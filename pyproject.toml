@@ -3,12 +3,12 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "brainpy"
-description = "BrainPy: Brain Dynamics Programming in Python"
+name = "brainpy_state"
+description = "brainpy.state: stateful spiking neural network models in BrainPy"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "BrainPy Team", email = "chao.brain@qq.com"}
+    {name = "brainpy.state Team", email = "chao.brain@qq.com"}
 ]
 license = {text = "GPL-3.0 license"}
 classifiers = [
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
@@ -48,9 +49,9 @@ dynamic = ['version']
 
 
 [project.urls]
-"Bug Tracker" = "https://github.com/brainpy/BrainPy/issues"
-"Documentation" = "https://brainpy.readthedocs.io/"
-"Source Code" = "https://github.com/brainpy/BrainPy"
+"Bug Tracker" = "https://github.com/chaobrain/brainpy.state/issues"
+"Documentation" = "https://brainpy_state.readthedocs.io/"
+"Source Code" = "https://github.com/chaobrain/brainpy_state"
 
 [project.optional-dependencies]
 cpu = [
@@ -101,4 +102,4 @@ exclude = [
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "brainpy.__version__"}
+version = {attr = "brainpy_state.__version__"}

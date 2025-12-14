@@ -14,6 +14,9 @@
 # ==============================================================================
 
 
+__version__ = "0.0.1"
+__version_info__ = tuple(map(int, __version__.split(".")))
+
 from ._base import *
 from ._base import __all__ as base_all
 from ._exponential import *
