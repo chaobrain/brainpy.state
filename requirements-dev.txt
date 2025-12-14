@@ -1,0 +1,14 @@
+-r requirements.txt
+
+matplotlib
+msgpack
+tqdm
+pathos
+numba
+setuptools
+
+
+# test requirements
+pytest
+pytest-xdist  # for parallel test execution
+absl-py
