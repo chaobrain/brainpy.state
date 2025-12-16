@@ -162,10 +162,11 @@ class AMPA(Synapse):
     Notes
     -----
     - The model captures the fast-rising and relatively fast-decaying excitatory currents
-      characteristic of AMPA receptor-mediated transmission.
+      characteristic of AMPA receptor-mediated transmission [1]_.
     - The time course of the synaptic conductance is determined by both the binding and
       unbinding rate constants and the duration of transmitter presence.
     - This implementation uses an exponential Euler integration method.
+    - For thalamic oscillation applications, see [2]_.
 
     References
     ----------
@@ -273,12 +274,12 @@ class GABAa(AMPA):
 
     Notes
     -----
-    - GABAa receptors typically produce slower-rising and longer-lasting currents compared to AMPA receptors.
+    - GABAa receptors typically produce slower-rising and longer-lasting currents compared to AMPA receptors [1]_.
     - The inhibitory nature of GABAa receptors is reflected in the convention of using a negative sign in the
       synaptic current equation.
     - The reversal potential for GABAa receptors is typically around -80 mV (due to chloride), making them
       inhibitory for neurons with resting potentials more positive than this value.
-    - This model does not include desensitization, which can be significant for prolonged GABA exposure.
+    - This model does not include desensitization, which can be significant for prolonged GABA exposure [2]_.
 
     References
     ----------
@@ -392,13 +393,14 @@ class BioNMDA(Synapse):
 
     Notes
     -----
-    - NMDA receptors have slower kinetics compared to AMPA receptors, with rise times
+    - NMDA receptors have slower kinetics compared to AMPA receptors [1]_, with rise times
       of several milliseconds and decay time constants of tens to hundreds of milliseconds.
-    - The voltage-dependent magnesium block is typically implemented in the output layer
+    - The voltage-dependent magnesium block [4]_ is typically implemented in the output layer
       or postsynaptic neuron model, not in this synapse model itself.
     - NMDA receptors are permeable to calcium ions, which can trigger various intracellular
-      signaling cascades important for synaptic plasticity.
+      signaling cascades important for synaptic plasticity [3]_.
     - This implementation uses an exponential Euler integration method for both state variables.
+    - For structural information about NMDA receptors, see [2]_.
 
     References
     ----------

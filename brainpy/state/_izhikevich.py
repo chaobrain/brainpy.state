@@ -103,10 +103,10 @@ class Izhikevich(Neuron):
     Notes
     -----
     - The quadratic term in the voltage equation (0.04*V^2) provides a sharp spike
-      upstroke similar to biological neurons.
+      upstroke similar to biological neurons [1]_.
     - Different combinations of parameters (a, b, c, d) can reproduce various neuronal
       behaviors including regular spiking, intrinsically bursting, chattering, and
-      fast spiking.
+      fast spiking [2]_.
     - The model uses a hard reset mechanism where V is set to c and u is incremented
       by d when a spike occurs.
     - Parameter ranges: a ∈ [0.01, 0.1], b ∈ [0.2, 0.3], c ∈ [-65, -50], d ∈ [0.1, 10]
@@ -291,8 +291,9 @@ class IzhikevichRef(Neuron):
     - During the refractory period, the membrane potential remains at the reset value c
       regardless of input current strength.
     - Refractory periods prevent high-frequency repetitive firing and are critical
-      for realistic neural dynamics.
+      for realistic neural dynamics [1]_.
     - The simulation environment time variable 't' is used to track the refractory state.
+    - For parameter selection guidelines, see [2]_.
 
     References
     ----------

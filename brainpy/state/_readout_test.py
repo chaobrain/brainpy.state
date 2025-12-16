@@ -21,7 +21,7 @@ import braintools
 import brainunit as u
 import jax.numpy as jnp
 
-import brainpy as brainpy
+import brainpy.state
 
 
 class TestReadoutModels(unittest.TestCase):
@@ -35,14 +35,14 @@ class TestReadoutModels(unittest.TestCase):
 
     def test_LeakyRateReadout(self):
         with brainstate.environ.context(dt=0.1):
-            model = brainpy.LeakyRateReadout(in_size=self.in_size, out_size=self.out_size, tau=self.tau)
+            model = brainpy.state.LeakyRateReadout(in_size=self.in_size, out_size=self.out_size, tau=self.tau)
             model.init_state(batch_size=self.batch_size)
             output = model.update(self.x)
             self.assertEqual(output.shape, (self.batch_size, self.out_size))
 
     def test_LeakySpikeReadout(self):
         with brainstate.environ.context(dt=0.1):
-            model = brainpy.LeakySpikeReadout(
+            model = brainpy.state.LeakySpikeReadout(
                 in_size=self.in_size, tau=self.tau, V_th=self.V_th * u.mV,
                 V_initializer=braintools.init.Constant(0. * u.mV),
                 w_init=braintools.init.KaimingNormal(unit=u.mV)

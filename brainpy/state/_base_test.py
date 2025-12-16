@@ -20,7 +20,7 @@ import braintools
 import brainunit as u
 import jax.numpy as jnp
 
-from brainpy import Neuron, Synapse
+from brainpy.state import Neuron, Synapse
 
 
 class TestNeuronBaseClass(unittest.TestCase):

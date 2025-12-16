@@ -101,6 +101,8 @@ class IF(Neuron):
     - The time-dependent dynamics are integrated using an exponential Euler method.
     - The IF model is perfect integrator in the sense that it accumulates input indefinitely
       until reaching threshold, without any leak current.
+    - The integrate-and-fire model was first introduced by Lapicque [1]_ [2]_.
+    - For a comprehensive review of integrate-and-fire models, see [3]_.
 
     References
     ----------
@@ -228,6 +230,7 @@ class LIF(Neuron):
     - The time-dependent dynamics are integrated using an exponential Euler method.
     - Spike generation is non-differentiable, so surrogate gradients are used for
       backpropagation during training.
+    - For a detailed treatment of LIF models, see [1]_ and [2]_.
 
     References
     ----------
@@ -363,6 +366,7 @@ class ExpIF(Neuron):
     - Even though it is a nonlinear model, it is simple enough to calculate the firing
       rate for constant input, and the linear response to fluctuations, even in the presence
       of input noise [4]_.
+    - For a comprehensive treatment of this model, see [2]_ and [5]_.
 
     References
     ----------
@@ -670,6 +674,12 @@ class AdExIF(Neuron):
     >>> # Apply an input current and update the neuron state
     >>> spikes = adexif.update(x=1.5*u.mA)
 
+    Notes
+    -----
+    - The AdEx model can reproduce a wide variety of neuronal firing patterns including
+      regular spiking, bursting, and spike-frequency adaptation.
+    - For detailed information about this model and its parameters, see [1]_ and [2]_.
+
     References
     ----------
     .. [1] Fourcaud-Trocmé, Nicolas, et al. "How spike generation
@@ -852,6 +862,12 @@ class AdExIFRef(Neuron):
     >>>     for t in range(time_steps):
     >>>         with brainstate.environ.context(t=t*0.1*u.ms):
     >>>             spikes = adexif_ref.update(x=inputs[t])
+
+    Notes
+    -----
+    - The AdExIF model with refractory period combines adaptation dynamics with
+      an absolute refractory period for more biologically realistic behavior.
+    - For detailed information about this model, see [1]_ and [2]_.
 
     References
     ----------
@@ -1059,9 +1075,10 @@ class LIFRef(Neuron):
     - During the refractory period, the membrane potential remains at the reset value
       regardless of input current strength.
     - Refractory periods prevent high-frequency repetitive firing and are critical
-      for realistic neural dynamics.
+      for realistic neural dynamics [3]_.
     - The time-dependent dynamics are integrated using an exponential Euler method.
     - The simulation environment time variable 't' is used to track the refractory state.
+    - For a comprehensive treatment of LIF models with refractory periods, see [1]_ and [2]_.
 
     References
     ----------
@@ -1226,12 +1243,13 @@ class ALIF(Neuron):
       with time constant tau_a between spikes.
     - The effective threshold increases by beta*a, making it progressively harder for the
       neuron to fire when it has recently been active.
-    - This adaptation mechanism creates spike-frequency adaptation, allowing the neuron
+    - This adaptation mechanism creates spike-frequency adaptation [2]_, allowing the neuron
       to respond strongly to input onset but then reduce its firing rate even if the
       input remains constant.
     - The adaptation time constant tau_a is typically much larger than the membrane time
       constant tau, creating a longer-lasting adaptation effect.
     - The time-dependent dynamics are integrated using an exponential Euler method.
+    - For detailed analysis of adaptive integrate-and-fire models, see [1]_ and [3]_.
 
     References
     ----------
@@ -1383,7 +1401,7 @@ class QuaIF(Neuron):
     - The quadratic nonlinearity provides a more realistic spike initiation compared to LIF.
     - The critical voltage V_c determines the onset of spike generation.
     - When V approaches V_c, the quadratic term causes rapid acceleration toward threshold.
-    - This model can exhibit Type I excitability (continuous f-I curve).
+    - This model can exhibit Type I excitability (continuous f-I curve) [1]_.
 
     References
     ----------
@@ -1535,8 +1553,9 @@ class AdQuaIF(Neuron):
     - The adaptation current w provides negative feedback, reducing firing rate.
     - Parameter 'a' controls subthreshold adaptation (coupling from V to w).
     - Parameter 'b' controls spike-triggered adaptation (increment after spike).
-    - With appropriate parameters, can exhibit regular spiking, bursting, etc.
+    - With appropriate parameters, can exhibit regular spiking, bursting, etc. [1]_.
     - The adaptation time constant tau_w determines adaptation speed.
+    - For a detailed bifurcation analysis of this model class, see [2]_.
 
     References
     ----------
@@ -1925,12 +1944,12 @@ class Gif(Neuron):
 
     Notes
     -----
-    - The Gif model uses internal currents (I1, I2) for complex dynamics.
+    - The Gif model uses internal currents (I1, I2) for complex dynamics [1]_.
     - Dynamic threshold V_th adapts based on membrane potential and its own dynamics.
     - Can reproduce diverse firing patterns: regular spiking, bursting, adaptation.
     - Parameters a and b control threshold adaptation.
     - Parameters k1, k2, R1, R2, A1, A2 control internal current dynamics.
-    - More flexible than simpler IF models for matching biological data.
+    - More flexible than simpler IF models for matching biological data [2]_.
 
     References
     ----------

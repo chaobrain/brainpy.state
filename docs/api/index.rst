@@ -3,9 +3,6 @@ API Reference
 
 Complete API reference for ``brainpy.state``.
 
-.. note::
-   ``brainpy.state`` is built on top of `brainstate <https://brainstate.readthedocs.io/>`_,
-   `brainunit <https://brainunit.readthedocs.io/>`_, and `braintools <https://braintools.readthedocs.io/>`_.
 
 Organization
 ------------
