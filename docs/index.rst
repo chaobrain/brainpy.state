@@ -27,21 +27,21 @@ Installation
 
        .. code-block:: bash
 
-          pip install -U brainpy[cpu]
+          pip install -U brainpy-state[cpu]
 
     .. tab-item:: GPU
 
        .. code-block:: bash
 
-          pip install -U brainpy[cuda12]
+          pip install -U brainpy-state[cuda12]
 
-          pip install -U brainpy[cuda13]
+          pip install -U brainpy-state[cuda13]
 
     .. tab-item:: TPU
 
        .. code-block:: bash
 
-          pip install -U brainpy[tpu]
+          pip install -U brainpy-state[tpu]
 
     .. tab-item:: Ecosystem
 
@@ -120,7 +120,7 @@ Learn more
 See also the ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``brainpy`` is one part of our `brain simulation ecosystem <https://brainmodeling.readthedocs.io/>`_.
+``brainpy.state`` is one part of our `brain simulation ecosystem <https://brainmodeling.readthedocs.io/>`_.
 
 
 

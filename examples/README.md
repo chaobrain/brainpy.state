@@ -1,10 +1,10 @@
-# BrainPy Version 3 Examples
+# brainpy.state Examples
 
-This directory contains example scripts demonstrating the capabilities of BrainPy 3.x for simulating and training spiking neural networks.
+This directory contains example scripts demonstrating the capabilities of brainpy.state for simulating and training spiking neural networks.
 
 ## Overview
 
-BrainPy 3.x is rewritten based on [brainstate](https://github.com/chaobrain/brainstate) and provides a powerful framework for computational neuroscience and brain-inspired computation.
+``brainpy.state`` is rewritten based on [brainstate](https://github.com/chaobrain/brainstate) and provides a powerful framework for computational neuroscience and brain-inspired computation.
 
 ## Example Categories
 
@@ -40,7 +40,7 @@ Examples demonstrating training of SNNs using surrogate gradient methods:
 ## Requirements
 
 ```bash
-pip install -U brainpy[cpu]  # or brainpy[cuda12] for GPU support
+pip install -U brainpy-state[cpu]  # or brainpy[cuda12] for GPU support
 ```
 
 ## Usage
@@ -67,4 +67,4 @@ These examples are based on influential papers in computational neuroscience. Se
 
 ## Documentation
 
-For more information, visit the [BrainPy documentation](https://brainpy.readthedocs.io).
+For more information, visit the [brainpy.state documentation](https://brainpy-state.readthedocs.io).

@@ -23,7 +23,7 @@ import brainunit as u
 import jax
 import jax.numpy as jnp
 
-from brainpy_state import Izhikevich, IzhikevichRef
+from brainpy import Izhikevich, IzhikevichRef
 
 
 class TestIzhikevichNeuron(unittest.TestCase):

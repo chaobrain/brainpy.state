@@ -17,7 +17,7 @@
 import argparse
 import time
 
-import brainpy
+import brainpy.state
 import braintools
 import brainunit as u
 import jax.numpy as jnp

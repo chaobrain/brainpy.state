@@ -1,46 +1,45 @@
 <p align="center">
-  	<img alt="Header image of BrainPy - brain dynamics programming in Python." src="https://raw.githubusercontent.com/brainpy/BrainPy/master/images/logo-banner.png" width=80%>
-</p> 
+  	<img alt="Header image of brainpy.state - brain dynamics programming in Python." src="https://raw.githubusercontent.com/chaobrain/brainpy.state/main/images/logo-banner.png" width=80%>
+</p>
 
 
 
 <p align="center">
-	<a href="https://pypi.org/project/brainpy/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainpy"></a>
-	<a href="https://github.com/brainpy/BrainPy"><img alt="LICENSE" src="https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic"></a>
-  	<a href="https://brainpy.readthedocs.io/en/latest/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy/badge/?version=latest"></a>
-  	<a href="https://badge.fury.io/py/brainpy"><img alt="PyPI version" src="https://badge.fury.io/py/brainpy.svg"></a>
-    <a href="https://github.com/brainpy/BrainPy/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/brainpy/BrainPy/actions/workflows/CI.yml/badge.svg"></a>
+	<a href="https://pypi.org/project/brainpy_state/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainpy_state"></a>
+	<a href="https://github.com/chaobrain/brainpy.state"><img alt="LICENSE" src="https://img.shields.io/badge/license-Apache%202.0-green?style=plastic"></a>
+  	<a href="https://brainpy-state.readthedocs.io/en/latest/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
+  	<a href="https://badge.fury.io/py/brainpy_state"><img alt="PyPI version" src="https://badge.fury.io/py/brainpy_state.svg"></a>
+    <a href="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml/badge.svg"></a>
 </p>
 
 
-BrainPy is a flexible, efficient, and extensible framework for computational neuroscience and brain-inspired computation based on the Just-In-Time (JIT) compilation. It provides an integrative ecosystem for brain dynamics programming, including brain dynamics **building**, **simulation**, **training**, **analysis**, etc. 
+``brainpy.state`` is a flexible, efficient, and extensible framework for computational neuroscience and brain-inspired computation based on the Just-In-Time (JIT) compilation. It provides an integrative ecosystem for brain dynamics programming, including brain dynamics **building**, **simulation**, **training**, **analysis**, etc.
 
-- **Source**: https://github.com/brainpy/BrainPy
-- **Documentation**: https://brainpy.readthedocs.io/
-- **Documentation (state-based)**: https://brainpy-state.readthedocs.io/
-- **Bug reports**: https://github.com/brainpy/BrainPy/issues
+- **Source**: https://github.com/chaobrain/brainpy.state
+- **Documentation**: https://brainpy-state.readthedocs.io/
+- **Bug reports**: https://github.com/chaobrain/brainpy.state/issues
 - **Ecosystem**: https://brainmodeling.readthedocs.io/
 
 
 ## Installation
 
-BrainPy is based on Python (>=3.10) and can be installed on Linux (Ubuntu 16.04 or later), macOS (10.12 or later), and Windows platforms. 
+``brainpy.state`` is based on Python (>=3.10) and can be installed on Linux (Ubuntu 16.04 or later), macOS (10.12 or later), and Windows platforms. 
 
 ```bash
-pip install brainpy.state -U
+pip install brainpy-state -U
 ```
 
-If you want to use BrainPy with different hardware support, please install the corresponding version of BrainPy:
+If you want to use ``brainpy.state`` with different hardware support, please install the corresponding version:
 
 ```bash
-pip install brainpy.state[cpu] -U  # install with CPU support only
-pip install brainpy.state[cuda12] -U  # install with CUDA 12.x support
-pip install brainpy.state[cuda13] -U  # install with CUDA 13.x support
-pip install brainpy.state[tpu] -U  # install with TPU support
+pip install brainpy-state[cpu] -U  # install with CPU support only
+pip install brainpy-state[cuda12] -U  # install with CUDA 12.x support
+pip install brainpy-state[cuda13] -U  # install with CUDA 13.x support
+pip install brainpy-state[tpu] -U  # install with TPU support
 ```
 
 
-Install the brainpy with the ecosystem packages:
+Install the ``brainpy.state`` with the ecosystem packages:
 
 ```bash
 pip install BrainX -U

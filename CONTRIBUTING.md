@@ -1,6 +1,6 @@
-# Contributing to BrainPy
+# Contributing to brainpy.state
 
-Thank you for your interest in contributing to BrainPy! We welcome contributions from the community and are grateful for your support in making BrainPy better.
+Thank you for your interest in contributing to brainpy.state! We welcome contributions from the community and are grateful for your support in making brainpy.state better.
 
 ## Table of Contents
 
@@ -26,11 +26,11 @@ Before creating bug reports, please check existing issues to avoid duplicates. W
 - **Clear title and description**
 - **Steps to reproduce** the problem
 - **Expected vs actual behavior**
-- **BrainPy version** and environment details (Python version, OS, JAX version)
+- **brainpy.state version** and environment details (Python version, OS, JAX version)
 - **Code samples** or test cases that demonstrate the issue
 - **Error messages** and stack traces
 
-Submit bug reports via [GitHub Issues](https://github.com/brainpy/BrainPy/issues/new).
+Submit bug reports via [GitHub Issues](https://github.com/chaobrain/brainpy.state/issues/new).
 
 ### Suggesting Enhancements
 
@@ -64,8 +64,8 @@ We welcome code contributions! This includes:
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/BrainPy.git
-   cd BrainPy
+   git clone https://github.com/YOUR_USERNAME/brainpy.state.git
+   cd brainpy.state
    ```
 
 3. **Create a virtual environment**:
@@ -203,7 +203,7 @@ def simulate_network(network, duration, dt=0.1):
 
 Aim for high test coverage on new code:
 ```bash
-pytest --cov=brainpy tests/
+pytest --cov=brainpy brainpy/
 ```
 
 ## Documentation
@@ -215,15 +215,15 @@ pytest --cov=brainpy tests/
 - Keep the API reference up to date
 - Fix typos and improve clarity
 
-For comprehensive contribution guidelines, see our [detailed documentation](https://brainpy.readthedocs.io/en/latest/tutorial_advanced/contributing.html).
+For comprehensive contribution guidelines, see our [detailed documentation](https://brainpy-state.readthedocs.io/).
 
 ## Community
 
 ### Getting Help
 
-- **Documentation**: https://brainpy.readthedocs.io/
-- **GitHub Discussions**: https://github.com/brainpy/BrainPy/discussions
-- **Issues**: https://github.com/brainpy/BrainPy/issues
+- **Documentation**: https://brainpy-state.readthedocs.io/
+- **GitHub Discussions**: https://github.com/chaobrain/brainpy.state/discussions
+- **Issues**: https://github.com/chaobrain/brainpy.state/issues
 
 ### Recognition
 
@@ -232,4 +232,4 @@ Contributors are recognized in:
 - Contributors file
 - Project documentation
 
-Thank you for contributing to BrainPy! Your efforts help make computational neuroscience more accessible and powerful for everyone.
+Thank you for contributing to brainpy.state! Your efforts help make computational neuroscience more accessible and powerful for everyone.

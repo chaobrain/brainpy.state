@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["flit_core >=3.5,<4"]
+build-backend = "flit_core.buildapi"
+
 
 [project]
-name = "brainpy_state"
+name = "brainpy-state"
 description = "brainpy.state: stateful spiking neural network models in BrainPy"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "brainpy.state Team", email = "chao.brain@qq.com"}
+    {name = "BrainX Team", email = "chao.brain@qq.com"}
 ]
 classifiers = [
     "Natural Language :: English",
@@ -45,10 +46,15 @@ dependencies = [
 dynamic = ['version']
 
 
+[tool.flit.module]
+name = "brainpy.state"
+
+
 [project.urls]
 "Bug Tracker" = "https://github.com/chaobrain/brainpy.state/issues"
-"Documentation" = "https://brainpy_state.readthedocs.io/"
-"Source Code" = "https://github.com/chaobrain/brainpy_state"
+"Documentation" = "https://brainpy-state.readthedocs.io/"
+"Source Code" = "https://github.com/chaobrain/brainpy.state"
+
 
 [project.optional-dependencies]
 cpu = [
@@ -80,11 +86,8 @@ tpu = [
     "braintools",
 ]
 
-[tool.setuptools]
-package-dir = {"" = "."}
 
-[tool.setuptools.packages.find]
-where = ["."]
+[tool.flit.sdist]
 exclude = [
     "lib*",
     "dev*",
@@ -96,7 +99,7 @@ exclude = [
     "images",
     "dist*",
     "bug*",
+    ".github",
+    ".gitignore",
+    ".readthedocs.yml",
 ]
-
-[tool.setuptools.dynamic]
-version = {attr = "brainpy_state.__version__"}

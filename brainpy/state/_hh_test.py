@@ -24,7 +24,7 @@ import brainunit as u
 import jax
 import jax.numpy as jnp
 
-from brainpy_state import HH, MorrisLecar, WangBuzsakiHH
+from brainpy import HH, MorrisLecar, WangBuzsakiHH
 
 
 class TestHHNeuron(unittest.TestCase):

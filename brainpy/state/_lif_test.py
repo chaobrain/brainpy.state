@@ -23,7 +23,7 @@ import brainunit as u
 import jax
 import jax.numpy as jnp
 
-from brainpy_state import IF, LIF, LIFRef, ALIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, QuaIF, AdQuaIF, AdQuaIFRef, Gif, \
+from brainpy import IF, LIF, LIFRef, ALIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, QuaIF, AdQuaIF, AdQuaIFRef, Gif, \
     GifRef
 
 

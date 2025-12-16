@@ -21,7 +21,7 @@ import brainunit as u
 import jax.numpy as jnp
 import pytest
 
-from brainpy_state import Expon, STP, STD, AMPA, GABAa, BioNMDA
+from brainpy import Expon, STP, STD, AMPA, GABAa, BioNMDA
 
 
 class TestSynapse(unittest.TestCase):

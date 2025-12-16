@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug or unexpected behavior to help us improve BrainPy
+about: Report a bug or unexpected behavior to help us improve brainpy.state
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -16,7 +16,7 @@ A clear and concise description of what the bug is.
 **Minimal code example to reproduce the issue:**
 
 ```python
-import brainpy as bp
+import brainpy.state as bps
 
 # Your code here that demonstrates the bug
 ```
@@ -42,7 +42,7 @@ Paste error message/traceback here
 
 Please provide the following information:
 
-- **BrainPy Version:** [e.g., 2.4.0]
+- **brainpy.state Version:** [e.g., 0.0.1]
 - **Python Version:** [e.g., 3.10.5]
 - **JAX Version:** [e.g., 0.4.30]
 - **Operating System:** [e.g., Ubuntu 22.04, macOS 13.0, Windows 11]
@@ -51,8 +51,8 @@ Please provide the following information:
 
 **Additional context:**
 ```python
-import brainpy as bp
-print(bp.__version__)
+import brainpy
+print(brainpy.__version__)
 # Add any other relevant version info
 ```
 

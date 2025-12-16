@@ -21,7 +21,7 @@ import braintools
 import brainunit as u
 import jax.numpy as jnp
 
-import brainpy_state as brainpy
+import brainpy as brainpy
 
 
 class TestReadoutModels(unittest.TestCase):

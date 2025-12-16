@@ -27,7 +27,7 @@ import braintools
 import brainunit as u
 import matplotlib.pyplot as plt
 
-import brainpy
+import brainpy.state
 import brainstate
 from Susin_Destexhe_2021_gamma_oscillation import (
     get_inputs, visualize_simulation_results,

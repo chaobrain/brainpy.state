@@ -19,7 +19,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           issue_message: >
-            👋 Welcome to BrainPy! Thank you for opening your first issue.
+            👋 Welcome to brainpy.state! Thank you for opening your first issue.
 
 
             We appreciate you taking the time to contribute to the project. A maintainer
@@ -31,13 +31,13 @@ jobs:
 
 
             If you're interested in contributing code, check out our
-            [Contributing Guide](https://github.com/brainpy/BrainPy/blob/master/CONTRIBUTING.md)
+            [Contributing Guide](https://github.com/chaobrain/brainpy.state/blob/main/CONTRIBUTING.md)
             for more information on how to get started.
 
 
             Happy coding! 🧠✨
           pr_message: >
-            🎉 Congratulations on opening your first pull request in BrainPy! Thank you for
+            🎉 Congratulations on opening your first pull request in brainpy.state! Thank you for
             your contribution!
 
 
@@ -52,8 +52,8 @@ jobs:
             - ✅ You've filled out the PR template completely
 
 
-            We appreciate your effort in making BrainPy better. If you have any questions,
+            We appreciate your effort in making brainpy.state better. If you have any questions,
             feel free to ask in the comments.
 
 
-            Welcome to the BrainPy community! 🌟
+            Welcome to the brainpy.state community! 🌟
