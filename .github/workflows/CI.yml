@@ -45,7 +45,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flit pytest
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          flit install --symlink
+          pip install -e .
 
       - name: Test with pytest
         run: pytest brainpy/
@@ -75,7 +75,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flit pytest
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          flit install --symlink
+          pip install -e .
 
       - name: Test with pytest
         run: pytest brainpy/
@@ -105,7 +105,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flit pytest
           if (Test-Path requirements-dev.txt) { pip install -r requirements-dev.txt }
-          flit install --pth-file
+          pip install -e .
 
       - name: Test with pytest
         run: pytest brainpy/
