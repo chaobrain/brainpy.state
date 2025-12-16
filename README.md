@@ -7,13 +7,20 @@
 <p align="center">
 	<a href="https://pypi.org/project/brainpy_state/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainpy_state"></a>
 	<a href="https://github.com/chaobrain/brainpy.state"><img alt="LICENSE" src="https://img.shields.io/badge/license-Apache%202.0-green?style=plastic"></a>
-  	<a href="https://brainpy-state.readthedocs.io/en/latest/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
+  	<a href="https://brainpy-state.readthedocs.io/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
   	<a href="https://badge.fury.io/py/brainpy_state"><img alt="PyPI version" src="https://badge.fury.io/py/brainpy_state.svg"></a>
     <a href="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml/badge.svg"></a>
 </p>
 
 
-``brainpy.state`` is a flexible, efficient, and extensible framework for computational neuroscience and brain-inspired computation based on the Just-In-Time (JIT) compilation. It provides an integrative ecosystem for brain dynamics programming, including brain dynamics **building**, **simulation**, **training**, **analysis**, etc.
+``brainpy.state`` modernizes [BrainPy](https://github.com/brainpy/BrainPy) simulator of spiking neural networks with state-based syntax in [brainstate](https://github.com/chaobrain/brainstate).
+Moreover, ``brainpy.state`` provides more features compared to ``BrainPy``, including:
+
+
+
+
+## Links
+
 
 - **Source**: https://github.com/chaobrain/brainpy.state
 - **Documentation**: https://brainpy-state.readthedocs.io/
