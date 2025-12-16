@@ -83,11 +83,11 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 
 html_theme = "sphinx_book_theme"
-html_logo = "_static/logos/logo.png"
+html_logo = "_static/brainpystate_vertical.png"
 html_title = "brainpy.state documentation"
 html_copy_source = True
 html_sourcelink_suffix = ""
-html_favicon = "_static/logos/logo-square.png"
+html_favicon = "_static/brainpystate_vertical.png"
 html_last_updated_fmt = ""
 html_css_files = ['css/theme.css']
 

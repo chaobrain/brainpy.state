@@ -3,18 +3,14 @@
 
 ``brainpy.state`` provides a new ``state``-based programming paradigm for building and simulating spiking neural networks.
 
+It modernizes the point-based spiking neural network modeling capability in `BrainPy <https://github.com/brainpy/BrainPy>`_ with `brainstate` syntax.
+
 
 Compared to ``brainpy.dyn``, ``brainpy.state`` provides:
 
 - A more intuitive and flexible way to define and manage the state of neural network components (neurons, synapses, etc.).
 - Improved performance and scalability for large-scale simulations.
 - Seamless integration with `BrainX <https://brainmodeling.readthedocs.io>`_ ecosystem.
-
-
-.. note::
-
-   ``brainpy.state`` is written based on `brainstate <https://github.com/chaobrain/brainstate>`_.
-   This documentation is for the latest ``brainpy.state``.
 
 
 

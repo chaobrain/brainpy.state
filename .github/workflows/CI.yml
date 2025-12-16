@@ -3,13 +3,13 @@
 
 name: Continuous Integration
 
+
 on:
   push:
     branches:
-      - '**'
+      - main
   pull_request:
-    branches:
-      - '**'
+
 
 permissions:
   contents: read
@@ -45,7 +45,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flit pytest
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          flit install --symlink
+          pip install -e .
 
       - name: Test with pytest
         run: pytest brainpy/
@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13"]
 
     steps:
       - name: Cancel Previous Runs
@@ -75,7 +75,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flit pytest
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          flit install --symlink
+          pip install -e .
 
       - name: Test with pytest
         run: pytest brainpy/
@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13"]
 
     steps:
       - name: Cancel Previous Runs
@@ -105,7 +105,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install flit pytest
           if (Test-Path requirements-dev.txt) { pip install -r requirements-dev.txt }
-          flit install --pth-file
+          pip install -e .
 
       - name: Test with pytest
         run: pytest brainpy/

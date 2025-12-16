@@ -139,6 +139,12 @@ class HH(Neuron):
     >>> # Apply an input current and update the neuron state
     >>> spikes = hh.update(x=10.*u.uA)
 
+    Notes
+    -----
+    - The Hodgkin-Huxley model is the foundation of biophysical neuron modeling [1]_.
+    - This implementation uses exponential Euler integration for numerical stability.
+    - For more information about the model, see [2]_.
+
     References
     ----------
     .. [1] Hodgkin, Alan L., and Andrew F. Huxley. "A quantitative description
@@ -372,6 +378,12 @@ class MorrisLecar(Neuron):
     >>> # Apply an input current and update the neuron state
     >>> spikes = ml.update(x=100.*u.uA)
 
+    Notes
+    -----
+    - The Morris-Lecar model is a two-dimensional reduction of the Hodgkin-Huxley model [1]_.
+    - This implementation uses exponential Euler integration for numerical stability.
+    - For detailed analysis and applications of this model, see [2]_ and [3]_.
+
     References
     ----------
     .. [1] Lecar, Harold. "Morris-lecar model." Scholarpedia 2.10 (2007): 1333.
@@ -563,6 +575,13 @@ class WangBuzsakiHH(Neuron):
     >>>
     >>> # Apply an input current and update the neuron state
     >>> spikes = wb.update(x=1.*u.uA)
+
+    Notes
+    -----
+    - This model was designed for studying gamma oscillations in hippocampal
+      interneuronal networks [1]_.
+    - The sodium activation variable m is assumed fast and replaced by its
+      steady-state function.
 
     References
     ----------

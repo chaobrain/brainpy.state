@@ -86,8 +86,9 @@ class STP(Synapse):
     -----
     - Larger values of tau_f produce stronger facilitation effects.
     - Larger values of tau_d lead to slower recovery from depression.
-    - The parameter U controls the initial release probability.
+    - The parameter U controls the initial release probability [1]_.
     - The effective synaptic strength is the product of u and x.
+    - For a comprehensive treatment of short-term plasticity dynamics, see [2]_.
 
     References
     ----------
@@ -191,9 +192,9 @@ class STD(Synapse):
 
     Notes
     -----
-    - Larger values of tau lead to slower recovery from depression.
+    - Larger values of tau lead to slower recovery from depression [1]_.
     - Larger values of U cause stronger depression with each spike.
-    - This model is a simplified version of the STP model that only includes depression.
+    - This model is a simplified version of the STP model that only includes depression [2]_.
 
     References
     ----------
