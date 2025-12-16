@@ -14,6 +14,35 @@
 # ==============================================================================
 
 
+# Compatibility check: ensure no conflicting old brainpy version is installed
+def _check_brainpy_compatibility():
+    try:
+        from importlib.metadata import version, PackageNotFoundError
+    except ImportError:
+        from importlib_metadata import version, PackageNotFoundError
+
+    try:
+        brainpy_version = version("brainpy")
+        # Parse version string (handle versions like "2.7.3.post1")
+        version_parts = brainpy_version.split(".")[:3]
+        major, minor = int(version_parts[0]), int(version_parts[1])
+        patch = int(version_parts[2].split("+")[0].split("post")[0].split("a")[0].split("b")[0].split("rc")[0])
+
+        if (major, minor, patch) < (2, 7, 4):
+            raise RuntimeError(
+                f"Incompatible brainpy version detected: {brainpy_version}. \n"
+                f"brainpy.state requires brainpy >= 2.7.4 or no brainpy installed. "
+                f"Please upgrade brainpy with 'pip install brainpy>=2.7.4' or "
+                f"uninstall it with 'pip uninstall brainpy'."
+            )
+    except PackageNotFoundError:
+        # brainpy is not installed, which is fine
+        pass
+
+
+_check_brainpy_compatibility()
+del _check_brainpy_compatibility
+
 __version__ = "0.0.1"
 __version_info__ = tuple(map(int, __version__.split(".")))
 
