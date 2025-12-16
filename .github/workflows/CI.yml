@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13"]
 
     steps:
       - name: Cancel Previous Runs
@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13"]
 
     steps:
       - name: Cancel Previous Runs
