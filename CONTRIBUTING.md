@@ -65,7 +65,7 @@ We welcome code contributions! This includes:
 2. **Clone your fork** locally:
    ```bash
    git clone https://github.com/YOUR_USERNAME/brainpy.state.git
-   cd brainpy.state
+   cd brainpy_state.state
    ```
 
 3. **Create a virtual environment**:
@@ -203,7 +203,7 @@ def simulate_network(network, duration, dt=0.1):
 
 Aim for high test coverage on new code:
 ```bash
-pytest --cov=brainpy brainpy/
+pytest --cov=brainpy_state brainpy_state/
 ```
 
 ## Documentation

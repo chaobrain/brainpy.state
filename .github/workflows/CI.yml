@@ -48,7 +48,7 @@ jobs:
           pip install -e .
 
       - name: Test with pytest
-        run: pytest brainpy/
+        run: pytest brainpy_state/
 
   test_macos:
     runs-on: macos-latest
@@ -78,7 +78,7 @@ jobs:
           pip install -e .
 
       - name: Test with pytest
-        run: pytest brainpy/
+        run: pytest brainpy_state/
 
   test_windows:
     runs-on: windows-latest
@@ -108,4 +108,4 @@ jobs:
           pip install -e .
 
       - name: Test with pytest
-        run: pytest brainpy/
+        run: pytest brainpy_state/

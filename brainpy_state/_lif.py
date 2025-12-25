@@ -75,12 +75,12 @@ class IF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an IF neuron layer with 10 neurons
-    >>> if_neuron = brainpy.state.IF(10, tau=8*u.ms, V_th=1.2*u.mV)
+    >>> if_neuron = brainpy_state.state.IF(10, tau=8*u.ms, V_th=1.2*u.mV)
     >>>
     >>> # Initialize the state
     >>> if_neuron.init_state(batch_size=1)
@@ -90,7 +90,7 @@ class IF(Neuron):
     >>>
     >>> # Create a network with IF neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.IF(100, tau=5.0*u.ms),
+    ...     brainpy_state.state.IF(100, tau=5.0*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -210,12 +210,12 @@ class LIF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a LIF neuron layer with 10 neurons
-    >>> lif = brainpy.state.LIF(10, tau=10*u.ms, V_th=0.8*u.mV)
+    >>> lif = brainpy_state.state.LIF(10, tau=10*u.ms, V_th=0.8*u.mV)
     >>>
     >>> # Initialize the state
     >>> lif.init_state(batch_size=1)
@@ -341,12 +341,12 @@ class ExpIF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a ExpIF neuron layer with 10 neurons
-    >>> expif = brainpy.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
+    >>> expif = brainpy_state.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
     >>>
     >>> # Initialize the state
     >>> expif.init_state(batch_size=1)
@@ -490,12 +490,12 @@ class ExpIFRef(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a ExpIF neuron layer with 10 neurons
-    >>> expif = brainpy.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
+    >>> expif = brainpy_state.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
     >>>
     >>> # Initialize the state
     >>> expif.init_state(batch_size=1)
@@ -661,12 +661,12 @@ class AdExIF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a AdExIF neuron layer with 10 neurons
-    >>> adexif = brainpy.state.AdExIF(10, tau=10*u.ms)
+    >>> adexif = brainpy_state.state.AdExIF(10, tau=10*u.ms)
     >>>
     >>> # Initialize the state
     >>> adexif.init_state(batch_size=1)
@@ -843,12 +843,12 @@ class AdExIFRef(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an AdExIFRef neuron layer with 10 neurons
-    >>> adexif_ref = brainpy.state.AdExIFRef(10, tau=10*u.ms, tau_ref=2*u.ms)
+    >>> adexif_ref = brainpy_state.state.AdExIFRef(10, tau=10*u.ms, tau_ref=2*u.ms)
     >>>
     >>> # Initialize the state
     >>> adexif_ref.init_state(batch_size=1)
@@ -1046,12 +1046,12 @@ class LIFRef(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a LIFRef neuron layer with 10 neurons
-    >>> lifref = brainpy.state.LIFRef(10,
+    >>> lifref = brainpy_state.state.LIFRef(10,
     ...                         tau=10*u.ms,
     ...                         tau_ref=5*u.ms,
     ...                         V_th=0.8*u.mV)
@@ -1064,7 +1064,7 @@ class LIFRef(Neuron):
     >>>
     >>> # Create a network with refractory neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.LIFRef(100, tau_ref=4*u.ms),
+    ...     brainpy_state.state.LIFRef(100, tau_ref=4*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -1215,12 +1215,12 @@ class ALIF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an ALIF neuron layer with 10 neurons
-    >>> alif = brainpy.state.ALIF(10,
+    >>> alif = brainpy_state.state.ALIF(10,
     ...                     tau=10*u.ms,
     ...                     tau_a=200*u.ms,
     ...                     beta=0.2*u.mV)
@@ -1233,7 +1233,7 @@ class ALIF(Neuron):
     >>>
     >>> # Create a network with adaptation for burst detection
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.ALIF(100, tau_a=150*u.ms, beta=0.3*u.mV),
+    ...     brainpy_state.state.ALIF(100, tau_a=150*u.ms, beta=0.3*u.mV),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -1377,12 +1377,12 @@ class QuaIF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a QuaIF neuron layer with 10 neurons
-    >>> quaif = brainpy.state.QuaIF(10, tau=10*u.ms, V_th=-30*u.mV, V_c=-50*u.mV)
+    >>> quaif = brainpy_state.state.QuaIF(10, tau=10*u.ms, V_th=-30*u.mV, V_c=-50*u.mV)
     >>>
     >>> # Initialize the state
     >>> quaif.init_state(batch_size=1)
@@ -1392,7 +1392,7 @@ class QuaIF(Neuron):
     >>>
     >>> # Create a network with QuaIF neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.QuaIF(100, tau=10.0*u.ms),
+    ...     brainpy_state.state.QuaIF(100, tau=10.0*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -1528,12 +1528,12 @@ class AdQuaIF(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an AdQuaIF neuron layer with 10 neurons
-    >>> adquaif = brainpy.state.AdQuaIF(10, tau=10*u.ms, tau_w=100*u.ms,
+    >>> adquaif = brainpy_state.state.AdQuaIF(10, tau=10*u.ms, tau_w=100*u.ms,
     ...                                 a=1.0*u.siemens, b=0.1*u.mA)
     >>>
     >>> # Initialize the state
@@ -1544,7 +1544,7 @@ class AdQuaIF(Neuron):
     >>>
     >>> # Create a network with adaptive neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.AdQuaIF(100, tau=10.0*u.ms, tau_w=100.0*u.ms),
+    ...     brainpy_state.state.AdQuaIF(100, tau=10.0*u.ms, tau_w=100.0*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -1698,12 +1698,12 @@ class AdQuaIFRef(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an AdQuaIFRef neuron layer with refractory period
-    >>> adquaif_ref = brainpy.state.AdQuaIFRef(10, tau=10*u.ms, tau_w=100*u.ms,
+    >>> adquaif_ref = brainpy_state.state.AdQuaIFRef(10, tau=10*u.ms, tau_w=100*u.ms,
     ...                                        tau_ref=2.0*u.ms, ref_var=True)
     >>>
     >>> # Initialize the state
@@ -1715,7 +1715,7 @@ class AdQuaIFRef(Neuron):
     >>>
     >>> # Create a network with refractory adaptive neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.AdQuaIFRef(100, tau=10.0*u.ms, tau_ref=2.0*u.ms),
+    ...     brainpy_state.state.AdQuaIFRef(100, tau=10.0*u.ms, tau_ref=2.0*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -1922,12 +1922,12 @@ class Gif(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a Gif neuron layer with dynamic threshold
-    >>> gif = brainpy.state.Gif(10, tau=20*u.ms, k1=0.2/u.ms, k2=0.02/u.ms,
+    >>> gif = brainpy_state.state.Gif(10, tau=20*u.ms, k1=0.2/u.ms, k2=0.02/u.ms,
     ...                         a=0.005/u.ms, b=0.01/u.ms)
     >>>
     >>> # Initialize the state
@@ -1938,7 +1938,7 @@ class Gif(Neuron):
     >>>
     >>> # Create a network with Gif neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.Gif(100, tau=20.0*u.ms),
+    ...     brainpy_state.state.Gif(100, tau=20.0*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 
@@ -2143,12 +2143,12 @@ class GifRef(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a GifRef neuron layer with refractory period
-    >>> gif_ref = brainpy.state.GifRef(10, tau=20*u.ms, tau_ref=2.0*u.ms,
+    >>> gif_ref = brainpy_state.state.GifRef(10, tau=20*u.ms, tau_ref=2.0*u.ms,
     ...                                k1=0.2/u.ms, k2=0.02/u.ms, ref_var=True)
     >>>
     >>> # Initialize the state
@@ -2160,7 +2160,7 @@ class GifRef(Neuron):
     >>>
     >>> # Create a network with refractory Gif neurons
     >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.GifRef(100, tau=20.0*u.ms, tau_ref=2.0*u.ms),
+    ...     brainpy_state.state.GifRef(100, tau=20.0*u.ms, tau_ref=2.0*u.ms),
     ...     brainstate.nn.Linear(100, 10)
     ... ])
 

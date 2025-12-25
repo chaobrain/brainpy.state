@@ -87,12 +87,12 @@ class Izhikevich(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an Izhikevich neuron layer with 10 neurons
-    >>> izh = brainpy.state.Izhikevich(10)
+    >>> izh = brainpy_state.state.Izhikevich(10)
     >>>
     >>> # Initialize the state
     >>> izh.init_state(batch_size=1)
@@ -265,12 +265,12 @@ class IzhikevichRef(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an IzhikevichRef neuron layer with 10 neurons
-    >>> izh_ref = brainpy.state.IzhikevichRef(10, tau_ref=2.*u.ms)
+    >>> izh_ref = brainpy_state.state.IzhikevichRef(10, tau_ref=2.*u.ms)
     >>>
     >>> # Initialize the state
     >>> izh_ref.init_state(batch_size=1)

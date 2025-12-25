@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 
 [project]
-name = "brainpy-state"
+name = "brainpy_state"
 description = "brainpy.state: stateful spiking neural network models in BrainPy"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,6 +38,7 @@ dependencies = [
     "numpy>=1.15",
     "jax",
     "tqdm",
+    "brainpy>=2.7.5",
     "brainstate>=0.2.0",
     "brainunit",
     "brainevent>=0.0.4",
@@ -63,6 +64,7 @@ cpu = [
     "brainunit",
     "brainevent",
     "braintools",
+    "brainpy>=2.7.5",
 ]
 cuda12 = [
     "jax[cuda12]",
@@ -70,6 +72,7 @@ cuda12 = [
     "brainunit",
     "brainevent",
     "braintools",
+    "brainpy>=2.7.5",
 ]
 cuda13 = [
     "jax[cuda13]",
@@ -77,6 +80,7 @@ cuda13 = [
     "brainunit",
     "brainevent",
     "braintools",
+    "brainpy>=2.7.5",
 ]
 tpu = [
     "jax[tpu]",
@@ -84,6 +88,7 @@ tpu = [
     "brainunit",
     "brainevent",
     "braintools",
+    "brainpy>=2.7.5",
 ]
 
 

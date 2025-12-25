@@ -504,9 +504,9 @@ class Neuron(Dynamics):
         >>> import brainstate
         >>> import brainunit as u
         >>> import braintools
-        >>> import brainpy
+        >>> import brainpy_state
         >>>
-        >>> class SimpleNeuron(brainpy.state.Neuron):
+        >>> class SimpleNeuron(brainpy_state.state.Neuron):
         ...     def __init__(self, in_size, V_th=1.0*u.mV, **kwargs):
         ...         super().__init__(in_size, **kwargs)
         ...         self.V_th = V_th
@@ -539,12 +539,12 @@ class Neuron(Dynamics):
 
     .. code-block:: python
 
-        >>> import brainpy
+        >>> import brainpy_state
         >>> import brainstate
         >>> import brainunit as u
         >>>
         >>> # Create a LIF neuron layer
-        >>> neuron = brainpy.state.LIF(
+        >>> neuron = brainpy_state.state.LIF(
         ...     in_size=100,
         ...     tau=10*u.ms,
         ...     V_th=1.0*u.mV,
@@ -565,7 +565,7 @@ class Neuron(Dynamics):
 
     .. code-block:: python
 
-        >>> import brainpy
+        >>> import brainpy_state
         >>> import brainstate
         >>> import brainunit as u
         >>>
@@ -573,11 +573,11 @@ class Neuron(Dynamics):
         >>> class SpikingNet(brainstate.nn.Module):
         ...     def __init__(self):
         ...         super().__init__()
-        ...         self.layer1 = brainpy.state.LIF(784, tau=5*u.ms)
+        ...         self.layer1 = brainpy_state.state.LIF(784, tau=5*u.ms)
         ...         self.fc1 = brainstate.nn.Linear(784, 256)
-        ...         self.layer2 = brainpy.state.ALIF(256, tau=10*u.ms, tau_a=200*u.ms)
+        ...         self.layer2 = brainpy_state.state.ALIF(256, tau=10*u.ms, tau_a=200*u.ms)
         ...         self.fc2 = brainstate.nn.Linear(256, 10)
-        ...         self.layer3 = brainpy.state.LIF(10, tau=8*u.ms)
+        ...         self.layer3 = brainpy_state.state.LIF(10, tau=8*u.ms)
         ...
         ...     def __call__(self, x):
         ...         spikes1 = self.layer1.update(x)
@@ -713,12 +713,12 @@ class Synapse(Dynamics):
 
     .. code-block:: python
 
-        >>> import brainpy
+        >>> import brainpy_state
         >>> import brainstate
         >>> import brainunit as u
         >>> import braintools
         >>>
-        >>> class SimpleSynapse(brainpy.state.Synapse):
+        >>> class SimpleSynapse(brainpy_state.state.Synapse):
         ...     def __init__(self, in_size, tau=5.0*u.ms, **kwargs):
         ...         super().__init__(in_size, **kwargs)
         ...         self.tau = braintools.init.param(tau, self.varshape)
@@ -742,13 +742,13 @@ class Synapse(Dynamics):
 
     .. code-block:: python
 
-        >>> import brainpy
+        >>> import brainpy_state
         >>> import brainstate
         >>> import brainunit as u
         >>> import jax
         >>>
         >>> # Create an exponential synapse
-        >>> synapse = brainpy.state.Expon(in_size=100, tau=8.0*u.ms)
+        >>> synapse = brainpy_state.state.Expon(in_size=100, tau=8.0*u.ms)
         >>>
         >>> # Initialize state
         >>> synapse.init_state(batch_size=32)
@@ -767,7 +767,7 @@ class Synapse(Dynamics):
 
     .. code-block:: python
 
-        >>> import brainpy
+        >>> import brainpy_state
         >>> import brainstate
         >>> import brainunit as u
         >>>
@@ -775,18 +775,18 @@ class Synapse(Dynamics):
         ...     def __init__(self):
         ...         super().__init__()
         ...         # Input layer
-        ...         self.input_neurons = brainpy.state.LIF(784, tau=5*u.ms)
+        ...         self.input_neurons = brainpy_state.state.LIF(784, tau=5*u.ms)
         ...         # First hidden layer with synaptic filtering
         ...         self.fc1 = brainstate.nn.Linear(784, 256)
-        ...         self.syn1 = brainpy.state.Expon(256, tau=8*u.ms)
-        ...         self.hidden1 = brainpy.state.LIF(256, tau=10*u.ms)
+        ...         self.syn1 = brainpy_state.state.Expon(256, tau=8*u.ms)
+        ...         self.hidden1 = brainpy_state.state.LIF(256, tau=10*u.ms)
         ...         # Second hidden layer with AMPA synapse
         ...         self.fc2 = brainstate.nn.Linear(256, 128)
-        ...         self.syn2 = brainpy.state.AMPA(128)
-        ...         self.hidden2 = brainpy.state.LIF(128, tau=10*u.ms)
+        ...         self.syn2 = brainpy_state.state.AMPA(128)
+        ...         self.hidden2 = brainpy_state.state.LIF(128, tau=10*u.ms)
         ...         # Output layer
         ...         self.fc3 = brainstate.nn.Linear(128, 10)
-        ...         self.output_neurons = brainpy.state.LIF(10, tau=8*u.ms)
+        ...         self.output_neurons = brainpy_state.state.LIF(10, tau=8*u.ms)
         ...
         ...     def __call__(self, x):
         ...         # Input layer
@@ -808,7 +808,7 @@ class Synapse(Dynamics):
 
     .. code-block:: python
 
-        >>> import brainpy
+        >>> import brainpy_state
         >>> import brainstate
         >>> import brainunit as u
         >>>
@@ -816,11 +816,11 @@ class Synapse(Dynamics):
         ...     def __init__(self, n_exc=800, n_inh=200):
         ...         super().__init__()
         ...         # Excitatory population
-        ...         self.exc_neurons = brainpy.state.LIF(n_exc, tau=10*u.ms)
-        ...         self.exc_syn = brainpy.state.AMPA(n_exc)
+        ...         self.exc_neurons = brainpy_state.state.LIF(n_exc, tau=10*u.ms)
+        ...         self.exc_syn = brainpy_state.state.AMPA(n_exc)
         ...         # Inhibitory population
-        ...         self.inh_neurons = brainpy.state.LIF(n_inh, tau=8*u.ms)
-        ...         self.inh_syn = brainpy.state.GABAa(n_inh)
+        ...         self.inh_neurons = brainpy_state.state.LIF(n_inh, tau=8*u.ms)
+        ...         self.inh_syn = brainpy_state.state.GABAa(n_inh)
         ...         # Connectivity
         ...         self.exc_to_exc = brainstate.nn.Linear(n_exc, n_exc)
         ...         self.exc_to_inh = brainstate.nn.Linear(n_exc, n_inh)

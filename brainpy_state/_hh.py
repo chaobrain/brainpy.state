@@ -126,12 +126,12 @@ class HH(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create an HH neuron layer with 10 neurons
-    >>> hh = brainpy.state.HH(10)
+    >>> hh = brainpy_state.state.HH(10)
     >>>
     >>> # Initialize the state
     >>> hh.init_state(batch_size=1)
@@ -365,12 +365,12 @@ class MorrisLecar(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a Morris-Lecar neuron layer with 10 neurons
-    >>> ml = brainpy.state.MorrisLecar(10)
+    >>> ml = brainpy_state.state.MorrisLecar(10)
     >>>
     >>> # Initialize the state
     >>> ml.init_state(batch_size=1)
@@ -563,12 +563,12 @@ class WangBuzsakiHH(Neuron):
 
     Examples
     --------
-    >>> import brainpy
+    >>> import brainpy_state
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> # Create a WangBuzsakiHH neuron layer with 10 neurons
-    >>> wb = brainpy.state.WangBuzsakiHH(10)
+    >>> wb = brainpy_state.state.WangBuzsakiHH(10)
     >>>
     >>> # Initialize the state
     >>> wb.init_state(batch_size=1)

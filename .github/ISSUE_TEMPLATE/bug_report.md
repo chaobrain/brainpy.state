@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug or unexpected behavior to help us improve brainpy.state
+about: Report a bug or unexpected behavior to help us improve brainpy_state.state
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -16,7 +16,7 @@ A clear and concise description of what the bug is.
 **Minimal code example to reproduce the issue:**
 
 ```python
-import brainpy.state as bps
+import brainpy_state.state as bps
 
 # Your code here that demonstrates the bug
 ```
@@ -50,9 +50,11 @@ Please provide the following information:
 - **Installation method:** [e.g., pip, conda, from source]
 
 **Additional context:**
+
 ```python
-import brainpy
-print(brainpy.__version__)
+import brainpy_state
+
+print(brainpy_state.__version__)
 # Add any other relevant version info
 ```
 

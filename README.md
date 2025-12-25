@@ -33,16 +33,16 @@ Moreover, ``brainpy.state`` provides more features compared to ``BrainPy``, incl
 ``brainpy.state`` is based on Python (>=3.10) and can be installed on Linux (Ubuntu 16.04 or later), macOS (10.12 or later), and Windows platforms. 
 
 ```bash
-pip install brainpy-state -U
+pip install brainpy brainpy_state -U
 ```
 
 If you want to use ``brainpy.state`` with different hardware support, please install the corresponding version:
 
 ```bash
-pip install brainpy-state[cpu] -U  # install with CPU support only
-pip install brainpy-state[cuda12] -U  # install with CUDA 12.x support
-pip install brainpy-state[cuda13] -U  # install with CUDA 13.x support
-pip install brainpy-state[tpu] -U  # install with TPU support
+pip install brainpy brainpy_state[cpu] -U  # install with CPU support only
+pip install brainpy brainpy_state[cuda12] -U  # install with CUDA 12.x support
+pip install brainpy brainpy_state[cuda13] -U  # install with CUDA 13.x support
+pip install brainpy brainpy_state[tpu] -U  # install with TPU support
 ```
 
 

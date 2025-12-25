@@ -20,7 +20,7 @@ updates:
       include: "scope"
     open-pull-requests-limit: 10
     reviewers:
-      - "brainpy/maintainers"
+      - "brainpy_state/maintainers"
     labels:
       - "dependencies"
       - "python"
@@ -49,7 +49,7 @@ updates:
       include: "scope"
     open-pull-requests-limit: 5
     reviewers:
-      - "brainpy/maintainers"
+      - "brainpy_state/maintainers"
     labels:
       - "dependencies"
       - "github-actions"

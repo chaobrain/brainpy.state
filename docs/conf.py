@@ -29,9 +29,9 @@ from highlight_test_lexer import fix_ipython2_lexer_in_notebooks
 
 fix_ipython2_lexer_in_notebooks(os.path.dirname(os.path.abspath(__file__)))
 
-import brainpy.state
+import brainpy_state
 
-release = brainpy.state.__version__
+release = brainpy_state.__version__
 
 # -- General configuration ---------------------------------------------------
 

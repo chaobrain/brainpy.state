@@ -251,7 +251,7 @@ class AsymmetryGapJunction(Projection):
 
     Examples
     --------
-    >>> import brainpy.state as brainpy
+    >>> import brainpy_state.state as brainpy
     >>> import brainunit as u
     >>> import numpy as np
     >>>
