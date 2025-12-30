@@ -48,7 +48,7 @@ dynamic = ['version']
 
 
 [tool.flit.module]
-name = "brainpy.state"
+name = "brainpy_state"
 
 
 [project.urls]
