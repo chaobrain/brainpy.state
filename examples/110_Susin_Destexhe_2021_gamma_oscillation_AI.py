@@ -190,5 +190,13 @@ def simulate_ai_net():
 
 
 if __name__ == '__main__':
+    pass
     # simulate_adex_neurons()
-    simulate_ai_net()
+    # simulate_ai_net()
+
+    with brainstate.environ.context(dt=0.1 * u.ms):
+        model = AINet()
+        r = model.vmap_new_states(batch_size=10, state_out_axes={1: brainstate.DelayState})
+        print(r)
+
+
