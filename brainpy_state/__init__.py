@@ -18,10 +18,7 @@
 def _check_brainpy_compatibility():
     try:
         from importlib.metadata import version, PackageNotFoundError
-    except ImportError:
-        from importlib_metadata import version, PackageNotFoundError
 
-    try:
         brainpy_version = version("brainpy")
         # Parse version string (handle versions like "2.7.3.post1")
         version_parts = brainpy_version.split(".")[:3]
@@ -35,7 +32,7 @@ def _check_brainpy_compatibility():
                 f"Please upgrade brainpy with 'pip install brainpy>=2.7.5' or "
                 f"uninstall it with 'pip uninstall brainpy'."
             )
-    except PackageNotFoundError:
+    except:
         # brainpy is not installed, which is fine
         pass
 
