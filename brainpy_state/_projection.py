@@ -18,9 +18,9 @@ from typing import Optional
 
 import brainevent
 import brainstate
-from brainstate._state import State
+from brainstate import State
 from brainstate.mixin import JointTypes, ParamDescriber
-from brainstate.nn._dynamics import init_maybe_prefetch
+from brainstate.nn import init_maybe_prefetch
 from brainstate.util import get_unique_name
 
 from ._base import Dynamics

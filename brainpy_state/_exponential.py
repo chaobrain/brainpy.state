@@ -87,7 +87,7 @@ class Expon(Synapse, AlignPost):
         self.g_initializer = g_initializer
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
@@ -187,8 +187,8 @@ class DualExpon(Synapse, AlignPost):
         return A
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g_rise = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
-        self.g_decay = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g_rise = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
+        self.g_decay = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.g_rise.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
