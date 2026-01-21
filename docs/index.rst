@@ -127,6 +127,7 @@ See also the ecosystem
    :caption: Tutorials
 
    quickstart/index.rst
+   core-concepts/index.rst
    examples/gallery.rst
 
 
