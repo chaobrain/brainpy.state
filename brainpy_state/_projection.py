@@ -18,9 +18,9 @@ from typing import Optional
 
 import brainevent
 import brainstate
-from brainstate._state import State
+from brainstate import State
 from brainstate.mixin import JointTypes, ParamDescriber
-from brainstate.nn._dynamics import maybe_init_prefetch
+from brainstate.nn import init_maybe_prefetch
 from brainstate.util import get_unique_name
 
 from ._base import Dynamics
@@ -254,7 +254,7 @@ class AlignPostProj(Projection):
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for module in self.modules:
-            maybe_init_prefetch(module, *args, **kwargs)
+            init_maybe_prefetch(module, *args, **kwargs)
 
     def update(self, *args):
         # call all modules
@@ -336,7 +336,7 @@ class DeltaProj(Projection):
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for prefetch in self.prefetches:
-            maybe_init_prefetch(prefetch, *args, **kwargs)
+            init_maybe_prefetch(prefetch, *args, **kwargs)
 
     def update(self, *x):
         for module in self.prefetches:
@@ -419,7 +419,7 @@ class CurrentProj(Projection):
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for prefetch in self.prefetch:
-            maybe_init_prefetch(prefetch, *args, **kwargs)
+            init_maybe_prefetch(prefetch, *args, **kwargs)
 
     def update(self, *x):
         for prefetch in self.prefetch:
@@ -460,7 +460,7 @@ class align_pre_projection(Projection):
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for module in self.spike_generator:
-            maybe_init_prefetch(module, *args, **kwargs)
+            init_maybe_prefetch(module, *args, **kwargs)
 
     def update(self, *x):
         for fun in self.spike_generator:
@@ -507,7 +507,7 @@ class align_post_projection(Projection):
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for module in self.spike_generator:
-            maybe_init_prefetch(module, *args, **kwargs)
+            init_maybe_prefetch(module, *args, **kwargs)
 
     def update(self, *x):
         for fun in self.spike_generator:

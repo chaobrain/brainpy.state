@@ -220,19 +220,19 @@ class HH(Neuron):
         return self.n_alpha(V) / (self.n_alpha(V) + self.n_beta(V))
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
+        self.V = brainstate.HiddenState.init(self.V_initializer, self.varshape, batch_size)
         if self.m_initializer is None:
             self.m = brainstate.HiddenState(self.m_inf(self.V.value))
         else:
-            self.m = brainstate.HiddenState(braintools.init.param(self.m_initializer, self.varshape, batch_size))
+            self.m = brainstate.HiddenState.init(self.m_initializer, self.varshape, batch_size)
         if self.h_initializer is None:
             self.h = brainstate.HiddenState(self.h_inf(self.V.value))
         else:
-            self.h = brainstate.HiddenState(braintools.init.param(self.h_initializer, self.varshape, batch_size))
+            self.h = brainstate.HiddenState.init(self.h_initializer, self.varshape, batch_size)
         if self.n_initializer is None:
             self.n = brainstate.HiddenState(self.n_inf(self.V.value))
         else:
-            self.n = brainstate.HiddenState(braintools.init.param(self.n_initializer, self.varshape, batch_size))
+            self.n = brainstate.HiddenState.init(self.n_initializer, self.varshape, batch_size)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
