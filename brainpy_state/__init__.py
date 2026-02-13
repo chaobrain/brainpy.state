@@ -40,35 +40,49 @@ def _check_brainpy_compatibility():
 _check_brainpy_compatibility()
 del _check_brainpy_compatibility
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 __version_info__ = tuple(map(int, __version__.split(".")))
 
-from ._base import *
-from ._base import __all__ as base_all
-from ._exponential import *
-from ._exponential import __all__ as exp_all
-from ._hh import *
-from ._hh import __all__ as hh_all
-from ._inputs import *
-from ._inputs import __all__ as inputs_all
-from ._izhikevich import *
-from ._izhikevich import __all__ as izh_all
-from ._lif import *
-from ._lif import __all__ as neuron_all
-from ._projection import *
-from ._projection import __all__ as proj_all
-from ._readout import *
-from ._readout import __all__ as readout_all
-from ._stp import *
-from ._stp import __all__ as stp_all
-from ._synapse import *
-from ._synapse import __all__ as synapse_all
-from ._synaptic_projection import *
-from ._synaptic_projection import __all__ as synproj_all
-from ._synouts import *
-from ._synouts import __all__ as synout_all
+from ._base import Dynamics, Neuron, Synapse
+from ._exponential import Expon, DualExpon
+from ._hh import HH, MorrisLecar, WangBuzsakiHH
+from ._inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
+from ._izhikevich import Izhikevich, IzhikevichRef
+from ._lif import (IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
+                    QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef)
+from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
+                           align_pre_projection, align_post_projection)
+from ._readout import LeakyRateReadout, LeakySpikeReadout
+from ._stp import STP, STD
+from ._synapse import Alpha, AMPA, GABAa, BioNMDA
+from ._synaptic_projection import SymmetryGapJunction, AsymmetryGapJunction
+from ._synouts import SynOut, COBA, CUBA, MgBlock
 
-__all__ = inputs_all + neuron_all + izh_all + hh_all + readout_all + stp_all + synapse_all
-__all__ = __all__ + synout_all + base_all + exp_all + proj_all + synproj_all
-del inputs_all, neuron_all, izh_all, hh_all, readout_all, stp_all, synapse_all, synout_all, base_all
-del exp_all, proj_all, synproj_all
+__all__ = [
+    # _base
+    'Dynamics', 'Neuron', 'Synapse',
+    # _exponential
+    'Expon', 'DualExpon',
+    # _hh
+    'HH', 'MorrisLecar', 'WangBuzsakiHH',
+    # _inputs
+    'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+    # _izhikevich
+    'Izhikevich', 'IzhikevichRef',
+    # _lif
+    'IF', 'LIF', 'ExpIF', 'ExpIFRef', 'AdExIF', 'AdExIFRef', 'LIFRef', 'ALIF',
+    'QuaIF', 'AdQuaIF', 'AdQuaIFRef', 'Gif', 'GifRef',
+    # _projection
+    'Projection', 'AlignPostProj', 'DeltaProj', 'CurrentProj',
+    'align_pre_projection', 'align_post_projection',
+    # _readout
+    'LeakyRateReadout', 'LeakySpikeReadout',
+    # _stp
+    'STP', 'STD',
+    # _synapse
+    'Alpha', 'AMPA', 'GABAa', 'BioNMDA',
+    # _synaptic_projection
+    'SymmetryGapJunction', 'AsymmetryGapJunction',
+    # _synouts
+    'SynOut', 'COBA', 'CUBA', 'MgBlock',
+]
