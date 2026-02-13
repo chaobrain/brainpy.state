@@ -204,3 +204,4 @@ cython_debug/
 /docs_state/changelog.md
 /examples_classic/dynamics_training/data/
 /docs/api/generated/
+/CLAUDE.md

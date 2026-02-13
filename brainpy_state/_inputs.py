@@ -19,6 +19,7 @@ import brainstate
 import braintools
 import brainunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size, DTypeLike
 
@@ -36,6 +37,10 @@ __all__ = [
 class SpikeTime(brainstate.nn.Dynamics):
     """The input neuron group characterized by spikes emitting at given times.
 
+    Internally builds a ``brainevent.CSR`` matrix of shape
+    ``[n_max_time_step, n_neuron]`` so that ``update()`` reduces to a
+    single CSR row slice.
+
     >>> # Get 2 neurons, firing spikes at 10 ms and 20 ms.
     >>> SpikeTime(2, times=[10, 20])
     >>> # or
@@ -48,6 +53,12 @@ class SpikeTime(brainstate.nn.Dynamics):
     >>> # Get 2 neurons; at 10 ms, neuron 0 fires; at 20 ms, neuron 0 and 1 fire;
     >>> # at 30 ms, neuron 1 fires.
     >>> SpikeTime(2, times=[10, 20, 20, 30], indices=[0, 0, 1, 1])
+    >>> # or
+    >>> # Get 2 neurons with a uniform float weight for all spikes.
+    >>> SpikeTime(2, times=[10, 20], indices=[0, 1], weights=2.5)
+    >>> # or
+    >>> # Get 2 neurons with per-event weights.
+    >>> SpikeTime(2, times=[10, 20], indices=[0, 1], weights=[0.5, 0.8])
 
     Parameters
     ----------
@@ -57,6 +68,14 @@ class SpikeTime(brainstate.nn.Dynamics):
         The neuron indices at each time point to emit spikes.
     times : list, tuple, ArrayType
         The time points which generate the spikes.
+    weights : bool, float, Sequence, or ArrayLike, default=True
+        Spike weights. ``True`` produces boolean output (backward-compatible).
+        A float scalar applies the same weight to every spike. A sequence of
+        the same length as ``indices``/``times`` assigns per-event weights.
+        The output dtype is inferred from this parameter.
+    time_as_step : str, default='round'
+        Rounding method for converting spike times to integer step indices.
+        Options: ``'floor'``, ``'round'``, ``'ceil'``.
     name : str, optional
         The name of the dynamic system.
     """
@@ -67,9 +86,9 @@ class SpikeTime(brainstate.nn.Dynamics):
         in_size: Size,
         indices: Union[Sequence, ArrayLike],
         times: Union[Sequence, ArrayLike],
-        spk_type: DTypeLike = bool,
+        weights: Union[float, Sequence, ArrayLike] = 1.0,
+        time_as_step: str = 'round',
         name: Optional[str] = None,
-        need_sort: bool = True,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -77,39 +96,102 @@ class SpikeTime(brainstate.nn.Dynamics):
         if len(indices) != len(times):
             raise ValueError(f'The length of "indices" and "times" must be the same. '
                              f'However, we got {len(indices)} != {len(times)}.')
+        if time_as_step not in ('floor', 'round', 'ceil'):
+            raise ValueError(f'"time_as_step" must be one of "floor", "round", "ceil". '
+                             f'Got {time_as_step!r}.')
         self.num_times = len(times)
-        self.spk_type = spk_type
+        self.time_as_step = time_as_step
+
+        # weights
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+        weights = u.math.asarray(weights, dtype=dftype)
+        self._scalar_weight = (weights.ndim == 0)
+        self._spk_dtype = weights.dtype
+        if not self._scalar_weight and len(weights) != self.num_times:
+            raise ValueError(
+                f'Length of "weights" must match "indices"/"times". '
+                f'Got {len(weights)} != {self.num_times}.'
+            )
 
         # data about times and indices
-        self.times = u.math.asarray(times)
-        self.indices = u.math.asarray(indices, dtype=brainstate.environ.ditype())
-        if need_sort:
-            sort_idx = u.math.argsort(self.times)
-            self.indices = self.indices[sort_idx]
-            self.times = self.times[sort_idx]
+        times = u.math.asarray(times)
+        indices = u.math.asarray(indices, dtype=brainstate.environ.ditype())
+        if self._scalar_weight:
+            self.weights = weights
+            self.times, self.indices = u.lax.sort((times, indices), dimension=0)
+        else:
+            sorted_arrays = u.lax.sort((times, indices, weights), dimension=0)
+            self.times = sorted_arrays[0]
+            self.indices = sorted_arrays[1]
+            self.weights = sorted_arrays[2]
 
-    def init_state(self, *args, **kwargs):
-        self.i = brainstate.ShortTermState(-1)
+        # Build CSR matrix [n_max_time_step, n_neuron]
+        import brainevent
 
-    def reset_state(self, batch_size=None, **kwargs):
-        self.i.value = -1
+        assert len(self.varshape) == 1, 'SpikeTime only supports 1D neuron groups for now.'
+        n_cols = self.varshape[-1]
 
-    def update(self):
-        t = brainstate.environ.get('t')
+        dt = brainstate.environ.get_dt()
+        ratio = self.times / dt
+        if isinstance(ratio, u.Quantity):
+            ratio = ratio.to_decimal()
 
-        def _cond_fun(spikes):
-            i = self.i.value
-            return u.math.logical_and(i < self.num_times, t >= self.times[i])
+        int_dtype = np.asarray(0, dtype=ditype).dtype
+        steps = jnp.asarray(self.rounding(ratio), dtype=int_dtype)
+        indices = jnp.asarray(self.indices, dtype=np.int32)
 
-        def _body_fun(spikes):
-            i = self.i.value
-            spikes = spikes.at[..., self.indices[i]].set(True)
-            self.i.value += 1
-            return spikes
+        if self.num_times == 0:
+            return
 
-        spike = u.math.zeros(self.varshape, dtype=self.spk_type)
-        spike = brainstate.transform.while_loop(_cond_fun, _body_fun, spike)
-        return spike
+        # Build CSR indptr
+        n_rows = int(steps.max()) + 1
+        counts = np.bincount(steps.astype(np.intp), minlength=n_rows)
+        indptr_np = np.zeros(n_rows + 1, dtype=np.int32)
+        np.cumsum(counts, out=indptr_np[1:])
+
+        self._csr = brainevent.CSR(
+            self.weights,
+            jax.numpy.asarray(indices, dtype=int_dtype),
+            jax.numpy.asarray(indptr_np, dtype=int_dtype),
+            shape=(n_rows, n_cols)
+        )
+
+    @property
+    def rounding(self):
+        if self.time_as_step == 'floor':
+            return u.math.floor
+        elif self.time_as_step == 'round':
+            return u.math.round
+        else:
+            return u.math.ceil
+
+    def _to_int(self, ratio):
+        if isinstance(ratio, u.Quantity):
+            ratio = ratio.to_decimal()
+        return u.math.asarray(self.rounding(ratio), dtype=brainstate.environ.ditype())
+
+    def update(self, index=None, time=None):
+        if self.num_times == 0:
+            return jax.numpy.zeros(self.varshape, dtype=self._spk_dtype)
+
+        if index is not None:
+            i = jax.numpy.asarray(index, dtype=brainstate.environ.ditype())
+        elif time is not None:
+            i = self._to_int(time / brainstate.environ.get_dt())
+        else:
+            # Both None — read from brainstate.environ
+            i = brainstate.environ.get('i', default=None)
+            if i is None:
+                t = brainstate.environ.get('t')
+                dt = brainstate.environ.get_dt()
+                i = self._to_int(t / dt)
+            else:
+                i = jax.numpy.asarray(i, dtype=brainstate.environ.ditype())
+
+        # Slice CSR row → dense spike vector of shape (n_cols,)
+        # Reshape to 1D for csr_slice_rows, then squeeze back
+        return self._csr[jnp.asarray(i, dtype=jnp.int32).reshape(1)][0]
 
 
 class PoissonSpike(brainstate.nn.Dynamics):
