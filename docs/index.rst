@@ -3,7 +3,9 @@
 
 ``brainpy.state`` provides a new ``state``-based programming paradigm for building and simulating spiking neural networks.
 
-It modernizes the point-based spiking neural network modeling capability in `BrainPy <https://github.com/brainpy/BrainPy>`_ with `brainstate` syntax.
+It modernizes the point-based spiking neural network modeling capability in
+`BrainPy <https://github.com/brainpy/BrainPy>`_ with
+`brainstate <https://github.com/chaobrain/brainstate>`_ syntax.
 
 
 Compared to ``brainpy.dyn``, ``brainpy.state`` provides:

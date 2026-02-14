@@ -73,7 +73,7 @@ class SpikeTime(brainstate.nn.Dynamics):
         A float scalar applies the same weight to every spike. A sequence of
         the same length as ``indices``/``times`` assigns per-event weights.
         The output dtype is inferred from this parameter.
-    time_as_step : str, default='round'
+    time_as_step : callable, str, default='round'
         Rounding method for converting spike times to integer step indices.
         Options: ``'floor'``, ``'round'``, ``'ceil'``.
     name : str, optional
@@ -87,7 +87,7 @@ class SpikeTime(brainstate.nn.Dynamics):
         indices: Union[Sequence, ArrayLike],
         times: Union[Sequence, ArrayLike],
         weights: Union[float, Sequence, ArrayLike] = 1.0,
-        time_as_step: str = 'round',
+        time_as_step: str | Callable = 'round',
         name: Optional[str] = None,
     ):
         super().__init__(in_size=in_size, name=name)
@@ -96,9 +96,12 @@ class SpikeTime(brainstate.nn.Dynamics):
         if len(indices) != len(times):
             raise ValueError(f'The length of "indices" and "times" must be the same. '
                              f'However, we got {len(indices)} != {len(times)}.')
-        if time_as_step not in ('floor', 'round', 'ceil'):
-            raise ValueError(f'"time_as_step" must be one of "floor", "round", "ceil". '
-                             f'Got {time_as_step!r}.')
+        if callable(time_as_step):
+            self.time_as_step = time_as_step
+        else:
+            if time_as_step not in ('floor', 'round', 'ceil'):
+                raise ValueError(f'"time_as_step" must be one of "floor", "round", "ceil". '
+                                 f'Got {time_as_step!r}.')
         self.num_times = len(times)
         self.time_as_step = time_as_step
 
@@ -115,8 +118,8 @@ class SpikeTime(brainstate.nn.Dynamics):
             )
 
         # data about times and indices
-        times = u.math.asarray(times)
-        indices = u.math.asarray(indices, dtype=brainstate.environ.ditype())
+        times = u.math.asarray(times, dtype=dftype)
+        indices = u.math.asarray(indices, dtype=ditype)
         if self._scalar_weight:
             self.weights = weights
             self.times, self.indices = u.lax.sort((times, indices), dimension=0)
@@ -137,29 +140,30 @@ class SpikeTime(brainstate.nn.Dynamics):
         if isinstance(ratio, u.Quantity):
             ratio = ratio.to_decimal()
 
-        int_dtype = np.asarray(0, dtype=ditype).dtype
-        steps = jnp.asarray(self.rounding(ratio), dtype=int_dtype)
-        indices = jnp.asarray(self.indices, dtype=np.int32)
+        steps = jnp.asarray(self.rounding(ratio), dtype=ditype)
+        indices = jnp.asarray(self.indices, dtype=ditype)
 
         if self.num_times == 0:
             return
 
         # Build CSR indptr
         n_rows = int(steps.max()) + 1
-        counts = np.bincount(steps.astype(np.intp), minlength=n_rows)
-        indptr_np = np.zeros(n_rows + 1, dtype=np.int32)
+        counts = np.bincount(np.asarray(steps), minlength=n_rows)
+        indptr_np = np.zeros(n_rows + 1, dtype=ditype)
         np.cumsum(counts, out=indptr_np[1:])
 
         self._csr = brainevent.CSR(
             self.weights,
-            jax.numpy.asarray(indices, dtype=int_dtype),
-            jax.numpy.asarray(indptr_np, dtype=int_dtype),
+            jax.numpy.asarray(indices, dtype=ditype),
+            jax.numpy.asarray(indptr_np, dtype=ditype),
             shape=(n_rows, n_cols)
         )
 
     @property
     def rounding(self):
-        if self.time_as_step == 'floor':
+        if callable(self.time_as_step):
+            return self.time_as_step
+        elif self.time_as_step == 'floor':
             return u.math.floor
         elif self.time_as_step == 'round':
             return u.math.round
