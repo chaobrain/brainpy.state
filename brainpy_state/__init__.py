@@ -40,35 +40,114 @@ def _check_brainpy_compatibility():
 _check_brainpy_compatibility()
 del _check_brainpy_compatibility
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 __version_info__ = tuple(map(int, __version__.split(".")))
 
-from ._base import *
-from ._base import __all__ as base_all
-from ._exponential import *
-from ._exponential import __all__ as exp_all
-from ._hh import *
-from ._hh import __all__ as hh_all
-from ._inputs import *
-from ._inputs import __all__ as inputs_all
-from ._izhikevich import *
-from ._izhikevich import __all__ as izh_all
-from ._lif import *
-from ._lif import __all__ as neuron_all
-from ._projection import *
-from ._projection import __all__ as proj_all
-from ._readout import *
-from ._readout import __all__ as readout_all
-from ._stp import *
-from ._stp import __all__ as stp_all
-from ._synapse import *
-from ._synapse import __all__ as synapse_all
-from ._synaptic_projection import *
-from ._synaptic_projection import __all__ as synproj_all
-from ._synouts import *
-from ._synouts import __all__ as synout_all
+from ._base import Dynamics, Neuron, Synapse
+from ._exponential import Expon, DualExpon
+from ._hh import HH, MorrisLecar, WangBuzsakiHH
+from ._inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
+from ._izhikevich import Izhikevich, IzhikevichRef
+from ._lif import (
+    IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
+    QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
+)
+from ._nest.ac_generator import ac_generator
+from ._nest.dc_generator import dc_generator
+from ._nest.noise_generator import noise_generator
+from ._nest.step_current_generator import step_current_generator
+from ._nest.step_rate_generator import step_rate_generator
+from ._nest.spike_generator import spike_generator
+from ._nest.spike_train_injector import spike_train_injector
+from ._nest.iaf_psc_delta import iaf_psc_delta
+from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
+from ._nest.iaf_cond_exp import iaf_cond_exp
+from ._nest.iaf_psc_alpha import iaf_psc_alpha
+from ._nest.iaf_psc_exp import iaf_psc_exp
+from ._nest.iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
+from ._nest.iaf_psc_alpha_multisynapse import iaf_psc_alpha_multisynapse
+from ._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
+from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
+from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
+from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from ._nest.gif_cond_exp import gif_cond_exp
+from ._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
+from ._nest.gif_psc_exp import gif_psc_exp
+from ._nest.hh_psc_alpha import hh_psc_alpha
+from ._nest.hh_psc_alpha_clopath import hh_psc_alpha_clopath
+from ._nest.hh_psc_alpha_gap import hh_psc_alpha_gap
+from ._nest.hh_cond_exp_traub import hh_cond_exp_traub
+from ._nest.hh_cond_beta_gap_traub import hh_cond_beta_gap_traub
+from ._nest.ht_neuron import ht_neuron
+from ._nest.izhikevich import izhikevich as nest_izhikevich
+from ._nest.pp_psc_delta import pp_psc_delta
+from ._nest.pp_cond_exp_mc_urbanczik import pp_cond_exp_mc_urbanczik
+from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
+                          align_pre_projection, align_post_projection)
+from ._readout import LeakyRateReadout, LeakySpikeReadout
+from ._stp import STP, STD
+from ._synapse import Alpha, AMPA, GABAa, BioNMDA
+from ._synaptic_projection import SymmetryGapJunction, AsymmetryGapJunction
+from ._synouts import SynOut, COBA, CUBA, MgBlock
 
-__all__ = inputs_all + neuron_all + izh_all + hh_all + readout_all + stp_all + synapse_all
-__all__ = __all__ + synout_all + base_all + exp_all + proj_all + synproj_all
-del inputs_all, neuron_all, izh_all, hh_all, readout_all, stp_all, synapse_all, synout_all, base_all
-del exp_all, proj_all, synproj_all
+__all__ = [
+    # _base
+    'Dynamics', 'Neuron', 'Synapse',
+    # _exponential
+    'Expon', 'DualExpon',
+    # _hh
+    'HH', 'MorrisLecar', 'WangBuzsakiHH',
+    # _inputs
+    'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+
+    # _izhikevich
+    'Izhikevich', 'IzhikevichRef',
+    # _lif
+    'IF', 'LIF', 'ExpIF', 'ExpIFRef', 'AdExIF', 'AdExIFRef', 'LIFRef', 'ALIF',
+    'QuaIF', 'AdQuaIF', 'AdQuaIFRef', 'Gif', 'GifRef',
+    # _projection
+    'Projection', 'AlignPostProj', 'DeltaProj', 'CurrentProj',
+    'align_pre_projection', 'align_post_projection',
+    # _readout
+    'LeakyRateReadout', 'LeakySpikeReadout',
+    # _stp
+    'STP', 'STD',
+    # _synapse
+    'Alpha', 'AMPA', 'GABAa', 'BioNMDA',
+    # _synaptic_projection
+    'SymmetryGapJunction', 'AsymmetryGapJunction',
+    # _synouts
+    'SynOut', 'COBA', 'CUBA', 'MgBlock',
+
+    # NEST-compatible models
+    'ac_generator',
+    'dc_generator',
+    'noise_generator',
+    'step_current_generator',
+    'step_rate_generator',
+    'spike_generator',
+    'spike_train_injector',
+    'iaf_psc_delta',
+    'iaf_psc_delta_ps',
+    'iaf_cond_exp',
+    'iaf_psc_alpha',
+    'iaf_psc_exp',
+    'iaf_psc_exp_multisynapse',
+    'iaf_psc_alpha_multisynapse',
+    'iaf_psc_exp_htum',
+    'iaf_psc_exp_ps',
+    'iaf_psc_exp_ps_lossless',
+    'iaf_psc_alpha_ps',
+    'gif_cond_exp',
+    'gif_cond_exp_multisynapse',
+    'gif_psc_exp',
+    'hh_psc_alpha',
+    'hh_psc_alpha_clopath',
+    'hh_psc_alpha_gap',
+    'hh_cond_exp_traub',
+    'hh_cond_beta_gap_traub',
+    'ht_neuron',
+    'nest_izhikevich',
+    'pp_psc_delta',
+    'pp_cond_exp_mc_urbanczik',
+]

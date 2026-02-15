@@ -25,7 +25,7 @@ project = 'brainpy.state'
 copyright = '2020-, brainpy.state'
 author = 'brainpy.state Team'
 
-from highlight_test_lexer import fix_ipython2_lexer_in_notebooks
+from highlight_lexer import fix_ipython2_lexer_in_notebooks
 
 fix_ipython2_lexer_in_notebooks(os.path.dirname(os.path.abspath(__file__)))
 
