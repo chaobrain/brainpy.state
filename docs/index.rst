@@ -11,6 +11,8 @@ It modernizes the point-based spiking neural network modeling capability in
 Compared to ``brainpy.dyn``, ``brainpy.state`` provides:
 
 - A more intuitive and flexible way to define and manage the state of neural network components (neurons, synapses, etc.).
+- Comprehensive support for various types of neuronal and synaptic dynamics as seen in the NEST simulator.
+- Diverse plasticity rules for synaptic learning and adaptation as seen in the NEST simulator.
 - Improved performance and scalability for large-scale simulations.
 - Seamless integration with `BrainX <https://brainmodeling.readthedocs.io>`_ ecosystem.
 
