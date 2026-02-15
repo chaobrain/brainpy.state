@@ -15,7 +15,13 @@
 
 # -*- coding: utf-8 -*-
 
+from .ac_generator import ac_generator
 from .dc_generator import dc_generator
+from .noise_generator import noise_generator
+from .step_current_generator import step_current_generator
+from .step_rate_generator import step_rate_generator
+from .spike_generator import spike_generator
+from .spike_train_injector import spike_train_injector
 from .iaf_psc_delta import iaf_psc_delta
 from .iaf_psc_delta_ps import iaf_psc_delta_ps
 from .iaf_cond_exp import iaf_cond_exp
@@ -30,7 +36,13 @@ from .iaf_psc_alpha_ps import iaf_psc_alpha_ps
 
 
 __all__ = [
+    'ac_generator',
     'dc_generator',
+    'noise_generator',
+    'step_current_generator',
+    'step_rate_generator',
+    'spike_generator',
+    'spike_train_injector',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',

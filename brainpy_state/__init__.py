@@ -52,7 +52,13 @@ from ._lif import (
     IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
     QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
 )
+from ._nest.ac_generator import ac_generator
 from ._nest.dc_generator import dc_generator
+from ._nest.noise_generator import noise_generator
+from ._nest.step_current_generator import step_current_generator
+from ._nest.step_rate_generator import step_rate_generator
+from ._nest.spike_generator import spike_generator
+from ._nest.spike_train_injector import spike_train_injector
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
 from ._nest.iaf_cond_exp import iaf_cond_exp
@@ -102,7 +108,13 @@ __all__ = [
     'SynOut', 'COBA', 'CUBA', 'MgBlock',
 
     # NEST-compatible models
+    'ac_generator',
     'dc_generator',
+    'noise_generator',
+    'step_current_generator',
+    'step_rate_generator',
+    'spike_generator',
+    'spike_train_injector',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
