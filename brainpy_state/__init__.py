@@ -55,6 +55,7 @@ from ._lif import (
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
 from ._nest.iaf_cond_exp import iaf_cond_exp
+from ._nest.iaf_psc_alpha import iaf_psc_alpha
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -92,8 +93,9 @@ __all__ = [
     # _synouts
     'SynOut', 'COBA', 'CUBA', 'MgBlock',
 
-    # iaf_psc_delta / iaf_cond_exp
+    # NEST-compatible neuron models
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
+    'iaf_psc_alpha',
 ]

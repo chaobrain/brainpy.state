@@ -18,11 +18,13 @@
 from .iaf_psc_delta import iaf_psc_delta
 from .iaf_psc_delta_ps import iaf_psc_delta_ps
 from .iaf_cond_exp import iaf_cond_exp
+from .iaf_psc_alpha import iaf_psc_alpha
 
 
 __all__ = [
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
+    'iaf_psc_alpha',
 ]
 
