@@ -1,0 +1,650 @@
+# Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+# -*- coding: utf-8 -*-
+
+"""Tests for NEST-compatible hh_psc_alpha neuron model.
+
+Tests cover:
+- Default parameter values matching NEST
+- Parameter validation
+- Subthreshold dynamics (ODE integration correctness)
+- Spike detection (threshold-and-local-maximum search)
+- Refractory period behavior
+- Synaptic current dynamics (alpha-shaped PSCs)
+- DC-driven spiking and firing rate behavior
+
+All tests use float64 precision on CPU to match NEST's numerical behavior.
+"""
+
+import math
+import unittest
+
+import numpy as np
+from scipy.integrate import solve_ivp
+
+import brainstate
+import braintools
+import brainunit as u
+import jax
+
+from brainpy.state import hh_psc_alpha
+
+jax.config.update('jax_enable_x64', True)
+brainstate.environ.set(precision=64, platform='cpu')
+
+
+def _nest_hh_dynamics(t, y, g_Na, g_K, g_L, E_Na, E_K, E_L, C_m, I_e, I_stim, tau_ex, tau_in):
+    """Reference HH dynamics matching NEST hh_psc_alpha_dynamics exactly."""
+    V = y[0]
+    m = y[1]
+    h = y[2]
+    n = y[3]
+    dI_ex = y[4]
+    I_ex = y[5]
+    dI_in = y[6]
+    I_in = y[7]
+
+    alpha_n = (0.01 * (V + 55.0)) / (1.0 - math.exp(-(V + 55.0) / 10.0))
+    beta_n = 0.125 * math.exp(-(V + 65.0) / 80.0)
+    alpha_m = (0.1 * (V + 40.0)) / (1.0 - math.exp(-(V + 40.0) / 10.0))
+    beta_m = 4.0 * math.exp(-(V + 65.0) / 18.0)
+    alpha_h = 0.07 * math.exp(-(V + 65.0) / 20.0)
+    beta_h = 1.0 / (1.0 + math.exp(-(V + 35.0) / 10.0))
+
+    I_Na = g_Na * m ** 3 * h * (V - E_Na)
+    I_K = g_K * n ** 4 * (V - E_K)
+    I_L = g_L * (V - E_L)
+
+    f = np.zeros(8)
+    f[0] = (-(I_Na + I_K + I_L) + I_stim + I_e + I_ex + I_in) / C_m
+    f[1] = alpha_m * (1.0 - m) - beta_m * m
+    f[2] = alpha_h * (1.0 - h) - beta_h * h
+    f[3] = alpha_n * (1.0 - n) - beta_n * n
+    f[4] = -dI_ex / tau_ex
+    f[5] = dI_ex - (I_ex / tau_ex)
+    f[6] = -dI_in / tau_in
+    f[7] = dI_in - (I_in / tau_in)
+    return f
+
+
+def _get_scalar(x):
+    """Extract a scalar float from a possibly 1D array."""
+    x = np.asarray(x)
+    if x.ndim > 0:
+        return float(x.flat[0])
+    return float(x)
+
+
+def _V_mV(neuron):
+    """Get membrane potential as scalar float in mV."""
+    return _get_scalar(u.math.asarray(neuron.V.value / u.mV))
+
+
+def _I_pA(state_val):
+    """Get current value as scalar float in pA."""
+    return _get_scalar(u.math.asarray(state_val / u.pA))
+
+
+class TestHHPscAlphaDefaults(unittest.TestCase):
+    """Test that default parameter values match NEST hh_psc_alpha."""
+
+    def test_default_parameters(self):
+        neuron = hh_psc_alpha(1)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.E_L / u.mV)), -54.402, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.C_m / u.pF)), 100.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.g_Na / u.nS)), 12000.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.g_K / u.nS)), 3600.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.g_L / u.nS)), 30.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.E_Na / u.mV)), 50.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.E_K / u.mV)), -77.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 2.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_syn_ex / u.ms)), 0.2, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_syn_in / u.ms)), 2.0, places=10)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
+
+    def test_initial_state_values(self):
+        """Initial V should be -65 mV; gating at equilibrium for V=-65."""
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = hh_psc_alpha(1)
+            neuron.init_state()
+
+            V = _V_mV(neuron)
+            self.assertAlmostEqual(V, -65.0, places=10)
+
+            # Check equilibrium gating variables at V = -65 mV
+            alpha_n = (0.01 * (-65.0 + 55.0)) / (1.0 - math.exp(-(-65.0 + 55.0) / 10.0))
+            beta_n = 0.125 * math.exp(-(-65.0 + 65.0) / 80.0)
+            alpha_m = (0.1 * (-65.0 + 40.0)) / (1.0 - math.exp(-(-65.0 + 40.0) / 10.0))
+            beta_m = 4.0 * math.exp(-(-65.0 + 65.0) / 18.0)
+            alpha_h = 0.07 * math.exp(-(-65.0 + 65.0) / 20.0)
+            beta_h = 1.0 / (1.0 + math.exp(-(-65.0 + 35.0) / 10.0))
+
+            m_eq = alpha_m / (alpha_m + beta_m)
+            h_eq = alpha_h / (alpha_h + beta_h)
+            n_eq = alpha_n / (alpha_n + beta_n)
+
+            self.assertAlmostEqual(_get_scalar(neuron.m.value), m_eq, places=10)
+            self.assertAlmostEqual(_get_scalar(neuron.h.value), h_eq, places=10)
+            self.assertAlmostEqual(_get_scalar(neuron.n.value), n_eq, places=10)
+
+            # Synaptic currents should be zero
+            self.assertAlmostEqual(_I_pA(neuron.I_syn_ex.value), 0.0, places=10)
+            self.assertAlmostEqual(_I_pA(neuron.I_syn_in.value), 0.0, places=10)
+            self.assertEqual(int(neuron.refractory_step_count.value[0]), 0)
+
+
+class TestHHPscAlphaValidation(unittest.TestCase):
+    """Test parameter validation."""
+
+    def test_negative_capacitance(self):
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, C_m=-100. * u.pF)
+
+    def test_zero_capacitance(self):
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, C_m=0. * u.pF)
+
+    def test_negative_refractory(self):
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, t_ref=-1. * u.ms)
+
+    def test_zero_refractory_ok(self):
+        neuron = hh_psc_alpha(1, t_ref=0. * u.ms)
+        self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 0.0)
+
+    def test_zero_tau_syn(self):
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, tau_syn_ex=0. * u.ms)
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, tau_syn_in=0. * u.ms)
+
+    def test_negative_conductance(self):
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, g_Na=-1. * u.nS)
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, g_K=-1. * u.nS)
+        with self.assertRaises(ValueError):
+            hh_psc_alpha(1, g_L=-1. * u.nS)
+
+
+class TestHHPscAlphaSubthreshold(unittest.TestCase):
+    """Test subthreshold dynamics against direct ODE integration."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
+        if delta is not None:
+            neuron.add_delta_input(f'delta_{step_idx}', delta)
+        with brainstate.environ.context(t=step_idx * self.dt):
+            return neuron.update(x=x)
+
+    def test_subthreshold_relaxation(self):
+        """Test that neuron relaxes toward resting potential without input."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA)
+            neuron.init_state()
+
+            for k in range(100):
+                self._step(neuron, k)
+
+            V_final = _V_mV(neuron)
+            self.assertAlmostEqual(V_final, -65.0, delta=1.0)
+
+    def test_ode_integration_matches_reference(self):
+        """Verify that one step of our model matches a reference RK45 solve."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=500. * u.pA)
+            neuron.init_state()
+
+            self._step(neuron, 0)
+
+            # Reference integration
+            V0 = -65.0
+            alpha_n = (0.01 * (V0 + 55.0)) / (1.0 - math.exp(-(V0 + 55.0) / 10.0))
+            beta_n = 0.125 * math.exp(-(V0 + 65.0) / 80.0)
+            alpha_m = (0.1 * (V0 + 40.0)) / (1.0 - math.exp(-(V0 + 40.0) / 10.0))
+            beta_m = 4.0 * math.exp(-(V0 + 65.0) / 18.0)
+            alpha_h = 0.07 * math.exp(-(V0 + 65.0) / 20.0)
+            beta_h = 1.0 / (1.0 + math.exp(-(V0 + 35.0) / 10.0))
+
+            m0 = alpha_m / (alpha_m + beta_m)
+            h0 = alpha_h / (alpha_h + beta_h)
+            n0 = alpha_n / (alpha_n + beta_n)
+
+            y0 = np.array([V0, m0, h0, n0, 0., 0., 0., 0.])
+            sol = solve_ivp(
+                _nest_hh_dynamics,
+                [0.0, 0.1],
+                y0,
+                method='RK45',
+                rtol=1e-3,
+                atol=1e-9,
+                args=(12000., 3600., 30., 50., -77., -54.402, 100., 500., 0., 0.2, 2.0),
+            )
+            yf = sol.y[:, -1]
+
+            V_model = _V_mV(neuron)
+            m_model = _get_scalar(neuron.m.value)
+            h_model = _get_scalar(neuron.h.value)
+            n_model = _get_scalar(neuron.n.value)
+
+            self.assertAlmostEqual(V_model, yf[0], places=8)
+            self.assertAlmostEqual(m_model, yf[1], places=10)
+            self.assertAlmostEqual(h_model, yf[2], places=10)
+            self.assertAlmostEqual(n_model, yf[3], places=10)
+
+    def test_dc_drives_depolarization(self):
+        """Strong DC input should depolarize the membrane."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1000. * u.pA)
+            neuron.init_state()
+
+            V_init = _V_mV(neuron)
+            for k in range(10):
+                self._step(neuron, k)
+
+            V_after = _V_mV(neuron)
+            self.assertGreater(V_after, V_init)
+
+
+class TestHHPscAlphaSpiking(unittest.TestCase):
+    """Test spike detection and refractory behavior."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
+        if delta is not None:
+            neuron.add_delta_input(f'delta_{step_idx}', delta)
+        with brainstate.environ.context(t=step_idx * self.dt):
+            return neuron.update(x=x)
+
+    @staticmethod
+    def _is_spike(spk):
+        return bool(u.math.all(spk > 0.0))
+
+    def test_spike_occurs_with_strong_dc(self):
+        """With a strong DC input, the neuron should fire a spike."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1000. * u.pA)
+            neuron.init_state()
+
+            spike_detected = False
+            for k in range(200):
+                spk = self._step(neuron, k)
+                if self._is_spike(spk):
+                    spike_detected = True
+                    break
+
+            self.assertTrue(spike_detected, "Neuron should fire with 1000 pA DC input within 20 ms")
+
+    def test_no_spike_without_input(self):
+        """With no input, the neuron should not spike."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA)
+            neuron.init_state()
+
+            for k in range(500):
+                spk = self._step(neuron, k)
+                self.assertFalse(self._is_spike(spk), f"No spike expected at step {k}")
+
+    def test_spike_detection_logic(self):
+        """Verify the threshold + local maximum spike detection logic."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1500. * u.pA)
+            neuron.init_state()
+
+            V_trace = []
+            spike_times = []
+            for k in range(300):
+                spk = self._step(neuron, k)
+                V_trace.append(_V_mV(neuron))
+                if self._is_spike(spk):
+                    spike_times.append(k * 0.1)
+
+            self.assertGreater(len(spike_times), 0)
+            V_max = max(V_trace)
+            self.assertGreater(V_max, 0.0, "V should exceed 0 mV during action potential")
+
+    def test_refractory_period(self):
+        """After a spike, no more spikes should occur for t_ref ms."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1500. * u.pA, t_ref=5. * u.ms)
+            neuron.init_state()
+
+            spike_times = []
+            for k in range(500):
+                spk = self._step(neuron, k)
+                if self._is_spike(spk):
+                    spike_times.append(k * 0.1)
+
+            self.assertGreater(len(spike_times), 1, "Expected multiple spikes with strong DC input")
+
+            for i in range(1, len(spike_times)):
+                isi = spike_times[i] - spike_times[i - 1]
+                self.assertGreaterEqual(isi, 5.0 - 0.1,
+                                        f"ISI {isi:.1f} ms violates refractory period of 5 ms")
+
+    def test_refractory_counter_decrements(self):
+        """Refractory counter should decrement each step after spike."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1500. * u.pA, t_ref=2. * u.ms)
+            neuron.init_state()
+
+            first_spike_step = None
+            for k in range(300):
+                spk = self._step(neuron, k)
+                if self._is_spike(spk):
+                    first_spike_step = k
+                    break
+
+            self.assertIsNotNone(first_spike_step, "Should detect a spike")
+
+            r = int(neuron.refractory_step_count.value[0])
+            self.assertGreater(r, 0, "Refractory counter should be positive after spike")
+
+            r_prev = r
+            for k in range(first_spike_step + 1, first_spike_step + 5):
+                self._step(neuron, k)
+                r_now = int(neuron.refractory_step_count.value[0])
+                if r_prev > 0:
+                    self.assertEqual(r_now, r_prev - 1,
+                                     f"Refractory counter should decrement from {r_prev} to {r_prev-1}")
+                r_prev = r_now
+
+    def test_dynamics_evolve_during_refractory(self):
+        """Unlike IAF, HH dynamics should continue during the refractory period."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1500. * u.pA, t_ref=5. * u.ms)
+            neuron.init_state()
+
+            for k in range(300):
+                spk = self._step(neuron, k)
+                if self._is_spike(spk):
+                    break
+
+            V_prev = _V_mV(neuron)
+            V_changed = False
+            for k2 in range(k + 1, k + 20):
+                self._step(neuron, k2)
+                V_now = _V_mV(neuron)
+                if abs(V_now - V_prev) > 1e-6:
+                    V_changed = True
+                V_prev = V_now
+
+            self.assertTrue(V_changed, "V should evolve during refractory period in HH model")
+
+
+class TestHHPscAlphaSynaptic(unittest.TestCase):
+    """Test synaptic current dynamics (alpha-shaped PSCs)."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
+        if delta is not None:
+            neuron.add_delta_input(f'delta_{step_idx}', delta)
+        with brainstate.environ.context(t=step_idx * self.dt):
+            return neuron.update(x=x)
+
+    def test_excitatory_spike_input(self):
+        """A positive weight spike input should increase dI_syn_ex."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA)
+            neuron.init_state()
+
+            self._step(neuron, 0)
+            dI_before = _get_scalar(neuron.dI_syn_ex.value)
+            self.assertAlmostEqual(dI_before, 0.0, places=10)
+
+            self._step(neuron, 1, delta=100. * u.pA)
+            dI_after = _get_scalar(neuron.dI_syn_ex.value)
+            self.assertGreater(dI_after, 0.0, "dI_syn_ex should be positive after excitatory input")
+
+    def test_inhibitory_spike_input(self):
+        """A negative weight spike input should increase (magnitude) dI_syn_in."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA)
+            neuron.init_state()
+
+            self._step(neuron, 0)
+            self._step(neuron, 1, delta=-50. * u.pA)
+            dI_in = _get_scalar(neuron.dI_syn_in.value)
+            self.assertLess(dI_in, 0.0, "dI_syn_in should be negative after inhibitory input")
+
+    def test_alpha_psc_waveform(self):
+        """Test that the synaptic current has an alpha-function shape."""
+        tau_ex_ms = 2.0
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA, tau_syn_ex=tau_ex_ms * u.ms)
+            neuron.init_state()
+
+            self._step(neuron, 0, delta=100. * u.pA)
+
+            I_trace = []
+            for k in range(1, 100):
+                self._step(neuron, k)
+                I_trace.append(_I_pA(neuron.I_syn_ex.value))
+
+            peak_idx = np.argmax(I_trace)
+            peak_time = (peak_idx + 1) * 0.1
+
+            self.assertAlmostEqual(peak_time, tau_ex_ms, delta=0.5)
+            self.assertGreater(I_trace[peak_idx], I_trace[-1])
+
+    def test_psc_normalization(self):
+        """A spike with weight 1 should produce peak current ~1 pA."""
+        tau_ex_ms = 2.0
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(
+                1, I_e=0. * u.pA, tau_syn_ex=tau_ex_ms * u.ms,
+                g_Na=0. * u.nS, g_K=0. * u.nS, g_L=0. * u.nS,
+            )
+            neuron.init_state()
+
+            self._step(neuron, 0, delta=1. * u.pA)
+
+            I_trace = []
+            for k in range(1, 200):
+                self._step(neuron, k)
+                I_trace.append(_I_pA(neuron.I_syn_ex.value))
+
+            peak = max(I_trace)
+            self.assertAlmostEqual(peak, 1.0, delta=0.05)
+
+    def test_stim_current_buffering(self):
+        """Stimulation current should be buffered one step."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA)
+            neuron.init_state()
+
+            self._step(neuron, 0, x=500. * u.pA)
+
+            I_stim = _I_pA(neuron.I_stim.value)
+            self.assertAlmostEqual(I_stim, 500.0, delta=1e-10)
+
+
+class TestHHPscAlphaMultiStep(unittest.TestCase):
+    """Multi-step integration tests comparing against a reference solver."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
+        if delta is not None:
+            neuron.add_delta_input(f'delta_{step_idx}', delta)
+        with brainstate.environ.context(t=step_idx * self.dt):
+            return neuron.update(x=x)
+
+    def test_multi_step_no_input(self):
+        """Multiple steps without input should match reference ODE solve."""
+        n_steps = 50
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=0. * u.pA)
+            neuron.init_state()
+
+            V_model = []
+            for k in range(n_steps):
+                self._step(neuron, k)
+                V_model.append(_V_mV(neuron))
+
+            V0 = -65.0
+            alpha_n = (0.01 * (V0 + 55.0)) / (1.0 - math.exp(-(V0 + 55.0) / 10.0))
+            beta_n = 0.125 * math.exp(-(V0 + 65.0) / 80.0)
+            alpha_m = (0.1 * (V0 + 40.0)) / (1.0 - math.exp(-(V0 + 40.0) / 10.0))
+            beta_m = 4.0 * math.exp(-(V0 + 65.0) / 18.0)
+            alpha_h = 0.07 * math.exp(-(V0 + 65.0) / 20.0)
+            beta_h = 1.0 / (1.0 + math.exp(-(V0 + 35.0) / 10.0))
+
+            m0 = alpha_m / (alpha_m + beta_m)
+            h0 = alpha_h / (alpha_h + beta_h)
+            n0 = alpha_n / (alpha_n + beta_n)
+
+            y = np.array([V0, m0, h0, n0, 0., 0., 0., 0.])
+            V_ref = []
+            for k in range(n_steps):
+                sol = solve_ivp(
+                    _nest_hh_dynamics,
+                    [0.0, 0.1],
+                    y,
+                    method='RK45',
+                    rtol=1e-3,
+                    atol=1e-9,
+                    args=(12000., 3600., 30., 50., -77., -54.402, 100., 0., 0., 0.2, 2.0),
+                )
+                y = sol.y[:, -1]
+                V_ref.append(y[0])
+
+            for k in range(n_steps):
+                self.assertAlmostEqual(V_model[k], V_ref[k], places=6,
+                                       msg=f"V mismatch at step {k}")
+
+    def test_dc_spiking_trajectory(self):
+        """With strong DC, verify the model produces action potentials with
+        reasonable peak voltage and recovery."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1000. * u.pA)
+            neuron.init_state()
+
+            V_trace = []
+            for k in range(500):
+                self._step(neuron, k)
+                V_trace.append(_V_mV(neuron))
+
+            V_max = max(V_trace)
+            V_min = min(V_trace)
+
+            self.assertGreater(V_max, 20.0, "AP peak should exceed 20 mV")
+            self.assertLess(V_min, -65.0, "AHP should be below -65 mV")
+
+    def test_firing_rate_increases_with_current(self):
+        """Firing rate should increase monotonically with input current."""
+        with brainstate.environ.context(dt=self.dt):
+            rates = []
+            for I_amp in [500., 1000., 1500.]:
+                neuron = hh_psc_alpha(1, I_e=I_amp * u.pA)
+                neuron.init_state()
+
+                for k in range(1000):
+                    self._step(neuron, k)
+
+                n_spikes = 0
+                for k in range(1000, 11000):
+                    spk = self._step(neuron, k)
+                    if bool(u.math.all(spk > 0.0)):
+                        n_spikes += 1
+
+                rates.append(n_spikes)
+
+            for i in range(1, len(rates)):
+                self.assertGreaterEqual(rates[i], rates[i - 1],
+                                         f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
+                                         f"{[500, 1000, 1500][i-1]} pA")
+
+
+class TestHHPscAlphaEdgeCases(unittest.TestCase):
+    """Test edge cases and special configurations."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
+        if delta is not None:
+            neuron.add_delta_input(f'delta_{step_idx}', delta)
+        with brainstate.environ.context(t=step_idx * self.dt):
+            return neuron.update(x=x)
+
+    def test_custom_initial_gating(self):
+        """Test that custom initial gating variables are used correctly."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, Act_m_init=0.5, Inact_h_init=0.3, Act_n_init=0.4)
+            neuron.init_state()
+
+            self.assertAlmostEqual(_get_scalar(neuron.m.value), 0.5, places=10)
+            self.assertAlmostEqual(_get_scalar(neuron.h.value), 0.3, places=10)
+            self.assertAlmostEqual(_get_scalar(neuron.n.value), 0.4, places=10)
+
+    def test_population_size(self):
+        """Test with a population of neurons."""
+        with brainstate.environ.context(dt=self.dt):
+            n_neurons = 5
+            neuron = hh_psc_alpha(n_neurons, I_e=1000. * u.pA)
+            neuron.init_state()
+
+            for k in range(100):
+                spk = self._step(neuron, k)
+
+            V = np.asarray(u.math.asarray(neuron.V.value / u.mV))
+            self.assertEqual(V.shape, (n_neurons,))
+            for i in range(1, n_neurons):
+                self.assertAlmostEqual(float(V[i]), float(V[0]), places=10)
+
+    def test_zero_refractory_period(self):
+        """With t_ref=0, spikes should not be suppressed by refractoriness."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1500. * u.pA, t_ref=0. * u.ms)
+            neuron.init_state()
+
+            spike_detected = False
+            for k in range(200):
+                spk = self._step(neuron, k)
+                if bool(u.math.all(spk > 0.0)):
+                    spike_detected = True
+                    break
+
+            self.assertTrue(spike_detected)
+
+    def test_last_spike_time_updated(self):
+        """Verify that last_spike_time is updated on spike emission."""
+        with brainstate.environ.context(dt=self.dt):
+            neuron = hh_psc_alpha(1, I_e=1500. * u.pA)
+            neuron.init_state()
+
+            initial_spk_time = _get_scalar(u.math.asarray(neuron.last_spike_time.value / u.ms))
+            self.assertLess(initial_spk_time, -1e6)
+
+            for k in range(200):
+                spk = self._step(neuron, k)
+                if bool(u.math.all(spk > 0.0)):
+                    t_spike = _get_scalar(u.math.asarray(neuron.last_spike_time.value / u.ms))
+                    expected_t = (k + 1) * 0.1
+                    self.assertAlmostEqual(t_spike, expected_t, delta=1e-10)
+                    break
+
+
+if __name__ == '__main__':
+    unittest.main()

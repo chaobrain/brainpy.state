@@ -73,6 +73,15 @@ from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
 from ._nest.gif_cond_exp import gif_cond_exp
 from ._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
 from ._nest.gif_psc_exp import gif_psc_exp
+from ._nest.hh_psc_alpha import hh_psc_alpha
+from ._nest.hh_psc_alpha_clopath import hh_psc_alpha_clopath
+from ._nest.hh_psc_alpha_gap import hh_psc_alpha_gap
+from ._nest.hh_cond_exp_traub import hh_cond_exp_traub
+from ._nest.hh_cond_beta_gap_traub import hh_cond_beta_gap_traub
+from ._nest.ht_neuron import ht_neuron
+from ._nest.izhikevich import izhikevich as nest_izhikevich
+from ._nest.pp_psc_delta import pp_psc_delta
+from ._nest.pp_cond_exp_mc_urbanczik import pp_cond_exp_mc_urbanczik
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -132,4 +141,13 @@ __all__ = [
     'gif_cond_exp',
     'gif_cond_exp_multisynapse',
     'gif_psc_exp',
+    'hh_psc_alpha',
+    'hh_psc_alpha_clopath',
+    'hh_psc_alpha_gap',
+    'hh_cond_exp_traub',
+    'hh_cond_beta_gap_traub',
+    'ht_neuron',
+    'nest_izhikevich',
+    'pp_psc_delta',
+    'pp_cond_exp_mc_urbanczik',
 ]

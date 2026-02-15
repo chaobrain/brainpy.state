@@ -205,9 +205,10 @@ cython_debug/
 /examples_classic/dynamics_training/data/
 /docs/api/generated/
 /CLAUDE.md
-/claude_implement_nest_models.sh
+/ai-coding/claude_implement_neuron_models.sh
 /claude_logs/
-/codex-bash.sh
-/codex-bash.ps1
+/ai-coding/codex-bash.sh
+/ai-coding/codex-bash.ps1
 /codex_logs/
-/claude_implement_nest_models.sh
+/ai-coding/claude_implement_neuron_models.sh
+/ai-coding/

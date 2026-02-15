@@ -42,6 +42,17 @@ from .mat2_psc_exp import mat2_psc_exp
 from .amat2_psc_exp import amat2_psc_exp
 from .glif_cond import glif_cond
 from .glif_psc import glif_psc
+from .glif_psc_double_alpha import glif_psc_double_alpha
+from .hh_psc_alpha import hh_psc_alpha
+from .hh_psc_alpha_clopath import hh_psc_alpha_clopath
+from .hh_psc_alpha_gap import hh_psc_alpha_gap
+from .hh_cond_exp_traub import hh_cond_exp_traub
+from .hh_cond_beta_gap_traub import hh_cond_beta_gap_traub
+from .ht_neuron import ht_neuron
+from .izhikevich import izhikevich
+from .pp_psc_delta import pp_psc_delta
+from .pp_cond_exp_mc_urbanczik import pp_cond_exp_mc_urbanczik
+from .ignore_and_fire import ignore_and_fire
 
 
 __all__ = [
@@ -72,5 +83,16 @@ __all__ = [
     'amat2_psc_exp',
     'glif_cond',
     'glif_psc',
+    'glif_psc_double_alpha',
+    'hh_psc_alpha',
+    'hh_psc_alpha_clopath',
+    'hh_psc_alpha_gap',
+    'hh_cond_exp_traub',
+    'hh_cond_beta_gap_traub',
+    'ht_neuron',
+    'izhikevich',
+    'pp_psc_delta',
+    'pp_cond_exp_mc_urbanczik',
+    'ignore_and_fire',
 ]
 
