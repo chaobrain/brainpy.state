@@ -53,6 +53,14 @@ from ._lif import (
     QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
 )
 from ._nest.dc_generator import dc_generator
+from ._nest.multimeter import multimeter
+from ._nest.correlation_detector import correlation_detector
+from ._nest.correlomatrix_detector import correlomatrix_detector
+from ._nest.correlospinmatrix_detector import correlospinmatrix_detector
+from ._nest.spike_recorder import spike_recorder
+from ._nest.spin_detector import spin_detector
+from ._nest.weight_recorder import weight_recorder
+from ._nest.volume_transmitter import volume_transmitter
 from ._nest.aeif_cond_alpha import aeif_cond_alpha
 from ._nest.aeif_cond_exp import aeif_cond_exp
 from ._nest.aeif_psc_alpha import aeif_psc_alpha
@@ -121,6 +129,14 @@ __all__ = [
 
     # NEST-compatible models
     'dc_generator',
+    'multimeter',
+    'correlation_detector',
+    'correlomatrix_detector',
+    'correlospinmatrix_detector',
+    'spike_recorder',
+    'spin_detector',
+    'weight_recorder',
+    'volume_transmitter',
     'aeif_cond_alpha',
     'aeif_cond_exp',
     'aeif_psc_alpha',

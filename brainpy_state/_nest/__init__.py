@@ -16,6 +16,14 @@
 # -*- coding: utf-8 -*-
 
 from .dc_generator import dc_generator
+from .multimeter import multimeter
+from .correlation_detector import correlation_detector
+from .correlomatrix_detector import correlomatrix_detector
+from .correlospinmatrix_detector import correlospinmatrix_detector
+from .spike_recorder import spike_recorder
+from .spin_detector import spin_detector
+from .weight_recorder import weight_recorder
+from .volume_transmitter import volume_transmitter
 from .aeif_cond_alpha import aeif_cond_alpha
 from .aeif_cond_exp import aeif_cond_exp
 from .aeif_psc_alpha import aeif_psc_alpha
@@ -49,6 +57,14 @@ from .iaf_bw_2001_exact import iaf_bw_2001_exact
 
 __all__ = [
     'dc_generator',
+    'multimeter',
+    'correlation_detector',
+    'correlomatrix_detector',
+    'correlospinmatrix_detector',
+    'spike_recorder',
+    'spin_detector',
+    'weight_recorder',
+    'volume_transmitter',
     'aeif_cond_alpha',
     'aeif_cond_exp',
     'aeif_psc_alpha',

@@ -10,6 +10,15 @@ Neuron Models Compatible with NEST
    :nosignatures:
    :template: classtemplate.rst
 
+   dc_generator
+   multimeter
+   correlation_detector
+   correlomatrix_detector
+   correlospinmatrix_detector
+   spike_recorder
+   spin_detector
+   weight_recorder
+   volume_transmitter
    iaf_psc_delta
    iaf_psc_delta_ps
    aeif_cond_alpha
