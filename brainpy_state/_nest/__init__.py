@@ -33,6 +33,15 @@ from .iaf_psc_exp_htum import iaf_psc_exp_htum
 from .iaf_psc_exp_ps import iaf_psc_exp_ps
 from .iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from .iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from .gif_cond_exp import gif_cond_exp
+from .gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
+from .gif_psc_exp import gif_psc_exp
+from .gif_psc_exp_multisynapse import gif_psc_exp_multisynapse
+from .gif_pop_psc_exp import gif_pop_psc_exp
+from .mat2_psc_exp import mat2_psc_exp
+from .amat2_psc_exp import amat2_psc_exp
+from .glif_cond import glif_cond
+from .glif_psc import glif_psc
 
 
 __all__ = [
@@ -54,5 +63,14 @@ __all__ = [
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
     'iaf_psc_alpha_ps',
+    'gif_cond_exp',
+    'gif_cond_exp_multisynapse',
+    'gif_psc_exp',
+    'gif_psc_exp_multisynapse',
+    'gif_pop_psc_exp',
+    'mat2_psc_exp',
+    'amat2_psc_exp',
+    'glif_cond',
+    'glif_psc',
 ]
 

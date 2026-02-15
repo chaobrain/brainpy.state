@@ -70,6 +70,9 @@ from ._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
 from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
 from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from ._nest.gif_cond_exp import gif_cond_exp
+from ._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
+from ._nest.gif_psc_exp import gif_psc_exp
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -126,4 +129,7 @@ __all__ = [
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
     'iaf_psc_alpha_ps',
+    'gif_cond_exp',
+    'gif_cond_exp_multisynapse',
+    'gif_psc_exp',
 ]

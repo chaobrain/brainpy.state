@@ -205,4 +205,9 @@ cython_debug/
 /examples_classic/dynamics_training/data/
 /docs/api/generated/
 /CLAUDE.md
-/claude_implement_nest_models_test.sh
+/claude_implement_nest_models.sh
+/claude_logs/
+/codex-bash.sh
+/codex-bash.ps1
+/codex_logs/
+/claude_implement_nest_models.sh
