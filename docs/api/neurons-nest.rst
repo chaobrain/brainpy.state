@@ -37,6 +37,9 @@ Neuron Models Compatible with NEST
    iaf_cond_exp_sfa_rr
    iaf_chs_2007
    iaf_chxk_2008
+   iaf_psc_delta
+   iaf_psc_delta_ps
+   iaf_cond_exp
    iaf_psc_alpha
    iaf_psc_exp
    iaf_psc_exp_multisynapse
@@ -61,3 +64,6 @@ Neuron Models Compatible with NEST
    threshold_lin_rate_opn
    rate_transformer_node
    siegert_neuron
+   iaf_psc_exp_ps
+   iaf_psc_exp_ps_lossless
+   iaf_psc_alpha_ps

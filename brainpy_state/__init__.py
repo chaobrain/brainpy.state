@@ -89,6 +89,16 @@ from ._nest.iaf_cond_exp import iaf_cond_exp
 from ._nest.iaf_cond_exp_sfa_rr import iaf_cond_exp_sfa_rr
 from ._nest.iaf_chs_2007 import iaf_chs_2007
 from ._nest.iaf_chxk_2008 import iaf_chxk_2008
+from ._nest.ac_generator import ac_generator
+from ._nest.dc_generator import dc_generator
+from ._nest.noise_generator import noise_generator
+from ._nest.step_current_generator import step_current_generator
+from ._nest.step_rate_generator import step_rate_generator
+from ._nest.spike_generator import spike_generator
+from ._nest.spike_train_injector import spike_train_injector
+from ._nest.iaf_psc_delta import iaf_psc_delta
+from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
+from ._nest.iaf_cond_exp import iaf_cond_exp
 from ._nest.iaf_psc_alpha import iaf_psc_alpha
 from ._nest.iaf_psc_exp import iaf_psc_exp
 from ._nest.iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
@@ -110,6 +120,21 @@ from ._nest.tanh_rate import tanh_rate_ipn, tanh_rate_opn
 from ._nest.threshold_lin_rate import threshold_lin_rate_ipn, threshold_lin_rate_opn
 from ._nest.rate_transformer_node import rate_transformer_node
 from ._nest.siegert_neuron import siegert_neuron
+from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
+from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
+from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from ._nest.gif_cond_exp import gif_cond_exp
+from ._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
+from ._nest.gif_psc_exp import gif_psc_exp
+from ._nest.hh_psc_alpha import hh_psc_alpha
+from ._nest.hh_psc_alpha_clopath import hh_psc_alpha_clopath
+from ._nest.hh_psc_alpha_gap import hh_psc_alpha_gap
+from ._nest.hh_cond_exp_traub import hh_cond_exp_traub
+from ._nest.hh_cond_beta_gap_traub import hh_cond_beta_gap_traub
+from ._nest.ht_neuron import ht_neuron
+from ._nest.izhikevich import izhikevich as nest_izhikevich
+from ._nest.pp_psc_delta import pp_psc_delta
+from ._nest.pp_cond_exp_mc_urbanczik import pp_cond_exp_mc_urbanczik
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -185,6 +210,16 @@ __all__ = [
     'iaf_cond_exp_sfa_rr',
     'iaf_chs_2007',
     'iaf_chxk_2008',
+    'ac_generator',
+    'dc_generator',
+    'noise_generator',
+    'step_current_generator',
+    'step_rate_generator',
+    'spike_generator',
+    'spike_train_injector',
+    'iaf_psc_delta',
+    'iaf_psc_delta_ps',
+    'iaf_cond_exp',
     'iaf_psc_alpha',
     'iaf_psc_exp',
     'iaf_psc_exp_multisynapse',
@@ -209,4 +244,19 @@ __all__ = [
     'threshold_lin_rate_opn',
     'rate_transformer_node',
     'siegert_neuron',
+    'iaf_psc_exp_ps',
+    'iaf_psc_exp_ps_lossless',
+    'iaf_psc_alpha_ps',
+    'gif_cond_exp',
+    'gif_cond_exp_multisynapse',
+    'gif_psc_exp',
+    'hh_psc_alpha',
+    'hh_psc_alpha_clopath',
+    'hh_psc_alpha_gap',
+    'hh_cond_exp_traub',
+    'hh_cond_beta_gap_traub',
+    'ht_neuron',
+    'nest_izhikevich',
+    'pp_psc_delta',
+    'pp_cond_exp_mc_urbanczik',
 ]

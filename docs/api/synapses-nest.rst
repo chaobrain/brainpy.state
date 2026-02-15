@@ -20,3 +20,4 @@ Synapse Models Compatible with NEST
     jonke_synapse
     urbanczik_synapse
     vogels_sprekeler_synapse
+
