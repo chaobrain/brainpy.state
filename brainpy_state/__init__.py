@@ -71,6 +71,15 @@ from ._nest.tsodyks_synapse import tsodyks_synapse
 from ._nest.tsodyks2_synapse import tsodyks2_synapse
 from ._nest.quantal_stp_synapse import quantal_stp_synapse
 from ._nest.tsodyks_synapse_hom import tsodyks_synapse_hom
+from ._nest.stdp_synapse import stdp_synapse
+from ._nest.stdp_synapse_hom import stdp_synapse_hom
+from ._nest.stdp_pl_synapse_hom import stdp_pl_synapse_hom
+from ._nest.stdp_facetshw_synapse_hom import stdp_facetshw_synapse_hom
+from ._nest.stdp_nn_pre_centered_synapse import stdp_nn_pre_centered_synapse
+from ._nest.stdp_nn_restr_synapse import stdp_nn_restr_synapse
+from ._nest.stdp_nn_symm_synapse import stdp_nn_symm_synapse
+from ._nest.stdp_triplet_synapse import stdp_triplet_synapse
+from ._nest.stdp_dopamine_synapse import stdp_dopamine_synapse
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
 from ._nest.iaf_cond_exp import iaf_cond_exp
@@ -141,6 +150,15 @@ __all__ = [
     'tsodyks2_synapse',
     'quantal_stp_synapse',
     'tsodyks_synapse_hom',
+    'stdp_synapse',
+    'stdp_synapse_hom',
+    'stdp_pl_synapse_hom',
+    'stdp_facetshw_synapse_hom',
+    'stdp_nn_pre_centered_synapse',
+    'stdp_nn_restr_synapse',
+    'stdp_nn_symm_synapse',
+    'stdp_triplet_synapse',
+    'stdp_dopamine_synapse',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',

@@ -18,4 +18,12 @@ Synapse Models Compatible with NEST
     tsodyks2_synapse
     quantal_stp_synapse
     tsodyks_synapse_hom
+    stdp_synapse
+    stdp_synapse_hom
+    stdp_pl_synapse_hom
+    stdp_nn_pre_centered_synapse
+    stdp_nn_restr_synapse
+    stdp_nn_symm_synapse
+    stdp_triplet_synapse
+    stdp_dopamine_synapse
 
