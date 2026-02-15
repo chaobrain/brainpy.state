@@ -18,11 +18,17 @@
 import math
 import unittest
 
+import numpy as np
+
 import braintools
 import brainstate
 import brainunit as u
+import jax
 
 from brainpy.state import iaf_cond_exp
+
+jax.config.update('jax_enable_x64', True)
+brainstate.environ.set(precision=64, platform='cpu')
 
 
 def _rkf45_ref_step(v, g_ex, g_in, is_refractory, i_stim, dt, h0, p, atol=1e-3):
@@ -98,6 +104,10 @@ class TestIAFCondExp(unittest.TestCase):
     def setUp(self):
         self.dt = 0.1 * u.ms
 
+    @staticmethod
+    def _is_spike(spk):
+        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64)[0] > 0.0)
+
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
@@ -118,6 +128,18 @@ class TestIAFCondExp(unittest.TestCase):
         self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
         self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
         self.assertEqual(neuron.I_e, 0. * u.pA)
+
+    def test_parameter_validation(self):
+        with self.assertRaises(ValueError):
+            iaf_cond_exp(1, C_m=0.0 * u.pF)
+        with self.assertRaises(ValueError):
+            iaf_cond_exp(1, tau_syn_ex=0.0 * u.ms)
+        with self.assertRaises(ValueError):
+            iaf_cond_exp(1, tau_syn_in=0.0 * u.ms)
+        with self.assertRaises(ValueError):
+            iaf_cond_exp(1, t_ref=-0.1 * u.ms)
+        with self.assertRaises(ValueError):
+            iaf_cond_exp(1, V_reset=-55. * u.mV, V_th=-55. * u.mV)
 
     def test_signed_spike_weights_split_into_ex_and_in(self):
         with brainstate.environ.context(dt=self.dt):
@@ -185,11 +207,11 @@ class TestIAFCondExp(unittest.TestCase):
 
             spikes = []
             for k in range(5):
-                spikes.append(self._step(neuron, k)[0])
+                spikes.append(self._is_spike(self._step(neuron, k)))
 
-            self.assertTrue(spikes[0] > 0.0)
-            self.assertTrue(spikes[1] == 0.0 and spikes[2] == 0.0 and spikes[3] == 0.0)
-            self.assertTrue(spikes[4] > 0.0)
+            self.assertTrue(spikes[0])
+            self.assertTrue((not spikes[1]) and (not spikes[2]) and (not spikes[3]))
+            self.assertTrue(spikes[4])
             self.assertTrue(u.math.allclose(neuron.last_spike_time.value, 5.0 * self.dt))
 
     def test_reference_trace_matches_nest_step_logic(self):
@@ -220,7 +242,7 @@ class TestIAFCondExp(unittest.TestCase):
                 v_model.append(float((neuron.V.value / u.mV)[0]))
                 ge_model.append(float((neuron.g_ex.value / u.nS)[0]))
                 gi_model.append(float((neuron.g_in.value / u.nS)[0]))
-                s_model.append(float(spk[0]))
+                s_model.append(self._is_spike(spk))
 
             dt = 0.1
             p = {
@@ -253,14 +275,14 @@ class TestIAFCondExp(unittest.TestCase):
                 if r > 0:
                     r -= 1
                     v = p['V_reset']
-                    spike = 0.0
+                    spike = False
                 else:
                     if v >= p['V_th']:
-                        spike = 1.0
+                        spike = True
                         r = refr_steps
                         v = p['V_reset']
                     else:
-                        spike = 0.0
+                        spike = False
                 i_stim = x
                 v_ref.append(v)
                 ge_ref.append(ge)

@@ -26,4 +26,14 @@ Synapse Models Compatible with NEST
     stdp_nn_symm_synapse
     stdp_triplet_synapse
     stdp_dopamine_synapse
+    gap_junction
+    diffusion_connection
+    rate_connection_instantaneous
+    rate_connection_delayed
+    sic_connection
+    ht_synapse
+    clopath_synapse
+    jonke_synapse
+    urbanczik_synapse
+    vogels_sprekeler_synapse
 

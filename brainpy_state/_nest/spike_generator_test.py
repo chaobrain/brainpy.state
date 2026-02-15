@@ -1,0 +1,352 @@
+# Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+# -*- coding: utf-8 -*-
+
+"""
+Tests for the spike_generator stimulation device.
+
+Validates the brainpy.state ``spike_generator`` against:
+  1. Expected spike timing output (unit tests).
+  2. Spike weight support.
+  3. Active window gating (start/stop).
+  4. Validation of parameter constraints.
+  5. The NEST simulator ``spike_generator`` reference
+     (skipped when NEST is not installed).
+"""
+
+import unittest
+
+import brainstate
+import braintools
+import brainunit as u
+import jax.numpy as jnp
+import numpy as np
+import numpy.testing as npt
+
+brainstate.environ.set(precision=64, platform='cpu')
+
+from brainpy.state import spike_generator
+
+
+class TestSpikeGeneratorBasic(unittest.TestCase):
+    """Unit tests for spike_generator output values and timing."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def test_empty_spike_times(self):
+        """With no spike times, output is always zero."""
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator()
+            for t_val in [0., 1., 10., 100.]:
+                with brainstate.environ.context(t=t_val * u.ms):
+                    out = sg.update()
+                npt.assert_allclose(out, 0.0, atol=1e-15,
+                                    err_msg=f"Should be 0 at t={t_val} ms")
+
+    def test_single_spike(self):
+        """Single spike at specified time."""
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[5. * u.ms],
+            )
+            # Before spike
+            with brainstate.environ.context(t=4.9 * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.0, atol=1e-15)
+
+            # At spike time
+            with brainstate.environ.context(t=5. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 1.0, atol=1e-15)
+
+            # After spike
+            with brainstate.environ.context(t=5.1 * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.0, atol=1e-15)
+
+    def test_multiple_spikes(self):
+        """Multiple spikes at different times."""
+        spike_times_ms = [1.0, 2.0, 3.0]
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[t * u.ms for t in spike_times_ms],
+            )
+
+            for t_val in [0.5, 1.5, 2.5, 3.5]:
+                with brainstate.environ.context(t=t_val * u.ms):
+                    out = sg.update()
+                npt.assert_allclose(out, 0.0, atol=1e-15,
+                                    err_msg=f"Should be 0 at t={t_val}")
+
+            for t_val in spike_times_ms:
+                with brainstate.environ.context(t=t_val * u.ms):
+                    out = sg.update()
+                npt.assert_allclose(out, 1.0, atol=1e-15,
+                                    err_msg=f"Should be 1 at t={t_val}")
+
+    def test_spike_weights(self):
+        """Spikes with custom weights."""
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[5. * u.ms, 10. * u.ms],
+                spike_weights=[2.5, 0.3],
+            )
+            with brainstate.environ.context(t=5. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 2.5, atol=1e-15)
+
+            with brainstate.environ.context(t=10. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.3, atol=1e-15)
+
+    def test_start_stop_gating(self):
+        """Spikes outside active window are suppressed."""
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[3. * u.ms, 7. * u.ms, 12. * u.ms],
+                start=5. * u.ms,
+                stop=10. * u.ms,
+            )
+            # Before start: spike at t=3 suppressed
+            with brainstate.environ.context(t=3. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.0, atol=1e-15)
+
+            # During active window: spike at t=7 fires
+            with brainstate.environ.context(t=7. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 1.0, atol=1e-15)
+
+            # After stop: spike at t=12 suppressed
+            with brainstate.environ.context(t=12. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.0, atol=1e-15)
+
+    def test_origin_shifts_window(self):
+        """Origin shifts the active window."""
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[5. * u.ms, 15. * u.ms],
+                start=10. * u.ms,
+                stop=20. * u.ms,
+                origin=100. * u.ms,
+            )
+            # Effective window: 110 to 120 ms
+            # spike at 5 ms: not in window
+            with brainstate.environ.context(t=5. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.0, atol=1e-15)
+
+            # spike at 15 ms: not in window (110-120)
+            with brainstate.environ.context(t=15. * u.ms):
+                out = sg.update()
+            npt.assert_allclose(out, 0.0, atol=1e-15)
+
+    def test_output_shape(self):
+        """Output shape matches in_size."""
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                in_size=5,
+                spike_times=[5. * u.ms],
+            )
+            with brainstate.environ.context(t=5. * u.ms):
+                out = sg.update()
+            self.assertEqual(out.shape, (5,))
+
+
+class TestSpikeGeneratorValidation(unittest.TestCase):
+    """Test parameter validation."""
+
+    def test_unsorted_spike_times_raises(self):
+        """Non-sorted spike times raises error."""
+        with self.assertRaises(ValueError):
+            spike_generator(
+                spike_times=[3. * u.ms, 1. * u.ms, 5. * u.ms],
+            )
+
+    def test_mismatched_weights_raises(self):
+        """Different sized spike_times and spike_weights raises error."""
+        with self.assertRaises(ValueError):
+            spike_generator(
+                spike_times=[1. * u.ms, 2. * u.ms],
+                spike_weights=[1.0],
+            )
+
+
+class TestSpikeGeneratorSimulation(unittest.TestCase):
+    """Integration tests: full simulation with spike recording."""
+
+    def test_spike_train_recording(self):
+        """Run simulation and record all spike times."""
+        dt_ms = 0.1
+        spike_times_ms = [1.0, 2.0, 3.0, 5.0, 10.0]
+        simtime = 15.0
+        n_steps = int(round(simtime / dt_ms))
+
+        with brainstate.environ.context(dt=dt_ms * u.ms):
+            sg = spike_generator(
+                spike_times=[t * u.ms for t in spike_times_ms],
+            )
+
+            recorded_spike_times = []
+            for step in range(n_steps):
+                t = step * dt_ms
+                with brainstate.environ.context(t=t * u.ms):
+                    out = sg.update()
+                    if float(out[0]) > 0.5:
+                        recorded_spike_times.append(round(t, 4))
+
+        npt.assert_allclose(recorded_spike_times, spike_times_ms, atol=1e-4,
+                            err_msg="Recorded spike times don't match input")
+
+    def test_spike_gated_recording(self):
+        """Only spikes within active window are recorded."""
+        dt_ms = 0.1
+        spike_times_ms = [1.0, 3.0, 5.0, 7.0, 9.0]
+        start = 3.0
+        stop = 8.0
+        simtime = 12.0
+        n_steps = int(round(simtime / dt_ms))
+
+        with brainstate.environ.context(dt=dt_ms * u.ms):
+            sg = spike_generator(
+                spike_times=[t * u.ms for t in spike_times_ms],
+                start=start * u.ms,
+                stop=stop * u.ms,
+            )
+
+            recorded = []
+            for step in range(n_steps):
+                t = step * dt_ms
+                with brainstate.environ.context(t=t * u.ms):
+                    out = sg.update()
+                    if float(out[0]) > 0.5:
+                        recorded.append(round(t, 4))
+
+        # Only spikes at 3.0, 5.0, 7.0 are in [3, 8)
+        expected = [3.0, 5.0, 7.0]
+        npt.assert_allclose(recorded, expected, atol=1e-4,
+                            err_msg="Gated spike times don't match expected")
+
+
+class TestSpikeGeneratorVsNEST(unittest.TestCase):
+    """Compare against NEST simulator."""
+
+    def setUp(self):
+        self.dt_ms = 0.1
+        self.dt = self.dt_ms * u.ms
+
+    @staticmethod
+    def _is_nest_available():
+        try:
+            import nest  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def test_spike_times_vs_nest(self):
+        """Compare spike generator output against NEST spike_generator."""
+        if not self._is_nest_available():
+            self.skipTest("NEST simulator not available")
+
+        import nest
+
+        spike_times_ms = [1.0, 2.0, 3.0]
+        simtime = 10.0
+
+        # --- NEST ---
+        nest.ResetKernel()
+        nest.resolution = self.dt_ms
+
+        sg_nest = nest.Create("spike_generator", params={
+            "spike_times": spike_times_ms,
+        })
+        sr = nest.Create("spike_recorder", params={"time_in_steps": False})
+        nest.Connect(sg_nest, sr, syn_spec={"delay": self.dt_ms})
+        nest.Simulate(simtime)
+
+        nest_spike_times = sr.events["times"]
+
+        # --- brainpy.state ---
+        n_steps = int(round(simtime / self.dt_ms))
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[t * u.ms for t in spike_times_ms],
+            )
+
+            bp_spike_times = []
+            for step in range(n_steps):
+                t = step * self.dt_ms
+                with brainstate.environ.context(t=t * u.ms):
+                    out = sg.update()
+                    if float(out[0]) > 0.5:
+                        bp_spike_times.append(round(t, 4))
+
+        # NEST spike times may have delay offset; compare the intended spike times
+        npt.assert_allclose(bp_spike_times, spike_times_ms, atol=1e-4,
+                            err_msg="brainpy spike times don't match expected")
+
+    def test_spike_generator_with_start_stop_vs_nest(self):
+        """Compare gated spike generator against NEST."""
+        if not self._is_nest_available():
+            self.skipTest("NEST simulator not available")
+
+        import nest
+
+        spike_times_ms = [0.1, 5.0, 5.3, 5.9, 6.0, 9.3]
+        start = 5.0
+        stop = 6.0
+        simtime = 10.0
+
+        # --- NEST ---
+        nest.ResetKernel()
+        nest.resolution = self.dt_ms
+        sg_nest = nest.Create("spike_generator", params={
+            "spike_times": spike_times_ms,
+            "start": start,
+            "stop": stop,
+        })
+        sr = nest.Create("spike_recorder")
+        nest.Connect(sg_nest, sr, syn_spec={"delay": self.dt_ms})
+        nest.Simulate(simtime)
+
+        nest_n_spikes = sr.n_events
+
+        # --- brainpy.state ---
+        n_steps = int(round(simtime / self.dt_ms))
+        with brainstate.environ.context(dt=self.dt):
+            sg = spike_generator(
+                spike_times=[t * u.ms for t in spike_times_ms],
+                start=start * u.ms,
+                stop=stop * u.ms,
+            )
+
+            bp_n_spikes = 0
+            for step in range(n_steps):
+                t = step * self.dt_ms
+                with brainstate.environ.context(t=t * u.ms):
+                    out = sg.update()
+                    if float(out[0]) > 0.5:
+                        bp_n_spikes += 1
+
+        # Both should record the same number of spikes in [5, 6)
+        self.assertEqual(bp_n_spikes, nest_n_spikes,
+                         msg=f"Spike count mismatch: brainpy={bp_n_spikes}, NEST={nest_n_spikes}")
+
+
+if __name__ == '__main__':
+    unittest.main()
