@@ -48,10 +48,13 @@ from ._exponential import Expon, DualExpon
 from ._hh import HH, MorrisLecar, WangBuzsakiHH
 from ._inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
 from ._izhikevich import Izhikevich, IzhikevichRef
-from ._lif import (IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
-                    QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef)
+from ._lif import (
+    IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
+    QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
+)
+from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
-                           align_pre_projection, align_post_projection)
+                          align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
 from ._stp import STP, STD
 from ._synapse import Alpha, AMPA, GABAa, BioNMDA
@@ -67,6 +70,7 @@ __all__ = [
     'HH', 'MorrisLecar', 'WangBuzsakiHH',
     # _inputs
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+
     # _izhikevich
     'Izhikevich', 'IzhikevichRef',
     # _lif
@@ -85,4 +89,7 @@ __all__ = [
     'SymmetryGapJunction', 'AsymmetryGapJunction',
     # _synouts
     'SynOut', 'COBA', 'CUBA', 'MgBlock',
+
+    # iaf_psc_delta
+    'iaf_psc_delta',
 ]
