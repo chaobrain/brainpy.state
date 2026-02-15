@@ -161,6 +161,15 @@ class iaf_cond_exp(Neuron):
     ``refractory``           Optional boolean refractory indicator (if ``ref_var=True``)
     ======================== ===========================================
 
+    Sends
+    -----
+    ``SpikeEvent`` (conceptually; represented as returned spike tensor).
+
+    Receives
+    --------
+    - Signed spike-weight conductance increments through ``add_delta_input``.
+    - External current input through ``x`` in :meth:`update` (one-step delayed).
+
     Notes
     -----
 
@@ -509,4 +518,4 @@ class iaf_cond_exp(Neuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float32) * u.mV)
+        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float64) * u.mV)

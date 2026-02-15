@@ -55,7 +55,11 @@ from ._lif import (
 from ._nest.dc_generator import dc_generator
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
+from ._nest.iaf_cond_alpha import iaf_cond_alpha
+from ._nest.iaf_cond_alpha_mc import iaf_cond_alpha_mc
+from ._nest.iaf_cond_beta import iaf_cond_beta
 from ._nest.iaf_cond_exp import iaf_cond_exp
+from ._nest.iaf_cond_exp_sfa_rr import iaf_cond_exp_sfa_rr
 from ._nest.iaf_psc_alpha import iaf_psc_alpha
 from ._nest.iaf_psc_exp import iaf_psc_exp
 from ._nest.iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
@@ -105,7 +109,11 @@ __all__ = [
     'dc_generator',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
+    'iaf_cond_alpha',
+    'iaf_cond_alpha_mc',
+    'iaf_cond_beta',
     'iaf_cond_exp',
+    'iaf_cond_exp_sfa_rr',
     'iaf_psc_alpha',
     'iaf_psc_exp',
     'iaf_psc_exp_multisynapse',

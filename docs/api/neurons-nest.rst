@@ -12,7 +12,11 @@ Neuron Models Compatible with NEST
 
    iaf_psc_delta
    iaf_psc_delta_ps
+   iaf_cond_alpha
+   iaf_cond_alpha_mc
+   iaf_cond_beta
    iaf_cond_exp
+   iaf_cond_exp_sfa_rr
    iaf_psc_alpha
    iaf_psc_exp
    iaf_psc_exp_multisynapse
