@@ -16,6 +16,16 @@
 # -*- coding: utf-8 -*-
 
 from .dc_generator import dc_generator
+from .inhomogeneous_poisson_generator import inhomogeneous_poisson_generator
+from .poisson_generator import poisson_generator
+from .poisson_generator_ps import poisson_generator_ps
+from .sinusoidal_poisson_generator import sinusoidal_poisson_generator
+from .sinusoidal_gamma_generator import sinusoidal_gamma_generator
+from .gamma_sup_generator import gamma_sup_generator
+from .ppd_sup_generator import ppd_sup_generator
+from .mip_generator import mip_generator
+from .spike_dilutor import spike_dilutor
+from .pulsepacket_generator import pulsepacket_generator
 from .iaf_psc_delta import iaf_psc_delta
 from .iaf_psc_delta_ps import iaf_psc_delta_ps
 from .iaf_cond_exp import iaf_cond_exp
@@ -27,10 +37,23 @@ from .iaf_psc_exp_htum import iaf_psc_exp_htum
 from .iaf_psc_exp_ps import iaf_psc_exp_ps
 from .iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from .iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from .mcculloch_pitts_neuron import mcculloch_pitts_neuron
+from .ginzburg_neuron import ginzburg_neuron
+from .erfc_neuron import erfc_neuron
 
 
 __all__ = [
     'dc_generator',
+    'inhomogeneous_poisson_generator',
+    'poisson_generator',
+    'poisson_generator_ps',
+    'sinusoidal_poisson_generator',
+    'sinusoidal_gamma_generator',
+    'gamma_sup_generator',
+    'ppd_sup_generator',
+    'mip_generator',
+    'spike_dilutor',
+    'pulsepacket_generator',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
@@ -42,5 +65,8 @@ __all__ = [
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
     'iaf_psc_alpha_ps',
+    'mcculloch_pitts_neuron',
+    'ginzburg_neuron',
+    'erfc_neuron',
 ]
 

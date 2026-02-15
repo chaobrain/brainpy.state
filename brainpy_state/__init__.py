@@ -53,6 +53,16 @@ from ._lif import (
     QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
 )
 from ._nest.dc_generator import dc_generator
+from ._nest.inhomogeneous_poisson_generator import inhomogeneous_poisson_generator
+from ._nest.poisson_generator import poisson_generator
+from ._nest.poisson_generator_ps import poisson_generator_ps
+from ._nest.sinusoidal_poisson_generator import sinusoidal_poisson_generator
+from ._nest.sinusoidal_gamma_generator import sinusoidal_gamma_generator
+from ._nest.gamma_sup_generator import gamma_sup_generator
+from ._nest.ppd_sup_generator import ppd_sup_generator
+from ._nest.mip_generator import mip_generator
+from ._nest.spike_dilutor import spike_dilutor
+from ._nest.pulsepacket_generator import pulsepacket_generator
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
 from ._nest.iaf_cond_exp import iaf_cond_exp
@@ -64,6 +74,8 @@ from ._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
 from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
 from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from ._nest.ginzburg_neuron import ginzburg_neuron
+from ._nest.erfc_neuron import erfc_neuron
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -103,6 +115,16 @@ __all__ = [
 
     # NEST-compatible models
     'dc_generator',
+    'inhomogeneous_poisson_generator',
+    'poisson_generator',
+    'poisson_generator_ps',
+    'sinusoidal_poisson_generator',
+    'sinusoidal_gamma_generator',
+    'gamma_sup_generator',
+    'ppd_sup_generator',
+    'mip_generator',
+    'spike_dilutor',
+    'pulsepacket_generator',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
@@ -114,4 +136,6 @@ __all__ = [
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
     'iaf_psc_alpha_ps',
+    'ginzburg_neuron',
+    'erfc_neuron',
 ]
