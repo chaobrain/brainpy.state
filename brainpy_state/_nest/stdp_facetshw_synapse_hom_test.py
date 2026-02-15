@@ -355,7 +355,7 @@ class TestSTDPFACETSHWSynapseHomParameters(unittest.TestCase):
         syn.check_synapse_params({'synapse_model': 'stdp_facetshw_synapse_hom', 'a_thresh_th': 2.0})
 
     def test_lut_and_vector_validation(self):
-        with self.assertRaisesRegex(ValueError, 'Look-up table has not 2\\^4 entries'):
+        with self.assertRaisesRegex(ValueError, 'lookuptable_0 must contain exactly 16 entries'):
             stdp_facetshw_synapse_hom(lookuptable_0=[0] * 15)
         with self.assertRaisesRegex(ValueError, 'lookuptable_0 entries must be in \\[0,15\\]'):
             stdp_facetshw_synapse_hom(lookuptable_0=[16] + [0] * 15)
