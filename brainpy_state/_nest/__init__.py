@@ -29,6 +29,10 @@ from .rate_connection_instantaneous import rate_connection_instantaneous
 from .rate_connection_delayed import rate_connection_delayed
 from .sic_connection import sic_connection
 from .ht_synapse import ht_synapse
+from .clopath_synapse import clopath_synapse
+from .jonke_synapse import jonke_synapse
+from .urbanczik_synapse import urbanczik_synapse
+from .vogels_sprekeler_synapse import vogels_sprekeler_synapse
 from .volume_transmitter import volume_transmitter
 from .aeif_cond_alpha import aeif_cond_alpha
 from .aeif_cond_exp import aeif_cond_exp
@@ -86,6 +90,10 @@ __all__ = [
     'rate_connection_delayed',
     'sic_connection',
     'ht_synapse',
+    'clopath_synapse',
+    'jonke_synapse',
+    'urbanczik_synapse',
+    'vogels_sprekeler_synapse',
     'volume_transmitter',
     'aeif_cond_alpha',
     'aeif_cond_exp',

@@ -16,3 +16,7 @@ Synapse Models Compatible with NEST
     rate_connection_delayed
     sic_connection
     ht_synapse
+    clopath_synapse
+    jonke_synapse
+    urbanczik_synapse
+    vogels_sprekeler_synapse

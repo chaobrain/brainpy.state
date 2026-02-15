@@ -66,6 +66,10 @@ from ._nest.rate_connection_instantaneous import rate_connection_instantaneous
 from ._nest.rate_connection_delayed import rate_connection_delayed
 from ._nest.sic_connection import sic_connection
 from ._nest.ht_synapse import ht_synapse
+from ._nest.clopath_synapse import clopath_synapse
+from ._nest.jonke_synapse import jonke_synapse
+from ._nest.urbanczik_synapse import urbanczik_synapse
+from ._nest.vogels_sprekeler_synapse import vogels_sprekeler_synapse
 from ._nest.volume_transmitter import volume_transmitter
 from ._nest.aeif_cond_alpha import aeif_cond_alpha
 from ._nest.aeif_cond_exp import aeif_cond_exp
@@ -158,6 +162,10 @@ __all__ = [
     'rate_connection_delayed',
     'sic_connection',
     'ht_synapse',
+    'clopath_synapse',
+    'jonke_synapse',
+    'urbanczik_synapse',
+    'vogels_sprekeler_synapse',
     'volume_transmitter',
     'aeif_cond_alpha',
     'aeif_cond_exp',
