@@ -52,10 +52,18 @@ from ._lif import (
     IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
     QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
 )
+from ._nest.dc_generator import dc_generator
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
 from ._nest.iaf_cond_exp import iaf_cond_exp
 from ._nest.iaf_psc_alpha import iaf_psc_alpha
+from ._nest.iaf_psc_exp import iaf_psc_exp
+from ._nest.iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
+from ._nest.iaf_psc_alpha_multisynapse import iaf_psc_alpha_multisynapse
+from ._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
+from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
+from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
+from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -93,9 +101,17 @@ __all__ = [
     # _synouts
     'SynOut', 'COBA', 'CUBA', 'MgBlock',
 
-    # NEST-compatible neuron models
+    # NEST-compatible models
+    'dc_generator',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
     'iaf_psc_alpha',
+    'iaf_psc_exp',
+    'iaf_psc_exp_multisynapse',
+    'iaf_psc_alpha_multisynapse',
+    'iaf_psc_exp_htum',
+    'iaf_psc_exp_ps',
+    'iaf_psc_exp_ps_lossless',
+    'iaf_psc_alpha_ps',
 ]
