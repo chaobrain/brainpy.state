@@ -16,6 +16,15 @@
 # -*- coding: utf-8 -*-
 
 from .dc_generator import dc_generator
+from .aeif_cond_alpha import aeif_cond_alpha
+from .aeif_cond_exp import aeif_cond_exp
+from .aeif_psc_alpha import aeif_psc_alpha
+from .aeif_psc_exp import aeif_psc_exp
+from .aeif_psc_delta import aeif_psc_delta
+from .aeif_psc_delta_clopath import aeif_psc_delta_clopath
+from .aeif_cond_alpha_multisynapse import aeif_cond_alpha_multisynapse
+from .aeif_cond_beta_multisynapse import aeif_cond_beta_multisynapse
+from .aeif_cond_alpha_astro import aeif_cond_alpha_astro
 from .iaf_psc_delta import iaf_psc_delta
 from .iaf_psc_delta_ps import iaf_psc_delta_ps
 from .iaf_cond_alpha import iaf_cond_alpha
@@ -23,18 +32,32 @@ from .iaf_cond_alpha_mc import iaf_cond_alpha_mc
 from .iaf_cond_beta import iaf_cond_beta
 from .iaf_cond_exp import iaf_cond_exp
 from .iaf_cond_exp_sfa_rr import iaf_cond_exp_sfa_rr
+from .iaf_chs_2007 import iaf_chs_2007
+from .iaf_chxk_2008 import iaf_chxk_2008
 from .iaf_psc_alpha import iaf_psc_alpha
 from .iaf_psc_exp import iaf_psc_exp
 from .iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
 from .iaf_psc_alpha_multisynapse import iaf_psc_alpha_multisynapse
 from .iaf_psc_exp_htum import iaf_psc_exp_htum
+from .iaf_tum_2000 import iaf_tum_2000
 from .iaf_psc_exp_ps import iaf_psc_exp_ps
 from .iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from .iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from .iaf_bw_2001 import iaf_bw_2001
+from .iaf_bw_2001_exact import iaf_bw_2001_exact
 
 
 __all__ = [
     'dc_generator',
+    'aeif_cond_alpha',
+    'aeif_cond_exp',
+    'aeif_psc_alpha',
+    'aeif_psc_exp',
+    'aeif_psc_delta',
+    'aeif_psc_delta_clopath',
+    'aeif_cond_alpha_multisynapse',
+    'aeif_cond_beta_multisynapse',
+    'aeif_cond_alpha_astro',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_alpha',
@@ -42,12 +65,17 @@ __all__ = [
     'iaf_cond_beta',
     'iaf_cond_exp',
     'iaf_cond_exp_sfa_rr',
+    'iaf_chs_2007',
+    'iaf_chxk_2008',
     'iaf_psc_alpha',
     'iaf_psc_exp',
     'iaf_psc_exp_multisynapse',
     'iaf_psc_alpha_multisynapse',
     'iaf_psc_exp_htum',
+    'iaf_tum_2000',
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
     'iaf_psc_alpha_ps',
+    'iaf_bw_2001',
+    'iaf_bw_2001_exact',
 ]
