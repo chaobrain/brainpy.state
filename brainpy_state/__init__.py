@@ -60,6 +60,12 @@ from ._nest.correlospinmatrix_detector import correlospinmatrix_detector
 from ._nest.spike_recorder import spike_recorder
 from ._nest.spin_detector import spin_detector
 from ._nest.weight_recorder import weight_recorder
+from ._nest.gap_junction import gap_junction
+from ._nest.diffusion_connection import diffusion_connection
+from ._nest.rate_connection_instantaneous import rate_connection_instantaneous
+from ._nest.rate_connection_delayed import rate_connection_delayed
+from ._nest.sic_connection import sic_connection
+from ._nest.ht_synapse import ht_synapse
 from ._nest.volume_transmitter import volume_transmitter
 from ._nest.aeif_cond_alpha import aeif_cond_alpha
 from ._nest.aeif_cond_exp import aeif_cond_exp
@@ -146,6 +152,12 @@ __all__ = [
     'spike_recorder',
     'spin_detector',
     'weight_recorder',
+    'gap_junction',
+    'diffusion_connection',
+    'rate_connection_instantaneous',
+    'rate_connection_delayed',
+    'sic_connection',
+    'ht_synapse',
     'volume_transmitter',
     'aeif_cond_alpha',
     'aeif_cond_exp',

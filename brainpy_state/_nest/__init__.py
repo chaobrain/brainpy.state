@@ -23,6 +23,12 @@ from .correlospinmatrix_detector import correlospinmatrix_detector
 from .spike_recorder import spike_recorder
 from .spin_detector import spin_detector
 from .weight_recorder import weight_recorder
+from .gap_junction import gap_junction
+from .diffusion_connection import diffusion_connection
+from .rate_connection_instantaneous import rate_connection_instantaneous
+from .rate_connection_delayed import rate_connection_delayed
+from .sic_connection import sic_connection
+from .ht_synapse import ht_synapse
 from .volume_transmitter import volume_transmitter
 from .aeif_cond_alpha import aeif_cond_alpha
 from .aeif_cond_exp import aeif_cond_exp
@@ -74,6 +80,12 @@ __all__ = [
     'spike_recorder',
     'spin_detector',
     'weight_recorder',
+    'gap_junction',
+    'diffusion_connection',
+    'rate_connection_instantaneous',
+    'rate_connection_delayed',
+    'sic_connection',
+    'ht_synapse',
     'volume_transmitter',
     'aeif_cond_alpha',
     'aeif_cond_exp',
