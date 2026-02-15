@@ -37,7 +37,6 @@ keywords = [
 dependencies = [
     "numpy>=1.15",
     "jax",
-    "tqdm",
     "brainpy>=2.7.6",
     "brainstate>=0.2.0",
     "brainunit",
