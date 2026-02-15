@@ -53,6 +53,8 @@ from ._lif import (
     QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
 )
 from ._nest.iaf_psc_delta import iaf_psc_delta
+from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
+from ._nest.iaf_cond_exp import iaf_cond_exp
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -90,6 +92,8 @@ __all__ = [
     # _synouts
     'SynOut', 'COBA', 'CUBA', 'MgBlock',
 
-    # iaf_psc_delta
+    # iaf_psc_delta / iaf_cond_exp
     'iaf_psc_delta',
+    'iaf_psc_delta_ps',
+    'iaf_cond_exp',
 ]

@@ -178,14 +178,18 @@ Readout Layers
    # Leaky spiking readout
    brainpy.state.LeakySpikeReadout(in_size=100, tau=5*u.ms, V_th=1*u.mV)
 
+
+
 .. toctree::
    :hidden:
    :maxdepth: 2
 
-   neurons
-   synapses
-   projections
-   synouts
-   stp
-   readouts
-   inputs
+   neurons.rst
+   neurons-nest.rst
+   synapses.rst
+   synapses-nest.rst
+   projections.rst
+   synouts.rst
+   stp.rst
+   readouts.rst
+   inputs.rst
