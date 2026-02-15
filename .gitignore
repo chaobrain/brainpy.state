@@ -208,3 +208,4 @@ cython_debug/
 /claude_implement_nest_models.sh
 /claude_logs/
 /codex_logs/
+/codex-synapse-model.sh

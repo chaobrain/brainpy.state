@@ -63,6 +63,14 @@ from ._nest.ppd_sup_generator import ppd_sup_generator
 from ._nest.mip_generator import mip_generator
 from ._nest.spike_dilutor import spike_dilutor
 from ._nest.pulsepacket_generator import pulsepacket_generator
+from ._nest.static_synapse import static_synapse
+from ._nest.static_synapse_hom_w import static_synapse_hom_w
+from ._nest.bernoulli_synapse import bernoulli_synapse
+from ._nest.cont_delay_synapse import cont_delay_synapse
+from ._nest.tsodyks_synapse import tsodyks_synapse
+from ._nest.tsodyks2_synapse import tsodyks2_synapse
+from ._nest.quantal_stp_synapse import quantal_stp_synapse
+from ._nest.tsodyks_synapse_hom import tsodyks_synapse_hom
 from ._nest.iaf_psc_delta import iaf_psc_delta
 from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
 from ._nest.iaf_cond_exp import iaf_cond_exp
@@ -125,6 +133,14 @@ __all__ = [
     'mip_generator',
     'spike_dilutor',
     'pulsepacket_generator',
+    'static_synapse',
+    'static_synapse_hom_w',
+    'bernoulli_synapse',
+    'cont_delay_synapse',
+    'tsodyks_synapse',
+    'tsodyks2_synapse',
+    'quantal_stp_synapse',
+    'tsodyks_synapse_hom',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',

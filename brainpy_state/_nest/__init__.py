@@ -26,6 +26,14 @@ from .ppd_sup_generator import ppd_sup_generator
 from .mip_generator import mip_generator
 from .spike_dilutor import spike_dilutor
 from .pulsepacket_generator import pulsepacket_generator
+from .static_synapse import static_synapse
+from .static_synapse_hom_w import static_synapse_hom_w
+from .bernoulli_synapse import bernoulli_synapse
+from .cont_delay_synapse import cont_delay_synapse
+from .tsodyks_synapse import tsodyks_synapse
+from .tsodyks2_synapse import tsodyks2_synapse
+from .quantal_stp_synapse import quantal_stp_synapse
+from .tsodyks_synapse_hom import tsodyks_synapse_hom
 from .iaf_psc_delta import iaf_psc_delta
 from .iaf_psc_delta_ps import iaf_psc_delta_ps
 from .iaf_cond_exp import iaf_cond_exp
@@ -54,6 +62,14 @@ __all__ = [
     'mip_generator',
     'spike_dilutor',
     'pulsepacket_generator',
+    'static_synapse',
+    'static_synapse_hom_w',
+    'bernoulli_synapse',
+    'cont_delay_synapse',
+    'tsodyks_synapse',
+    'tsodyks2_synapse',
+    'quantal_stp_synapse',
+    'tsodyks_synapse_hom',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
     'iaf_cond_exp',
