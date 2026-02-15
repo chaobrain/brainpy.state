@@ -10,6 +10,22 @@ Synapse Models Compatible with NEST
     :nosignatures:
     :template: classtemplate.rst
 
+    static_synapse
+    static_synapse_hom_w
+    bernoulli_synapse
+    cont_delay_synapse
+    tsodyks_synapse
+    tsodyks2_synapse
+    quantal_stp_synapse
+    tsodyks_synapse_hom
+    stdp_synapse
+    stdp_synapse_hom
+    stdp_pl_synapse_hom
+    stdp_nn_pre_centered_synapse
+    stdp_nn_restr_synapse
+    stdp_nn_symm_synapse
+    stdp_triplet_synapse
+    stdp_dopamine_synapse
     gap_junction
     diffusion_connection
     rate_connection_instantaneous

@@ -16,6 +16,33 @@
 # -*- coding: utf-8 -*-
 
 from .dc_generator import dc_generator
+from .inhomogeneous_poisson_generator import inhomogeneous_poisson_generator
+from .poisson_generator import poisson_generator
+from .poisson_generator_ps import poisson_generator_ps
+from .sinusoidal_poisson_generator import sinusoidal_poisson_generator
+from .sinusoidal_gamma_generator import sinusoidal_gamma_generator
+from .gamma_sup_generator import gamma_sup_generator
+from .ppd_sup_generator import ppd_sup_generator
+from .mip_generator import mip_generator
+from .spike_dilutor import spike_dilutor
+from .pulsepacket_generator import pulsepacket_generator
+from .static_synapse import static_synapse
+from .static_synapse_hom_w import static_synapse_hom_w
+from .bernoulli_synapse import bernoulli_synapse
+from .cont_delay_synapse import cont_delay_synapse
+from .tsodyks_synapse import tsodyks_synapse
+from .tsodyks2_synapse import tsodyks2_synapse
+from .quantal_stp_synapse import quantal_stp_synapse
+from .tsodyks_synapse_hom import tsodyks_synapse_hom
+from .stdp_synapse import stdp_synapse
+from .stdp_synapse_hom import stdp_synapse_hom
+from .stdp_pl_synapse_hom import stdp_pl_synapse_hom
+from .stdp_facetshw_synapse_hom import stdp_facetshw_synapse_hom
+from .stdp_nn_pre_centered_synapse import stdp_nn_pre_centered_synapse
+from .stdp_nn_restr_synapse import stdp_nn_restr_synapse
+from .stdp_nn_symm_synapse import stdp_nn_symm_synapse
+from .stdp_triplet_synapse import stdp_triplet_synapse
+from .stdp_dopamine_synapse import stdp_dopamine_synapse
 from .multimeter import multimeter
 from .correlation_detector import correlation_detector
 from .correlomatrix_detector import correlomatrix_detector
@@ -67,6 +94,12 @@ from .iaf_psc_exp import iaf_psc_exp
 from .iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
 from .iaf_psc_alpha_multisynapse import iaf_psc_alpha_multisynapse
 from .iaf_psc_exp_htum import iaf_psc_exp_htum
+from .iaf_psc_exp_ps import iaf_psc_exp_ps
+from .iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
+from .iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from .mcculloch_pitts_neuron import mcculloch_pitts_neuron
+from .ginzburg_neuron import ginzburg_neuron
+from .erfc_neuron import erfc_neuron
 from .iaf_tum_2000 import iaf_tum_2000
 from .iaf_psc_exp_ps import iaf_psc_exp_ps
 from .iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
@@ -108,6 +141,34 @@ from .pp_cond_exp_mc_urbanczik import pp_cond_exp_mc_urbanczik
 from .ignore_and_fire import ignore_and_fire
 
 __all__ = [
+    'dc_generator',
+    'inhomogeneous_poisson_generator',
+    'poisson_generator',
+    'poisson_generator_ps',
+    'sinusoidal_poisson_generator',
+    'sinusoidal_gamma_generator',
+    'gamma_sup_generator',
+    'ppd_sup_generator',
+    'mip_generator',
+    'spike_dilutor',
+    'pulsepacket_generator',
+    'static_synapse',
+    'static_synapse_hom_w',
+    'bernoulli_synapse',
+    'cont_delay_synapse',
+    'tsodyks_synapse',
+    'tsodyks2_synapse',
+    'quantal_stp_synapse',
+    'tsodyks_synapse_hom',
+    'stdp_synapse',
+    'stdp_synapse_hom',
+    'stdp_pl_synapse_hom',
+    'stdp_facetshw_synapse_hom',
+    'stdp_nn_pre_centered_synapse',
+    'stdp_nn_restr_synapse',
+    'stdp_nn_symm_synapse',
+    'stdp_triplet_synapse',
+    'stdp_dopamine_synapse',
     'dc_generator',
     'multimeter',
     'correlation_detector',
@@ -160,6 +221,12 @@ __all__ = [
     'iaf_psc_exp_multisynapse',
     'iaf_psc_alpha_multisynapse',
     'iaf_psc_exp_htum',
+    'iaf_psc_exp_ps',
+    'iaf_psc_exp_ps_lossless',
+    'iaf_psc_alpha_ps',
+    'mcculloch_pitts_neuron',
+    'ginzburg_neuron',
+    'erfc_neuron',
     'iaf_tum_2000',
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',

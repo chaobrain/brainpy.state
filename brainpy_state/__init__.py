@@ -53,6 +53,33 @@ from ._lif import (
     QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
 )
 from ._nest.dc_generator import dc_generator
+from ._nest.inhomogeneous_poisson_generator import inhomogeneous_poisson_generator
+from ._nest.poisson_generator import poisson_generator
+from ._nest.poisson_generator_ps import poisson_generator_ps
+from ._nest.sinusoidal_poisson_generator import sinusoidal_poisson_generator
+from ._nest.sinusoidal_gamma_generator import sinusoidal_gamma_generator
+from ._nest.gamma_sup_generator import gamma_sup_generator
+from ._nest.ppd_sup_generator import ppd_sup_generator
+from ._nest.mip_generator import mip_generator
+from ._nest.spike_dilutor import spike_dilutor
+from ._nest.pulsepacket_generator import pulsepacket_generator
+from ._nest.static_synapse import static_synapse
+from ._nest.static_synapse_hom_w import static_synapse_hom_w
+from ._nest.bernoulli_synapse import bernoulli_synapse
+from ._nest.cont_delay_synapse import cont_delay_synapse
+from ._nest.tsodyks_synapse import tsodyks_synapse
+from ._nest.tsodyks2_synapse import tsodyks2_synapse
+from ._nest.quantal_stp_synapse import quantal_stp_synapse
+from ._nest.tsodyks_synapse_hom import tsodyks_synapse_hom
+from ._nest.stdp_synapse import stdp_synapse
+from ._nest.stdp_synapse_hom import stdp_synapse_hom
+from ._nest.stdp_pl_synapse_hom import stdp_pl_synapse_hom
+from ._nest.stdp_facetshw_synapse_hom import stdp_facetshw_synapse_hom
+from ._nest.stdp_nn_pre_centered_synapse import stdp_nn_pre_centered_synapse
+from ._nest.stdp_nn_restr_synapse import stdp_nn_restr_synapse
+from ._nest.stdp_nn_symm_synapse import stdp_nn_symm_synapse
+from ._nest.stdp_triplet_synapse import stdp_triplet_synapse
+from ._nest.stdp_dopamine_synapse import stdp_dopamine_synapse
 from ._nest.multimeter import multimeter
 from ._nest.correlation_detector import correlation_detector
 from ._nest.correlomatrix_detector import correlomatrix_detector
@@ -104,6 +131,11 @@ from ._nest.iaf_psc_exp import iaf_psc_exp
 from ._nest.iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
 from ._nest.iaf_psc_alpha_multisynapse import iaf_psc_alpha_multisynapse
 from ._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
+from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
+from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
+from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
+from ._nest.ginzburg_neuron import ginzburg_neuron
+from ._nest.erfc_neuron import erfc_neuron
 from ._nest.iaf_tum_2000 import iaf_tum_2000
 from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
 from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
@@ -174,6 +206,33 @@ __all__ = [
 
     # NEST-compatible models
     'dc_generator',
+    'inhomogeneous_poisson_generator',
+    'poisson_generator',
+    'poisson_generator_ps',
+    'sinusoidal_poisson_generator',
+    'sinusoidal_gamma_generator',
+    'gamma_sup_generator',
+    'ppd_sup_generator',
+    'mip_generator',
+    'spike_dilutor',
+    'pulsepacket_generator',
+    'static_synapse',
+    'static_synapse_hom_w',
+    'bernoulli_synapse',
+    'cont_delay_synapse',
+    'tsodyks_synapse',
+    'tsodyks2_synapse',
+    'quantal_stp_synapse',
+    'tsodyks_synapse_hom',
+    'stdp_synapse',
+    'stdp_synapse_hom',
+    'stdp_pl_synapse_hom',
+    'stdp_facetshw_synapse_hom',
+    'stdp_nn_pre_centered_synapse',
+    'stdp_nn_restr_synapse',
+    'stdp_nn_symm_synapse',
+    'stdp_triplet_synapse',
+    'stdp_dopamine_synapse',
     'multimeter',
     'correlation_detector',
     'correlomatrix_detector',
@@ -225,6 +284,11 @@ __all__ = [
     'iaf_psc_exp_multisynapse',
     'iaf_psc_alpha_multisynapse',
     'iaf_psc_exp_htum',
+    'iaf_psc_exp_ps',
+    'iaf_psc_exp_ps_lossless',
+    'iaf_psc_alpha_ps',
+    'ginzburg_neuron',
+    'erfc_neuron',
     'iaf_tum_2000',
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
