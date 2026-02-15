@@ -90,6 +90,16 @@ from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
 from ._nest.iaf_bw_2001 import iaf_bw_2001
 from ._nest.iaf_bw_2001_exact import iaf_bw_2001_exact
+from ._nest.rate_neuron_ipn import rate_neuron_ipn
+from ._nest.rate_neuron_opn import rate_neuron_opn
+from ._nest.lin_rate import lin_rate_ipn, lin_rate_opn
+from ._nest.gauss_rate import gauss_rate_ipn
+from ._nest.sigmoid_rate import sigmoid_rate_ipn
+from ._nest.sigmoid_rate_gg_1998 import sigmoid_rate_gg_1998_ipn
+from ._nest.tanh_rate import tanh_rate_ipn, tanh_rate_opn
+from ._nest.threshold_lin_rate import threshold_lin_rate_ipn, threshold_lin_rate_opn
+from ._nest.rate_transformer_node import rate_transformer_node
+from ._nest.siegert_neuron import siegert_neuron
 from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
                           align_pre_projection, align_post_projection)
 from ._readout import LeakyRateReadout, LeakySpikeReadout
@@ -166,4 +176,17 @@ __all__ = [
     'iaf_psc_alpha_ps',
     'iaf_bw_2001',
     'iaf_bw_2001_exact',
+    'rate_neuron_ipn',
+    'rate_neuron_opn',
+    'lin_rate_ipn',
+    'lin_rate_opn',
+    'gauss_rate_ipn',
+    'sigmoid_rate_ipn',
+    'sigmoid_rate_gg_1998_ipn',
+    'tanh_rate_ipn',
+    'tanh_rate_opn',
+    'threshold_lin_rate_ipn',
+    'threshold_lin_rate_opn',
+    'rate_transformer_node',
+    'siegert_neuron',
 ]

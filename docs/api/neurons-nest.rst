@@ -48,3 +48,16 @@ Neuron Models Compatible with NEST
    iaf_psc_alpha_ps
    iaf_bw_2001
    iaf_bw_2001_exact
+   rate_neuron_ipn
+   rate_neuron_opn
+   lin_rate_ipn
+   lin_rate_opn
+   gauss_rate_ipn
+   sigmoid_rate_ipn
+   sigmoid_rate_gg_1998_ipn
+   tanh_rate_ipn
+   tanh_rate_opn
+   threshold_lin_rate_ipn
+   threshold_lin_rate_opn
+   rate_transformer_node
+   siegert_neuron

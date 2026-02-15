@@ -53,6 +53,16 @@ from .iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
 from .iaf_psc_alpha_ps import iaf_psc_alpha_ps
 from .iaf_bw_2001 import iaf_bw_2001
 from .iaf_bw_2001_exact import iaf_bw_2001_exact
+from .rate_neuron_ipn import rate_neuron_ipn
+from .rate_neuron_opn import rate_neuron_opn
+from .lin_rate import lin_rate_ipn, lin_rate_opn
+from .gauss_rate import gauss_rate_ipn
+from .sigmoid_rate import sigmoid_rate_ipn
+from .sigmoid_rate_gg_1998 import sigmoid_rate_gg_1998_ipn
+from .tanh_rate import tanh_rate_ipn, tanh_rate_opn
+from .threshold_lin_rate import threshold_lin_rate_ipn, threshold_lin_rate_opn
+from .rate_transformer_node import rate_transformer_node
+from .siegert_neuron import siegert_neuron
 
 
 __all__ = [
@@ -94,4 +104,17 @@ __all__ = [
     'iaf_psc_alpha_ps',
     'iaf_bw_2001',
     'iaf_bw_2001_exact',
+    'rate_neuron_ipn',
+    'rate_neuron_opn',
+    'lin_rate_ipn',
+    'lin_rate_opn',
+    'gauss_rate_ipn',
+    'sigmoid_rate_ipn',
+    'sigmoid_rate_gg_1998_ipn',
+    'tanh_rate_ipn',
+    'tanh_rate_opn',
+    'threshold_lin_rate_ipn',
+    'threshold_lin_rate_opn',
+    'rate_transformer_node',
+    'siegert_neuron',
 ]
