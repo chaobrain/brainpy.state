@@ -1,12 +1,12 @@
 Neuron Models
 =============
 
-Spiking neuron models in BrainPy.
+Core spiking neuron models in ``brainpy.state``.
 
 .. currentmodule:: brainpy.state
 
 Leaky Integrate-and-Fire Models
----------------------------------
+-------------------------------
 
 .. autosummary::
    :toctree: generated/
@@ -39,7 +39,7 @@ Izhikevich Models
    IzhikevichRef
 
 Hodgkin-Huxley Models
-----------------------
+---------------------
 
 .. autosummary::
    :toctree: generated/

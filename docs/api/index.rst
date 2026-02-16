@@ -7,7 +7,7 @@ Complete API reference for ``brainpy.state``.
 Organization
 ------------
 
-The API is organized into the following categories:
+**Core Models** — high-level, composable building blocks for spiking neural networks:
 
 .. grid:: 1 2 2 3
 
@@ -45,6 +45,27 @@ The API is organized into the following categories:
       :link: inputs.html
 
       Spike and current generators (PoissonSpike, SpikeTime)
+
+
+**NEST-Compatible Models** — faithful re-implementations of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ models:
+
+.. grid:: 1 2 2 3
+
+   .. grid-item-card:: :material-regular:`neurology;2em` NEST Neurons
+      :link: nest-neurons.html
+
+      IAF, AdEx, GIF, GLIF, HH, Izhikevich, rate, and binary neurons
+
+   .. grid-item-card:: :material-regular:`sync_alt;2em` NEST Synapses & Plasticity
+      :link: nest-synapses.html
+
+      Static, STP, STDP, voltage-based, and specialized synapse models
+
+   .. grid-item-card:: :material-regular:`developer_board;2em` NEST Devices
+      :link: nest-devices.html
+
+      Generators, recorders, and detectors
+
 
 Example Reference
 -----------------
@@ -183,13 +204,21 @@ Readout Layers
 .. toctree::
    :hidden:
    :maxdepth: 2
+   :caption: Core Models
 
-   neurons.rst
-   neurons-nest.rst
-   synapses.rst
-   synapses-nest.rst
-   projections.rst
-   synouts.rst
-   stp.rst
-   readouts.rst
-   inputs.rst
+   neurons
+   synapses
+   projections
+   synouts
+   stp
+   readouts
+   inputs
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: NEST-Compatible Models
+
+   nest-neurons
+   nest-synapses
+   nest-devices

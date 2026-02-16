@@ -5,7 +5,8 @@ Connect neural populations with the Comm-Syn-Out architecture.
 
 .. currentmodule:: brainpy.state
 
-
+Projection Classes
+------------------
 
 .. autosummary::
     :toctree: generated/
@@ -16,6 +17,25 @@ Connect neural populations with the Comm-Syn-Out architecture.
     AlignPostProj
     DeltaProj
     CurrentProj
+
+Projection Helper Functions
+----------------------------
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+    :template: classtemplate.rst
+
     align_pre_projection
     align_post_projection
 
+Gap Junction Projections
+------------------------
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+    :template: classtemplate.rst
+
+    SymmetryGapJunction
+    AsymmetryGapJunction

@@ -1,7 +1,7 @@
 Synapse Models
 ==============
 
-Synaptic dynamics models in BrainPy.
+Core synaptic dynamics models in ``brainpy.state``.
 
 .. currentmodule:: brainpy.state
 
@@ -18,7 +18,7 @@ Simple Synapse Models
     Alpha
 
 Biological Receptor Models
----------------------------
+--------------------------
 
 .. autosummary::
     :toctree: generated/
@@ -28,4 +28,3 @@ Biological Receptor Models
     AMPA
     GABAa
     BioNMDA
-
