@@ -99,15 +99,15 @@ class noise_generator(brainstate.nn.Dynamics):
 
     Basic usage:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     ng = bps.noise_generator(mean=0. * u.pA,
+    ...     ng = brainpy.state.noise_generator(mean=0. * u.pA,
     ...                              std=100. * u.pA,
     ...                              seed=42)
-    ...     neuron = bps.iaf_psc_delta(1)
+    ...     neuron = brainpy.state.iaf_psc_delta(1)
     ...     neuron.init_state()
     ...
     ...     for step in range(1000):

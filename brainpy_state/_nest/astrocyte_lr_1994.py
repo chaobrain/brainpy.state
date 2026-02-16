@@ -258,8 +258,8 @@ class astrocyte_lr_1994(Dynamics):
     
     .. code-block:: python
     
-       >>> import brainpy.state as bps
-       >>> model = bps.astrocyte_lr_1994(in_size=1)
+       >>> import brainpy
+       >>> model = brainpy.state.astrocyte_lr_1994(in_size=1)
        >>> model.init_state()
     """
 

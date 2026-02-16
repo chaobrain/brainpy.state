@@ -99,15 +99,15 @@ class dc_generator(brainstate.nn.Dynamics):
 
     Basic usage with an iaf_psc_delta neuron:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     dc = bps.dc_generator(amplitude=500. * u.pA,
+    ...     dc = brainpy.state.dc_generator(amplitude=500. * u.pA,
     ...                           start=10. * u.ms,
     ...                           stop=50. * u.ms)
-    ...     neuron = bps.iaf_psc_delta(1)
+    ...     neuron = brainpy.state.iaf_psc_delta(1)
     ...     neuron.init_state()
     ...
     ...     # In simulation loop:
@@ -118,9 +118,9 @@ class dc_generator(brainstate.nn.Dynamics):
 
     Multiple generators with different time windows:
 
-    >>> dc1 = bps.dc_generator(amplitude=300. * u.pA,
+    >>> dc1 = brainpy.state.dc_generator(amplitude=300. * u.pA,
     ...                        start=0. * u.ms, stop=100. * u.ms)
-    >>> dc2 = bps.dc_generator(amplitude=-200. * u.pA,
+    >>> dc2 = brainpy.state.dc_generator(amplitude=-200. * u.pA,
     ...                        start=50. * u.ms, stop=150. * u.ms)
 
     References

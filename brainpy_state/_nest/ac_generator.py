@@ -112,18 +112,18 @@ class ac_generator(brainstate.nn.Dynamics):
 
     Basic usage with a neuron:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     ac = bps.ac_generator(amplitude=500. * u.pA,
+    ...     ac = brainpy.state.ac_generator(amplitude=500. * u.pA,
     ...                           offset=100. * u.pA,
     ...                           frequency=100. * u.Hz,
     ...                           phase=0.,
     ...                           start=5. * u.ms,
     ...                           stop=50. * u.ms)
-    ...     neuron = bps.iaf_psc_delta(1)
+    ...     neuron = brainpy.state.iaf_psc_delta(1)
     ...     neuron.init_state()
     ...
     ...     for step in range(1000):

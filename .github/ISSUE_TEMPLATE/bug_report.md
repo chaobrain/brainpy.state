@@ -16,7 +16,7 @@ A clear and concise description of what the bug is.
 **Minimal code example to reproduce the issue:**
 
 ```python
-import brainpy.state as bps
+import brainpy
 
 # Your code here that demonstrates the bug
 ```
