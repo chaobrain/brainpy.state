@@ -52,7 +52,7 @@ name = "brainpy_state"
 
 [project.urls]
 "Bug Tracker" = "https://github.com/chaobrain/brainpy.state/issues"
-"Documentation" = "https://brainpy-state.readthedocs.io/"
+"Documentation" = "https://brainpy.readthedocs.io/projects/state/"
 "Source Code" = "https://github.com/chaobrain/brainpy.state"
 
 

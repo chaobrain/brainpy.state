@@ -1,7 +1,7 @@
 Synapse Models (BrainPy)
 =======================
 
-BrainPy-compatible synaptic dynamics models.
+BrainPy-style synaptic dynamics models.
 
 .. currentmodule:: brainpy.state
 

@@ -7,7 +7,7 @@
 <p align="center">
 	<a href="https://pypi.org/project/brainpy_state/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainpy_state"></a>
 	<a href="https://github.com/chaobrain/brainpy.state"><img alt="LICENSE" src="https://img.shields.io/badge/license-Apache%202.0-green?style=plastic"></a>
-  	<a href="https://brainpy-state.readthedocs.io/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
+  	<a href="https://brainpy.readthedocs.io/projects/state/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
   	<a href="https://badge.fury.io/py/brainpy_state"><img alt="PyPI version" src="https://badge.fury.io/py/brainpy_state.svg"></a>
     <a href="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml/badge.svg"></a>
 </p>
@@ -18,7 +18,7 @@
 The library ships **167+ models** organized in three tiers:
 
 - **Base classes** — `Dynamics`, `Neuron`, `Synapse` — the abstract foundation every model inherits from.
-- **BrainPy-compatible models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
+- **BrainPy-style models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
 - **NEST-compatible models (119+)** — faithful JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neuron, synapse, plasticity (STDP, STP), and device models.
 
 All parameters carry physical units via [brainunit](https://github.com/chaobrain/brainunit), and every neuron supports surrogate-gradient-based training out of the box.
@@ -67,7 +67,7 @@ I2I = brainpy.state.DeltaProj(
 
 ## Links
 
-- **Documentation**: https://brainpy-state.readthedocs.io/
+- **Documentation**: https://brainpy.readthedocs.io/projects/state/
 - **Source**: https://github.com/chaobrain/brainpy.state
 - **Bug reports**: https://github.com/chaobrain/brainpy.state/issues
 - **Ecosystem**: https://brainmodeling.readthedocs.io/

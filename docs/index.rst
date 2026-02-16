@@ -10,7 +10,7 @@ It is the point-neuron modeling layer of the
 The library ships **167+ models** organized in three tiers:
 
 - **Base classes** — ``Dynamics``, ``Neuron``, ``Synapse`` — the abstract foundation every model inherits from.
-- **BrainPy-compatible models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, ...),
+- **BrainPy-style models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, ...),
   synapses (Expon, Alpha, AMPA, NMDA, ...), projections, readouts, and input generators
   previously designed in `BrainPy <https://brainpy.readthedocs.io/>`_.
 - **NEST-compatible models (119+)** — faithful JAX re-implementations of

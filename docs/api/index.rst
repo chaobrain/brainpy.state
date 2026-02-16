@@ -6,7 +6,7 @@ Complete API reference for ``brainpy.state``.
 The API is organized into three categories:
 
 - **Base Models** — abstract base classes that all models inherit from
-- **BrainPy-Compatible Models** — high-level, composable building blocks for the `BrainPy <https://brainpy.readthedocs.io/>`_ models
+- **BrainPy-style Models** — high-level, composable building blocks for the `BrainPy <https://brainpy.readthedocs.io/>`_ models
 - **NEST-Compatible Models** — faithful re-implementations of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ models
 
 
@@ -23,7 +23,7 @@ Organization
       Abstract base classes: Dynamics, Neuron, Synapse
 
 
-**BrainPy-Compatible Models**
+**BrainPy-style Models**
 
 .. grid:: 1 2 2 3
 
@@ -95,7 +95,7 @@ Organization
 .. toctree::
    :hidden:
    :maxdepth: 2
-   :caption: BrainPy-Compatible Models
+   :caption: BrainPy-style Models
 
    brainpy-neurons
    brainpy-synapses
