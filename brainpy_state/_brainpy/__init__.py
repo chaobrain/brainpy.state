@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 """
-BrainPy-compatible models for brainpy.state.
+BrainPy-style models for brainpy.state.
 
 This subpackage provides high-level, composable neuron, synapse, projection,
 and input models that are previously designed in the BrainPy simulator.

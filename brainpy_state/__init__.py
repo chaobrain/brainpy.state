@@ -50,7 +50,7 @@ __version_info__ = tuple(map(int, __version__.split(".")))
 from ._base import Dynamics, Neuron, Synapse
 
 # =============================================================================
-# BrainPy-Compatible Models
+# BrainPy-style Models
 # =============================================================================
 
 from ._brainpy import (
@@ -268,7 +268,7 @@ __all__ = [
     'Dynamics', 'Neuron', 'Synapse',
 
     # =========================================================================
-    # BrainPy-Compatible Models
+    # BrainPy-style Models
     # =========================================================================
 
     # Neuron models - LIF family

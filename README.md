@@ -18,7 +18,7 @@
 The library ships **167+ models** organized in three tiers:
 
 - **Base classes** — `Dynamics`, `Neuron`, `Synapse` — the abstract foundation every model inherits from.
-- **BrainPy-compatible models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
+- **BrainPy-style models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
 - **NEST-compatible models (119+)** — faithful JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neuron, synapse, plasticity (STDP, STP), and device models.
 
 All parameters carry physical units via [brainunit](https://github.com/chaobrain/brainunit), and every neuron supports surrogate-gradient-based training out of the box.
