@@ -7,13 +7,13 @@
 It is the point-neuron modeling layer of the
 `BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
 
-The library ships **165+ models** organized in three tiers:
+The library ships **167+ models** organized in three tiers:
 
 - **Base classes** — ``Dynamics``, ``Neuron``, ``Synapse`` — the abstract foundation every model inherits from.
 - **BrainPy-compatible models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, ...),
   synapses (Expon, Alpha, AMPA, NMDA, ...), projections, readouts, and input generators
   previously designed in `BrainPy <https://brainpy.readthedocs.io/>`_.
-- **NEST-compatible models (117+)** — faithful JAX re-implementations of
+- **NEST-compatible models (119+)** — faithful JAX re-implementations of
   `NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron, synapse,
   plasticity (STDP, STP), and device models.
 
