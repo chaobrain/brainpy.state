@@ -38,71 +38,186 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
 
     Description
     -----------
-
     ``gamma_sup_generator`` re-implements NEST's stimulation device of the
-    same name. It generates, per output train, the pooled spike train from
-    ``n_proc`` independent component processes with gamma-interval statistics.
+    same name. It emits, per output train and simulation step, the
+    multiplicity of spikes produced by superimposing ``n_proc`` independent
+    component renewal processes with gamma-distributed inter-spike intervals.
 
-    NEST implementation model
-    -------------------------
+    **1. State-space model, derivation, and update equations**
 
-    NEST represents each target train by an occupation vector over
-    ``gamma_shape`` internal states:
+    Let :math:`k = \mathrm{gamma\_shape}` and :math:`r = \mathrm{rate}` in Hz.
+    Each component gamma process is represented as a cyclic chain of ``k``
+    exponential phases. Using an occupation vector per output train,
 
     .. math::
 
-       \mathbf{occ} = (occ_0, \dots, occ_{k-1}), \quad k=\text{gamma_shape}.
+       \mathbf{occ} = (occ_0, \dots, occ_{k-1}),
+       \qquad \sum_{i=0}^{k-1} occ_i = n_{\mathrm{proc}},
 
-    At each simulation step:
+    a process in phase ``i`` transitions to phase ``i+1`` (mod ``k``) with
+    per-step probability
 
-    1. For each state ``i``, draw transitions
-       ``n_trans[i] ~ Binomial(occ[i], p)``, where
-       ``p = rate * gamma_shape * dt / 1000``.
-    2. Apply NEST's Poisson approximation branch for sparse/high-count cases:
-       - if ``occ[i] >= 100 and p <= 0.01``, or
-       - if ``occ[i] >= 500 and p * occ[i] <= 0.1``,
-       sample ``Poisson(p * occ[i])`` and clip to ``occ[i]``.
-    3. Move transitioning components to the next state cyclically.
-       Transitions from the last state emit spikes and return to state 0.
+    .. math::
 
-    The returned output is spike multiplicity per train and step (int64), i.e.
-    it can be larger than 1, matching NEST ``SpikeEvent`` multiplicity.
+       p = r \cdot k \cdot \Delta t / 1000.
 
-    Timing semantics (NEST spike generators)
-    ----------------------------------------
+    This is the discrete-time hazard form used by NEST. For each bin ``i``,
 
-    Activity follows NEST ``StimulationDevice::is_active`` for spike devices:
+    .. math::
+
+       n_i \sim \mathrm{Binomial}(occ_i, p),
+
+    except for NEST's sparse/high-count approximation branch:
+
+    - if ``occ_i >= 100 and p <= 0.01``, or
+    - if ``occ_i >= 500 and p * occ_i <= 0.1``,
+
+    use ``Poisson(p * occ_i)`` and clip to ``occ_i``.
+
+    After sampling, all ``n_i`` are moved simultaneously to preserve integer
+    mass and avoid order-dependent updates. The emitted spike multiplicity for
+    one train is
+
+    .. math::
+
+       K_n = n_{k-1},
+
+    i.e., transitions leaving the last phase and re-entering phase 0. This
+    allows per-step counts larger than 1, matching NEST ``SpikeEvent``
+    multiplicity semantics.
+
+    **2. Timing semantics and activity window**
+
+    Activity follows NEST ``StimulationDevice::is_active`` for spike
+    generators:
 
     .. math::
 
        t_{\min} < t \le t_{\max},
+       \qquad
+       t_{\min} = origin + start,\quad t_{\max} = origin + stop.
 
-    with ``t_min = origin + start`` and ``t_max = origin + stop``.
-    Therefore ``start`` is exclusive and ``stop`` is inclusive.
+    Therefore ``start`` is exclusive and ``stop`` is inclusive. Internally,
+    finite times are projected to integer steps with
+    ``round(time_ms / dt_ms)`` and checked as
+    ``t_min_step < curr_step <= t_max_step``.
+
+    **3. Assumptions, constraints, and computational implications**
+
+    Parameters are scalarized to ``float64``/``int`` before simulation.
+    Enforced constraints are ``rate >= 0``, ``gamma_shape >= 1``,
+    ``n_proc >= 1``, and ``stop >= start``. If ``dt`` is available, finite
+    ``origin``, ``start``, and ``stop`` must lie on the simulation grid
+    (absolute tolerance ``1e-12`` in ``time/dt`` ratio).
+
+    Runtime complexity of :meth:`update` is
+    :math:`O(\prod \mathrm{varshape} \cdot \mathrm{gamma\_shape})`, with state
+    memory :math:`O(\prod \mathrm{varshape} \cdot \mathrm{gamma\_shape})` from
+    the occupation matrix. RNG sampling uses ``numpy.random.Generator``
+    (seeded by ``rng_seed``), so stochastic draws are CPU NumPy based rather
+    than JAX-key based.
 
     Parameters
     ----------
     in_size : Size, optional
-        Number/shape of independent output spike trains. Default: ``1``.
+        Output size specification consumed by
+        :class:`brainstate.nn.Dynamics`. The exact shape returned by
+        :meth:`update` is ``self.varshape`` derived from ``in_size``; each
+        element corresponds to one independent output train. Default is ``1``.
     rate : ArrayLike, optional
-        Rate of each component process in spikes/s. Must be non-negative.
-        Default: ``0.0 * u.Hz``.
+        Scalar component-process rate in spikes/s (Hz), shape ``()`` after
+        conversion. Accepted as a single-element ``ArrayLike`` or
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     gamma_shape : ArrayLike, optional
-        Gamma shape parameter (integer, ``>= 1``). Default: ``1``.
+        Scalar integer gamma shape :math:`k`, shape ``()`` after conversion.
+        Parsed via nearest-integer check with absolute tolerance ``1e-12``.
+        Must satisfy ``gamma_shape >= 1``. Default is ``1``.
     n_proc : ArrayLike, optional
-        Number of superimposed component processes (integer, ``>= 1``).
-        Default: ``1``.
+        Scalar integer number of independent component processes per output
+        train, shape ``()`` after conversion. Must satisfy ``n_proc >= 1``.
+        Default is ``1``.
     start : ArrayLike, optional
-        Activation time relative to ``origin`` in ms. Default: ``0.0 * u.ms``.
+        Scalar relative activation time in ms, shape ``()`` after conversion.
+        Effective lower bound is ``origin + start`` and is exclusive.
+        Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Deactivation time relative to ``origin`` in ms. ``None`` means
-        infinity. Default: ``None``.
+        Scalar relative deactivation time in ms, shape ``()`` after
+        conversion. Effective upper bound is ``origin + stop`` and is
+        inclusive. ``None`` maps to ``+inf``. Must satisfy ``stop >= start``
+        after conversion. Default is ``None``.
     origin : ArrayLike, optional
-        Time origin for ``start`` and ``stop`` in ms. Default: ``0.0 * u.ms``.
+        Scalar global time offset in ms, shape ``()`` after conversion, added
+        to ``start`` and ``stop`` to define absolute activity bounds.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Seed for transition sampling. Default: ``0``.
-    name : str, optional
-        Object name.
+        Seed used to initialize ``numpy.random.default_rng`` in
+        :meth:`init_state`. Default is ``0``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 20 40
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``rate``
+         - ``0.0 * u.Hz``
+         - :math:`r`
+         - Component-process rate in spikes/s.
+       * - ``gamma_shape``
+         - ``1``
+         - :math:`k`
+         - Number of cyclic exponential phases per component process.
+       * - ``n_proc``
+         - ``1``
+         - :math:`n_{\mathrm{proc}}`
+         - Number of superimposed component processes per output train.
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower bound of activity.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound; ``None`` maps to ``+\infty``.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global offset added to ``start`` and ``stop``.
+       * - ``in_size``
+         - ``1``
+         - -
+         - Defines ``self.varshape`` for independent output trains.
+       * - ``rng_seed``
+         - ``0``
+         - -
+         - Seed of the NumPy generator used for transition draws.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node instance. Each :meth:`update` call returns a JAX array
+        of dtype ``int64`` and shape ``self.varshape`` containing per-step
+        spike multiplicities.
+
+    Raises
+    ------
+    ValueError
+        If ``rate < 0``; if ``gamma_shape < 1``; if ``n_proc < 1``; if
+        ``stop < start``; if scalar-conversion fails due to non-scalar inputs;
+        or if finite ``origin``/``start``/``stop`` are not multiples of
+        simulation resolution when ``dt`` is available.
+    TypeError
+        If unit conversion to ``u.Hz`` or ``u.ms`` fails for supplied inputs.
+    KeyError
+        At runtime, if required simulation-context entries (for example
+        ``dt`` in ``brainstate.environ.get_dt()``) are unavailable.
 
     Notes
     -----
@@ -112,6 +227,44 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
       to the last bin.
     - As in NEST, each output train maintains independent internal occupation
       states.
+    - In the direct binomial branch, ``transition_prob`` is numerically
+      clamped to ``[0, 1]`` before calling NumPy RNG to avoid invalid
+      probability inputs in edge cases.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.gamma_sup_generator(
+       ...         in_size=(2, 3),
+       ...         rate=20.0 * u.Hz,
+       ...         gamma_shape=3,
+       ...         n_proc=50,
+       ...         start=5.0 * u.ms,
+       ...         stop=40.0 * u.ms,
+       ...         rng_seed=7,
+       ...     )
+       ...     with brainstate.environ.context(t=12.0 * u.ms):
+       ...         counts = gen.update()
+       ...     _ = counts.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> gen = brainpy.state.gamma_sup_generator(rate=15.0 * u.Hz, gamma_shape=2)
+       >>> gen.set(n_proc=20, stop=None, origin=1.0 * u.ms)
+       >>> params = gen.get()
+       >>> _ = params['gamma_shape'], params['n_proc']
+
+    See Also
+    --------
+    ppd_sup_generator : Superposition with dead-time component processes.
+    sinusoidal_gamma_generator : Inhomogeneous gamma generator with sinusoidal rate.
 
     References
     ----------
@@ -261,6 +414,26 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize occupancy and RNG state for all output trains.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Unused API placeholder for compatibility with Dynamics interfaces.
+            Ignored.
+        **kwargs
+            Additional unused keyword arguments. Ignored.
+
+        Returns
+        -------
+        out : Any
+            ``None``. Side effects:
+            - ``self.occ`` is created as ``brainstate.ShortTermState`` with
+              shape ``(prod(self.varshape), gamma_shape)`` and dtype
+              ``int64``, initialized with NEST's equilibrium approximation.
+            - ``self._rng`` is set to ``numpy.random.Generator`` seeded by
+              ``rng_seed``.
+        """
         del batch_size, kwargs
 
         ini_occ_ref = int(self.n_proc // self.gamma_shape)
@@ -285,7 +458,41 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        """Set public parameters with NEST-compatible semantics.
+
+        Parameters
+        ----------
+        rate : ArrayLike or object, optional
+            New scalar component rate in Hz. ``_UNSET`` keeps current value.
+        gamma_shape : ArrayLike or object, optional
+            New scalar integer gamma shape ``>= 1``. ``_UNSET`` keeps current
+            value.
+        n_proc : ArrayLike or object, optional
+            New scalar integer number of component processes ``>= 1``.
+            ``_UNSET`` keeps current value.
+        start : ArrayLike or object, optional
+            New scalar relative start time in ms. ``_UNSET`` keeps current
+            value.
+        stop : ArrayLike, object, or None, optional
+            New scalar relative stop time in ms; ``None`` maps to ``+inf``.
+            ``_UNSET`` keeps current value.
+        origin : ArrayLike or object, optional
+            New scalar origin time in ms. ``_UNSET`` keeps current value.
+
+        Returns
+        -------
+        out : Any
+            ``None``. Parameters are updated in place. If ``dt`` exists in
+            ``brainstate.environ``, timing bounds and transition probability
+            cache are recomputed immediately.
+
+        Raises
+        ------
+        ValueError
+            If converted values violate model constraints or are non-scalar.
+        TypeError
+            If unit conversion to Hz/ms fails.
+        """
         new_rate = self.rate if rate is _UNSET else self._to_scalar_rate_hz(rate)
         new_gamma_shape = (
             self.gamma_shape
@@ -326,7 +533,15 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
             self._refresh_runtime_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters."""
+        """Return current public parameters as plain Python scalars.
+
+        Returns
+        -------
+        out : Any
+            ``dict`` with keys ``rate``, ``gamma_shape``, ``n_proc``,
+            ``start``, ``stop``, and ``origin``. Values are ``float``/``int``
+            in public units (Hz for ``rate``, ms for times).
+        """
         return {
             'rate': float(self.rate),
             'gamma_shape': int(self.gamma_shape),
@@ -384,6 +599,28 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         return int(n_trans[-1])
 
     def update(self):
+        """Advance one simulation step and return per-train spike multiplicity.
+
+        The method lazily initializes state, refreshes timing/probability cache
+        when ``dt`` changes, applies the active-window test, then updates each
+        train's occupation vector using NEST-equivalent transition logic.
+
+        Returns
+        -------
+        out : Any
+            JAX array with dtype ``int64`` and shape ``self.varshape``.
+            Each element is the number of emitted spikes for one output train
+            in the current step.
+
+        Raises
+        ------
+        ValueError
+            If cached times fail simulation-grid consistency checks during
+            cache refresh.
+        KeyError
+            If required simulation context values (for example ``dt``) are
+            unavailable in ``brainstate.environ``.
+        """
         if not hasattr(self, 'occ'):
             self.init_state()
 

@@ -29,150 +29,213 @@ __all__ = [
 
 
 class spike_train_injector(brainstate.nn.Dynamics):
-    r"""Spike train injector -- NEST-compatible neuron device.
+    r"""Spike train injector -- NEST-compatible event source device.
 
-    Short description
-    -----------------
+    Emit deterministic spike events at configured times with optional
+    per-time multiplicity, then gate output by an activity window.
 
-    Neuron that emits prescribed spike trains.
+    **1. Model equations**
 
-    Description
-    -----------
+    Let :math:`\{t_i\}_{i=1}^{K}` be configured spike times in ms after
+    conversion from unitful or unitless inputs. Let :math:`m_i` denote
+    multiplicity (``spike_multiplicities``) when provided, otherwise
+    :math:`m_i = 1`. At simulation time :math:`t` with step :math:`\Delta t`
+    (both in ms), this implementation uses
 
-    The spike train injector neuron emits spikes at prescribed spike times
-    which are given as an array. The neuron does not allow incoming connections
-    and is thus not able to process incoming spikes or currents.
+    .. math::
 
-    This is a brainpy.state re-implementation of the NEST simulator device of
-    the same name, using NEST-standard parameterization.
+        q_i(t) = \mathbf{1}\!\left[|t - t_i| < \frac{\Delta t}{2}\right].
 
-    .. note::
+    The scalar emitted spike count before window gating is
 
-       ``spike_train_injector`` is recommended if the spike trains have a
-       similar rate to regular neurons.  For very high rates, use
-       :class:`spike_generator`.
+    .. math::
 
-    Spike times are given in milliseconds as an array. The ``spike_times``
-    array must be sorted with the earliest spike first. All spike times must
-    be strictly in the future.  Setting a spike time of 0.0 will result in an
-    error (unless ``shift_now_spikes`` is ``True``).
+        a(t) = \sum_{i=1}^{K} m_i q_i(t).
 
-    Multiple occurrences of the same time indicate that more than one event is
-    to be generated at this particular time.
+    The activity gate is
 
-    Spike time handling options
-    ...........................
+    .. math::
 
-    The spike train injector supports spike times that do not coincide with a
-    time step, that is, are not falling on the grid defined by the simulation
-    resolution. Spike times that do not coincide with a step are handled with
-    one of three options:
+        g(t) =
+        \mathbf{1}\!\left[t \ge t_0 + t_{\mathrm{start,rel}}\right]
+        \cdot
+        \mathbf{1}\!\left[t < t_0 + t_{\mathrm{stop,rel}}\right],
 
-    **Option 1: ``precise_times``** (default: ``False``)
+    where the second indicator is omitted when ``stop is None``.
+    Returned output is broadcast to node shape ``self.varshape``:
 
-    If ``False``, spike times will be rounded to simulation steps, i.e.
-    multiples of the resolution. The rounding is controlled by the two other
-    flags.  If ``True``, spike times will not be rounded but represented
-    exactly as a combination of step and offset.  This should only be used if
-    all neurons receiving the spike train can handle precise timing
-    information. In this case, the other two options are ignored.
+    .. math::
 
-    **Option 2: ``allow_offgrid_times``** (default: ``False``)
+        y(t) = g(t)\,a(t)\,\mathbf{1}_{\mathrm{varshape}}.
 
-    If ``False``, spike times will be rounded to the nearest step if they are
-    less than ``tic/2`` from the step, otherwise an error is raised.  If
-    ``True``, spike times are rounded to the nearest step if within ``tic/2``
-    from the step, otherwise they are rounded up to the *end* of the step.
-    This setting has no effect if ``precise_times`` is ``True``.
+    **2. Timing derivation, assumptions, and constraints**
 
-    **Option 3: ``shift_now_spikes``** (default: ``False``)
+    The :math:`|t - t_i| < \Delta t / 2` rule corresponds to nearest-grid
+    assignment under uniform-step simulation. For exact half-step offsets,
+    strict inequality means no match at that step. If multiple ``spike_times``
+    entries map to the same step, emitted values are summed.
 
-    This option is mainly for use by the PyNN-NEST interface.  If ``False``,
-    spike times rounded down to the current point in time will be considered
-    in the past and ignored.  If ``True``, spike times that are rounded down
-    to the current time step are shifted one time step into the future.
+    Enforced constraints:
 
-    .. note::
+    - ``spike_times`` must be non-descending after conversion to float ms.
+    - ``spike_multiplicities`` must be empty or have
+      ``len(spike_multiplicities) == len(spike_times)``.
+    - ``precise_times=True`` cannot be combined with
+      ``allow_offgrid_times=True`` or ``shift_now_spikes=True``.
 
-       In this brainpy.state implementation, the three option flags
-       (``precise_times``, ``allow_offgrid_times``, ``shift_now_spikes``) are
-       accepted for API compatibility but the actual spike time quantisation
-       follows a simplified grid-alignment scheme: spike times are always
-       rounded to the nearest simulation step using a tolerance of ``dt/2``.
-       For typical use cases where spike times are grid-aligned (multiples of
-       ``dt``), this produces identical results to NEST.
+    Implementation-specific constraints:
 
-    Spike multiplicities
-    ....................
+    - NEST option flags ``precise_times``, ``allow_offgrid_times``, and
+      ``shift_now_spikes`` are accepted for API compatibility, but the current
+      update rule always uses the fixed tolerance test above.
+    - ``start``/``stop``/``origin`` are converted through ``float(...)``
+      inside :meth:`update`; values must be scalar-convertible in runtime
+      context.
+    - NEST documentation states spikes should be strictly in the future. This
+      implementation does not perform explicit future-time validation in
+      ``__init__`` and instead relies on runtime matching and active-window
+      gating.
 
-    Optionally, ``spike_multiplicities`` can be set.  This is a list of
-    integers of the same length as ``spike_times``, giving the number of
-    spikes to deliver at each time.  In this brainpy.state implementation the
-    multiplicity is encoded by emitting an output equal to the multiplicity
-    value (rather than 1) at that step.
+    **3. Computational implications**
 
-    Update semantics
-    .................
-
-    At each simulation step, the ``update()`` method checks whether any spike
-    times match the current simulation time within a tolerance of ``dt/2``.
-    If so, the output is 1 (or the multiplicity, or the accumulated
-    multiplicity if several spike times map to the same step).  Otherwise the
-    output is 0.  The output is gated by the active device window
-    ``[origin + start, origin + stop)``.
+    Each :meth:`update` call performs one linear scan over ``spike_times`` and
+    one broadcast over ``self.varshape``. Per-step complexity is
+    :math:`O(K + \prod \mathrm{varshape})`, where :math:`K` is the number of
+    configured spikes. Memory cost is :math:`O(K)` for stored times and
+    optional multiplicities.
 
     Parameters
     ----------
+    in_size : Size, optional
+        Output size/shape consumed by :class:`brainstate.nn.Dynamics`. The
+        emitted array has shape ``self.varshape`` derived from ``in_size``.
+        Default is ``1``.
+    spike_times : Sequence, optional
+        Sequence of spike times with length ``K``. Entries can be unitful
+        times (typically ms) or unitless numerics interpreted as ms.
+        Internally converted to ``float`` milliseconds and required to be
+        non-descending. Duplicate times are allowed. Default is ``()``.
+    spike_multiplicities : Sequence, optional
+        Sequence of multiplicities with length ``K`` matching ``spike_times``,
+        or empty to use unit spikes. Entries are converted with ``int(m)`` and
+        accumulated when multiple spikes map to the same step. Default is
+        ``()``.
+    precise_times : bool, optional
+        NEST compatibility flag for precise timing representation. Stored and
+        validated against other flags but not used to alter runtime matching in
+        this implementation. Default is ``False``.
+    allow_offgrid_times : bool, optional
+        NEST compatibility flag for off-grid handling. Stored and validated but
+        not used to alter runtime matching in this implementation. Default is
+        ``False``.
+    shift_now_spikes : bool, optional
+        NEST compatibility flag for shifting spikes that round to current step.
+        Stored and validated but not used to alter runtime matching in this
+        implementation. Default is ``False``.
+    start : ArrayLike, optional
+        Relative activation time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        initialized via :func:`braintools.init.param`. Effective lower bound is
+        ``origin + start`` (inclusive). Must be scalar-convertible inside
+        :meth:`update`. Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative deactivation time :math:`t_{\mathrm{stop,rel}}` (typically
+        ms), initialized via :func:`braintools.init.param` when provided.
+        Effective upper bound is ``origin + stop`` (exclusive). ``None`` means
+        no upper bound. Must be scalar-convertible when provided.
+        Default is ``None``.
+    origin : ArrayLike, optional
+        Global origin :math:`t_0` (typically ms) added to ``start`` and
+        ``stop`` at runtime. Must be scalar-convertible in :meth:`update`.
+        Default is ``0. * u.ms``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set.  Default values match the NEST
-    simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
 
-    ========================== ================== =============================================
-    **Parameter**              **Default**        **Description**
-    ========================== ================== =============================================
-    ``in_size``                1                  Output size (number of independent injectors)
-    ``spike_times``            ``[]``             Spike times in ms (sorted, non-descending)
-    ``spike_multiplicities``   ``[]``             Spike multiplicities (same length or empty)
-    ``precise_times``          ``False``          Use precise spike timing (API compat.)
-    ``allow_offgrid_times``    ``False``          Allow off-grid spike times (API compat.)
-    ``shift_now_spikes``       ``False``          Shift now-spikes into future (API compat.)
-    ``start``                  0 ms               Activation time relative to ``origin``
-    ``stop``                   ``None`` (inf)     Deactivation time relative to ``origin``
-    ``origin``                 0 ms               Global time offset
-    ========================== ================== =============================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``spike_times``
+         - ``()``
+         - :math:`t_i`
+         - Spike schedule in ms used by ``|t - t_i| < dt/2`` matching.
+       * - ``spike_multiplicities``
+         - ``()``
+         - :math:`m_i`
+         - Per-time spike count; empty means implicit ``m_i = 1``.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative inclusive lower bound of active window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative exclusive upper bound of active window.
+       * - ``origin``
+         - ``0. * u.ms``
+         - :math:`t_0`
+         - Global offset added to ``start`` and ``stop``.
 
-    Receives
-    --------
-    None — This device does not accept incoming connections.
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a float-valued JAX array
+        with shape ``self.varshape`` equal to accumulated spike multiplicity at
+        matching times and ``0`` otherwise.
 
-    Sends
+    Raises
+    ------
+    ValueError
+        If incompatible timing flags are combined, if ``spike_times`` is not
+        non-descending, or if ``spike_multiplicities`` has invalid length.
+    TypeError
+        If spike-time or multiplicity conversion to ``float``/``int`` fails,
+        or if time-window values are not scalar-convertible at update time.
+    KeyError
+        At update time, if required simulation context entries are unavailable,
+        depending on ``brainstate.environ`` behavior.
+
+    Notes
     -----
-    SpikeEvent (output > 0)
+    This device does not accept incoming synaptic/current connections. It only
+    emits scheduled spike events (nonzero values in the returned array).
 
     Examples
     --------
+    .. code-block:: python
 
-    Basic usage:
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     inj = brainpy.state.spike_train_injector(
+       ...         spike_times=[1.0 * u.ms, 2.0 * u.ms, 2.0 * u.ms],
+       ...         spike_multiplicities=[1, 2, 3],
+       ...         start=0.0 * u.ms,
+       ...         stop=5.0 * u.ms,
+       ...     )
+       ...     with brainstate.environ.context(t=2.0 * u.ms):
+       ...         out = inj.update()
+       ...     _ = out.shape
 
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     inj = brainpy.state.spike_train_injector(
-    ...         spike_times=[1. * u.ms, 2. * u.ms, 3. * u.ms],
-    ...     )
-    ...
-    ...     for step in range(50):
-    ...         with brainstate.environ.context(t=step * 0.1 * u.ms):
-    ...             spk = inj.update()
+    .. code-block:: python
 
-    With spike multiplicities:
-
-    >>> inj = brainpy.state.spike_train_injector(
-    ...     spike_times=[1. * u.ms, 2. * u.ms],
-    ...     spike_multiplicities=[3, 5],
-    ... )
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     inj = brainpy.state.spike_train_injector(
+       ...         spike_times=[10.0 * u.ms],
+       ...         precise_times=True,
+       ...     )
+       ...     with brainstate.environ.context(t=10.0 * u.ms):
+       ...         out = inj.update()
+       ...     _ = out.shape
 
     References
     ----------
@@ -181,7 +244,7 @@ class spike_train_injector(brainstate.nn.Dynamics):
 
     See Also
     --------
-    spike_generator : General-purpose spike generator device
+    spike_generator : General-purpose spike generator device.
     """
     __module__ = 'brainpy.state'
 
@@ -244,21 +307,56 @@ class spike_train_injector(brainstate.nn.Dynamics):
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
-        """Return spike output at the current simulation time.
+        r"""Compute spike output for the current simulation step.
 
-        Checks if any spike times match the current simulation time within a
-        tolerance of ``dt/2``.  If a match is found, returns the spike
-        multiplicity (or 1 if multiplicities are not set).  If multiple spike
-        times map to the same step, their multiplicities are accumulated.
-
-        The output is gated by the device active window
-        ``[origin + start, origin + stop)``.
+        Parameters
+        ----------
+        None
+            Uses ``brainstate.environ['t']`` and
+            ``brainstate.environ.get_dt()`` together with the instance state
+            initialized in :meth:`__init__`.
 
         Returns
         -------
-        spike : jax.Array
-            Spike output, shaped ``(in_size,)``.  The value is the
-            (accumulated) multiplicity at spike times, 0 otherwise.
+        out : Any
+            Float-valued JAX array with shape ``self.varshape``. Output is
+            ``0`` outside the active window and equals the accumulated
+            multiplicity of all indices satisfying ``|t - t_i| < dt/2`` when
+            the device is active.
+
+        Raises
+        ------
+        KeyError
+            If required simulation context entries are missing from
+            ``brainstate.environ``.
+        TypeError
+            If ``t``, ``dt``, ``start``, ``stop``, or ``origin`` cannot be
+            converted to scalar ms values.
+        ValueError
+            If downstream unit conversion/comparison raises invalid-value
+            errors.
+
+        Notes
+        -----
+        Matching uses strict inequality ``abs(t_ms - spike_t) < dt_ms / 2``.
+        Therefore, a spike exactly at half-step distance from ``t`` is not
+        emitted at that step.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import spike_train_injector
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = spike_train_injector(
+           ...         spike_times=[1.0 * u.ms, 1.0 * u.ms],
+           ...         spike_multiplicities=[2, 3],
+           ...     )
+           ...     with brainstate.environ.context(t=1.0 * u.ms):
+           ...         out = gen.update()
+           ...     _ = out.shape
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

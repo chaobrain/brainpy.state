@@ -48,76 +48,219 @@ class _StepCalibration:
 class multimeter(brainstate.nn.Dynamics):
     r"""NEST-compatible analog recorder for neuron/device state variables.
 
+    Short Description
+    -----------------
+    ``multimeter`` records analog state samples from connected targets into an
+    in-memory ``events`` dictionary compatible with NEST ``multimeter``
+    semantics.
+
     Description
     -----------
-    ``multimeter`` samples analog variables from connected targets, matching
-    the NEST ``multimeter`` model semantics:
+    This implementation follows the NEST device-level timing model while
+    exposing a Python update API:
 
-    * Sample timestamps are aligned by ``offset + k * interval``.
-    * Recording window is ``(origin + start, origin + stop]``.
-    * ``start`` is exclusive and ``stop`` is inclusive.
-    * Samples are delivered with request/reply lag: values sampled at one step
-      become visible on the next call to :meth:`update` (or :meth:`flush`).
+    - Sampling times are constrained to a step-grid lattice defined by
+      ``interval`` and ``offset``.
+    - Recording is gated by a window
+      :math:`(\mathrm{origin}+\mathrm{start},\;\mathrm{origin}+\mathrm{stop}]`
+      (start exclusive, stop inclusive) evaluated in simulation steps.
+    - Samples are enqueued at the current step and emitted on the next
+      :meth:`update` call (or immediately by :meth:`flush`), reproducing the
+      one-step request/reply lag used by NEST multimeters.
 
-    This implementation is intended for brainpy.state step loops where users
-    call ``multimeter.update(...)`` once per simulation step after updating the
-    recorded neuron state.
+    **1. Step-grid sampling model**
+
+    Let :math:`dt` be simulation resolution in ms, and let step index
+    :math:`n = \mathrm{round}(t/dt)`. During :meth:`update`, sampled values are
+    stamped at
+
+    .. math::
+
+       s = n + 1.
+
+    Define integer grid parameters
+
+    .. math::
+
+       m = \frac{\mathrm{interval}}{dt}, \qquad
+       o = \frac{\mathrm{offset}}{dt}.
+
+    A sample is enqueued iff :math:`s` lies on the lattice:
+
+    .. math::
+
+       s \equiv 0 \ (\mathrm{mod}\ m) \ \text{if}\ o = 0,\qquad
+       s \equiv o \ (\mathrm{mod}\ m),\ s \ge o \ \text{if}\ o > 0.
+
+    Here, ``interval`` and ``offset`` must be exact integer multiples of
+    ``dt`` (up to ``1e-12`` tolerance in floating conversion).
+
+    **2. Active window and delivery lag**
+
+    With
+    :math:`s_\min = (\mathrm{origin}+\mathrm{start})/dt` and
+    :math:`s_\max = (\mathrm{origin}+\mathrm{stop})/dt` (or :math:`+\infty`),
+    a pending sample is written to ``events`` only when
+
+    .. math::
+
+       s > s_\min \ \land\ s \le s_\max.
+
+    Because pending samples are emitted before new sampling in each
+    :meth:`update`, values observed at step :math:`n` become visible in
+    ``events`` at step :math:`n+1` unless :meth:`flush` is called.
+
+    **3. Payload normalization and shape constraints**
+
+    For each requested recordable ``k`` in ``record_from``, ``data[k]`` is
+    converted to ``np.float64`` and flattened to shape ``(N,)``. All
+    recordables must share the same ``N``; scalar payloads (size 1) are
+    broadcast to ``(N,)`` when another recordable defines ``N > 1``. ``senders``
+    is converted to ``np.int64`` with the same broadcast rule, defaulting to
+    ones when omitted. Stored event arrays are one-dimensional with length equal
+    to the total number of emitted samples.
+
+    **4. Computational implications**
+
+    Per :meth:`update` call with payload size ``N`` and ``R=len(record_from)``,
+    enqueue work is :math:`O(RN)`. Pending emission is linear in the number of
+    buffered items and appended event count. Memory usage is linear in emitted
+    events for ``times``, ``senders``, and each requested recordable.
 
     Parameters
     ----------
-    in_size : int, optional
-        Device batch size. Defaults to 1.
-    record_from : sequence of str, optional
-        Names of variables to record. Defaults to ``()``.
-    interval : Quantity[ms], optional
-        Sampling interval. Must be a positive multiple of ``dt``.
-        Defaults to ``1.0 * u.ms``.
-    offset : Quantity[ms], optional
-        Sampling offset relative to global time origin. Must be 0 or a
-        positive multiple of ``dt``. Defaults to ``0.0 * u.ms``.
-    start : Quantity[ms], optional
-        Recording window start, relative to ``origin``.
-        Defaults to ``0.0 * u.ms``.
-    stop : Quantity[ms] or None, optional
-        Recording window stop, relative to ``origin``.
-        ``None`` means +infinity. Defaults to ``None``.
-    origin : Quantity[ms], optional
-        Recording window origin shift. Defaults to ``0.0 * u.ms``.
+    in_size : Size, optional
+        Output size/shape argument consumed by :class:`brainstate.nn.Dynamics`.
+        This recorder is stateful and returns event dictionaries; ``in_size`` is
+        retained for API consistency. Default is ``1``.
+    record_from : Sequence[str], optional
+        Ordered names of recordables expected in ``data`` during
+        :meth:`update`. If empty, incoming payloads are ignored and no values
+        are stored. Default is ``()``.
+    interval : ArrayLike, optional
+        Scalar sampling interval in time units convertible to ms
+        (typically ``u.ms``). Must satisfy ``interval >= dt`` and be an integer
+        multiple of ``dt``. Default is ``1.0 * u.ms``.
+    offset : ArrayLike, optional
+        Scalar sampling offset relative to simulation origin, convertible to ms.
+        Must be either ``0`` or a positive integer multiple of ``dt``.
+        Default is ``0.0 * u.ms``.
+    start : ArrayLike, optional
+        Scalar relative recording-window start (ms). Used in the exclusive bound
+        ``stamp_step > (origin + start) / dt``. Default is ``0.0 * u.ms``.
+    stop : ArrayLike or None, optional
+        Scalar relative recording-window stop (ms). Used in the inclusive bound
+        ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper bound.
+        Default is ``None``.
+    origin : ArrayLike, optional
+        Scalar origin shift (ms) added to ``start`` and ``stop`` when
+        constructing the active window. Default is ``0.0 * u.ms``.
     time_in_steps : bool, optional
-        If ``True``, reported ``events['times']`` are integer step indices
-        (NEST ``time_in_steps`` style) and ``events['offsets']`` are included.
-        Defaults to ``False``.
+        If ``False``, ``events['times']`` stores float timestamps in ms. If
+        ``True``, ``events['times']`` stores integer-valued step stamps as
+        ``float64`` and ``events['offsets']`` is emitted as zeros with matching
+        shape. Default is ``False``.
     frozen : bool, optional
-        Kept for NEST API compatibility. ``True`` is rejected because NEST
-        protects multimeters from freezing.
-    name : str, optional
-        Module name.
+        NEST-compatibility argument. ``True`` is rejected because multimeters
+        are non-freezable. Default is ``False``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``interval``
+         - ``1.0 * u.ms``
+         - :math:`m \cdot dt`
+         - Sampling period on the simulation grid.
+       * - ``offset``
+         - ``0.0 * u.ms``
+         - :math:`o \cdot dt`
+         - Phase shift of the sampling lattice.
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower bound of activity window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound of activity window.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global time origin shift for the recording window.
+       * - ``record_from``
+         - ``()``
+         - :math:`\{x_r\}_{r=1}^{R}`
+         - Ordered recordable channels expected in each payload.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node. :meth:`update` and :meth:`flush` return an ``events``
+        dictionary with one-dimensional arrays:
+        ``times`` (``float64``, shape ``(E,)``), ``senders`` (``int64``,
+        shape ``(E,)``), optional ``offsets`` (``float64``, shape ``(E,)`` when
+        ``time_in_steps=True``), and one ``float64`` array of shape ``(E,)``
+        per key in ``record_from``.
+
+    Raises
+    ------
+    ValueError
+        If ``frozen=True``; if timing parameters are not scalar-convertible,
+        not finite (when required), not aligned to ``dt``, or violate
+        constraints (for example ``interval < dt`` or ``stop < start``); if
+        ``data`` is not a mapping; if required recordables are missing; if a
+        recordable payload is empty; or if recordable/sender sizes are
+        inconsistent after flattening/broadcasting.
+    TypeError
+        If unit conversion or array casting to numeric values fails.
+    KeyError
+        If :meth:`get` is called with an unsupported key.
 
     Notes
     -----
-    * In NEST, ``interval``, ``offset``, and ``record_from`` cannot be changed
-      after connecting to targets. The same rule is enforced here once
-      :meth:`connect` is called or after first data-carrying :meth:`update`.
-    * Event buffers mirror NEST's in-memory ``events`` dictionary with keys
-      ``times``, ``senders``, and one array per requested recordable.
+    - After first connection or data-carrying :meth:`update`, properties
+      ``interval``, ``offset``, and ``record_from`` become immutable.
+    - This recorder does not fetch neuron states itself; callers must pass
+      values through :meth:`update` each step after state integration.
+
+    References
+    ----------
+    .. [1] NEST Simulator, ``multimeter`` device.
+           https://nest-simulator.readthedocs.io/en/stable/models/multimeter.html
 
     Examples
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>> import numpy as np
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     neuron = brainpy.state.iaf_psc_delta(1, I_e=500. * u.pA)
-    ...     neuron.init_state()
-    ...     mm = brainpy.state.multimeter(record_from=['V_m'], interval=0.1 * u.ms)
-    ...     for k in range(100):
-    ...         with brainstate.environ.context(t=k * 0.1 * u.ms):
-    ...             neuron.update()
-    ...             vm = float(neuron.V.value[0] / u.mV)
-    ...             mm.update({'V_m': np.array([vm])}, senders=np.array([1]))
-    ...     events = mm.flush()
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> import numpy as np
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neuron = brainpy.state.iaf_psc_delta(1, I_e=500.0 * u.pA)
+       ...     neuron.init_state()
+       ...     mm = brainpy.state.multimeter(
+       ...         record_from=['V_m'],
+       ...         interval=0.1 * u.ms,
+       ...         start=0.0 * u.ms,
+       ...         stop=5.0 * u.ms,
+       ...     )
+       ...     for k in range(50):
+       ...         with brainstate.environ.context(t=k * 0.1 * u.ms):
+       ...             neuron.update()
+       ...             vm = float(neuron.V.value[0] / u.mV)
+       ...             _ = mm.update({'V_m': np.array([vm], dtype=np.float64)}, senders=np.array([1]))
+       ...     events = mm.flush()
+       ...     _ = events['V_m'].shape
     """
     __module__ = 'brainpy.state'
 
@@ -234,6 +377,29 @@ class multimeter(brainstate.nn.Dynamics):
         self._has_targets = True
 
     def flush(self):
+        r"""Emit buffered samples and return current event storage.
+
+        Parameters
+        ----------
+        None
+            Uses ``brainstate.environ.get_dt()`` to validate timing calibration
+            and convert pending stamps to output times.
+
+        Returns
+        -------
+        out : Any
+            Event dictionary identical to :attr:`events`, including all emitted
+            samples accumulated so far.
+
+        Raises
+        ------
+        ValueError
+            If simulation resolution ``dt`` is invalid (non-positive, not
+            scalar-convertible, or incompatible with configured time
+            parameters).
+        TypeError
+            If ``dt`` cannot be converted to a scalar ms value.
+        """
         dt = brainstate.environ.get_dt()
         calib = self._get_step_calibration(dt)
         self._emit_pending(calib)
@@ -244,6 +410,44 @@ class multimeter(brainstate.nn.Dynamics):
         data: Mapping[str, ArrayLike] = None,
         senders: ArrayLike = None,
     ):
+        r"""Process one simulation step and optionally enqueue a new sample.
+
+        Parameters
+        ----------
+        data : Mapping[str, ArrayLike] or None, optional
+            Mapping from each name in ``record_from`` to its current analog
+            value payload. Each payload is converted to ``np.float64`` and
+            flattened to shape ``(N,)``. Scalars (size 1) are broadcast to
+            ``(N,)`` when another recordable defines ``N > 1``. If ``None``,
+            no new sample is enqueued and only pending samples are emitted.
+            Default is ``None``.
+        senders : ArrayLike or None, optional
+            Sender IDs associated with the payload. Converted to ``np.int64``
+            and flattened to shape ``(N,)`` using the same scalar-broadcast rule
+            as recordables. If ``None``, all sender IDs default to ``1``.
+            Default is ``None``.
+
+        Returns
+        -------
+        out : Any
+            Event dictionary identical to :attr:`events` after emitting pending
+            samples and processing the optional payload.
+
+        Raises
+        ------
+        ValueError
+            If current time ``t`` is not on the simulation grid; if timing
+            parameters are incompatible with ``dt``; if ``data`` is not a
+            mapping; if required recordables are missing; if a recordable array
+            is empty; or if recordable/sender lengths are inconsistent after
+            broadcasting rules.
+        TypeError
+            If time or payload conversion to numeric arrays fails.
+        KeyError
+            If ``brainstate.environ`` does not provide required simulation
+            context keys (``'t'`` and ``dt``), depending on environment
+            backend behavior.
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
         calib = self._get_step_calibration(dt)

@@ -29,98 +29,177 @@ __all__ = [
 
 
 class step_rate_generator(brainstate.nn.Dynamics):
-    r"""Piecewise constant rate generator -- NEST-compatible stimulation device.
+    r"""Piecewise-constant rate generator -- NEST-compatible stimulation device.
 
-    Description
-    -----------
+    Generate a deterministic piecewise-constant rate trace and gate it with a
+    half-open activity window using NEST-compatible parameter semantics.
 
-    ``step_rate_generator`` provides a piecewise constant rate input to the
-    connected rate unit(s). The rate changes at the specified times. The unit
-    of the rate is spikes/s (Hz).
+    **1. Model equations and schedule selection**
 
-    This is a brainpy.state re-implementation of the NEST simulator device of
-    the same name, using NEST-standard parameterization.
-
-    Rate output
-    ...........
-
-    The device provides a rate that is piecewise constant over time:
+    Let :math:`\{(t_k, a_k)\}_{k=1}^{K}` be configured change-time/rate pairs,
+    where :math:`t_k` are times in ms and :math:`a_k` are rates in spikes/s
+    (Hz). The scheduled rate is
 
     .. math::
 
-        r(t) = \begin{cases}
-            0                          & \text{if } t < t_1 \\
-            a_k                        & \text{if } t_k \le t < t_{k+1}, \; k = 1, \dots, N-1 \\
-            a_N                        & \text{if } t \ge t_N
+        A(t) =
+        \begin{cases}
+            0, & t < t_1, \\
+            a_k, & t_k \le t < t_{k+1},\ k=1,\dots,K-1, \\
+            a_K, & t \ge t_K.
         \end{cases}
 
-    where :math:`t_k` are the amplitude change times and :math:`a_k` are the
-    corresponding rate values in spikes/s.
+    The output is gated by
 
-    .. note::
+    .. math::
 
-       This input is handled in the same way as input from any other rate unit,
-       that is, it is processed by the input function of the receiving rate unit.
+        g(t) = \mathbf{1}\!\left[t \ge t_0+t_{\mathrm{start,rel}}\right]
+        \cdot
+        \mathbf{1}\!\left[t < t_0+t_{\mathrm{stop,rel}}\right],
 
-    Timing convention
-    .................
+    with the second indicator omitted when ``stop is None``. Final output:
 
-    In NEST, the amplitude change is applied one simulation step ahead so that
-    the new rate takes effect at the specified time. This re-implementation
-    follows the same convention.
+    .. math::
 
-    The active window ``[origin + start, origin + stop)`` gates the output:
-    outside this window, the output is zero regardless of the rate schedule.
+        r_{\mathrm{out}}(t) = g(t)\,A(t).
 
-    .. note::
+    **2. Timing semantics, assumptions, and constraints**
 
-       ``amplitude_times`` must be strictly increasing and positive (> 0).
-       ``amplitude_times`` and ``amplitude_values`` must have the same length.
+    This implementation chooses, at environment time ``t``, the latest
+    schedule entry satisfying ``t_k <= t``. With discrete simulation time on a
+    grid, this reproduces NEST-compatible step semantics where a configured
+    change time marks the first step at which the new rate is emitted.
+
+    Enforced constraints:
+
+    - ``len(amplitude_times) == len(amplitude_values)``.
+    - ``amplitude_times`` are strictly increasing after conversion to float ms.
+
+    Accepted but not additionally constrained:
+
+    - Unitless ``amplitude_times`` are interpreted as ms.
+    - Unitless ``amplitude_values`` are interpreted as spikes/s.
+    - NEST documentation recommends positive change times; positivity is not
+      explicitly enforced here.
+
+    **3. Computational implications**
+
+    :meth:`update` performs a linear scan over ``amplitude_times`` to locate
+    the active plateau, then broadcasts one scalar rate over ``self.varshape``
+    and applies one boolean activity mask. Per-call complexity is
+    :math:`O(K + \prod \mathrm{varshape})`, where :math:`K` is the number of
+    schedule entries.
 
     Parameters
     ----------
+    in_size : Size, optional
+        Output size/shape specification consumed by
+        :class:`brainstate.nn.Dynamics`. The emitted rate has shape
+        ``self.varshape`` derived from ``in_size``. Default is ``1``.
+    amplitude_times : Sequence[ArrayLike], optional
+        Ordered sequence of change times with length ``K``. Each value may be
+        a unitful time (typically ms) or a unitless numeric interpreted as ms.
+        Internally converted to plain ``float`` milliseconds and stored as a
+        Python list. Must be strictly increasing. Default is ``()``.
+    amplitude_values : Sequence[ArrayLike], optional
+        Sequence of plateau rates with length ``K`` matching
+        ``amplitude_times`` elementwise. Values represent spikes/s (Hz) and
+        may be unitful or unitless. Internally converted to plain ``float``
+        values and stored as a Python list. Default is ``()``.
+    start : ArrayLike, optional
+        Relative start time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        broadcast to ``self.varshape`` via :func:`braintools.init.param`.
+        Effective lower bound is ``origin + start`` (inclusive).
+        Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative stop time :math:`t_{\mathrm{stop,rel}}` (typically ms),
+        broadcast to ``self.varshape`` when provided. Effective upper bound is
+        ``origin + stop`` (exclusive). ``None`` means no upper bound.
+        Default is ``None``.
+    origin : ArrayLike, optional
+        Time origin :math:`t_0` (typically ms) added to ``start`` and ``stop``,
+        broadcast to ``self.varshape``. Default is ``0. * u.ms``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set. Default values match the NEST simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
 
-    ======================= ================== ============================================
-    **Parameter**           **Default**        **Description**
-    ======================= ================== ============================================
-    ``in_size``             1                  Output size of the generator
-    ``amplitude_times``     ``[]``             Times at which rate changes (list of ms)
-    ``amplitude_values``    ``[]``             Rate values at corresponding times (list, spks/s)
-    ``start``               0 ms               Activation time relative to ``origin``
-    ``stop``                ``None`` (inf)     Deactivation time relative to ``origin``
-    ``origin``              0 ms               Global time offset
-    ======================= ================== ============================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``amplitude_times``
+         - ``()``
+         - :math:`t_k`
+         - Change times (ms) for piecewise-constant rate plateaus.
+       * - ``amplitude_values``
+         - ``()``
+         - :math:`a_k`
+         - Plateau rates (spikes/s) selected at and after each ``t_k``.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative inclusive lower bound of the active output window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative exclusive upper bound of the active output window.
+       * - ``origin``
+         - ``0. * u.ms``
+         - :math:`t_0`
+         - Global time offset added to ``start`` and ``stop``.
 
-    Examples
-    --------
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a rate-like array with
+        shape ``self.varshape`` and values in spikes/s: scheduled plateau while
+        active and zeros outside the activity window.
 
-    Basic usage:
-
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     srg = brainpy.state.step_rate_generator(
-    ...         amplitude_times=[10. * u.ms, 110. * u.ms, 210. * u.ms],
-    ...         amplitude_values=[400., 1000., 200.],
-    ...     )
-    ...
-    ...     for step in range(3000):
-    ...         with brainstate.environ.context(t=step * 0.1 * u.ms):
-    ...             rate = srg.update()
-
-    References
-    ----------
-    .. [1] NEST Simulator, ``step_rate_generator`` device.
-           https://nest-simulator.readthedocs.io/en/stable/models/step_rate_generator.html
+    Raises
+    ------
+    ValueError
+        If ``amplitude_times`` and ``amplitude_values`` lengths differ, or if
+        ``amplitude_times`` is not strictly increasing after conversion to ms.
+    TypeError
+        If unitful/unitless arithmetic is invalid during schedule conversion,
+        parameter broadcasting, or time-window comparisons.
+    KeyError
+        At update time, if simulation time ``'t'`` is missing from
+        ``brainstate.environ``.
 
     See Also
     --------
-    step_current_generator : Piecewise constant current generator
-    dc_generator : Constant current generator
+    step_current_generator : Piecewise-constant current stimulation device.
+    dc_generator : Constant current stimulation device.
+    inhomogeneous_poisson_generator : Stochastic rate-to-spike generator.
+
+    References
+    ----------
+    .. [1] NEST Simulator documentation for ``step_rate_generator``:
+           https://nest-simulator.readthedocs.io/en/stable/models/step_rate_generator.html
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.step_rate_generator(
+       ...         amplitude_times=[10.0 * u.ms, 110.0 * u.ms, 210.0 * u.ms],
+       ...         amplitude_values=[400.0, 1000.0, 200.0],
+       ...         start=0.0 * u.ms,
+       ...         stop=300.0 * u.ms,
+       ...     )
+       ...     with brainstate.environ.context(t=160.0 * u.ms):
+       ...         rate = gen.update()
+       ...     _ = rate.shape
     """
     __module__ = 'brainpy.state'
 
@@ -175,16 +254,38 @@ class step_rate_generator(brainstate.nn.Dynamics):
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
-        """Return the rate at the current simulation time.
+        r"""Compute scheduled rate at environment time ``t``.
 
-        The output is the most recent rate value whose corresponding time
-        is ``<= t``. If ``t`` is before all amplitude times, the output is zero.
-        The output is gated by the active window ``[origin+start, origin+stop)``.
+        Parameters
+        ----------
+        None
+            Uses current simulation time ``t`` from ``brainstate.environ`` and
+            parameters initialized in :meth:`__init__`.
 
         Returns
         -------
-        rate : array
-            The output rate (spks/s), shaped ``(in_size,)``. Dimensionless float.
+        out : Any
+            Rate-like quantity with shape ``self.varshape``. For each output
+            channel, value equals the latest scheduled plateau whose change
+            time is ``<= t``. Channels outside the active window
+            ``[origin + start, origin + stop)`` are set to zero (or
+            ``t >= origin + start`` when ``stop is None``).
+
+        Raises
+        ------
+        KeyError
+            If ``brainstate.environ`` has no ``'t'`` entry.
+        TypeError
+            If provided times cannot be compared because of incompatible
+            units/dtypes.
+        ValueError
+            If conversion of ``t`` to milliseconds fails.
+
+        Notes
+        -----
+        Start is inclusive and stop is exclusive. If ``stop <= start`` (after
+        adding ``origin``), the active set is empty and the output is always
+        zero regardless of the scheduled plateaus.
         """
         t = brainstate.environ.get('t')
 

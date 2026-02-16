@@ -219,3 +219,5 @@ cython_debug/
 /codex_logs/
 /ai-coding/claude_implement_neuron_models.sh
 /ai-coding/
+/scripts/
+/codex_logs_numpy_doc/

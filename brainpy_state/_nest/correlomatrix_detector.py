@@ -66,82 +66,201 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
     pools and accumulates binned auto/cross-covariance matrices for
     non-negative lags.
 
-    Description
-    -----------
-    This class mirrors NEST ``correlomatrix_detector``
-    (``models/correlomatrix_detector.{h,cpp}``) including update ordering and
-    matrix bin semantics:
+    **1. Event model and covariance tensor equations**
 
-    - Inputs are grouped by receptor port ``0 .. N_channels-1``.
-    - Connection delays are ignored for correlation content.
-    - A single time-sorted queue stores accepted spikes as
-      ``(timestep, multiplicity*weight, receptor_channel)``.
-    - For each new accepted event, the event is inserted into the queue first,
-      old spikes are pruned, and then covariance/count matrices are updated
-      against all remaining queued spikes.
+    Let an accepted event be
+    :math:`e=(c, t, m, w)` with receptor channel :math:`c`,
+    integer simulation step :math:`t`, multiplicity :math:`m`, and
+    connection weight :math:`w`. The queued event weight is
+    :math:`\hat{w}=m\cdot w`.
 
-    Two outputs are maintained:
+    The detector stores all accepted events in one queue sorted by time.
+    For each new accepted event :math:`i`:
 
-    - ``count_covariance``: unweighted integer covariance counts,
-    - ``covariance``: weighted covariance (float64).
+    1. Insert :math:`i` into the queue (sorted by ``stamp_step``).
+    2. Prune events older than the lag horizon
+       :math:`\tau_{\mathrm{edge}}=\tau_{\max}+\Delta_\tau/2`,
+       including minimum delay offset.
+    3. If :math:`t_i \in [T_{\mathrm{start}}, T_{\mathrm{stop}}]`, update
+       covariance bins against every remaining queued event :math:`j`.
 
-    Shapes are ``(N_channels, N_channels, N_bins)`` with
-    ``N_bins = tau_max / delta_tau + 1`` (non-negative lags only).
+    For pair :math:`(i,j)`, define :math:`d=|t_i-t_j|` (in steps).
+    Channel ordering follows NEST matrix layout:
 
-    Bin Semantics
-    -------------
-    Bin edge handling matches NEST C++ implementation:
+    - if :math:`t_i \ge t_j`, write into ``(c_i, c_j, b)``,
+    - otherwise write into ``(c_j, c_i, b)``.
 
-    - Lower-triangular entries (``i > j``): intervals are left-closed,
-      right-open.
-    - Diagonal and upper-triangular entries (``i <= j``): intervals are
-      left-open, right-closed.
+    The bin index :math:`b` (step domain) is computed as
 
-    This preserves symmetry reconstruction
-    :math:`C(t) = C^T(-t)` when stacking lower/upper parts.
+    .. math::
 
-    Time Windows
-    ------------
-    As in NEST, two windows apply:
+       b =
+       \begin{cases}
+       -\left\lfloor \dfrac{\Delta_{\tau,\mathrm{steps}}/2 - d}
+       {\Delta_{\tau,\mathrm{steps}}} \right\rfloor,
+       & c_{\mathrm{row}} \le c_{\mathrm{col}} \\
+       \left\lfloor \dfrac{\Delta_{\tau,\mathrm{steps}}/2 + d}
+       {\Delta_{\tau,\mathrm{steps}}} \right\rfloor,
+       & c_{\mathrm{row}} > c_{\mathrm{col}}
+       \end{cases}
 
-    - Device activity window
-      :math:`(\mathrm{origin}+\mathrm{start},\mathrm{origin}+\mathrm{stop}]`:
-      events outside are discarded completely.
-    - Counting window ``[Tstart, Tstop]``:
-      only accepted events within this interval increment
-      ``n_events``, ``covariance``, and ``count_covariance``.
+    and contributes
+
+    .. math::
+
+       \mathrm{cov}[c_{\mathrm{row}}, c_{\mathrm{col}}, b]
+       \leftarrow
+       \mathrm{cov}[c_{\mathrm{row}}, c_{\mathrm{col}}, b]
+       + (m_i w_i)\hat{w}_j,
+
+       \mathrm{count}[c_{\mathrm{row}}, c_{\mathrm{col}}, b]
+       \leftarrow
+       \mathrm{count}[c_{\mathrm{row}}, c_{\mathrm{col}}, b] + m_i.
+
+    At zero lag, off-diagonal or non-identical-event pairs mirror-update the
+    transposed entry, reproducing NEST's symmetric zero-lag handling.
+
+    Output tensor shapes are
+    ``(N_channels, N_channels, N_bins)`` with
+    :math:`N_{\mathrm{bins}} = 1 + \tau_{\max}/\Delta_\tau`.
+
+    **2. Windowing, assumptions, and constraints**
+
+    Two windows are applied:
+
+    - Activity window:
+      :math:`(\mathrm{origin}+\mathrm{start},\ \mathrm{origin}+\mathrm{stop}]`.
+      Events outside this interval are discarded and never queued.
+    - Counting window:
+      :math:`[T_{\mathrm{start}},\ T_{\mathrm{stop}}]`. Only accepted events
+      in this interval update ``n_events``, ``covariance``, and
+      ``count_covariance``.
+
+    Calibration constraints mirror NEST semantics in this implementation:
+
+    - ``dt > 0`` and all finite time parameters are scalar-convertible.
+    - ``start``, ``stop`` (when finite), ``origin``, ``delta_tau``, and
+      ``tau_max`` must align to integer simulation steps.
+    - ``delta_tau`` must be an odd multiple of ``dt``.
+    - ``tau_max`` must be a non-negative multiple of ``delta_tau``.
+    - ``N_channels >= 1``.
+
+    **3. Computational implications**
+
+    Per accepted event, insertion is :math:`O(Q)` in queue length and
+    correlation updates are :math:`O(Q)` over retained events, so total update
+    work scales linearly with active queue size. Memory is
+    :math:`O(Q + N_{\mathrm{channels}}^2 N_{\mathrm{bins}})`.
 
     Parameters
     ----------
-    in_size : int, optional
-        Device batch size. Defaults to ``1``.
-    delta_tau : Quantity[ms] or float or None, optional
-        Bin width. Must be an odd multiple of simulation ``dt``.
-        If ``None``, defaults to ``5 * dt``.
-    tau_max : Quantity[ms] or float or None, optional
-        One-sided lag range. Must be a multiple of ``delta_tau``.
-        If ``None``, defaults to ``10 * delta_tau``.
-    Tstart : Quantity[ms] or float, optional
-        Counting window start (inclusive). Defaults to ``0.0 * u.ms``.
-    Tstop : Quantity[ms] or float or None, optional
-        Counting window stop (inclusive). ``None`` means +infinity.
-    N_channels : int, optional
-        Number of receptor pools. Must be >= 1. Defaults to ``1``.
-    start : Quantity[ms], optional
-        Activity window start relative to ``origin`` (exclusive).
-    stop : Quantity[ms] or None, optional
-        Activity window stop relative to ``origin`` (inclusive).
-        ``None`` means +infinity.
-    origin : Quantity[ms], optional
-        Activity window origin shift.
-    name : str, optional
-        Module name.
+    in_size : Size, optional
+        Output size/shape metadata consumed by :class:`brainstate.nn.Dynamics`.
+        This detector stores internal tensors and does not emit batch-shaped
+        arrays through ``update``. Default is ``1``.
+    delta_tau : ArrayLike or None, optional
+        Lag bin width :math:`\Delta_\tau` in milliseconds. Accepts scalar
+        float-like values or ``brainunit`` quantities convertible to ms.
+        Must be finite, strictly positive, aligned to ``dt``, and an odd
+        multiple of ``dt``. ``None`` resolves to ``5 * dt``.
+        Default is ``None``.
+    tau_max : ArrayLike or None, optional
+        One-sided lag horizon :math:`\tau_{\max}` in milliseconds. Accepts
+        scalar float-like values or quantities convertible to ms. Must be
+        finite, non-negative, aligned to ``dt``, and an exact multiple of
+        ``delta_tau``. ``None`` resolves to ``10 * delta_tau``.
+        Default is ``None``.
+    Tstart : ArrayLike, optional
+        Inclusive lower bound of counting window in milliseconds.
+        Scalar-convertible; quantities are converted to ms.
+        Default is ``0.0 * u.ms``.
+    Tstop : ArrayLike or None, optional
+        Inclusive upper bound of counting window in milliseconds.
+        Scalar-convertible when provided. ``None`` means :math:`+\infty`.
+        Default is ``None``.
+    N_channels : int or ArrayLike, optional
+        Number of receptor channels. Must resolve to a scalar integer
+        ``>= 1``. Channel IDs accepted at runtime are
+        ``0, 1, ..., N_channels - 1``. Default is ``1``.
+    start : ArrayLike, optional
+        Exclusive lower bound of activity window relative to ``origin`` in
+        milliseconds. Must be scalar-convertible and aligned to ``dt``.
+        Default is ``0.0 * u.ms``.
+    stop : ArrayLike or None, optional
+        Inclusive upper bound of activity window relative to ``origin`` in
+        milliseconds. Must be scalar-convertible and aligned to ``dt`` when
+        finite. ``None`` means :math:`+\infty`. Default is ``None``.
+    origin : ArrayLike, optional
+        Activity-window origin shift in milliseconds. Must be
+        scalar-convertible and aligned to ``dt``.
+        Default is ``0.0 * u.ms``.
+    name : str or None, optional
+        Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
 
-    State Access
-    ------------
-    - ``covariance``: weighted covariance matrix (float64)
-    - ``count_covariance``: unweighted covariance matrix (int64)
-    - ``n_events``: per-channel counted events (int64)
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 18 17 24 41
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``delta_tau``
+         - ``None``
+         - :math:`\Delta_\tau`
+         - Lag-bin width; resolved as ``5 * dt`` when omitted.
+       * - ``tau_max``
+         - ``None``
+         - :math:`\tau_{\max}`
+         - One-sided lag horizon; resolved as ``10 * delta_tau`` when omitted.
+       * - ``Tstart``
+         - ``0.0 * u.ms``
+         - :math:`T_{\mathrm{start}}`
+         - Inclusive start of covariance/count update window.
+       * - ``Tstop``
+         - ``None``
+         - :math:`T_{\mathrm{stop}}`
+         - Inclusive end of covariance/count update window.
+       * - ``N_channels``
+         - ``1``
+         - :math:`N_{\mathrm{channels}}`
+         - Number of receptor channels and matrix axes.
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower bound of activity window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound of activity window.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global shift added to ``start`` and ``stop`` boundaries.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node. :meth:`update` and :meth:`flush` return a mapping with
+        keys ``'covariance'``, ``'count_covariance'``, and ``'n_events'``.
+        Shapes are ``(N_channels, N_channels, N_bins)``,
+        ``(N_channels, N_channels, N_bins)``, and ``(N_channels,)``.
+
+    Raises
+    ------
+    ValueError
+        If scalar parameters are invalid (non-scalar, non-finite where finite
+        values are required, misaligned to ``dt``), if consistency constraints
+        are violated (for example ``delta_tau`` even in steps, ``tau_max`` not
+        divisible by ``delta_tau``, ``stop < start``, or ``N_channels < 1``),
+        or if runtime event arrays contain invalid values/sizes (negative
+        multiplicities, non-finite ``weights``, unknown receptor channel, or
+        mismatched vector lengths).
+    KeyError
+        If runtime environment keys such as simulation time ``'t'`` or
+        resolution ``dt`` are unavailable when calibration/update is called.
 
     Notes
     -----
@@ -150,6 +269,37 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
     - This implementation uses default NEST kernel minimum delay semantics in
       pruning (`min_delay = 1` simulation step).
     - Optional ``multiplicities`` emulate NEST ``SpikeEvent`` multiplicity.
+    - Runtime event arguments accepted by :meth:`update` are one-dimensional
+      scalar-broadcastable arrays over the same event axis:
+      ``spikes``, ``receptor_ports``/``receptor_types``, ``weights``,
+      ``multiplicities``, and ``stamp_steps``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> import numpy as np
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     det = brainpy.state.correlomatrix_detector(
+       ...         N_channels=2,
+       ...         delta_tau=0.5 * u.ms,
+       ...         tau_max=2.0 * u.ms,
+       ...     )
+       ...     det.init_state()
+       ...     _ = det.update(
+       ...         spikes=np.array([1.0, 1.0]),
+       ...         receptor_ports=np.array([0, 1]),
+       ...         weights=np.array([1.0, 2.0]),
+       ...         stamp_steps=np.array([11, 12]),
+       ...     )
+       ...     out = det.flush()
+       >>> out["covariance"].shape
+       (2, 2, 5)
+       >>> out["count_covariance"].dtype
+       dtype('int64')
 
     References
     ----------

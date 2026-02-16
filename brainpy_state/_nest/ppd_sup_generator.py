@@ -38,105 +38,268 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
 
     Description
     -----------
-
     ``ppd_sup_generator`` re-implements NEST's stimulation device with the
-    same name. For each output train, it simulates the pooled spike train of
-    ``n_proc`` independent Poisson processes with absolute dead time.
+    same name. For each output train, it emits the per-step multiplicity of a
+    superposition of ``n_proc`` independent Poisson-like component processes
+    with absolute dead time.
 
-    Let ``rate`` be the mean rate (Hz) of each component process and
-    ``dead_time`` be the absolute dead time (ms). NEST evolves an age
-    distribution per output train:
+    **1. State model, derivation, and update equations**
 
-    - ``occ_refractory[a]`` stores how many processes are in dead-time bin
-      ``a``, for ``a = 0, ..., floor(dead_time / dt) - 1``.
-    - ``occ_active`` stores how many processes are currently available to
-      spike.
+    Let :math:`r=\mathrm{rate}` (Hz), :math:`\tau_d=\mathrm{dead\_time}` (ms),
+    and :math:`\Delta t` be the simulation resolution in ms. For each output
+    train, the internal state is an age-discretized occupancy model:
 
-    At each step, available processes emit with hazard
+    - ``occ_active``: number of currently active component processes.
+    - ``occ_refractory[a]`` for
+      :math:`a=0,\dots,\lfloor\tau_d/\Delta t\rfloor-1`: number of processes
+      in refractory age bin ``a``.
+    - ``activate``: rotating pointer indicating the bin whose occupants become
+      active at the current step.
+
+    NEST's per-step hazard for one active process is
 
     .. math::
 
-       h_{\mathrm{step}} = \frac{dt}{1000 / \mathrm{rate} - \mathrm{dead\_time}}.
+       h_{\mathrm{step}} =
+       \frac{\Delta t}{1000/r-\tau_d}.
 
-    If sinusoidal modulation is enabled, NEST scales this hazard as
+    This discretization is valid under NEST's model constraint
+    :math:`1000/r>\tau_d` (or ``rate == 0``). If sinusoidal modulation is
+    enabled, the instantaneous hazard becomes
 
     .. math::
 
        h_t = h_{\mathrm{step}}
-         \left(1 + A \sin\left(2\pi f t / 1000\right)\right),
+       \left(1 + A \sin\left(2\pi f t / 1000\right)\right),
 
-    where ``A`` is ``relative_amplitude`` in ``[0, 1]`` and ``f`` is
-    ``frequency`` in Hz.
+    where :math:`A=\mathrm{relative\_amplitude}\in[0,1]` and
+    :math:`f=\mathrm{frequency}` in Hz.
 
-    NEST update ordering (source-equivalent)
-    ----------------------------------------
+    For each train and step, emitted multiplicity ``n_spikes`` is sampled from
+    the active pool using NEST's branch logic:
 
-    This implementation follows ``models/ppd_sup_generator.cpp``:
+    - Binomial branch: ``Binomial(occ_active, h_t)``.
+    - Poisson approximation branch when
+      ``(occ_active >= 100 and h_t <= 0.01)`` or
+      ``(occ_active >= 500 and h_t * occ_active <= 0.1)``:
+      sample ``Poisson(h_t * occ_active)`` and clip to ``occ_active``.
 
-    1. Check activity at the current left step edge ``t``.
-    2. Compute current hazard ``h_t`` (including optional sinusoidal factor).
-    3. For each output train, draw emitted multiplicity from its current
-       active pool:
-       - Binomial branch: ``Binomial(occ_active, h_t)``.
-       - Poisson approximation branch (NEST heuristic):
-         - if ``occ_active >= 100`` and ``h_t <= 0.01``, or
-         - if ``occ_active >= 500`` and ``h_t * occ_active <= 0.1``,
-         sample ``Poisson(h_t * occ_active)`` and clip to ``occ_active``.
-    4. Move emitted processes into dead-time bins via a rotating pointer and
-       reactivate processes whose dead time has elapsed.
-    5. Return per-step multiplicity per train (int64).
+    State transition for nonzero refractory bins is
 
-    Timing semantics
-    ----------------
+    .. math::
 
-    As a spike generator, activity follows NEST ``StimulationDevice``:
+       occ\_active' = occ\_active + occ\_refractory[p] - n\_spikes,
+       \quad
+       occ\_refractory[p]' = n\_spikes,
+
+    with pointer update :math:`p'=(p+1)\bmod B`,
+    :math:`B=\lfloor\tau_d/\Delta t\rfloor`.
+    If ``B == 0`` (zero dead time), the active pool is not decremented by
+    refractory bookkeeping and each component can contribute at most one spike
+    per step through the binomial/Poisson draw.
+
+    **2. Timing semantics and activity window**
+
+    Activity follows NEST ``StimulationDevice`` semantics for generators:
 
     .. math::
 
        t_{\min} < t \le t_{\max},
+       \qquad
+       t_{\min} = origin + start,\quad t_{\max} = origin + stop.
 
-    with ``t_min = origin + start`` and ``t_max = origin + stop``.
-    Therefore ``start`` is exclusive and ``stop`` is inclusive.
+    Therefore ``start`` is exclusive and ``stop`` is inclusive. Internally,
+    finite times are projected to steps with ``round(time_ms / dt_ms)`` and
+    checked as ``t_min_step < curr_step <= t_max_step``.
+
+    **3. Assumptions, constraints, and computational implications**
+
+    All physical parameters are scalarized to host-side ``float64`` or
+    ``int`` before simulation. Enforced constraints are:
+
+    - ``dead_time >= 0``.
+    - ``n_proc >= 1``.
+    - ``relative_amplitude in [0, 1]``.
+    - ``stop >= start``.
+    - ``1000 / rate > dead_time`` (or ``rate == 0``).
+
+    If ``dt`` is available, finite ``origin``, ``start``, and ``stop`` must be
+    exact grid multiples (absolute tolerance ``1e-12`` in ``time/dt`` ratio).
+    Runtime of :meth:`update` is
+    :math:`O(\prod \mathrm{varshape})` per step; memory is
+    :math:`O(\prod \mathrm{varshape} \cdot \lfloor\tau_d/\Delta t\rfloor)`.
+    Random draws are produced by ``numpy.random.Generator`` (seeded by
+    ``rng_seed``), so stochasticity is NumPy-host based rather than JAX-key
+    based.
 
     Parameters
     ----------
     in_size : Size, optional
-        Number/shape of independent output spike trains. Default: ``1``.
+        Output size specification consumed by
+        :class:`brainstate.nn.Dynamics`. ``self.varshape`` derived from this
+        value is the exact shape returned by :meth:`update`, and each element
+        corresponds to one independent output train. Default is ``1``.
     rate : ArrayLike, optional
-        Mean firing rate of each component process in spikes/s.
-        Default: ``0.0 * u.Hz``.
+        Scalar component-process rate in spikes/s (Hz), shape ``()`` after
+        conversion. Accepts a single-element numeric ``ArrayLike`` or a
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        Must satisfy ``1000 / rate > dead_time`` when ``rate > 0``.
+        Default is ``0.0 * u.Hz``.
     dead_time : ArrayLike, optional
-        Absolute dead time in ms. Must be non-negative. Default: ``0.0 * u.ms``.
+        Scalar absolute refractory time in ms, shape ``()`` after conversion.
+        Accepts a single-element numeric ``ArrayLike`` or a
+        :class:`brainunit.Quantity` convertible to ``u.ms``.
+        Must satisfy ``dead_time >= 0``. Default is ``0.0 * u.ms``.
     n_proc : ArrayLike, optional
-        Number of independent component processes (integer, ``>= 1``).
-        Default: ``1``.
+        Scalar integer number of independent component processes per output
+        train, shape ``()`` after conversion. Parsed by nearest-integer check
+        with absolute tolerance ``1e-12``. Must satisfy ``n_proc >= 1``.
+        Default is ``1``.
     frequency : ArrayLike, optional
-        Sinusoidal modulation frequency in Hz. Default: ``0.0 * u.Hz``.
+        Scalar sinusoidal modulation frequency in Hz, shape ``()`` after
+        conversion. ``frequency == 0`` disables sinusoidal variation even when
+        ``relative_amplitude > 0``. Default is ``0.0 * u.Hz``.
     relative_amplitude : ArrayLike, optional
-        Relative modulation amplitude in ``[0, 1]``. Default: ``0.0``.
+        Scalar dimensionless modulation amplitude :math:`A`, shape ``()``
+        after conversion. Must satisfy ``0 <= relative_amplitude <= 1``.
+        Default is ``0.0``.
     start : ArrayLike, optional
-        Activation start time relative to ``origin`` (ms).
-        Default: ``0.0 * u.ms``.
+        Scalar relative activation time in ms, shape ``()`` after conversion.
+        Effective lower activity bound is ``origin + start`` and is exclusive.
+        Must be grid-representable when ``dt`` is available.
+        Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Deactivation stop time relative to ``origin`` (ms).
-        ``None`` means infinity. Default: ``None``.
+        Scalar relative deactivation time in ms, shape ``()`` after
+        conversion. Effective upper activity bound is ``origin + stop`` and is
+        inclusive. ``None`` maps to ``+inf``. Must satisfy ``stop >= start``
+        and be grid-representable when finite and ``dt`` is available.
+        Default is ``None``.
     origin : ArrayLike, optional
-        Time origin for ``start`` and ``stop`` in ms.
-        Default: ``0.0 * u.ms``.
+        Scalar time-origin offset in ms, shape ``()`` after conversion.
+        Added to ``start`` and ``stop`` to compute absolute active bounds.
+        Must be grid-representable when finite and ``dt`` is available.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Seed for internal random sampling. Default: ``0``.
-    name : str, optional
-        Object name.
+        Seed used to initialize ``numpy.random.default_rng`` in
+        :meth:`init_state`. Default is ``0``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 20 18 24 38
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``rate``
+         - ``0.0 * u.Hz``
+         - :math:`r`
+         - Component-process rate in spikes/s.
+       * - ``dead_time``
+         - ``0.0 * u.ms``
+         - :math:`\tau_d`
+         - Absolute refractory duration in ms.
+       * - ``n_proc``
+         - ``1``
+         - :math:`n_{\mathrm{proc}}`
+         - Number of component processes per output train.
+       * - ``frequency``
+         - ``0.0 * u.Hz``
+         - :math:`f`
+         - Modulation frequency in Hz.
+       * - ``relative_amplitude``
+         - ``0.0``
+         - :math:`A`
+         - Relative sinusoidal modulation amplitude.
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower activity bound.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound; ``None`` maps to ``+\infty``.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global offset added to ``start`` and ``stop``.
+       * - ``in_size``
+         - ``1``
+         - -
+         - Defines ``self.varshape`` for independent output trains.
+       * - ``rng_seed``
+         - ``0``
+         - -
+         - Seed for NumPy RNG used by stochastic transition draws.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node instance. Each :meth:`update` call returns a JAX array
+        of dtype ``int64`` and shape ``self.varshape`` containing per-step
+        spike multiplicities per output train.
+
+    Raises
+    ------
+    ValueError
+        If scalar conversion fails due to non-scalar inputs; if ``dead_time``
+        is negative; if ``n_proc < 1``; if ``relative_amplitude`` is outside
+        ``[0, 1]``; if ``stop < start``; if ``1000 / rate <= dead_time`` for
+        nonzero ``rate``; if integer-valued inputs are non-integral beyond
+        tolerance; or if finite ``origin``/``start``/``stop`` are not
+        multiples of simulation resolution when ``dt`` is available.
+    TypeError
+        If conversion to ``u.Hz``/``u.ms`` or numeric casting fails for
+        provided parameter types.
+    KeyError
+        At runtime, if required simulation-context fields (for example ``dt``
+        used by ``brainstate.environ.get_dt()``) are unavailable.
 
     Notes
     -----
-    - Initial occupation matches NEST ``pre_run_hook()``:
-      ``floor(rate/1000 * n_proc * dt)`` in each dead-time bin and the
+    - Initial occupancy matches NEST ``pre_run_hook()``:
+      ``floor(rate / 1000 * n_proc * dt)`` in each refractory bin and the
       remainder in ``occ_active``.
-    - NEST does not initialize to sinusoidal equilibrium; modulation may show
-      initial transients.
-    - The stimulation-backend parameter order in NEST is
+    - NEST does not initialize to sinusoidal equilibrium, so modulation can
+      show startup transients.
+    - Stimulation-backend parameter order in NEST is
       ``[dead_time, rate, n_proc, frequency, relative_amplitude]``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.ppd_sup_generator(
+       ...         in_size=(2, 2),
+       ...         rate=20.0 * u.Hz,
+       ...         dead_time=2.0 * u.ms,
+       ...         n_proc=80,
+       ...         frequency=8.0 * u.Hz,
+       ...         relative_amplitude=0.25,
+       ...         start=5.0 * u.ms,
+       ...         stop=50.0 * u.ms,
+       ...         rng_seed=3,
+       ...     )
+       ...     with brainstate.environ.context(t=12.0 * u.ms):
+       ...         counts = gen.update()
+       ...     _ = counts.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> gen = brainpy.state.ppd_sup_generator(rate=15.0 * u.Hz, n_proc=30)
+       >>> gen.set(dead_time=1.5 * u.ms, stop=None, origin=2.0 * u.ms)
+       >>> params = gen.get()
+       >>> _ = params['dead_time'], params['stop']
 
     References
     ----------
