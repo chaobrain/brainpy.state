@@ -177,6 +177,16 @@ from .tanh_rate import tanh_rate_ipn, tanh_rate_opn
 from .threshold_lin_rate import threshold_lin_rate_ipn, threshold_lin_rate_opn
 
 # ---------------------------------------------------------------------------
+# Astrocyte models
+# ---------------------------------------------------------------------------
+from .astrocyte_lr_1994 import astrocyte_lr_1994
+
+# ---------------------------------------------------------------------------
+# Multi-compartment models
+# ---------------------------------------------------------------------------
+from .cm_default import cm_default
+
+# ---------------------------------------------------------------------------
 # Other spiking neurons
 # ---------------------------------------------------------------------------
 from .ignore_and_fire import ignore_and_fire
@@ -351,6 +361,12 @@ __all__ = [
     'tanh_rate_opn',
     'threshold_lin_rate_ipn',
     'threshold_lin_rate_opn',
+
+    # Astrocyte models
+    'astrocyte_lr_1994',
+
+    # Multi-compartment models
+    'cm_default',
 
     # Other spiking neurons
     'ignore_and_fire',

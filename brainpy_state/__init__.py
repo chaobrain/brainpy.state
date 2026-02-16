@@ -217,6 +217,9 @@ from ._nest import (
     threshold_lin_rate_ipn,
     threshold_lin_rate_opn,
 
+    # Astrocyte models
+    astrocyte_lr_1994,
+
     # Other spiking neurons
     ignore_and_fire,
 
@@ -428,6 +431,9 @@ __all__ = [
     'tanh_rate_opn',
     'threshold_lin_rate_ipn',
     'threshold_lin_rate_opn',
+
+    # Astrocyte models
+    'astrocyte_lr_1994',
 
     # Other spiking neurons
     'ignore_and_fire',
