@@ -1,7 +1,7 @@
-Neuron Models
-=============
+Neuron Models (BrainPy)
+======================
 
-Core spiking neuron models in ``brainpy.state``.
+BrainPy-compatible spiking neuron models.
 
 .. currentmodule:: brainpy.state
 

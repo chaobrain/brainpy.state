@@ -1,5 +1,5 @@
-Readout Layers
-==============
+Readout Layers (BrainPy)
+=======================
 
 Readout modules for converting spiking or rate-coded outputs.
 

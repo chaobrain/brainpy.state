@@ -3,51 +3,67 @@ API Reference
 
 Complete API reference for ``brainpy.state``.
 
+The API is organized into three categories:
+
+- **Base Models** — abstract base classes that all models inherit from
+- **BrainPy-Compatible Models** — high-level, composable building blocks for the BrainPy ecosystem
+- **NEST-Compatible Models** — faithful re-implementations of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ models
+
 
 Organization
 ------------
 
-**Core Models** — high-level, composable building blocks for spiking neural networks:
+**Base Models**
+
+.. grid:: 1 2 2 3
+
+   .. grid-item-card:: :material-regular:`foundation;2em` Base Classes
+      :link: base.html
+
+      Abstract base classes: Dynamics, Neuron, Synapse
+
+
+**BrainPy-Compatible Models**
 
 .. grid:: 1 2 2 3
 
    .. grid-item-card:: :material-regular:`psychology;2em` Neurons
-      :link: neurons.html
+      :link: brainpy-neurons.html
 
       Spiking neuron models (LIF, ALIF, Izhikevich, HH, etc.)
 
    .. grid-item-card:: :material-regular:`timeline;2em` Synapses
-      :link: synapses.html
+      :link: brainpy-synapses.html
 
       Synaptic dynamics (Expon, Alpha, AMPA, GABA, NMDA)
 
    .. grid-item-card:: :material-regular:`account_tree;2em` Projections
-      :link: projections.html
+      :link: brainpy-projections.html
 
       Connect neural populations (AlignPostProj, DeltaProj, etc.)
 
    .. grid-item-card:: :material-regular:`output;2em` Synaptic Outputs
-      :link: synouts.html
+      :link: brainpy-synouts.html
 
       Convert conductances to currents (COBA, CUBA, MgBlock)
 
    .. grid-item-card:: :material-regular:`psychology_alt;2em` Short-Term Plasticity
-      :link: stp.html
+      :link: brainpy-stp.html
 
       Short-term synaptic plasticity (STP, STD)
 
    .. grid-item-card:: :material-regular:`sensors;2em` Readouts
-      :link: readouts.html
+      :link: brainpy-readouts.html
 
       Readout layers (LeakyRateReadout, LeakySpikeReadout)
 
    .. grid-item-card:: :material-regular:`input;2em` Input Generators
-      :link: inputs.html
+      :link: brainpy-inputs.html
 
       Spike and current generators (PoissonSpike, SpikeTime)
 
 
-**NEST-Compatible Models** — faithful re-implementations of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ models:
+**NEST-Compatible Models**
 
 .. grid:: 1 2 2 3
 
@@ -204,15 +220,22 @@ Readout Layers
 .. toctree::
    :hidden:
    :maxdepth: 2
-   :caption: Core Models
+   :caption: Base Models
 
-   neurons
-   synapses
-   projections
-   synouts
-   stp
-   readouts
-   inputs
+   base
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: BrainPy-Compatible Models
+
+   brainpy-neurons
+   brainpy-synapses
+   brainpy-projections
+   brainpy-synouts
+   brainpy-stp
+   brainpy-readouts
+   brainpy-inputs
 
 .. toctree::
    :hidden:

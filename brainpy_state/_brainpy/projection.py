@@ -23,9 +23,9 @@ from brainstate.mixin import JointTypes, ParamDescriber
 from brainstate.nn import init_maybe_prefetch
 from brainstate.util import get_unique_name
 
-from ._base import Dynamics
-from ._mixin import BindCondData, AlignPost
-from ._synouts import SynOut
+from brainpy_state._base import Dynamics
+from brainpy_state._mixin import BindCondData, AlignPost
+from .synouts import SynOut
 
 __all__ = [
     'Projection',

@@ -65,7 +65,7 @@ We welcome code contributions! This includes:
 2. **Clone your fork** locally:
    ```bash
    git clone https://github.com/YOUR_USERNAME/brainpy.state.git
-   cd brainpy_state.state
+   cd brainpy.state
    ```
 
 3. **Create a virtual environment**:

@@ -23,8 +23,8 @@ import braintools
 import brainunit as u
 from brainstate.typing import Size, ArrayLike
 
-from ._base import Synapse
-from ._mixin import AlignPost
+from brainpy_state._base import Synapse
+from brainpy_state._mixin import AlignPost
 
 __all__ = [
     'Expon', 'DualExpon',

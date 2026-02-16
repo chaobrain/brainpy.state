@@ -19,7 +19,7 @@ import brainstate
 import brainunit as u
 import jax.numpy as jnp
 
-from ._mixin import BindCondData
+from brainpy_state._mixin import BindCondData
 
 __all__ = [
     'SynOut', 'COBA', 'CUBA', 'MgBlock',

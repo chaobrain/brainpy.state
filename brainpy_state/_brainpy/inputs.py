@@ -23,7 +23,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size, DTypeLike
 
-from ._misc import set_module_as
+from brainpy_state._misc import set_module_as
 
 __all__ = [
     'SpikeTime',
@@ -253,13 +253,13 @@ class PoissonEncoder(brainstate.nn.Dynamics):
 
     Examples
     --------
-    >>> import brainpy_state
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>> import numpy as np
     >>>
     >>> # Create a Poisson encoder for 10 neurons
-    >>> encoder = brainpy_state.state.PoissonEncoder(10)
+    >>> encoder = brainpy.state.PoissonEncoder(10)
     >>>
     >>> # Generate spikes with varying firing rates
     >>> rates = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]) * u.Hz
@@ -272,7 +272,7 @@ class PoissonEncoder(brainstate.nn.Dynamics):
     >>> spike_train = encoder.update(firing_rates)
     >>>
     >>> # Feed the spikes into a spiking neural network
-    >>> neuron_layer = brainpy_state.state.LIF(10)
+    >>> neuron_layer = brainpy.state.LIF(10)
     >>> neuron_layer.init_state(batch_size=1)
     >>> output_spikes = neuron_layer.update(spike_train)
 
@@ -358,17 +358,17 @@ class PoissonInput(brainstate.nn.Module):
 
     Examples
     --------
-    >>> import brainpy_state
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>> import numpy as np
     >>>
     >>> # Create a neuron group with membrane potential
-    >>> neuron = brainpy_state.state.LIF(100)
+    >>> neuron = brainpy.state.LIF(100)
     >>> neuron.init_state(batch_size=1)
     >>>
     >>> # Add Poisson input to all neurons
-    >>> poisson_in = brainpy_state.state.PoissonInput(
+    >>> poisson_in = brainpy.state.PoissonInput(
     ...     target=neuron.V,
     ...     indices=None,
     ...     num_input=200,
@@ -378,7 +378,7 @@ class PoissonInput(brainstate.nn.Module):
     >>>
     >>> # Add Poisson input only to specific neurons
     >>> indices = np.array([0, 10, 20, 30])
-    >>> specific_input = brainpy_state.state.PoissonInput(
+    >>> specific_input = brainpy.state.PoissonInput(
     ...     target=neuron.V,
     ...     indices=indices,
     ...     num_input=50,
@@ -498,7 +498,7 @@ def poisson_input(
 
     Examples
     --------
-    >>> import brainpy_state
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>> import numpy as np
@@ -507,7 +507,7 @@ def poisson_input(
     >>> V = brainstate.HiddenState(np.zeros(100) * u.mV)
     >>>
     >>> # Add Poisson input to all neurons at 50 Hz
-    >>> brainpy_state.state.poisson_input(
+    >>> brainpy.state.poisson_input(
     ...     freq=50 * u.Hz,
     ...     num_input=200,
     ...     weight=0.1 * u.mV,
@@ -516,7 +516,7 @@ def poisson_input(
     >>>
     >>> # Apply Poisson input only to a subset of neurons
     >>> indices = np.array([0, 10, 20, 30])
-    >>> brainpy_state.state.poisson_input(
+    >>> brainpy.state.poisson_input(
     ...     freq=100 * u.Hz,
     ...     num_input=50,
     ...     weight=0.2 * u.mV,
@@ -527,7 +527,7 @@ def poisson_input(
     >>> # Apply input with refractory mask
     >>> refractory = np.zeros(100, dtype=bool)
     >>> refractory[40:60] = True  # neurons 40-59 are in refractory period
-    >>> brainpy_state.state.poisson_input(
+    >>> brainpy.state.poisson_input(
     ...     freq=75 * u.Hz,
     ...     num_input=100,
     ...     weight=0.15 * u.mV,

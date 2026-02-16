@@ -29,7 +29,7 @@ from highlight_lexer import fix_ipython2_lexer_in_notebooks
 
 fix_ipython2_lexer_in_notebooks(os.path.dirname(os.path.abspath(__file__)))
 
-import brainpy_state
+import brainpy
 
 release = brainpy_state.__version__
 

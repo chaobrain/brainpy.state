@@ -23,7 +23,7 @@ import braintools
 import brainunit as u
 from brainstate.typing import Size, ArrayLike
 
-from ._base import Synapse
+from brainpy_state._base import Synapse
 
 __all__ = [
     'Alpha', 'AMPA', 'GABAa', 'BioNMDA',

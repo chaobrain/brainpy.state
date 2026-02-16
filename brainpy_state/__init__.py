@@ -44,49 +44,50 @@ __version__ = "0.0.4"
 __version_info__ = tuple(map(int, __version__.split(".")))
 
 # =============================================================================
-# Core Models
+# Base Models
 # =============================================================================
 
-# Base classes
 from ._base import Dynamics, Neuron, Synapse
 
-# Neuron models - LIF family
-from ._lif import (
+# =============================================================================
+# BrainPy-Compatible Models
+# =============================================================================
+
+from ._brainpy import (
+    # Neuron models - LIF family
     IF, LIF, LIFRef, ALIF,
     ExpIF, ExpIFRef,
     AdExIF, AdExIFRef,
     QuaIF, AdQuaIF, AdQuaIFRef,
     Gif, GifRef,
-)
 
-# Neuron models - Hodgkin-Huxley family
-from ._hh import HH, MorrisLecar, WangBuzsakiHH
+    # Neuron models - Hodgkin-Huxley family
+    HH, MorrisLecar, WangBuzsakiHH,
 
-# Neuron models - Izhikevich family
-from ._izhikevich import Izhikevich, IzhikevichRef
+    # Neuron models - Izhikevich family
+    Izhikevich, IzhikevichRef,
 
-# Synapse models
-from ._exponential import Expon, DualExpon
-from ._synapse import Alpha, AMPA, GABAa, BioNMDA
+    # Synapse models
+    Expon, DualExpon,
+    Alpha, AMPA, GABAa, BioNMDA,
 
-# Synaptic outputs
-from ._synouts import SynOut, COBA, CUBA, MgBlock
+    # Synaptic outputs
+    SynOut, COBA, CUBA, MgBlock,
 
-# Short-term plasticity
-from ._stp import STP, STD
+    # Short-term plasticity
+    STP, STD,
 
-# Projections
-from ._projection import (
+    # Projections
     Projection, AlignPostProj, DeltaProj, CurrentProj,
     align_pre_projection, align_post_projection,
+    SymmetryGapJunction, AsymmetryGapJunction,
+
+    # Readouts
+    LeakyRateReadout, LeakySpikeReadout,
+
+    # Input generators
+    SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input,
 )
-from ._synaptic_projection import SymmetryGapJunction, AsymmetryGapJunction
-
-# Readouts
-from ._readout import LeakyRateReadout, LeakySpikeReadout
-
-# Input generators
-from ._inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
 
 # =============================================================================
 # NEST-Compatible Models
@@ -259,11 +260,13 @@ from ._nest import (
 
 __all__ = [
     # =========================================================================
-    # Core Models
+    # Base Models
     # =========================================================================
-
-    # Base classes
     'Dynamics', 'Neuron', 'Synapse',
+
+    # =========================================================================
+    # BrainPy-Compatible Models
+    # =========================================================================
 
     # Neuron models - LIF family
     'IF', 'LIF', 'LIFRef', 'ALIF',

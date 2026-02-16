@@ -22,8 +22,8 @@ import braintools
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from ._misc import set_module_as
-from ._projection import Projection
+from brainpy_state._misc import set_module_as
+from .projection import Projection
 
 __all__ = [
     'SymmetryGapJunction',
@@ -251,7 +251,7 @@ class AsymmetryGapJunction(Projection):
 
     Examples
     --------
-    >>> import brainpy_state.state as brainpy
+    >>> import brainpy.state as brainpy
     >>> import brainunit as u
     >>> import numpy as np
     >>>
