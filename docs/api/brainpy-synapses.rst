@@ -1,7 +1,7 @@
-Synapse Models
-==============
+Synapse Models (BrainPy)
+=======================
 
-Synaptic dynamics models in BrainPy.
+BrainPy-compatible synaptic dynamics models.
 
 .. currentmodule:: brainpy.state
 
@@ -18,7 +18,7 @@ Simple Synapse Models
     Alpha
 
 Biological Receptor Models
----------------------------
+--------------------------
 
 .. autosummary::
     :toctree: generated/
@@ -28,4 +28,3 @@ Biological Receptor Models
     AMPA
     GABAa
     BioNMDA
-

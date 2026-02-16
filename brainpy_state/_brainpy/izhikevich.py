@@ -23,7 +23,7 @@ import brainunit as u
 import jax
 from brainstate.typing import ArrayLike, Size
 
-from ._base import Neuron
+from brainpy_state._base import Neuron
 
 __all__ = [
     'Izhikevich', 'IzhikevichRef',
@@ -85,20 +85,9 @@ class Izhikevich(Neuron):
     u : HiddenState
         Recovery variable.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy_state
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an Izhikevich neuron layer with 10 neurons
-    >>> izh = brainpy_state.state.Izhikevich(10)
-    >>>
-    >>> # Initialize the state
-    >>> izh.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = izh.update(x=10.*u.mV/u.ms)
+    IzhikevichRef : Izhikevich model with absolute refractory period.
 
     Notes
     -----
@@ -117,6 +106,20 @@ class Izhikevich(Neuron):
            on neural networks, 14(6), 1569-1572.
     .. [2] Izhikevich, E. M. (2004). Which model to use for cortical spiking neurons?.
            IEEE transactions on neural networks, 15(5), 1063-1070.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an Izhikevich neuron layer with 10 neurons
+        >>> izh = brainpy.state.Izhikevich(10)
+        >>> # Initialize the state
+        >>> izh.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = izh.update(x=10.*u.mV/u.ms)
     """
 
     __module__ = 'brainpy.state'
@@ -263,26 +266,9 @@ class IzhikevichRef(Neuron):
     refractory : HiddenState
         Neuron refractory state (if ref_var=True).
 
-    Examples
+    See Also
     --------
-    >>> import brainpy_state
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an IzhikevichRef neuron layer with 10 neurons
-    >>> izh_ref = brainpy_state.state.IzhikevichRef(10, tau_ref=2.*u.ms)
-    >>>
-    >>> # Initialize the state
-    >>> izh_ref.init_state(batch_size=1)
-    >>>
-    >>> # Generate inputs and run simulation
-    >>> time_steps = 100
-    >>> inputs = brainstate.random.randn(time_steps, 1, 10) * u.mV / u.ms
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    >>>     for t in range(time_steps):
-    >>>         with brainstate.environ.context(t=t*0.1*u.ms):
-    >>>             spikes = izh_ref.update(x=inputs[t])
+    Izhikevich : Izhikevich model without refractory period.
 
     Notes
     -----
@@ -301,6 +287,25 @@ class IzhikevichRef(Neuron):
            on neural networks, 14(6), 1569-1572.
     .. [2] Izhikevich, E. M. (2004). Which model to use for cortical spiking neurons?.
            IEEE transactions on neural networks, 15(5), 1063-1070.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an IzhikevichRef neuron layer with 10 neurons
+        >>> izh_ref = brainpy.state.IzhikevichRef(10, tau_ref=2.*u.ms)
+        >>> # Initialize the state
+        >>> izh_ref.init_state(batch_size=1)
+        >>> # Generate inputs and run simulation
+        >>> time_steps = 100
+        >>> inputs = brainstate.random.randn(time_steps, 1, 10) * u.mV / u.ms
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     for t in range(time_steps):
+        ...         with brainstate.environ.context(t=t*0.1*u.ms):
+        ...             spikes = izh_ref.update(x=inputs[t])
     """
 
     __module__ = 'brainpy.state'

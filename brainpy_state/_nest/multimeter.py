@@ -103,15 +103,15 @@ class multimeter(brainstate.nn.Dynamics):
 
     Examples
     --------
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>> import numpy as np
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     neuron = bps.iaf_psc_delta(1, I_e=500. * u.pA)
+    ...     neuron = brainpy.state.iaf_psc_delta(1, I_e=500. * u.pA)
     ...     neuron.init_state()
-    ...     mm = bps.multimeter(record_from=['V_m'], interval=0.1 * u.ms)
+    ...     mm = brainpy.state.multimeter(record_from=['V_m'], interval=0.1 * u.ms)
     ...     for k in range(100):
     ...         with brainstate.environ.context(t=k * 0.1 * u.ms):
     ...             neuron.update()

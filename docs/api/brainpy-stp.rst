@@ -1,5 +1,5 @@
-Short-Term Plasticity
-=====================
+Short-Term Plasticity (BrainPy)
+==============================
 
 Short-term synaptic plasticity models.
 

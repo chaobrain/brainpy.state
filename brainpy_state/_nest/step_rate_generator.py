@@ -98,12 +98,12 @@ class step_rate_generator(brainstate.nn.Dynamics):
 
     Basic usage:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     srg = bps.step_rate_generator(
+    ...     srg = brainpy.state.step_rate_generator(
     ...         amplitude_times=[10. * u.ms, 110. * u.ms, 210. * u.ms],
     ...         amplitude_values=[400., 1000., 200.],
     ...     )

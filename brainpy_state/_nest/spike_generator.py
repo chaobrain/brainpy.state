@@ -91,12 +91,12 @@ class spike_generator(brainstate.nn.Dynamics):
 
     Basic usage with a neuron:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     sg = bps.spike_generator(
+    ...     sg = brainpy.state.spike_generator(
     ...         spike_times=[5. * u.ms, 10. * u.ms, 15. * u.ms],
     ...     )
     ...
@@ -106,7 +106,7 @@ class spike_generator(brainstate.nn.Dynamics):
 
     With spike weights:
 
-    >>> sg = bps.spike_generator(
+    >>> sg = brainpy.state.spike_generator(
     ...     spike_times=[5. * u.ms, 10. * u.ms],
     ...     spike_weights=[2.0, 0.5],
     ... )

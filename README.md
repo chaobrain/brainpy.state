@@ -13,50 +13,106 @@
 </p>
 
 
-``brainpy.state`` modernizes [BrainPy](https://github.com/brainpy/BrainPy) simulator of spiking neural networks with state-based syntax in [brainstate](https://github.com/chaobrain/brainstate).
-Moreover, ``brainpy.state`` provides more features compared to ``BrainPy``, including:
+`brainpy.state` provides **stateful spiking neural network models** built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate). It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/).
+
+The library ships **167+ models** organized in three tiers:
+
+- **Base classes** — `Dynamics`, `Neuron`, `Synapse` — the abstract foundation every model inherits from.
+- **BrainPy-compatible models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
+- **NEST-compatible models (119+)** — faithful JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neuron, synapse, plasticity (STDP, STP), and device models.
+
+All parameters carry physical units via [brainunit](https://github.com/chaobrain/brainunit), and every neuron supports surrogate-gradient-based training out of the box.
 
 
+## Features
+
+- **Comprehensive model library** — 18 neuron families, 6 synapse types, 9 STDP rules, 17 generators, and more.
+- **Physical units everywhere** — parameters use `brainunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors.
+- **Differentiable** — surrogate gradients enable backpropagation through spiking networks for training with gradient descent.
+- **NEST compatibility** — benchmarked against [NEST](https://nest-simulator.readthedocs.io/) for numerical accuracy; uses NEST-compatible parameter names.
+- **Hardware-accelerated** — JAX backend with JIT compilation for CPU, GPU, and TPU.
+- **Composable architecture** — mix-and-match neurons, synapses, synaptic outputs (COBA/CUBA/MgBlock), and projections.
+
+
+## Quick Example
+
+```python
+import brainpy
+import brainstate
+import brainunit as u
+
+# Create neuron populations
+E = brainpy.state.LIF(3200, V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+I = brainpy.state.LIF(800,  V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+
+# Connect them with projections
+E2E = brainpy.state.DeltaProj(
+    comm=brainstate.nn.EventFixedProb(3200, 3200, prob=0.02, weight=0.6*u.mV),
+    post=E,
+)
+E2I = brainpy.state.DeltaProj(
+    comm=brainstate.nn.EventFixedProb(3200, 800, prob=0.02, weight=0.6*u.mV),
+    post=I,
+)
+I2E = brainpy.state.DeltaProj(
+    comm=brainstate.nn.EventFixedProb(800, 3200, prob=0.02, weight=-6.7*u.mV),
+    post=E,
+)
+I2I = brainpy.state.DeltaProj(
+    comm=brainstate.nn.EventFixedProb(800, 800, prob=0.02, weight=-6.7*u.mV),
+    post=I,
+)
+```
 
 
 ## Links
 
-
-- **Source**: https://github.com/chaobrain/brainpy.state
 - **Documentation**: https://brainpy-state.readthedocs.io/
+- **Source**: https://github.com/chaobrain/brainpy.state
 - **Bug reports**: https://github.com/chaobrain/brainpy.state/issues
 - **Ecosystem**: https://brainmodeling.readthedocs.io/
 
 
 ## Installation
 
-``brainpy.state`` is based on Python (>=3.10) and can be installed on Linux (Ubuntu 16.04 or later), macOS (10.12 or later), and Windows platforms. 
+`brainpy.state` requires Python >= 3.10 and runs on Linux, macOS, and Windows.
 
 ```bash
-pip install brainpy brainpy_state -U
+pip install brainpy.state -U
 ```
 
-If you want to use ``brainpy.state`` with different hardware support, please install the corresponding version:
+For hardware-specific JAX backends:
 
 ```bash
-pip install brainpy brainpy_state[cpu] -U  # install with CPU support only
-pip install brainpy brainpy_state[cuda12] -U  # install with CUDA 12.x support
-pip install brainpy brainpy_state[cuda13] -U  # install with CUDA 13.x support
-pip install brainpy brainpy_state[tpu] -U  # install with TPU support
+pip install brainpy.state[cpu] -U     # CPU only
+pip install brainpy.state[cuda12] -U  # CUDA 12.x
+pip install brainpy.state[cuda13] -U  # CUDA 13.x
+pip install brainpy.state[tpu] -U     # TPU
 ```
 
-
-Install the ``brainpy.state`` with the ecosystem packages:
+Or install the full BrainX ecosystem:
 
 ```bash
 pip install BrainX -U
 ```
 
 
+## Ecosystem
 
-## Citing 
+`brainpy.state` is part of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/):
 
-If you are using ``brainpy.state``, please consider citing the corresponding paper:
+| Package | Description |
+|---------|-------------|
+| [brainpy](https://brainpy.readthedocs.io/) | General-purpose brain dynamics programming framework |
+| [brainstate](https://github.com/chaobrain/brainstate) | State management for JAX-based brain modeling |
+| [brainunit](https://github.com/chaobrain/brainunit) | Physical units for neuroscience |
+| [brainevent](https://github.com/chaobrain/brainevent) | Event-driven sparse operators |
+| [braintools](https://github.com/chaobrain/braintools) | Surrogate gradients, analysis, and utilities |
+
+
+## Citing
+
+If you use `brainpy.state`, please consider citing the following paper:
 
 ```bibtex
 @article {10.7554/eLife.86365,
@@ -78,6 +134,3 @@ If you are using ``brainpy.state``, please consider citing the corresponding pap
     publisher = {eLife Sciences Publications, Ltd},
 }
 ```
-
-
-

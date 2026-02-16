@@ -18,12 +18,15 @@ import sys
 sys.path.insert(0, os.path.abspath('../docs/'))
 sys.path.insert(0, os.path.abspath('../'))
 shutil.copyfile('../changelog.md', './changelog.md')
+shutil.rmtree('./_build', ignore_errors=True)
+shutil.rmtree('./__pycache__', ignore_errors=True)
+shutil.rmtree('./api/generated', ignore_errors=True)
 
 # -- Project information -----------------------------------------------------
 
 project = 'brainpy.state'
 copyright = '2020-, brainpy.state'
-author = 'brainpy.state Team'
+author = 'BrainX Team'
 
 from highlight_lexer import fix_ipython2_lexer_in_notebooks
 

@@ -22,7 +22,7 @@ import braintools
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from ._base import Neuron
+from brainpy_state._base import Neuron
 
 __all__ = [
     'HH', 'MorrisLecar', 'WangBuzsakiHH',
@@ -124,20 +124,10 @@ class HH(Neuron):
     n : HiddenState
         Potassium activation variable.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy_state
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an HH neuron layer with 10 neurons
-    >>> hh = brainpy_state.state.HH(10)
-    >>>
-    >>> # Initialize the state
-    >>> hh.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = hh.update(x=10.*u.uA)
+    MorrisLecar : Two-dimensional reduced excitation model.
+    WangBuzsakiHH : Modified HH model for hippocampal interneurons.
 
     Notes
     -----
@@ -151,6 +141,20 @@ class HH(Neuron):
            of membrane current and its application to conduction and excitation
            in nerve." The Journal of physiology 117.4 (1952): 500.
     .. [2] https://en.wikipedia.org/wiki/Hodgkin%E2%80%93Huxley_model
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an HH neuron layer with 10 neurons
+        >>> hh = brainpy.state.HH(10)
+        >>> # Initialize the state
+        >>> hh.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = hh.update(x=10.*u.uA)
     """
 
     __module__ = 'brainpy.state'
@@ -363,20 +367,10 @@ class MorrisLecar(Neuron):
     W : HiddenState
         Recovery variable.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy_state
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a Morris-Lecar neuron layer with 10 neurons
-    >>> ml = brainpy_state.state.MorrisLecar(10)
-    >>>
-    >>> # Initialize the state
-    >>> ml.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = ml.update(x=100.*u.uA)
+    HH : Full Hodgkin-Huxley four-variable model.
+    WangBuzsakiHH : Modified HH model for hippocampal interneurons.
 
     Notes
     -----
@@ -389,6 +383,20 @@ class MorrisLecar(Neuron):
     .. [1] Lecar, Harold. "Morris-lecar model." Scholarpedia 2.10 (2007): 1333.
     .. [2] http://www.scholarpedia.org/article/Morris-Lecar_model
     .. [3] https://en.wikipedia.org/wiki/Morris%E2%80%93Lecar_model
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a Morris-Lecar neuron layer with 10 neurons
+        >>> ml = brainpy.state.MorrisLecar(10)
+        >>> # Initialize the state
+        >>> ml.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = ml.update(x=100.*u.uA)
     """
 
     __module__ = 'brainpy.state'
@@ -561,20 +569,10 @@ class WangBuzsakiHH(Neuron):
     n : HiddenState
         Potassium activation variable.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy_state
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a WangBuzsakiHH neuron layer with 10 neurons
-    >>> wb = brainpy_state.state.WangBuzsakiHH(10)
-    >>>
-    >>> # Initialize the state
-    >>> wb.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = wb.update(x=1.*u.uA)
+    HH : Classic Hodgkin-Huxley model.
+    MorrisLecar : Two-dimensional reduced excitation model.
 
     Notes
     -----
@@ -588,6 +586,20 @@ class WangBuzsakiHH(Neuron):
     .. [1] Wang, X.J. and Buzsaki, G., (1996) Gamma oscillation by synaptic
            inhibition in a hippocampal interneuronal network model. Journal of
            neuroscience, 16(20), pp.6402-6413.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a WangBuzsakiHH neuron layer with 10 neurons
+        >>> wb = brainpy.state.WangBuzsakiHH(10)
+        >>> # Initialize the state
+        >>> wb.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = wb.update(x=1.*u.uA)
     """
 
     __module__ = 'brainpy.state'

@@ -22,8 +22,8 @@ import braintools
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from ._misc import set_module_as
-from ._projection import Projection
+from brainpy_state._misc import set_module_as
+from .projection import Projection
 
 __all__ = [
     'SymmetryGapJunction',
@@ -81,6 +81,30 @@ class SymmetryGapJunction(Projection):
     See Also
     --------
     AsymmetryGapJunction : For gap junctions with different conductances in each direction.
+
+    References
+    ----------
+    .. [1] Bennett, M. V., & Zukin, R. S. (2004). Electrical coupling and
+           neuronal synchronization in the mammalian brain. Neuron, 41(4),
+           495-511.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create two neuron populations
+        >>> neurons = brainpy.state.HH(100)
+        >>> neurons.init_state(batch_size=1)
+        >>> # Create symmetric gap junctions (self-coupling)
+        >>> gj = brainpy.state.SymmetryGapJunction(
+        ...     couples=neurons,
+        ...     states='V',
+        ...     conn=lambda pre_size, post_size: ([0,1,2], [1,2,0]),
+        ...     weight=0.1 * u.msiemens,
+        ... )
     """
 
     __module__ = 'brainpy.state'
@@ -249,31 +273,9 @@ class AsymmetryGapJunction(Projection):
     param_type : type, optional
         The parameter state type to use for weights, defaults to ParamState.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy_state.state as brainpy
-    >>> import brainunit as u
-    >>> import numpy as np
-    >>>
-    >>> # Create two neuron populations
-    >>> n_neurons = 100
-    >>> pre_pop = brainpy.LIF(n_neurons, V_rest=-70*u.mV, V_threshold=-50*u.mV)
-    >>> post_pop = brainpy.LIF(n_neurons, V_rest=-70*u.mV, V_threshold=-50*u.mV)
-    >>> pre_pop.init_state()
-    >>> post_pop.init_state()
-    >>>
-    >>> # Create asymmetric gap junction with different weights in each direction
-    >>> weights = np.ones((n_neurons, 2)) * u.nS
-    >>> weights[:, 0] *= 2.0  # Double weight in pre->post direction
-    >>>
-    >>> gap_junction = brainpy.AsymmetryGapJunction(
-    ...     pre=pre_pop,
-    ...     pre_state='V',
-    ...     post=post_pop,
-    ...     post_state='V',
-    ...     conn=one_to_one,
-    ...     weight=weights
-    ... )
+    SymmetryGapJunction : For gap junctions with identical conductance in both directions.
 
     Notes
     -----
@@ -281,9 +283,42 @@ class AsymmetryGapJunction(Projection):
     the same pair of neurons. This can model rectifying electrical synapses that preferentially
     allow current to flow in one direction.
 
-    See Also
+    References
+    ----------
+    .. [1] Bennett, M. V., & Zukin, R. S. (2004). Electrical coupling and
+           neuronal synchronization in the mammalian brain. Neuron, 41(4),
+           495-511.
+    .. [2] Phelan, P. (2005). Innexins: members of an evolutionarily
+           conserved family of gap-junction proteins. Biochimica et
+           Biophysica Acta (BBA)-Biomembranes, 1711(2), 225-245.
+
+    Examples
     --------
-    SymmetryGapJunction : For gap junctions with identical conductance in both directions.
+    .. code-block:: python
+
+        >>> import brainpy.state as brainpy
+        >>> import brainunit as u
+        >>> import numpy as np
+        >>>
+        >>> # Create two neuron populations
+        >>> n_neurons = 100
+        >>> pre_pop = brainpy.LIF(n_neurons, V_rest=-70*u.mV, V_threshold=-50*u.mV)
+        >>> post_pop = brainpy.LIF(n_neurons, V_rest=-70*u.mV, V_threshold=-50*u.mV)
+        >>> pre_pop.init_state()
+        >>> post_pop.init_state()
+        >>>
+        >>> # Create asymmetric gap junction with different weights in each direction
+        >>> weights = np.ones((n_neurons, 2)) * u.nS
+        >>> weights[:, 0] *= 2.0  # Double weight in pre->post direction
+        >>>
+        >>> gap_junction = brainpy.AsymmetryGapJunction(
+        ...     pre=pre_pop,
+        ...     pre_state='V',
+        ...     post=post_pop,
+        ...     post_state='V',
+        ...     conn=one_to_one,
+        ...     weight=weights
+        ... )
     """
     __module__ = 'brainpy.state'
 

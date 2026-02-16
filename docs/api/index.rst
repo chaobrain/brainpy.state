@@ -3,193 +3,113 @@ API Reference
 
 Complete API reference for ``brainpy.state``.
 
+The API is organized into three categories:
+
+- **Base Models** — abstract base classes that all models inherit from
+- **BrainPy-Compatible Models** — high-level, composable building blocks for the `BrainPy <https://brainpy.readthedocs.io/>`_ models
+- **NEST-Compatible Models** — faithful re-implementations of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ models
+
 
 Organization
 ------------
 
-The API is organized into the following categories:
+**Base Models**
+
+.. grid:: 1 2 2 3
+
+   .. grid-item-card:: :material-regular:`foundation;2em` Base Classes
+      :link: base.html
+
+      Abstract base classes: Dynamics, Neuron, Synapse
+
+
+**BrainPy-Compatible Models**
 
 .. grid:: 1 2 2 3
 
    .. grid-item-card:: :material-regular:`psychology;2em` Neurons
-      :link: neurons.html
+      :link: brainpy-neurons.html
 
       Spiking neuron models (LIF, ALIF, Izhikevich, HH, etc.)
 
    .. grid-item-card:: :material-regular:`timeline;2em` Synapses
-      :link: synapses.html
+      :link: brainpy-synapses.html
 
       Synaptic dynamics (Expon, Alpha, AMPA, GABA, NMDA)
 
    .. grid-item-card:: :material-regular:`account_tree;2em` Projections
-      :link: projections.html
+      :link: brainpy-projections.html
 
       Connect neural populations (AlignPostProj, DeltaProj, etc.)
 
    .. grid-item-card:: :material-regular:`output;2em` Synaptic Outputs
-      :link: synouts.html
+      :link: brainpy-synouts.html
 
       Convert conductances to currents (COBA, CUBA, MgBlock)
 
    .. grid-item-card:: :material-regular:`psychology_alt;2em` Short-Term Plasticity
-      :link: stp.html
+      :link: brainpy-stp.html
 
       Short-term synaptic plasticity (STP, STD)
 
    .. grid-item-card:: :material-regular:`sensors;2em` Readouts
-      :link: readouts.html
+      :link: brainpy-readouts.html
 
       Readout layers (LeakyRateReadout, LeakySpikeReadout)
 
    .. grid-item-card:: :material-regular:`input;2em` Input Generators
-      :link: inputs.html
+      :link: brainpy-inputs.html
 
       Spike and current generators (PoissonSpike, SpikeTime)
 
-Example Reference
------------------
 
-Neurons
-~~~~~~~
+**NEST-Compatible Models**
 
-.. code-block:: python
+.. grid:: 1 2 2 3
 
-   import brainpy
-   import brainunit as u
+   .. grid-item-card:: :material-regular:`hub;2em` NEST Neurons
+      :link: nest-neurons.html
 
-   # Leaky Integrate-and-Fire
-   brainpy.state.LIF(100, V_rest=-70*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+      IAF, AdEx, GIF, GLIF, HH, Izhikevich, rate, and binary neurons
 
-   # Adaptive LIF
-   brainpy.state.ALIF(100, tau=20*u.ms, tau_w=144*u.ms, a=4*u.nS, b=0.0805*u.nA)
+   .. grid-item-card:: :material-regular:`sync_alt;2em` NEST Synapses & Plasticity
+      :link: nest-synapses.html
 
-   # Izhikevich
-   brainpy.state.Izhikevich(100, a=0.02/u.ms, b=0.2/u.ms, c=-65*u.mV, d=8*u.mV/u.ms)
+      Static, STP, STDP, voltage-based, and specialized synapse models
 
-   # Hodgkin-Huxley
-   brainpy.state.HH(100, ENa=50*u.mV, EK=-77*u.mV, EL=-54.387*u.mV)
+   .. grid-item-card:: :material-regular:`developer_board;2em` NEST Devices
+      :link: nest-devices.html
 
-Synapses
-~~~~~~~~
+      Generators, recorders, and detectors
 
-.. code-block:: python
-
-   # Exponential synapse
-   brainpy.state.Expon.desc(100, tau=5*u.ms)
-
-   # Dual exponential synapse
-   brainpy.state.DualExpon.desc(100, tau_rise=1*u.ms, tau_decay=10*u.ms)
-
-   # Alpha synapse
-   brainpy.state.Alpha.desc(100, tau=8*u.ms)
-
-   # AMPA receptor
-   brainpy.state.AMPA.desc(100, alpha=0.98/(u.ms*u.mM), beta=0.18/u.ms)
-
-   # GABAa receptor
-   brainpy.state.GABAa.desc(100, alpha=0.53/(u.ms*u.mM), beta=0.18/u.ms)
-
-   # NMDA receptor
-   brainpy.state.BioNMDA.desc(100, alpha1=2.0/u.ms, beta1=0.01/u.ms)
-
-Projections
-~~~~~~~~~~~
-
-.. code-block:: python
-
-   # AlignPost projection with communication, synapse, and output
-   brainpy.state.AlignPostProj(
-       comm=brainstate.nn.EventFixedProb(n_pre, n_post, prob=0.1, weight=0.5*u.mS),
-       syn=brainpy.state.Expon.desc(n_post, tau=5*u.ms),
-       out=brainpy.state.COBA.desc(E=0*u.mV),
-       post=post_neurons
-   )
-
-   # Delta projection for direct input
-   brainpy.state.DeltaProj(
-       comm=lambda x: x * 10*u.mV,
-       post=post_neurons
-   )
-
-   # Current projection
-   brainpy.state.CurrentProj(
-       comm=lambda x: x * 0.5,
-       out=brainpy.state.CUBA.desc(scale=1*u.nA),
-       post=post_neurons
-   )
-
-Synaptic Outputs
-~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Conductance-based output
-   brainpy.state.COBA.desc(E=0*u.mV)  # excitatory reversal potential
-
-   # Current-based output
-   brainpy.state.CUBA.desc(scale=1*u.mV)
-
-   # NMDA with magnesium block
-   brainpy.state.MgBlock.desc(E=0*u.mV, cc_Mg=1.2*u.mM, alpha=0.062, beta=3.57)
-
-Short-Term Plasticity
-~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Short-term plasticity (facilitation + depression)
-   brainpy.state.STP.desc(100, U=0.15, tau_f=1500*u.ms, tau_d=200*u.ms)
-
-   # Short-term depression only
-   brainpy.state.STD.desc(100, tau=200*u.ms, U=0.07)
-
-Input Generators
-~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Spike times
-   brainpy.state.SpikeTime(100, times=[10, 20, 30]*u.ms, indices=[0, 10, 20])
-
-   # Poisson spike generator
-   brainpy.state.PoissonSpike(100, freqs=50*u.Hz)
-
-   # Poisson encoder (dynamic rates)
-   encoder = brainpy.state.PoissonEncoder(100)
-   spikes = encoder.update(rates)  # rates: array of firing rates
-
-   # Poisson input to a state variable
-   brainpy.state.PoissonInput(
-       target=neuron.V,
-       indices=None,
-       num_input=200,
-       freq=50*u.Hz,
-       weight=0.1*u.mV
-   )
-
-Readout Layers
-~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Leaky rate-based readout
-   brainpy.state.LeakyRateReadout(in_size=100, out_size=10, tau=5*u.ms)
-
-   # Leaky spiking readout
-   brainpy.state.LeakySpikeReadout(in_size=100, tau=5*u.ms, V_th=1*u.mV)
 
 
 
 .. toctree::
    :hidden:
    :maxdepth: 2
+   :caption: Base Models
 
-   neurons.rst
-   neurons-nest.rst
-   synapses.rst
-   synapses-nest.rst
-   projections.rst
-   synouts.rst
-   stp.rst
-   readouts.rst
-   inputs.rst
+   base
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: BrainPy-Compatible Models
+
+   brainpy-neurons
+   brainpy-synapses
+   brainpy-projections
+   brainpy-synouts
+   brainpy-stp
+   brainpy-readouts
+   brainpy-inputs
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: NEST-Compatible Models
+
+   nest-neurons
+   nest-synapses
+   nest-devices

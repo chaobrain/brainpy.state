@@ -43,284 +43,435 @@ del _check_brainpy_compatibility
 __version__ = "0.0.4"
 __version_info__ = tuple(map(int, __version__.split(".")))
 
+# =============================================================================
+# Base Models
+# =============================================================================
+
 from ._base import Dynamics, Neuron, Synapse
-from ._exponential import Expon, DualExpon
-from ._hh import HH, MorrisLecar, WangBuzsakiHH
-from ._inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
-from ._izhikevich import Izhikevich, IzhikevichRef
-from ._lif import (
-    IF, LIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, LIFRef, ALIF,
-    QuaIF, AdQuaIF, AdQuaIFRef, Gif, GifRef
+
+# =============================================================================
+# BrainPy-Compatible Models
+# =============================================================================
+
+from ._brainpy import (
+    # Neuron models - LIF family
+    IF, LIF, LIFRef, ALIF,
+    ExpIF, ExpIFRef,
+    AdExIF, AdExIFRef,
+    QuaIF, AdQuaIF, AdQuaIFRef,
+    Gif, GifRef,
+
+    # Neuron models - Hodgkin-Huxley family
+    HH, MorrisLecar, WangBuzsakiHH,
+
+    # Neuron models - Izhikevich family
+    Izhikevich, IzhikevichRef,
+
+    # Synapse models
+    Expon, DualExpon,
+    Alpha, AMPA, GABAa, BioNMDA,
+
+    # Synaptic outputs
+    SynOut, COBA, CUBA, MgBlock,
+
+    # Short-term plasticity
+    STP, STD,
+
+    # Projections
+    Projection, AlignPostProj, DeltaProj, CurrentProj,
+    align_pre_projection, align_post_projection,
+    SymmetryGapJunction, AsymmetryGapJunction,
+
+    # Readouts
+    LeakyRateReadout, LeakySpikeReadout,
+
+    # Input generators
+    SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input,
 )
-from ._nest.dc_generator import dc_generator
-from ._nest.inhomogeneous_poisson_generator import inhomogeneous_poisson_generator
-from ._nest.poisson_generator import poisson_generator
-from ._nest.poisson_generator_ps import poisson_generator_ps
-from ._nest.sinusoidal_poisson_generator import sinusoidal_poisson_generator
-from ._nest.sinusoidal_gamma_generator import sinusoidal_gamma_generator
-from ._nest.gamma_sup_generator import gamma_sup_generator
-from ._nest.ppd_sup_generator import ppd_sup_generator
-from ._nest.mip_generator import mip_generator
-from ._nest.spike_dilutor import spike_dilutor
-from ._nest.pulsepacket_generator import pulsepacket_generator
-from ._nest.static_synapse import static_synapse
-from ._nest.static_synapse_hom_w import static_synapse_hom_w
-from ._nest.bernoulli_synapse import bernoulli_synapse
-from ._nest.cont_delay_synapse import cont_delay_synapse
-from ._nest.tsodyks_synapse import tsodyks_synapse
-from ._nest.tsodyks2_synapse import tsodyks2_synapse
-from ._nest.quantal_stp_synapse import quantal_stp_synapse
-from ._nest.tsodyks_synapse_hom import tsodyks_synapse_hom
-from ._nest.stdp_synapse import stdp_synapse
-from ._nest.stdp_synapse_hom import stdp_synapse_hom
-from ._nest.stdp_pl_synapse_hom import stdp_pl_synapse_hom
-from ._nest.stdp_facetshw_synapse_hom import stdp_facetshw_synapse_hom
-from ._nest.stdp_nn_pre_centered_synapse import stdp_nn_pre_centered_synapse
-from ._nest.stdp_nn_restr_synapse import stdp_nn_restr_synapse
-from ._nest.stdp_nn_symm_synapse import stdp_nn_symm_synapse
-from ._nest.stdp_triplet_synapse import stdp_triplet_synapse
-from ._nest.stdp_dopamine_synapse import stdp_dopamine_synapse
-from ._nest.multimeter import multimeter
-from ._nest.correlation_detector import correlation_detector
-from ._nest.correlomatrix_detector import correlomatrix_detector
-from ._nest.correlospinmatrix_detector import correlospinmatrix_detector
-from ._nest.spike_recorder import spike_recorder
-from ._nest.spin_detector import spin_detector
-from ._nest.weight_recorder import weight_recorder
-from ._nest.gap_junction import gap_junction
-from ._nest.diffusion_connection import diffusion_connection
-from ._nest.rate_connection_instantaneous import rate_connection_instantaneous
-from ._nest.rate_connection_delayed import rate_connection_delayed
-from ._nest.sic_connection import sic_connection
-from ._nest.ht_synapse import ht_synapse
-from ._nest.clopath_synapse import clopath_synapse
-from ._nest.jonke_synapse import jonke_synapse
-from ._nest.urbanczik_synapse import urbanczik_synapse
-from ._nest.vogels_sprekeler_synapse import vogels_sprekeler_synapse
-from ._nest.volume_transmitter import volume_transmitter
-from ._nest.aeif_cond_alpha import aeif_cond_alpha
-from ._nest.aeif_cond_exp import aeif_cond_exp
-from ._nest.aeif_psc_alpha import aeif_psc_alpha
-from ._nest.aeif_psc_exp import aeif_psc_exp
-from ._nest.aeif_psc_delta import aeif_psc_delta
-from ._nest.aeif_psc_delta_clopath import aeif_psc_delta_clopath
-from ._nest.aeif_cond_alpha_multisynapse import aeif_cond_alpha_multisynapse
-from ._nest.aeif_cond_beta_multisynapse import aeif_cond_beta_multisynapse
-from ._nest.aeif_cond_alpha_astro import aeif_cond_alpha_astro
-from ._nest.iaf_psc_delta import iaf_psc_delta
-from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
-from ._nest.iaf_cond_alpha import iaf_cond_alpha
-from ._nest.iaf_cond_alpha_mc import iaf_cond_alpha_mc
-from ._nest.iaf_cond_beta import iaf_cond_beta
-from ._nest.iaf_cond_exp import iaf_cond_exp
-from ._nest.iaf_cond_exp_sfa_rr import iaf_cond_exp_sfa_rr
-from ._nest.iaf_chs_2007 import iaf_chs_2007
-from ._nest.iaf_chxk_2008 import iaf_chxk_2008
-from ._nest.ac_generator import ac_generator
-from ._nest.dc_generator import dc_generator
-from ._nest.noise_generator import noise_generator
-from ._nest.step_current_generator import step_current_generator
-from ._nest.step_rate_generator import step_rate_generator
-from ._nest.spike_generator import spike_generator
-from ._nest.spike_train_injector import spike_train_injector
-from ._nest.iaf_psc_delta import iaf_psc_delta
-from ._nest.iaf_psc_delta_ps import iaf_psc_delta_ps
-from ._nest.iaf_cond_exp import iaf_cond_exp
-from ._nest.iaf_psc_alpha import iaf_psc_alpha
-from ._nest.iaf_psc_exp import iaf_psc_exp
-from ._nest.iaf_psc_exp_multisynapse import iaf_psc_exp_multisynapse
-from ._nest.iaf_psc_alpha_multisynapse import iaf_psc_alpha_multisynapse
-from ._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
-from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
-from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
-from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
-from ._nest.ginzburg_neuron import ginzburg_neuron
-from ._nest.erfc_neuron import erfc_neuron
-from ._nest.iaf_tum_2000 import iaf_tum_2000
-from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
-from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
-from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
-from ._nest.iaf_bw_2001 import iaf_bw_2001
-from ._nest.iaf_bw_2001_exact import iaf_bw_2001_exact
-from ._nest.rate_neuron_ipn import rate_neuron_ipn
-from ._nest.rate_neuron_opn import rate_neuron_opn
-from ._nest.lin_rate import lin_rate_ipn, lin_rate_opn
-from ._nest.gauss_rate import gauss_rate_ipn
-from ._nest.sigmoid_rate import sigmoid_rate_ipn
-from ._nest.sigmoid_rate_gg_1998 import sigmoid_rate_gg_1998_ipn
-from ._nest.tanh_rate import tanh_rate_ipn, tanh_rate_opn
-from ._nest.threshold_lin_rate import threshold_lin_rate_ipn, threshold_lin_rate_opn
-from ._nest.rate_transformer_node import rate_transformer_node
-from ._nest.siegert_neuron import siegert_neuron
-from ._nest.iaf_psc_exp_ps import iaf_psc_exp_ps
-from ._nest.iaf_psc_exp_ps_lossless import iaf_psc_exp_ps_lossless
-from ._nest.iaf_psc_alpha_ps import iaf_psc_alpha_ps
-from ._nest.gif_cond_exp import gif_cond_exp
-from ._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
-from ._nest.gif_psc_exp import gif_psc_exp
-from ._nest.hh_psc_alpha import hh_psc_alpha
-from ._nest.hh_psc_alpha_clopath import hh_psc_alpha_clopath
-from ._nest.hh_psc_alpha_gap import hh_psc_alpha_gap
-from ._nest.hh_cond_exp_traub import hh_cond_exp_traub
-from ._nest.hh_cond_beta_gap_traub import hh_cond_beta_gap_traub
-from ._nest.ht_neuron import ht_neuron
-from ._nest.izhikevich import izhikevich as nest_izhikevich
-from ._nest.pp_psc_delta import pp_psc_delta
-from ._nest.pp_cond_exp_mc_urbanczik import pp_cond_exp_mc_urbanczik
-from ._projection import (Projection, AlignPostProj, DeltaProj, CurrentProj,
-                          align_pre_projection, align_post_projection)
-from ._readout import LeakyRateReadout, LeakySpikeReadout
-from ._stp import STP, STD
-from ._synapse import Alpha, AMPA, GABAa, BioNMDA
-from ._synaptic_projection import SymmetryGapJunction, AsymmetryGapJunction
-from ._synouts import SynOut, COBA, CUBA, MgBlock
+
+# =============================================================================
+# NEST-Compatible Models
+# =============================================================================
+
+from ._nest import (
+    # Stimulation devices - Current generators
+    ac_generator,
+    dc_generator,
+    noise_generator,
+    step_current_generator,
+    step_rate_generator,
+
+    # Stimulation devices - Spike generators
+    spike_generator,
+    spike_train_injector,
+    spike_dilutor,
+
+    # Stimulation devices - Poisson generators
+    inhomogeneous_poisson_generator,
+    poisson_generator,
+    poisson_generator_ps,
+    sinusoidal_poisson_generator,
+
+    # Stimulation devices - Other generators
+    gamma_sup_generator,
+    mip_generator,
+    ppd_sup_generator,
+    pulsepacket_generator,
+    sinusoidal_gamma_generator,
+
+    # Recording devices
+    correlation_detector,
+    correlomatrix_detector,
+    correlospinmatrix_detector,
+    multimeter,
+    spike_recorder,
+    spin_detector,
+    volume_transmitter,
+    weight_recorder,
+
+    # IAF neurons - current-based (psc)
+    iaf_psc_alpha,
+    iaf_psc_alpha_multisynapse,
+    iaf_psc_alpha_ps,
+    iaf_psc_delta,
+    iaf_psc_delta_ps,
+    iaf_psc_exp,
+    iaf_psc_exp_htum,
+    iaf_psc_exp_multisynapse,
+    iaf_psc_exp_ps,
+    iaf_psc_exp_ps_lossless,
+
+    # IAF neurons - conductance-based (cond)
+    iaf_cond_alpha,
+    iaf_cond_alpha_mc,
+    iaf_cond_beta,
+    iaf_cond_exp,
+    iaf_cond_exp_sfa_rr,
+
+    # IAF neurons - specialized variants
+    iaf_bw_2001,
+    iaf_bw_2001_exact,
+    iaf_chs_2007,
+    iaf_chxk_2008,
+    iaf_tum_2000,
+
+    # Adaptive Exponential IF (aeif) neurons
+    aeif_cond_alpha,
+    aeif_cond_alpha_astro,
+    aeif_cond_alpha_multisynapse,
+    aeif_cond_beta_multisynapse,
+    aeif_cond_exp,
+    aeif_psc_alpha,
+    aeif_psc_delta,
+    aeif_psc_delta_clopath,
+    aeif_psc_exp,
+
+    # Generalized IF (gif) neurons
+    gif_cond_exp,
+    gif_cond_exp_multisynapse,
+    gif_pop_psc_exp,
+    gif_psc_exp,
+    gif_psc_exp_multisynapse,
+
+    # Multi-timescale Adaptive Threshold (mat) neurons
+    amat2_psc_exp,
+    mat2_psc_exp,
+
+    # Generalized LIF (glif) neurons
+    glif_cond,
+    glif_psc,
+    glif_psc_double_alpha,
+
+    # Hodgkin-Huxley family
+    hh_cond_beta_gap_traub,
+    hh_cond_exp_traub,
+    hh_psc_alpha,
+    hh_psc_alpha_clopath,
+    hh_psc_alpha_gap,
+    ht_neuron,
+
+    # Izhikevich neuron
+    izhikevich,
+
+    # Point process neurons
+    pp_cond_exp_mc_urbanczik,
+    pp_psc_delta,
+
+    # Binary neurons
+    erfc_neuron,
+    ginzburg_neuron,
+    mcculloch_pitts_neuron,
+
+    # Rate neurons
+    gauss_rate_ipn,
+    lin_rate_ipn,
+    lin_rate_opn,
+    rate_neuron_ipn,
+    rate_neuron_opn,
+    rate_transformer_node,
+    siegert_neuron,
+    sigmoid_rate_ipn,
+    sigmoid_rate_gg_1998_ipn,
+    tanh_rate_ipn,
+    tanh_rate_opn,
+    threshold_lin_rate_ipn,
+    threshold_lin_rate_opn,
+
+    # Astrocyte models
+    astrocyte_lr_1994,
+
+    # Other spiking neurons
+    ignore_and_fire,
+
+    # Static synapses
+    bernoulli_synapse,
+    cont_delay_synapse,
+    static_synapse,
+    static_synapse_hom_w,
+
+    # Short-term plasticity synapses
+    quantal_stp_synapse,
+    tsodyks2_synapse,
+    tsodyks_synapse,
+    tsodyks_synapse_hom,
+
+    # STDP synapses
+    stdp_dopamine_synapse,
+    stdp_facetshw_synapse_hom,
+    stdp_nn_pre_centered_synapse,
+    stdp_nn_restr_synapse,
+    stdp_nn_symm_synapse,
+    stdp_pl_synapse_hom,
+    stdp_synapse,
+    stdp_synapse_hom,
+    stdp_triplet_synapse,
+
+    # Voltage-based / specialized synapses
+    clopath_synapse,
+    ht_synapse,
+    jonke_synapse,
+    urbanczik_synapse,
+    vogels_sprekeler_synapse,
+
+    # Gap junctions and special connections
+    diffusion_connection,
+    gap_junction,
+    rate_connection_delayed,
+    rate_connection_instantaneous,
+    sic_connection,
+)
 
 __all__ = [
-    # _base
+    # =========================================================================
+    # Base Models
+    # =========================================================================
     'Dynamics', 'Neuron', 'Synapse',
-    # _exponential
-    'Expon', 'DualExpon',
-    # _hh
-    'HH', 'MorrisLecar', 'WangBuzsakiHH',
-    # _inputs
-    'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
 
-    # _izhikevich
+    # =========================================================================
+    # BrainPy-Compatible Models
+    # =========================================================================
+
+    # Neuron models - LIF family
+    'IF', 'LIF', 'LIFRef', 'ALIF',
+    'ExpIF', 'ExpIFRef',
+    'AdExIF', 'AdExIFRef',
+    'QuaIF', 'AdQuaIF', 'AdQuaIFRef',
+    'Gif', 'GifRef',
+
+    # Neuron models - Hodgkin-Huxley family
+    'HH', 'MorrisLecar', 'WangBuzsakiHH',
+
+    # Neuron models - Izhikevich family
     'Izhikevich', 'IzhikevichRef',
-    # _lif
-    'IF', 'LIF', 'ExpIF', 'ExpIFRef', 'AdExIF', 'AdExIFRef', 'LIFRef', 'ALIF',
-    'QuaIF', 'AdQuaIF', 'AdQuaIFRef', 'Gif', 'GifRef',
-    # _projection
-    'Projection', 'AlignPostProj', 'DeltaProj', 'CurrentProj',
-    'align_pre_projection', 'align_post_projection',
-    # _readout
-    'LeakyRateReadout', 'LeakySpikeReadout',
-    # _stp
-    'STP', 'STD',
-    # _synapse
+
+    # Synapse models
+    'Expon', 'DualExpon',
     'Alpha', 'AMPA', 'GABAa', 'BioNMDA',
-    # _synaptic_projection
-    'SymmetryGapJunction', 'AsymmetryGapJunction',
-    # _synouts
+
+    # Synaptic outputs
     'SynOut', 'COBA', 'CUBA', 'MgBlock',
 
-    # NEST-compatible models
-    'dc_generator',
-    'inhomogeneous_poisson_generator',
-    'poisson_generator',
-    'poisson_generator_ps',
-    'sinusoidal_poisson_generator',
-    'sinusoidal_gamma_generator',
-    'gamma_sup_generator',
-    'ppd_sup_generator',
-    'mip_generator',
-    'spike_dilutor',
-    'pulsepacket_generator',
-    'static_synapse',
-    'static_synapse_hom_w',
-    'bernoulli_synapse',
-    'cont_delay_synapse',
-    'tsodyks_synapse',
-    'tsodyks2_synapse',
-    'quantal_stp_synapse',
-    'tsodyks_synapse_hom',
-    'stdp_synapse',
-    'stdp_synapse_hom',
-    'stdp_pl_synapse_hom',
-    'stdp_facetshw_synapse_hom',
-    'stdp_nn_pre_centered_synapse',
-    'stdp_nn_restr_synapse',
-    'stdp_nn_symm_synapse',
-    'stdp_triplet_synapse',
-    'stdp_dopamine_synapse',
-    'multimeter',
-    'correlation_detector',
-    'correlomatrix_detector',
-    'correlospinmatrix_detector',
-    'spike_recorder',
-    'spin_detector',
-    'weight_recorder',
-    'gap_junction',
-    'diffusion_connection',
-    'rate_connection_instantaneous',
-    'rate_connection_delayed',
-    'sic_connection',
-    'ht_synapse',
-    'clopath_synapse',
-    'jonke_synapse',
-    'urbanczik_synapse',
-    'vogels_sprekeler_synapse',
-    'volume_transmitter',
-    'aeif_cond_alpha',
-    'aeif_cond_exp',
-    'aeif_psc_alpha',
-    'aeif_psc_exp',
-    'aeif_psc_delta',
-    'aeif_psc_delta_clopath',
-    'aeif_cond_alpha_multisynapse',
-    'aeif_cond_beta_multisynapse',
-    'aeif_cond_alpha_astro',
-    'iaf_psc_delta',
-    'iaf_psc_delta_ps',
-    'iaf_cond_alpha',
-    'iaf_cond_alpha_mc',
-    'iaf_cond_beta',
-    'iaf_cond_exp',
-    'iaf_cond_exp_sfa_rr',
-    'iaf_chs_2007',
-    'iaf_chxk_2008',
+    # Short-term plasticity
+    'STP', 'STD',
+
+    # Projections
+    'Projection', 'AlignPostProj', 'DeltaProj', 'CurrentProj',
+    'align_pre_projection', 'align_post_projection',
+    'SymmetryGapJunction', 'AsymmetryGapJunction',
+
+    # Readouts
+    'LeakyRateReadout', 'LeakySpikeReadout',
+
+    # Input generators
+    'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+
+    # =========================================================================
+    # NEST-Compatible Models
+    # =========================================================================
+
+    # Stimulation devices - Current generators
     'ac_generator',
     'dc_generator',
     'noise_generator',
     'step_current_generator',
     'step_rate_generator',
+
+    # Stimulation devices - Spike generators
     'spike_generator',
     'spike_train_injector',
+    'spike_dilutor',
+
+    # Stimulation devices - Poisson generators
+    'inhomogeneous_poisson_generator',
+    'poisson_generator',
+    'poisson_generator_ps',
+    'sinusoidal_poisson_generator',
+
+    # Stimulation devices - Other generators
+    'gamma_sup_generator',
+    'mip_generator',
+    'ppd_sup_generator',
+    'pulsepacket_generator',
+    'sinusoidal_gamma_generator',
+
+    # Recording devices
+    'correlation_detector',
+    'correlomatrix_detector',
+    'correlospinmatrix_detector',
+    'multimeter',
+    'spike_recorder',
+    'spin_detector',
+    'volume_transmitter',
+    'weight_recorder',
+
+    # IAF neurons - current-based (psc)
+    'iaf_psc_alpha',
+    'iaf_psc_alpha_multisynapse',
+    'iaf_psc_alpha_ps',
     'iaf_psc_delta',
     'iaf_psc_delta_ps',
-    'iaf_cond_exp',
-    'iaf_psc_alpha',
     'iaf_psc_exp',
-    'iaf_psc_exp_multisynapse',
-    'iaf_psc_alpha_multisynapse',
     'iaf_psc_exp_htum',
+    'iaf_psc_exp_multisynapse',
     'iaf_psc_exp_ps',
     'iaf_psc_exp_ps_lossless',
-    'iaf_psc_alpha_ps',
-    'ginzburg_neuron',
-    'erfc_neuron',
-    'iaf_tum_2000',
-    'iaf_psc_exp_ps',
-    'iaf_psc_exp_ps_lossless',
-    'iaf_psc_alpha_ps',
+
+    # IAF neurons - conductance-based (cond)
+    'iaf_cond_alpha',
+    'iaf_cond_alpha_mc',
+    'iaf_cond_beta',
+    'iaf_cond_exp',
+    'iaf_cond_exp_sfa_rr',
+
+    # IAF neurons - specialized variants
     'iaf_bw_2001',
     'iaf_bw_2001_exact',
-    'rate_neuron_ipn',
-    'rate_neuron_opn',
+    'iaf_chs_2007',
+    'iaf_chxk_2008',
+    'iaf_tum_2000',
+
+    # Adaptive Exponential IF (aeif) neurons
+    'aeif_cond_alpha',
+    'aeif_cond_alpha_astro',
+    'aeif_cond_alpha_multisynapse',
+    'aeif_cond_beta_multisynapse',
+    'aeif_cond_exp',
+    'aeif_psc_alpha',
+    'aeif_psc_delta',
+    'aeif_psc_delta_clopath',
+    'aeif_psc_exp',
+
+    # Generalized IF (gif) neurons
+    'gif_cond_exp',
+    'gif_cond_exp_multisynapse',
+    'gif_pop_psc_exp',
+    'gif_psc_exp',
+    'gif_psc_exp_multisynapse',
+
+    # Multi-timescale Adaptive Threshold (mat) neurons
+    'amat2_psc_exp',
+    'mat2_psc_exp',
+
+    # Generalized LIF (glif) neurons
+    'glif_cond',
+    'glif_psc',
+    'glif_psc_double_alpha',
+
+    # Hodgkin-Huxley family
+    'hh_cond_beta_gap_traub',
+    'hh_cond_exp_traub',
+    'hh_psc_alpha',
+    'hh_psc_alpha_clopath',
+    'hh_psc_alpha_gap',
+    'ht_neuron',
+
+    # Izhikevich neuron
+    'izhikevich',
+
+    # Point process neurons
+    'pp_cond_exp_mc_urbanczik',
+    'pp_psc_delta',
+
+    # Binary neurons
+    'erfc_neuron',
+    'ginzburg_neuron',
+    'mcculloch_pitts_neuron',
+
+    # Rate neurons
+    'gauss_rate_ipn',
     'lin_rate_ipn',
     'lin_rate_opn',
-    'gauss_rate_ipn',
+    'rate_neuron_ipn',
+    'rate_neuron_opn',
+    'rate_transformer_node',
+    'siegert_neuron',
     'sigmoid_rate_ipn',
     'sigmoid_rate_gg_1998_ipn',
     'tanh_rate_ipn',
     'tanh_rate_opn',
     'threshold_lin_rate_ipn',
     'threshold_lin_rate_opn',
-    'rate_transformer_node',
-    'siegert_neuron',
-    'iaf_psc_exp_ps',
-    'iaf_psc_exp_ps_lossless',
-    'iaf_psc_alpha_ps',
-    'gif_cond_exp',
-    'gif_cond_exp_multisynapse',
-    'gif_psc_exp',
-    'hh_psc_alpha',
-    'hh_psc_alpha_clopath',
-    'hh_psc_alpha_gap',
-    'hh_cond_exp_traub',
-    'hh_cond_beta_gap_traub',
-    'ht_neuron',
-    'nest_izhikevich',
-    'pp_psc_delta',
-    'pp_cond_exp_mc_urbanczik',
+
+    # Astrocyte models
+    'astrocyte_lr_1994',
+
+    # Other spiking neurons
+    'ignore_and_fire',
+
+    # Static synapses
+    'bernoulli_synapse',
+    'cont_delay_synapse',
+    'static_synapse',
+    'static_synapse_hom_w',
+
+    # Short-term plasticity synapses
+    'quantal_stp_synapse',
+    'tsodyks2_synapse',
+    'tsodyks_synapse',
+    'tsodyks_synapse_hom',
+
+    # STDP synapses
+    'stdp_dopamine_synapse',
+    'stdp_facetshw_synapse_hom',
+    'stdp_nn_pre_centered_synapse',
+    'stdp_nn_restr_synapse',
+    'stdp_nn_symm_synapse',
+    'stdp_pl_synapse_hom',
+    'stdp_synapse',
+    'stdp_synapse_hom',
+    'stdp_triplet_synapse',
+
+    # Voltage-based / specialized synapses
+    'clopath_synapse',
+    'ht_synapse',
+    'jonke_synapse',
+    'urbanczik_synapse',
+    'vogels_sprekeler_synapse',
+
+    # Gap junctions and special connections
+    'diffusion_connection',
+    'gap_junction',
+    'rate_connection_delayed',
+    'rate_connection_instantaneous',
+    'sic_connection',
 ]

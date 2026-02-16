@@ -154,12 +154,12 @@ class spike_train_injector(brainstate.nn.Dynamics):
 
     Basic usage:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     inj = bps.spike_train_injector(
+    ...     inj = brainpy.state.spike_train_injector(
     ...         spike_times=[1. * u.ms, 2. * u.ms, 3. * u.ms],
     ...     )
     ...
@@ -169,7 +169,7 @@ class spike_train_injector(brainstate.nn.Dynamics):
 
     With spike multiplicities:
 
-    >>> inj = bps.spike_train_injector(
+    >>> inj = brainpy.state.spike_train_injector(
     ...     spike_times=[1. * u.ms, 2. * u.ms],
     ...     spike_multiplicities=[3, 5],
     ... )

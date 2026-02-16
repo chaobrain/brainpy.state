@@ -35,5 +35,6 @@ For experienced users, you can jump directly to the concepts overview or explore
    :maxdepth: 2
 
    installation.rst
+   overview.ipynb
    5min-tutorial.ipynb
 

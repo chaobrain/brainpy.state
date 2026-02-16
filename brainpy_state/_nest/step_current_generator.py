@@ -94,16 +94,16 @@ class step_current_generator(brainstate.nn.Dynamics):
 
     Basic usage:
 
-    >>> import brainpy.state as bps
+    >>> import brainpy
     >>> import brainstate
     >>> import brainunit as u
     >>>
     >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     scg = bps.step_current_generator(
+    ...     scg = brainpy.state.step_current_generator(
     ...         amplitude_times=[10. * u.ms, 50. * u.ms, 80. * u.ms],
     ...         amplitude_values=[200. * u.pA, -100. * u.pA, 500. * u.pA],
     ...     )
-    ...     neuron = bps.iaf_psc_delta(1)
+    ...     neuron = brainpy.state.iaf_psc_delta(1)
     ...     neuron.init_state()
     ...
     ...     for step in range(1000):
