@@ -73,6 +73,37 @@ class LeakyRateReadout(brainstate.nn.Module):
         Weight matrix connecting input to output
     r : HiddenState
         Hidden state representing the output values
+
+    See Also
+    --------
+    LeakySpikeReadout : Spiking readout with leaky integrate-and-fire dynamics.
+
+    Notes
+    -----
+    - The decay factor :math:`\alpha = e^{-\Delta t / \tau}` is computed once
+      at construction time using the current environment ``dt``.
+    - The weight matrix is initialized with Kaiming Normal initialization,
+      which is suitable for layers that follow ReLU-like activations.
+    - This module does not produce spikes; it outputs continuous rate values,
+      making it suitable as the final readout layer in spiking networks
+      trained with surrogate gradients.
+
+    References
+    ----------
+    .. [1] Neftci, E. O., Mostafa, H., & Zenke, F. (2019). Surrogate gradient
+           learning in spiking neural networks. IEEE Signal Processing
+           Magazine, 36(6), 51-63.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> with brainstate.environ.context(dt=1. * u.ms):
+        ...     readout = brainpy.state.LeakyRateReadout(128, 10, tau=5.*u.ms)
+        ...     readout.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -158,6 +189,37 @@ class LeakySpikeReadout(Neuron):
         Membrane potential state variable
     weight : ParamState
         Synaptic weight matrix
+
+    See Also
+    --------
+    LeakyRateReadout : Non-spiking leaky readout module.
+
+    Notes
+    -----
+    - This readout neuron includes a learnable weight matrix that projects
+      input spikes into the membrane potential space.
+    - The surrogate gradient function enables backpropagation through the
+      non-differentiable spike generation during training.
+    - Unlike :class:`LeakyRateReadout`, this module produces binary spike
+      outputs, which can be decoded (e.g., via spike counts or first-spike
+      time) for classification tasks.
+
+    References
+    ----------
+    .. [1] Zenke, F., & Ganguli, S. (2018). SuperSpike: Supervised learning
+           in multilayer spiking neural networks. Neural Computation, 30(6),
+           1514-1541.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> with brainstate.environ.context(dt=1. * u.ms):
+        ...     readout = brainpy.state.LeakySpikeReadout(128, tau=5.*u.ms)
+        ...     readout.init_state(batch_size=1)
     """
 
     __module__ = 'brainpy.state'

@@ -45,7 +45,7 @@ class TestSynapse(unittest.TestCase):
 
         # Test forward pass
         state = synapse.init_state(self.batch_size)
-        call = brainstate.compile.jit(synapse)
+        call = brainstate.transform.jit(synapse)
         with brainstate.environ.context(dt=0.1 * u.ms):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -74,7 +74,7 @@ class TestSynapse(unittest.TestCase):
 
         # Test forward pass
         state = synapse.init_state(self.batch_size)
-        call = brainstate.compile.jit(synapse)
+        call = brainstate.transform.jit(synapse)
         for t in range(self.time_steps):
             out = call(inputs[t])
             self.assertEqual(out.shape, (self.batch_size, self.in_size))
@@ -119,7 +119,7 @@ class TestSynapse(unittest.TestCase):
 
             inputs = brainstate.random.randn(self.time_steps, self.batch_size, *in_size) * u.mS
             state = synapse.init_state(self.batch_size)
-            call = brainstate.compile.jit(synapse)
+            call = brainstate.transform.jit(synapse)
             with brainstate.environ.context(dt=0.1 * u.ms):
                 for t in range(self.time_steps):
                     out = call(inputs[t])
@@ -142,7 +142,7 @@ class TestSynapse(unittest.TestCase):
 
         # Test forward pass
         synapse.init_state(self.batch_size)
-        call = brainstate.compile.jit(synapse)
+        call = brainstate.transform.jit(synapse)
         with brainstate.environ.context(dt=0.1 * u.ms, t=0. * u.ms):
             # Test with spike input (True/False array)
             spike_input = jnp.zeros((self.batch_size, self.in_size), dtype=bool)
@@ -172,7 +172,7 @@ class TestSynapse(unittest.TestCase):
 
         # Test forward pass
         synapse.init_state(self.batch_size)
-        call = brainstate.compile.jit(synapse)
+        call = brainstate.transform.jit(synapse)
         with brainstate.environ.context(dt=0.1 * u.ms, t=0. * u.ms):
             spike_input = jnp.zeros((self.batch_size, self.in_size), dtype=bool)
             spike_input = spike_input.at[0, 0].set(True)
@@ -206,7 +206,7 @@ class TestSynapse(unittest.TestCase):
 
         # Test forward pass with spike inputs
         synapse.init_state(self.batch_size)
-        call = brainstate.compile.jit(synapse)
+        call = brainstate.transform.jit(synapse)
         with brainstate.environ.context(dt=0.1 * u.ms, t=0. * u.ms):
             # Create spike input at first time step
             spike_input = jnp.zeros((self.batch_size, self.in_size), dtype=bool)
@@ -237,7 +237,7 @@ class TestSynapse(unittest.TestCase):
         """Test that BioNMDA properly implements second-order kinetics with two state variables"""
         synapse = BioNMDA(self.in_size)
         synapse.init_state(self.batch_size)
-        call = brainstate.compile.jit(synapse)
+        call = brainstate.transform.jit(synapse)
 
         with brainstate.environ.context(dt=0.1 * u.ms, t=0. * u.ms):
             # Initial state should be zero (g has units, x is dimensionless)

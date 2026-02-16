@@ -64,11 +64,39 @@ class Alpha(Synapse):
     tau : Parameter
         Time constant of the alpha function.
 
+    See Also
+    --------
+    Expon : Single-exponential decay synapse.
+    DualExpon : Dual-exponential synapse with separate rise and decay.
+    AMPA : AMPA receptor kinetic synapse model.
+
     Notes
     -----
     The alpha function is defined as g(t) = (t/tau) * exp(1-t/tau) for t ≥ 0.
     This implementation uses an exponential Euler integration method.
     The output of this synapse is the conductance value.
+
+    References
+    ----------
+    .. [1] Rall, W. (1967). Distinguishing theoretical synaptic potentials
+           computed for different soma-dendritic distributions of synaptic
+           input. Journal of Neurophysiology, 30(5), 1138-1168.
+    .. [2] Roth, A., & van Rossum, M. C. W. (2009). Modeling synapses.
+           In Computational Modeling Methods for Neuroscientists (pp. 139-160).
+           MIT Press.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an alpha synapse with 8 ms time constant
+        >>> syn = brainpy.state.Alpha(100, tau=8.*u.ms)
+        >>> syn.init_state(batch_size=1)
+        >>> # Step the synapse
+        >>> g = syn.update()
     """
     __module__ = 'brainpy.state'
 
@@ -159,6 +187,12 @@ class AMPA(Synapse):
     spike_arrival_time : ShortTermState
         Time of the most recent presynaptic spike.
 
+    See Also
+    --------
+    GABAa : Inhibitory GABAa receptor synapse model.
+    BioNMDA : NMDA receptor synapse model with Mg2+ block.
+    Expon : Simpler exponential decay synapse.
+
     Notes
     -----
     - The model captures the fast-rising and relatively fast-decaying excitatory currents
@@ -176,6 +210,17 @@ class AMPA(Synapse):
     .. [2] Vijayan, S., & Kopell, N. J. (2012). Thalamic model of awake alpha oscillations
            and implications for stimulus processing. Proceedings of the National Academy
            of Sciences, 109(45), 18553-18558.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an AMPA synapse
+        >>> ampa = brainpy.state.AMPA(100)
+        >>> ampa.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -272,6 +317,11 @@ class GABAa(AMPA):
     ----------
     Inherits all attributes from AMPA class.
 
+    See Also
+    --------
+    AMPA : Excitatory AMPA receptor synapse model.
+    BioNMDA : NMDA receptor synapse model.
+
     Notes
     -----
     - GABAa receptors typically produce slower-rising and longer-lasting currents compared to AMPA receptors [1]_.
@@ -289,6 +339,17 @@ class GABAa(AMPA):
     .. [2] Destexhe, A., & Paré, D. (1999). Impact of network activity on the integrative
            properties of neocortical pyramidal neurons in vivo. Journal of neurophysiology,
            81(4), 1531-1547.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a GABAa synapse
+        >>> gabaa = brainpy.state.GABAa(100)
+        >>> gabaa.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -391,6 +452,12 @@ class BioNMDA(Synapse):
     spike_arrival_time : ShortTermState
         Time of the most recent presynaptic spike.
 
+    See Also
+    --------
+    AMPA : Fast excitatory AMPA receptor synapse model.
+    GABAa : Inhibitory GABAa receptor synapse model.
+    MgBlock : Voltage-dependent Mg2+ block output module.
+
     Notes
     -----
     - NMDA receptors have slower kinetics compared to AMPA receptors [1]_, with rise times
@@ -412,6 +479,17 @@ class BioNMDA(Synapse):
     .. [4] Jahr, C. E., & Stevens, C. F. (1990). Voltage dependence of NMDA-activated
            macroscopic conductances predicted by single-channel kinetics. Journal of Neuroscience,
            10(9), 3178-3182.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an NMDA synapse
+        >>> nmda = brainpy.state.BioNMDA(100)
+        >>> nmda.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 

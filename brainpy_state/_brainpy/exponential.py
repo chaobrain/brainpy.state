@@ -62,6 +62,11 @@ class Expon(Synapse, AlignPost):
     tau : Parameter
         Time constant of decay.
 
+    See Also
+    --------
+    DualExpon : Dual-exponential synapse with separate rise and decay.
+    Alpha : Alpha-function synapse with equal rise and decay time constants.
+
     Notes
     -----
     The implementation uses an exponential Euler integration method.
@@ -70,6 +75,25 @@ class Expon(Synapse, AlignPost):
     This class inherits from :py:class:`AlignPost`, which means it can be used in projection patterns
     where synaptic variables are aligned with post-synaptic neurons, enabling event-driven
     computation and more efficient handling of sparse connectivity patterns.
+
+    References
+    ----------
+    .. [1] Roth, A., & van Rossum, M. C. W. (2009). Modeling synapses.
+           In Computational Modeling Methods for Neuroscientists (pp. 139-160).
+           MIT Press.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a simple exponential synapse with 8 ms decay
+        >>> syn = brainpy.state.Expon(100, tau=8.*u.ms)
+        >>> syn.init_state(batch_size=1)
+        >>> # Step the synapse (conductance decays exponentially)
+        >>> g = syn.update()
     """
     __module__ = 'brainpy.state'
 
@@ -143,6 +167,11 @@ class DualExpon(Synapse, AlignPost):
     a : Parameter
         Normalization factor calculated from tau_rise, tau_decay, and A.
 
+    See Also
+    --------
+    Expon : Single-exponential decay synapse.
+    Alpha : Alpha-function synapse (special case where tau_rise == tau_decay).
+
     Notes
     -----
     The dual exponential model produces a conductance waveform that is more
@@ -155,6 +184,25 @@ class DualExpon(Synapse, AlignPost):
     This class inherits from :py:class:`AlignPost`, which means it can be used in projection patterns
     where synaptic variables are aligned with post-synaptic neurons, enabling event-driven
     computation and more efficient handling of sparse connectivity patterns.
+
+    References
+    ----------
+    .. [1] Roth, A., & van Rossum, M. C. W. (2009). Modeling synapses.
+           In Computational Modeling Methods for Neuroscientists (pp. 139-160).
+           MIT Press.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a dual-exponential synapse
+        >>> syn = brainpy.state.DualExpon(100, tau_rise=1.*u.ms, tau_decay=10.*u.ms)
+        >>> syn.init_state(batch_size=1)
+        >>> # Step the synapse
+        >>> g = syn.update()
     """
     __module__ = 'brainpy.state'
 

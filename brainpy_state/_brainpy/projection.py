@@ -39,37 +39,39 @@ __all__ = [
 
 class Projection(brainstate.nn.Module):
     """
-    Base class for synaptic projection modules in neural network modeling.
+    Base class for synaptic projection modules.
 
-    This class defines the interface for modules that handle projections between
-    neural populations. Projections process input signals and transform them
-    before they reach the target neurons, implementing the connectivity patterns
-    in neural networks.
-
-    In the BrainState execution order, Projection modules are updated before
-    Dynamics modules, following the natural information flow in neural systems:
-    1. Projections process inputs (synaptic transmission)
-    2. Dynamics update neuron states (neural integration)
-
-    The Projection class does not implement the update logic directly but delegates
-    to its child nodes. If no child nodes exist, it raises a ValueError.
+    A projection connects pre-synaptic and post-synaptic neural populations,
+    handling synaptic transmission, weight application, and input delivery.
+    In the BrainState execution order, projections are updated *before*
+    dynamics modules, following the natural information flow: projections
+    process inputs first, then neurons integrate.
 
     Parameters
     ----------
     *args
-        Arguments passed to the parent Module class.
+        Positional arguments forwarded to :class:`brainstate.nn.Module`.
     **kwargs
-        Keyword arguments passed to the parent Module class.
+        Keyword arguments forwarded to :class:`brainstate.nn.Module`.
 
     Raises
     ------
     ValueError
-        If the update() method is called but no child nodes are defined.
+        If :meth:`update` is called but no child nodes are defined.
+
+    See Also
+    --------
+    AlignPostProj : Post-synaptic alignment projection.
+    DeltaProj : Delta-input projection (direct voltage changes).
+    CurrentProj : Current-based projection.
+    align_pre_projection : Pre-synaptic alignment convenience wrapper.
+    align_post_projection : Post-synaptic alignment convenience wrapper.
 
     Notes
     -----
-    Derived classes should implement specific projection behaviors, such as
-    dense connectivity, sparse connectivity, or specific weight update rules.
+    Subclasses typically compose a communication module (connection weights),
+    a synapse model, and a synaptic output module. The base class delegates
+    its :meth:`update` call to child nodes registered via the module tree.
     """
     __module__ = 'brainpy.state'
 
@@ -151,35 +153,85 @@ class _AlignPost(brainstate.nn.Module):
 
 class AlignPostProj(Projection):
     """
-    Align-post projection of the neural network.
+    Post-synaptic alignment projection.
 
+    In this projection pattern, the synapse dynamics and synaptic output
+    are aligned with (owned by) the post-synaptic neuron. Multiple
+    projections targeting the same post-synaptic population with the same
+    synapse/output descriptor share a single synapse and output instance,
+    enabling efficient event-driven updates.
+
+    The update pipeline is:
+
+    1. Optional pre-processing modules transform the input.
+    2. The communication module (``comm``) maps pre-synaptic signals
+       to post-synaptic space.
+    3. The result is added as a delta input to the shared synapse.
+    4. The synapse and output are updated by the post-synaptic neuron's
+       ``before_update`` hook (if using descriptor merging).
+
+    Parameters
+    ----------
+    *modules
+        Optional pre-processing modules applied sequentially to the input
+        before the communication step.
+    comm : Callable
+        Communication module (e.g., ``brainevent.nn.FixedProb``) that
+        maps pre-synaptic activity to post-synaptic space.
+    syn : ParamDescriber[AlignPost] or AlignPost
+        Synapse model or its descriptor. When a descriptor is provided,
+        the synapse is created lazily and shared across projections
+        targeting the same post-synaptic neuron.
+    out : ParamDescriber[SynOut] or SynOut
+        Synaptic output module or its descriptor.
+    post : Dynamics
+        Post-synaptic neural population.
+    label : str, optional
+        Label for identifying this projection's contribution in the
+        post-synaptic neuron's input dictionary.
+
+    Raises
+    ------
+    TypeError
+        If ``comm`` is not callable, if ``syn``/``out`` types are
+        inconsistent, or if ``post`` is not a :class:`Dynamics` instance.
+
+    See Also
+    --------
+    DeltaProj : Direct delta-input projection.
+    CurrentProj : Current-based projection.
+    align_post_projection : Convenience wrapper with spike generation.
+
+    Notes
+    -----
+    - When both ``syn`` and ``out`` are descriptors (``ParamDescriber``),
+      the projection attempts to merge with existing synapse/output
+      instances on the post-synaptic neuron, avoiding duplicate state.
+    - When ``syn`` is an already-instantiated ``AlignPost`` object, no
+      merging occurs and ``out`` must also be an instantiated ``SynOut``.
+
+    References
+    ----------
+    .. [1] Brette, R., et al. (2007). Simulation of networks of spiking
+           neurons: a review of tools and strategies. Journal of
+           Computational Neuroscience, 23(3), 349-398.
 
     Examples
     --------
+    .. code-block:: python
 
-    Here is an example of using the `AlignPostProj` to create a synaptic projection.
-    Note that this projection needs the manual input of pre-synaptic spikes.
-
-    >>> import brainstate
-    >>> import brainunit as u
-    >>> n_exc = 3200
-    >>> n_inh = 800
-    >>> num = n_exc + n_inh
-    >>> pop = brainstate.nn.LIFRef(
-    ...        num,
-    ...        V_rest=-49. * u.mV, V_th=-50. * u.mV, V_reset=-60. * u.mV,
-    ...        tau=20. * u.ms, tau_ref=5. * u.ms,
-    ...        V_initializer=brainstate.nn.Normal(-55., 2., unit=u.mV)
-    ... )
-    >>> pop.init_state()
-    >>> E = brainstate.nn.AlignPostProj(
-    ...        comm=brainstate.nn.FixedNumConn(n_exc, num, prob=80 / num, weight=1.62 * u.mS),
-    ...        syn=brainstate.nn.Expon.desc(num, tau=5. * u.ms),
-    ...        out=brainstate.nn.CUBA.desc(scale=u.volt),
-    ...        post=pop
-    ... )
-    >>> exe_current = E(pop.get_spike())
-
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> n_pre, n_post = 800, 200
+        >>> post_pop = brainpy.state.LIF(n_post, tau=20.*u.ms)
+        >>> post_pop.init_state()
+        >>> proj = brainpy.state.AlignPostProj(
+        ...     comm=brainstate.nn.Linear(n_pre, n_post),
+        ...     syn=brainpy.state.Expon.desc(n_post, tau=5.*u.ms),
+        ...     out=brainpy.state.CUBA.desc(scale=u.volt),
+        ...     post=post_pop,
+        ... )
     """
     __module__ = 'brainpy.state'
 
@@ -273,35 +325,66 @@ class AlignPostProj(Projection):
 
 class DeltaProj(Projection):
     """
-    Delta-based projection of the neural network.
+    Delta-input projection.
 
-    This projection directly applies delta inputs to post-synaptic neurons without intervening
-    synaptic dynamics. It processes inputs through optional prefetch modules, applies a communication model,
-    and adds the result directly as a delta input to the post-synaptic population.
+    Applies pre-synaptic signals directly as delta (voltage) inputs to the
+    post-synaptic population, bypassing synapse dynamics entirely. Useful
+    for instantaneous coupling or simplified network models.
+
+    The update pipeline is:
+
+    1. Optional pre-fetch modules transform the input.
+    2. The communication module (``comm``) maps the signal to
+       post-synaptic space.
+    3. The result is added as a delta input to the post-synaptic neuron's
+       membrane potential.
 
     Parameters
     ----------
     *prefetch
-        Optional prefetch modules to process input before communication.
-    comm : callable
-        Communication model that determines how signals are transmitted.
+        Optional modules applied sequentially to the input before
+        the communication step.
+    comm : Callable
+        Communication module mapping pre-synaptic activity to
+        post-synaptic delta inputs.
     post : Dynamics
-        Post-synaptic neural population to receive the delta inputs.
-    label : Optional[str], default=None
-        Optional label for the projection to identify it in the post-synaptic population.
+        Post-synaptic neural population.
+    label : str, optional
+        Label for identifying this projection's delta input.
+
+    Raises
+    ------
+    TypeError
+        If ``comm`` is not callable or ``post`` is not a
+        :class:`Dynamics` instance.
+
+    See Also
+    --------
+    AlignPostProj : Projection with full synapse dynamics.
+    CurrentProj : Current-based projection.
+
+    Notes
+    -----
+    - Delta projections add directly to the membrane potential rather
+      than to the current, making them suitable for modeling gap junctions
+      or abstract coupling.
+    - The ``label`` parameter allows multiple delta projections to coexist
+      on the same post-synaptic population with distinct labels.
 
     Examples
     --------
-    >>> import brainstate
-    >>> import brainunit as u
-    >>> n_neurons = 100
-    >>> pop = brainstate.nn.LIF(n_neurons, V_rest=-70*u.mV, V_threshold=-50*u.mV)
-    >>> pop.init_state()
-    >>> delta_input = brainstate.nn.DeltaProj(
-    ...     comm=lambda x: x * 10.0*u.mV,
-    ...     post=pop
-    ... )
-    >>> delta_input(1.0)  # Apply voltage increment directly
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> n_neurons = 100
+        >>> pop = brainpy.state.LIF(n_neurons, tau=10.*u.ms)
+        >>> pop.init_state()
+        >>> delta_proj = brainpy.state.DeltaProj(
+        ...     comm=brainstate.nn.Linear(n_neurons, n_neurons),
+        ...     post=pop,
+        ... )
     """
     __module__ = 'brainpy.state'
 
@@ -348,37 +431,69 @@ class DeltaProj(Projection):
 
 class CurrentProj(Projection):
     """
-    Current-based projection of the neural network.
+    Current-based projection.
 
-    This projection directly modulates post-synaptic currents without separate synaptic dynamics.
-    It processes inputs through optional prefetch modules, applies a communication model,
-    and binds the result to the output model which is then added as a current input to the post-synaptic population.
+    Delivers current input to post-synaptic neurons by passing the
+    communication output through a synaptic output module (e.g.,
+    :class:`COBA` or :class:`CUBA`) and registering it as a current
+    input on the post-synaptic population.
+
+    The update pipeline is:
+
+    1. Optional pre-fetch modules transform the input.
+    2. The communication module (``comm``) maps pre-synaptic activity.
+    3. The synaptic output module (``out``) converts conductance to
+       current and binds it to the post-synaptic neuron.
 
     Parameters
     ----------
     *prefetch
-        Optional prefetch modules to process input before communication.
-        The last element must be an instance of Prefetch or PrefetchDelayAt if any are provided.
-    comm : callable
-        Communication model that determines how signals are transmitted.
+        Optional pre-fetch modules. If provided, the last element must
+        be a :class:`brainstate.nn.Prefetch` or
+        :class:`brainstate.nn.PrefetchDelayAt` instance.
+    comm : Callable
+        Communication module mapping pre-synaptic activity.
     out : SynOut
-        Output model that converts communication results to post-synaptic currents.
+        Synaptic output module that converts the communication result
+        to post-synaptic current.
     post : Dynamics
-        Post-synaptic neural population to receive the currents.
+        Post-synaptic neural population.
+
+    Raises
+    ------
+    TypeError
+        If ``comm`` is not callable, ``out`` is not a :class:`SynOut`,
+        ``post`` is not a :class:`Dynamics`, or the last prefetch module
+        has an incorrect type.
+
+    See Also
+    --------
+    AlignPostProj : Projection with aligned synapse dynamics.
+    DeltaProj : Direct delta-input projection.
+    align_pre_projection : Convenience wrapper with pre-synaptic alignment.
+
+    Notes
+    -----
+    - The output module is immediately registered as a current input on
+      the post-synaptic population at construction time.
+    - Unlike :class:`AlignPostProj`, this projection does not use synapse
+      dynamics -- the communication result is directly converted to current.
 
     Examples
     --------
-    >>> import brainstate
-    >>> import brainunit as u
-    >>> n_neurons = 100
-    >>> pop = brainstate.nn.LIF(n_neurons, V_rest=-70*u.mV, V_threshold=-50*u.mV)
-    >>> pop.init_state()
-    >>> current_input = brainstate.nn.CurrentProj(
-    ...     comm=lambda x: x * 0.5,
-    ...     out=brainstate.nn.CUBA(scale=1.0*u.nA),
-    ...     post=pop
-    ... )
-    >>> current_input(0.2)  # Apply external current
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> n_neurons = 100
+        >>> pop = brainpy.state.LIF(n_neurons, tau=10.*u.ms)
+        >>> pop.init_state()
+        >>> proj = brainpy.state.CurrentProj(
+        ...     comm=brainstate.nn.Linear(n_neurons, n_neurons),
+        ...     out=brainpy.state.CUBA(scale=u.volt),
+        ...     post=pop,
+        ... )
     """
     __module__ = 'brainpy.state'
 
@@ -430,14 +545,73 @@ class CurrentProj(Projection):
 
 class align_pre_projection(Projection):
     """
-    Represents a pre-synaptic alignment projection mechanism.
+    Pre-synaptic alignment projection with spike generation.
 
-    This class inherits from the `Projection` base class and is designed to
-    manage the pre-synaptic alignment process in neural network simulations.
-    It takes into account pre-synaptic dynamics, synaptic properties, delays,
-    communication functions, synaptic outputs, post-synaptic dynamics, and
-    short-term plasticity.
+    A convenience wrapper that combines spike generation, optional
+    short-term plasticity (STP), pre-synaptic synapse dynamics, and
+    a :class:`CurrentProj` into a single module. The synapse operates
+    in pre-synaptic space, processing spikes before the communication
+    step transmits them to post-synaptic neurons.
 
+    The update pipeline is:
+
+    1. Spike generator modules produce binary spike signals.
+    2. If STP is provided, spikes are modulated by short-term
+       plasticity dynamics.
+    3. The pre-synaptic synapse model filters the (modulated) spikes.
+    4. The :class:`CurrentProj` maps the filtered signal to post-synaptic
+       current.
+
+    Parameters
+    ----------
+    *spike_generator
+        One or more modules that produce spike signals from the input.
+    syn : Dynamics
+        Pre-synaptic synapse dynamics (e.g., :class:`Expon`).
+    comm : Callable
+        Communication module mapping pre-synaptic to post-synaptic space.
+    out : SynOut
+        Synaptic output module.
+    post : Dynamics
+        Post-synaptic neural population.
+    stp : Dynamics, optional
+        Short-term plasticity module applied after spike generation.
+
+    See Also
+    --------
+    align_post_projection : Post-synaptic alignment variant.
+    CurrentProj : Underlying current projection used internally.
+    AlignPostProj : Alternative projection with post-synaptic alignment.
+
+    Notes
+    -----
+    - Pre-synaptic alignment means the synapse state lives in
+      pre-synaptic space. This is natural for models where synaptic
+      filtering (e.g., exponential decay) should happen before the
+      communication step.
+    - Spike signals are wrapped in ``brainevent.BinaryArray`` for
+      efficient event-driven processing.
+    - When STP is used, its output is wrapped in
+      ``brainevent.MaskedFloat`` to preserve sparsity.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> pre = brainpy.state.LIF(800, tau=20.*u.ms)
+        >>> post = brainpy.state.LIF(200, tau=20.*u.ms)
+        >>> pre.init_state()
+        >>> post.init_state()
+        >>> proj = brainpy.state.align_pre_projection(
+        ...     pre,
+        ...     syn=brainpy.state.Expon(800, tau=5.*u.ms),
+        ...     comm=brainstate.nn.Linear(800, 200),
+        ...     out=brainpy.state.CUBA(scale=u.volt),
+        ...     post=post,
+        ... )
     """
     __module__ = 'brainpy.state'
 
@@ -479,13 +653,67 @@ class align_pre_projection(Projection):
 
 class align_post_projection(Projection):
     """
-    Represents a post-synaptic alignment projection mechanism.
+    Post-synaptic alignment projection with spike generation.
 
-    This class inherits from the `Projection` base class and is designed to
-    manage the post-synaptic alignment process in neural network simulations.
-    It takes into account spike generators, communication functions, synaptic
-    properties, synaptic outputs, post-synaptic dynamics, and short-term plasticity.
+    A convenience wrapper that combines spike generation, optional
+    short-term plasticity (STP), and an :class:`AlignPostProj` into a
+    single module. The synapse operates in post-synaptic space, sharing
+    state across projections that target the same post-synaptic neuron.
 
+    The update pipeline is:
+
+    1. Spike generator modules produce binary spike signals.
+    2. If STP is provided, spikes are modulated by short-term
+       plasticity dynamics.
+    3. The :class:`AlignPostProj` handles communication and
+       post-aligned synapse/output updates.
+
+    Parameters
+    ----------
+    *spike_generator
+        One or more modules that produce spike signals from the input.
+    comm : Callable
+        Communication module mapping pre-synaptic to post-synaptic space.
+    syn : AlignPost or ParamDescriber[AlignPost]
+        Post-synaptic synapse model or its descriptor.
+    out : SynOut or ParamDescriber[SynOut]
+        Synaptic output module or its descriptor.
+    post : Dynamics
+        Post-synaptic neural population.
+    stp : Dynamics, optional
+        Short-term plasticity module applied after spike generation.
+
+    See Also
+    --------
+    align_pre_projection : Pre-synaptic alignment variant.
+    AlignPostProj : Underlying post-aligned projection used internally.
+
+    Notes
+    -----
+    - Post-synaptic alignment enables synapse state sharing: if multiple
+      projections target the same post-synaptic population with the same
+      synapse/output descriptor, they share a single synapse instance.
+    - Spike signals are wrapped in ``brainevent.BinaryArray`` for
+      efficient event-driven processing.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> pre = brainpy.state.LIF(800, tau=20.*u.ms)
+        >>> post = brainpy.state.LIF(200, tau=20.*u.ms)
+        >>> pre.init_state()
+        >>> post.init_state()
+        >>> proj = brainpy.state.align_post_projection(
+        ...     pre,
+        ...     comm=brainstate.nn.Linear(800, 200),
+        ...     syn=brainpy.state.Expon.desc(200, tau=5.*u.ms),
+        ...     out=brainpy.state.CUBA.desc(scale=u.volt),
+        ...     post=post,
+        ... )
     """
     __module__ = 'brainpy.state'
 

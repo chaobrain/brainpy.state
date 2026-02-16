@@ -123,12 +123,12 @@ with brainstate.environ.context(dt=1.0 * u.ms):
     optimizer.register_trainable_weights(net.states(brainstate.ParamState))
 
     def loss_fn():
-        predictions = brainstate.compile.for_loop(net.update, x_data)
+        predictions = brainstate.transform.for_loop(net.update, x_data)
         predictions = u.math.mean(predictions, axis=0)  # [T, B, C] -> [B, C]
         return braintools.metric.softmax_cross_entropy_with_integer_labels(predictions, y_data).mean()
 
 
-    @brainstate.compile.jit
+    @brainstate.transform.jit
     def train_fn():
         brainstate.nn.init_all_states(net, batch_size=num_sample)
         grads, l = brainstate.transform.grad(loss_fn, net.states(brainstate.ParamState), return_value=True)()

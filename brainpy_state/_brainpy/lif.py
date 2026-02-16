@@ -73,26 +73,10 @@ class IF(Neuron):
     V : HiddenState
         Membrane potential.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an IF neuron layer with 10 neurons
-    >>> if_neuron = brainpy.state.IF(10, tau=8*u.ms, V_th=1.2*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> if_neuron.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = if_neuron.update(x=2.0*u.mA)
-    >>>
-    >>> # Create a network with IF neurons
-    >>> network = brainstate.nn.Sequential(
-    ...     brainpy.state.IF(100, tau=5.0*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... )
+    LIF : Leaky integrate-and-fire with resting potential.
+    QuaIF : Quadratic integrate-and-fire with nonlinear dynamics.
 
     Notes
     -----
@@ -113,6 +97,20 @@ class IF(Neuron):
            model neuron (1907). Brain Research Bulletin, 50(5-6), 303-304.
     .. [3] Burkitt, A. N. (2006). A review of the integrate-and-fire neuron model:
            I. Homogeneous synaptic input. Biological cybernetics, 95(1), 1-19.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an IF neuron layer with 10 neurons
+        >>> if_neuron = brainpy.state.IF(10, tau=8*u.ms, V_th=1.2*u.mV)
+        >>> # Initialize the state
+        >>> if_neuron.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = if_neuron.update(x=2.0*u.mA)
     """
 
     __module__ = 'brainpy.state'
@@ -208,20 +206,12 @@ class LIF(Neuron):
     V : HiddenState
         Membrane potential.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a LIF neuron layer with 10 neurons
-    >>> lif = brainpy.state.LIF(10, tau=10*u.ms, V_th=0.8*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> lif.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = lif.update(x=1.5*u.mA)
+    IF : Perfect integrator without leak.
+    LIFRef : LIF with absolute refractory period.
+    ALIF : Adaptive LIF with spike-frequency adaptation.
+    ExpIF : LIF with exponential spike initiation.
 
     Notes
     -----
@@ -239,6 +229,20 @@ class LIF(Neuron):
            Cambridge University Press.
     .. [2] Burkitt, A. N. (2006). A review of the integrate-and-fire neuron model:
            I. Homogeneous synaptic input. Biological cybernetics, 95(1), 1-19.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a LIF neuron layer with 10 neurons
+        >>> lif = brainpy.state.LIF(10, tau=10*u.ms, V_th=0.8*u.mV)
+        >>> # Initialize the state
+        >>> lif.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = lif.update(x=1.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -339,20 +343,11 @@ class ExpIF(Neuron):
     V : HiddenState
         Membrane potential.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a ExpIF neuron layer with 10 neurons
-    >>> expif = brainpy.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> expif.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = expif.update(x=1.5*u.mA)
+    ExpIFRef : ExpIF with absolute refractory period.
+    AdExIF : Adaptive exponential integrate-and-fire.
+    LIF : Simpler leaky integrate-and-fire without exponential term.
 
     Notes
     -----
@@ -384,6 +379,20 @@ class ExpIF(Neuron):
            integrate-and-fire neurons to modulated current-based and
            conductance-based synaptic drive." Physical Review E 76, no. 2 (2007): 021919.
     .. [5] https://en.wikipedia.org/wiki/Exponential_integrate-and-fire
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an ExpIF neuron layer with 10 neurons
+        >>> expif = brainpy.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
+        >>> # Initialize the state
+        >>> expif.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = expif.update(x=1.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -488,28 +497,35 @@ class ExpIFRef(Neuron):
     refractory : HiddenState
         Neuron refractory state.
 
+    See Also
+    --------
+    ExpIF : ExpIF without refractory period.
+    AdExIFRef : Adaptive ExpIF with refractory period.
+
+    Notes
+    -----
+    - The refractory mechanism prevents the neuron from firing within
+      ``tau_ref`` after a spike by holding the membrane potential at
+      the reset value.
+    - The simulation environment time variable ``t`` must be available
+      via ``brainstate.environ.get('t')`` for refractory tracking.
+
+    References
+    ----------
+    .. [1] Fourcaud-Trocme, N., et al. (2003). How spike generation
+           mechanisms determine the neuronal response to fluctuating
+           inputs. Journal of Neuroscience, 23(37), 11628-11640.
+
     Examples
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a ExpIF neuron layer with 10 neurons
-    >>> expif = brainpy.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> expif.init_state(batch_size=1)
-    >>>
-    >>> # Generate inputs
-    >>> time_steps = 100
-    >>> inputs = brainstate.random.randn(time_steps, 1, 10) * u.mA
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> 
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    >>>     for t in range(time_steps):
-    >>>         with brainstate.environ.context(t=t*0.1*u.ms):
-    >>>             spikes = expif.update(x=inputs[t])
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an ExpIFRef neuron layer with 10 neurons
+        >>> expif = brainpy.state.ExpIFRef(10, tau=10*u.ms, tau_ref=1.7*u.ms)
+        >>> expif.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -659,20 +675,11 @@ class AdExIF(Neuron):
     w : HiddenState
         Adaptation current.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a AdExIF neuron layer with 10 neurons
-    >>> adexif = brainpy.state.AdExIF(10, tau=10*u.ms)
-    >>>
-    >>> # Initialize the state
-    >>> adexif.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = adexif.update(x=1.5*u.mA)
+    AdExIFRef : AdExIF with absolute refractory period.
+    ExpIF : Exponential IF without adaptation.
+    LIF : Simpler leaky integrate-and-fire.
 
     Notes
     -----
@@ -690,6 +697,20 @@ class AdExIF(Neuron):
     .. seealso::
 
        :class:`brainpy.dyn.AdExIF` for the dynamical-system counterpart.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an AdExIF neuron layer with 10 neurons
+        >>> adexif = brainpy.state.AdExIF(10, tau=10*u.ms)
+        >>> # Initialize the state
+        >>> adexif.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = adexif.update(x=1.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -841,27 +862,10 @@ class AdExIFRef(Neuron):
     refractory : HiddenState
         Neuron refractory state (if ref_var=True).
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an AdExIFRef neuron layer with 10 neurons
-    >>> adexif_ref = brainpy.state.AdExIFRef(10, tau=10*u.ms, tau_ref=2*u.ms)
-    >>>
-    >>> # Initialize the state
-    >>> adexif_ref.init_state(batch_size=1)
-    >>>
-    >>> # Generate inputs
-    >>> time_steps = 100
-    >>> inputs = brainstate.random.randn(time_steps, 1, 10) * u.mA
-    >>>
-    >>> # Apply input currents and update the neuron state
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    >>>     for t in range(time_steps):
-    >>>         with brainstate.environ.context(t=t*0.1*u.ms):
-    >>>             spikes = adexif_ref.update(x=inputs[t])
+    AdExIF : AdExIF without refractory period.
+    ExpIFRef : ExpIF with refractory period but no adaptation.
 
     Notes
     -----
@@ -879,6 +883,18 @@ class AdExIFRef(Neuron):
     .. seealso::
 
        :class:`brainpy.dyn.AdExIFRef` for the dynamical-system counterpart.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an AdExIFRef neuron layer with 10 neurons
+        >>> adexif_ref = brainpy.state.AdExIFRef(10, tau=10*u.ms, tau_ref=2*u.ms)
+        >>> # Initialize the state
+        >>> adexif_ref.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -1044,29 +1060,10 @@ class LIFRef(Neuron):
     last_spike_time : ShortTermState
         Time of the last spike, used to implement refractory period.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a LIFRef neuron layer with 10 neurons
-    >>> lifref = brainpy.state.LIFRef(10,
-    ...                         tau=10*u.ms,
-    ...                         tau_ref=5*u.ms,
-    ...                         V_th=0.8*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> lifref.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = lifref.update(x=1.5*u.mA)
-    >>>
-    >>> # Create a network with refractory neurons
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.LIFRef(100, tau_ref=4*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    LIF : LIF without refractory period.
+    ALIF : Adaptive LIF with spike-frequency adaptation.
 
     Notes
     -----
@@ -1089,6 +1086,21 @@ class LIFRef(Neuron):
            I. Homogeneous synaptic input. Biological cybernetics, 95(1), 1-19.
     .. [3] Izhikevich, E. M. (2003). Simple model of spiking neurons. IEEE Transactions on
            neural networks, 14(6), 1569-1572.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a LIFRef neuron layer with 10 neurons
+        >>> lifref = brainpy.state.LIFRef(10, tau=10*u.ms, tau_ref=5*u.ms,
+        ...                               V_th=0.8*u.mV)
+        >>> # Initialize the state
+        >>> lifref.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = lifref.update(x=1.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -1213,29 +1225,11 @@ class ALIF(Neuron):
     a : HiddenState
         Adaptation variable that increases after each spike and decays exponentially.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an ALIF neuron layer with 10 neurons
-    >>> alif = brainpy.state.ALIF(10,
-    ...                     tau=10*u.ms,
-    ...                     tau_a=200*u.ms,
-    ...                     beta=0.2*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> alif.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = alif.update(x=1.5*u.mA)
-    >>>
-    >>> # Create a network with adaptation for burst detection
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.ALIF(100, tau_a=150*u.ms, beta=0.3*u.mV),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    LIF : Standard LIF without adaptation.
+    LIFRef : LIF with refractory period.
+    AdExIF : Adaptive exponential integrate-and-fire.
 
     Notes
     -----
@@ -1262,6 +1256,21 @@ class ALIF(Neuron):
     .. [3] Naud, R., Marcille, N., Clopath, C., & Gerstner, W. (2008). Firing patterns in
            the adaptive exponential integrate-and-fire model. Biological cybernetics,
            99(4), 335-347.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an ALIF neuron layer with 10 neurons
+        >>> alif = brainpy.state.ALIF(10, tau=10*u.ms, tau_a=200*u.ms,
+        ...                           beta=0.2*u.mV)
+        >>> # Initialize the state
+        >>> alif.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = alif.update(x=1.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -1375,26 +1384,11 @@ class QuaIF(Neuron):
     V : HiddenState
         Membrane potential.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a QuaIF neuron layer with 10 neurons
-    >>> quaif = brainpy.state.QuaIF(10, tau=10*u.ms, V_th=-30*u.mV, V_c=-50*u.mV)
-    >>>
-    >>> # Initialize the state
-    >>> quaif.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> spikes = quaif.update(x=2.5*u.mA)
-    >>>
-    >>> # Create a network with QuaIF neurons
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.QuaIF(100, tau=10.0*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    AdQuaIF : Adaptive quadratic integrate-and-fire.
+    AdQuaIFRef : Adaptive quadratic IF with refractory period.
+    ExpIF : Exponential integrate-and-fire (alternative nonlinear model).
 
     Notes
     -----
@@ -1408,6 +1402,21 @@ class QuaIF(Neuron):
     .. [1] P. E. Latham, B.J. Richmond, P. Nelson and S. Nirenberg
            (2000) Intrinsic dynamics in neuronal networks. I. Theory.
            J. Neurophysiology 83, pp. 808–827.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a QuaIF neuron layer with 10 neurons
+        >>> quaif = brainpy.state.QuaIF(10, tau=10*u.ms, V_th=-30*u.mV,
+        ...                             V_c=-50*u.mV)
+        >>> # Initialize the state
+        >>> quaif.init_state(batch_size=1)
+        >>> # Apply an input current and update the neuron state
+        >>> spikes = quaif.update(x=2.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -1526,27 +1535,11 @@ class AdQuaIF(Neuron):
     w : HiddenState
         Adaptation current.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an AdQuaIF neuron layer with 10 neurons
-    >>> adquaif = brainpy.state.AdQuaIF(10, tau=10*u.ms, tau_w=100*u.ms,
-    ...                                 a=1.0*u.siemens, b=0.1*u.mA)
-    >>>
-    >>> # Initialize the state
-    >>> adquaif.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and observe spike-frequency adaptation
-    >>> spikes = adquaif.update(x=3.0*u.mA)
-    >>>
-    >>> # Create a network with adaptive neurons
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.AdQuaIF(100, tau=10.0*u.ms, tau_w=100.0*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    QuaIF : Quadratic IF without adaptation.
+    AdQuaIFRef : Adaptive quadratic IF with refractory period.
+    AdExIF : Adaptive exponential IF (alternative adaptive model).
 
     Notes
     -----
@@ -1564,6 +1557,21 @@ class AdQuaIF(Neuron):
     .. [2] Touboul, Jonathan. "Bifurcation analysis of a general class of
            nonlinear integrate-and-fire neurons." SIAM Journal on Applied
            Mathematics 68, no. 4 (2008): 1045-1079.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an AdQuaIF neuron layer with 10 neurons
+        >>> adquaif = brainpy.state.AdQuaIF(10, tau=10*u.ms, tau_w=100*u.ms,
+        ...                                 a=1.0*u.siemens, b=0.1*u.mA)
+        >>> # Initialize the state
+        >>> adquaif.init_state(batch_size=1)
+        >>> # Apply an input current and observe spike-frequency adaptation
+        >>> spikes = adquaif.update(x=3.0*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -1696,28 +1704,10 @@ class AdQuaIFRef(Neuron):
     refractory : HiddenState
         Neuron refractory state (if ref_var=True).
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an AdQuaIFRef neuron layer with refractory period
-    >>> adquaif_ref = brainpy.state.AdQuaIFRef(10, tau=10*u.ms, tau_w=100*u.ms,
-    ...                                        tau_ref=2.0*u.ms, ref_var=True)
-    >>>
-    >>> # Initialize the state
-    >>> adquaif_ref.init_state(batch_size=1)
-    >>>
-    >>> # Apply input and observe refractory behavior
-    >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
-    ...     spikes = adquaif_ref.update(x=3.0*u.mA)
-    >>>
-    >>> # Create a network with refractory adaptive neurons
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.AdQuaIFRef(100, tau=10.0*u.ms, tau_ref=2.0*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    AdQuaIF : Adaptive quadratic IF without refractory period.
+    QuaIF : Quadratic IF without adaptation or refractory.
 
     Notes
     -----
@@ -1726,6 +1716,25 @@ class AdQuaIFRef(Neuron):
     - Set ref_var=True to track refractory state as a boolean variable.
     - Refractory period prevents unrealistically high firing rates.
     - More biologically realistic than AdQuaIF without refractory period.
+
+    References
+    ----------
+    .. [1] Touboul, Jonathan. "Bifurcation analysis of a general class of
+           nonlinear integrate-and-fire neurons." SIAM Journal on Applied
+           Mathematics 68, no. 4 (2008): 1045-1079.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an AdQuaIFRef neuron layer with refractory period
+        >>> adquaif_ref = brainpy.state.AdQuaIFRef(10, tau=10*u.ms,
+        ...     tau_w=100*u.ms, tau_ref=2.0*u.ms, ref_var=True)
+        >>> # Initialize the state
+        >>> adquaif_ref.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -1920,27 +1929,11 @@ class Gif(Neuron):
     V_th : HiddenState
         Spiking threshold potential.
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a Gif neuron layer with dynamic threshold
-    >>> gif = brainpy.state.Gif(10, tau=20*u.ms, k1=0.2/u.ms, k2=0.02/u.ms,
-    ...                         a=0.005/u.ms, b=0.01/u.ms)
-    >>>
-    >>> # Initialize the state
-    >>> gif.init_state(batch_size=1)
-    >>>
-    >>> # Apply input and observe diverse firing patterns
-    >>> spikes = gif.update(x=1.5*u.mA)
-    >>>
-    >>> # Create a network with Gif neurons
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.Gif(100, tau=20.0*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    GifRef : Gif with absolute refractory period.
+    ALIF : Simpler adaptive LIF model.
+    AdExIF : Adaptive exponential IF (alternative complex model).
 
     Notes
     -----
@@ -1960,6 +1953,21 @@ class Gif(Neuron):
            Gouwens, David Feng, Jim Berg, Aaron Szafer et al. "Generalized
            leaky integrate-and-fire models classify multiple neuron types."
            Nature communications 9, no. 1 (2018): 1-15.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a Gif neuron layer with dynamic threshold
+        >>> gif = brainpy.state.Gif(10, tau=20*u.ms, k1=0.2/u.ms,
+        ...                         k2=0.02/u.ms, a=0.005/u.ms, b=0.01/u.ms)
+        >>> # Initialize the state
+        >>> gif.init_state(batch_size=1)
+        >>> # Apply input and observe diverse firing patterns
+        >>> spikes = gif.update(x=1.5*u.mA)
     """
     __module__ = 'brainpy.state'
 
@@ -2141,28 +2149,10 @@ class GifRef(Neuron):
     refractory : HiddenState
         Neuron refractory state (if ref_var=True).
 
-    Examples
+    See Also
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create a GifRef neuron layer with refractory period
-    >>> gif_ref = brainpy.state.GifRef(10, tau=20*u.ms, tau_ref=2.0*u.ms,
-    ...                                k1=0.2/u.ms, k2=0.02/u.ms, ref_var=True)
-    >>>
-    >>> # Initialize the state
-    >>> gif_ref.init_state(batch_size=1)
-    >>>
-    >>> # Apply input and observe refractory behavior
-    >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
-    ...     spikes = gif_ref.update(x=1.5*u.mA)
-    >>>
-    >>> # Create a network with refractory Gif neurons
-    >>> network = brainstate.nn.Sequential([
-    ...     brainpy.state.GifRef(100, tau=20.0*u.ms, tau_ref=2.0*u.ms),
-    ...     brainstate.nn.Linear(100, 10)
-    ... ])
+    Gif : Gif without refractory period.
+    AdExIFRef : Adaptive exponential IF with refractory period.
 
     Notes
     -----
@@ -2172,6 +2162,25 @@ class GifRef(Neuron):
     - More biologically realistic than Gif without refractory mechanism.
     - Can still exhibit diverse firing patterns: regular, bursting, adaptation.
     - Refractory period prevents unrealistically high firing rates.
+
+    References
+    ----------
+    .. [1] Mihalas, S., & Niebur, E. (2009). A generalized linear
+           integrate-and-fire neural model produces diverse spiking
+           behaviors. Neural computation, 21(3), 704-718.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create a GifRef neuron layer with refractory period
+        >>> gif_ref = brainpy.state.GifRef(10, tau=20*u.ms, tau_ref=2.0*u.ms,
+        ...     k1=0.2/u.ms, k2=0.02/u.ms, ref_var=True)
+        >>> # Initialize the state
+        >>> gif_ref.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 

@@ -28,9 +28,31 @@ __all__ = [
 
 class SynOut(brainstate.nn.Module, BindCondData):
     """
-    Base class for synaptic outputs.
+    Base class for synaptic output modules.
 
-    :py:class:`~.SynOut` is also subclass of :py:class:`~.ParamDesc` and :py:class:`~.BindCondData`.
+    ``SynOut`` defines the interface for converting synaptic conductance values
+    into post-synaptic currents. Subclasses implement specific biophysical
+    models (conductance-based, current-based, magnesium-blocked) by overriding
+    the :meth:`update` method.
+
+    Before calling, conductance data for the current time step must be bound
+    via :meth:`~BindCondData.bind_cond`.
+
+    See Also
+    --------
+    COBA : Conductance-based synaptic output.
+    CUBA : Current-based synaptic output.
+    MgBlock : Synaptic output with voltage-dependent magnesium block.
+
+    Notes
+    -----
+    This class also inherits from :class:`~brainpy_state._mixin.BindCondData`,
+    which provides the :meth:`bind_cond` method for temporarily storing
+    conductance data between computation steps within a single time step.
+
+    Subclasses must implement ``update(self, conductance, potential)`` which
+    receives the bound conductance and the post-synaptic membrane potential,
+    and returns the resulting synaptic current.
     """
 
     __module__ = 'brainpy.state'
@@ -54,22 +76,58 @@ class SynOut(brainstate.nn.Module, BindCondData):
 
 class COBA(SynOut):
     r"""
-    Conductance-based synaptic output.
+    Conductance-based (COBA) synaptic output.
 
-    Given the synaptic conductance, the model output the post-synaptic current with
+    Converts synaptic conductance into post-synaptic current using the
+    driving-force model. The output current depends on the difference between
+    the membrane potential and the reversal potential:
 
     .. math::
 
-       I_{syn}(t) = g_{\mathrm{syn}}(t) (E - V(t))
+       I_{\mathrm{syn}}(t) = g_{\mathrm{syn}}(t) \, (E - V(t))
+
+    where :math:`g_{\mathrm{syn}}` is the instantaneous synaptic conductance,
+    :math:`E` is the reversal potential, and :math:`V` is the post-synaptic
+    membrane potential.
 
     Parameters
     ----------
-    E: ArrayLike
-      The reversal potential.
+    E : ArrayLike
+        Reversal potential of the synapse. Typical values: 0 mV for
+        excitatory (AMPA/NMDA) and -80 mV for inhibitory (GABAa) synapses.
 
     See Also
     --------
-    CUBA
+    CUBA : Current-based synaptic output (potential-independent).
+    MgBlock : Conductance-based output with voltage-dependent Mg2+ block.
+
+    Notes
+    -----
+    - When :math:`V < E`, the driving force :math:`(E - V)` is positive,
+      producing a depolarizing (excitatory) current. When :math:`V > E`,
+      the current is hyperpolarizing (inhibitory).
+    - The COBA model is more biologically realistic than CUBA because the
+      synaptic current magnitude depends on the membrane potential, providing
+      automatic gain control and preventing reversal of current direction
+      past the equilibrium potential [1]_.
+
+    References
+    ----------
+    .. [1] Destexhe, A., Mainen, Z. F., & Sejnowski, T. J. (1994). Synthesis
+           of models for excitable membranes, synaptic transmission and
+           neuromodulation using a common kinetic formalism. Journal of
+           Computational Neuroscience, 1(3), 195-230.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainunit as u
+        >>> # Excitatory COBA synapse with reversal at 0 mV
+        >>> coba_exc = brainpy.state.COBA(E=0. * u.mV)
+        >>> # Inhibitory COBA synapse with reversal at -80 mV
+        >>> coba_inh = brainpy.state.COBA(E=-80. * u.mV)
     """
     __module__ = 'brainpy.state'
 
@@ -83,22 +141,58 @@ class COBA(SynOut):
 
 
 class CUBA(SynOut):
-    r"""Current-based synaptic output.
+    r"""Current-based (CUBA) synaptic output.
 
-    Given the conductance, this model outputs the post-synaptic current with a identity function:
+    Converts synaptic conductance directly into post-synaptic current by
+    applying a fixed scaling factor, independent of the membrane potential:
 
     .. math::
 
-       I_{\mathrm{syn}}(t) = g_{\mathrm{syn}}(t)
+       I_{\mathrm{syn}}(t) = g_{\mathrm{syn}}(t) \cdot \text{scale}
+
+    where :math:`g_{\mathrm{syn}}` is the instantaneous synaptic conductance
+    and ``scale`` is a constant conversion factor.
 
     Parameters
     ----------
-    scale: ArrayLike
-      The scaling factor for the conductance. Default 1. [mV]
+    scale : ArrayLike, default=u.volt
+        Scaling factor applied to the conductance to obtain the current.
+        The default value of ``u.volt`` converts conductance in siemens
+        to current in amperes.
 
     See Also
     --------
-    COBA
+    COBA : Conductance-based synaptic output (potential-dependent).
+
+    Notes
+    -----
+    - The CUBA model ignores the post-synaptic membrane potential entirely,
+      making the synaptic current a fixed function of the presynaptic
+      activity alone.
+    - This simplification is computationally cheaper than COBA and can be
+      appropriate when the membrane potential remains close to rest or when
+      modeling abstract spiking networks [1]_.
+    - In practice, ``scale`` should be chosen so that
+      ``conductance * scale`` has units compatible with the target neuron's
+      current input (e.g., millivolts for dimensionless models, or amperes
+      for biophysical models).
+
+    References
+    ----------
+    .. [1] Brette, R., et al. (2007). Simulation of networks of spiking
+           neurons: a review of tools and strategies. Journal of Computational
+           Neuroscience, 23(3), 349-398.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainunit as u
+        >>> # Default CUBA synapse
+        >>> cuba = brainpy.state.CUBA()
+        >>> # CUBA with custom scaling
+        >>> cuba_scaled = brainpy.state.CUBA(scale=0.5 * u.volt)
     """
     __module__ = 'brainpy.state'
 
@@ -111,34 +205,79 @@ class CUBA(SynOut):
 
 
 class MgBlock(SynOut):
-    r"""Synaptic output based on Magnesium blocking.
+    r"""Synaptic output with voltage-dependent magnesium (Mg2+) block.
 
-    Given the synaptic conductance, the model output the post-synaptic current with
-
-    .. math::
-
-       I_{syn}(t) = g_{\mathrm{syn}}(t) (E - V(t)) g_{\infty}(V,[{Mg}^{2+}]_{o})
-
-    where The fraction of channels :math:`g_{\infty}` that are not blocked by magnesium can be fitted to
+    Models NMDA-receptor-mediated synaptic transmission where extracellular
+    magnesium ions block the receptor channel pore at hyperpolarized potentials.
+    The output current is:
 
     .. math::
 
-       g_{\infty}(V,[{Mg}^{2+}]_{o}) = (1+{e}^{-\alpha V} \frac{[{Mg}^{2+}]_{o}} {\beta})^{-1}
+       I_{\mathrm{syn}}(t) = g_{\mathrm{syn}}(t) \, (E - V(t)) \,
+       g_{\infty}(V, [{Mg}^{2+}]_o)
 
-    Here :math:`[{Mg}^{2+}]_{o}` is the extracellular magnesium concentration.
+    where the fraction of unblocked channels is:
+
+    .. math::
+
+       g_{\infty}(V, [{Mg}^{2+}]_o) = \left(
+       1 + \frac{[{Mg}^{2+}]_o}{\beta} \,
+       e^{-\alpha \, (V - V_{\mathrm{offset}})}
+       \right)^{-1}
+
+    Here :math:`[{Mg}^{2+}]_o` is the extracellular magnesium concentration,
+    :math:`\alpha` and :math:`\beta` are kinetic constants, and
+    :math:`V_{\mathrm{offset}}` is an optional voltage offset.
 
     Parameters
     ----------
-    E: ArrayLike
-      The reversal potential for the synaptic current. [mV]
-    alpha: ArrayLike
-      Binding constant. Default 0.062
-    beta: ArrayLike
-      Unbinding constant. Default 3.57
-    cc_Mg: ArrayLike
-      Concentration of Magnesium ion. Default 1.2 [mM].
-    V_offset: ArrayLike
-      The offset potential. Default 0. [mV]
+    E : ArrayLike, default=0.
+        Reversal potential of the NMDA synapse (mV).
+    cc_Mg : ArrayLike, default=1.2
+        Extracellular magnesium concentration (mM).
+    alpha : ArrayLike, default=0.062
+        Voltage sensitivity of the Mg2+ block (/mV).
+    beta : ArrayLike, default=3.57
+        Mg2+ unbinding constant (mM).
+    V_offset : ArrayLike, default=0.
+        Voltage offset applied before computing the block factor (mV).
+
+    See Also
+    --------
+    COBA : Conductance-based output without voltage-dependent block.
+    BioNMDA : Biophysical NMDA receptor synapse dynamics.
+
+    Notes
+    -----
+    - At resting potential (~-65 mV), the Mg2+ block is nearly complete and
+      the NMDA conductance contributes little current. As the membrane
+      depolarizes (e.g., via AMPA input), the block is progressively relieved,
+      creating a voltage-dependent coincidence detection mechanism [1]_.
+    - The default parameters (``alpha=0.062``, ``beta=3.57``,
+      ``cc_Mg=1.2``) correspond to the widely used fit from
+      Jahr & Stevens (1990) [2]_.
+    - This module is typically paired with :class:`BioNMDA` or a slow
+      exponential synapse model to capture full NMDA receptor dynamics.
+
+    References
+    ----------
+    .. [1] Mayer, M. L., Westbrook, G. L., & Guthrie, P. B. (1984).
+           Voltage-dependent block by Mg2+ of NMDA responses in spinal cord
+           neurones. Nature, 309(5965), 261-263.
+    .. [2] Jahr, C. E., & Stevens, C. F. (1990). Voltage dependence of
+           NMDA-activated macroscopic conductances predicted by single-channel
+           kinetics. Journal of Neuroscience, 10(9), 3178-3182.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainunit as u
+        >>> # Standard NMDA Mg2+ block
+        >>> mg_block = brainpy.state.MgBlock(E=0. * u.mV, cc_Mg=1.2)
+        >>> # Reduced Mg2+ concentration (e.g., Mg-free solution)
+        >>> mg_free = brainpy.state.MgBlock(E=0. * u.mV, cc_Mg=0.0)
     """
     __module__ = 'brainpy.state'
 

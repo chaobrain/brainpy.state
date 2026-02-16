@@ -82,6 +82,10 @@ class STP(Synapse):
     x : HiddenState
         Available synaptic resources (depression variable).
 
+    See Also
+    --------
+    STD : Short-term depression only model.
+
     Notes
     -----
     - Larger values of tau_f produce stronger facilitation effects.
@@ -97,6 +101,17 @@ class STP(Synapse):
            Proceedings of the National Academy of Sciences, 94(2), 719-723.
     .. [2] Tsodyks, M., Pawelzik, K., & Markram, H. (1998). Neural networks with dynamic
            synapses. Neural computation, 10(4), 821-835.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an STP synapse with facilitation-dominant parameters
+        >>> stp = brainpy.state.STP(100, U=0.1, tau_f=1500.*u.ms, tau_d=200.*u.ms)
+        >>> stp.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 
@@ -190,6 +205,10 @@ class STD(Synapse):
     x : HiddenState
         Available synaptic resources (depression variable).
 
+    See Also
+    --------
+    STP : Full short-term plasticity model with facilitation and depression.
+
     Notes
     -----
     - Larger values of tau lead to slower recovery from depression [1]_.
@@ -203,6 +222,17 @@ class STD(Synapse):
     .. [2] Tsodyks, M. V., & Markram, H. (1997). The neural code between neocortical
            pyramidal neurons depends on neurotransmitter release probability.
            Proceedings of the National Academy of Sciences, 94(2), 719-723.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>> # Create an STD synapse
+        >>> std = brainpy.state.STD(100, tau=200.*u.ms, U=0.07)
+        >>> std.init_state(batch_size=1)
     """
     __module__ = 'brainpy.state'
 

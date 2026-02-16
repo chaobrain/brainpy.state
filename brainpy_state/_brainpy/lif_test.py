@@ -73,7 +73,7 @@ class TestNeuron(unittest.TestCase):
 
             # Test forward pass
             state = neuron.init_state(self.batch_size)
-            call = brainstate.compile.jit(neuron)
+            call = brainstate.transform.jit(neuron)
 
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -93,7 +93,7 @@ class TestNeuron(unittest.TestCase):
 
         # Test forward pass
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -111,7 +111,7 @@ class TestNeuron(unittest.TestCase):
 
         # Test forward pass
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -130,7 +130,7 @@ class TestNeuron(unittest.TestCase):
 
         neuron.init_state(self.batch_size)
 
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 with brainstate.environ.context(t=t * self.dt):
@@ -153,7 +153,7 @@ class TestNeuron(unittest.TestCase):
 
         neuron.init_state(self.batch_size)
 
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 with brainstate.environ.context(t=t * self.dt):
@@ -175,7 +175,7 @@ class TestNeuron(unittest.TestCase):
         self.assertEqual(neuron.tau_w, tau_w)
 
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -200,7 +200,7 @@ class TestNeuron(unittest.TestCase):
 
         neuron.init_state(self.batch_size)
 
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 with brainstate.environ.context(t=t * self.dt):
@@ -224,7 +224,7 @@ class TestNeuron(unittest.TestCase):
         self.assertEqual(neuron.tau, tau)
 
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -242,7 +242,7 @@ class TestNeuron(unittest.TestCase):
         self.assertEqual(neuron.tau_w, tau_w)
 
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -265,7 +265,7 @@ class TestNeuron(unittest.TestCase):
         self.assertEqual(neuron.ref_var, ref_var)
 
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 with brainstate.environ.context(t=t * self.dt):
@@ -288,7 +288,7 @@ class TestNeuron(unittest.TestCase):
         self.assertEqual(neuron.tau, tau)
 
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 out = call(inputs[t])
@@ -311,7 +311,7 @@ class TestNeuron(unittest.TestCase):
         self.assertEqual(neuron.ref_var, ref_var)
 
         neuron.init_state(self.batch_size)
-        call = brainstate.compile.jit(neuron)
+        call = brainstate.transform.jit(neuron)
         with brainstate.environ.context(dt=self.dt):
             for t in range(self.time_steps):
                 with brainstate.environ.context(t=t * self.dt):
@@ -341,7 +341,7 @@ class TestNeuron(unittest.TestCase):
             neuron = NeuronClass(self.in_size, spk_reset='soft')
             inputs = self.generate_input()
             state = neuron.init_state(self.batch_size)
-            call = brainstate.compile.jit(neuron)
+            call = brainstate.transform.jit(neuron)
             with brainstate.environ.context(dt=self.dt):
                 for t in range(self.time_steps):
                     with brainstate.environ.context(t=t * self.dt):
@@ -356,7 +356,7 @@ class TestNeuron(unittest.TestCase):
             neuron = NeuronClass(self.in_size, spk_reset='hard')
             inputs = self.generate_input()
             state = neuron.init_state(self.batch_size)
-            call = brainstate.compile.jit(neuron)
+            call = brainstate.transform.jit(neuron)
             with brainstate.environ.context(dt=self.dt):
                 for t in range(self.time_steps):
                     with brainstate.environ.context(t=t * self.dt):
@@ -371,7 +371,7 @@ class TestNeuron(unittest.TestCase):
             neuron = NeuronClass(self.in_size)
             inputs = self.generate_input()
             state = neuron.init_state(self.batch_size)
-            call = brainstate.compile.jit(neuron)
+            call = brainstate.transform.jit(neuron)
             with brainstate.environ.context(dt=self.dt):
                 for t in range(self.time_steps):
                     with brainstate.environ.context(t=t * self.dt):
@@ -388,7 +388,7 @@ class TestNeuron(unittest.TestCase):
 
             inputs = brainstate.random.randn(self.time_steps, self.batch_size, *in_size) * u.mA
             state = neuron.init_state(self.batch_size)
-            call = brainstate.compile.jit(neuron)
+            call = brainstate.transform.jit(neuron)
             with brainstate.environ.context(dt=self.dt):
                 for t in range(self.time_steps):
                     with brainstate.environ.context(t=t * self.dt):
