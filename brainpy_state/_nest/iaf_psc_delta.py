@@ -32,24 +32,21 @@ __all__ = [
 
 
 class iaf_psc_delta(Neuron):
-    r"""Leaky integrate-and-fire neuron model with delta-shaped input currents.
+    r"""NEST-compatible ``iaf_psc_delta`` neuron model.
 
     Description
     -----------
 
-    ``iaf_psc_delta`` is a leaky integrate-and-fire neuron model with
+    ``iaf_psc_delta`` is a current-based leaky integrate-and-fire neuron with
+    hard threshold/reset, absolute refractory period, and delta-shaped
+    synaptic events represented as instantaneous membrane-voltage jumps
+    (weights in mV). The implementation follows the NEST model
+    ``iaf_psc_delta`` update semantics, including refractory handling and
+    step-wise exact subthreshold propagation.
 
-    * a hard threshold,
-    * a fixed refractory period,
-    * Dirac delta (:math:`\delta`)-shaped synaptic input currents.
+    **1. Continuous-time dynamics and exact per-step propagator**
 
-    This is a brainpy.state re-implementation of the NEST simulator model of the
-    same name, using NEST-standard parameterization.
-
-    Membrane potential evolution, spike emission, and refractoriness
-    ................................................................
-
-    The membrane potential evolves according to
+    The membrane dynamics are
 
     .. math::
 
@@ -57,27 +54,43 @@ class iaf_psc_delta(Neuron):
        + \dot{\Delta}_{\text{syn}}
        + \frac{I_{\text{syn}} + I_\text{e}}{C_{\text{m}}}
 
-    where the derivative of change in voltage due to synaptic input
-    :math:`\dot{\Delta}_{\text{syn}}(t)` is discussed below and :math:`I_\text{e}` is
-    a constant input current set as a model parameter.
+    where :math:`I_\text{syn}` is the sum of continuous current inputs and
+    :math:`\dot{\Delta}_{\text{syn}}` captures impulse-like jumps from
+    delta synapses.
 
-    A spike is emitted at time step :math:`t^*=t_{k+1}` if
-
-    .. math::
-
-       V_\text{m}(t_k) < V_{th} \quad\text{and}\quad V_\text{m}(t_{k+1})\geq V_\text{th} \;.
-
-    Subsequently,
+    For fixed simulation step :math:`h=dt` and piecewise-constant current
+    :math:`I_k`, exact integration of the linear subthreshold ODE yields
 
     .. math::
 
-       V_\text{m}(t) = V_{\text{reset}} \quad\text{for}\quad t^* \leq t < t^* + t_{\text{ref}} \;,
+       V_{k+1}^{\mathrm{cand}}
+       = E_L + (V_k - E_L)e^{-h/\tau_m}
+       + \frac{\tau_m}{C_m}\left(I_k + I_e\right)\left(1 - e^{-h/\tau_m}\right),
 
-    that is, the membrane potential is clamped to :math:`V_{\text{reset}}` during the
-    refractory period.
+    which is implemented directly in :meth:`update`. This is equivalent to
+    the propagator formulation used in NEST for this linear system.
 
-    Synaptic input
-    ..............
+    **2. Spike condition, reset, and refractory countdown**
+
+    After adding delta-input jump :math:`\Delta_{\text{syn},k}`, a spike is
+    emitted at step end if the post-update potential crosses threshold:
+
+    .. math::
+
+       V_k^{\mathrm{post}} \ge V_{th}.
+
+    On spike:
+
+    .. math::
+
+       V \leftarrow V_{reset}, \qquad
+       r \leftarrow \left\lceil \frac{t_{ref}}{dt} \right\rceil,
+
+    where :math:`r` is the integer refractory-step counter. While
+    :math:`r > 0`, the membrane is clamped (no subthreshold integration is
+    committed), then :math:`r` decrements by one each simulation step.
+
+    **3. Delta synapses, voltage jumps, and charge interpretation**
 
     The change in membrane potential due to synaptic inputs can be formulated as:
 
@@ -95,7 +108,8 @@ class iaf_psc_delta(Neuron):
 
        \Delta_{\text{syn}} = w \;,
 
-    where :math:`w` is the corresponding synaptic weight in mV.
+    where :math:`w` is synaptic weight in mV. Positive weights are excitatory
+    and negative weights are inhibitory.
 
     The change in voltage caused by the synaptic input can be interpreted as being
     caused by individual post-synaptic currents (PSCs) given by
@@ -110,43 +124,179 @@ class iaf_psc_delta(Neuron):
 
        q = \int_0^{\infty}  i_{\text{syn}}(t)\, dt = C_{\text{m}} \cdot w \;.
 
-    By default, :math:`V_\text{m}` is not bounded from below. To limit
-    hyperpolarization to biophysically plausible values, set parameter
-    :math:`V_{\text{min}}` as lower bound of :math:`V_\text{m}`.
+    **4. Assumptions, constraints, and computational implications**
+
+    - The model assumes unit-compatible parameters and broadcast-compatible
+      shapes against ``self.varshape``.
+    - ``V_min`` is optional; when provided, candidate voltage is clipped with
+      ``max(V, V_min)`` before threshold evaluation.
+    - Per-step compute is :math:`O(\prod \mathrm{varshape})` with vectorized
+      elementwise operations.
+    - ``refractory_input=False`` discards delta events that arrive during
+      refractory clamping, while ``refractory_input=True`` stores a decayed
+      contribution that is released when refractoriness ends.
 
     .. note::
 
-       This implementation uses exact integration (exponential Euler) [1]_, [2]_
-       to integrate subthreshold membrane dynamics, which for this linear ODE is
-       equivalent to the propagator-based approach used in the NEST C++
-       implementation.
-
-       Spikes arriving while the neuron is refractory are discarded (matching
-       NEST's default ``refractory_input=false``).
+       This implementation uses exact integration for subthreshold dynamics
+       and NEST-compatible conversion of refractory duration to grid steps via
+       ``ceil(t_ref / dt)``.
 
     Parameters
     ----------
 
-    The following parameters can be set. Default values match the NEST simulator.
+    in_size : Size
+        Population shape specification. All neuron parameters are broadcast to
+        ``self.varshape`` derived from ``in_size``.
+    E_L : ArrayLike, optional
+        Resting potential :math:`E_L` in mV; scalar or array broadcastable to
+        ``self.varshape``. Default is ``-70. * u.mV``.
+    C_m : ArrayLike, optional
+        Membrane capacitance :math:`C_m` in pF; broadcastable to
+        ``self.varshape``. Expected positive for physical behavior. Default is
+        ``250. * u.pF``.
+    tau_m : ArrayLike, optional
+        Membrane time constant :math:`\tau_m` in ms; broadcastable to
+        ``self.varshape``. Expected positive. Default is ``10. * u.ms``.
+    t_ref : ArrayLike, optional
+        Absolute refractory duration :math:`t_{ref}` in ms. Converted to
+        integer simulation steps using ``ceil(t_ref / dt)``. Default is
+        ``2. * u.ms``.
+    V_th : ArrayLike, optional
+        Spike threshold :math:`V_{th}` in mV; broadcastable to ``self.varshape``.
+        Default is ``-55. * u.mV``.
+    V_reset : ArrayLike, optional
+        Post-spike reset potential :math:`V_{reset}` in mV; broadcastable to
+        ``self.varshape``. Default is ``-70. * u.mV``.
+    I_e : ArrayLike, optional
+        Constant external current :math:`I_e` in pA; scalar or array
+        broadcastable to ``self.varshape``. Default is ``0. * u.pA``.
+    V_min : ArrayLike or None, optional
+        Optional lower membrane bound :math:`V_{min}` in mV. If ``None``,
+        no lower clipping is applied. Default is ``None``.
+    V_initializer : Callable, optional
+        Initializer for membrane state ``V`` in :meth:`init_state`. Output
+        must be shape-compatible with ``self.varshape`` (and optional batch
+        prefix). Default is ``braintools.init.Constant(-70. * u.mV)``.
+    spk_fun : Callable, optional
+        Surrogate spike function used by :meth:`get_spike`. Default is
+        ``braintools.surrogate.ReluGrad()``.
+    spk_reset : str, optional
+        Reset policy inherited from :class:`~brainpy_state._base.Neuron`.
+        ``'hard'`` reproduces NEST hard reset behavior. Default is ``'hard'``.
+    refractory_input : bool, optional
+        If ``False``, delta inputs during refractory are ignored. If ``True``,
+        refractory-arriving delta jumps are accumulated in
+        ``refractory_spike_buffer`` and applied after refractory release.
+        Default is ``False``.
+    ref_var : bool, optional
+        If ``True``, allocate boolean refractory state ``self.refractory`` for
+        inspection. Default is ``False``.
+    name : str or None, optional
+        Optional node name.
 
-    ==================== ================== =============================== ====================================================
-    **Parameter**        **Default**        **Math equivalent**             **Description**
-    ==================== ================== =============================== ====================================================
-    ``in_size``          (required)                                         Size of the input / number of neurons
-    ``E_L``              -70 mV             :math:`E_\text{L}`              Resting membrane potential
-    ``C_m``              250 pF             :math:`C_{\text{m}}`            Capacitance of the membrane
-    ``tau_m``            10 ms              :math:`\tau_{\text{m}}`         Membrane time constant
-    ``t_ref``            2 ms               :math:`t_{\text{ref}}`          Duration of refractory period
-    ``V_th``             -55 mV             :math:`V_{\text{th}}`           Spike threshold
-    ``V_reset``          -70 mV             :math:`V_{\text{reset}}`        Reset potential of the membrane
-    ``I_e``              0 pA               :math:`I_\text{e}`              Constant input current
-    ``V_min``            None               :math:`V_{\text{min}}`          Absolute lower value for the membrane potential
-    ``V_initializer``    Constant(-70 mV)                                   Initializer for the membrane potential state
-    ``spk_fun``          ReluGrad()                                         Surrogate gradient function for spike generation
-    ``spk_reset``        ``'hard'``                                         Reset mode. NEST behavior is hard reset at spike.
-    ``refractory_input`` ``False``                                          If True, integrate refractory-arriving spikes at refractory end
-    ``ref_var``          ``False``                                          If True, expose boolean refractory state variable
-    ==================== ================== =============================== ====================================================
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 17 28 14 16 35
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar/tuple
+         - required
+         - --
+         - Defines population/state shape ``self.varshape``.
+       * - ``E_L``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``-70. * u.mV``
+         - :math:`E_L`
+         - Resting membrane potential.
+       * - ``C_m``
+         - ArrayLike, broadcastable (pF)
+         - ``250. * u.pF``
+         - :math:`C_m`
+         - Membrane capacitance in subthreshold propagator.
+       * - ``tau_m``
+         - ArrayLike, broadcastable (ms)
+         - ``10. * u.ms``
+         - :math:`\tau_m`
+         - Membrane leak time constant.
+       * - ``t_ref``
+         - ArrayLike, broadcastable (ms), step-converted by ``ceil``
+         - ``2. * u.ms``
+         - :math:`t_{ref}`
+         - Absolute refractory duration.
+       * - ``V_th`` and ``V_reset``
+         - ArrayLike, broadcastable (mV)
+         - ``-55. * u.mV``, ``-70. * u.mV``
+         - :math:`V_{th}`, :math:`V_{reset}`
+         - Threshold and reset voltages.
+       * - ``I_e``
+         - ArrayLike, broadcastable (pA)
+         - ``0. * u.pA``
+         - :math:`I_e`
+         - Constant injected current.
+       * - ``V_min``
+         - ArrayLike broadcastable (mV) or ``None``
+         - ``None``
+         - :math:`V_{min}`
+         - Optional lower clamp before threshold test.
+       * - ``V_initializer``
+         - Callable
+         - ``Constant(-70. * u.mV)``
+         - --
+         - Initializes membrane state ``V``.
+       * - ``spk_fun``
+         - Callable
+         - ``ReluGrad()``
+         - --
+         - Surrogate spike output function.
+       * - ``spk_reset``
+         - str
+         - ``'hard'``
+         - --
+         - Reset mode inherited from base neuron class.
+       * - ``refractory_input``
+         - bool
+         - ``False``
+         - --
+         - Controls refractory-period treatment of delta inputs.
+       * - ``ref_var``
+         - bool
+         - ``False``
+         - --
+         - Enables persistent refractory boolean state.
+       * - ``name``
+         - str | None
+         - ``None``
+         - --
+         - Optional node identifier.
+
+    Returns
+    -------
+    out : Any
+        Configured neuron node. Each :meth:`update` call returns surrogate
+        spike output with shape ``self.V.value.shape``.
+
+    Raises
+    ------
+    ValueError
+        If parameter initialization or broadcasting fails (for example due to
+        incompatible array shape in ``braintools.init.param``).
+    TypeError
+        If provided values are not compatible with expected units/types
+        (mV, ms, pF, pA, or callable initializers/spike functions).
+    KeyError
+        At runtime, if required simulation context entries (for example ``t``
+        or ``dt``) are missing when :meth:`update` is called.
+    AttributeError
+        If :meth:`update` is called before :meth:`init_state` creates required
+        state variables.
 
     Attributes
     ----------
@@ -157,21 +307,40 @@ class iaf_psc_delta(Neuron):
     refractory : HiddenState
         Neuron refractory state (only present if ``ref_var=True``).
 
+    Notes
+    -----
+    - State variables are ``V``, ``last_spike_time``,
+      ``refractory_step_count``, and ``refractory_spike_buffer``. ``refractory``
+      exists only when ``ref_var=True``.
+    - Continuous current input ``x`` is combined with ``I_e`` through
+      :meth:`sum_current_inputs` in the same simulation step.
+    - Delta events from :meth:`sum_delta_inputs` are interpreted in mV and
+      added as instantaneous voltage jumps.
+
     Examples
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an iaf_psc_delta neuron layer with 10 neurons
-    >>> neuron = brainpy.state.iaf_psc_delta(10, tau_m=10*u.ms, t_ref=2*u.ms)
-    >>>
-    >>> # Initialize the state
-    >>> neuron.init_state(batch_size=1)
-    >>>
-    >>> # Apply an input current and update the neuron state
-    >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
-    ...     spikes = neuron.update(x=500.*u.pA)
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = brainpy.state.iaf_psc_delta(in_size=10, t_ref=2.0 * u.ms)
+       ...     neu.init_state(batch_size=1)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         spk = neu.update(x=500.0 * u.pA)
+       ...     _ = spk.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = brainpy.state.iaf_psc_delta(in_size=(2,), V_min=-80.0 * u.mV)
+       ...     neu.init_state()
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = neu.update(x=120.0 * u.pA)
 
     References
     ----------
@@ -224,6 +393,32 @@ class iaf_psc_delta(Neuron):
         self.ref_var = ref_var
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize membrane and refractory runtime states.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Optional leading batch dimension. If ``None``, states are created
+            with shape ``self.varshape``; otherwise with
+            ``(batch_size,) + self.varshape``.
+        **kwargs : Any
+            Unused compatibility arguments.
+
+        Returns
+        -------
+        out : Any
+            ``None``. The method mutates the object in-place by creating
+            ``V``, ``last_spike_time``, ``refractory_step_count``,
+            ``refractory_spike_buffer``, and optionally ``refractory``.
+
+        Raises
+        ------
+        ValueError
+            If initializer outputs cannot be broadcast to target state shape.
+        TypeError
+            If initializer values are incompatible with required numeric/unit
+            conversions.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.V = brainstate.HiddenState(V)
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
@@ -236,17 +431,80 @@ class iaf_psc_delta(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None):
+        """Evaluate surrogate spike activation for a voltage tensor.
+
+        Parameters
+        ----------
+        V : ArrayLike or None, optional
+            Membrane voltage input in mV, broadcast-compatible with
+            ``self.varshape``. If ``None``, the method uses ``self.V.value``.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output from ``self.spk_fun`` with the same shape as
+            ``V`` (or ``self.V.value`` when ``V`` is ``None``).
+
+        Raises
+        ------
+        TypeError
+            If ``V`` cannot participate in arithmetic with membrane parameters
+            due to incompatible dtype/unit.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
+        """Convert refractory duration to integer simulation-step counts.
+
+        Returns
+        -------
+        out : Any
+            Integer array (``jnp.int32``) with shape broadcast-compatible to
+            ``self.varshape``; computed as ``ceil(self.t_ref / dt)``.
+
+        Raises
+        ------
+        KeyError
+            If simulation context does not provide ``dt``.
+        TypeError
+            If ``t_ref`` and ``dt`` are not unit-compatible for division.
+        """
         dt = brainstate.environ.get_dt()
         # NEST converts refractory duration to grid steps by rounding up to the
         # next simulation step.
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA):
+        """Advance the neuron by one simulation step.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            External current input in pA for this step. It is combined with
+            ``I_e`` and additional current sources from
+            :meth:`sum_current_inputs`.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output from :meth:`get_spike` with shape
+            ``self.V.value.shape``. The returned spike signal is computed from
+            pre-reset post-threshold voltage ``v_post``.
+
+        Raises
+        ------
+        KeyError
+            If simulation context does not provide required entries ``t`` or
+            ``dt``.
+        AttributeError
+            If required states are missing because :meth:`init_state` has not
+            been called.
+        TypeError
+            If input/state values are not unit-compatible with expected pA/mV
+            arithmetic.
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
         last_v = self.V.value
