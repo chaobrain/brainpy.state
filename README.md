@@ -133,4 +133,12 @@ If you use `brainpy.state`, please consider citing the following paper:
     issn = {2050-084X},
     publisher = {eLife Sciences Publications, Ltd},
 }
+
+@inproceedings{wang2024a,
+    title={A differentiable brain simulator bridging brain simulation and brain-inspired computing},
+    author={Chaoming Wang and Tianqiu Zhang and Sichao He and Hongyaoxing Gu and Shangyang Li and Si Wu},
+    booktitle={The Twelfth International Conference on Learning Representations},
+    year={2024},
+    url={https://openreview.net/forum?id=AU2gS9ut61}
+}
 ```
