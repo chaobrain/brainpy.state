@@ -462,7 +462,7 @@ class iaf_bw_2001(Neuron):
 
     @property
     def receptor_types(self):
-        """Return dictionary of available receptor types.
+        r"""Return dictionary of available receptor types.
 
         Returns
         -------
@@ -474,7 +474,7 @@ class iaf_bw_2001(Neuron):
 
     @property
     def recordables(self):
-        """Return list of recordable state variable names.
+        r"""Return list of recordable state variable names.
 
         Returns
         -------
@@ -544,7 +544,7 @@ class iaf_bw_2001(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Creates and initializes membrane potential, synaptic conductance states
         (AMPA, GABA, NMDA), synaptic currents, refractory counters, NMDA presynaptic
@@ -602,7 +602,7 @@ class iaf_bw_2001(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Restores membrane potential, synaptic conductances, currents, refractory
         counters, NMDA helper state, adaptive step size, and delayed current buffer
@@ -654,7 +654,7 @@ class iaf_bw_2001(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute spike output using surrogate gradient function.
+        r"""Compute spike output using surrogate gradient function.
 
         Converts membrane potential to a differentiable spike signal using the
         configured surrogate gradient function (``spk_fun``). The membrane potential
@@ -664,7 +664,7 @@ class iaf_bw_2001(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential (mV). If None, uses current ``self.V.value``.
-            Shape: ``(*in_size,)`` or ``(batch_size, *in_size)``.
+            Shape: ``(\*in_size,)`` or ``(batch_size, \*in_size)``.
 
         Returns
         -------
@@ -769,7 +769,7 @@ class iaf_bw_2001(Neuron):
 
     @staticmethod
     def _nmda_currents_scalar(v, s_ampa, s_gaba, s_nmda, p):
-        """Compute synaptic currents for a single neuron (scalar values).
+        r"""Compute synaptic currents for a single neuron (scalar values).
 
         Calculates AMPA, GABA, and NMDA currents given membrane potential,
         conductance states, and parameters. NMDA includes voltage-dependent
@@ -805,7 +805,7 @@ class iaf_bw_2001(Neuron):
 
     @classmethod
     def _dynamics_scalar(cls, y, i_stim, p):
-        """Compute ODE derivatives for a single neuron (scalar values).
+        r"""Compute ODE derivatives for a single neuron (scalar values).
 
         Evaluates the right-hand side of the ODE system:
 
@@ -844,7 +844,7 @@ class iaf_bw_2001(Neuron):
         return np.asarray([dv, ds_ampa, ds_gaba, ds_nmda], dtype=np.float64)
 
     def _rkf45_integrate_scalar(self, y0, i_stim, h0, dt, p, atol):
-        """Integrate ODEs for one timestep using adaptive RKF45 (scalar implementation).
+        r"""Integrate ODEs for one timestep using adaptive RKF45 (scalar implementation).
 
         Performs adaptive Runge-Kutta-Fehlberg 4(5) integration with local error
         control. The step size is adapted based on estimated truncation error,
@@ -1035,8 +1035,8 @@ class iaf_bw_2001(Neuron):
         Returns
         -------
         jax.numpy.ndarray
-            Spike output (differentiable). Shape: ``(*in_size,)`` or
-            ``(batch_size, *in_size)``. Values in [0, 1] for typical surrogate
+            Spike output (differentiable). Shape: ``(\*in_size,)`` or
+            ``(batch_size, \*in_size)``. Values in [0, 1] for typical surrogate
             functions.
 
         Raises
@@ -1056,6 +1056,7 @@ class iaf_bw_2001(Neuron):
         2. **Spike reception**: Add incoming spike weights (scaled by offset
            for NMDA) to ``s_AMPA``, ``s_GABA``, ``s_NMDA``.
         3. **Refractory/threshold**:
+
            - If in refractory period (``refractory_step_count > 0``): clamp
              :math:`V_m` to :math:`V_{reset}`, decrement counter.
            - Else: check threshold :math:`V_m \geq V_{th}`. If crossed, emit

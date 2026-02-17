@@ -518,7 +518,7 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        r"""Set NEST-style public parameters."""
         new_dead_time = (
             self.dead_time if dead_time is _UNSET else self._to_scalar_time_ms(dead_time)
         )
@@ -566,7 +566,7 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
             self._refresh_runtime_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters."""
+        r"""Return current public parameters."""
         return {
             'rate': float(self.rate),
             'dead_time': float(self.dead_time),

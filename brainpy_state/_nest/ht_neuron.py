@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""NEST-compatible ``ht_neuron`` model (Hill & Tononi, 2005).
+r"""NEST-compatible ``ht_neuron`` model (Hill & Tononi, 2005).
 
 This module implements the neuron model described in:
 
@@ -1032,7 +1032,7 @@ class ht_neuron(Neuron):
         self._cond_step_GABA_B = g_peak_GABA_B * _beta_normalization_factor(tau_rise_GABA_B, tau_decay_GABA_B)
 
     def _validate_parameters(self):
-        """Validate parameter constraints to ensure physiological consistency.
+        r"""Validate parameter constraints to ensure physiological consistency.
 
         Checks all parameter values against the same constraints enforced by NEST's
         ``ht_neuron::Parameters_::set()`` method. Raises ValueError if any constraint
@@ -1097,7 +1097,7 @@ class ht_neuron(Neuron):
             raise ValueError('tau_Mg_fast_NMDA < tau_Mg_slow_NMDA required.')
 
     def _refractory_counts(self, dt_ms):
-        """Convert refractory period from milliseconds to integer step count.
+        r"""Convert refractory period from milliseconds to integer step count.
 
         Computes the number of discrete simulation steps corresponding to the
         refractory period t_ref. Uses rounding to nearest integer to minimize
@@ -1779,7 +1779,7 @@ class ht_neuron(Neuron):
                     _ref=_ref_i,
                     _I_stim=_I_stim_i,
                     _I_NaP=_I_NaP, _I_KNa=_I_KNa, _I_T=_I_T, _I_h=_I_h):
-                """Right-hand side of the ODE system (matches ht_neuron_dynamics)."""
+                r"""Right-hand side of the ODE system (matches ht_neuron_dynamics)."""
                 V = _V_clamp if _voltage_clamp else y[0]
 
                 # NMDA conductance with instantaneous blocking

@@ -258,7 +258,8 @@ class amat2_psc_exp(Neuron):
     name : str, optional
         Name of the neuron population.
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     The following table maps BrainPy parameter names to their mathematical symbols
     and NEST equivalents:
@@ -287,7 +288,8 @@ class amat2_psc_exp(Neuron):
     ``ref_var``          ``False``                                          If True, expose boolean refractory state
     ==================== ================== =============================== ==========================================================
 
-    **State Variables**
+    State Variables
+    ---------------
 
     ========================= ===================== ====================================================
     **Variable**              **Type**              **Description**
@@ -451,7 +453,7 @@ class amat2_psc_exp(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert a quantity to a plain NumPy array in specified units.
+        r"""Convert a quantity to a plain NumPy array in specified units.
 
         Parameters
         ----------
@@ -469,7 +471,7 @@ class amat2_psc_exp(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast a parameter array to match state variable shape.
+        r"""Broadcast a parameter array to match state variable shape.
 
         Parameters
         ----------
@@ -486,7 +488,7 @@ class amat2_psc_exp(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate model parameters for physical and numerical constraints.
+        r"""Validate model parameters for physical and numerical constraints.
 
         This method checks that:
         - Capacitance is strictly positive
@@ -535,7 +537,7 @@ class amat2_psc_exp(Neuron):
             )
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes all state variables including membrane potential,
         adaptive threshold components, voltage-dependent threshold components,
@@ -546,7 +548,7 @@ class amat2_psc_exp(Neuron):
         batch_size : int, optional
             Batch dimension size for vectorized simulation. If None, no batch
             dimension is added (shape is ``in_size`` only). If provided, state
-            shape becomes ``(batch_size, *in_size)``.
+            shape becomes ``(batch_size, \*in_size)``.
         **kwargs
             Additional initialization arguments (unused, for API compatibility).
 
@@ -592,7 +594,7 @@ class amat2_psc_exp(Neuron):
         ----------
         V : Quantity, ndarray, optional
             Membrane potential (absolute voltage). If None, uses current
-            ``self.V.value``. Shape: ``(*varshape,)`` or ``(batch_size, *varshape)``.
+            ``self.V.value``. Shape: ``(\*varshape,)`` or ``(batch_size, \*varshape)``.
         V_th : Quantity, ndarray, optional
             Total spike threshold (absolute voltage). If None, computed as
             ``omega + V_th_1 + V_th_2 + V_th_v``. Shape: same as ``V``.
@@ -622,13 +624,13 @@ class amat2_psc_exp(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Compute refractory period duration in time steps.
+        r"""Compute refractory period duration in time steps.
 
         Returns
         -------
         int32 array
             Number of simulation steps corresponding to the refractory period
-            ``t_ref``, computed as ``ceil(t_ref / dt)``. Shape: ``(*varshape,)``.
+            ``t_ref``, computed as ``ceil(t_ref / dt)``. Shape: ``(\*varshape,)``.
 
         Notes
         -----
@@ -654,6 +656,7 @@ class amat2_psc_exp(Neuron):
         3. Decay time-dependent threshold components (``V_th_1``, ``V_th_2``)
         4. Decay synaptic currents and add incoming spike weights
         5. Detect spikes: if not refractory and ``V >= omega + V_th_1 + V_th_2 + V_th_v``:
+
            - Increment threshold components by ``alpha_1`` and ``alpha_2``
            - Set refractory counter to ``ceil(t_ref / dt)``
            - Record spike time
@@ -665,8 +668,8 @@ class amat2_psc_exp(Neuron):
         x : Quantity, ndarray, optional
             External input current for the current time step. This current is
             buffered and applied in the NEXT time step (one-step delay, following
-            NEST convention). Shape: scalar, ``(*varshape,)``, or
-            ``(batch_size, *varshape)``. Default: 0 pA.
+            NEST convention). Shape: scalar, ``(\*varshape,)``, or
+            ``(batch_size, \*varshape)``. Default: 0 pA.
 
         Returns
         -------
@@ -833,7 +836,7 @@ class amat2_psc_exp(Neuron):
 
         References
         ----------
-        .. [1] Rotter S and Diesmann M (1999). Exact simulation of
+        .. [6] Rotter S and Diesmann M (1999). Exact simulation of
                time-invariant linear systems with applications to neuronal
                modeling. Biological Cybernetics 81:381-402.
                DOI: https://doi.org/10.1007/s004220050570

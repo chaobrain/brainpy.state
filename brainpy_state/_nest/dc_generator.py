@@ -44,22 +44,42 @@ class dc_generator(brainstate.nn.Dynamics):
         \end{cases}
 
     where :math:`A` is ``amplitude`` and
-    :math:`t_{\mathrm{start}} = t_0 + t_{\mathrm{start,rel}}`,
-    :math:`t_{\mathrm{stop}} = t_0 + t_{\mathrm{stop,rel}}`.
-    If ``stop is None``, then :math:`t_{\mathrm{stop}}=+\infty`.
 
-    **2. Timing semantics and computational implications**
+    .. math::
 
-    The active interval is :math:`[t_{\mathrm{start}}, t_{\mathrm{stop}})`.
-    Since neuron states are advanced from ``t`` to ``t + dt`` in each step, a
-    current enabled at ``t_start`` first changes the membrane trajectory after
-    that update (observed at :math:`t_{\mathrm{start}} + dt`), while the last
-    active update starts at :math:`t_{\mathrm{stop}} - dt`.
+        t_{\mathrm{start}} = t_0 + t_{\mathrm{start,rel}}, \qquad
+        t_{\mathrm{stop}}  = t_0 + t_{\mathrm{stop,rel}}.
 
-    This implementation is stateless: :meth:`update` computes a boolean mask at
-    the current environment time and applies :func:`u.math.where`. Per call
-    complexity is :math:`O(\prod \mathrm{varshape})`, with one broadcast
-    allocation ``amplitude * ones(varshape)`` and one masked selection.
+    If ``stop is None``, then :math:`t_{\mathrm{stop}} = +\infty` and the
+    generator runs indefinitely from :math:`t_{\mathrm{start}}` onward.
+
+    **2. Timing semantics, assumptions, and constraints**
+
+    The active interval is the half-open set
+    :math:`[t_{\mathrm{start}},\, t_{\mathrm{stop}})`.  Since neuron states are
+    advanced from ``t`` to ``t + dt`` in each step, a current enabled at
+    :math:`t_{\mathrm{start}}` first affects the membrane trajectory after that
+    update (observable at :math:`t_{\mathrm{start}} + dt`); the last active
+    update starts at :math:`t_{\mathrm{stop}} - dt`.
+
+    This implementation is stateless: :meth:`update` recomputes a boolean mask
+    at each call using the environment time, then applies :func:`u.math.where`.
+    Assumptions and constraints:
+
+    - If ``stop <= start`` (after adding ``origin``), the active set is empty
+      and the output is identically zero for all ``t``.
+    - ``amplitude``, ``start``, ``stop``, and ``origin`` must each be
+      broadcastable to ``self.varshape``; the shape check is performed by
+      :func:`braintools.init.param` during :meth:`__init__`.
+    - Unitless numerics in ``start``, ``stop``, and ``origin`` are treated as
+      milliseconds; unitless numerics in ``amplitude`` are treated as pA.
+
+    **3. Computational implications**
+
+    Per-call complexity is :math:`O(\prod \mathrm{varshape})`, dominated by one
+    broadcast allocation ``amplitude * ones(varshape)`` and one masked
+    selection. No recurrent state is maintained, so the model is fully
+    replayable given the same environment time sequence.
 
     Parameters
     ----------
@@ -68,18 +88,18 @@ class dc_generator(brainstate.nn.Dynamics):
         :class:`brainstate.nn.Dynamics`. The emitted current shape is
         ``self.varshape`` derived from ``in_size``. Default is ``1``.
     amplitude : ArrayLike, optional
-        Constant current amplitude :math:`A` (typically in pA). Scalars or
-        arrays are accepted and broadcast to ``self.varshape`` via
+        Constant current amplitude :math:`A` (typically pA). Scalars or arrays
+        are accepted and broadcast to ``self.varshape`` via
         :func:`braintools.init.param`. Default is ``0. * u.pA``.
     start : ArrayLike, optional
         Relative start time :math:`t_{\mathrm{start,rel}}` (typically ms),
         broadcast to ``self.varshape``. Effective start is
-        ``origin + start``. Default is ``0. * u.ms``.
+        ``origin + start`` (inclusive). Default is ``0. * u.ms``.
     stop : ArrayLike or None, optional
         Relative stop time :math:`t_{\mathrm{stop,rel}}` (typically ms),
         broadcast to ``self.varshape`` when provided. Effective stop is
-        ``origin + stop`` and the upper bound is exclusive. ``None`` means the
-        pulse never deactivates. Default is ``None``.
+        ``origin + stop`` (exclusive). ``None`` means the pulse never
+        deactivates. Default is ``None``.
     origin : ArrayLike, optional
         Time origin :math:`t_0` (typically ms) added to ``start`` and ``stop``,
         broadcast to ``self.varshape``. Default is ``0. * u.ms``.
@@ -99,15 +119,15 @@ class dc_generator(brainstate.nn.Dynamics):
        * - ``amplitude``
          - ``0. * u.pA``
          - :math:`A`
-         - Constant current value during the active window.
+         - Constant current value emitted during the active window.
        * - ``start``
          - ``0. * u.ms``
          - :math:`t_{\mathrm{start,rel}}`
-         - Relative start time; effective lower bound is ``origin + start``.
+         - Relative start time; effective inclusive lower bound is ``origin + start``.
        * - ``stop``
          - ``None``
          - :math:`t_{\mathrm{stop,rel}}`
-         - Relative stop time; effective upper bound is ``origin + stop``.
+         - Relative stop time; effective exclusive upper bound is ``origin + stop``.
        * - ``origin``
          - ``0. * u.ms``
          - :math:`t_0`
@@ -117,8 +137,8 @@ class dc_generator(brainstate.nn.Dynamics):
     -------
     out : Any
         Dynamics node. Calling :meth:`update` returns a current-like quantity
-        with shape ``self.varshape``: ``amplitude`` while active and zeros
-        otherwise.
+        with shape ``self.varshape`` and units inherited from ``amplitude``:
+        ``amplitude`` for channels in the active window and zeros elsewhere.
 
     Raises
     ------
@@ -127,19 +147,19 @@ class dc_generator(brainstate.nn.Dynamics):
         broadcast to ``self.varshape`` by :func:`braintools.init.param`.
     TypeError
         If invalid unitful/unitless arithmetic is provided (for example, values
-        incompatible with current or time comparisons).
+        with incompatible units in current or time comparisons).
 
     Notes
     -----
     NEST recommends using neuron parameter ``I_e`` when a constant bias current
     is needed throughout the full simulation. Use ``dc_generator`` when the
-    current must be switched on/off at specific times.
+    current must be switched on/off at specific simulation times.
 
     See Also
     --------
     ac_generator : Sinusoidal current stimulation device.
     step_current_generator : Piecewise-constant current stimulation.
-    noise_generator : Gaussian-noise current stimulation.
+    noise_generator : Gaussian white-noise current stimulation.
 
     References
     ----------
@@ -213,10 +233,10 @@ class dc_generator(brainstate.nn.Dynamics):
         Returns
         -------
         current : Any
-            Current-like quantity with shape ``self.varshape``. Values equal
-            ``amplitude`` on channels where
-            ``origin + start <= t < origin + stop`` (or ``t >= origin + start``
-            when ``stop is None``), and zero elsewhere.
+            Current-like quantity with shape ``self.varshape`` and units
+            inherited from ``amplitude``. Values equal ``amplitude`` on channels
+            where ``origin + start <= t < origin + stop`` (or
+            ``t >= origin + start`` when ``stop is None``), and zero elsewhere.
 
         Raises
         ------
@@ -231,7 +251,14 @@ class dc_generator(brainstate.nn.Dynamics):
         -----
         Start is inclusive and stop is exclusive, matching NEST semantics.
         If ``stop <= start`` (after adding ``origin``), the active set is empty
-        and the output is always zero.
+        and the output is identically zero for all ``t``. The model carries no
+        internal state, so repeated calls with the same environment time produce
+        identical results.
+
+        See Also
+        --------
+        dc_generator : Class-level parameter definitions and model equations.
+        ac_generator.update : Windowed sinusoidal-current update rule.
 
         Examples
         --------

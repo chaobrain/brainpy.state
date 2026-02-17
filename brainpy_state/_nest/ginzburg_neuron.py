@@ -360,7 +360,7 @@ class ginzburg_neuron(Dynamics):
         batch_size : int, optional
             Number of batches for parallel simulation. If ``None``, creates unbatched
             states with shape ``in_size``. If specified, prepends batch dimension to
-            create shape ``(batch_size, *in_size)``.
+            create shape ``(batch_size, \*in_size)``.
         **kwargs
             Additional arguments (ignored, for API compatibility).
 
@@ -387,7 +387,7 @@ class ginzburg_neuron(Dynamics):
             self.t_next = brainstate.ShortTermState(next_interval)
 
     def _sample_uniform(self, shape):
-        """Draw uniform random samples from [0, 1).
+        r"""Draw uniform random samples from [0, 1).
 
         Parameters
         ----------
@@ -441,7 +441,7 @@ class ginzburg_neuron(Dynamics):
         Parameters
         ----------
         h : ArrayLike, units=mV
-            Input state(s), shape ``(in_size,)`` or ``(batch_size, *in_size)``.
+            Input state(s), shape ``(in_size,)`` or ``(batch_size, \*in_size)``.
 
         Returns
         -------

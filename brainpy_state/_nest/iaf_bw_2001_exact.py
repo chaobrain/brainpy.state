@@ -251,9 +251,9 @@ class iaf_bw_2001_exact(Neuron):
 
     **Additional State Variables**
 
-    - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[*in_size, n_ports]``)
-    - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[*in_size, n_ports]``)
-    - ``nmda_weights`` — Fixed weights for each NMDA port (shape: ``[*in_size, n_ports]``)
+    - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[\*in_size, n_ports]``)
+    - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[\*in_size, n_ports]``)
+    - ``nmda_weights`` — Fixed weights for each NMDA port (shape: ``[\*in_size, n_ports]``)
     - ``refractory_step_count`` — Remaining refractory steps (int32)
     - ``integration_step`` — Persistent RKF45 step size (ms)
     - ``I_stim`` — One-step delayed external current buffer (pA)
@@ -463,7 +463,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @property
     def receptor_types(self):
-        """Mapping of receptor names to numeric identifiers.
+        r"""Mapping of receptor names to numeric identifiers.
 
         Returns
         -------
@@ -474,7 +474,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @property
     def recordables(self):
-        """List of variables available for recording.
+        r"""List of variables available for recording.
 
         Returns
         -------
@@ -485,7 +485,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _value_to_float(x, unit=None):
-        """Convert quantity with units to float64 NumPy array.
+        r"""Convert quantity with units to float64 NumPy array.
 
         Parameters
         ----------
@@ -508,7 +508,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast array to target state shape.
+        r"""Broadcast array to target state shape.
 
         Parameters
         ----------
@@ -526,7 +526,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @classmethod
     def _normalize_spike_receptor(cls, receptor):
-        """Normalize receptor identifier to numeric code.
+        r"""Normalize receptor identifier to numeric code.
 
         Parameters
         ----------
@@ -558,7 +558,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _normalize_nmda_port(port) -> Hashable:
-        """Normalize NMDA port identifier to hashable value.
+        r"""Normalize NMDA port identifier to hashable value.
 
         Parameters
         ----------
@@ -591,7 +591,7 @@ class iaf_bw_2001_exact(Neuron):
         return port
 
     def _validate_parameters(self):
-        """Validate model parameters at initialization.
+        r"""Validate model parameters at initialization.
 
         Raises
         ------
@@ -636,7 +636,7 @@ class iaf_bw_2001_exact(Neuron):
         return 0
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes membrane potential, synaptic conductances, currents,
         NMDA port arrays (initially empty), refractory state, and integration step size.
@@ -698,7 +698,7 @@ class iaf_bw_2001_exact(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Unlike :meth:`init_state`, this preserves NMDA port structure (number of ports
         and their weights remain unchanged). Resets voltage, conductances, currents,
@@ -899,7 +899,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _nmda_currents_scalar(v, s_ampa, s_gaba, s_nmda_sum, p):
-        """Compute synaptic currents for a single neuron (scalar computation).
+        r"""Compute synaptic currents for a single neuron (scalar computation).
 
         Parameters
         ----------
@@ -935,7 +935,7 @@ class iaf_bw_2001_exact(Neuron):
 
     @classmethod
     def _dynamics_scalar(cls, y, i_stim, p, nmda_weights):
-        """Compute ODE right-hand side for a single neuron (scalar computation).
+        r"""Compute ODE right-hand side for a single neuron (scalar computation).
 
         Parameters
         ----------
@@ -1000,7 +1000,7 @@ class iaf_bw_2001_exact(Neuron):
         return dy, i_ampa, i_gaba, i_nmda, s_nmda_sum
 
     def _rkf45_integrate_scalar(self, y0, i_stim, h0, dt, p, nmda_weights, atol):
-        """Integrate ODEs for a single neuron using adaptive RKF45 method.
+        r"""Integrate ODEs for a single neuron using adaptive RKF45 method.
 
         Uses Runge-Kutta-Fehlberg (RKF45) with embedded 4th and 5th order methods
         for local error estimation and adaptive step size control.
@@ -1118,7 +1118,7 @@ class iaf_bw_2001_exact(Neuron):
         return y, h, i_ampa, i_gaba, i_nmda, s_nmda_sum
 
     def update(self, x=0. * u.pA, spike_events=None):
-        """Advance neuron state by one simulation time step.
+        r"""Advance neuron state by one simulation time step.
 
         Performs RKF45 integration of ODEs, applies spike jumps to conductances,
         checks threshold, resets spiking neurons, and updates refractory state.

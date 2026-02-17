@@ -551,7 +551,7 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         )
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize random key and per-train renewal state.
+        r"""Initialize random key and per-train renewal state.
 
         Parameters
         ----------
@@ -595,7 +595,7 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set public parameters and refresh cached process/timing state.
+        r"""Set public parameters and refresh cached process/timing state.
 
         Parameters
         ----------
@@ -692,7 +692,7 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
             self._refresh_timing_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters as plain Python scalars.
+        r"""Return current public parameters as plain Python scalars.
 
         Returns
         -------
@@ -715,7 +715,7 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         }
 
     def get_recorded_rate(self) -> float:
-        """Return latest step-end instantaneous rate in spikes/s.
+        r"""Return latest step-end instantaneous rate in spikes/s.
 
         Returns
         -------
@@ -771,7 +771,7 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         return hazard
 
     def update(self):
-        """Advance one simulation step and emit binary spike events.
+        r"""Advance one simulation step and emit binary spike events.
 
         Returns
         -------

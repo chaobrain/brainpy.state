@@ -238,7 +238,7 @@ class siegert_neuron(Dynamics):
 
     States support an optional leading batch dimension for parallelizing multiple
     network realizations. Initialize with ``init_state(batch_size=B)`` to create
-    shape ``(B, *in_size)``.
+    shape ``(B, \*in_size)``.
 
     **Integration with NEST:**
 
@@ -911,7 +911,7 @@ class siegert_neuron(Dynamics):
         Returns
         -------
         rate : ndarray
-            Updated firing rate in Hz (shape matches ``in_size`` or ``(batch_size, *in_size)``).
+            Updated firing rate in Hz (shape matches ``in_size`` or ``(batch_size, \*in_size)``).
             Also stored in ``self.rate.value``. Values are non-negative.
 
         Raises

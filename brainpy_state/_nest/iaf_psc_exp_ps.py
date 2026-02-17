@@ -411,7 +411,7 @@ class iaf_psc_exp_ps(Neuron):
             raise ValueError('All time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize membrane, synaptic, and precise-timing runtime states.
+        r"""Initialize membrane, synaptic, and precise-timing runtime states.
 
         This method allocates all internal state variables required for precise
         spike-time simulation. Membrane potential ``V`` is initialized using
@@ -471,7 +471,7 @@ class iaf_psc_exp_ps(Neuron):
             self.refractory = brainstate.ShortTermState(np.zeros(V.shape, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
-        """Evaluate surrogate spike output from membrane potential.
+        r"""Evaluate surrogate spike output from membrane potential.
 
         Applies the surrogate spike function (typically
         ``braintools.surrogate.ReluGrad`` or similar) to a normalized
@@ -512,7 +512,7 @@ class iaf_psc_exp_ps(Neuron):
         return self.spk_fun(v_scaled)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
-        """Parse spike events into normalized (offset_ms, weight_array) tuples.
+        r"""Parse spike events into normalized (offset_ms, weight_array) tuples.
 
         Converts mixed-format spike events (tuples or dicts) into a uniform
         internal representation suitable for event processing. Offsets are
@@ -551,7 +551,7 @@ class iaf_psc_exp_ps(Neuron):
 
     @staticmethod
     def _bisect_root(f, t_hi: float):
-        """Find root of scalar function using bounded bisection.
+        r"""Find root of scalar function using bounded bisection.
 
         Locates the point where ``f(t)`` crosses zero within the interval
         ``[0, t_hi]`` using bisection with 64 iterations. Assumes ``f`` is
@@ -604,7 +604,7 @@ class iaf_psc_exp_ps(Neuron):
         return 0.5 * (lo + hi)
 
     def update(self, x=0. * u.pA, spike_events=None):
-        """Advance one global step with precise within-step event handling.
+        r"""Advance one global step with precise within-step event handling.
 
         This method implements the complete NEST-compatible precise-spike-time
         algorithm for ``iaf_psc_exp_ps``. Each global time step is subdivided

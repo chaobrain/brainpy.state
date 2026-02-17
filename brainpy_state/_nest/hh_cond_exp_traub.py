@@ -201,23 +201,23 @@ class hh_cond_exp_traub(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential with shape (*in_size,) in mV.
+        Membrane potential with shape (\*in_size,) in mV.
     m : brainstate.HiddenState
-        Sodium activation gating variable (0 ≤ m ≤ 1), shape (*in_size,).
+        Sodium activation gating variable (0 ≤ m ≤ 1), shape (\*in_size,).
     h : brainstate.HiddenState
-        Sodium inactivation gating variable (0 ≤ h ≤ 1), shape (*in_size,).
+        Sodium inactivation gating variable (0 ≤ h ≤ 1), shape (\*in_size,).
     n : brainstate.HiddenState
-        Potassium activation gating variable (0 ≤ n ≤ 1), shape (*in_size,).
+        Potassium activation gating variable (0 ≤ n ≤ 1), shape (\*in_size,).
     g_ex : brainstate.HiddenState
-        Excitatory synaptic conductance in nS, shape (*in_size,).
+        Excitatory synaptic conductance in nS, shape (\*in_size,).
     g_in : brainstate.HiddenState
-        Inhibitory synaptic conductance in nS, shape (*in_size,).
+        Inhibitory synaptic conductance in nS, shape (\*in_size,).
     I_stim : brainstate.ShortTermState
-        Stimulation current buffer in pA, shape (*in_size,).
+        Stimulation current buffer in pA, shape (\*in_size,).
     refractory_step_count : brainstate.ShortTermState
-        Refractory countdown in grid steps, shape (*in_size,), dtype int32.
+        Refractory countdown in grid steps, shape (\*in_size,), dtype int32.
     last_spike_time : brainstate.ShortTermState
-        Time of most recent spike in ms, shape (*in_size,).
+        Time of most recent spike in ms, shape (\*in_size,).
 
     Raises
     ------
@@ -296,8 +296,8 @@ class hh_cond_exp_traub(Neuron):
     A presynaptic spike with weight :math:`w` causes an instantaneous
     conductance jump:
 
-    - :math:`w > 0`: :math:`g_{ex} \leftarrow g_{ex} + w`
-    - :math:`w < 0`: :math:`g_{in} \leftarrow g_{in} + |w|`
+    - :math:`w > 0` -- :math:`g_{ex} \leftarrow g_{ex} + w`
+    - :math:`w < 0` -- :math:`g_{in} \leftarrow g_{in} + |w|`
 
     **4. Spike Detection**
 
@@ -462,7 +462,7 @@ class hh_cond_exp_traub(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert brainunit quantity to numpy float64 array.
+        r"""Convert brainunit quantity to numpy float64 array.
 
         Parameters
         ----------
@@ -490,7 +490,7 @@ class hh_cond_exp_traub(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast numpy array to target shape.
+        r"""Broadcast numpy array to target shape.
 
         Parameters
         ----------
@@ -512,7 +512,7 @@ class hh_cond_exp_traub(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter constraints.
+        r"""Validate parameter constraints.
 
         Raises
         ------
@@ -534,12 +534,12 @@ class hh_cond_exp_traub(Neuron):
             raise ValueError('All time constants must be strictly positive.')
 
     def _refractory_counts(self):
-        """Compute refractory period length in simulation time steps.
+        r"""Compute refractory period length in simulation time steps.
 
         Returns
         -------
         jnp.ndarray
-            Number of time steps for refractory period, shape (*in_size,),
+            Number of time steps for refractory period, shape (\*in_size,),
             dtype=int32. Computed as ceil(t_ref / dt).
 
         Notes
@@ -566,7 +566,7 @@ class hh_cond_exp_traub(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Initializes membrane potential, gating variables, synaptic conductances,
         stimulation current buffer, refractory counter, and last spike time. If
@@ -584,8 +584,8 @@ class hh_cond_exp_traub(Neuron):
         ----------
         batch_size : int, optional
             Number of batches for parallel simulation. If None, no batch dimension
-            is added. State shapes will be (batch_size, *in_size) if provided,
-            otherwise (*in_size,).
+            is added. State shapes will be (batch_size, \*in_size) if provided,
+            otherwise (\*in_size,).
         **kwargs
             Additional keyword arguments (reserved for future use).
 
@@ -679,7 +679,7 @@ class hh_cond_exp_traub(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradient function.
+        r"""Compute differentiable spike output using surrogate gradient function.
 
         Applies the surrogate spike function to the membrane potential. This is
         used for gradient-based learning; actual spike detection in the update
@@ -689,7 +689,7 @@ class hh_cond_exp_traub(Neuron):
         Parameters
         ----------
         V : ArrayLike, optional
-            Membrane potential in mV, shape (*in_size,) or (batch_size, *in_size).
+            Membrane potential in mV, shape (\*in_size,) or (batch_size, \*in_size).
             If None, uses the current state ``self.V.value``.
 
         Returns
@@ -743,7 +743,7 @@ class hh_cond_exp_traub(Neuron):
         return self.spk_fun(v_scaled)
 
     def _sum_signed_delta_inputs(self):
-        """Split delta inputs into excitatory (positive) and inhibitory (negative).
+        r"""Split delta inputs into excitatory (positive) and inhibitory (negative).
 
         Processes all incoming synaptic spike events (delta inputs) and separates
         them by sign into excitatory and inhibitory conductance jumps. Positive
@@ -753,11 +753,11 @@ class hh_cond_exp_traub(Neuron):
         Returns
         -------
         g_ex : ArrayLike
-            Total excitatory conductance jump in nS, shape (*in_size,) or
-            (batch_size, *in_size). Sum of all positive delta inputs.
+            Total excitatory conductance jump in nS, shape (\*in_size,) or
+            (batch_size, \*in_size). Sum of all positive delta inputs.
         g_in : ArrayLike
-            Total inhibitory conductance jump in nS, shape (*in_size,) or
-            (batch_size, *in_size). Sum of absolute values of all negative
+            Total inhibitory conductance jump in nS, shape (\*in_size,) or
+            (batch_size, \*in_size). Sum of absolute values of all negative
             delta inputs.
 
         Notes
@@ -838,15 +838,15 @@ class hh_cond_exp_traub(Neuron):
         ----------
         x : ArrayLike, default 0 pA
             External stimulation current input (in addition to ``I_e``), shape
-            () or (*in_size,) or (batch_size, *in_size). This current is added
+            () or (\*in_size,) or (batch_size, \*in_size). This current is added
             to the constant ``I_e`` parameter and any registered current inputs
             via ``add_current_input()``.
 
         Returns
         -------
         ArrayLike
-            Spike output with shape (batch_size, *in_size) if batch_size is set,
-            otherwise (*in_size,). Values are computed using the surrogate spike
+            Spike output with shape (batch_size, \*in_size) if batch_size is set,
+            otherwise (\*in_size,). Values are computed using the surrogate spike
             function for differentiability. Spikes occur only when the discrete
             spike condition is satisfied (not refractory, threshold crossed, and
             local maximum detected).

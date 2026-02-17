@@ -39,12 +39,10 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
 
     Description
     -----------
-
     ``sinusoidal_poisson_generator`` re-implements NEST's stimulation device
     of the same name and emits per-step spike multiplicities.
 
-    Stochastic Model and Discretization
-    -----------------------------------
+    **1. Stochastic model and discretization**
 
     The instantaneous firing rate in spikes/s is
 
@@ -56,11 +54,11 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
 
     where:
 
-    - ``r`` is ``rate`` (spikes/s),
-    - ``a`` is ``amplitude`` (spikes/s),
-    - ``f_{\mathrm{mod}}`` is ``frequency`` (Hz),
-    - ``phi`` is ``phase`` (deg, internally converted to radians),
-    - ``t`` is simulation time in ms.
+    - :math:`r` is ``rate`` (spikes/s),
+    - :math:`a` is ``amplitude`` (spikes/s),
+    - :math:`f_{\mathrm{mod}}` is ``frequency`` (Hz),
+    - :math:`\phi` is ``phase`` (deg, internally converted to radians),
+    - :math:`t` is simulation time in ms.
 
     For simulation resolution :math:`\Delta t` in ms, each output train
     samples a Poisson multiplicity
@@ -73,8 +71,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
     where the ``1000`` factor converts Hz * ms to a dimensionless mean.
     ``K_n`` is an integer count ``0, 1, 2, ...`` and may exceed ``1``.
 
-    Oscillator-State Recurrence and Derivation
-    ------------------------------------------
+    **2. Oscillator-state recurrence and derivation**
 
     Following NEST, sinusoidal modulation is stored in a rotated two-component
     oscillator state:
@@ -108,8 +105,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
     zero before Poisson sampling. This avoids recomputing trigonometric
     functions each step and keeps per-step modulation update constant-time.
 
-    Update Ordering (NEST source order)
-    -----------------------------------
+    **3. Update ordering (NEST source order)**
 
     The internal two-component oscillator state is updated exactly in the
     order used by NEST ``models/sinusoidal_poisson_generator.cpp``:
@@ -124,8 +120,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
     post-rotation rate. This implementation exposes it via
     :meth:`get_recorded_rate`.
 
-    Timing Semantics
-    ----------------
+    **4. Timing semantics**
 
     NEST currently classifies this model as ``CURRENT_GENERATOR`` in
     ``get_type()``. Consequently, activity is evaluated with a two-step shift
@@ -136,13 +131,13 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
        t_{\min} < (n + 2) \le t_{\max},
 
     where ``n`` is current simulation step index and
-    ``t_min = origin + start``, ``t_max = origin + stop`` (in steps).
+    ``t_{\min} = \mathrm{origin} + \mathrm{start}``,
+    ``t_{\max} = \mathrm{origin} + \mathrm{stop}`` (in steps).
 
     This differs from regular spike generators and is intentionally replicated
     here to match NEST behavior.
 
-    Assumptions, Constraints, and Computational Implications
-    --------------------------------------------------------
+    **5. Assumptions, constraints, and computational implications**
 
     - Public parameters are scalar-only; non-scalar values raise
       :class:`ValueError`.
@@ -151,9 +146,8 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
       must be representable on the simulation grid.
     - If ``dt`` changes, timing caches and oscillator state are recomputed from
       absolute simulation time to preserve NEST-compatible behavior.
-    - Per-step complexity is
-      :math:`O(\prod \mathrm{varshape})` for Poisson sampling and
-      :math:`O(1)` for oscillator/timing updates.
+    - Per-step complexity is :math:`O(\prod \mathrm{varshape})` for Poisson
+      sampling and :math:`O(1)` for oscillator/timing updates.
 
     Parameters
     ----------
@@ -470,7 +464,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < shifted_step) and (shifted_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize RNG, oscillator states, and cached recorded rate.
+        r"""Initialize RNG, oscillator states, and cached recorded rate.
 
         Parameters
         ----------
@@ -508,7 +502,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set public parameters and refresh dependent cached state.
+        r"""Set public parameters and refresh dependent cached state.
 
         Parameters
         ----------
@@ -591,7 +585,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
                 self._reset_oscillator_state(self._current_time_ms())
 
     def get(self) -> dict:
-        """Return current public parameters and oscillator state snapshot.
+        r"""Return current public parameters and oscillator state snapshot.
 
         Returns
         -------
@@ -621,7 +615,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         }
 
     def get_recorded_rate(self) -> float:
-        """Return latest post-update instantaneous rate in spikes/s.
+        r"""Return latest post-update instantaneous rate in spikes/s.
 
         Returns
         -------
@@ -653,7 +647,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         return int(np.asarray(sample, dtype=np.int64).reshape(()))
 
     def update(self):
-        """Advance generator by one simulation step and emit spike counts.
+        r"""Advance generator by one simulation step and emit spike counts.
 
         Returns
         -------

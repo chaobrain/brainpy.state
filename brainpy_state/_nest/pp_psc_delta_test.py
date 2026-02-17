@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for pp_psc_delta neuron model.
 
 These tests verify that the brainpy.state implementation of pp_psc_delta
@@ -54,7 +54,7 @@ from brainpy_state._nest.pp_psc_delta import pp_psc_delta
 
 def _run_nest_ref(n_steps, h, p, i_stim_seq, delta_v_seq, rand_seq,
                   tau_sfa, q_sfa):
-    """Full reference implementation of pp_psc_delta update loop.
+    r"""Full reference implementation of pp_psc_delta update loop.
 
     Matches NEST's update order exactly (from pp_psc_delta.cpp):
     1. Update V_m via exact propagator (including delta synaptic inputs)
@@ -189,7 +189,7 @@ def _run_nest_ref(n_steps, h, p, i_stim_seq, delta_v_seq, rand_seq,
 
 
 class TestPpPscDeltaDefaultParams(unittest.TestCase):
-    """Test that default parameters match NEST C++ source code values."""
+    r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
         neuron = pp_psc_delta(1)
@@ -208,7 +208,7 @@ class TestPpPscDeltaDefaultParams(unittest.TestCase):
         self.assertAlmostEqual(neuron.t_ref_remaining, 0.0)
 
     def test_initial_state_matches_nest(self):
-        """V_m should be initialized to 0 (relative to rest)."""
+        r"""V_m should be initialized to 0 (relative to rest)."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = pp_psc_delta(1)
             neuron.init_state()
@@ -216,7 +216,7 @@ class TestPpPscDeltaDefaultParams(unittest.TestCase):
 
 
 class TestPpPscDeltaParameterValidation(unittest.TestCase):
-    """Test that invalid parameters raise appropriate errors."""
+    r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_sfa_q_sfa_raises(self):
         with self.assertRaises(ValueError):
@@ -252,7 +252,7 @@ class TestPpPscDeltaParameterValidation(unittest.TestCase):
 
 
 class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold membrane dynamics without spiking."""
+    r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -264,7 +264,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_passive_decay_from_rest(self):
-        """Starting at V=0 (rest) with no input, V should remain at 0."""
+        r"""Starting at V=0 (rest) with no input, V should remain at 0."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -280,7 +280,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
                 self.assertAlmostEqual(v, 0.0, places=10)
 
     def test_passive_decay_from_nonzero(self):
-        """Starting at V=10mV (above rest) with no input, V should decay exponentially."""
+        r"""Starting at V=10mV (above rest) with no input, V should decay exponentially."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -301,7 +301,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(v, expected, places=5)
 
     def test_current_input_has_one_step_delay(self):
-        """External current should be stored for use in the NEXT step."""
+        r"""External current should be stored for use in the NEXT step."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -324,7 +324,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(v1 > 0.0, f"V should increase from current, got {v1}")
 
     def test_delta_input_adds_instantaneous_voltage_jump(self):
-        """Delta inputs should cause immediate voltage jumps."""
+        r"""Delta inputs should cause immediate voltage jumps."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -342,7 +342,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(v, 5.0, places=3)
 
     def test_exact_integration_single_step(self):
-        """Test that exact integration matches analytic formula for one step."""
+        r"""Test that exact integration matches analytic formula for one step."""
         h = 0.1  # ms
         tau_m = 10.0
         C_m = 250.0
@@ -371,7 +371,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(v, V_expected, places=8)
 
     def test_constant_current_steady_state(self):
-        """With constant current and no spiking, V should approach steady state V_ss = I_e * tau_m / C_m."""
+        r"""With constant current and no spiking, V should approach steady state V_ss = I_e * tau_m / C_m."""
         tau_m = 10.0
         C_m = 250.0
         I_e = 500.0  # pA
@@ -397,7 +397,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
 
 
 class TestPpPscDeltaDeadTime(unittest.TestCase):
-    """Test dead time (refractory period) mechanics."""
+    r"""Test dead time (refractory period) mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -409,7 +409,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_no_spike_during_dead_time(self):
-        """During dead time, no spikes should be emitted."""
+        r"""During dead time, no spikes should be emitted."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -432,7 +432,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
                                  f"Should not spike during dead time at step {k}")
 
     def test_dead_time_count_matches_duration(self):
-        """Refractory counter should match dead_time / dt."""
+        r"""Refractory counter should match dead_time / dt."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -449,7 +449,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
             self.assertEqual(ref_count, expected)
 
     def test_dead_time_clamped_to_resolution(self):
-        """If dead_time < h, it should be clamped to h internally."""
+        r"""If dead_time < h, it should be clamped to h internally."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -466,7 +466,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
             self.assertGreaterEqual(ref_count, 1)
 
     def test_dead_time_counter_decrements(self):
-        """Dead time counter should decrement by 1 each step."""
+        r"""Dead time counter should decrement by 1 each step."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -486,7 +486,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
             self.assertEqual(r1, r0 - 1)
 
     def test_t_ref_remaining_initializes_dead_time(self):
-        """t_ref_remaining should set the initial dead time counter."""
+        r"""t_ref_remaining should set the initial dead time counter."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -507,7 +507,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
 
 
 class TestPpPscDeltaMembraneReset(unittest.TestCase):
-    """Test membrane potential reset behavior."""
+    r"""Test membrane potential reset behavior."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -519,7 +519,7 @@ class TestPpPscDeltaMembraneReset(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_with_reset_resets_to_zero(self):
-        """When with_reset=True, V should be reset to 0 after spike."""
+        r"""When with_reset=True, V should be reset to 0 after spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -539,7 +539,7 @@ class TestPpPscDeltaMembraneReset(unittest.TestCase):
                                        msg="V should be 0 after reset")
 
     def test_without_reset_preserves_voltage(self):
-        """When with_reset=False, V should NOT be reset after spike."""
+        r"""When with_reset=False, V should NOT be reset after spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -561,7 +561,7 @@ class TestPpPscDeltaMembraneReset(unittest.TestCase):
 
 
 class TestPpPscDeltaAdaptation(unittest.TestCase):
-    """Test spike-frequency adaptation mechanics."""
+    r"""Test spike-frequency adaptation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -573,7 +573,7 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_sfa_elements_decay_exponentially(self):
-        """SFA elements should decay by exp(-dt/tau) each step."""
+        r"""SFA elements should decay by exp(-dt/tau) each step."""
         tau_sfa = [34.0, 100.0]
         q_sfa = [7.0, 3.0]
 
@@ -613,7 +613,7 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
                                        msg=f"SFA element {i} decay mismatch")
 
     def test_adaptation_reduces_effective_rate(self):
-        """After a spike, adaptation should reduce the effective firing rate."""
+        r"""After a spike, adaptation should reduce the effective firing rate."""
         with brainstate.environ.context(dt=self.dt):
             # Without adaptation
             no_adapt = pp_psc_delta(
@@ -655,7 +655,7 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
                             f"{spikes_with_adapt} vs {spikes_no_adapt}")
 
     def test_multi_component_adaptation(self):
-        """Multiple adaptation components should all contribute."""
+        r"""Multiple adaptation components should all contribute."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -678,7 +678,7 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
 
 
 class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
-    """Test stochastic spike generation mechanics."""
+    r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -690,7 +690,7 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_no_spikes_with_zero_rate(self):
-        """With c_1=c_2=0, rate is always 0, so no spikes should occur."""
+        r"""With c_1=c_2=0, rate is always 0, so no spikes should occur."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -707,7 +707,7 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
                                  f"No spike expected with zero rate at step {k}")
 
     def test_high_rate_produces_spikes(self):
-        """With very high c_2 (high rate), spikes should occur readily."""
+        r"""With very high c_2 (high rate), spikes should occur readily."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -728,7 +728,7 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
                             f"Expected many spikes with high rate, got {spike_count}")
 
     def test_deterministic_with_fixed_rng_key(self):
-        """Two neurons with the same RNG key should spike identically."""
+        r"""Two neurons with the same RNG key should spike identically."""
         with brainstate.environ.context(dt=self.dt):
             key = jax.random.PRNGKey(12345)
             n1 = pp_psc_delta(1, c_1=0.0, c_2=50.0, c_3=0.25,
@@ -745,7 +745,7 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
                                  f"Spike mismatch at step {k} with identical RNG")
 
     def test_linear_transfer_function(self):
-        """With c_2=0, only the linear part c_1*V should contribute to rate."""
+        r"""With c_2=0, only the linear part c_1*V should contribute to rate."""
         with brainstate.environ.context(dt=self.dt):
             # Positive V and positive c_1 should produce spikes
             neuron = pp_psc_delta(
@@ -772,10 +772,10 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
 
 
 class TestPpPscDeltaTransferFunction(unittest.TestCase):
-    """Test the rate/transfer function computation."""
+    r"""Test the rate/transfer function computation."""
 
     def test_rate_computation_exponential_only(self):
-        """With c_1=0, rate = c_2 * exp(c_3 * V_eff)."""
+        r"""With c_1=0, rate = c_2 * exp(c_3 * V_eff)."""
         c_2 = 1.238
         c_3 = 0.25
         V_eff = 0.0  # at rest, no adaptation
@@ -783,7 +783,7 @@ class TestPpPscDeltaTransferFunction(unittest.TestCase):
         self.assertAlmostEqual(rate, c_2, places=6)
 
     def test_rate_computation_linear_plus_exponential(self):
-        """With both c_1 and c_2, rate = c_1*V' + c_2*exp(c_3*V')."""
+        r"""With both c_1 and c_2, rate = c_1*V' + c_2*exp(c_3*V')."""
         c_1 = 10.0
         c_2 = 5.0
         c_3 = 0.1
@@ -793,7 +793,7 @@ class TestPpPscDeltaTransferFunction(unittest.TestCase):
         self.assertAlmostEqual(rate, expected, places=6)
 
     def test_negative_rate_suppressed(self):
-        """Negative rate (from rectifier) should not produce spikes."""
+        r"""Negative rate (from rectifier) should not produce spikes."""
         # With c_1 > 0, c_2 = 0, and V_eff < 0, rate < 0 -> no spikes
         c_1 = 10.0
         c_2 = 0.0
@@ -804,7 +804,7 @@ class TestPpPscDeltaTransferFunction(unittest.TestCase):
 
 
 class TestPpPscDeltaReferenceTrace(unittest.TestCase):
-    """Compare full simulation traces against standalone reference implementation."""
+    r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
         self.dt_val = 0.1
@@ -817,7 +817,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_subthreshold_trace_matches_reference(self):
-        """Multi-step subthreshold trace with constant current should match reference."""
+        r"""Multi-step subthreshold trace with constant current should match reference."""
         p = {
             'tau_m': 10.0, 'C_m': 250.0,
             'c_1': 0.0, 'c_2': 0.0, 'c_3': 0.0,  # no spiking
@@ -865,7 +865,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
                                    msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_trace_with_adaptation_and_spiking(self):
-        """Full trace with adaptation and controlled spiking matches reference."""
+        r"""Full trace with adaptation and controlled spiking matches reference."""
         p = {
             'tau_m': 10.0, 'C_m': 250.0,
             'c_1': 0.0, 'c_2': 50.0, 'c_3': 0.25,
@@ -919,7 +919,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
                                    msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_trace_without_reset(self):
-        """Trace with with_reset=False should match reference."""
+        r"""Trace with with_reset=False should match reference."""
         p = {
             'tau_m': 10.0, 'C_m': 250.0,
             'c_1': 0.0, 'c_2': 20.0, 'c_3': 0.25,
@@ -970,7 +970,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
                                    msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_trace_with_synaptic_delta_inputs(self):
-        """Trace with delta voltage inputs should match reference."""
+        r"""Trace with delta voltage inputs should match reference."""
         p = {
             'tau_m': 10.0, 'C_m': 250.0,
             'c_1': 0.0, 'c_2': 10.0, 'c_3': 0.25,
@@ -1024,7 +1024,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
                                    msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_trace_with_multi_adaptation(self):
-        """Trace with multiple adaptation components matches reference."""
+        r"""Trace with multiple adaptation components matches reference."""
         p = {
             'tau_m': 25.0, 'C_m': 250.0,
             'c_1': 0.0, 'c_2': 10.0, 'c_3': 1.0,
@@ -1076,7 +1076,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
 
 
 class TestPpPscDeltaUpdateOrder(unittest.TestCase):
-    """Test that the update order matches NEST exactly."""
+    r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -1088,7 +1088,7 @@ class TestPpPscDeltaUpdateOrder(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_adaptation_decay_before_spike_check(self):
-        """Adaptation should be decayed BEFORE the spike check, matching NEST."""
+        r"""Adaptation should be decayed BEFORE the spike check, matching NEST."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -1115,7 +1115,7 @@ class TestPpPscDeltaUpdateOrder(unittest.TestCase):
             self.assertAlmostEqual(actual_q, expected_q, places=6)
 
     def test_delta_input_applied_before_spike_check(self):
-        """Delta inputs should be incorporated in the V update before the spike check."""
+        r"""Delta inputs should be incorporated in the V update before the spike check."""
         with brainstate.environ.context(dt=self.dt):
             neuron = pp_psc_delta(
                 1,
@@ -1135,10 +1135,10 @@ class TestPpPscDeltaUpdateOrder(unittest.TestCase):
 
 
 class TestPpPscDeltaShapeBatch(unittest.TestCase):
-    """Test population shape and batch handling."""
+    r"""Test population shape and batch handling."""
 
     def test_population_shape(self):
-        """Model should work with multi-neuron populations."""
+        r"""Model should work with multi-neuron populations."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = pp_psc_delta(
                 4,
@@ -1153,7 +1153,7 @@ class TestPpPscDeltaShapeBatch(unittest.TestCase):
                 self.assertEqual(spk.shape, (4,))
 
     def test_batch_size(self):
-        """Model should work with batch dimensions."""
+        r"""Model should work with batch dimensions."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = pp_psc_delta(
                 3,

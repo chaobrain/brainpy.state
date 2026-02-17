@@ -268,7 +268,7 @@ class bernoulli_synapse(static_synapse):
 
     @staticmethod
     def _to_scalar_probability(value: ArrayLike) -> float:
-        """Convert input to scalar float for probability validation.
+        r"""Convert input to scalar float for probability validation.
 
         Parameters
         ----------
@@ -292,7 +292,7 @@ class bernoulli_synapse(static_synapse):
 
     @staticmethod
     def _validate_probability(p_transmit: float):
-        """Validate that transmission probability is in valid range.
+        r"""Validate that transmission probability is in valid range.
 
         Parameters
         ----------
@@ -309,7 +309,7 @@ class bernoulli_synapse(static_synapse):
 
     @staticmethod
     def _sample_uniform() -> float:
-        """Draw one uniform random variate in [0, 1).
+        r"""Draw one uniform random variate in [0, 1).
 
         Uses NumPy's global RNG state (``np.random.random()``).
 
@@ -327,7 +327,7 @@ class bernoulli_synapse(static_synapse):
         return float(np.random.random())
 
     def get(self) -> dict:
-        """Return current public parameters.
+        r"""Return current public parameters.
 
         Returns
         -------
@@ -364,7 +364,7 @@ class bernoulli_synapse(static_synapse):
         post: object = _UNSET,
         event_type: str | object = _UNSET,
     ):
-        """Set NEST-style public parameters.
+        r"""Set NEST-style public parameters.
 
         Updates one or more connection parameters. All parameters are optional;
         unspecified parameters retain their current values.
@@ -430,7 +430,7 @@ class bernoulli_synapse(static_synapse):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> bool:
-        """Stochastically schedule one outgoing event.
+        r"""Stochastically schedule one outgoing event.
 
         Performs a Bernoulli trial to decide whether to transmit the event. If
         the trial succeeds, the event is scheduled for delivery using the

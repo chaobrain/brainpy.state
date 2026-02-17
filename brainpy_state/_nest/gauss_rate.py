@@ -535,7 +535,7 @@ class gauss_rate_ipn(_gauss_rate_base):
 
     @property
     def recordables(self):
-        """List of state variable names that can be recorded during simulation.
+        r"""List of state variable names that can be recorded during simulation.
 
         Returns
         -------
@@ -552,7 +552,7 @@ class gauss_rate_ipn(_gauss_rate_base):
 
     @property
     def receptor_types(self):
-        """Dictionary mapping receptor port names to integer indices.
+        r"""Dictionary mapping receptor port names to integer indices.
 
         Returns
         -------
@@ -570,7 +570,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         return {'RATE': 0}
 
     def _validate_parameters(self):
-        """Check parameter validity and raise exceptions for invalid configurations.
+        r"""Check parameter validity and raise exceptions for invalid configurations.
 
         Enforces mathematical and physical constraints on model parameters:
 
@@ -601,7 +601,7 @@ class gauss_rate_ipn(_gauss_rate_base):
             raise ValueError('Rectifying rate must be >= 0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables and internal delay queues.
+        r"""Initialize all state variables and internal delay queues.
 
         Creates and initializes firing rate, noise, and auxiliary state variables
         required for event-driven simulation with delayed transmission.

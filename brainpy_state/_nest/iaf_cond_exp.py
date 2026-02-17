@@ -198,23 +198,23 @@ class iaf_cond_exp(Neuron):
     State Variables
     ---------------
     V : brainstate.HiddenState
-        Membrane potential :math:`V_\mathrm{m}` in mV, shape ``(*in_size, *batch_shape)``.
+        Membrane potential :math:`V_\mathrm{m}` in mV, shape ``(\*in_size, \*batch_shape)``.
     g_ex : brainstate.HiddenState
         Excitatory synaptic conductance :math:`g_\mathrm{ex}` in nS,
-        shape ``(*in_size, *batch_shape)``.
+        shape ``(\*in_size, \*batch_shape)``.
     g_in : brainstate.HiddenState
         Inhibitory synaptic conductance :math:`g_\mathrm{in}` in nS,
-        shape ``(*in_size, *batch_shape)``.
+        shape ``(\*in_size, \*batch_shape)``.
     last_spike_time : brainstate.ShortTermState
-        Last spike emission time in ms, shape ``(*in_size, *batch_shape)``.
+        Last spike emission time in ms, shape ``(\*in_size, \*batch_shape)``.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory time steps (int32), shape ``(*in_size, *batch_shape)``.
+        Remaining refractory time steps (int32), shape ``(\*in_size, \*batch_shape)``.
     integration_step : brainstate.ShortTermState
-        Internal RKF45 adaptive step size in ms, shape ``(*in_size, *batch_shape)``.
+        Internal RKF45 adaptive step size in ms, shape ``(\*in_size, \*batch_shape)``.
     I_stim : brainstate.ShortTermState
-        Buffered external current (one-step delayed) in pA, shape ``(*in_size, *batch_shape)``.
+        Buffered external current (one-step delayed) in pA, shape ``(\*in_size, \*batch_shape)``.
     refractory : brainstate.ShortTermState, optional
-        Boolean refractory state indicator, shape ``(*in_size, *batch_shape)``.
+        Boolean refractory state indicator, shape ``(\*in_size, \*batch_shape)``.
         Only present if ``ref_var=True``.
 
     Raises
@@ -348,7 +348,7 @@ class iaf_cond_exp(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Creates and registers state variables for membrane potential, synaptic
         conductances, refractory tracking, RKF45 integration, and buffered currents.
@@ -397,7 +397,7 @@ class iaf_cond_exp(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to their initial values.
+        r"""Reset all state variables to their initial values.
 
         Re-initializes existing state variables without creating new state objects.
         Used to restart simulations while preserving state object references.
@@ -436,7 +436,7 @@ class iaf_cond_exp(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradient.
+        r"""Compute differentiable spike output using surrogate gradient.
 
         Transforms membrane potential into a continuous spike signal suitable for
         gradient-based learning. Uses the configured surrogate gradient function
@@ -492,7 +492,7 @@ class iaf_cond_exp(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, g_ex, g_in, is_refractory, i_stim, p):
-        """Compute time derivatives for a single neuron.
+        r"""Compute time derivatives for a single neuron.
 
         Evaluates the ODE system for membrane potential and synaptic conductances.
         During refractory period, voltage derivative is clamped to zero while
@@ -542,7 +542,7 @@ class iaf_cond_exp(Neuron):
         return dv, dg_ex, dg_in
 
     def _rkf45_integrate_scalar(self, v0, ge0, gi0, is_refractory, i_stim, h0, dt, p):
-        """Integrate ODE system for one timestep using adaptive RKF45.
+        r"""Integrate ODE system for one timestep using adaptive RKF45.
 
         Implements Runge-Kutta-Fehlberg 4(5) method with embedded error estimation
         and automatic step size control. Integrates from time 0 to ``dt`` with
@@ -682,7 +682,7 @@ class iaf_cond_exp(Neuron):
         return v, ge, gi, h
 
     def update(self, x=0. * u.pA):
-        """Advance neuron dynamics by one simulation timestep.
+        r"""Advance neuron dynamics by one simulation timestep.
 
         Integrates membrane potential and synaptic conductances using adaptive RKF45,
         applies synaptic input increments, handles spike emission and reset, and
@@ -699,7 +699,7 @@ class iaf_cond_exp(Neuron):
         Returns
         -------
         ArrayLike
-            Differentiable spike output with shape ``(*in_size, *batch_shape)``.
+            Differentiable spike output with shape ``(\*in_size, \*batch_shape)``.
             Values are computed via surrogate gradient function from pre-reset
             membrane potentials. Binary spike detection uses ``V >= V_th`` threshold.
 

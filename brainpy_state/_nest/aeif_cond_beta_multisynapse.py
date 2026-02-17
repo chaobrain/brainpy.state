@@ -114,7 +114,8 @@ class aeif_cond_beta_multisynapse(Neuron):
     name : str, optional
         Instance name. If None, auto-generated.
 
-    **Parameter Mapping (NEST Compatibility)**
+    Parameter Mapping (NEST Compatibility)
+    ---------------------------------------
 
     ======================== ===================== ===============================================
     **BrainPy Parameter**    **NEST Parameter**    **Description**
@@ -138,7 +139,8 @@ class aeif_cond_beta_multisynapse(Neuron):
     ``gsl_error_tol``        ``gsl_error_tol``     RKF45 tolerance
     ======================== ===================== ===============================================
 
-    **Mathematical Model**
+    Mathematical Model
+    ------------------
 
     **1. Membrane Dynamics**
 
@@ -152,16 +154,16 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     where:
 
-    - :math:`C_m`: membrane capacitance (pF)
-    - :math:`g_L`: leak conductance (nS)
-    - :math:`E_L`: leak reversal potential (mV)
-    - :math:`\Delta_T`: exponential slope factor (mV)
-    - :math:`V_{th}`: spike initiation threshold (mV)
-    - :math:`g_k`: conductance of receptor :math:`k` (nS)
-    - :math:`E_{\text{rev},k}`: reversal potential of receptor :math:`k` (mV)
-    - :math:`w`: adaptation current (pA)
-    - :math:`I_e`: constant external current (pA)
-    - :math:`I_{\text{stim}}`: delayed injected current (pA)
+    - :math:`C_m` -- membrane capacitance (pF)
+    - :math:`g_L` -- leak conductance (nS)
+    - :math:`E_L` -- leak reversal potential (mV)
+    - :math:`\Delta_T` -- exponential slope factor (mV)
+    - :math:`V_{th}` -- spike initiation threshold (mV)
+    - :math:`g_k` -- conductance of receptor :math:`k` (nS)
+    - :math:`E_{\text{rev},k}` -- reversal potential of receptor :math:`k` (mV)
+    - :math:`w` -- adaptation current (pA)
+    - :math:`I_e` -- constant external current (pA)
+    - :math:`I_{\text{stim}}` -- delayed injected current (pA)
 
     During refractory period, :math:`dV/dt = 0` and :math:`V` is clamped to
     :math:`V_{\text{reset}}`. Outside refractory, the exponential term uses
@@ -251,23 +253,23 @@ class aeif_cond_beta_multisynapse(Neuron):
     Attributes
     ----------
     V : HiddenState
-        Membrane potential (mV), shape ``(*in_size,)``.
+        Membrane potential (mV), shape ``(\*in_size,)``.
     w : HiddenState
-        Adaptation current (pA), shape ``(*in_size,)``.
+        Adaptation current (pA), shape ``(\*in_size,)``.
     dg : ShortTermState
-        Beta auxiliary states (unitless), shape ``(*in_size, n_receptors)``.
+        Beta auxiliary states (unitless), shape ``(\*in_size, n_receptors)``.
     g : HiddenState
-        Receptor conductances (nS), shape ``(*in_size, n_receptors)``.
+        Receptor conductances (nS), shape ``(\*in_size, n_receptors)``.
     refractory_step_count : ShortTermState
-        Remaining refractory steps (int32), shape ``(*in_size,)``.
+        Remaining refractory steps (int32), shape ``(\*in_size,)``.
     integration_step : ShortTermState
-        Persistent RKF45 step size (ms), shape ``(*in_size,)``.
+        Persistent RKF45 step size (ms), shape ``(\*in_size,)``.
     I_stim : ShortTermState
-        One-step delayed current buffer (pA), shape ``(*in_size,)``.
+        One-step delayed current buffer (pA), shape ``(\*in_size,)``.
     last_spike_time : ShortTermState
-        Last spike time (ms), shape ``(*in_size,)``. Initialized to -1e7 ms.
+        Last spike time (ms), shape ``(\*in_size,)``. Initialized to -1e7 ms.
     refractory : ShortTermState, optional
-        Boolean refractory indicator, shape ``(*in_size,)``. Only present if
+        Boolean refractory indicator, shape ``(\*in_size,)``. Only present if
         ``ref_var=True``.
     n_receptors : int
         Number of receptor ports, inferred from ``tau_rise.size``.
@@ -401,7 +403,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         ref_var: bool = False,
         name: str = None,
     ):
-        """Initialize aeif_cond_beta_multisynapse neuron.
+        r"""Initialize aeif_cond_beta_multisynapse neuron.
 
         All parameters are documented in the class docstring.
         """
@@ -438,7 +440,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of receptor ports.
+        r"""Number of receptor ports.
 
         Returns
         -------
@@ -449,7 +451,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @property
     def recordables(self):
-        """List of recordable state variable names.
+        r"""List of recordable state variable names.
 
         Returns
         -------
@@ -460,7 +462,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert quantity to NumPy array in specified unit.
+        r"""Convert quantity to NumPy array in specified unit.
 
         Parameters
         ----------
@@ -478,7 +480,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @staticmethod
     def _to_numpy_unitless(x):
-        """Convert unitless quantity to NumPy array.
+        r"""Convert unitless quantity to NumPy array.
 
         Parameters
         ----------
@@ -494,7 +496,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast parameter to state shape.
+        r"""Broadcast parameter to state shape.
 
         Parameters
         ----------
@@ -512,7 +514,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @staticmethod
     def _broadcast_to_receptors(x_np: np.ndarray, shape, n_receptors: int):
-        """Broadcast parameter to receptor array shape.
+        r"""Broadcast parameter to receptor array shape.
 
         Parameters
         ----------
@@ -526,7 +528,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         np.ndarray
-            Broadcast array with shape ``(*shape, n_receptors)``.
+            Broadcast array with shape ``(\*shape, n_receptors)``.
         """
         return np.broadcast_to(x_np, shape + (n_receptors,))
 
@@ -573,7 +575,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
     def _validate_parameters(self):
-        """Validate model parameters at initialization.
+        r"""Validate model parameters at initialization.
 
         Raises
         ------
@@ -623,7 +625,7 @@ class aeif_cond_beta_multisynapse(Neuron):
                 )
 
     def _safe_dt(self):
-        """Get simulation timestep with fallback.
+        r"""Get simulation timestep with fallback.
 
         Returns
         -------
@@ -636,7 +638,7 @@ class aeif_cond_beta_multisynapse(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates ``HiddenState`` and ``ShortTermState`` attributes for membrane
         potential, adaptation current, receptor conductances, refractory counters,
@@ -646,7 +648,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension prepended to ``in_size``. If None, states have shape
-            ``(*in_size,)`` or ``(*in_size, n_receptors)`` for receptor arrays.
+            ``(\*in_size,)`` or ``(\*in_size, n_receptors)`` for receptor arrays.
         **kwargs
             Additional initialization arguments (unused).
 
@@ -690,7 +692,7 @@ class aeif_cond_beta_multisynapse(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Reapplies initializers to all state variables without recreating state
         objects. Useful for resetting between simulation trials.
@@ -723,7 +725,7 @@ class aeif_cond_beta_multisynapse(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute surrogate spike output for gradient-based learning.
+        r"""Compute surrogate spike output for gradient-based learning.
 
         Applies surrogate gradient function to scaled membrane potential for
         differentiable spike generation. Does not modify state variables.
@@ -736,7 +738,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         ArrayLike
-            Surrogate spike output in [0, 1], shape ``(*in_size,)``. Produced by
+            Surrogate spike output in [0, 1], shape ``(\*in_size,)``. Produced by
             ``spk_fun`` applied to ``(V - V_th) / (V_th - V_reset)``.
 
         Notes
@@ -755,7 +757,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         ArrayLike
-            Number of timesteps for refractory period, shape ``(*in_size,)``.
+            Number of timesteps for refractory period, shape ``(\*in_size,)``.
             Computed as :math:`\lceil t_{\text{ref}} / dt \rceil` (int32).
 
         Notes
@@ -767,7 +769,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
-        """Parse incoming spike events into receptor-specific weight array.
+        r"""Parse incoming spike events into receptor-specific weight array.
 
         Converts event list/dict format into NumPy array with receptor-specific
         conductance increments, validating receptor types and weight non-negativity.
@@ -786,7 +788,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         np.ndarray
-            Weight array (nS, unitless) with shape ``(*v_shape, n_receptors)``.
+            Weight array (nS, unitless) with shape ``(\*v_shape, n_receptors)``.
             Element ``[..., k]`` contains total conductance increment for receptor ``k+1``.
 
         Raises
@@ -827,7 +829,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @staticmethod
     def _dynamics_scalar(y, is_refractory, i_stim, p):
-        """Compute ODE right-hand side for single neuron (RKF45 substep).
+        r"""Compute ODE right-hand side for single neuron (RKF45 substep).
 
         Parameters
         ----------
@@ -890,7 +892,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Parameters
         ----------
         x : ArrayLike, optional
-            Continuous current input (pA), shape broadcastable to ``(*in_size,)``.
+            Continuous current input (pA), shape broadcastable to ``(\*in_size,)``.
             Summed with ``current_inputs`` and ``I_e``, then delayed by one timestep
             (NEST semantics). Default: 0.0 pA.
         spike_events : Iterable or None, optional
@@ -905,7 +907,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         ArrayLike
-            Binary spike indicator (0 or 1), shape ``(*in_size,)``. Float64 for
+            Binary spike indicator (0 or 1), shape ``(\*in_size,)``. Float64 for
             gradient compatibility. Value is 1.0 if spike occurred during
             :math:`(t, t+dt]`, else 0.0.
 
@@ -937,6 +939,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
         3. **Spike Detection**: Within each RKF45 substep, if :math:`V \geq V_{\text{peak}}`
            (or :math:`V \geq V_{th}` if :math:`\Delta_T = 0`):
+
            - :math:`V \leftarrow V_{\text{reset}}`
            - :math:`w \leftarrow w + b`
            - Refractory counter :math:`r \leftarrow \lceil t_{\text{ref}} / dt \rceil + 1`
@@ -1001,7 +1004,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         .. code-block:: python
 
            >>> print(neuron.V.value)  # doctest: +SKIP
-           >>> print(neuron.g.value)  # shape: (*in_size, n_receptors)  # doctest: +SKIP
+           >>> print(neuron.g.value)  # shape: (\*in_size, n_receptors)  # doctest: +SKIP
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

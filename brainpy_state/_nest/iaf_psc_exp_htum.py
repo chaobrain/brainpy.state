@@ -398,7 +398,7 @@ class iaf_psc_exp_htum(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref_tot / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA):
-        """Advance the neuron state by one simulation step.
+        r"""Advance the neuron state by one simulation step.
 
         Parameters
         ----------

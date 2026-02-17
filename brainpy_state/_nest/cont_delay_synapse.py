@@ -68,7 +68,8 @@ class cont_delay_synapse(static_synapse):
         Unique identifier for this synapse instance. Used for debugging and
         event tracking. Default: ``None`` (auto-generated).
 
-    **Mathematical Model**
+    Mathematical Model
+    ------------------
 
     **1. Delay Decomposition**
 
@@ -139,13 +140,13 @@ class cont_delay_synapse(static_synapse):
     and delivered with offset :math:`o_{\text{event}}`. The delivery mechanism
     depends on the receiver's capabilities:
 
-    - **Off-grid delivery:** Calls ``receiver.handle_cont_delay_synapse_event(value, receptor_type, event_type, offset)``
+    - Off-grid delivery: Calls ``receiver.handle_cont_delay_synapse_event(value, receptor_type, event_type, offset)``
       if available. The receiver integrates the event at precise time
       :math:`t_{\text{step}} - o_{\text{event}}` (measured from right edge).
-    - **On-grid fallback:** If :math:`o_{\text{event}} \approx 0`, uses
+    - On-grid fallback: If :math:`o_{\text{event}} \approx 0`, uses
       standard :class:`static_synapse` delivery (``add_current_input`` or
       ``add_delta_input``).
-    - **Precise spike API:** For spike events, optionally calls
+    - Precise spike API: For spike events, optionally calls
       ``receiver.add_precise_spike_event(key, value, offset, label)`` if
       ``handle_cont_delay_synapse_event`` is unavailable.
 
@@ -159,7 +160,8 @@ class cont_delay_synapse(static_synapse):
 
     where :math:`m` is the incoming spike count and :math:`w` is the weight.
 
-    **Parameter Mapping (NEST Equivalence)**
+    Parameter Mapping (NEST Equivalence)
+    -------------------------------------
 
     ================= ================================ ========================
     NEST Parameter    brainpy.state Parameter          Notes
@@ -175,20 +177,22 @@ class cont_delay_synapse(static_synapse):
     automatically during initialization and when the simulation timestep
     changes. They are exposed via ``get()`` for inspection.
 
-    **Computational Properties**
+    Computational Properties
+    ------------------------
 
-    - **Time complexity:** :math:`O(1)` per event (queue insertion/retrieval
+    - Time complexity: :math:`O(1)` per event (queue insertion/retrieval
       uses dict lookups).
-    - **Space complexity:** :math:`O(E \cdot D)` where :math:`E` is the number
+    - Space complexity: :math:`O(E \cdot D)` where :math:`E` is the number
       of pending events and :math:`D` is the maximum delay in timesteps.
-    - **Numerical precision:** Offset arithmetic uses double precision. Offsets
+    - Numerical precision: Offset arithmetic uses double precision. Offsets
       within :math:`10^{-15}` ms of zero are treated as on-grid for
       numerical stability.
-    - **Exact integration:** When combined with compatible neuron models
+    - Exact integration: When combined with compatible neuron models
       (e.g., NEST's ``*_ps`` variants), achieves machine-precision spike
       timing independent of timestep choice (within numerical limits).
 
-    **Failure Modes**
+    Failure Modes
+    -------------
 
     - **ValueError:** Raised if ``delay < dt`` or ``dt <= 0`` during
       initialization or ``_refresh_delay_cache``.
@@ -393,7 +397,7 @@ class cont_delay_synapse(static_synapse):
         return params
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Validate and warn about connect-time synapse specifications.
+        r"""Validate and warn about connect-time synapse specifications.
 
         Issues a warning if ``delay`` is specified in connect-time synapse
         dictionaries (e.g., in NEST-style ``Connect`` calls), because such
@@ -520,7 +524,7 @@ class cont_delay_synapse(static_synapse):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> bool:
-        """Schedule an outgoing synaptic event with continuous-delay offset.
+        r"""Schedule an outgoing synaptic event with continuous-delay offset.
 
         Implements the NEST ``cont_delay_synapse`` event scheduling algorithm:
         combines the source spike offset with the synapse's fractional delay
@@ -576,13 +580,13 @@ class cont_delay_synapse(static_synapse):
 
         If :math:`o_{\text{total}} \geq \Delta t`, a carry occurs:
 
-        - Adjusted delay steps: :math:`d_{\text{steps}} - 1`
-        - Final event offset: :math:`o_{\text{total}} - \Delta t`
+        - Adjusted delay steps -- :math:`d_{\text{steps}} - 1`
+        - Final event offset -- :math:`o_{\text{total}} - \Delta t`
 
         Otherwise, no carry:
 
-        - Adjusted delay steps: :math:`d_{\text{steps}}`
-        - Final event offset: :math:`o_{\text{total}}`
+        - Adjusted delay steps -- :math:`d_{\text{steps}}`
+        - Final event offset -- :math:`o_{\text{total}}`
 
         **Immediate Delivery:** If the carry reduces delay steps to zero, the
         event is delivered immediately via ``_deliver_event_with_offset``
@@ -658,7 +662,7 @@ class cont_delay_synapse(static_synapse):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> int:
-        """Process one simulation timestep: deliver queued events and schedule new ones.
+        r"""Process one simulation timestep: deliver queued events and schedule new ones.
 
         This method implements the standard synapse update cycle:
 
@@ -678,9 +682,9 @@ class cont_delay_synapse(static_synapse):
         spike_events : list of tuples/dicts, tuple, dict, or None, optional
             Precise spike events with sub-timestep timing. Supported formats:
 
-            - **Single tuple:** ``(offset, multiplicity)``
-            - **Single dict:** ``{'offset': value, 'multiplicity': value}``
-            - **List of tuples/dicts:** Multiple events in one step
+            - Single tuple: ``(offset, multiplicity)``
+            - Single dict: ``{'offset': value, 'multiplicity': value}``
+            - List of tuples/dicts: Multiple events in one step
 
             Each ``offset`` must satisfy ``0 <= offset <= dt`` (in ms).
             Default: ``None`` (no precise events).

@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the spike_generator stimulation device.
 
 Validates the brainpy.state ``spike_generator`` against:
@@ -42,13 +42,13 @@ from brainpy.state import spike_generator
 
 
 class TestSpikeGeneratorBasic(unittest.TestCase):
-    """Unit tests for spike_generator output values and timing."""
+    r"""Unit tests for spike_generator output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_empty_spike_times(self):
-        """With no spike times, output is always zero."""
+        r"""With no spike times, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator()
             for t_val in [0., 1., 10., 100.]:
@@ -58,7 +58,7 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
                                     err_msg=f"Should be 0 at t={t_val} ms")
 
     def test_single_spike(self):
-        """Single spike at specified time."""
+        r"""Single spike at specified time."""
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator(
                 spike_times=[5. * u.ms],
@@ -79,7 +79,7 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.0, atol=1e-15)
 
     def test_multiple_spikes(self):
-        """Multiple spikes at different times."""
+        r"""Multiple spikes at different times."""
         spike_times_ms = [1.0, 2.0, 3.0]
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator(
@@ -99,7 +99,7 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
                                     err_msg=f"Should be 1 at t={t_val}")
 
     def test_spike_weights(self):
-        """Spikes with custom weights."""
+        r"""Spikes with custom weights."""
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator(
                 spike_times=[5. * u.ms, 10. * u.ms],
@@ -114,7 +114,7 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.3, atol=1e-15)
 
     def test_start_stop_gating(self):
-        """Spikes outside active window are suppressed."""
+        r"""Spikes outside active window are suppressed."""
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator(
                 spike_times=[3. * u.ms, 7. * u.ms, 12. * u.ms],
@@ -137,7 +137,7 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.0, atol=1e-15)
 
     def test_origin_shifts_window(self):
-        """Origin shifts the active window."""
+        r"""Origin shifts the active window."""
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator(
                 spike_times=[5. * u.ms, 15. * u.ms],
@@ -157,7 +157,7 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.0, atol=1e-15)
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             sg = spike_generator(
                 in_size=5,
@@ -169,17 +169,17 @@ class TestSpikeGeneratorBasic(unittest.TestCase):
 
 
 class TestSpikeGeneratorValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_unsorted_spike_times_raises(self):
-        """Non-sorted spike times raises error."""
+        r"""Non-sorted spike times raises error."""
         with self.assertRaises(ValueError):
             spike_generator(
                 spike_times=[3. * u.ms, 1. * u.ms, 5. * u.ms],
             )
 
     def test_mismatched_weights_raises(self):
-        """Different sized spike_times and spike_weights raises error."""
+        r"""Different sized spike_times and spike_weights raises error."""
         with self.assertRaises(ValueError):
             spike_generator(
                 spike_times=[1. * u.ms, 2. * u.ms],
@@ -188,10 +188,10 @@ class TestSpikeGeneratorValidation(unittest.TestCase):
 
 
 class TestSpikeGeneratorSimulation(unittest.TestCase):
-    """Integration tests: full simulation with spike recording."""
+    r"""Integration tests: full simulation with spike recording."""
 
     def test_spike_train_recording(self):
-        """Run simulation and record all spike times."""
+        r"""Run simulation and record all spike times."""
         dt_ms = 0.1
         spike_times_ms = [1.0, 2.0, 3.0, 5.0, 10.0]
         simtime = 15.0
@@ -214,7 +214,7 @@ class TestSpikeGeneratorSimulation(unittest.TestCase):
                             err_msg="Recorded spike times don't match input")
 
     def test_spike_gated_recording(self):
-        """Only spikes within active window are recorded."""
+        r"""Only spikes within active window are recorded."""
         dt_ms = 0.1
         spike_times_ms = [1.0, 3.0, 5.0, 7.0, 9.0]
         start = 3.0
@@ -244,7 +244,7 @@ class TestSpikeGeneratorSimulation(unittest.TestCase):
 
 
 class TestSpikeGeneratorVsNEST(unittest.TestCase):
-    """Compare against NEST simulator."""
+    r"""Compare against NEST simulator."""
 
     def setUp(self):
         self.dt_ms = 0.1
@@ -259,7 +259,7 @@ class TestSpikeGeneratorVsNEST(unittest.TestCase):
             return False
 
     def test_spike_times_vs_nest(self):
-        """Compare spike generator output against NEST spike_generator."""
+        r"""Compare spike generator output against NEST spike_generator."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -301,7 +301,7 @@ class TestSpikeGeneratorVsNEST(unittest.TestCase):
                             err_msg="brainpy spike times don't match expected")
 
     def test_spike_generator_with_start_stop_vs_nest(self):
-        """Compare gated spike generator against NEST."""
+        r"""Compare gated spike generator against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 

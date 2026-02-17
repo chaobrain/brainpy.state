@@ -228,21 +228,21 @@ class aeif_psc_delta(Neuron):
     ---------------
 
     V : brainstate.HiddenState
-        Membrane potential :math:`V_m` in millivolts. Shape: ``(*in_size, *batch_shape)``.
+        Membrane potential :math:`V_m` in millivolts. Shape: ``(\*in_size, \*batch_shape)``.
     w : brainstate.HiddenState
-        Adaptation current in picoamperes. Shape: ``(*in_size, *batch_shape)``.
+        Adaptation current in picoamperes. Shape: ``(\*in_size, \*batch_shape)``.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory grid steps (int32). Shape: ``(*in_size, *batch_shape)``.
+        Remaining refractory grid steps (int32). Shape: ``(\*in_size, \*batch_shape)``.
     refractory_spike_buffer : brainstate.ShortTermState
-        Delayed refractory delta-jump accumulator in millivolts (float64). Shape: ``(*in_size, *batch_shape)``.
+        Delayed refractory delta-jump accumulator in millivolts (float64). Shape: ``(\*in_size, \*batch_shape)``.
     integration_step : brainstate.ShortTermState
-        Persistent RKF45 internal step size in milliseconds. Shape: ``(*in_size, *batch_shape)``.
+        Persistent RKF45 internal step size in milliseconds. Shape: ``(\*in_size, \*batch_shape)``.
     I_stim : brainstate.ShortTermState
-        One-step delayed current buffer in picoamperes. Shape: ``(*in_size, *batch_shape)``.
+        One-step delayed current buffer in picoamperes. Shape: ``(\*in_size, \*batch_shape)``.
     last_spike_time : brainstate.ShortTermState
-        Last emitted spike time in milliseconds (:math:`t+\Delta t` on spike). Shape: ``(*in_size, *batch_shape)``.
+        Last emitted spike time in milliseconds (:math:`t+\Delta t` on spike). Shape: ``(\*in_size, \*batch_shape)``.
     refractory : brainstate.ShortTermState, optional
-        Boolean refractory indicator. Only present if ``ref_var=True``. Shape: ``(*in_size, *batch_shape)``.
+        Boolean refractory indicator. Only present if ``ref_var=True``. Shape: ``(\*in_size, \*batch_shape)``.
 
     Raises
     ------
@@ -455,7 +455,7 @@ class aeif_psc_delta(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Creates and initializes state variables: membrane potential ``V``, adaptation
         current ``w``, refractory buffer, spike timing, refractory counter, integration
@@ -466,7 +466,7 @@ class aeif_psc_delta(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension for vectorized simulation. If None, no batch dimension is added.
-            State shapes become ``(*in_size, batch_size)`` if provided, otherwise ``(*in_size,)``.
+            State shapes become ``(\*in_size, batch_size)`` if provided, otherwise ``(\*in_size,)``.
         **kwargs : dict
             Additional keyword arguments (ignored, for API compatibility).
 
@@ -506,7 +506,7 @@ class aeif_psc_delta(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to their initial values.
+        r"""Reset all state variables to their initial values.
 
         Resets membrane potential, adaptation current, refractory buffer, spike timing,
         refractory counter, integration step size, and delayed current buffer to their
@@ -557,7 +557,7 @@ class aeif_psc_delta(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential in millivolts. If None, uses ``self.V.value``.
-            Shape: ``(*in_size, *batch_shape)``.
+            Shape: ``(\*in_size, \*batch_shape)``.
 
         Returns
         -------
@@ -624,13 +624,13 @@ class aeif_psc_delta(Neuron):
         Parameters
         ----------
         x : ArrayLike, optional
-            External current input in picoamperes. Shape: ``(*in_size, *batch_shape)`` or
+            External current input in picoamperes. Shape: ``(\*in_size, \*batch_shape)`` or
             broadcastable. Default: ``0.0 * u.pA``.
 
         Returns
         -------
         spike : ArrayLike
-            Binary spike indicator (0 or 1) for this timestep. Shape: ``(*in_size, *batch_shape)``.
+            Binary spike indicator (0 or 1) for this timestep. Shape: ``(\*in_size, \*batch_shape)``.
             Value is 1 if any spike occurred during the integration interval, 0 otherwise.
 
         Raises

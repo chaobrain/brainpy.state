@@ -120,16 +120,16 @@ class static_synapse(Dynamics):
 
     **Event type → Receiver method mapping:**
 
-    ==================  ======================================  ============================
-    Event Type          Receiver Method                         Typical Use Case
-    ==================  ======================================  ============================
-    ``'spike'``         ``add_delta_input(key, value, label)``  Binary spike transmission
-    ``'rate'``          ``add_current_input(key, value, label)`` Rate-coded signals
-    ``'current'``       ``add_current_input(key, value, label)`` Direct current injection
-    ``'conductance'``   ``add_current_input(key, value, label)`` Conductance-based input
-    ``'double_data'``   ``add_current_input`` (fallback)        Arbitrary data transmission
-    ``'data_logging'``  ``add_current_input`` (fallback)        Logging/monitoring signals
-    ==================  ======================================  ============================
+    ==================  ==========================================  ============================
+    Event Type          Receiver Method                             Typical Use Case
+    ==================  ==========================================  ============================
+    ``'spike'``         ``add_delta_input(key, value, label)``      Binary spike transmission
+    ``'rate'``          ``add_current_input(key, value, label)``    Rate-coded signals
+    ``'current'``       ``add_current_input(key, value, label)``    Direct current injection
+    ``'conductance'``   ``add_current_input(key, value, label)``    Conductance-based input
+    ``'double_data'``   ``add_current_input`` (fallback)            Arbitrary data transmission
+    ``'data_logging'``  ``add_current_input`` (fallback)            Logging/monitoring signals
+    ==================  ==========================================  ============================
 
     If the receiver implements ``handle_static_synapse_event(value, receptor_type, event_type)``,
     that callback takes precedence over the standard routing.
@@ -591,7 +591,7 @@ class static_synapse(Dynamics):
         return len(queued)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize or reset synapse state (event queue).
+        r"""Initialize or reset synapse state (event queue).
 
         Clears the internal event queue and resets the delivery counter. Should be
         called before starting a new simulation or when resetting network state.
@@ -624,7 +624,7 @@ class static_synapse(Dynamics):
         post: object = _UNSET,
         event_type: str | object = _UNSET,
     ):
-        """Update synapse parameters dynamically (NEST ``SetStatus`` equivalent).
+        r"""Update synapse parameters dynamically (NEST ``SetStatus`` equivalent).
 
         Modifies one or more synapse parameters while preserving others. Delay changes
         trigger re-discretization based on the current simulation time step. Parameters
@@ -748,7 +748,7 @@ class static_synapse(Dynamics):
             self.delay = float(self._delay_requested_ms)
 
     def get(self) -> dict:
-        """Retrieve current synapse parameters (NEST ``GetStatus`` equivalent).
+        r"""Retrieve current synapse parameters (NEST ``GetStatus`` equivalent).
 
         Returns a dictionary of all public synapse parameters, including the
         discretized delay in both milliseconds and time steps.
@@ -836,7 +836,7 @@ class static_synapse(Dynamics):
         }
 
     def set_weight(self, weight: ArrayLike):
-        """Update synaptic weight (NEST connection API compatibility).
+        r"""Update synaptic weight (NEST connection API compatibility).
 
         Convenience method that modifies only the weight parameter, leaving delay,
         receptor type, and event type unchanged. Equivalent to ``set(weight=...)``.
@@ -874,7 +874,7 @@ class static_synapse(Dynamics):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> bool:
-        """Schedule an outgoing event for delayed delivery.
+        r"""Schedule an outgoing event for delayed delivery.
 
         Immediately scales the input ``multiplicity`` by the synaptic ``weight`` and
         enqueues the result for delivery after ``delay`` milliseconds. The event will
@@ -1046,7 +1046,7 @@ class static_synapse(Dynamics):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> int:
-        """Execute one simulation time step: deliver queued events and schedule new input.
+        r"""Execute one simulation time step: deliver queued events and schedule new input.
 
         This method implements the standard NEST synapse update cycle:
 

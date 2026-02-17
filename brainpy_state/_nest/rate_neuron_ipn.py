@@ -397,8 +397,8 @@ class rate_neuron_ipn(_lin_rate_base):
            https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_ipn.html
     .. [2] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
            Helias, M., & Diesmann, M. (2017). Integration of continuous-time
-           dynamics in a spiking neural network simulator. *Frontiers in
-           Neuroinformatics*, 11, 34.
+           dynamics in a spiking neural network simulator.
+           *Frontiers in Neuroinformatics*, 11, 34.
            https://doi.org/10.3389/fninf.2017.00034
 
     See Also
@@ -478,7 +478,7 @@ class rate_neuron_ipn(_lin_rate_base):
 
     @property
     def receptor_types(self):
-        """Receptor type dictionary for projection compatibility.
+        r"""Receptor type dictionary for projection compatibility.
 
         Returns
         -------
@@ -497,7 +497,7 @@ class rate_neuron_ipn(_lin_rate_base):
         return {'RATE': 0}
 
     def _validate_parameters(self):
-        """Validate model parameters at construction time.
+        r"""Validate model parameters at construction time.
 
         Raises
         ------

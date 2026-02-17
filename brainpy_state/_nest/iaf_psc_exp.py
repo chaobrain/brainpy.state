@@ -392,7 +392,7 @@ class iaf_psc_exp(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA, x_filtered=0. * u.pA):
-        """Advance the neuron state by one simulation step.
+        r"""Advance the neuron state by one simulation step.
 
         Parameters
         ----------

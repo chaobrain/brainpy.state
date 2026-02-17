@@ -55,15 +55,15 @@ class aeif_psc_alpha(Neuron):
 
     where:
 
-    - :math:`C_m`: membrane capacitance
-    - :math:`g_L`: leak conductance
-    - :math:`E_L`: leak reversal potential
-    - :math:`\Delta_T`: exponential slope factor (spike sharpness)
-    - :math:`V_{th}`: spike initiation threshold
-    - :math:`w`: adaptation current
-    - :math:`I_{ex}`, :math:`I_{in}`: excitatory and inhibitory synaptic currents
-    - :math:`I_e`: constant external current
-    - :math:`I_{stim}`: time-varying external input (one-step delayed)
+    - :math:`C_m` -- membrane capacitance
+    - :math:`g_L` -- leak conductance
+    - :math:`E_L` -- leak reversal potential
+    - :math:`\Delta_T` -- exponential slope factor (spike sharpness)
+    - :math:`V_{th}` -- spike initiation threshold
+    - :math:`w` -- adaptation current
+    - :math:`I_{ex}`, :math:`I_{in}` -- excitatory and inhibitory synaptic currents
+    - :math:`I_e` -- constant external current
+    - :math:`I_{stim}` -- time-varying external input (one-step delayed)
 
     The exponential term :math:`g_L \Delta_T \exp((V - V_{th})/\Delta_T)` causes rapid
     voltage acceleration near :math:`V_{th}`, producing spike initiation. Setting
@@ -241,8 +241,8 @@ class aeif_psc_alpha(Neuron):
     ``a``                4 nS               :math:`a`                                  Subthreshold adaptation coupling
     ``b``                80.5 pA            :math:`b`                                  Spike-triggered adaptation increment
     ``V_th``             -50.4 mV           :math:`V_\mathrm{th}`                      Spike initiation threshold
-    ``tau_syn_ex``       0.2 ms             :math:`\tau_{\mathrm{syn,ex}}`            Excitatory alpha time constant
-    ``tau_syn_in``       2.0 ms             :math:`\tau_{\mathrm{syn,in}}`            Inhibitory alpha time constant
+    ``tau_syn_ex``       0.2 ms             :math:`\tau_{\mathrm{syn,ex}}`             Excitatory alpha time constant
+    ``tau_syn_in``       2.0 ms             :math:`\tau_{\mathrm{syn,in}}`             Inhibitory alpha time constant
     ``I_e``              0 pA               :math:`I_\mathrm{e}`                       Constant external current
     ``gsl_error_tol``    1e-6               —                                          RKF45 local error tolerance
     ``V_initializer``    Constant(-70.6 mV) —                                          Membrane initializer
@@ -257,7 +257,7 @@ class aeif_psc_alpha(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential, shape ``(*in_size, *batch_size)`` with unit mV.
+        Membrane potential, shape ``(\*in_size, \*batch_size)`` with unit mV.
     dI_ex : brainstate.ShortTermState
         Excitatory alpha auxiliary state (derivative of :math:`I_{ex}`), unitless array.
     I_ex : brainstate.HiddenState
@@ -282,7 +282,7 @@ class aeif_psc_alpha(Neuron):
     Returns
     -------
     spike : Array
-        Binary spike indicator array with shape ``(*in_size, *batch_size)``, dtype float.
+        Binary spike indicator array with shape ``(\*in_size, \*batch_size)``, dtype float.
         Value is 1.0 where spikes occurred in the current step, 0.0 otherwise.
 
     Raises
@@ -444,7 +444,7 @@ class aeif_psc_alpha(Neuron):
         ref_var: bool = False,
         name: str = None,
     ):
-        """Initialize the aeif_psc_alpha neuron model.
+        r"""Initialize the aeif_psc_alpha neuron model.
 
         See class docstring for detailed parameter descriptions.
         """
@@ -476,7 +476,7 @@ class aeif_psc_alpha(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert brainunit quantity to NumPy float64 array by dividing out unit.
+        r"""Convert brainunit quantity to NumPy float64 array by dividing out unit.
 
         Parameters
         ----------
@@ -494,7 +494,7 @@ class aeif_psc_alpha(Neuron):
 
     @staticmethod
     def _to_numpy_unitless(x):
-        """Convert unitless or unit-bearing input to NumPy float64 array.
+        r"""Convert unitless or unit-bearing input to NumPy float64 array.
 
         Parameters
         ----------
@@ -510,7 +510,7 @@ class aeif_psc_alpha(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast NumPy array to target shape.
+        r"""Broadcast NumPy array to target shape.
 
         Parameters
         ----------
@@ -588,7 +588,7 @@ class aeif_psc_alpha(Neuron):
                 )
 
     def _safe_dt(self):
-        """Retrieve current simulation time step with fallback.
+        r"""Retrieve current simulation time step with fallback.
 
         Returns
         -------
@@ -607,7 +607,7 @@ class aeif_psc_alpha(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes the membrane potential, synaptic currents, adaptation
         current, refractory counters, integration step size, and stimulus buffer.
@@ -616,7 +616,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         batch_size : int, optional
             Number of batched simulations. If provided, states have shape
-            ``(*in_size, batch_size)``. If ``None``, states have shape ``(*in_size,)``.
+            ``(\*in_size, batch_size)``. If ``None``, states have shape ``(\*in_size,)``.
         **kwargs : dict
             Additional keyword arguments (unused, for API compatibility).
 
@@ -665,7 +665,7 @@ class aeif_psc_alpha(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to their initial values.
+        r"""Reset all state variables to their initial values.
 
         Reinitializes membrane potential, synaptic currents, adaptation current,
         refractory counters, integration step size, and stimulus buffer without
@@ -675,7 +675,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         batch_size : int, optional
             Number of batched simulations. If provided, states are reset to shape
-            ``(*in_size, batch_size)``. If ``None``, states have shape ``(*in_size,)``.
+            ``(\*in_size, batch_size)``. If ``None``, states have shape ``(\*in_size,)``.
         **kwargs : dict
             Additional keyword arguments (unused, for API compatibility).
 
@@ -719,7 +719,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential array with unit mV. If ``None``, uses the current
-            ``self.V.value``. Shape: ``(*in_size, *batch_size)``.
+            ``self.V.value``. Shape: ``(\*in_size, \*batch_size)``.
 
         Returns
         -------
@@ -763,7 +763,7 @@ class aeif_psc_alpha(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _sum_signed_delta_inputs(self):
-        """Collect and split synaptic spike inputs by sign.
+        r"""Collect and split synaptic spike inputs by sign.
 
         Retrieves all registered delta inputs (from projections), evaluates callables,
         and separates positive (excitatory) and negative (inhibitory) contributions.
@@ -772,10 +772,10 @@ class aeif_psc_alpha(Neuron):
         -------
         w_ex : Array
             Total excitatory input (sum of positive components), unit pA.
-            Shape: ``(*in_size, *batch_size)``.
+            Shape: ``(\*in_size, \*batch_size)``.
         w_in : Array
             Total inhibitory input (sum of absolute values of negative components), unit pA.
-            Shape: ``(*in_size, *batch_size)``.
+            Shape: ``(\*in_size, \*batch_size)``.
 
         Notes
         -----
@@ -903,7 +903,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         x : ArrayLike, optional
             External current input at the current time step, with unit pA.
-            Shape must be broadcastable to ``(*in_size, *batch_size)``.
+            Shape must be broadcastable to ``(\*in_size, \*batch_size)``.
             Default: ``0.0 * u.pA``.
 
             This input is stored in the one-step-delayed buffer ``I_stim`` and will be
@@ -912,7 +912,7 @@ class aeif_psc_alpha(Neuron):
         Returns
         -------
         spike : Array
-            Binary spike indicator with shape ``(*in_size, *batch_size)``, dtype float.
+            Binary spike indicator with shape ``(\*in_size, \*batch_size)``, dtype float.
             Value is ``1.0`` where at least one spike occurred during the integration
             interval, ``0.0`` otherwise.
 

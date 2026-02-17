@@ -76,7 +76,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
     Decoding rule (NEST compatible):
 
-    - :math:`m=1`: mark a tentative down-transition.
+    - :math:`m=1` -- mark a tentative down-transition.
     - A second event with identical ``(channel, stamp_step)`` or
       :math:`m=2`: confirm up-transition (:math:`x_c\leftarrow 1`) and cancel
       tentative-down handling for that event pair.
@@ -343,7 +343,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
     @property
     def count_covariance(self) -> np.ndarray:
-        """Return accumulated raw covariance histogram.
+        r"""Return accumulated raw covariance histogram.
 
         Returns
         -------
@@ -356,7 +356,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         return np.asarray(self._count_covariance, dtype=np.int64)
 
     def get(self, key: str = 'count_covariance'):
-        """Read a detector attribute using NEST-style string keys.
+        r"""Read a detector attribute using NEST-style string keys.
 
         Parameters
         ----------
@@ -404,7 +404,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         raise KeyError(f'Unsupported key "{key}" for correlospinmatrix_detector.get().')
 
     def connect(self):
-        """Compatibility no-op for device connection API.
+        r"""Compatibility no-op for device connection API.
 
         Returns
         -------
@@ -414,7 +414,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         return None
 
     def flush(self):
-        """Return current detector outputs without mutating state.
+        r"""Return current detector outputs without mutating state.
 
         Returns
         -------
@@ -427,7 +427,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         }
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Reset internal detector state.
+        r"""Reset internal detector state.
 
         Parameters
         ----------
@@ -448,7 +448,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         multiplicities: ArrayLike = None,
         stamp_steps: ArrayLike = None,
     ):
-        """Process one simulation tick worth of incoming events.
+        r"""Process one simulation tick worth of incoming events.
 
         Parameters
         ----------

@@ -750,7 +750,7 @@ class glif_psc_double_alpha(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of synaptic receptor ports.
+        r"""Number of synaptic receptor ports.
 
         Returns the number of distinct receptor ports configured for this neuron
         population. Each receptor port has independent fast and slow alpha-function
@@ -871,7 +871,7 @@ class glif_psc_double_alpha(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Creates and initializes all state variables required for GLIF dynamics,
         including membrane potential, synaptic current states (fast and slow
@@ -899,7 +899,7 @@ class glif_psc_double_alpha(Neuron):
         batch_size : int, optional
             Batch dimension size for parallel simulations. If ``None`` (default),
             no batch dimension is added. If an integer, state variables are
-            initialized with shape ``(batch_size, *self.varshape)``.
+            initialized with shape ``(batch_size, \*self.varshape)``.
         **kwargs
             Additional keyword arguments (currently unused, reserved for future extensions).
 
@@ -980,7 +980,7 @@ class glif_psc_double_alpha(Neuron):
         self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial conditions.
+        r"""Reset all state variables to initial conditions.
 
         Resets all state variables to their initial values as defined in
         ``init_state()``. This is useful for restarting simulations or running
@@ -1004,7 +1004,7 @@ class glif_psc_double_alpha(Neuron):
         batch_size : int, optional
             Batch dimension size. If ``None`` (default), uses the current batch
             size (or no batch dimension). If an integer, reshapes all states to
-            ``(batch_size, *self.varshape)``, allowing changing batch size during
+            ``(batch_size, \*self.varshape)``, allowing changing batch size during
             simulation.
         **kwargs
             Additional keyword arguments (currently unused, reserved for future extensions).
@@ -1084,7 +1084,7 @@ class glif_psc_double_alpha(Neuron):
         V : ArrayLike, optional
             Membrane potential (absolute, in mV). If ``None`` (default), uses
             the current state ``self.V.value``. If provided, should have shape
-            compatible with ``self.varshape`` (or ``(batch_size, *self.varshape)``).
+            compatible with ``self.varshape`` (or ``(batch_size, \*self.varshape)``).
             Unit: ``brainunit.mV`` or dimensionless (interpreted as mV).
 
         Returns
@@ -1121,7 +1121,7 @@ class glif_psc_double_alpha(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _collect_receptor_delta_inputs(self):
-        """Collect delta inputs per receptor port from registered delta_inputs.
+        r"""Collect delta inputs per receptor port from registered delta_inputs.
 
         This internal method scans all registered delta inputs (typically added via
         ``add_delta_input()`` by projection objects) and routes them to the

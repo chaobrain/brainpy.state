@@ -194,12 +194,12 @@ class vogels_sprekeler_synapse:
 
     The ``send()`` method requires postsynaptic targets to implement:
 
-    - **get_history(t1, t2)**: Returns spike history entries in time window
+    - ``get_history(t1, t2)`` -- Returns spike history entries in time window
       ``(t1, t2]`` (exclusive-inclusive). Entries must expose spike time via
       attribute ``t_`` or ``t``, dict key ``'t_'`` or ``'t'``, or first tuple
       element.
 
-    - **get_K_value(t)** or **get_k_value(t)**: Returns postsynaptic STDP trace
+    - ``get_K_value(t)`` or ``get_k_value(t)`` -- Returns postsynaptic STDP trace
       :math:`K_-` at time ``t`` (in ms). Must return float.
 
     See Also
@@ -342,7 +342,7 @@ class vogels_sprekeler_synapse:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Return model properties dictionary.
+        r"""Return model properties dictionary.
 
         Returns
         -------
@@ -363,7 +363,7 @@ class vogels_sprekeler_synapse:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve current parameter and state values.
+        r"""Retrieve current parameter and state values.
 
         Returns all synapse parameters, STDP trace state, and model properties
         as a dictionary. Follows NEST ``GetStatus`` semantics.
@@ -418,7 +418,7 @@ class vogels_sprekeler_synapse:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update synapse parameters and state variables.
+        r"""Update synapse parameters and state variables.
 
         Modifies synapse configuration following NEST ``SetStatus`` semantics.
         Validates all updates and enforces constraints (positive delays/tau,
@@ -511,7 +511,7 @@ class vogels_sprekeler_synapse:
         self._check_constraints()
 
     def get(self, key: str = 'status'):
-        """Retrieve specific parameter or full status dictionary.
+        r"""Retrieve specific parameter or full status dictionary.
 
         Parameters
         ----------
@@ -563,7 +563,7 @@ class vogels_sprekeler_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Process one presynaptic spike and return emitted SpikeEvent payload.
+        r"""Process one presynaptic spike and return emitted SpikeEvent payload.
 
         Implements the complete Vogels-Sprekeler STDP update sequence for a single
         presynaptic spike: retrieves postsynaptic spike history, applies pairwise
@@ -576,10 +576,11 @@ class vogels_sprekeler_synapse:
             Presynaptic spike time in milliseconds (scalar).
         target : Any
             Postsynaptic target object. Must implement:
-            - ``get_history(t1, t2)`` → iterable of spike entries in ``(t1, t2]``.
+
+            - ``get_history(t1, t2)`` -- iterable of spike entries in ``(t1, t2]``.
               Each entry must expose spike time via attribute ``t_``/``t``,
               dict key ``'t_'``/``'t'``, or first tuple element.
-            - ``get_K_value(t)`` or ``get_k_value(t)`` → float (postsynaptic
+            - ``get_K_value(t)`` or ``get_k_value(t)`` -- float (postsynaptic
               trace :math:`K_-` at time ``t``).
         receptor_type : int, array-like, optional
             Postsynaptic receptor port index (≥0). Included in returned event
@@ -726,7 +727,7 @@ class vogels_sprekeler_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Alias for ``send()`` method.
+        r"""Alias for ``send()`` method.
 
         Identical to ``send()`` with the same parameters and return value.
         Provided for API compatibility with alternative naming conventions.
@@ -753,7 +754,7 @@ class vogels_sprekeler_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> list[dict[str, Any]]:
-        """Process a sequence of presynaptic spikes and return event list.
+        r"""Process a sequence of presynaptic spikes and return event list.
 
         Iteratively calls ``send()`` for each spike time, accumulating weight
         updates and trace dynamics across the entire spike train. Useful for

@@ -80,8 +80,8 @@ class stdp_nn_symm_synapse(stdp_synapse):
        0 & \text{otherwise}
        \end{cases}
 
-    Here :math:`t_{\mathrm{post}}^{\mathrm{last}}` denotes the **nearest
-    preceding** postsynaptic spike before :math:`t_{\mathrm{pre}}-d`.
+    Here :math:`t_{\mathrm{post}}^{\mathrm{last}}` denotes the **nearest preceding**
+    postsynaptic spike before :math:`t_{\mathrm{pre}}-d`.
 
     The symmetric scheme differs from both the all-to-all :class:`stdp_synapse`
     (which accumulates a running ``Kplus`` trace) and the pre-centered
@@ -268,7 +268,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
         return 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Returns a dictionary containing all synapse parameters and internal state
         variables, excluding the unused ``Kplus`` parameter (which is not part of
@@ -301,7 +301,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
         return params
 
     def set(self, **kwargs):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Updates synapse parameters dynamically. Rejects attempts to set ``Kplus``
         because it is not part of the symmetric nearest-neighbor STDP model.

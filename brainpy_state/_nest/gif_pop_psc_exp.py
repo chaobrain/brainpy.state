@@ -305,7 +305,7 @@ class gif_pop_psc_exp(Dynamics):
         self._validate_parameters()
 
     def _validate_parameters(self):
-        """Validate model parameters for physical consistency.
+        r"""Validate model parameters for physical consistency.
 
         Raises
         ------
@@ -338,7 +338,7 @@ class gif_pop_psc_exp(Dynamics):
             raise ValueError('Absolute refractory period cannot be negative.')
 
     def _adaptation_kernel(self, k: int, h: float) -> float:
-        """Compute the adaptation kernel value at lag k time steps.
+        r"""Compute the adaptation kernel value at lag k time steps.
 
         Implements the adaptation kernel theta(k*h) as the sum of exponentially
         decaying components (see below Eq. (87) of [1]_). This kernel determines
@@ -368,7 +368,7 @@ class gif_pop_psc_exp(Dynamics):
         return theta_tmp
 
     def _get_history_size(self, h: float) -> int:
-        """Automatically determine a suitable history kernel size.
+        r"""Automatically determine a suitable history kernel size.
 
         Computes the minimum kernel length needed to capture adaptation dynamics
         by finding the time lag where the adaptation kernel decays below 10% of
@@ -403,7 +403,7 @@ class gif_pop_psc_exp(Dynamics):
         return k
 
     def _escrate(self, x: float) -> float:
-        """Escape rate (hazard function).
+        r"""Escape rate (hazard function).
 
         Computes the instantaneous firing rate as an exponential function of
         the distance from threshold.
@@ -430,7 +430,7 @@ class gif_pop_psc_exp(Dynamics):
         return self.lambda_0 * math.exp(x / self.Delta_V)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all population state variables and history buffers.
+        r"""Initialize all population state variables and history buffers.
 
         Allocates and initializes circular buffers for tracking refractory
         cohorts, computes integration constants, and sets initial conditions
@@ -526,7 +526,7 @@ class gif_pop_psc_exp(Dynamics):
         self._rng = np.random.RandomState(self.rng_seed)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all population state to initial conditions.
+        r"""Reset all population state to initial conditions.
 
         Equivalent to calling init_state. Resets all history buffers,
         state variables, and the random number generator.
@@ -541,7 +541,7 @@ class gif_pop_psc_exp(Dynamics):
         self.init_state(batch_size=batch_size, **kwargs)
 
     def _draw_binomial(self, n_expect: float) -> int:
-        """Draw a binomial random number of spikes, matching NEST.
+        r"""Draw a binomial random number of spikes, matching NEST.
 
         Each of the N neurons fires independently with probability p = n_expect / N.
 
@@ -570,7 +570,7 @@ class gif_pop_psc_exp(Dynamics):
             return int(self._rng.binomial(self.N, p_bino))
 
     def _draw_poisson(self, n_expect: float) -> int:
-        """Draw a Poisson random number of spikes, matching NEST.
+        r"""Draw a Poisson random number of spikes, matching NEST.
 
         When n_expect is very small, switches to Bernoulli to avoid numerical
         issues with the Poisson distribution.
@@ -610,7 +610,7 @@ class gif_pop_psc_exp(Dynamics):
             return 0
 
     def update(self, x=0.0):
-        """Advance the population model by one time step.
+        r"""Advance the population model by one time step.
 
         Implements the full population update algorithm from Figures 11 and 12
         of [1]_, including:
@@ -821,7 +821,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def V_m(self) -> float:
-        """Mean membrane potential in millivolts.
+        r"""Mean membrane potential in millivolts.
 
         Returns
         -------
@@ -833,7 +833,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def I_syn_ex(self) -> float:
-        """Excitatory synaptic current in picoamperes.
+        r"""Excitatory synaptic current in picoamperes.
 
         Returns
         -------
@@ -845,7 +845,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def I_syn_in(self) -> float:
-        """Inhibitory synaptic current in picoamperes.
+        r"""Inhibitory synaptic current in picoamperes.
 
         Returns
         -------
@@ -857,7 +857,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def n_spikes(self) -> int:
-        """Number of spikes emitted in the current time step.
+        r"""Number of spikes emitted in the current time step.
 
         Returns
         -------
@@ -869,7 +869,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def n_expect(self) -> float:
-        """Expected number of spikes in the current time step.
+        r"""Expected number of spikes in the current time step.
 
         Returns
         -------
@@ -881,7 +881,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def theta_hat(self) -> float:
-        """Adaptive threshold for non-refractory neurons in millivolts.
+        r"""Adaptive threshold for non-refractory neurons in millivolts.
 
         Returns
         -------
@@ -893,7 +893,7 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def y0(self) -> float:
-        """External current input state in picoamperes.
+        r"""External current input state in picoamperes.
 
         Returns
         -------

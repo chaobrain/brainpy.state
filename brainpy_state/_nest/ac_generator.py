@@ -29,78 +29,35 @@ __all__ = [
 class ac_generator(brainstate.nn.Dynamics):
     r"""AC current generator -- NEST-compatible stimulation device.
 
-    Generate a NEST-compatible sinusoidal current and gate it with a
-    half-open activity window.
+    Generate a sinusoidal current with a constant DC offset and gate the output
+    with a half-open activity window using NEST-compatible parameter semantics.
 
-    The emitted current for each output channel is
+    **1. Model equations**
+
+    For each output channel, the emitted current is
 
     .. math::
 
-        I(t) = I_0 + A \sin(\omega t + \phi),
+        I(t) = \begin{cases}
+            I_0 + A\sin(\omega t + \phi) & \text{if } t_{\mathrm{start}} \le t
+                < t_{\mathrm{stop}}, \\
+            0 & \text{otherwise},
+        \end{cases}
 
-    with :math:`\omega = 2\pi f / 1000` (rad/ms) when :math:`f` is provided in
-    Hz and simulation time :math:`t` is in ms.
+    where :math:`\omega = 2\pi f / 1000` (rad/ms) when :math:`f` is given in
+    Hz and simulation time :math:`t` is in ms, and
 
-    Parameters
-    ----------
-    in_size : Size, optional
-        Output size/shape of the generator. The produced current has shape
-        ``self.varshape`` derived from ``in_size``. Default is ``1``.
-    amplitude : ArrayLike, optional
-        Sinusoidal amplitude :math:`A` (typically pA). Scalars or arrays are
-        accepted and broadcast to ``self.varshape`` by
-        :func:`braintools.init.param`. Default is ``0. * u.pA``.
-    offset : ArrayLike, optional
-        Constant DC offset :math:`I_0` (typically pA), broadcast to
-        ``self.varshape``. Default is ``0. * u.pA``.
-    frequency : ArrayLike, optional
-        Oscillation frequency :math:`f` in Hz (or unitless numeric interpreted
-        as Hz). Broadcast to ``self.varshape``. Default is ``0. * u.Hz``.
-    phase : ArrayLike, optional
-        Phase in degrees using NEST convention. Converted internally as
-        :math:`\phi = \text{phase} \cdot 2\pi / 360`. Broadcast to
-        ``self.varshape``. Default is ``0.``.
-    start : ArrayLike, optional
-        Relative activation time in ms. Effective start is
-        :math:`t_\mathrm{start} = \mathrm{origin} + \mathrm{start}`.
-        Broadcast to ``self.varshape``. Default is ``0. * u.ms``.
-    stop : ArrayLike or None, optional
-        Relative deactivation time in ms. Effective stop is
-        :math:`t_\mathrm{stop} = \mathrm{origin} + \mathrm{stop}` and the
-        device is active for :math:`t < t_\mathrm{stop}`. ``None`` means no
-        upper time bound. Default is ``None``.
-    origin : ArrayLike, optional
-        Global time origin in ms used to shift ``start``/``stop``.
-        Broadcast to ``self.varshape``. Default is ``0. * u.ms``.
-    name : str or None, optional
-        Optional object name passed to :class:`brainstate.nn.Dynamics`.
+    .. math::
 
-    Returns
-    -------
-    out : Any
-        A dynamics node whose :meth:`update` method returns a current quantity
-        with shape ``self.varshape`` and units inherited from ``amplitude`` and
-        ``offset``.
+        t_{\mathrm{start}} = t_0 + t_{\mathrm{start,rel}}, \qquad
+        t_{\mathrm{stop}}  = t_0 + t_{\mathrm{stop,rel}}.
 
-    Raises
-    ------
-    ValueError
-        If a parameter cannot be broadcast to ``in_size`` or violates internal
-        shape constraints enforced by :func:`braintools.init.param`.
-    TypeError
-        If arithmetic with provided unitful/unitless values is invalid during
-        parameter initialization or later updates.
+    If ``stop is None``, then :math:`t_{\mathrm{stop}} = +\infty`.
 
-    See Also
-    --------
-    dc_generator : Constant current stimulation device.
-    step_current_generator : Piecewise-constant current stimulation.
-    noise_generator : Gaussian white-noise current stimulation.
+    **2. Rotation-matrix interpretation**
 
-    Notes
-    -----
-    The NEST reference implementation can be written as a linear oscillator
-    rotated exactly each step (Rotter and Diesmann, 1999):
+    The NEST reference implementation propagates the oscillator state with an
+    exact rotation matrix (Rotter and Diesmann, 1999):
 
     .. math::
 
@@ -112,22 +69,68 @@ class ac_generator(brainstate.nn.Dynamics):
         \end{pmatrix}
         \begin{pmatrix} y_0^n \\ y_1^n \end{pmatrix},
 
-    with initial state :math:`y_0(0)=A\cos\phi`, :math:`y_1(0)=A\sin\phi`,
-    and output :math:`I(t)=y_1(t)+I_0`.
+    with initial state :math:`y_0(0) = A\cos\phi`, :math:`y_1(0) = A\sin\phi`
+    and output :math:`I(t) = y_1(t) + I_0`. This implementation instead
+    evaluates the equivalent closed-form expression :math:`A\sin(\omega t +
+    \phi)` directly via :func:`jax.numpy.sin`, which is numerically identical
+    but stateless.
 
-    This implementation computes the equivalent closed-form sinusoid directly
-    using :func:`jax.numpy.sin`. Computational implications:
+    **3. Timing semantics and computational implications**
 
-    - The oscillator phase is tied to absolute simulation time ``t``.
-      Windowing by ``start``/``stop`` does not reset phase.
-    - Per call, work is vectorized and dominated by one sine evaluation and
-      one conditional mask over ``self.varshape``.
-    - Activity uses the half-open interval
-      :math:`[\mathrm{origin}+\mathrm{start},\ \mathrm{origin}+\mathrm{stop})`.
+    The active interval is the half-open set
+    :math:`[t_{\mathrm{start}},\, t_{\mathrm{stop}})`. Since neuron states are
+    advanced from ``t`` to ``t + dt`` in each step, a current enabled at
+    :math:`t_{\mathrm{start}}` first affects the membrane trajectory after that
+    update (observable at :math:`t_{\mathrm{start}} + dt`); the last active
+    update starts at :math:`t_{\mathrm{stop}} - dt`. Because the phase is tied
+    to absolute simulation time ``t``, windowing by ``start``/``stop`` does
+    *not* reset the oscillator phase. Per-call complexity is
+    :math:`O(\prod \mathrm{varshape})`, dominated by one sine evaluation and
+    one conditional mask.
 
+    Parameters
+    ----------
+    in_size : Size, optional
+        Output size/shape specification understood by
+        :class:`brainstate.nn.Dynamics`. The emitted current shape is
+        ``self.varshape`` derived from ``in_size``. Default is ``1``.
+    amplitude : ArrayLike, optional
+        Sinusoidal amplitude :math:`A` (typically pA). Scalars or arrays are
+        accepted and broadcast to ``self.varshape`` via
+        :func:`braintools.init.param`. Default is ``0. * u.pA``.
+    offset : ArrayLike, optional
+        Constant DC offset :math:`I_0` added to the sinusoid (typically pA),
+        broadcast to ``self.varshape``. Default is ``0. * u.pA``.
+    frequency : ArrayLike, optional
+        Oscillation frequency :math:`f` in Hz (or a unitless numeric
+        interpreted as Hz). Converted internally to
+        :math:`\omega = 2\pi f / 1000` (rad/ms). Broadcast to
+        ``self.varshape``. Default is ``0. * u.Hz``.
+    phase : ArrayLike, optional
+        Initial phase :math:`\phi_{\mathrm{deg}}` in degrees (NEST convention).
+        Converted internally as :math:`\phi = \phi_{\mathrm{deg}} \cdot 2\pi /
+        360`. Stored as a dimensionless scalar or array broadcast to
+        ``self.varshape``. Default is ``0.``.
+    start : ArrayLike, optional
+        Relative activation time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        broadcast to ``self.varshape``. Effective start is
+        ``origin + start``. Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative deactivation time :math:`t_{\mathrm{stop,rel}}` (typically
+        ms), broadcast to ``self.varshape`` when provided. Effective stop is
+        ``origin + stop`` and the upper bound is exclusive. ``None`` means the
+        sinusoid is never deactivated. Default is ``None``.
+    origin : ArrayLike, optional
+        Global time origin :math:`t_0` (typically ms) added to both ``start``
+        and ``stop``, broadcast to ``self.varshape``. Default is ``0. * u.ms``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+
+    Parameter Mapping
+    -----------------
     .. list-table:: Parameter mapping to model symbols
        :header-rows: 1
-       :widths: 18 17 20 45
+       :widths: 18 17 22 43
 
        * - Parameter
          - Default
@@ -144,19 +147,47 @@ class ac_generator(brainstate.nn.Dynamics):
        * - ``frequency``
          - ``0. * u.Hz``
          - :math:`f`
-         - Frequency converted to :math:`\omega = 2\pi f/1000` (rad/ms).
+         - Frequency in Hz; converted to :math:`\omega = 2\pi f/1000` rad/ms.
        * - ``phase``
          - ``0.``
          - :math:`\phi_{\mathrm{deg}}`
-         - Input phase in degrees converted to radians in the update step.
-       * - ``start``, ``stop``
-         - ``0. * u.ms``, ``None``
-         - :math:`t_{\mathrm{start,rel}}, t_{\mathrm{stop,rel}}`
-         - Relative window limits added to ``origin``.
+         - Input phase in degrees; converted to radians each update step.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative start time; effective lower bound is ``origin + start``.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative stop time; effective upper bound is ``origin + stop``.
        * - ``origin``
          - ``0. * u.ms``
          - :math:`t_0`
-         - Global time offset applied to both window boundaries.
+         - Global offset applied to both window boundaries.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a current-like quantity
+        with shape ``self.varshape`` and units inherited from ``amplitude`` and
+        ``offset``: :math:`I_0 + A\sin(\omega t + \phi)` while active and
+        zeros otherwise.
+
+    Raises
+    ------
+    ValueError
+        If ``in_size`` is invalid or any parameter cannot be broadcast to
+        ``self.varshape`` by :func:`braintools.init.param`.
+    TypeError
+        If unitful/unitless arithmetic is invalid during parameter
+        initialization (e.g., incompatible units in ``amplitude`` or
+        ``offset``).
+
+    See Also
+    --------
+    dc_generator : Constant current stimulation device.
+    step_current_generator : Piecewise-constant current stimulation.
+    noise_generator : Gaussian white-noise current stimulation.
 
     References
     ----------
@@ -187,6 +218,25 @@ class ac_generator(brainstate.nn.Dynamics):
        ...     with brainstate.environ.context(t=10.0 * u.ms):
        ...         current = stim.update()
        ...     _ = current.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> ac1 = brainpy.state.ac_generator(
+       ...     amplitude=200.0 * u.pA,
+       ...     offset=50.0 * u.pA,
+       ...     frequency=40.0 * u.Hz,
+       ...     phase=0.0,
+       ... )
+       >>> ac2 = brainpy.state.ac_generator(
+       ...     amplitude=100.0 * u.pA,
+       ...     offset=0.0 * u.pA,
+       ...     frequency=80.0 * u.Hz,
+       ...     phase=90.0,
+       ...     start=10.0 * u.ms,
+       ...     stop=60.0 * u.ms,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -218,60 +268,53 @@ class ac_generator(brainstate.nn.Dynamics):
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
-        r"""Summary
-        -------
-        Compute the current at the environment time ``t`` and apply
-        ``[origin + start, origin + stop)`` gating.
+        r"""Compute the window-gated sinusoidal current at environment time ``t``.
 
         Parameters
         ----------
         None
-            This method reads simulation time from ``brainstate.environ``
-            key ``'t'`` and uses instance parameters set at construction.
+            Uses the current simulation time ``t`` from ``brainstate.environ``
+            and instance parameters set in :meth:`__init__`.
 
         Returns
         -------
-        current : brainunit.Quantity
-            Current array with shape ``self.varshape``. For active channels,
-            values equal
-            :math:`\mathrm{offset} + \mathrm{amplitude}\sin(\omega t + \phi)`;
-            inactive channels are exactly zero.
+        current : Any
+            Current-like quantity with shape ``self.varshape``. For channels
+            where ``origin + start <= t < origin + stop`` (or
+            ``t >= origin + start`` when ``stop is None``), values equal
+            :math:`I_0 + A\sin(\omega t + \phi)` where
+            :math:`\omega = 2\pi f / 1000` (rad/ms) and
+            :math:`\phi = \phi_{\mathrm{deg}} \cdot 2\pi / 360` (rad).
+            Inactive channels are exactly zero.
 
         Raises
         ------
         KeyError
-            If ``brainstate.environ`` does not define current time ``'t'``.
+            If the environment time key ``'t'`` is not available in
+            ``brainstate.environ``.
         TypeError
-            If unitful arithmetic is invalid (for example incompatible units
-            in ``t``, ``frequency``, ``amplitude``, or ``offset``).
-
-        See Also
-        --------
-        ac_generator : Parameter definitions and model assumptions.
-        dc_generator.update : Windowed constant-current update rule.
+            If ``t``, ``frequency``, ``amplitude``, or ``offset`` carry
+            incompatible units preventing valid arithmetic.
 
         Notes
         -----
-        Frequency conversion is performed per call as
-        :math:`\omega = 2\pi f/1000` so that ``f`` in Hz and ``t`` in ms
-        produce a radian phase argument.
+        Frequency and phase conversions are performed per call:
 
-        Phase conversion uses NEST's degree convention:
-        :math:`\phi = \mathrm{phase}\cdot 2\pi/360`.
+        .. math::
 
-        The oscillator itself is not stateful in this implementation; the
-        waveform depends only on absolute ``t``. Consequently, changing the
-        activity window does not alter phase continuity. Complexity is
-        :math:`O(\prod \text{varshape})` due to broadcasting and masking.
+            \omega = \frac{2\pi f}{1000} \, (\text{rad/ms}), \qquad
+            \phi   = \frac{\phi_{\mathrm{deg}} \cdot 2\pi}{360} \, (\text{rad}).
 
-        References
-        ----------
-        .. [1] NEST Simulator documentation for ``ac_generator``:
-               https://nest-simulator.readthedocs.io/en/stable/models/ac_generator.html
-        .. [2] Rotter S., Diesmann M. (1999). Exact digital simulation of
-               time-invariant linear systems with applications to neuronal
-               modeling. *Biol. Cybern.*, 81, 381-402.
-               https://doi.org/10.1007/s004220050570
+        The waveform depends only on absolute ``t``; the oscillator carries no
+        internal state. Entering and leaving the activity window therefore does
+        not reset or shift the phase. Start is inclusive and stop is exclusive,
+        matching NEST semantics. If ``stop <= start`` (after adding ``origin``),
+        the active set is empty and the output is always zero.
+
+        See Also
+        --------
+        ac_generator : Class-level parameter definitions and model equations.
+        dc_generator.update : Windowed constant-current update rule.
 
         Examples
         --------

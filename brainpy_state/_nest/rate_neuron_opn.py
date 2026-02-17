@@ -424,8 +424,8 @@ class rate_neuron_opn(_lin_rate_base):
            https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_opn.html
     .. [2] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
            Helias, M., & Diesmann, M. (2017). Integration of continuous-time
-           dynamics in a spiking neural network simulator. *Frontiers in
-           Neuroinformatics*, 11, 34.
+           dynamics in a spiking neural network simulator.
+           *Frontiers in Neuroinformatics*, 11, 34.
 
     See Also
     --------
@@ -493,7 +493,7 @@ class rate_neuron_opn(_lin_rate_base):
 
     @property
     def receptor_types(self):
-        """Receptor type dictionary for projection compatibility.
+        r"""Receptor type dictionary for projection compatibility.
 
         Returns
         -------
@@ -503,7 +503,7 @@ class rate_neuron_opn(_lin_rate_base):
         return {'RATE': 0}
 
     def _validate_parameters(self):
-        """Validate model parameters at construction time.
+        r"""Validate model parameters at construction time.
 
         Raises
         ------
@@ -520,7 +520,7 @@ class rate_neuron_opn(_lin_rate_base):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
     def _call_nl(self, fn: Callable, x: np.ndarray):
-        """Call user-provided nonlinearity with flexible signature.
+        r"""Call user-provided nonlinearity with flexible signature.
 
         Parameters
         ----------
@@ -637,7 +637,7 @@ class rate_neuron_opn(_lin_rate_base):
         return self._broadcast_to_state(self._to_numpy(y), state_shape)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
-        """Extract ``(rate, weight, multiplicity, delay_steps)`` from event.
+        r"""Extract ``(rate, weight, multiplicity, delay_steps)`` from event.
 
         Parameters
         ----------
@@ -689,7 +689,7 @@ class rate_neuron_opn(_lin_rate_base):
         return rate, weight, multiplicity, delay_steps
 
     def _event_to_ex_in(self, ev, default_delay_steps: int, state_shape):
-        """Convert event to excitatory and inhibitory contributions.
+        r"""Convert event to excitatory and inhibitory contributions.
 
         Parameters
         ----------
@@ -736,7 +736,7 @@ class rate_neuron_opn(_lin_rate_base):
         return ex, inh, delay_steps
 
     def _accumulate_instant_events(self, events, state_shape):
-        """Accumulate instantaneous events (no delay).
+        r"""Accumulate instantaneous events (no delay).
 
         Parameters
         ----------
@@ -772,7 +772,7 @@ class rate_neuron_opn(_lin_rate_base):
         return ex, inh
 
     def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        """Schedule delayed events and return zero-delay contributions.
+        r"""Schedule delayed events and return zero-delay contributions.
 
         Parameters
         ----------

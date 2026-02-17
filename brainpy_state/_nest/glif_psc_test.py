@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Tests for glif_psc neuron model.
+r"""Tests for glif_psc neuron model.
 
 Tests verify that the glif_psc implementation matches NEST simulator dynamics
 for all five GLIF model variants. Test strategy:
@@ -58,7 +58,7 @@ from brainpy_state._nest.glif_psc import glif_psc, _iaf_propagator_alpha
 # ---------------------------------------------------------------------------
 
 def _compute_propagators(tau_syn_list, tau_m, c_m, dt):
-    """Pre-compute all propagator matrix elements matching NEST pre_run_hook."""
+    r"""Pre-compute all propagator matrix elements matching NEST pre_run_hook."""
     n_rec = len(tau_syn_list)
     P33 = math.exp(-dt / tau_m)
     P30 = (1.0 / c_m) * (1.0 - P33) * tau_m
@@ -89,7 +89,7 @@ def _compute_propagators(tau_syn_list, tau_m, c_m, dt):
 
 
 def _ref_glif_psc_step(state, params, dt, spike_weights=None):
-    """Execute one reference NEST glif_psc update step.
+    r"""Execute one reference NEST glif_psc update step.
 
     state: dict with keys V_rel, y1, y2, r, i_stim, v_old,
            threshold_spike, threshold_voltage, ASCurrents, ASCurrents_sum,
@@ -214,7 +214,7 @@ def _make_ref_params(G=9.43, E_L=-78.85, th_inf_abs=-51.68, C_m=58.72,
                      tau_syn=(2.0,),
                      has_theta_spike=False, has_asc=False,
                      has_theta_voltage=False, dt=0.01):
-    """Build reference parameter dict with pre-computed decay rates."""
+    r"""Build reference parameter dict with pre-computed decay rates."""
     th_inf = th_inf_abs - E_L
     V_reset_rel = V_reset_abs - E_L
     Tau = C_m / G  # membrane time constant
@@ -269,7 +269,7 @@ def _make_ref_params(G=9.43, E_L=-78.85, th_inf_abs=-51.68, C_m=58.72,
 
 
 def _make_ref_state(params, V_abs=None, asc_init=(0.0, 0.0)):
-    """Create initial reference state dict."""
+    r"""Create initial reference state dict."""
     E_L = params['E_L']
     if V_abs is None:
         V_abs = E_L
@@ -306,7 +306,7 @@ class TestGlifPsc(unittest.TestCase):
         self.dt = 0.01 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dy_inputs=None):
-        """Execute one simulation step with optional per-receptor spike inputs.
+        r"""Execute one simulation step with optional per-receptor spike inputs.
 
         dy_inputs: list of (receptor_index, weight_pA) tuples
         """
@@ -323,7 +323,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        """Verify default parameters match NEST C++ source."""
+        r"""Verify default parameters match NEST C++ source."""
         neuron = glif_psc(1)
         self.assertEqual(neuron.g_m, 9.43 * u.nS)
         self.assertEqual(neuron.E_L, -78.85 * u.mV)
@@ -351,7 +351,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_invalid_model_combination(self):
-        """Invalid mechanism combinations should raise."""
+        r"""Invalid mechanism combinations should raise."""
         with self.assertRaises(ValueError):
             glif_psc(1, adapting_threshold=True, spike_dependent_threshold=False)
 
@@ -386,7 +386,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_propagator_alpha_regular(self):
-        """IAFPropagatorAlpha regular case (tau_m != tau_syn)."""
+        r"""IAFPropagatorAlpha regular case (tau_m != tau_syn)."""
         tau_syn = 2.0
         tau_m = 6.226  # = 58.72 / 9.43
         c_m = 58.72
@@ -400,7 +400,7 @@ class TestGlifPsc(unittest.TestCase):
         self.assertGreater(P32, 0)
 
     def test_propagator_alpha_singular(self):
-        """IAFPropagatorAlpha singular case (tau_m ≈ tau_syn)."""
+        r"""IAFPropagatorAlpha singular case (tau_m ≈ tau_syn)."""
         tau_syn = 6.226
         tau_m = 6.226  # exact same -> singular
         c_m = 58.72
@@ -419,7 +419,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif1_subthreshold_dynamics_match_reference(self):
-        """GLIF1: subthreshold membrane potential matches reference."""
+        r"""GLIF1: subthreshold membrane potential matches reference."""
         dt_val = 0.01
         n_steps = 200
 
@@ -464,7 +464,7 @@ class TestGlifPsc(unittest.TestCase):
                                        msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_glif1_spike_and_refractory(self):
-        """GLIF1: spike generation and refractory period."""
+        r"""GLIF1: spike generation and refractory period."""
         dt_val = 0.01
         n_steps = 1500
 
@@ -507,7 +507,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif2_spike_dependent_threshold(self):
-        """GLIF2: biologically defined reset with spike-dependent threshold."""
+        r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -555,7 +555,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif3_after_spike_currents(self):
-        """GLIF3: after-spike currents match reference."""
+        r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -597,7 +597,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif4_combined_reset_and_asc(self):
-        """GLIF4: spike-dependent threshold + after-spike currents."""
+        r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -639,7 +639,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif5_full_model(self):
-        """GLIF5: all mechanisms enabled — voltage trace matches reference."""
+        r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -692,7 +692,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_alpha_psc_current_response(self):
-        """Verify alpha-function PSC produces correct current waveform.
+        r"""Verify alpha-function PSC produces correct current waveform.
 
         A spike of weight 1.0 should produce a peak current of 1 pA at
         t = tau_syn.
@@ -735,7 +735,7 @@ class TestGlifPsc(unittest.TestCase):
                                    msg=f"Peak I={y2_trace[peak_idx]} pA, expected ~1.0 pA")
 
     def test_synaptic_current_depolarizes(self):
-        """Positive synaptic current input should depolarize membrane."""
+        r"""Positive synaptic current input should depolarize membrane."""
         dt_val = 0.01
 
         with brainstate.environ.context(dt=self.dt):
@@ -783,7 +783,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_refractory_period_holds_voltage(self):
-        """During refractory period, voltage should be held at reset value."""
+        r"""During refractory period, voltage should be held at reset value."""
         dt_val = 0.01
 
         with brainstate.environ.context(dt=self.dt):
@@ -830,7 +830,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_three_receptors(self):
-        """Model with three receptor ports initializes and runs correctly."""
+        r"""Model with three receptor ports initializes and runs correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc(
                 1,
@@ -859,7 +859,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_initial_v_m(self):
-        """Initial V_m should match the initializer."""
+        r"""Initial V_m should match the initializer."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc(
                 1,
@@ -874,7 +874,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif5_threshold_trace_matches_reference(self):
-        """GLIF5: threshold components (spike + voltage) match reference trace."""
+        r"""GLIF5: threshold components (spike + voltage) match reference trace."""
         dt_val = 0.01
         n_steps = 1000
 
@@ -921,7 +921,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_synaptic_y1_y2_traces_match_reference(self):
-        """Verify y1/y2 alpha-function traces match reference propagator."""
+        r"""Verify y1/y2 alpha-function traces match reference propagator."""
         dt_val = 0.01
         n_steps = 300
         tau_syn_val = 2.0
@@ -979,7 +979,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_multi_receptor_voltage_trace(self):
-        """Two receptors with different tau_syn and inputs match reference."""
+        r"""Two receptors with different tau_syn and inputs match reference."""
         dt_val = 0.01
         n_steps = 500
 
@@ -1034,7 +1034,7 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif1_voltage_trace_with_constant_current(self):
-        """GLIF1 with constant current: full voltage trace matches reference."""
+        r"""GLIF1 with constant current: full voltage trace matches reference."""
         dt_val = 0.01
         n_steps = 3000
 

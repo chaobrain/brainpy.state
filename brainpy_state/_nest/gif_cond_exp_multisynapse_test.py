@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for gif_cond_exp_multisynapse neuron model.
 
 These tests verify that the brainpy.state implementation of
@@ -55,7 +55,7 @@ from brainpy_state._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisyna
 
 def _rkf45_ref_step_multi(v, g_vals, is_refractory, i_stim, stc, dt, h0, p,
                           tau_syn, E_rev, atol=1e-3):
-    """Reference RKF45 integration for a single simulation step (multisynapse).
+    r"""Reference RKF45 integration for a single simulation step (multisynapse).
 
     This is a standalone Python implementation of the RKF45 adaptive integrator
     that matches the NEST GSL integration behavior for gif_cond_exp_multisynapse.
@@ -147,7 +147,7 @@ def _rkf45_ref_step_multi(v, g_vals, is_refractory, i_stim, stc, dt, h0, p,
 def _run_nest_ref_multi(n_steps, dt, p, i_stim_seq, dg_seq, rand_seq,
                         tau_stc, q_stc, tau_sfa, q_sfa, lambda_0, Delta_V,
                         V_T_star, tau_syn, E_rev):
-    """Full reference implementation of gif_cond_exp_multisynapse update loop.
+    r"""Full reference implementation of gif_cond_exp_multisynapse update loop.
 
     Matches NEST update order exactly:
     1. Compute stc/sfa totals, decay elements
@@ -234,7 +234,7 @@ def _run_nest_ref_multi(n_steps, dt, p, i_stim_seq, dg_seq, rand_seq,
 
 
 class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
-    """Test that default parameters match NEST C++ source code values."""
+    r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
         neuron = gif_cond_exp_multisynapse(1)
@@ -257,7 +257,7 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
         self.assertEqual(neuron.q_stc, ())
 
     def test_initial_state_matches_nest(self):
-        """V_m should be initialized to E_L, all conductances to 0."""
+        r"""V_m should be initialized to E_L, all conductances to 0."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = gif_cond_exp_multisynapse(
                 1, tau_syn=(4.0, 8.0), E_rev=(0.0, -85.0)
@@ -269,7 +269,7 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.g[1].value, 0.0 * u.nS))
 
     def test_multiple_receptors(self):
-        """Verify model with multiple receptor ports."""
+        r"""Verify model with multiple receptor ports."""
         neuron = gif_cond_exp_multisynapse(
             1, tau_syn=(2.0, 4.0, 8.0), E_rev=(0.0, -85.0, -65.0)
         )
@@ -279,7 +279,7 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynParameterValidation(unittest.TestCase):
-    """Test that invalid parameters raise appropriate errors."""
+    r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_syn_E_rev_raises(self):
         with self.assertRaises(ValueError):
@@ -323,13 +323,13 @@ class TestGIFCondExpMultisynParameterValidation(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold membrane dynamics without spiking."""
+    r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
-        """Run one step. dg_values is a list of (port, weight_nS) tuples."""
+        r"""Run one step. dg_values is a list of (port, weight_nS) tuples."""
         if dg_values is not None:
             for port, val in dg_values:
                 neuron.add_delta_input(f'receptor_{port}_{k}', val * u.nS)
@@ -337,7 +337,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_current_input_has_one_step_delay(self):
-        """External current should be stored for use in the NEXT step (NEST ring buffer)."""
+        r"""External current should be stored for use in the NEXT step (NEST ring buffer)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -362,7 +362,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(v1 > 0.0, f"V should increase from current, got {v1}")
 
     def test_per_receptor_conductance_jumps(self):
-        """Conductance jumps should go to the correct receptor port."""
+        r"""Conductance jumps should go to the correct receptor port."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -383,7 +383,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(g1, 3.0, places=10)
 
     def test_conductance_exponential_decay_per_receptor(self):
-        """Each receptor conductance should decay with its own time constant."""
+        r"""Each receptor conductance should decay with its own time constant."""
         with brainstate.environ.context(dt=self.dt):
             tau0, tau1 = 4.0, 8.0
             neuron = gif_cond_exp_multisynapse(
@@ -412,7 +412,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(g1, expected_g1, places=3)
 
     def test_excitatory_depolarizes_inhibitory_hyperpolarizes(self):
-        """Excitatory reversal (0mV) should depolarize, inhibitory (-85mV) should hyperpolarize."""
+        r"""Excitatory reversal (0mV) should depolarize, inhibitory (-85mV) should hyperpolarize."""
         with brainstate.environ.context(dt=self.dt):
             base = gif_cond_exp_multisynapse(
                 1, tau_syn=(4.0, 8.0), E_rev=(0.0, -85.0),
@@ -453,7 +453,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(v_inh < v_base, f"Inh {v_inh} should be < base {v_base}")
 
     def test_three_receptor_ports(self):
-        """Test with three receptor ports with different reversal potentials."""
+        r"""Test with three receptor ports with different reversal potentials."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -491,7 +491,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
-    """Test refractory period mechanics."""
+    r"""Test refractory period mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -504,7 +504,7 @@ class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_refractory_clamps_voltage_to_V_reset(self):
-        """During refractory period, V should stay at V_reset."""
+        r"""During refractory period, V should stay at V_reset."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -529,7 +529,7 @@ class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
                                        msg=f"V should be V_reset during refractory at step {k}")
 
     def test_refractory_count_matches_t_ref(self):
-        """Refractory counter should match ceil(t_ref / dt)."""
+        r"""Refractory counter should match ceil(t_ref / dt)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -548,7 +548,7 @@ class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
             self.assertEqual(ref_count, expected)
 
     def test_conductances_continue_decaying_during_refractory(self):
-        """Conductances should keep decaying during refractory period."""
+        r"""Conductances should keep decaying during refractory period."""
         with brainstate.environ.context(dt=self.dt):
             tau0 = 4.0
             neuron = gif_cond_exp_multisynapse(
@@ -577,7 +577,7 @@ class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
-    """Test stc and sfa adaptation mechanics."""
+    r"""Test stc and sfa adaptation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -590,7 +590,7 @@ class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_stc_elements_decay_exponentially(self):
-        """STC elements should decay by exp(-dt/tau) each step."""
+        r"""STC elements should decay by exp(-dt/tau) each step."""
         tau_stc = [10.0, 20.0]
         q_stc = [5.0, -2.0]
 
@@ -622,7 +622,7 @@ class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
                                        msg=f"STC element {i} decay mismatch")
 
     def test_sfa_elements_decay_exponentially(self):
-        """SFA elements should decay by exp(-dt/tau) each step."""
+        r"""SFA elements should decay by exp(-dt/tau) each step."""
         tau_sfa = [100.0, 50.0]
         q_sfa = [10.0, 5.0]
 
@@ -653,7 +653,7 @@ class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
                                        msg=f"SFA element {i} decay mismatch")
 
     def test_adaptation_increases_threshold(self):
-        """After a spike, sfa should raise the effective threshold."""
+        r"""After a spike, sfa should raise the effective threshold."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -678,7 +678,7 @@ class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
-    """Test stochastic spike generation mechanics."""
+    r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -691,7 +691,7 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_no_spikes_with_zero_lambda(self):
-        """With lambda_0=0, no spikes should ever occur."""
+        r"""With lambda_0=0, no spikes should ever occur."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -708,7 +708,7 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
                                  f"No spike expected with lambda_0=0 at step {k}")
 
     def test_high_lambda_produces_spikes(self):
-        """With very high lambda_0, spikes should occur readily."""
+        r"""With very high lambda_0, spikes should occur readily."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -731,7 +731,7 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
                             f"Expected many spikes with high lambda, got {spike_count}")
 
     def test_deterministic_with_fixed_rng_key(self):
-        """Two neurons with the same RNG key and parameters should spike identically."""
+        r"""Two neurons with the same RNG key and parameters should spike identically."""
         with brainstate.environ.context(dt=self.dt):
             key = jax.random.PRNGKey(12345)
             n1 = gif_cond_exp_multisynapse(
@@ -755,7 +755,7 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
-    """Compare full simulation traces against standalone reference implementation."""
+    r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
         self.dt_val = 0.1
@@ -769,7 +769,7 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_subthreshold_trace_matches_reference(self):
-        """Multi-step subthreshold trace with two receptors should match reference."""
+        r"""Multi-step subthreshold trace with two receptors should match reference."""
         tau_syn = [4.0, 8.0]
         E_rev = [0.0, -85.0]
         p = {
@@ -834,7 +834,7 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
                                    msg=f"g[1] mismatch at step {k}")
 
     def test_full_trace_with_adaptation_and_spiking(self):
-        """Full trace with adaptation and controlled stochastic spiking matches reference."""
+        r"""Full trace with adaptation and controlled stochastic spiking matches reference."""
         tau_syn = [4.0, 8.0]
         E_rev = [0.0, -85.0]
         p = {
@@ -910,7 +910,7 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
                                    msg=f"g[1] mismatch at step {k}")
 
     def test_trace_with_multiple_receptor_inputs_and_adaptation(self):
-        """Three receptors with staggered inputs, adaptation active."""
+        r"""Three receptors with staggered inputs, adaptation active."""
         tau_syn = [2.0, 4.0, 8.0]
         E_rev = [0.0, -85.0, -65.0]
         p = {
@@ -987,7 +987,7 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynUpdateOrder(unittest.TestCase):
-    """Test that the update order matches NEST exactly."""
+    r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -1000,7 +1000,7 @@ class TestGIFCondExpMultisynUpdateOrder(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_stc_computed_before_ode_integration(self):
-        """STC current should be computed BEFORE ODE integration, matching NEST order."""
+        r"""STC current should be computed BEFORE ODE integration, matching NEST order."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -1024,7 +1024,7 @@ class TestGIFCondExpMultisynUpdateOrder(unittest.TestCase):
                                    msg="STC should be 100 nA on step after spike")
 
     def test_conductance_jumps_after_ode_integration(self):
-        """Conductance jumps should be applied AFTER ODE integration."""
+        r"""Conductance jumps should be applied AFTER ODE integration."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -1046,7 +1046,7 @@ class TestGIFCondExpMultisynUpdateOrder(unittest.TestCase):
 
 
 class TestGIFCondExpMultisynResetState(unittest.TestCase):
-    """Test that reset_state properly reinitializes all state."""
+    r"""Test that reset_state properly reinitializes all state."""
 
     def test_reset_restores_initial_state(self):
         with brainstate.environ.context(dt=0.1 * u.ms):

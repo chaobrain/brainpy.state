@@ -293,7 +293,7 @@ class rate_connection_instantaneous:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Return connection model properties.
+        r"""Return connection model properties.
 
         Returns
         -------
@@ -309,7 +309,7 @@ class rate_connection_instantaneous:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve all connection parameters as a dictionary.
+        r"""Retrieve all connection parameters as a dictionary.
 
         Follows NEST's ``GetStatus`` API convention.
 
@@ -344,7 +344,7 @@ class rate_connection_instantaneous:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters from a dictionary or keyword arguments.
+        r"""Update connection parameters from a dictionary or keyword arguments.
 
         Follows NEST's ``SetStatus`` API convention. Only allows updating ``weight``.
         Any attempt to set ``delay`` or ``delay_steps`` raises a ``ValueError``.
@@ -399,7 +399,7 @@ class rate_connection_instantaneous:
             self.set_weight(updates['weight'])
 
     def get(self, key: str = 'status'):
-        """Retrieve a specific parameter or full status dictionary.
+        r"""Retrieve a specific parameter or full status dictionary.
 
         Parameters
         ----------
@@ -440,7 +440,7 @@ class rate_connection_instantaneous:
         raise KeyError(f'Unsupported key "{key}" for rate_connection_instantaneous.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update the connection weight.
+        r"""Update the connection weight.
 
         Parameters
         ----------
@@ -465,7 +465,7 @@ class rate_connection_instantaneous:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, _):
-        """Reject delay modification (instantaneous model has no delay).
+        r"""Reject delay modification (instantaneous model has no delay).
 
         This method always raises a ``ValueError`` to enforce NEST semantics.
 
@@ -492,7 +492,7 @@ class rate_connection_instantaneous:
         raise ValueError(self._DELAY_ERROR)
 
     def set_delay_steps(self, _):
-        """Reject delay_steps modification (instantaneous model has no delay).
+        r"""Reject delay_steps modification (instantaneous model has no delay).
 
         This method always raises a ``ValueError`` to enforce NEST semantics.
 
@@ -519,7 +519,7 @@ class rate_connection_instantaneous:
         raise ValueError(self._DELAY_ERROR)
 
     def prepare_secondary_event(self, coeffarray: ArrayLike) -> dict[str, Any]:
-        """Create an instantaneous secondary-event payload.
+        r"""Create an instantaneous secondary-event payload.
 
         Secondary events are used in waveform relaxation (WFR) and implicit integration
         schemes for rate neurons. The coefficient array represents contributions at
@@ -572,7 +572,7 @@ class rate_connection_instantaneous:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike = 0,
     ) -> dict[str, Any]:
-        """Create an instantaneous rate-event payload for step-based simulation APIs.
+        r"""Create an instantaneous rate-event payload for step-based simulation APIs.
 
         Constructs an event dictionary that can be passed to rate neuron receivers
         to transmit a rate signal with the connection's weight and zero delay.
@@ -727,9 +727,9 @@ class rate_connection_instantaneous:
 
         References
         ----------
-        .. [1] NEST instantaneous-rate receiver implementation:
+        .. [3] NEST instantaneous-rate receiver implementation:
                ``models/rate_neuron_ipn_impl.h`` and ``models/rate_neuron_opn_impl.h``.
-        .. [2] Hahne, J., et al. (2015). "A unified framework for spiking and rate-based
+        .. [4] Hahne, J., et al. (2015). "A unified framework for spiking and rate-based
                neural networks." Frontiers in Neuroinformatics, 9, 22.
 
         Examples
@@ -800,7 +800,7 @@ class rate_connection_instantaneous:
 
     @staticmethod
     def _to_coeff_array(value: ArrayLike) -> np.ndarray:
-        """Convert input to a validated 1D float64 coefficient array.
+        r"""Convert input to a validated 1D float64 coefficient array.
 
         Parameters
         ----------
@@ -826,7 +826,7 @@ class rate_connection_instantaneous:
 
     @staticmethod
     def _to_rate_value(value: ArrayLike):
-        """Convert input to a rate value (scalar float or array).
+        r"""Convert input to a rate value (scalar float or array).
 
         Parameters
         ----------
@@ -848,7 +848,7 @@ class rate_connection_instantaneous:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert input to a validated scalar float.
+        r"""Convert input to a validated scalar float.
 
         Parameters
         ----------
@@ -876,7 +876,7 @@ class rate_connection_instantaneous:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert input to a validated integer scalar.
+        r"""Convert input to a validated integer scalar.
 
         Parameters
         ----------

@@ -69,12 +69,12 @@ class mat2_psc_exp(Neuron):
 
     where:
 
-    - :math:`V_m`: membrane potential (absolute voltage)
-    - :math:`E_L`: resting potential
-    - :math:`\tau_m = C_m / g_L`: membrane time constant
-    - :math:`I_{\mathrm{syn,ex}}, I_{\mathrm{syn,in}}`: synaptic currents
-    - :math:`I_e`: constant external current
-    - :math:`I_0`: buffered step current input (updated each time step)
+    - :math:`V_m` -- membrane potential (absolute voltage)
+    - :math:`E_L` -- resting potential
+    - :math:`\tau_m = C_m / g_L` -- membrane time constant
+    - :math:`I_{\mathrm{syn,ex}}, I_{\mathrm{syn,in}}` -- synaptic currents
+    - :math:`I_e` -- constant external current
+    - :math:`I_0` -- buffered step current input (updated each time step)
 
     **2.2 Synaptic Currents**
 
@@ -462,7 +462,7 @@ class mat2_psc_exp(Neuron):
             self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None, V_th: ArrayLike = None):
-        """Compute surrogate gradient spike signal.
+        r"""Compute surrogate gradient spike signal.
 
         Parameters
         ----------
@@ -493,7 +493,7 @@ class mat2_psc_exp(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA):
-        """Advance the neuron state by one time step.
+        r"""Advance the neuron state by one time step.
 
         Implements the NEST-compatible update order for the MAT2 model with exact
         integration of subthreshold dynamics.

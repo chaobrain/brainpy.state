@@ -464,7 +464,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
             raise ValueError('Membrane and synapse time constants must differ.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize membrane, synaptic, and precise-timing runtime states.
+        r"""Initialize membrane, synaptic, and precise-timing runtime states.
 
         This method allocates all internal state variables required for
         lossless precise spike-time simulation. Membrane potential ``V`` is
@@ -524,7 +524,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
             self.refractory = brainstate.ShortTermState(np.zeros(V.shape, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
-        """Evaluate surrogate spike output from membrane potential.
+        r"""Evaluate surrogate spike output from membrane potential.
 
         Applies the surrogate spike function (typically
         ``braintools.surrogate.ReluGrad`` or similar) to a normalized
@@ -565,7 +565,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
         return self.spk_fun(v_scaled)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
-        """Parse spike events into normalized (offset_ms, weight_array) tuples.
+        r"""Parse spike events into normalized (offset_ms, weight_array) tuples.
 
         Converts mixed-format spike events (tuples or dicts) into a uniform
         internal representation suitable for event processing. Offsets are
@@ -604,7 +604,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
 
     @staticmethod
     def _bisect_root(f, t_hi: float):
-        """Find root of scalar function using bounded bisection.
+        r"""Find root of scalar function using bounded bisection.
 
         Locates the point where ``f(t)`` crosses zero within the interval
         ``[0, t_hi]`` using bisection with 64 iterations. Assumes ``f`` is
@@ -664,8 +664,8 @@ class iaf_psc_exp_ps_lossless(Neuron):
         This method implements the complete NEST-compatible lossless
         precise-spike-time algorithm for ``iaf_psc_exp_ps_lossless``. Each
         global time step is subdivided into mini-intervals determined by spike
-        event offsets. Before propagating each mini-interval, the **lossless
-        spike detection criterion** (Krishnan et al., 2018) checks whether the
+        event offsets. Before propagating each mini-interval, the
+        **lossless spike detection criterion** (Krishnan et al., 2018) checks whether the
         membrane trajectory crosses threshold anywhere within the interval, even
         between sampled grid points. If a crossing is detected, bisection
         root-finding (64 iterations) localizes the precise sub-step spike time.

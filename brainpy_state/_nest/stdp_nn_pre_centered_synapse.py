@@ -94,8 +94,8 @@ class stdp_nn_pre_centered_synapse(stdp_synapse):
 
     Here :math:`t_{\mathrm{post}}^{(1)}` denotes the **first** postsynaptic
     spike in the interval :math:`(t_{\mathrm{last}}-d,\, t_{\mathrm{pre}}-d]`,
-    and :math:`t_{\mathrm{post}}^{\mathrm{last}}` denotes the **nearest
-    preceding** postsynaptic spike before :math:`t_{\mathrm{pre}}-d`.
+    and :math:`t_{\mathrm{post}}^{\mathrm{last}}` denotes the **nearest preceding**
+    postsynaptic spike before :math:`t_{\mathrm{pre}}-d`.
 
     After processing a presynaptic spike that finds a postsynaptic spike in the
     facilitation window, the presynaptic trace is reset:
@@ -249,7 +249,7 @@ class stdp_nn_pre_centered_synapse(stdp_synapse):
         return 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Returns a dictionary containing all synapse parameters and internal state
         variables, including ``weight``, ``delay``, ``receptor_type``, plasticity

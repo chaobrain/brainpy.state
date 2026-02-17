@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Tests for NEST-compatible ht_neuron model (Hill & Tononi, 2005).
+r"""Tests for NEST-compatible ht_neuron model (Hill & Tononi, 2005).
 
 Tests cover:
 - Default parameter values matching NEST
@@ -67,7 +67,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 # ---------------------------------------------------------------------------
 
 def _nest_ht_dynamics(t, y, params):
-    """Reference HT dynamics matching NEST ht_neuron_dynamics exactly.
+    r"""Reference HT dynamics matching NEST ht_neuron_dynamics exactly.
 
     Parameters
     ----------
@@ -186,7 +186,7 @@ def _nest_ht_dynamics(t, y, params):
 
 
 def _default_params():
-    """Return default parameter dict matching NEST ht_neuron defaults."""
+    r"""Return default parameter dict matching NEST ht_neuron defaults."""
     return dict(
         E_Na=30.0, E_K=-90.0, g_NaL=0.2, g_KL=1.0,
         tau_m=16.0, theta_eq=-51.0, tau_theta=2.0,
@@ -206,7 +206,7 @@ def _default_params():
 
 
 def _default_initial_state(params):
-    """Return the NEST-matching initial state vector."""
+    r"""Return the NEST-matching initial state vector."""
     V_init = (params['g_NaL'] * params['E_Na'] + params['g_KL'] * params['E_K']) / \
              (params['g_NaL'] + params['g_KL'])
     y0 = np.zeros(_STATE_VEC_SIZE, dtype=np.float64)
@@ -222,7 +222,7 @@ def _default_initial_state(params):
 
 
 def _get_scalar(x):
-    """Extract scalar float from array or scalar."""
+    r"""Extract scalar float from array or scalar."""
     x = np.asarray(x)
     return float(x.flat[0]) if x.ndim > 0 else float(x)
 
@@ -232,10 +232,10 @@ def _get_scalar(x):
 # ===================================================================
 
 class TestBetaNormalizationFactor(unittest.TestCase):
-    """Test the beta normalization factor computation."""
+    r"""Test the beta normalization factor computation."""
 
     def test_known_values(self):
-        """Check normalization factor for AMPA defaults (tau_rise=0.5, tau_decay=2.4)."""
+        r"""Check normalization factor for AMPA defaults (tau_rise=0.5, tau_decay=2.4)."""
         tau_rise = 0.5
         tau_decay = 2.4
         factor = _beta_normalization_factor(tau_rise, tau_decay)
@@ -247,55 +247,55 @@ class TestBetaNormalizationFactor(unittest.TestCase):
         self.assertAlmostEqual(factor, expected, places=12)
 
     def test_alpha_limit(self):
-        """When tau_rise == tau_decay, should fall back to alpha function."""
+        r"""When tau_rise == tau_decay, should fall back to alpha function."""
         tau = 5.0
         factor = _beta_normalization_factor(tau, tau)
         expected = math.e / tau
         self.assertAlmostEqual(factor, expected, places=12)
 
     def test_positive(self):
-        """Factor should always be positive."""
+        r"""Factor should always be positive."""
         for tau_rise, tau_decay in [(0.5, 2.4), (1.0, 7.0), (4.0, 40.0), (60.0, 200.0)]:
             self.assertGreater(_beta_normalization_factor(tau_rise, tau_decay), 0.0)
 
 
 class TestEquilibriumFunctions(unittest.TestCase):
-    """Test steady-state equilibrium helper functions."""
+    r"""Test steady-state equilibrium helper functions."""
 
     def test_m_eq_h_at_minus75(self):
-        """At V=-75 (threshold), m_eq_h should be 0.5."""
+        r"""At V=-75 (threshold), m_eq_h should be 0.5."""
         self.assertAlmostEqual(_m_eq_h(-75.0), 0.5, places=10)
 
     def test_m_eq_h_depolarized(self):
-        """At high voltage, I_h activation should be near 0."""
+        r"""At high voltage, I_h activation should be near 0."""
         self.assertAlmostEqual(_m_eq_h(0.0), 0.0, places=3)
 
     def test_m_eq_h_hyperpolarized(self):
-        """At low voltage, I_h activation should be near 1."""
+        r"""At low voltage, I_h activation should be near 1."""
         self.assertAlmostEqual(_m_eq_h(-120.0), 1.0, places=3)
 
     def test_m_eq_T_at_minus59(self):
-        """At V=-59 (inflection), m_eq_T should be 0.5."""
+        r"""At V=-59 (inflection), m_eq_T should be 0.5."""
         self.assertAlmostEqual(_m_eq_T(-59.0), 0.5, places=10)
 
     def test_h_eq_T_at_minus83(self):
-        """At V=-83 (inflection), h_eq_T should be 0.5."""
+        r"""At V=-83 (inflection), h_eq_T should be 0.5."""
         self.assertAlmostEqual(_h_eq_T(-83.0), 0.5, places=10)
 
     def test_D_eq_KNa_positive(self):
-        """D_eq_KNa should always be positive."""
+        r"""D_eq_KNa should always be positive."""
         for V in [-90, -70, -50, -30, -10, 0, 10, 30]:
             self.assertGreater(_D_eq_KNa(V, 1250.0), 0.0)
 
     def test_m_eq_NMDA_at_V_act(self):
-        """At V=V_act_NMDA, m_eq should be 0.5."""
+        r"""At V=V_act_NMDA, m_eq should be 0.5."""
         V_act = -25.57
         S_act = 0.081
         self.assertAlmostEqual(_m_eq_NMDA(V_act, S_act, V_act), 0.5, places=10)
 
 
 class TestHTNeuronDefaults(unittest.TestCase):
-    """Test that default parameter values match NEST ht_neuron."""
+    r"""Test that default parameter values match NEST ht_neuron."""
 
     def test_default_parameters(self):
         neuron = ht_neuron(1)
@@ -344,10 +344,10 @@ class TestHTNeuronDefaults(unittest.TestCase):
 
 
 class TestHTNeuronInitialState(unittest.TestCase):
-    """Test initial state variable values."""
+    r"""Test initial state variable values."""
 
     def test_initial_membrane_potential(self):
-        """V_m should start at (g_NaL*E_Na + g_KL*E_K) / (g_NaL + g_KL)."""
+        r"""V_m should start at (g_NaL*E_Na + g_KL*E_K) / (g_NaL + g_KL)."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
@@ -356,14 +356,14 @@ class TestHTNeuronInitialState(unittest.TestCase):
             self.assertAlmostEqual(V_actual, V_init_expected, places=10)
 
     def test_initial_threshold(self):
-        """Theta should start at theta_eq."""
+        r"""Theta should start at theta_eq."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
             self.assertAlmostEqual(_get_scalar(neuron.theta.value), -51.0, places=10)
 
     def test_initial_synaptic_zero(self):
-        """All synaptic variables should be zero initially."""
+        r"""All synaptic variables should be zero initially."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
@@ -377,7 +377,7 @@ class TestHTNeuronInitialState(unittest.TestCase):
             self.assertAlmostEqual(_get_scalar(neuron.G_GABA_B.value), 0.0, places=10)
 
     def test_initial_intrinsic_equilibrium(self):
-        """Intrinsic gating variables should be at equilibrium for initial V."""
+        r"""Intrinsic gating variables should be at equilibrium for initial V."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
@@ -409,7 +409,7 @@ class TestHTNeuronInitialState(unittest.TestCase):
             )
 
     def test_initial_refractory_zero(self):
-        """Refractory counter should be zero initially."""
+        r"""Refractory counter should be zero initially."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
@@ -417,10 +417,10 @@ class TestHTNeuronInitialState(unittest.TestCase):
 
 
 class TestHTNeuronValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_negative_conductances(self):
-        """Negative peak conductances should raise ValueError."""
+        r"""Negative peak conductances should raise ValueError."""
         for param in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A',
                       'g_peak_GABA_B', 'g_peak_NaP', 'g_peak_KNa',
                       'g_peak_T', 'g_peak_h', 'g_NaL', 'g_KL'):
@@ -428,7 +428,7 @@ class TestHTNeuronValidation(unittest.TestCase):
                 ht_neuron(1, **{param: -1.0})
 
     def test_negative_tau(self):
-        """Zero or negative time constants should raise ValueError."""
+        r"""Zero or negative time constants should raise ValueError."""
         for param in ('tau_rise_AMPA', 'tau_decay_AMPA', 'tau_rise_NMDA',
                       'tau_decay_NMDA', 'tau_rise_GABA_A', 'tau_decay_GABA_A',
                       'tau_rise_GABA_B', 'tau_decay_GABA_B',
@@ -438,7 +438,7 @@ class TestHTNeuronValidation(unittest.TestCase):
                 ht_neuron(1, **{param: 0.0})
 
     def test_rise_greater_than_decay(self):
-        """tau_rise >= tau_decay should raise ValueError."""
+        r"""tau_rise >= tau_decay should raise ValueError."""
         with self.assertRaises(ValueError):
             ht_neuron(1, tau_rise_AMPA=5.0, tau_decay_AMPA=2.0)
         with self.assertRaises(ValueError):
@@ -456,10 +456,10 @@ class TestHTNeuronValidation(unittest.TestCase):
 
 
 class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold dynamics against standalone reference solver."""
+    r"""Test subthreshold dynamics against standalone reference solver."""
 
     def test_free_evolution_no_input(self):
-        """With no input, neuron should remain subthreshold and near resting potential.
+        r"""With no input, neuron should remain subthreshold and near resting potential.
 
         Note: The initial V is computed from leak equilibrium only (g_NaL, g_KL).
         The intrinsic currents (I_h, I_NaP, etc.) are active and shift V
@@ -494,7 +494,7 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
                                    msg="Theta should stay near theta_eq with no input")
 
     def test_matches_reference_solver(self):
-        """Model output should match standalone reference ODE integration."""
+        r"""Model output should match standalone reference ODE integration."""
         dt = 0.1  # ms
         n_steps = 50
 
@@ -535,7 +535,7 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
                                    msg=f"theta: model={theta_model:.6f}, ref={theta_ref:.6f}")
 
     def test_with_dc_current(self):
-        """Small DC current should depolarize the neuron subthreshold."""
+        r"""Small DC current should depolarize the neuron subthreshold."""
         dt = 0.1
         n_steps = 200
         I_dc = 5.0  # mV/ms equivalent (unitless conductance model)
@@ -559,10 +559,10 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
 
 
 class TestHTNeuronSpiking(unittest.TestCase):
-    """Test spike generation and refractory behavior."""
+    r"""Test spike generation and refractory behavior."""
 
     def test_strong_current_produces_spike(self):
-        """A strong DC current should cause the neuron to spike."""
+        r"""A strong DC current should cause the neuron to spike."""
         dt = 0.1
         n_steps = 500
         I_strong = 50.0  # Strong input
@@ -583,7 +583,7 @@ class TestHTNeuronSpiking(unittest.TestCase):
             self.assertTrue(spiked, "Strong DC current should produce a spike")
 
     def test_refractory_period(self):
-        """After a spike, neuron should be refractory for t_ref steps."""
+        r"""After a spike, neuron should be refractory for t_ref steps."""
         dt = 0.1
         n_steps = 1000
         I_strong = 50.0
@@ -609,7 +609,7 @@ class TestHTNeuronSpiking(unittest.TestCase):
             self.assertIsNotNone(first_spike_step, "Should have spiked")
 
     def test_spike_resets_V_and_theta(self):
-        """On spike, V and theta should be set to E_Na."""
+        r"""On spike, V and theta should be set to E_Na."""
         dt = 0.1
         n_steps = 1000
         I_strong = 50.0
@@ -636,10 +636,10 @@ class TestHTNeuronSpiking(unittest.TestCase):
 
 
 class TestHTNeuronSynapticDynamics(unittest.TestCase):
-    """Test synaptic conductance dynamics with beta-function kernels."""
+    r"""Test synaptic conductance dynamics with beta-function kernels."""
 
     def test_ampa_spike_response(self):
-        """An AMPA spike should produce a transient conductance increase."""
+        r"""An AMPA spike should produce a transient conductance increase."""
         dt = 0.1
         params = _default_params()
         cond_step = params['g_peak_AMPA'] * _beta_normalization_factor(
@@ -673,7 +673,7 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
                             msg="AMPA conductance should decay after peak")
 
     def test_gaba_a_spike_response(self):
-        """A GABA_A spike should produce a transient conductance increase."""
+        r"""A GABA_A spike should produce a transient conductance increase."""
         dt = 0.1
         params = _default_params()
         cond_step = params['g_peak_GABA_A'] * _beta_normalization_factor(
@@ -696,7 +696,7 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
             self.assertAlmostEqual(np.max(G_trace), params['g_peak_GABA_A'], places=1)
 
     def test_beta_function_shape(self):
-        """Beta-function conductance should have correct rise-then-decay shape."""
+        r"""Beta-function conductance should have correct rise-then-decay shape."""
         dt = 0.1
         params = _default_params()
 
@@ -730,10 +730,10 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
 
 
 class TestHTNeuronIntrinsicCurrents(unittest.TestCase):
-    """Test intrinsic current computation."""
+    r"""Test intrinsic current computation."""
 
     def test_I_NaP_at_rest(self):
-        """I_NaP should be computable at rest voltage."""
+        r"""I_NaP should be computable at rest voltage."""
         V = -70.0
         g_peak_NaP = 1.0
         E_rev_NaP = 30.0
@@ -745,7 +745,7 @@ class TestHTNeuronIntrinsicCurrents(unittest.TestCase):
         self.assertLess(abs(expected), 1.0, msg="I_NaP should be small at resting potential")
 
     def test_I_h_at_rest(self):
-        """I_h at rest should be non-trivial (hyperpolarized)."""
+        r"""I_h at rest should be non-trivial (hyperpolarized)."""
         V_rest = (0.2 * 30.0 + 1.0 * (-90.0)) / (0.2 + 1.0)
         m_Ih = _m_eq_h(V_rest)
         I_h = -1.0 * m_Ih * (V_rest - (-40.0))
@@ -753,7 +753,7 @@ class TestHTNeuronIntrinsicCurrents(unittest.TestCase):
         self.assertGreater(I_h, 0.0, msg="I_h should be depolarizing at rest (V < E_h)")
 
     def test_intrinsic_currents_recorded(self):
-        """After a simulation step, intrinsic current values should be stored."""
+        r"""After a simulation step, intrinsic current values should be stored."""
         dt = 0.1
 
         with brainstate.environ.context(dt=dt * u.ms):
@@ -771,10 +771,10 @@ class TestHTNeuronIntrinsicCurrents(unittest.TestCase):
 
 
 class TestHTNeuronNMDA(unittest.TestCase):
-    """Test NMDA voltage-dependent unblocking."""
+    r"""Test NMDA voltage-dependent unblocking."""
 
     def test_instant_unblock_mode(self):
-        """With instant_unblock=True, m_NMDA should equal m_eq."""
+        r"""With instant_unblock=True, m_NMDA should equal m_eq."""
         V = -50.0
         S_act = 0.081
         V_act = -25.57
@@ -783,7 +783,7 @@ class TestHTNeuronNMDA(unittest.TestCase):
         self.assertAlmostEqual(m, m_eq, places=10)
 
     def test_two_stage_unblock_mode(self):
-        """With instant_unblock=False, m_NMDA should be weighted mix of fast and slow."""
+        r"""With instant_unblock=False, m_NMDA should be weighted mix of fast and slow."""
         V = -50.0
         S_act = 0.081
         V_act = -25.57
@@ -797,7 +797,7 @@ class TestHTNeuronNMDA(unittest.TestCase):
         self.assertAlmostEqual(m, expected, places=10)
 
     def test_nmda_blocking_enforced(self):
-        """NMDA unblocking variables should not exceed equilibrium."""
+        r"""NMDA unblocking variables should not exceed equilibrium."""
         dt = 0.1
         n_steps = 50
 
@@ -819,10 +819,10 @@ class TestHTNeuronNMDA(unittest.TestCase):
 
 
 class TestHTNeuronThresholdDynamics(unittest.TestCase):
-    """Test dynamic threshold behavior."""
+    r"""Test dynamic threshold behavior."""
 
     def test_threshold_relaxes_to_equilibrium(self):
-        """Theta should relax exponentially toward theta_eq."""
+        r"""Theta should relax exponentially toward theta_eq."""
         dt = 0.1
         n_steps = 500
         theta_eq = -51.0
@@ -846,10 +846,10 @@ class TestHTNeuronThresholdDynamics(unittest.TestCase):
 
 
 class TestHTNeuronMultipleNeurons(unittest.TestCase):
-    """Test with population of multiple neurons."""
+    r"""Test with population of multiple neurons."""
 
     def test_population_size(self):
-        """Should work with in_size > 1."""
+        r"""Should work with in_size > 1."""
         dt = 0.1
 
         with brainstate.environ.context(dt=dt * u.ms):
@@ -876,10 +876,10 @@ class TestHTNeuronMultipleNeurons(unittest.TestCase):
 
 
 class TestHTNeuronCondSteps(unittest.TestCase):
-    """Test that conductance step pre-computation matches NEST."""
+    r"""Test that conductance step pre-computation matches NEST."""
 
     def test_cond_step_AMPA(self):
-        """AMPA cond_step should equal g_peak * beta_normalization_factor."""
+        r"""AMPA cond_step should equal g_peak * beta_normalization_factor."""
         neuron = ht_neuron(1)
         expected = 0.1 * _beta_normalization_factor(0.5, 2.4)
         self.assertAlmostEqual(neuron._cond_step_AMPA, expected, places=12)
@@ -901,10 +901,10 @@ class TestHTNeuronCondSteps(unittest.TestCase):
 
 
 class TestHTNeuronReferenceComparison(unittest.TestCase):
-    """Compare full simulation traces between model and reference solver."""
+    r"""Compare full simulation traces between model and reference solver."""
 
     def test_dc_driven_trace(self):
-        """Compare voltage trace under DC input with reference solver."""
+        r"""Compare voltage trace under DC input with reference solver."""
         dt = 0.1
         n_steps = 100
         I_dc = 3.0

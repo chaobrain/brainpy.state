@@ -35,7 +35,7 @@ __all__ = [
 
 
 class _tanh_rate_base(_lin_rate_base):
-    """Base class for tanh-rate neurons with shared input transformation logic.
+    r"""Base class for tanh-rate neurons with shared input transformation logic.
 
     Provides hyperbolic-tangent nonlinearity and fixed multiplicative coupling
     factors (always 1) for both ``tanh_rate_ipn`` and ``tanh_rate_opn``.
@@ -63,7 +63,7 @@ class _tanh_rate_base(_lin_rate_base):
 
     @staticmethod
     def _mult_coupling_ex(rate):
-        """Multiplicative coupling factor for excitatory inputs (always 1).
+        r"""Multiplicative coupling factor for excitatory inputs (always 1).
 
         Parameters
         ----------
@@ -79,7 +79,7 @@ class _tanh_rate_base(_lin_rate_base):
 
     @staticmethod
     def _mult_coupling_in(rate):
-        """Multiplicative coupling factor for inhibitory inputs (always 1).
+        r"""Multiplicative coupling factor for inhibitory inputs (always 1).
 
         Parameters
         ----------
@@ -94,7 +94,7 @@ class _tanh_rate_base(_lin_rate_base):
         return np.ones_like(rate, dtype=np.float64)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
-        """Extract event fields from flexible event representation.
+        r"""Extract event fields from flexible event representation.
 
         Parse rate events in dict, tuple, or scalar format and return
         normalized components.
@@ -157,7 +157,7 @@ class _tanh_rate_base(_lin_rate_base):
         return rate, weight, multiplicity, delay_steps
 
     def _event_to_ex_in(self, ev, default_delay_steps: int, state_shape, g, theta):
-        """Convert event to excitatory and inhibitory contributions.
+        r"""Convert event to excitatory and inhibitory contributions.
 
         Extract event components, broadcast to state shape, apply nonlinearity
         if needed, and split by weight sign.
@@ -212,7 +212,7 @@ class _tanh_rate_base(_lin_rate_base):
         return ex, inh, delay_steps
 
     def _accumulate_instant_events_tanh(self, events, state_shape, g, theta):
-        """Accumulate instant rate events (zero-delay).
+        r"""Accumulate instant rate events (zero-delay).
 
         Sum excitatory and inhibitory contributions from all instant events.
 
@@ -256,7 +256,7 @@ class _tanh_rate_base(_lin_rate_base):
         return ex, inh
 
     def _schedule_delayed_events_tanh(self, events, step_idx: int, state_shape, g, theta):
-        """Schedule delayed rate events and return zero-delay contributions.
+        r"""Schedule delayed rate events and return zero-delay contributions.
 
         Queue events with positive delay into internal buffers and accumulate
         zero-delay events for immediate application.
@@ -316,7 +316,7 @@ class _tanh_rate_base(_lin_rate_base):
         return ex_now, inh_now
 
     def _common_inputs_tanh(self, x, instant_rate_events, delayed_rate_events, g, theta):
-        """Collect all input contributions for current simulation step.
+        r"""Collect all input contributions for current simulation step.
 
         Process delayed queues, schedule new delayed events, accumulate instant
         events, and gather external current/delta inputs.
@@ -386,7 +386,7 @@ class _tanh_rate_base(_lin_rate_base):
         return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
 
     def _common_parameters_tanh(self, state_shape):
-        """Broadcast model parameters to state shape.
+        r"""Broadcast model parameters to state shape.
 
         Convert parameters to plain NumPy arrays and broadcast to match state
         dimensions.
@@ -635,8 +635,8 @@ class tanh_rate_ipn(_tanh_rate_base):
            https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_ipn.html
     .. [2] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
            Helias, M., & Diesmann, M. (2017). Integration of continuous-time
-           dynamics in a spiking neural network simulator. *Frontiers in
-           Neuroinformatics*, 11, 34.
+           dynamics in a spiking neural network simulator.
+           *Frontiers in Neuroinformatics*, 11, 34.
 
     Examples
     --------
@@ -706,7 +706,7 @@ class tanh_rate_ipn(_tanh_rate_base):
 
     @property
     def recordables(self):
-        """List of recordable state variables.
+        r"""List of recordable state variables.
 
         Returns
         -------
@@ -717,7 +717,7 @@ class tanh_rate_ipn(_tanh_rate_base):
 
     @property
     def receptor_types(self):
-        """Mapping of receptor type names to indices.
+        r"""Mapping of receptor type names to indices.
 
         Returns
         -------
@@ -727,7 +727,7 @@ class tanh_rate_ipn(_tanh_rate_base):
         return {'RATE': 0}
 
     def _validate_parameters(self):
-        """Validate parameter constraints at initialization.
+        r"""Validate parameter constraints at initialization.
 
         Raises
         ------
@@ -745,7 +745,7 @@ class tanh_rate_ipn(_tanh_rate_base):
             raise ValueError('Rectifying rate must be >= 0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize state variables and internal buffers.
+        r"""Initialize state variables and internal buffers.
 
         Create ``rate``, ``noise``, ``instant_rate``, ``delayed_rate``, and
         step counter states. Initialize delay queues.
@@ -1098,8 +1098,8 @@ class tanh_rate_opn(_tanh_rate_base):
            https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_opn.html
     .. [2] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
            Helias, M., & Diesmann, M. (2017). Integration of continuous-time
-           dynamics in a spiking neural network simulator. *Frontiers in
-           Neuroinformatics*, 11, 34.
+           dynamics in a spiking neural network simulator.
+           *Frontiers in Neuroinformatics*, 11, 34.
 
     Examples
     --------
@@ -1163,7 +1163,7 @@ class tanh_rate_opn(_tanh_rate_base):
 
     @property
     def recordables(self):
-        """List of recordable state variables.
+        r"""List of recordable state variables.
 
         Returns
         -------
@@ -1174,7 +1174,7 @@ class tanh_rate_opn(_tanh_rate_base):
 
     @property
     def receptor_types(self):
-        """Mapping of receptor type names to indices.
+        r"""Mapping of receptor type names to indices.
 
         Returns
         -------
@@ -1184,7 +1184,7 @@ class tanh_rate_opn(_tanh_rate_base):
         return {'RATE': 0}
 
     def _validate_parameters(self):
-        """Validate parameter constraints at initialization.
+        r"""Validate parameter constraints at initialization.
 
         Raises
         ------
@@ -1197,7 +1197,7 @@ class tanh_rate_opn(_tanh_rate_base):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize state variables and internal buffers.
+        r"""Initialize state variables and internal buffers.
 
         Create ``rate``, ``noise``, ``noisy_rate``, ``instant_rate``,
         ``delayed_rate``, and step counter states. Initialize delay queues.

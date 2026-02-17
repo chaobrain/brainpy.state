@@ -207,31 +207,31 @@ class izhikevich(Neuron):
 
     **Parameter Mapping (NEST ↔ brainpy.state)**
 
-    ========================== =================== ============================== =================================================================
-    **NEST Parameter**         **brainpy.state**   **Math Equivalent**            **Description**
-    ========================== =================== ============================== =================================================================
-    ``a``                      ``a``               :math:`a`                      Time scale of recovery variable :math:`U_{\text{m}}`
-    ``b``                      ``b``               :math:`b`                      Sensitivity of :math:`U_{\text{m}}` to :math:`V_{\text{m}}`
-    ``c``                      ``c``               :math:`c`                      After-spike reset value of :math:`V_{\text{m}}` (mV)
-    ``d``                      ``d``               :math:`d`                      After-spike increment of :math:`U_{\text{m}}` (mV)
-    ``I_e``                    ``I_e``             :math:`I_{\text{e}}`           Constant input current (pA)
-    ``V_th``                   ``V_th``            :math:`V_{\text{th}}`          Spike threshold (mV)
-    ``V_min``                  ``V_min``           :math:`V_{\text{min}}`         Lower bound for :math:`V_{\text{m}}` (mV, optional)
-    ``consistent_integration`` ``consistent_integration``                        Forward Euler (True) vs. published numerics (False)
-    ========================== =================== ============================== =================================================================
+    ========================== ========================== ============================== =================================================================
+    **NEST Parameter**         **brainpy.state**          **Math Equivalent**            **Description**
+    ========================== ========================== ============================== =================================================================
+    ``a``                      ``a``                      :math:`a`                      Time scale of recovery variable :math:`U_{\text{m}}`
+    ``b``                      ``b``                      :math:`b`                      Sensitivity of :math:`U_{\text{m}}` to :math:`V_{\text{m}}`
+    ``c``                      ``c``                      :math:`c`                      After-spike reset value of :math:`V_{\text{m}}` (mV)
+    ``d``                      ``d``                      :math:`d`                      After-spike increment of :math:`U_{\text{m}}` (mV)
+    ``I_e``                    ``I_e``                    :math:`I_{\text{e}}`           Constant input current (pA)
+    ``V_th``                   ``V_th``                   :math:`V_{\text{th}}`          Spike threshold (mV)
+    ``V_min``                  ``V_min``                  :math:`V_{\text{min}}`         Lower bound for :math:`V_{\text{m}}` (mV, optional)
+    ``consistent_integration`` ``consistent_integration`` --                             Forward Euler (True) vs. published numerics (False)
+    ========================== ========================== ============================== =================================================================
 
     Attributes
     ----------
     V : HiddenState
-        Membrane potential :math:`V_{\text{m}}` in mV. Shape: ``(*varshape,)``
-        or ``(batch_size, *varshape)``.
+        Membrane potential :math:`V_{\text{m}}` in mV. Shape: ``(\*varshape,)``
+        or ``(batch_size, \*varshape)``.
     U : HiddenState
-        Recovery variable :math:`U_{\text{m}}` in mV. Shape: ``(*varshape,)``
-        or ``(batch_size, *varshape)``.
+        Recovery variable :math:`U_{\text{m}}` in mV. Shape: ``(\*varshape,)``
+        or ``(batch_size, \*varshape)``.
     I : ShortTermState
         Buffered input current from the previous time step in pA (one-step
-        delayed ring buffer, matching NEST semantics). Shape: ``(*varshape,)``
-        or ``(batch_size, *varshape)``.
+        delayed ring buffer, matching NEST semantics). Shape: ``(\*varshape,)``
+        or ``(batch_size, \*varshape)``.
 
     Examples
     --------
@@ -347,7 +347,7 @@ class izhikevich(Neuron):
         batch_size : int, optional
             Batch dimension for parallel simulation of independent neuron
             populations. If provided, all state variables will have shape
-            ``(batch_size, *varshape)``. Default: None (no batch dimension).
+            ``(batch_size, \*varshape)``. Default: None (no batch dimension).
         **kwargs : dict, optional
             Additional keyword arguments (currently unused, reserved for
             future extensions).
@@ -386,8 +386,8 @@ class izhikevich(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential to test for spike emission (with units of
-            voltage, typically mV). Shape: ``(*varshape,)`` or
-            ``(batch_size, *varshape)``.
+            voltage, typically mV). Shape: ``(\*varshape,)`` or
+            ``(batch_size, \*varshape)``.
             Default: None (uses ``self.V.value``).
 
         Returns
@@ -454,7 +454,7 @@ class izhikevich(Neuron):
         ----------
         x : Quantity (current), array_like, optional
             External current input in pA (or compatible current unit).
-            Shape: scalar, ``(*varshape,)``, or ``(batch_size, *varshape)``.
+            Shape: scalar, ``(\*varshape,)``, or ``(batch_size, \*varshape)``.
             Default: 0 pA.
             This current is buffered and applied at the *next* time step.
 
@@ -462,7 +462,7 @@ class izhikevich(Neuron):
         -------
         ArrayLike
             Surrogate-differentiable spike output for the current time step.
-            Shape: ``(*varshape,)`` or ``(batch_size, *varshape)``.
+            Shape: ``(\*varshape,)`` or ``(batch_size, \*varshape)``.
             Values are in [0, 1] for typical surrogate functions, with defined
             gradients for backpropagation.
 

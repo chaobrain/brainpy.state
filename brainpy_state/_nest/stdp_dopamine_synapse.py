@@ -48,12 +48,12 @@ class stdp_dopamine_synapse(static_synapse):
     ``stdp_dopamine_synapse`` implements dopamine-modulated STDP with per-connection
     state variables:
 
-    - ``weight``: synaptic efficacy (modulated by dopamine)
-    - ``Kplus``: presynaptic facilitation trace
-    - ``c``: eligibility trace (records recent spike timing correlations)
-    - ``n``: dopamine trace (reward signal)
-    - ``t_last_update``: timestamp of last propagated state update
-    - ``t_lastspike``: timestamp of previous presynaptic spike
+    - ``weight`` -- synaptic efficacy (modulated by dopamine)
+    - ``Kplus`` -- presynaptic facilitation trace
+    - ``c`` -- eligibility trace (records recent spike timing correlations)
+    - ``n`` -- dopamine trace (reward signal)
+    - ``t_last_update`` -- timestamp of last propagated state update
+    - ``t_lastspike`` -- timestamp of previous presynaptic spike
 
     In NEST, the postsynaptic depression trace ``Kminus`` is read from the postsynaptic
     archiving neuron. For standalone compatibility, this implementation maintains an
@@ -76,12 +76,12 @@ class stdp_dopamine_synapse(static_synapse):
 
     where:
 
-    - :math:`w`: synaptic weight
-    - :math:`c`: eligibility trace
-    - :math:`n`: dopamine concentration
-    - :math:`b`: dopamine baseline
-    - :math:`\tau_c`: eligibility trace decay time constant
-    - :math:`\tau_n`: dopamine trace decay time constant
+    - :math:`w` -- synaptic weight
+    - :math:`c` -- eligibility trace
+    - :math:`n` -- dopamine concentration
+    - :math:`b` -- dopamine baseline
+    - :math:`\tau_c` -- eligibility trace decay time constant
+    - :math:`\tau_n` -- dopamine trace decay time constant
 
     Weight updates are computed analytically using ``expm1`` over each time interval:
 
@@ -504,7 +504,7 @@ class stdp_dopamine_synapse(static_synapse):
         self.c -= self.A_minus * kminus
 
     def clear_post_history(self):
-        """Clear internal postsynaptic STDP history state.
+        r"""Clear internal postsynaptic STDP history state.
 
         Resets the postsynaptic spike history buffer and depression trace to initial
         conditions. This is useful when reinitializing the synapse or starting a new
@@ -522,7 +522,7 @@ class stdp_dopamine_synapse(static_synapse):
         self._post_hist_kminus = []
 
     def clear_dopamine_history(self):
-        """Reset internal dopamine spike history.
+        r"""Reset internal dopamine spike history.
 
         Clears the dopamine spike buffer and reinitializes it with a single pseudo-spike
         at the current ``t_last_update`` time with zero multiplicity. This effectively
@@ -724,7 +724,7 @@ class stdp_dopamine_synapse(static_synapse):
         return 0.0
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize or reset all synapse state variables to their default values.
+        r"""Initialize or reset all synapse state variables to their default values.
 
         Resets all dynamic state (traces, timestamps, spike histories) to initial
         conditions as specified during construction or via :meth:`set`. This is typically
@@ -764,7 +764,7 @@ class stdp_dopamine_synapse(static_synapse):
         self.dopa_spikes_idx = 0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all NEST-style synapse parameters and state variables as a dictionary,
         suitable for inspection, serialization, or comparison with NEST ``GetStatus``
@@ -832,7 +832,7 @@ class stdp_dopamine_synapse(static_synapse):
         return params
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Validate connect-time synapse specification for disallowed common properties.
+        r"""Validate connect-time synapse specification for disallowed common properties.
 
         Enforces NEST convention that certain parameters (STDP learning rules, dopamine
         modulation parameters) must be set on the synapse model template rather than
@@ -904,7 +904,7 @@ class stdp_dopamine_synapse(static_synapse):
         n: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Updates synapse parameters and/or state variables. Validates all new values
         before applying changes. Only parameters explicitly provided are modified.
@@ -1275,7 +1275,7 @@ class stdp_dopamine_synapse(static_synapse):
         receptor_type: ArrayLike | None = None,
         trigger_dopa_update: bool = True,
     ) -> int:
-        """Execute one simulation timestep with spike delivery, plasticity, and dopamine updates.
+        r"""Execute one simulation timestep with spike delivery, plasticity, and dopamine updates.
 
         This is the primary high-level interface for advancing synapse dynamics. It integrates
         spike event delivery, postsynaptic/dopamine spike recording, presynaptic spike

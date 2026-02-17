@@ -46,10 +46,10 @@ class quantal_stp_synapse(static_synapse):
 
     Each synapse maintains four state variables:
 
-    - ``u``: dynamic release probability per site (evolves with facilitation)
-    - ``n``: total number of release sites (fixed)
-    - ``a``: currently available (recovered) release sites
-    - ``t_lastspike``: timestamp of last presynaptic spike
+    - ``u`` -- dynamic release probability per site (evolves with facilitation)
+    - ``n`` -- total number of release sites (fixed)
+    - ``a`` -- currently available (recovered) release sites
+    - ``t_lastspike`` -- timestamp of last presynaptic spike
 
     **1. State Evolution Between Spikes**
 
@@ -71,10 +71,10 @@ class quantal_stp_synapse(static_synapse):
 
     The release probability ``u`` undergoes:
 
-    - **Depression baseline**: decays toward baseline ``U``
-    - **Facilitation**: modulated by exponential decay with time constant
+    - Depression baseline: decays toward baseline ``U``
+    - Facilitation: modulated by exponential decay with time constant
       :math:`\tau_{\mathrm{fac}}`
-    - **Special case**: if :math:`\tau_{\mathrm{fac}} < 10^{-10}`, no
+    - Special case: if :math:`\tau_{\mathrm{fac}} < 10^{-10}`, no
       facilitation occurs (:math:`u_{\mathrm{decay}} = 0`), and ``u`` is
       reset to ``U``
 
@@ -412,7 +412,7 @@ class quantal_stp_synapse(static_synapse):
         return float(np.random.random())
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize or reset synapse state to configured initial values.
+        r"""Initialize or reset synapse state to configured initial values.
 
         Resets the three mutable state variables to their initial configuration:
 
@@ -444,7 +444,7 @@ class quantal_stp_synapse(static_synapse):
         self.t_lastspike = -1.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all NEST-compatible parameters and the current values of
         mutable state variables. This method is useful for inspecting synapse
@@ -512,7 +512,7 @@ class quantal_stp_synapse(static_synapse):
         tau_fac: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and state variables.
+        r"""Set NEST-style public parameters and state variables.
 
         Updates synapse parameters and optionally resets mutable state. All
         parameters are validated before being applied. If validation fails,
@@ -765,7 +765,7 @@ class quantal_stp_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events and process current presynaptic input.
+        r"""Deliver due events and process current presynaptic input.
 
         Performs two operations in sequence:
 

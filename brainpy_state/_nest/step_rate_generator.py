@@ -96,12 +96,12 @@ class step_rate_generator(brainstate.nn.Dynamics):
         Output size/shape specification consumed by
         :class:`brainstate.nn.Dynamics`. The emitted rate has shape
         ``self.varshape`` derived from ``in_size``. Default is ``1``.
-    amplitude_times : Sequence[ArrayLike], optional
+    amplitude_times : Sequence, optional
         Ordered sequence of change times with length ``K``. Each value may be
         a unitful time (typically ms) or a unitless numeric interpreted as ms.
         Internally converted to plain ``float`` milliseconds and stored as a
         Python list. Must be strictly increasing. Default is ``()``.
-    amplitude_values : Sequence[ArrayLike], optional
+    amplitude_values : Sequence, optional
         Sequence of plateau rates with length ``K`` matching
         ``amplitude_times`` elementwise. Values represent spikes/s (Hz) and
         may be unitful or unitless. Internally converted to plain ``float``
@@ -156,9 +156,9 @@ class step_rate_generator(brainstate.nn.Dynamics):
     Returns
     -------
     out : Any
-        Dynamics node. Calling :meth:`update` returns a rate-like array with
-        shape ``self.varshape`` and values in spikes/s: scheduled plateau while
-        active and zeros outside the activity window.
+        Dynamics node. Calling :meth:`update` returns a dimensionless rate
+        array with shape ``self.varshape`` and values in spikes/s: the
+        scheduled plateau while active, and zeros outside the activity window.
 
     Raises
     ------
@@ -172,11 +172,22 @@ class step_rate_generator(brainstate.nn.Dynamics):
         At update time, if simulation time ``'t'`` is missing from
         ``brainstate.environ``.
 
+    Notes
+    -----
+    NEST recommends specifying ``amplitude_times`` on a grid of simulation
+    resolution ``dt``. Using off-grid change times is allowed but may shift
+    the effective change by up to one ``dt`` step depending on floating-point
+    rounding when comparing ``t_ms >= amp_time_ms``. Use ``dc_generator``
+    when only a constant current drive is needed; use ``step_rate_generator``
+    when a rate-coded drive must take different values at different simulation
+    intervals. Unlike ``step_current_generator``, the emitted quantity is
+    dimensionless (spikes/s) and is not multiplied by a unit before output.
+
     See Also
     --------
     step_current_generator : Piecewise-constant current stimulation device.
     dc_generator : Constant current stimulation device.
-    inhomogeneous_poisson_generator : Stochastic rate-to-spike generator.
+    ac_generator : Sinusoidal current stimulation device.
 
     References
     ----------
@@ -200,6 +211,23 @@ class step_rate_generator(brainstate.nn.Dynamics):
        ...     with brainstate.environ.context(t=160.0 * u.ms):
        ...         rate = gen.update()
        ...     _ = rate.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> gen1 = brainpy.state.step_rate_generator(
+       ...     amplitude_times=[0.0 * u.ms, 100.0 * u.ms, 200.0 * u.ms],
+       ...     amplitude_values=[50.0, 0.0, 80.0],
+       ... )
+       >>> gen2 = brainpy.state.step_rate_generator(
+       ...     in_size=10,
+       ...     amplitude_times=[50.0 * u.ms, 150.0 * u.ms],
+       ...     amplitude_values=[120.0, 40.0],
+       ...     start=40.0 * u.ms,
+       ...     stop=180.0 * u.ms,
+       ...     origin=10.0 * u.ms,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -259,33 +287,58 @@ class step_rate_generator(brainstate.nn.Dynamics):
         Parameters
         ----------
         None
-            Uses current simulation time ``t`` from ``brainstate.environ`` and
-            parameters initialized in :meth:`__init__`.
+            Uses the current simulation time from ``brainstate.environ['t']``
+            and instance parameters initialized in :meth:`__init__`.
 
         Returns
         -------
         out : Any
-            Rate-like quantity with shape ``self.varshape``. For each output
-            channel, value equals the latest scheduled plateau whose change
-            time is ``<= t``. Channels outside the active window
-            ``[origin + start, origin + stop)`` are set to zero (or
-            ``t >= origin + start`` when ``stop is None``).
+            Dimensionless rate array with shape ``self.varshape`` and values in
+            spikes/s. For each output channel, value equals the latest
+            scheduled plateau whose change time is ``<= t``. Channels outside
+            the active window ``[origin + start, origin + stop)`` are set to
+            zero (or ``t >= origin + start`` when ``stop is None``).
 
         Raises
         ------
         KeyError
             If ``brainstate.environ`` has no ``'t'`` entry.
         TypeError
-            If provided times cannot be compared because of incompatible
-            units/dtypes.
+            If provided time values cannot be compared because of incompatible
+            units or dtypes.
         ValueError
-            If conversion of ``t`` to milliseconds fails.
+            If conversion of schedule entries to floating-point ms fails.
 
         Notes
         -----
-        Start is inclusive and stop is exclusive. If ``stop <= start`` (after
-        adding ``origin``), the active set is empty and the output is always
-        zero regardless of the scheduled plateaus.
+        The schedule lookup is linear in ``len(amplitude_times)``. This is
+        efficient for short schedules and preserves straightforward NEST-like
+        semantics without interpolation. Start is inclusive and stop is
+        exclusive, matching NEST semantics. If ``stop <= start`` (after
+        adding ``origin``), the active set is empty and the output is
+        identically zero for all ``t``.
+
+        See Also
+        --------
+        step_rate_generator : Class-level parameter definitions and model equations.
+        step_current_generator.update : Windowed piecewise-constant current update rule.
+        dc_generator.update : Windowed constant-current update rule.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import step_rate_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = step_rate_generator(
+           ...         amplitude_times=[2.0 * u.ms, 4.0 * u.ms],
+           ...         amplitude_values=[50.0, 20.0],
+           ...     )
+           ...     with brainstate.environ.context(t=3.0 * u.ms):
+           ...         rate = gen.update()
+           ...     _ = rate.shape
         """
         t = brainstate.environ.get('t')
 

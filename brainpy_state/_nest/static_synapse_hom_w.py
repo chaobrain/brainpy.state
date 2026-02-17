@@ -379,7 +379,7 @@ class static_synapse_hom_w(static_synapse):
     __module__ = 'brainpy.state'
 
     def get(self) -> dict:
-        """Retrieve current synapse parameters (NEST ``GetStatus`` equivalent).
+        r"""Retrieve current synapse parameters (NEST ``GetStatus`` equivalent).
 
         Returns a dictionary of all public synapse parameters, identical to
         :meth:`static_synapse.get` but with ``synapse_model`` set to
@@ -428,7 +428,7 @@ class static_synapse_hom_w(static_synapse):
         return params
 
     def set_weight(self, weight: ArrayLike):
-        """Reject per-connection weight assignment (NEST compatibility constraint).
+        r"""Reject per-connection weight assignment (NEST compatibility constraint).
 
         This method is intentionally disabled for ``static_synapse_hom_w`` to enforce
         the homogeneous weight constraint. NEST prevents per-connection weight
@@ -536,7 +536,7 @@ class static_synapse_hom_w(static_synapse):
         )
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Validate synapse specification parameters for NEST compatibility.
+        r"""Validate synapse specification parameters for NEST compatibility.
 
         Checks that connection-level synapse specifications do not attempt to set
         per-connection weights, which violates the homogeneous weight constraint.

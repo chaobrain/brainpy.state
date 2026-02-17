@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the step_current_generator stimulation device.
 
 Validates the brainpy.state ``step_current_generator`` against:
@@ -42,13 +42,13 @@ from brainpy.state import step_current_generator, iaf_psc_delta
 
 
 class TestStepCurrentGeneratorBasic(unittest.TestCase):
-    """Unit tests for step_current_generator output values and timing."""
+    r"""Unit tests for step_current_generator output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_empty_schedule(self):
-        """With no amplitude schedule, output is always zero."""
+        r"""With no amplitude schedule, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator()
             for t_val in [0., 5., 50., 100.]:
@@ -58,7 +58,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
                                 f"Should be 0 at t={t_val} ms")
 
     def test_single_step(self):
-        """Single step change: zero before, amplitude after."""
+        r"""Single step change: zero before, amplitude after."""
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator(
                 amplitude_times=[10. * u.ms],
@@ -80,7 +80,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 200. * u.pA))
 
     def test_multiple_steps(self):
-        """Multiple step changes produce correct piecewise constant output."""
+        r"""Multiple step changes produce correct piecewise constant output."""
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator(
                 amplitude_times=[10. * u.ms, 30. * u.ms, 50. * u.ms],
@@ -103,7 +103,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
                 self.assertTrue(u.math.allclose(scg.update(), 300. * u.pA))
 
     def test_start_stop_gating(self):
-        """Active window gates the output."""
+        r"""Active window gates the output."""
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator(
                 amplitude_times=[5. * u.ms],
@@ -124,7 +124,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
                 self.assertTrue(u.math.allclose(scg.update(), 0. * u.pA))
 
     def test_origin_shifts_window(self):
-        """Origin shifts start and stop."""
+        r"""Origin shifts start and stop."""
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator(
                 amplitude_times=[5. * u.ms],
@@ -144,7 +144,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
                 self.assertTrue(u.math.allclose(scg.update(), 0. * u.pA))
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator(
                 in_size=5,
@@ -157,10 +157,10 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
 
 
 class TestStepCurrentGeneratorValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_mismatched_lengths_raises(self):
-        """Different sized amplitude_times and amplitude_values raises error."""
+        r"""Different sized amplitude_times and amplitude_values raises error."""
         with self.assertRaises(ValueError):
             step_current_generator(
                 amplitude_times=[1. * u.ms, 2. * u.ms],
@@ -168,7 +168,7 @@ class TestStepCurrentGeneratorValidation(unittest.TestCase):
             )
 
     def test_non_increasing_times_raises(self):
-        """Non-strictly increasing times raises error."""
+        r"""Non-strictly increasing times raises error."""
         with self.assertRaises(ValueError):
             step_current_generator(
                 amplitude_times=[1. * u.ms, 2. * u.ms, 2. * u.ms],
@@ -177,10 +177,10 @@ class TestStepCurrentGeneratorValidation(unittest.TestCase):
 
 
 class TestStepCurrentGeneratorWithNeuron(unittest.TestCase):
-    """Integration tests with iaf_psc_delta neuron."""
+    r"""Integration tests with iaf_psc_delta neuron."""
 
     def test_step_current_vs_analytical(self):
-        """Step current driving neuron matches analytical integration."""
+        r"""Step current driving neuron matches analytical integration."""
         dt_ms = 0.1
         simtime = 50.0
         n_steps = int(round(simtime / dt_ms))
@@ -243,7 +243,7 @@ class TestStepCurrentGeneratorWithNeuron(unittest.TestCase):
 
 
 class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
-    """Compare against NEST simulator."""
+    r"""Compare against NEST simulator."""
 
     def setUp(self):
         self.dt_ms = 0.1
@@ -258,7 +258,7 @@ class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
             return False
 
     def test_step_current_vs_nest(self):
-        """Compare step current output against NEST step_current_generator."""
+        r"""Compare step current output against NEST step_current_generator."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 

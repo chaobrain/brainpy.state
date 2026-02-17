@@ -486,7 +486,7 @@ class aeif_cond_alpha_astro(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate model parameters against NEST constraints.
+        r"""Validate model parameters against NEST constraints.
 
         Returns
         -------
@@ -541,13 +541,13 @@ class aeif_cond_alpha_astro(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize persistent and short-term state variables.
+        r"""Initialize persistent and short-term state variables.
 
         Parameters
         ----------
         batch_size : int, optional
             If provided, state tensors are created with leading batch axis
-            ``(batch_size, *self.varshape)``. Otherwise shapes are
+            ``(batch_size, \*self.varshape)``. Otherwise shapes are
             ``self.varshape``.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
@@ -602,13 +602,13 @@ class aeif_cond_alpha_astro(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset model state and SIC queue to initial conditions.
+        r"""Reset model state and SIC queue to initial conditions.
 
         Parameters
         ----------
         batch_size : int, optional
             Optional batch size used to rebuild values with shape
-            ``(batch_size, *self.varshape)``. If omitted, keeps non-batched
+            ``(batch_size, \*self.varshape)``. If omitted, keeps non-batched
             ``self.varshape`` layout.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
@@ -657,7 +657,7 @@ class aeif_cond_alpha_astro(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Evaluate surrogate spike output from membrane voltage.
+        r"""Evaluate surrogate spike output from membrane voltage.
 
         Parameters
         ----------
@@ -718,7 +718,7 @@ class aeif_cond_alpha_astro(Neuron):
             self._sic_queue[step_index] = prev + value
 
     def _enqueue_sic_events(self, sic_events, state_shape):
-        """Convert and enqueue SIC events into the future-step queue.
+        r"""Convert and enqueue SIC events into the future-step queue.
 
         Parameters
         ----------
@@ -814,7 +814,7 @@ class aeif_cond_alpha_astro(Neuron):
         return dv, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw
 
     def update(self, x=0.0 * u.pA, sic_events=None):
-        """Advance the neuron by one simulation step with optional SIC events.
+        r"""Advance the neuron by one simulation step with optional SIC events.
 
         Parameters
         ----------

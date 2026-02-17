@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Tests for NEST-compatible hh_psc_alpha_gap neuron model.
+r"""Tests for NEST-compatible hh_psc_alpha_gap neuron model.
 
 Tests cover:
 - Default parameter values matching NEST
@@ -50,7 +50,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 def _nest_hh_gap_dynamics(t, y, g_Na, g_Kv1, g_Kv3, g_L, E_Na, E_K, E_L,
                           C_m, I_e, I_stim, tau_ex, tau_in):
-    """Reference HH dynamics matching NEST hh_psc_alpha_gap_dynamics exactly.
+    r"""Reference HH dynamics matching NEST hh_psc_alpha_gap_dynamics exactly.
 
     State vector order: [V, m, h, n, p, dI_ex, I_ex, dI_in, I_in]
     """
@@ -91,7 +91,7 @@ def _nest_hh_gap_dynamics(t, y, g_Na, g_Kv1, g_Kv3, g_L, E_Na, E_K, E_L,
 
 
 def _get_scalar(x):
-    """Extract a scalar float from a possibly 1D array."""
+    r"""Extract a scalar float from a possibly 1D array."""
     x = np.asarray(x)
     if x.ndim > 0:
         return float(x.flat[0])
@@ -99,17 +99,17 @@ def _get_scalar(x):
 
 
 def _V_mV(neuron):
-    """Get membrane potential as scalar float in mV."""
+    r"""Get membrane potential as scalar float in mV."""
     return _get_scalar(u.math.asarray(neuron.V.value / u.mV))
 
 
 def _I_pA(state_val):
-    """Get current value as scalar float in pA."""
+    r"""Get current value as scalar float in pA."""
     return _get_scalar(u.math.asarray(state_val / u.pA))
 
 
 class TestHHPscAlphaGapDefaults(unittest.TestCase):
-    """Test that default parameter values match NEST hh_psc_alpha_gap."""
+    r"""Test that default parameter values match NEST hh_psc_alpha_gap."""
 
     def test_default_parameters(self):
         neuron = hh_psc_alpha_gap(1)
@@ -127,7 +127,7 @@ class TestHHPscAlphaGapDefaults(unittest.TestCase):
         self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
 
     def test_initial_state_values(self):
-        """Initial V should be -69.60401191631222 mV; gating at equilibrium."""
+        r"""Initial V should be -69.60401191631222 mV; gating at equilibrium."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = hh_psc_alpha_gap(1)
             neuron.init_state()
@@ -162,7 +162,7 @@ class TestHHPscAlphaGapDefaults(unittest.TestCase):
             self.assertEqual(int(neuron.refractory_step_count.value[0]), 0)
 
     def test_nest_gating_variable_values(self):
-        """Verify gating variable initial values match NEST source comments."""
+        r"""Verify gating variable initial values match NEST source comments."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = hh_psc_alpha_gap(1)
             neuron.init_state()
@@ -175,7 +175,7 @@ class TestHHPscAlphaGapDefaults(unittest.TestCase):
 
 
 class TestHHPscAlphaGapValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_negative_capacitance(self):
         with self.assertRaises(ValueError):
@@ -211,7 +211,7 @@ class TestHHPscAlphaGapValidation(unittest.TestCase):
 
 
 class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
-    """Test subthreshold dynamics against direct ODE integration."""
+    r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -223,7 +223,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_subthreshold_relaxation(self):
-        """Test that neuron relaxes toward resting potential without input."""
+        r"""Test that neuron relaxes toward resting potential without input."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA)
             neuron.init_state()
@@ -236,7 +236,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
             self.assertAlmostEqual(V_final, -70.0, delta=2.0)
 
     def test_ode_integration_matches_reference(self):
-        """Verify that one step of our model matches a reference RK45 solve."""
+        r"""Verify that one step of our model matches a reference RK45 solve."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=500.0 * u.pA)
             neuron.init_state()
@@ -284,7 +284,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
             self.assertAlmostEqual(p_model, yf[4], places=10)
 
     def test_dc_drives_depolarization(self):
-        """Strong DC input should depolarize the membrane."""
+        r"""Strong DC input should depolarize the membrane."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=1000.0 * u.pA)
             neuron.init_state()
@@ -297,7 +297,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
             self.assertGreater(V_after, V_init)
 
     def test_multi_step_no_input(self):
-        """Multiple steps without input should match reference ODE solve."""
+        r"""Multiple steps without input should match reference ODE solve."""
         n_steps = 50
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA)
@@ -344,7 +344,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
                                        msg=f"V mismatch at step {k}")
 
     def test_multi_step_with_dc(self):
-        """Multiple steps with DC should match reference solver."""
+        r"""Multiple steps with DC should match reference solver."""
         n_steps = 100
         I_e_val = 200.0
         with brainstate.environ.context(dt=self.dt):
@@ -394,7 +394,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
 
 
 class TestHHPscAlphaGapSpiking(unittest.TestCase):
-    """Test spike detection and refractory behavior."""
+    r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -410,7 +410,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
         return bool(u.math.all(spk > 0.0))
 
     def test_spike_occurs_with_strong_dc(self):
-        """With a strong DC input, the neuron should fire a spike."""
+        r"""With a strong DC input, the neuron should fire a spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=200.0 * u.pA)
             neuron.init_state()
@@ -425,7 +425,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
             self.assertTrue(spike_detected, "Neuron should fire with 200 pA DC input within 30 ms")
 
     def test_no_spike_without_input(self):
-        """With no input, the neuron should not spike."""
+        r"""With no input, the neuron should not spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA)
             neuron.init_state()
@@ -435,7 +435,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
                 self.assertFalse(self._is_spike(spk), f"No spike expected at step {k}")
 
     def test_spike_detection_logic(self):
-        """Verify the threshold + local maximum spike detection logic."""
+        r"""Verify the threshold + local maximum spike detection logic."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=300.0 * u.pA)
             neuron.init_state()
@@ -453,7 +453,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
             self.assertGreater(V_max, 0.0, "V should exceed 0 mV during action potential")
 
     def test_refractory_period(self):
-        """After a spike, no more spikes should occur for t_ref ms."""
+        r"""After a spike, no more spikes should occur for t_ref ms."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=300.0 * u.pA, t_ref=5.0 * u.ms)
             neuron.init_state()
@@ -472,7 +472,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
                                         f"ISI {isi:.1f} ms violates refractory period of 5 ms")
 
     def test_refractory_counter_decrements(self):
-        """Refractory counter should decrement each step after spike."""
+        r"""Refractory counter should decrement each step after spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=300.0 * u.pA, t_ref=2.0 * u.ms)
             neuron.init_state()
@@ -499,7 +499,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
                 r_prev = r_now
 
     def test_dynamics_evolve_during_refractory(self):
-        """Unlike IAF, HH dynamics should continue during the refractory period."""
+        r"""Unlike IAF, HH dynamics should continue during the refractory period."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=300.0 * u.pA, t_ref=5.0 * u.ms)
             neuron.init_state()
@@ -521,7 +521,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
             self.assertTrue(V_changed, "V should evolve during refractory period in HH model")
 
     def test_dc_spiking_trajectory(self):
-        """With strong DC, verify the model produces action potentials with
+        r"""With strong DC, verify the model produces action potentials with
         reasonable peak voltage and recovery."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=200.0 * u.pA)
@@ -540,7 +540,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
 
 
 class TestHHPscAlphaGapSynaptic(unittest.TestCase):
-    """Test synaptic current dynamics (alpha-shaped PSCs)."""
+    r"""Test synaptic current dynamics (alpha-shaped PSCs)."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -552,7 +552,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_excitatory_spike_input(self):
-        """A positive weight spike input should increase dI_syn_ex."""
+        r"""A positive weight spike input should increase dI_syn_ex."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA)
             neuron.init_state()
@@ -566,7 +566,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
             self.assertGreater(dI_after, 0.0, "dI_syn_ex should be positive after excitatory input")
 
     def test_inhibitory_spike_input(self):
-        """A negative weight spike input should increase (magnitude) dI_syn_in."""
+        r"""A negative weight spike input should increase (magnitude) dI_syn_in."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA)
             neuron.init_state()
@@ -577,7 +577,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
             self.assertLess(dI_in, 0.0, "dI_syn_in should be negative after inhibitory input")
 
     def test_alpha_psc_waveform(self):
-        """Test that the synaptic current has an alpha-function shape."""
+        r"""Test that the synaptic current has an alpha-function shape."""
         tau_ex_ms = 2.0
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA, tau_syn_ex=tau_ex_ms * u.ms)
@@ -597,7 +597,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
             self.assertGreater(I_trace[peak_idx], I_trace[-1])
 
     def test_psc_normalization(self):
-        """A spike with weight 1 should produce peak current ~1 pA."""
+        r"""A spike with weight 1 should produce peak current ~1 pA."""
         tau_ex_ms = 2.0
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(
@@ -617,7 +617,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
             self.assertAlmostEqual(peak, 1.0, delta=0.05)
 
     def test_stim_current_buffering(self):
-        """Stimulation current should be buffered one step."""
+        r"""Stimulation current should be buffered one step."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=0.0 * u.pA)
             neuron.init_state()
@@ -629,7 +629,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
 
 
 class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
-    """Test edge cases and special configurations."""
+    r"""Test edge cases and special configurations."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -641,7 +641,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_custom_initial_gating(self):
-        """Test that custom initial gating variables are used correctly."""
+        r"""Test that custom initial gating variables are used correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(
                 1, Act_m_init=0.5, Inact_h_init=0.3,
@@ -655,7 +655,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
             self.assertAlmostEqual(_get_scalar(neuron.p.value), 0.2, places=10)
 
     def test_population_size(self):
-        """Test with a population of neurons."""
+        r"""Test with a population of neurons."""
         with brainstate.environ.context(dt=self.dt):
             n_neurons = 5
             neuron = hh_psc_alpha_gap(n_neurons, I_e=200.0 * u.pA)
@@ -670,7 +670,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
                 self.assertAlmostEqual(float(V[i]), float(V[0]), places=10)
 
     def test_zero_refractory_period(self):
-        """With t_ref=0, spikes should not be suppressed by refractoriness."""
+        r"""With t_ref=0, spikes should not be suppressed by refractoriness."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=300.0 * u.pA, t_ref=0.0 * u.ms)
             neuron.init_state()
@@ -685,7 +685,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
             self.assertTrue(spike_detected)
 
     def test_last_spike_time_updated(self):
-        """Verify that last_spike_time is updated on spike emission."""
+        r"""Verify that last_spike_time is updated on spike emission."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=300.0 * u.pA)
             neuron.init_state()
@@ -702,7 +702,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
                     break
 
     def test_different_ion_channel_kinetics(self):
-        """Verify model uses different kinetics than hh_psc_alpha.
+        r"""Verify model uses different kinetics than hh_psc_alpha.
 
         hh_psc_alpha_gap has Kv1+Kv3 channels (n^4 and p^2) rather than a
         single K channel (n^4). The gating rate functions are also different.
@@ -724,7 +724,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
 
 
 class TestHHPscAlphaGapFiringProperties(unittest.TestCase):
-    """Test firing rate and AP waveform properties."""
+    r"""Test firing rate and AP waveform properties."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -738,7 +738,7 @@ class TestHHPscAlphaGapFiringProperties(unittest.TestCase):
         return bool(u.math.all(spk > 0.0))
 
     def test_firing_rate_increases_with_current(self):
-        """Firing rate should increase monotonically with input current."""
+        r"""Firing rate should increase monotonically with input current."""
         with brainstate.environ.context(dt=self.dt):
             rates = []
             for I_amp in [150., 250., 400.]:
@@ -764,7 +764,7 @@ class TestHHPscAlphaGapFiringProperties(unittest.TestCase):
                                         f"{[150, 250, 400][i - 1]} pA")
 
     def test_ap_waveform_shape(self):
-        """Action potential should have characteristic shape: fast upstroke, overshoot, AHP."""
+        r"""Action potential should have characteristic shape: fast upstroke, overshoot, AHP."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_psc_alpha_gap(1, I_e=200.0 * u.pA)
             neuron.init_state()

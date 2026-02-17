@@ -130,7 +130,7 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         Seed passed to ``numpy.random.SeedSequence`` for per-target RNG stream
         construction in :meth:`init_state`. Default is ``0``.
     name : str or None, optional
-        Optional node name.
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
     Parameter Mapping
     -----------------
@@ -175,8 +175,8 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
     -------
     out : Any
         Dynamics node instance. :meth:`update` returns per-step multiplicities
-        as ``numpy.ndarray[int64]`` with shape ``self.varshape`` and can
-        optionally return precise spike-time event arrays per target.
+        as ``numpy.ndarray`` of dtype ``int64`` and shape ``self.varshape``,
+        and can optionally return precise spike-time event arrays per target.
 
     Raises
     ------
@@ -192,8 +192,8 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
 
     Notes
     -----
-    - Unlike grid-constrained :class:`poisson_generator`, this model tracks
-      and emits off-grid spike times.
+    - Unlike the grid-constrained :class:`poisson_generator`, this model tracks
+      and emits off-grid spike times with sub-step precision.
     - ``last_spike_time`` stores the latest emitted precise time per output.
     - ``last_spike_offset`` stores ``(t + dt) - last_spike_time`` at the step
       where that spike was emitted, using ms units.
@@ -331,27 +331,58 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         return self._to_scalar_time_ms(t)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize precise-spike state buffers and RNG streams.
+        r"""Initialize precise-spike state buffers and per-target RNG streams.
 
         Parameters
         ----------
         batch_size : int or None, optional
-            Unused. Included for framework API compatibility.
-        **kwargs
-            Unused keyword arguments for compatibility.
+            Unused. Included for framework API compatibility with
+            :class:`brainstate.nn.Dynamics`. Default is ``None``.
+        **kwargs : Any
+            Unused keyword arguments accepted for API compatibility.
 
         Returns
         -------
-        out : Any
-            ``None``. Side effects:
+        out : None
+            The method mutates internal state by creating three
+            :class:`brainstate.ShortTermState` attributes and a private RNG
+            tuple:
 
-            - initializes ``next_spike_time`` with shape ``(num_targets,)``
-              and dtype ``float64`` filled by ``-inf``,
-            - initializes ``last_spike_time`` with shape ``self.varshape``
-              and dtype ``float64`` filled by ``-inf``,
-            - initializes ``last_spike_offset`` with shape ``self.varshape``
-              and dtype ``float64`` filled by ``0``,
-            - creates one independent ``numpy.random.Generator`` per target.
+            - ``next_spike_time`` -- shape ``(num_targets,)``, dtype
+              ``float64``, initialized to ``-inf``. Stores the scheduled
+              precise emission time (ms) for each target stream.
+            - ``last_spike_time`` -- shape ``self.varshape``, dtype
+              ``float64``, initialized to ``-inf``. Records the most recently
+              emitted spike time (ms) for each output.
+            - ``last_spike_offset`` -- shape ``self.varshape``, dtype
+              ``float64``, initialized to ``0``. Records
+              ``(t + dt) - last_spike_time`` at the step where the last spike
+              was emitted.
+            - ``_rngs`` -- tuple of ``num_targets`` independent
+              ``numpy.random.Generator`` instances spawned from ``rng_seed``
+              via ``numpy.random.SeedSequence``.
+
+        Notes
+        -----
+        Calling :meth:`init_state` resets all state buffers and re-seeds all
+        RNG streams. Repeated calls therefore restart the stochastic sequence
+        from the beginning. :meth:`update` calls this method lazily on the
+        first step if :meth:`init_state` has not been invoked explicitly.
+
+        See Also
+        --------
+        poisson_generator_ps.update : Consumes state buffers populated here.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import poisson_generator_ps
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = poisson_generator_ps(in_size=4, rate=800.0 * u.Hz, rng_seed=7)
+           ...     gen.init_state()
         """
         del batch_size, kwargs
         self.next_spike_time = brainstate.ShortTermState(
@@ -383,42 +414,71 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Update public parameters and refresh generator state when required.
+        r"""Update public parameters and refresh generator state when required.
+
+        Only keyword arguments that are explicitly passed are modified; omitted
+        arguments retain their current values.
 
         Parameters
         ----------
         rate : ArrayLike or object, optional
-            New scalar rate in Hz. Use ``_UNSET`` to keep current value.
-            Setting this parameter resets ``next_spike_time`` state to
-            ``-inf`` for all targets, matching NEST behavior.
+            New scalar mean firing rate in spikes/s (Hz). Accepts any
+            ``ArrayLike`` with exactly one element, or a
+            :class:`brainunit.Quantity` convertible to ``u.Hz``. Must satisfy
+            ``rate >= 0`` after conversion. Setting this parameter resets
+            ``next_spike_time`` state to ``-inf`` for all targets, matching
+            NEST behavior. Omit to keep the current value.
         dead_time : ArrayLike or object, optional
-            New scalar dead time in ms. Use ``_UNSET`` to keep current value.
+            New scalar absolute dead time in ms. Accepts one-element
+            ``ArrayLike`` or quantity convertible to ``u.ms``. Must satisfy
+            ``dead_time >= 0`` and ``dead_time <= 1000 / rate`` when
+            ``rate > 0`` after conversion. Omit to keep the current value.
         start : ArrayLike or object, optional
-            New scalar relative start in ms. Use ``_UNSET`` to keep current
-            value.
+            New scalar relative activation time in ms. Effective lower activity
+            bound is ``origin + start``. Must be finite after conversion.
+            Omit to keep the current value.
         stop : ArrayLike or None or object, optional
-            New scalar relative stop in ms. ``None`` maps to ``+inf``.
-            Use ``_UNSET`` to keep current value.
+            New scalar relative deactivation time in ms. ``None`` maps to
+            ``+inf``. Must satisfy ``stop >= start`` after conversion. Omit to
+            keep the current value.
         origin : ArrayLike or object, optional
-            New scalar origin in ms. Use ``_UNSET`` to keep current value.
+            New scalar global time offset in ms added to ``start`` and
+            ``stop``. Must be finite after conversion. Omit to keep the
+            current value.
 
         Returns
         -------
-        out : Any
-            ``None``. Side effects: updates converted scalar public parameters.
-            If ``start``/``origin`` move activation forward past already
-            scheduled finite ``next_spike_time`` values, those states are
-            reinitialized to ``-inf`` to preserve NEST pre-run semantics.
+        out : None
+            Mutates ``self.rate``, ``self.dead_time``, ``self.start``,
+            ``self.stop``, and ``self.origin`` in place. If ``start`` or
+            ``origin`` move the activation window forward past already-scheduled
+            finite ``next_spike_time`` values, those states are reinitialized
+            to ``-inf`` to preserve NEST pre-run semantics.
 
         Raises
         ------
         ValueError
-            If updated parameters violate model constraints (for example
-            negative ``rate``/``dead_time``, ``stop < start``, non-finite
+            If updated parameters violate model constraints: negative
+            ``rate``/``dead_time``, ``stop < start``, non-finite
             ``origin``/``start``, or ``dead_time > 1000 / rate`` for
-            ``rate > 0``).
+            ``rate > 0``.
         TypeError
             If any supplied parameter cannot be converted to scalar Hz/ms.
+
+        See Also
+        --------
+        poisson_generator_ps.get : Read-back current parameter values.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainunit as u
+           >>> gen = brainpy.state.poisson_generator_ps(rate=500.0 * u.Hz)
+           >>> gen.set(rate=1000.0 * u.Hz, dead_time=0.5 * u.ms)
+           >>> params = gen.get()
+           >>> _ = params['rate'], params['dead_time']
         """
         new_rate = self.rate if rate is _UNSET else self._to_scalar_rate_hz(rate)
         new_dead_time = (
@@ -468,7 +528,7 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
                 )
 
     def get(self) -> dict:
-        """Return current public parameters as plain Python scalars.
+        r"""Return current public parameters as plain Python scalars.
 
         Parameters
         ----------
@@ -476,11 +536,47 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
-            ``dict`` with keys ``'rate'``, ``'dead_time'``, ``'start'``,
-            ``'stop'``, and ``'origin'``. Values are ``float`` in public
-            units (Hz for ``rate``, ms for times). ``stop`` is ``inf`` when
-            deactivation is disabled.
+        params : dict
+            Dictionary with five ``float`` entries:
+
+            - ``'rate'`` -- mean firing rate in spikes/s (Hz).
+            - ``'dead_time'`` -- absolute refractory dead time in ms.
+            - ``'start'`` -- relative exclusive-lower activity bound in ms.
+            - ``'stop'`` -- relative inclusive-upper activity bound in ms;
+              ``inf`` when deactivation is disabled (``stop=None`` was passed).
+            - ``'origin'`` -- global time offset in ms.
+
+        Notes
+        -----
+        Returned values are plain Python ``float`` scalars (``float64``
+        precision). They mirror the internal scalar attributes set in
+        :meth:`__init__` or updated by :meth:`set` and are not bound to any
+        ``brainunit`` quantities.
+
+        See Also
+        --------
+        poisson_generator_ps.set : Update one or more parameters in place.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainunit as u
+           >>> gen = brainpy.state.poisson_generator_ps(
+           ...     rate=800.0 * u.Hz,
+           ...     dead_time=0.5 * u.ms,
+           ...     start=5.0 * u.ms,
+           ...     stop=100.0 * u.ms,
+           ...     origin=2.0 * u.ms,
+           ... )
+           >>> params = gen.get()
+           >>> params['rate']
+           800.0
+           >>> params['dead_time']
+           0.5
+           >>> params['stop']
+           100.0
         """
         return {
             'rate': float(self.rate),
@@ -492,20 +588,56 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
 
     @property
     def step_spike_times_ms(self):
-        """Precise spike times emitted in the most recent :meth:`update` call.
+        r"""Precise spike times emitted in the most recent :meth:`update` call.
 
         Returns
         -------
-        out : Any
-            ``tuple`` of length ``np.prod(self.varshape)``. Each element is a
+        spike_times : tuple of numpy.ndarray
+            Tuple of length ``np.prod(self.varshape)``. Each element is a
             one-dimensional ``numpy.ndarray`` with dtype ``float64`` containing
             the emitted precise spike times (ms) for that flattened output
             train in the latest simulation step. Arrays are empty when no
-            spikes were emitted for the train.
+            spikes were emitted for the train in the most recent step.
+
+        Notes
+        -----
+        The tuple is replaced atomically at each :meth:`update` call. Holding
+        a reference to a previous value is safe because each call creates new
+        arrays. Spike times are in the half-open interval
+        ``(t_min_active, t_max_active]`` corresponding to the step window.
+
+        See Also
+        --------
+        poisson_generator_ps.update : Produces the spike-time arrays stored
+            here.
         """
         return self._last_step_spike_times_ms
 
     def _sample_initial_offset_ms(self, rng: np.random.Generator, inv_rate_ms: float) -> float:
+        r"""Sample the first spike offset from the stationary backward-recurrence distribution.
+
+        Uses the two-branch mixture that NEST employs to avoid transient rate
+        bias when a stream starts mid-process:
+
+        - **Dead-time branch** (probability ``dead_time * rate / 1000``):
+          uniform draw on ``[0, dead_time)``.
+        - **Exponential branch** (complementary probability):
+          shifted exponential ``Exp(1/alpha) + dead_time``.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator
+            Per-target RNG instance. Consumed in place.
+        inv_rate_ms : float
+            Scale parameter :math:`\alpha = 1000 / r - t_{\mathrm{dead}}` in
+            ms. Must be non-negative (enforced by parameter validation).
+
+        Returns
+        -------
+        offset_ms : float
+            Initial spike offset in ms from ``t_min_active``. Always
+            non-negative.
+        """
         if self.dead_time > 0.0 and rng.random() < (self.dead_time * self.rate / 1000.0):
             # Uniform branch on [0, dead_time).
             return float(rng.random() * self.dead_time)
@@ -513,10 +645,38 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         return float(rng.exponential() * inv_rate_ms + self.dead_time)
 
     def _sample_isi_ms(self, rng: np.random.Generator, inv_rate_ms: float) -> float:
+        r"""Sample one inter-spike interval (ISI) from the renewal distribution.
+
+        Draws a single ISI as
+
+        .. math::
+
+           \Delta t = t_{\mathrm{dead}} + \xi \, \alpha, \qquad
+           \xi \sim \mathrm{Exp}(1),
+
+        where :math:`\alpha = 1000 / r - t_{\mathrm{dead}}` is the scale
+        parameter in ms. When ``dead_time == 0``, this reduces to a pure
+        exponential ISI, recovering the memoryless Poisson process.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator
+            Per-target RNG instance. Consumed in place; one exponential variate
+            is drawn per call.
+        inv_rate_ms : float
+            Scale parameter :math:`\alpha = 1000 / r - t_{\mathrm{dead}}` in
+            ms. Must be non-negative.
+
+        Returns
+        -------
+        isi_ms : float
+            Sampled inter-spike interval in ms. Always satisfies
+            ``isi_ms >= dead_time``.
+        """
         return float(rng.exponential() * inv_rate_ms + self.dead_time)
 
     def update(self, return_precise_times: bool = False):
-        """Advance one simulation step and emit precise Poisson events.
+        r"""Advance one simulation step and emit precise Poisson events.
 
         Parameters
         ----------
@@ -527,16 +687,20 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
-            If ``return_precise_times`` is ``False``:
-            ``numpy.ndarray`` of dtype ``int64`` and shape ``self.varshape``
-            containing per-step spike multiplicities.
+        counts : numpy.ndarray
+            Integer array with dtype ``int64`` and shape ``self.varshape``
+            containing per-step spike multiplicities. Returned in both modes.
 
-            If ``return_precise_times`` is ``True``:
-            ``(counts, spike_times_tuple)`` where ``counts`` is the array above
-            and ``spike_times_tuple`` is a tuple of length
-            ``np.prod(self.varshape)`` with one ``float64`` array of emitted
-            spike times (ms) per flattened target.
+            - **Active and** ``rate > 0``: each element counts how many spikes
+              fell in ``(t_min_active, t_max_active]`` for that output train.
+            - **Inactive or** ``rate <= 0``: all entries are exactly ``0``.
+
+        spike_times_tuple : tuple of numpy.ndarray, only when ``return_precise_times=True``
+            Tuple of length ``np.prod(self.varshape)``. Each element is a
+            one-dimensional ``float64`` array of emitted precise spike times
+            (ms) for the corresponding flattened output train in this step.
+            Arrays are empty when no spikes were emitted. Also accessible via
+            :attr:`step_spike_times_ms` after the call.
 
         Raises
         ------
@@ -548,6 +712,74 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
             ``brainstate.environ``.
         TypeError
             If environment values cannot be converted to scalar milliseconds.
+
+        Notes
+        -----
+        The update proceeds as follows each call:
+
+        1. **Lazy init** -- If ``next_spike_time`` has not been created by
+           :meth:`init_state`, it is initialized automatically with
+           ``self.rng_seed``.
+        2. **Window clipping** -- Computes ``t_min_active`` and
+           ``t_max_active`` by intersecting the step interval
+           ``[t, t + dt]`` with the configured activity window. Returns zeros
+           immediately if the window is empty or ``rate <= 0``.
+        3. **Stream initialization** -- For any target whose
+           ``next_spike_time`` is ``-inf`` (first call or after a rate reset),
+           the initial spike is placed at
+           ``t_min_active + _sample_initial_offset_ms(...)`` using the
+           stationary backward-recurrence distribution.
+        4. **Spike emission loop** -- Advances each target stream forward,
+           emitting spikes at ``next_t <= t_max_active`` and drawing new ISIs
+           via :meth:`_sample_isi_ms` until the next spike lies outside the
+           current step.
+        5. **State update** -- Writes back ``next_spike_time``,
+           ``last_spike_time``, and ``last_spike_offset`` states and caches
+           per-target spike-time arrays in :attr:`step_spike_times_ms`.
+
+        See Also
+        --------
+        poisson_generator_ps.init_state : State buffers consumed here.
+        poisson_generator_ps.set : Update parameters between runs.
+        poisson_generator_ps.step_spike_times_ms : Access precise times after
+            update without the overhead of the return value.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = brainpy.state.poisson_generator_ps(
+           ...         in_size=(2, 3),
+           ...         rate=1000.0 * u.Hz,
+           ...         dead_time=0.0 * u.ms,
+           ...         start=0.0 * u.ms,
+           ...         stop=50.0 * u.ms,
+           ...         rng_seed=0,
+           ...     )
+           ...     gen.init_state()
+           ...     with brainstate.environ.context(t=10.0 * u.ms):
+           ...         counts = gen.update()
+           ...     _ = counts.shape  # (2, 3)
+
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = brainpy.state.poisson_generator_ps(
+           ...         in_size=(4,),
+           ...         rate=500.0 * u.Hz,
+           ...         dead_time=1.0 * u.ms,
+           ...         rng_seed=42,
+           ...     )
+           ...     with brainstate.environ.context(t=5.0 * u.ms):
+           ...         counts, times = gen.update(return_precise_times=True)
+           ...     _ = len(times)  # 4
         """
         if not hasattr(self, 'next_spike_time'):
             self.init_state()

@@ -59,10 +59,10 @@ class stdp_triplet_synapse(stdp_synapse):
     **State Variables:**
 
     - ``w``: Synaptic weight (plastic, bounded to :math:`[0, W_{\max}]` or :math:`[W_{\max}, 0]`)
-    - :math:`r_1 = K^+`: Short presynaptic trace (decays with :math:`\tau_+`)
-    - :math:`r_2 = K^+_{\text{triplet}}`: Long presynaptic trace (decays with :math:`\tau_+^{\text{triplet}}`)
-    - :math:`o_1 = K^-`: Short postsynaptic trace (decays with :math:`\tau_-`)
-    - :math:`o_2 = K^-_{\text{triplet}}`: Long postsynaptic trace (decays with :math:`\tau_-^{\text{triplet}}`)
+    - :math:`r_1 = K^+` -- Short presynaptic trace (decays with :math:`\tau_+`)
+    - :math:`r_2 = K^+_{\text{triplet}}` -- Long presynaptic trace (decays with :math:`\tau_+^{\text{triplet}}`)
+    - :math:`o_1 = K^-` -- Short postsynaptic trace (decays with :math:`\tau_-`)
+    - :math:`o_2 = K^-_{\text{triplet}}` -- Long postsynaptic trace (decays with :math:`\tau_-^{\text{triplet}}`)
 
     **Continuous-time dynamics (between spikes):**
 
@@ -489,7 +489,7 @@ class stdp_triplet_synapse(stdp_synapse):
         return math.copysign(new_w if new_w > 0.0 else 0.0, self.Wmax)
 
     def clear_post_history(self):
-        """Clear internal postsynaptic STDP history state.
+        r"""Clear internal postsynaptic STDP history state.
 
         Resets all postsynaptic spike history buffers and trace values to their
         initial state. This method should be called periodically in long simulations
@@ -547,7 +547,7 @@ class stdp_triplet_synapse(stdp_synapse):
         self.Kplus_triplet = float(self._Kplus_triplet0)
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all NEST-compatible parameters and dynamic state variables in a
         dictionary format. This method mirrors the NEST ``GetStatus`` API, allowing
@@ -629,7 +629,7 @@ class stdp_triplet_synapse(stdp_synapse):
         Kplus_triplet: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Updates synapse configuration and dynamic state variables. This method mirrors
         the NEST ``SetStatus`` API, allowing runtime modification of synapse properties.

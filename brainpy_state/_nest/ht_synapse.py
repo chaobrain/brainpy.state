@@ -273,7 +273,7 @@ class ht_synapse:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Model capability flags mirroring NEST connection properties.
+        r"""Model capability flags mirroring NEST connection properties.
 
         Returns
         -------
@@ -305,7 +305,7 @@ class ht_synapse:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve complete connection state and parameters.
+        r"""Retrieve complete connection state and parameters.
 
         Returns
         -------
@@ -360,7 +360,7 @@ class ht_synapse:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters and state from dictionary or kwargs.
+        r"""Update connection parameters and state from dictionary or kwargs.
 
         Parameters
         ----------
@@ -443,7 +443,7 @@ class ht_synapse:
             self.t_last_spike_ms = self._to_float_scalar(updates['t_last_spike_ms'], name='t_last_spike_ms')
 
     def get(self, key: str = 'status'):
-        """Retrieve a specific parameter or complete status dictionary.
+        r"""Retrieve a specific parameter or complete status dictionary.
 
         Parameters
         ----------
@@ -488,7 +488,7 @@ class ht_synapse:
         raise KeyError(f'Unsupported key "{key}" for ht_synapse.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update the baseline synaptic weight.
+        r"""Update the baseline synaptic weight.
 
         Parameters
         ----------
@@ -512,7 +512,7 @@ class ht_synapse:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, delay: ArrayLike):
-        """Update the transmission delay (alias for ``set_delay_steps``).
+        r"""Update the transmission delay (alias for ``set_delay_steps``).
 
         Parameters
         ----------
@@ -541,7 +541,7 @@ class ht_synapse:
         self.delay_steps = self._validate_delay_steps(delay, name='delay')
 
     def set_delay_steps(self, delay_steps: ArrayLike):
-        """Update the transmission delay in simulation steps.
+        r"""Update the transmission delay in simulation steps.
 
         Parameters
         ----------
@@ -569,7 +569,7 @@ class ht_synapse:
         P: ArrayLike = 1.0,
         t_last_spike_ms: ArrayLike = 0.0,
     ):
-        """Reset internal state variables to specified values.
+        r"""Reset internal state variables to specified values.
 
         Useful for initializing or reinitializing the synapse mid-simulation without
         recreating the object.
@@ -827,7 +827,7 @@ class ht_synapse:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Alias of :meth:`send` for event-style APIs.
+        r"""Alias of :meth:`send` for event-style APIs.
 
         Provided for compatibility with event-driven simulation frameworks that
         prefer explicit ``to_*_event`` method naming. Functionality is identical
@@ -867,7 +867,7 @@ class ht_synapse:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> list[dict[str, Any]]:
-        """Process a sequence of spikes and return all emitted events.
+        r"""Process a sequence of spikes and return all emitted events.
 
         Convenience method for simulating a spike train through the synapse and
         observing depression dynamics over time. Each spike updates the internal

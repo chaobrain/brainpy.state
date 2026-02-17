@@ -36,11 +36,26 @@ _UNSET = object()
 
 
 class spike_dilutor(Dynamics):
-    r"""Spike multiplicity dilutor compatible with NEST.
+    r"""NEST-compatible ``spike_dilutor`` device.
+
+    Short description
+    -----------------
 
     Dilute an incoming mother spike multiplicity into independent child
     multiplicities by Bernoulli copying, one trial per
     ``(target, mother-spike)`` pair.
+
+    Description
+    -----------
+
+    ``spike_dilutor`` mirrors NEST ``models/spike_dilutor.cpp``.
+    On each active simulation step, the device reads one scalar mother
+    multiplicity, then independently assigns each of the :math:`M` child
+    targets a copy count drawn from a Binomial distribution with that
+    multiplicity and copy probability :math:`p_{\mathrm{copy}}`.
+
+    Outputs are integer multiplicities (``0, 1, 2, ...``), matching NEST
+    ``SpikeEvent`` multiplicity semantics rather than binary spikes.
 
     **1. Model equations and distributional properties**
 
@@ -57,17 +72,14 @@ class spike_dilutor(Dynamics):
 
     .. math::
 
-       N_j(n)\mid N_m(n)\sim\mathrm{Binomial}(N_m(n), p).
+       N_j(n)\mid N_m(n)\sim\mathrm{Binomial}(N_m(n),\, p).
 
-    Hence:
+    Hence the per-target moments are:
 
     .. math::
 
        \mathbb{E}[N_j\mid N_m]=N_m p,\quad
        \mathrm{Var}[N_j\mid N_m]=N_m p(1-p).
-
-    Outputs are integer multiplicities (``0, 1, 2, ...``), matching NEST
-    ``SpikeEvent`` multiplicity semantics rather than binary spikes.
 
     **2. NEST-equivalent update ordering**
 
@@ -89,24 +101,26 @@ class spike_dilutor(Dynamics):
     :math:`t_{\max}=\mathrm{origin}+\mathrm{stop}`. Therefore ``start`` is
     exclusive and ``stop`` is inclusive.
 
-    Grid constraints are enforced when timing cache is refreshed:
+    Grid constraints are enforced when the timing cache is refreshed:
 
-    - finite ``origin``, ``start``, and ``stop`` must be integer multiples of
-      ``dt`` (checked with tight absolute tolerance),
-    - ``stop >= start`` must hold,
-    - cached step indices are recomputed if runtime ``dt`` changes.
+    - Finite ``origin``, ``start``, and ``stop`` must be integer multiples of
+      ``dt`` (checked with tight absolute tolerance of ``1e-12``).
+    - ``stop >= start`` must hold.
+    - Cached step indices are recomputed if the runtime ``dt`` changes between
+      calls.
 
-    Mother multiplicity is taken as the sum of direct ``mother_spikes`` plus
-    registered current and delta inputs, then truncated toward zero to a
-    non-negative integer count.
+    Mother multiplicity is taken as the sum of the direct ``mother_spikes``
+    argument plus any values registered via :meth:`add_current_input` and
+    :meth:`add_delta_input`, then truncated toward zero to a non-negative
+    integer count.
 
     **4. Computational implications**
 
-    For ``0 < p_copy < 1``, one update draws an array of shape
+    For ``0 < p_copy < 1``, one update draws a random array of shape
     ``(prod(varshape), n_mother_spikes)`` and counts successes per target.
-    Time and temporary-memory complexity are
+    Time and temporary-memory complexity are both
     :math:`O(\prod\mathrm{varshape}\cdot n_{\mathrm{mother}})`. Fast paths for
-    ``p_copy`` equal to ``0`` or ``1`` avoid random sampling.
+    ``p_copy`` equal to ``0`` or ``1`` avoid random sampling entirely.
 
     Parameters
     ----------
@@ -116,22 +130,25 @@ class spike_dilutor(Dynamics):
         ``in_size``. Default is ``1``.
     p_copy : ArrayLike, optional
         Scalar Bernoulli copy probability :math:`p_{\mathrm{copy}}`.
-        Accepted as scalar-like numeric array/value, converted to Python
-        ``float`` and validated in ``[0, 1]``. Unitless. Default is ``1.0``.
+        Accepted as a scalar-like numeric array or value; converted internally
+        to Python ``float`` and validated in ``[0, 1]``. Unitless.
+        Default is ``1.0``.
     start : ArrayLike, optional
-        Relative start time in milliseconds. Scalar-convertible value
-        interpreted as ms; active window lower bound is
-        ``origin + start`` and is exclusive. Default is ``0.0 * u.ms``.
+        Relative start time (ms). Scalar-convertible; active window lower bound
+        is ``origin + start`` and is **exclusive**. Must be an integer multiple
+        of ``dt`` when finite. Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Relative stop time in milliseconds. ``None`` maps to ``+inf`` (no upper
-        bound). When finite, upper bound ``origin + stop`` is inclusive.
-        Must satisfy ``stop >= start``. Default is ``None``.
+        Relative stop time (ms). ``None`` maps to ``+inf`` (no upper bound).
+        When finite, upper bound ``origin + stop`` is **inclusive** and must
+        satisfy ``stop >= start``. Must be an integer multiple of ``dt`` when
+        finite. Default is ``None``.
     origin : ArrayLike, optional
-        Global time offset in milliseconds added to ``start`` and ``stop``.
-        Scalar-convertible. Default is ``0.0 * u.ms``.
+        Global time offset (ms) added to both ``start`` and ``stop``.
+        Scalar-convertible. Must be an integer multiple of ``dt`` when finite.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Seed for NumPy ``default_rng`` used for Bernoulli copy draws in
-        :meth:`update`. Default is ``0``.
+        Integer seed for NumPy ``default_rng`` used for Bernoulli copy draws.
+        The RNG is re-initialised in :meth:`init_state`. Default is ``0``.
     name : str or None, optional
         Optional node name passed to :class:`Dynamics`.
 
@@ -165,41 +182,47 @@ class spike_dilutor(Dynamics):
        * - ``in_size``
          - ``1``
          - :math:`M`
-         - Number/shape of child targets, with ``M=prod(varshape)``.
+         - Number/shape of child targets; ``M = prod(varshape)``.
 
     Returns
     -------
     out : Any
         Dynamics node. Calling :meth:`update` returns a NumPy array with dtype
-        ``int64`` and shape ``self.varshape``. Each entry is the copied child
+        ``int64`` and shape ``self.varshape``. Each element is the copied child
         multiplicity for one target in the current simulation step.
 
     Raises
     ------
     ValueError
         If ``p_copy`` is outside ``[0, 1]``, if ``stop < start``, if any time
-        parameter is non-scalar or off-grid with respect to ``dt``, or if
+        parameter is non-scalar or not an integer multiple of ``dt``, or if the
         effective mother multiplicity for a step is negative.
     TypeError
-        If parameters cannot be converted to required numeric scalar types.
+        If parameters cannot be converted to the required numeric scalar types.
     KeyError
-        At update time, if simulation context does not provide required values
-        (for example simulation resolution via ``brainstate.environ.get_dt()``),
-        depending on environment behavior.
+        At update time, if the simulation context does not provide the required
+        ``dt`` value via ``brainstate.environ.get_dt()``.
+
+    See Also
+    --------
+    bernoulli_synapse : Per-spike Bernoulli transmission at the synapse level.
+    spike_generator : Deterministic spike injection device.
 
     Notes
     -----
     - Incoming mother spikes are provided through the ``mother_spikes``
       argument of :meth:`update`, and can also be accumulated via
       :meth:`add_delta_input` / :meth:`add_current_input`.
-    - Like NEST, this model is deprecated in favor of probabilistic synapses
-      (e.g., ``bernoulli_synapse`` in NEST).
+    - Like NEST, this model is deprecated in favour of probabilistic synapses
+      (e.g., ``bernoulli_synapse``), which operate at the connection level.
     - NEST restricts ``spike_dilutor`` to single-threaded simulations. This
       backend does not expose NEST thread kernels, so that restriction is not
-      modeled here.
+      modelled here.
 
     Examples
     --------
+    Dilute a mother multiplicity of 3 into 4 independent child channels:
+
     .. code-block:: python
 
        >>> import brainpy
@@ -213,9 +236,12 @@ class spike_dilutor(Dynamics):
        ...         stop=5.0 * u.ms,
        ...         rng_seed=123,
        ...     )
+       ...     sd.init_state()
        ...     with brainstate.environ.context(t=1.0 * u.ms):
        ...         y = sd.update(mother_spikes=3)
-       ...     _ = (y.shape, y.dtype)
+       ...     _ = (y.shape, y.dtype)  # ((4,), int64)
+
+    Pass-through mode (``p_copy=1.0``) with a 2-D output shape:
 
     .. code-block:: python
 
@@ -224,9 +250,10 @@ class spike_dilutor(Dynamics):
        >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sd = brainpy.state.spike_dilutor(p_copy=1.0, in_size=(2, 2))
+       ...     sd.init_state()
        ...     with brainstate.environ.context(t=2.0 * u.ms):
-       ...         y = sd.update(mother_spikes=[1, 2])
-       ...     _ = y.sum()
+       ...         y = sd.update(mother_spikes=5)
+       ...     _ = y.sum()  # == 20  (4 targets × 5 spikes)
 
     References
     ----------
@@ -351,6 +378,31 @@ class spike_dilutor(Dynamics):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialise the per-instance NumPy random number generator.
+
+        Constructs a ``numpy.random.default_rng`` seeded with
+        :attr:`rng_seed`.  Must be called before the first :meth:`update`
+        call; :meth:`update` calls it automatically when the RNG is absent,
+        but explicit initialisation is preferred for reproducibility.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Unused; accepted for API compatibility with
+            :class:`brainstate.nn.Dynamics`. Default is ``None``.
+        **kwargs
+            Unused; accepted for forward compatibility.
+
+        Returns
+        -------
+        None
+            Modifies ``self._rng`` in-place.
+
+        Notes
+        -----
+        Calling :meth:`init_state` a second time resets the RNG to the
+        initial seed, making simulation runs reproducible when seeded.
+        """
         del batch_size, kwargs
         self._rng = np.random.default_rng(self.rng_seed)
 
@@ -362,7 +414,48 @@ class spike_dilutor(Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set public parameters with NEST-style validation."""
+        r"""Update public parameters with NEST-style validation.
+
+        Updates one or more device parameters.  All arguments are keyword-only
+        and optional; unspecified parameters retain their current values.
+        If a timing parameter is provided and ``dt`` is available in the
+        environment, the step-index cache is refreshed immediately.
+
+        Parameters
+        ----------
+        p_copy : ArrayLike, optional
+            New Bernoulli copy probability. Scalar-convertible; must lie in
+            ``[0, 1]``. Raises ``ValueError`` if the constraint is violated.
+        start : ArrayLike, optional
+            New relative start time (ms). Scalar-convertible; must be an
+            integer multiple of ``dt`` when finite.
+        stop : ArrayLike or None, optional
+            New relative stop time (ms). ``None`` maps to ``+inf``.
+            Must satisfy ``stop >= start``.
+        origin : ArrayLike, optional
+            New global time offset (ms). Scalar-convertible.
+
+        Raises
+        ------
+        ValueError
+            If ``p_copy`` is outside ``[0, 1]``, if ``stop < start`` after
+            the update, if any time value is non-scalar, or if a finite time
+            value is not an integer multiple of the current ``dt``.
+        TypeError
+            If a parameter cannot be converted to the required numeric type.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     sd = brainpy.state.spike_dilutor(p_copy=0.5)
+           ...     sd.set(p_copy=0.8, stop=10.0 * u.ms)
+           ...     _ = sd.p_copy  # 0.8
+        """
         new_p_copy = (
             self.p_copy
             if p_copy is _UNSET
@@ -393,7 +486,32 @@ class spike_dilutor(Dynamics):
             self._refresh_timing_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters as plain Python scalars."""
+        r"""Return current public parameters as plain Python scalars.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all device parameters:
+
+            - ``'p_copy'`` : float — Bernoulli copy probability in ``[0, 1]``.
+            - ``'start'`` : float — relative start time in ms (exclusive bound).
+            - ``'stop'`` : float — relative stop time in ms (inclusive bound);
+              ``+inf`` when no upper bound is configured.
+            - ``'origin'`` : float — global time offset in ms.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     sd = brainpy.state.spike_dilutor(p_copy=0.3, stop=5.0 * u.ms)
+           ...     params = sd.get()
+           ...     _ = params['p_copy']   # 0.3
+           ...     _ = params['stop']     # 5.0
+        """
         return {
             'p_copy': float(self.p_copy),
             'start': float(self.start),
@@ -402,6 +520,37 @@ class spike_dilutor(Dynamics):
         }
 
     def _sample_child_spikes(self, n_mother_spikes: int) -> np.ndarray:
+        r"""Draw Binomial child multiplicities for all targets.
+
+        For each of the :math:`M = \prod\mathrm{varshape}` targets, sums
+        ``n_mother_spikes`` independent Bernoulli trials with success
+        probability :math:`p_{\mathrm{copy}}`.  Three fast paths avoid
+        random sampling when the result is deterministic:
+
+        - ``n_mother_spikes <= 0`` or ``_num_targets == 0``: return zeros.
+        - ``p_copy <= 0.0``: return zeros (no copies ever succeed).
+        - ``p_copy >= 1.0``: return ``n_mother_spikes`` for every target.
+
+        Parameters
+        ----------
+        n_mother_spikes : int
+            Non-negative integer mother multiplicity for the current step.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            1-D array of dtype ``int64`` with length ``self._num_targets``.
+            Element ``j`` gives the number of mother spikes copied to child
+            target ``j``.  Caller is responsible for reshaping to
+            ``self.varshape``.
+
+        Notes
+        -----
+        Random draws are taken from ``self._rng`` (a ``numpy.random.Generator``
+        initialised in :meth:`init_state`).  The draw allocates a temporary
+        array of shape ``(self._num_targets, n_mother_spikes)``, which may be
+        large for high-multiplicity inputs.
+        """
         out = np.zeros(self._num_targets, dtype=np.int64)
 
         if n_mother_spikes <= 0 or self._num_targets == 0:
@@ -419,34 +568,64 @@ class spike_dilutor(Dynamics):
         return out
 
     def update(self, mother_spikes: ArrayLike = 0.0):
-        """Advance one simulation step and emit child spike multiplicities.
+        r"""Advance one simulation step and emit child spike multiplicities.
+
+        Reads the current simulation time from ``brainstate.environ``,
+        checks device activity, and—when active—delegates to
+        :meth:`_sample_child_spikes` to draw independent Binomial counts for
+        each target.  If the timing cache is stale (``dt`` changed since last
+        call), the cache is refreshed before activity is evaluated.
 
         Parameters
         ----------
         mother_spikes : ArrayLike, optional
             Mother-process multiplicity contribution for the current step.
-            Values are summed over all elements, combined with registered
-            current and delta inputs, and converted to an integer count by
-            truncation toward zero. The resulting total must be non-negative.
-            Unitless count semantics. Default is ``0.0``.
+            Values are summed element-wise over all array elements, then
+            combined with any values registered via :meth:`add_current_input`
+            and :meth:`add_delta_input`.  The resulting total is truncated
+            toward zero to a non-negative integer count.  Unitless count
+            semantics. Default is ``0.0``.
 
         Returns
         -------
-        out : Any
-            NumPy array with dtype ``int64`` and shape ``self.varshape``.
-            Returns zeros when the device is inactive for current time step or
-            when the effective mother multiplicity is zero.
+        out : numpy.ndarray
+            Integer array with dtype ``int64`` and shape ``self.varshape``.
+            Each element gives the copied child multiplicity for the
+            corresponding target in the current simulation step.  Returns all
+            zeros when the device is inactive or when the effective mother
+            multiplicity is zero.
 
         Raises
         ------
         ValueError
-            If ``mother_spikes`` (after combining all inputs) is negative, or
-            if finite timing parameters are not multiples of current ``dt``.
+            If the effective mother multiplicity is negative after combining
+            all inputs, or if a finite timing parameter is not an integer
+            multiple of the current ``dt``.
         TypeError
-            If ``mother_spikes`` cannot be converted to numeric array form.
+            If ``mother_spikes`` cannot be converted to a numeric array.
         KeyError
-            If required simulation context (for example ``dt``) is unavailable,
-            depending on ``brainstate.environ`` behavior.
+            If required simulation context (e.g. ``dt``) is unavailable
+            depending on ``brainstate.environ`` behaviour.
+
+        See Also
+        --------
+        _sample_child_spikes : Low-level Binomial sampling routine.
+        init_state : Initialise the RNG before calling update.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     sd = brainpy.state.spike_dilutor(in_size=3, p_copy=0.5, rng_seed=0)
+           ...     sd.init_state()
+           ...     with brainstate.environ.context(t=1.0 * u.ms):
+           ...         out = sd.update(mother_spikes=4)
+           ...     _ = out.shape   # (3,)
+           ...     _ = out.dtype   # int64
         """
         if not hasattr(self, '_rng'):
             self.init_state()

@@ -72,9 +72,9 @@ class tsodyks_synapse(static_synapse):
 
     where:
 
-    - :math:`\tau_{\mathrm{fac}}`: Facilitation time constant (ms). If :math:`\tau_{\mathrm{fac}} = 0`, facilitation is disabled and :math:`u` decays instantly to zero.
-    - :math:`\tau_{\mathrm{psc}}`: Time constant of synaptic current decay (ms).
-    - :math:`\tau_{\mathrm{rec}}`: Recovery time constant for inactive resources (ms).
+    - :math:`\tau_{\mathrm{fac}}` -- Facilitation time constant (ms). If :math:`\tau_{\mathrm{fac}} = 0`, facilitation is disabled and :math:`u` decays instantly to zero.
+    - :math:`\tau_{\mathrm{psc}}` -- Time constant of synaptic current decay (ms).
+    - :math:`\tau_{\mathrm{rec}}` -- Recovery time constant for inactive resources (ms).
 
     **Upon presynaptic spike at time** :math:`t_s`:
 
@@ -455,7 +455,7 @@ class tsodyks_synapse(static_synapse):
             raise ValueError('x + y must be <= 1.0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize or reset all state variables to their configured initial values.
+        r"""Initialize or reset all state variables to their configured initial values.
 
         Resets the internal event delivery queue (via ``super().init_state()``) and
         restores the short-term plasticity state variables ``x``, ``y``, ``u`` to
@@ -484,7 +484,7 @@ class tsodyks_synapse(static_synapse):
         self.t_lastspike = 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state variables.
+        r"""Return current public parameters and mutable state variables.
 
         Retrieves all NEST-visible synapse parameters, including the baseline weight,
         delay, receptor type (from ``super().get()``), time constants, utilization
@@ -548,7 +548,7 @@ class tsodyks_synapse(static_synapse):
         u: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and state variables.
+        r"""Set NEST-style public parameters and state variables.
 
         Updates synapse parameters and/or state variables. Only parameters explicitly
         provided (not ``_UNSET``) are modified. All changes are validated before
@@ -678,7 +678,7 @@ class tsodyks_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``tsodyks_synapse`` short-term plasticity dynamics.
+        r"""Schedule one outgoing event with NEST ``tsodyks_synapse`` short-term plasticity dynamics.
 
         Processes a presynaptic spike event by:
 
@@ -789,7 +789,7 @@ class tsodyks_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events and process current-step presynaptic input.
+        r"""Deliver due events and process current-step presynaptic input.
 
         This method performs two tasks per simulation time step:
 

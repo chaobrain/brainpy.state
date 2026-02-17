@@ -393,7 +393,7 @@ class iaf_psc_delta(Neuron):
         self.ref_var = ref_var
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize membrane and refractory runtime states.
+        r"""Initialize membrane and refractory runtime states.
 
         Parameters
         ----------
@@ -431,7 +431,7 @@ class iaf_psc_delta(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None):
-        """Evaluate surrogate spike activation for a voltage tensor.
+        r"""Evaluate surrogate spike activation for a voltage tensor.
 
         Parameters
         ----------
@@ -456,7 +456,7 @@ class iaf_psc_delta(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Convert refractory duration to integer simulation-step counts.
+        r"""Convert refractory duration to integer simulation-step counts.
 
         Returns
         -------
@@ -477,7 +477,7 @@ class iaf_psc_delta(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA):
-        """Advance the neuron by one simulation step.
+        r"""Advance the neuron by one simulation step.
 
         Parameters
         ----------

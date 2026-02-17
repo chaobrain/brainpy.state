@@ -172,6 +172,16 @@ class step_current_generator(brainstate.nn.Dynamics):
         At update time, if simulation time ``'t'`` is missing from
         ``brainstate.environ``.
 
+    Notes
+    -----
+    NEST recommends specifying ``amplitude_times`` on a grid of simulation
+    resolution ``dt``.  Using off-grid change times is allowed but may shift
+    the effective change by up to one ``dt`` step depending on floating-point
+    rounding when comparing ``t_ms >= amp_time_ms``.  Use ``dc_generator``
+    when only a single constant plateau is needed; ``step_current_generator``
+    is the preferred device when the current must take different values at
+    different intervals within a single simulation run.
+
     See Also
     --------
     dc_generator : Constant current stimulation device.
@@ -201,6 +211,23 @@ class step_current_generator(brainstate.nn.Dynamics):
        ...     with brainstate.environ.context(t=60.0 * u.ms):
        ...         current = stim.update()
        ...     _ = current.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> stim1 = brainpy.state.step_current_generator(
+       ...     amplitude_times=[0.0 * u.ms, 100.0 * u.ms, 200.0 * u.ms],
+       ...     amplitude_values=[300.0 * u.pA, 0.0 * u.pA, -150.0 * u.pA],
+       ... )
+       >>> stim2 = brainpy.state.step_current_generator(
+       ...     in_size=10,
+       ...     amplitude_times=[50.0 * u.ms, 150.0 * u.ms],
+       ...     amplitude_values=[400.0 * u.pA, 100.0 * u.pA],
+       ...     start=40.0 * u.ms,
+       ...     stop=180.0 * u.ms,
+       ...     origin=10.0 * u.ms,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -286,7 +313,16 @@ class step_current_generator(brainstate.nn.Dynamics):
         -----
         The schedule lookup is linear in ``len(amplitude_times)``. This is
         efficient for short schedules and preserves straightforward NEST-like
-        semantics without interpolation.
+        semantics without interpolation.  Start is inclusive and stop is
+        exclusive, matching NEST semantics.  If ``stop <= start`` (after
+        adding ``origin``), the active set is empty and the output is
+        identically zero for all ``t``.
+
+        See Also
+        --------
+        step_current_generator : Class-level parameter definitions and model equations.
+        dc_generator.update : Windowed constant-current update rule.
+        ac_generator.update : Windowed sinusoidal-current update rule.
 
         Examples
         --------

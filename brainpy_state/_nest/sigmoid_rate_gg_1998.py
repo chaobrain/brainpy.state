@@ -66,7 +66,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
 
     @staticmethod
     def _mult_coupling_ex(rate):
-        """Compute excitatory multiplicative coupling factor (fixed to 1.0).
+        r"""Compute excitatory multiplicative coupling factor (fixed to 1.0).
 
         For ``sigmoid_rate_gg_1998`` variants, multiplicative coupling is not
         implemented; this method always returns ones regardless of ``rate``.
@@ -85,7 +85,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
 
     @staticmethod
     def _mult_coupling_in(rate):
-        """Compute inhibitory multiplicative coupling factor (fixed to 1.0).
+        r"""Compute inhibitory multiplicative coupling factor (fixed to 1.0).
 
         For ``sigmoid_rate_gg_1998`` variants, multiplicative coupling is not
         implemented; this method always returns ones regardless of ``rate``.
@@ -103,7 +103,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         return np.ones_like(rate, dtype=np.float64)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
-        """Parse rate event into (rate, weight, multiplicity, delay_steps).
+        r"""Parse rate event into (rate, weight, multiplicity, delay_steps).
 
         Accepts dict, tuple/list, or scalar formats and applies defaults for
         missing fields.
@@ -217,7 +217,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         return ex, inh, delay_steps
 
     def _accumulate_instant_events_sigmoid_gg_1998(self, events, state_shape, g):
-        """Accumulate instantaneous rate events into excitatory/inhibitory sums.
+        r"""Accumulate instantaneous rate events into excitatory/inhibitory sums.
 
         Processes all events with ``delay_steps=0`` and aggregates contributions.
         Raises error if any event specifies non-zero delay.
@@ -259,7 +259,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         return ex, inh
 
     def _schedule_delayed_events_sigmoid_gg_1998(self, events, step_idx: int, state_shape, g):
-        """Schedule delayed rate events and return zero-delay contributions.
+        r"""Schedule delayed rate events and return zero-delay contributions.
 
         For each event:
         - If ``delay_steps=0``, add to immediate excitatory/inhibitory sums.
@@ -315,7 +315,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         return ex_now, inh_now
 
     def _common_inputs_sigmoid_gg_1998(self, x, instant_rate_events, delayed_rate_events, g):
-        """Aggregate all input sources into excitatory/inhibitory and external drive.
+        r"""Aggregate all input sources into excitatory/inhibitory and external drive.
 
         Drains delayed queues, schedules new delayed events, accumulates instantaneous
         events, separates delta inputs by polarity, and computes total external drive.
@@ -382,7 +382,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
 
     def _common_parameters_sigmoid_gg_1998(self, state_shape):
-        """Broadcast model parameters to state shape.
+        r"""Broadcast model parameters to state shape.
 
         Converts time constant to milliseconds and broadcasts all parameters to
         match the current state array shape.
@@ -709,7 +709,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
     @property
     def recordables(self):
-        """List of state variables available for recording.
+        r"""List of state variables available for recording.
 
         Returns
         -------
@@ -720,7 +720,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
     @property
     def receptor_types(self):
-        """Receptor port name-to-index mapping for synaptic input routing.
+        r"""Receptor port name-to-index mapping for synaptic input routing.
 
         Returns
         -------
@@ -730,7 +730,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         return {'RATE': 0}
 
     def _validate_parameters(self):
-        """Validate construction-time parameter constraints.
+        r"""Validate construction-time parameter constraints.
 
         Checks that time constant, decay rate, noise amplitude, and rectification
         rate satisfy physical and numerical consistency requirements.
@@ -756,7 +756,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
             raise ValueError('Rectifying rate must be >= 0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize neuron state variables and delayed event queues.
+        r"""Initialize neuron state variables and delayed event queues.
 
         Allocates ``rate``, ``noise``, ``instant_rate``, ``delayed_rate``, internal
         step counter, and per-step delayed event dictionaries for excitatory and

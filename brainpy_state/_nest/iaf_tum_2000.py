@@ -509,7 +509,7 @@ class iaf_tum_2000(Neuron):
 
     @property
     def receptor_types(self):
-        """Return a dictionary of available receptor type labels.
+        r"""Return a dictionary of available receptor type labels.
 
         Returns
         -------
@@ -521,7 +521,7 @@ class iaf_tum_2000(Neuron):
 
     @property
     def recordables(self):
-        """Return a list of state variable names available for recording.
+        r"""Return a list of state variable names available for recording.
 
         Returns
         -------
@@ -535,7 +535,7 @@ class iaf_tum_2000(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit=None):
-        """Convert brainunit quantity or array to NumPy float64 array.
+        r"""Convert brainunit quantity or array to NumPy float64 array.
 
         Parameters
         ----------
@@ -566,7 +566,7 @@ class iaf_tum_2000(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast NumPy array to the specified shape.
+        r"""Broadcast NumPy array to the specified shape.
 
         Parameters
         ----------
@@ -585,7 +585,7 @@ class iaf_tum_2000(Neuron):
 
     @classmethod
     def _normalize_spike_receptor(cls, receptor):
-        """Normalize receptor label to canonical integer ID.
+        r"""Normalize receptor label to canonical integer ID.
 
         Converts string labels like ``'DEFAULT'``, ``'TSODYKS'``, ``'R0'``,
         ``'R1'``, or numeric strings/integers to the standard receptor IDs (0 or 1).
@@ -628,7 +628,7 @@ class iaf_tum_2000(Neuron):
         return receptor
 
     def _validate_parameters(self):
-        """Validate model parameters at construction time.
+        r"""Validate model parameters at construction time.
 
         Checks all parameter constraints to ensure physical consistency and
         numerical stability. Raises ``ValueError`` with a descriptive message if
@@ -794,7 +794,7 @@ class iaf_tum_2000(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Compute refractory period duration in integer simulation steps.
+        r"""Compute refractory period duration in integer simulation steps.
 
         Converts the continuous-time refractory duration ``self.t_ref`` into the
         number of discrete simulation steps via ``ceil(t_ref / dt)``.
@@ -809,7 +809,7 @@ class iaf_tum_2000(Neuron):
         return bu.math.asarray(bu.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _parse_spike_events(self, spike_events: Iterable, state_shape):
-        """Parse external spike events into excitatory and inhibitory weights.
+        r"""Parse external spike events into excitatory and inhibitory weights.
 
         Processes each event descriptor in ``spike_events``, validates receptor
         types and sender models, computes effective weights including
@@ -891,7 +891,7 @@ class iaf_tum_2000(Neuron):
         return w_ex, w_in
 
     def _parse_registered_spike_inputs(self, state_shape):
-        """Parse registered delta inputs into excitatory and inhibitory weights.
+        r"""Parse registered delta inputs into excitatory and inhibitory weights.
 
         Processes inputs previously registered via :meth:`add_delta_input`
         (inherited from :class:`~brainpy_state._base.Dynamics`), extracts

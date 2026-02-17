@@ -471,29 +471,29 @@ class glif_psc(Neuron):
     ----------
     V : HiddenState
         Membrane potential :math:`V_\mathrm{m}` (absolute). Shape: (batch,
-        *in_size).
+        \*in_size).
     y1 : list of HiddenState
         Synaptic current derivative states (pA), one per receptor port.
-        Shape: (batch, *in_size).
+        Shape: (batch, \*in_size).
     y2 : list of HiddenState
         Synaptic current states (pA), one per receptor port. Shape: (batch,
-        *in_size).
+        \*in_size).
     last_spike_time : ShortTermState
-        Last spike time for each neuron (ms). Shape: (batch, *in_size).
+        Last spike time for each neuron (ms). Shape: (batch, \*in_size).
     refractory_step_count : ShortTermState
-        Remaining refractory grid steps (int32). Shape: (batch, *in_size).
+        Remaining refractory grid steps (int32). Shape: (batch, \*in_size).
     I_stim : ShortTermState
-        Buffered external current for next step (pA). Shape: (batch, *in_size).
+        Buffered external current for next step (pA). Shape: (batch, \*in_size).
     _ASCurrents : numpy.ndarray
-        After-spike current values (pA). Shape: (n_asc, batch, *in_size).
+        After-spike current values (pA). Shape: (n_asc, batch, \*in_size).
     _ASCurrents_sum : numpy.ndarray
-        Sum of after-spike currents (pA). Shape: (batch, *in_size).
+        Sum of after-spike currents (pA). Shape: (batch, \*in_size).
     _threshold : numpy.ndarray
-        Total threshold (relative to E_L, in mV). Shape: (batch, *in_size).
+        Total threshold (relative to E_L, in mV). Shape: (batch, \*in_size).
     _threshold_spike : numpy.ndarray
-        Spike component of threshold (mV). Shape: (batch, *in_size).
+        Spike component of threshold (mV). Shape: (batch, \*in_size).
     _threshold_voltage : numpy.ndarray
-        Voltage component of threshold (mV). Shape: (batch, *in_size).
+        Voltage component of threshold (mV). Shape: (batch, \*in_size).
     n_receptors : int
         Number of synaptic receptor ports (determined by len(tau_syn)).
 
@@ -501,7 +501,7 @@ class glif_psc(Neuron):
     -------
     spike : jax.numpy.ndarray
         Spike output (float32) via surrogate gradient function. Shape: (batch,
-        *in_size). Values in [0, 1] during forward pass; gradient computed via
+        \*in_size). Values in [0, 1] during forward pass; gradient computed via
         surrogate function.
 
     Raises
@@ -678,7 +678,7 @@ class glif_psc(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of synaptic receptor ports.
+        r"""Number of synaptic receptor ports.
 
         Returns
         -------
@@ -843,7 +843,7 @@ class glif_psc(Neuron):
         self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate spike output via surrogate gradient function.
+        r"""Generate spike output via surrogate gradient function.
 
         Applies the surrogate gradient function to a normalized voltage signal.
         The voltage is linearly scaled such that ``V_th`` maps to 1 and
@@ -878,7 +878,7 @@ class glif_psc(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _collect_receptor_delta_inputs(self):
-        """Collect delta inputs per receptor port.
+        r"""Collect delta inputs per receptor port.
 
         Scans the ``delta_inputs`` dictionary for input currents registered
         with receptor-specific keys. Input keys containing 'receptor_<k>'
@@ -960,7 +960,7 @@ class glif_psc(Neuron):
         -------
         spike : jax.numpy.ndarray
             Spike output (float32) via surrogate gradient function. Shape:
-            (batch, *in_size). Values in [0, 1] during forward pass;
+            (batch, \*in_size). Values in [0, 1] during forward pass;
             backward gradient computed via the surrogate function specified
             by ``spk_fun``.
 

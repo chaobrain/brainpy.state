@@ -145,8 +145,8 @@ class iaf_chs_2007(Neuron):
     - One sample per neuron per step is consumed from the flat noise array
       using a ``position`` index.
     - If the noise buffer is exhausted before the end of the simulation, an
-      ``IndexError`` is raised. **Users must provide a noise array of length
-      at least equal to the total number of simulation steps.**
+      ``IndexError`` is raised.
+      **Users must provide a noise array of length at least equal to the total number of simulation steps.**
 
     **4. Assumptions, constraints, and computational complexity**
 
@@ -482,7 +482,7 @@ class iaf_chs_2007(Neuron):
         ----------
         batch_size : int or None, optional
             Optional batch dimension size. If provided, states will have shape
-            ``(batch_size, *self.varshape)``. If ``None``, states have shape
+            ``(batch_size, \*self.varshape)``. If ``None``, states have shape
             ``self.varshape``.
         **kwargs
             Additional keyword arguments (currently unused).
@@ -523,7 +523,7 @@ class iaf_chs_2007(Neuron):
         ----------
         batch_size : int or None, optional
             Optional batch dimension size. If provided, states will have shape
-            ``(batch_size, *self.varshape)``. If ``None``, states have shape
+            ``(batch_size, \*self.varshape)``. If ``None``, states have shape
             ``self.varshape``.
         **kwargs
             Additional keyword arguments (currently unused).
@@ -649,8 +649,8 @@ class iaf_chs_2007(Neuron):
         One noise sample per neuron per step is consumed from the flat
         ``self.noise`` array using the ``position`` index. For vectorized or
         batched states, each element independently increments its ``position``
-        index if ``V_noise > 0`` for that element. **The noise buffer must be
-        pre-allocated with at least ``num_steps`` samples.**
+        index if ``V_noise > 0`` for that element.
+        **The noise buffer must be pre-allocated with at least ``num_steps`` samples.**
 
         **No refractory state:**
 

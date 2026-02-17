@@ -423,41 +423,41 @@ class hh_psc_alpha_gap(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential :math:`V_m`. Shape: ``(batch_size, *in_size)``.
+        Membrane potential :math:`V_m`. Shape: ``(batch_size, \*in_size)``.
         Unit: mV.
     m : brainstate.HiddenState
-        Sodium activation gating variable. Shape: ``(batch_size, *in_size)``.
+        Sodium activation gating variable. Shape: ``(batch_size, \*in_size)``.
         Range: [0, 1]. Unitless.
     h : brainstate.HiddenState
-        Sodium inactivation gating variable. Shape: ``(batch_size, *in_size)``.
+        Sodium inactivation gating variable. Shape: ``(batch_size, \*in_size)``.
         Range: [0, 1]. Unitless.
     n : brainstate.HiddenState
         Potassium Kv1 activation gating variable. Shape:
-        ``(batch_size, *in_size)``. Range: [0, 1]. Unitless.
+        ``(batch_size, \*in_size)``. Range: [0, 1]. Unitless.
     p : brainstate.HiddenState
         Potassium Kv3 activation gating variable. Shape:
-        ``(batch_size, *in_size)``. Range: [0, 1]. Unitless.
+        ``(batch_size, \*in_size)``. Range: [0, 1]. Unitless.
     I_syn_ex : brainstate.ShortTermState
-        Excitatory postsynaptic current. Shape: ``(batch_size, *in_size)``.
+        Excitatory postsynaptic current. Shape: ``(batch_size, \*in_size)``.
         Unit: pA.
     I_syn_in : brainstate.ShortTermState
-        Inhibitory postsynaptic current. Shape: ``(batch_size, *in_size)``.
+        Inhibitory postsynaptic current. Shape: ``(batch_size, \*in_size)``.
         Unit: pA.
     dI_syn_ex : brainstate.ShortTermState
         Excitatory alpha-kernel derivative state (time derivative of
-        ``I_syn_ex``). Shape: ``(batch_size, *in_size)``. Unit: pA/ms.
+        ``I_syn_ex``). Shape: ``(batch_size, \*in_size)``. Unit: pA/ms.
     dI_syn_in : brainstate.ShortTermState
         Inhibitory alpha-kernel derivative state (time derivative of
-        ``I_syn_in``). Shape: ``(batch_size, *in_size)``. Unit: pA/ms.
+        ``I_syn_in``). Shape: ``(batch_size, \*in_size)``. Unit: pA/ms.
     I_stim : brainstate.ShortTermState
         Stimulation current buffer for next time step. Shape:
-        ``(batch_size, *in_size)``. Unit: pA.
+        ``(batch_size, \*in_size)``. Unit: pA.
     refractory_step_count : brainstate.ShortTermState
         Refractory countdown in discrete time steps. Counts down from
-        ``ceil(t_ref / dt)`` to 0. Shape: ``(batch_size, *in_size)``.
+        ``ceil(t_ref / dt)`` to 0. Shape: ``(batch_size, \*in_size)``.
         Unit: steps (integer).
     last_spike_time : brainstate.ShortTermState
-        Time of most recent spike. Shape: ``(batch_size, *in_size)``.
+        Time of most recent spike. Shape: ``(batch_size, \*in_size)``.
         Unit: ms.
 
     Raises
@@ -665,7 +665,7 @@ class hh_psc_alpha_gap(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Sets up membrane potential, gating variables, synaptic currents, and
         internal state tracking. Gating variables are initialized to their
@@ -691,7 +691,7 @@ class hh_psc_alpha_gap(Neuron):
         If ``batch_size`` is provided, all state variables gain an additional
         leading batch dimension. This enables parallel simulation of multiple
         trials or training examples. State shape becomes:
-        ``(batch_size, *in_size)`` instead of ``in_size``.
+        ``(batch_size, \*in_size)`` instead of ``in_size``.
 
         **Equilibrium Initialization Rationale:**
 
@@ -705,7 +705,7 @@ class hh_psc_alpha_gap(Neuron):
         batch_size : int or None, optional
             Number of parallel simulation batches. If None, no batch dimension
             is added (shape = ``in_size``). If provided, state shape becomes
-            ``(batch_size, *in_size)``. Useful for training with multiple
+            ``(batch_size, \*in_size)``. Useful for training with multiple
             input examples simultaneously. Default: None.
         **kwargs
             Additional keyword arguments (currently unused, reserved for
@@ -862,7 +862,7 @@ class hh_psc_alpha_gap(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output from membrane potential.
+        r"""Compute differentiable spike output from membrane potential.
 
         Applies the surrogate gradient function (``spk_fun``) to generate a
         continuous, differentiable spike signal from the membrane potential.
@@ -877,13 +877,13 @@ class hh_psc_alpha_gap(Neuron):
         ----------
         V : ArrayLike or None, optional
             Membrane potential or voltage-derived signal. If None, uses the
-            current value of ``self.V.value``. Shape: ``(batch_size, *in_size)``.
+            current value of ``self.V.value``. Shape: ``(batch_size, \*in_size)``.
             Unit: mV. Default: None.
 
         Returns
         -------
         spike_signal : ArrayLike
-            Differentiable spike output with shape ``(batch_size, *in_size)``.
+            Differentiable spike output with shape ``(batch_size, \*in_size)``.
             The surrogate function maps the scaled voltage to a continuous
             output (typically in range [0, 1] or [-1, 1] depending on
             ``spk_fun``). Gradients flow through this function during
@@ -1011,7 +1011,7 @@ class hh_psc_alpha_gap(Neuron):
         Returns
         -------
         spike_output : ArrayLike
-            Differentiable spike signal with shape ``(batch_size, *in_size)``.
+            Differentiable spike signal with shape ``(batch_size, \*in_size)``.
             Computed by applying surrogate gradient function ``spk_fun`` to a
             voltage-derived signal: positive when spiking (``V_out = 1e-12``),
             negative otherwise (``V_out = -1.0``). For binary spike detection,

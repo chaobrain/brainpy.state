@@ -511,7 +511,7 @@ class rate_transformer_node(Dynamics):
         return total_now
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables and reset the delayed event queue.
+        r"""Initialize all state variables and reset the delayed event queue.
 
         Allocates ``rate``, ``instant_rate``, ``delayed_rate``, and internal timestep counter.
         Clears any pre-existing delayed events from the internal queue. Must be called before
@@ -521,7 +521,7 @@ class rate_transformer_node(Dynamics):
         ----------
         batch_size : int, optional
             Number of parallel simulation batches. If provided, state variables will have shape
-            ``(batch_size, *in_size)``. If ``None`` (default), shape is ``in_size``.
+            ``(batch_size, \*in_size)``. If ``None`` (default), shape is ``in_size``.
         **kwargs
             Additional keyword arguments (ignored, present for API consistency).
 
@@ -545,7 +545,7 @@ class rate_transformer_node(Dynamics):
         self._delayed_queue = {}
 
     def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None):
-        """Execute one timestep of the rate transformation algorithm.
+        r"""Execute one timestep of the rate transformation algorithm.
 
         Processes incoming rate events (both instant and delayed), applies the configured
         nonlinearity, and updates the output ``rate`` state variable. Implements the NEST
@@ -585,10 +585,10 @@ class rate_transformer_node(Dynamics):
 
         Returns
         -------
-        rate_new : ndarray, shape (in_size,) or (batch_size, *in_size)
+        rate_new : ndarray, shape ``(in_size,)`` or ``(batch_size, \*in_size)``
             **Updated output rate** after applying nonlinearity to aggregated inputs. This
             is the new value of the ``rate`` state variable. Shape matches ``in_size``
-            (or ``(batch_size, *in_size)`` if batch mode was used in ``init_state()``).
+            (or ``(batch_size, \*in_size)`` if batch mode was used in ``init_state()``).
 
         Raises
         ------

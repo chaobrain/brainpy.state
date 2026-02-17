@@ -287,8 +287,8 @@ class jonke_synapse:
     References
     ----------
     .. [1] Jonke, Z., Habenschuss, S., & Maass, W. (2017). Feedback inhibition shapes
-           emergent computational properties of cortical microcircuit motifs. *Journal of
-           Neuroscience*, 37(35), 8511-8523. https://doi.org/10.1523/JNEUROSCI.2078-16.2017
+           emergent computational properties of cortical microcircuit motifs.
+           *Journal of Neuroscience*, 37(35), 8511-8523. https://doi.org/10.1523/JNEUROSCI.2078-16.2017
     .. [2] NEST Simulator source code: ``models/jonke_synapse.h`` and
            ``models/jonke_synapse.cpp`` (https://github.com/nest/nest-simulator).
     .. [3] van Rossum, M. C., Bi, G. Q., & Turrigiano, G. G. (2000). Stable Hebbian learning
@@ -342,7 +342,7 @@ class jonke_synapse:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """NEST synapse model capability flags.
+        r"""NEST synapse model capability flags.
 
         Returns
         -------
@@ -365,7 +365,7 @@ class jonke_synapse:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve complete synapse state snapshot (NEST GetStatus compatible).
+        r"""Retrieve complete synapse state snapshot (NEST GetStatus compatible).
 
         Returns current values of all parameters, state variables, and model capabilities.
         Output format matches NEST's ``GetStatus`` dictionary structure.
@@ -421,7 +421,7 @@ class jonke_synapse:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update synapse parameters and state (NEST SetStatus compatible).
+        r"""Update synapse parameters and state (NEST SetStatus compatible).
 
         Modifies any subset of parameters. Unspecified keys retain current values. Validates
         all updates before applying (atomic operation). Accepts both dictionary argument and
@@ -521,7 +521,7 @@ class jonke_synapse:
             raise ValueError('Kplus must be non-negative.')
 
     def get(self, key: str = 'status'):
-        """Retrieve parameter or full status dictionary by key (NEST Get compatible).
+        r"""Retrieve parameter or full status dictionary by key (NEST Get compatible).
 
         Parameters
         ----------
@@ -560,7 +560,7 @@ class jonke_synapse:
         raise KeyError(f'Unsupported key "{key}" for jonke_synapse.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update synaptic weight (convenience method).
+        r"""Update synaptic weight (convenience method).
 
         Parameters
         ----------
@@ -575,7 +575,7 @@ class jonke_synapse:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, delay: ArrayLike):
-        """Update dendritic delay (convenience method).
+        r"""Update dendritic delay (convenience method).
 
         Parameters
         ----------
@@ -590,7 +590,7 @@ class jonke_synapse:
         self.delay = self._validate_positive_delay(delay)
 
     def set_delay_steps(self, delay_steps: ArrayLike):
-        """Update event delivery delay in steps (convenience method).
+        r"""Update event delivery delay in steps (convenience method).
 
         Parameters
         ----------
@@ -808,7 +808,7 @@ class jonke_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Alias for ``send()`` method (NEST naming compatibility).
+        r"""Alias for ``send()`` method (NEST naming compatibility).
 
         Identical functionality to ``send()``. Provided for API consistency with NEST's
         ``Connection::to_spike_event()`` naming convention.
@@ -855,7 +855,7 @@ class jonke_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> list[dict[str, Any]]:
-        """Process sequence of presynaptic spikes and track weight evolution.
+        r"""Process sequence of presynaptic spikes and track weight evolution.
 
         Convenience method for simulating complete spike train interactions. Sequentially
         calls ``send()`` for each spike time, maintaining plasticity state across spikes.
@@ -1027,7 +1027,7 @@ class jonke_synapse:
 
     @staticmethod
     def _get_history(target: Any, t1: float, t2: float):
-        """Retrieve postsynaptic spike history from target neuron.
+        r"""Retrieve postsynaptic spike history from target neuron.
 
         Parameters
         ----------
@@ -1057,7 +1057,7 @@ class jonke_synapse:
 
     @staticmethod
     def _extract_history_time(entry: Any) -> float:
-        """Extract spike time from history entry in flexible format.
+        r"""Extract spike time from history entry in flexible format.
 
         Supports multiple entry formats for compatibility with various neuron implementations:
         object attributes, dictionary keys, or tuple/list indexing.
@@ -1132,7 +1132,7 @@ class jonke_synapse:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert array-like input to validated float scalar.
+        r"""Convert array-like input to validated float scalar.
 
         Handles brainunit Quantities, NumPy arrays, and Python scalars. Ensures result is
         single finite value.
@@ -1167,7 +1167,7 @@ class jonke_synapse:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert array-like input to validated integer scalar.
+        r"""Convert array-like input to validated integer scalar.
 
         Similar to ``_to_float_scalar`` but enforces integer values (within floating-point
         tolerance 1e-12).
@@ -1206,7 +1206,7 @@ class jonke_synapse:
 
     @classmethod
     def _validate_positive_delay(cls, value: ArrayLike) -> float:
-        """Validate and convert delay to positive float scalar.
+        r"""Validate and convert delay to positive float scalar.
 
         Parameters
         ----------
@@ -1230,7 +1230,7 @@ class jonke_synapse:
 
     @classmethod
     def _validate_delay_steps(cls, value: ArrayLike) -> int:
-        """Validate and convert delay_steps to integer ≥ 1.
+        r"""Validate and convert delay_steps to integer ≥ 1.
 
         Parameters
         ----------
@@ -1254,7 +1254,7 @@ class jonke_synapse:
 
     @classmethod
     def _validate_multiplicity(cls, value: ArrayLike) -> float:
-        """Validate and convert multiplicity to non-negative float scalar.
+        r"""Validate and convert multiplicity to non-negative float scalar.
 
         Parameters
         ----------

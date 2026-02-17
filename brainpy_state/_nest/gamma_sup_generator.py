@@ -414,7 +414,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize occupancy and RNG state for all output trains.
+        r"""Initialize occupancy and RNG state for all output trains.
 
         Parameters
         ----------
@@ -428,6 +428,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         -------
         out : Any
             ``None``. Side effects:
+
             - ``self.occ`` is created as ``brainstate.ShortTermState`` with
               shape ``(prod(self.varshape), gamma_shape)`` and dtype
               ``int64``, initialized with NEST's equilibrium approximation.
@@ -458,7 +459,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set public parameters with NEST-compatible semantics.
+        r"""Set public parameters with NEST-compatible semantics.
 
         Parameters
         ----------
@@ -533,7 +534,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
             self._refresh_runtime_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters as plain Python scalars.
+        r"""Return current public parameters as plain Python scalars.
 
         Returns
         -------
@@ -599,7 +600,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         return int(n_trans[-1])
 
     def update(self):
-        """Advance one simulation step and return per-train spike multiplicity.
+        r"""Advance one simulation step and return per-train spike multiplicity.
 
         The method lazily initializes state, refreshes timing/probability cache
         when ``dt`` changes, applies the active-window test, then updates each

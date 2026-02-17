@@ -52,6 +52,7 @@ class mcculloch_pitts_neuron(Dynamics):
        \end{cases}
 
     where:
+
       - :math:`h(t)` is the total accumulated synaptic input (in mV)
       - :math:`\theta` is the activation threshold (in mV)
       - :math:`H(\cdot)` is the Heaviside step function (strict inequality)
@@ -160,7 +161,7 @@ class mcculloch_pitts_neuron(Dynamics):
     Attributes
     ----------
     y : brainstate.ShortTermState
-        Binary output state of the neuron. Shape: ``(in_size,)`` or ``(batch_size, *in_size)``.
+        Binary output state of the neuron. Shape: ``(in_size,)`` or ``(batch_size, \*in_size)``.
         Values are float64 in {0.0, 1.0}. Updated at each (scheduled) update point.
     h : brainstate.ShortTermState
         Total accumulated synaptic input (in mV). Shape matches ``y``. Includes contributions
@@ -275,7 +276,7 @@ class mcculloch_pitts_neuron(Dynamics):
         self.stochastic_update = stochastic_update
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize neuron state variables.
+        r"""Initialize neuron state variables.
 
         Allocates and initializes the binary output state ``y``, total synaptic input ``h``,
         and (if stochastic updates are enabled) the next scheduled update time ``t_next``.
@@ -284,7 +285,7 @@ class mcculloch_pitts_neuron(Dynamics):
         ----------
         batch_size : int, optional
             Number of parallel batches for vectorized simulation. If ``None``, state shape
-            is ``(in_size,)``. If provided, state shape is ``(batch_size, *in_size)``.
+            is ``(in_size,)``. If provided, state shape is ``(batch_size, \*in_size)``.
         **kwargs
             Additional keyword arguments (reserved for future use).
 
@@ -338,7 +339,7 @@ class mcculloch_pitts_neuron(Dynamics):
         ----------
         h : ArrayLike
             Total synaptic input to the neuron (in mV). Shape: ``(in_size,)`` or
-            ``(batch_size, *in_size)``. Can be scalar or array.
+            ``(batch_size, \*in_size)``. Can be scalar or array.
 
         Returns
         -------
@@ -379,7 +380,7 @@ class mcculloch_pitts_neuron(Dynamics):
         Parameters
         ----------
         x : float, ArrayLike, optional
-            External current input (in mV). Shape must be broadcastable to ``(batch_size, *in_size)``
+            External current input (in mV). Shape must be broadcastable to ``(batch_size, \*in_size)``
             or ``(in_size,)``. This represents continuous driving current (e.g., from a
             ``dc_generator`` in NEST) and is added to :math:`h` at the update point.
             Default: ``0.0 * u.mV`` (no external input).
@@ -388,7 +389,7 @@ class mcculloch_pitts_neuron(Dynamics):
         -------
         ArrayLike
             Binary output state :math:`y` (0.0 or 1.0) after the update. Shape: ``(in_size,)``
-            or ``(batch_size, *in_size)``. Values are wrapped in ``jax.lax.stop_gradient``
+            or ``(batch_size, \*in_size)``. Values are wrapped in ``jax.lax.stop_gradient``
             to prevent gradient flow through the discontinuous Heaviside function.
 
         Notes

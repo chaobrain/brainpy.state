@@ -74,8 +74,8 @@ class stdp_pl_synapse_hom(static_synapse):
 
     where:
 
-    - :math:`\tau_+ > 0`: Potentiation time constant (ms)
-    - :math:`\tau_- > 0`: Depression time constant (ms)
+    - :math:`\tau_+ > 0` -- Potentiation time constant (ms)
+    - :math:`\tau_- > 0` -- Depression time constant (ms)
 
     **Upon presynaptic spike at time** :math:`t_{\mathrm{pre}}` **with dendritic delay** :math:`d`:
 
@@ -92,8 +92,8 @@ class stdp_pl_synapse_hom(static_synapse):
 
     where:
 
-    - :math:`\lambda`: Learning rate (dimensionless)
-    - :math:`\mu`: Power-law exponent for potentiation (:math:`\mu \in [0, 1]` typical)
+    - :math:`\lambda` -- Learning rate (dimensionless)
+    - :math:`\mu` -- Power-law exponent for potentiation (:math:`\mu \in [0, 1]` typical)
 
     **Interpretation:** The presynaptic trace :math:`K^+` is back-propagated to
     the time of the postsynaptic spike (:math:`t_{\mathrm{post}} + d`, accounting
@@ -153,8 +153,8 @@ class stdp_pl_synapse_hom(static_synapse):
 
     **3. Homogeneous-Property Semantics**
 
-    In NEST, ``tau_plus``, ``lambda``, ``alpha``, and ``mu`` are **common model
-    properties** shared by all synapses of this type, while ``weight`` and ``Kplus``
+    In NEST, ``tau_plus``, ``lambda``, ``alpha``, and ``mu`` are **common model properties**
+    shared by all synapses of this type, while ``weight`` and ``Kplus``
     are **per-connection state**.
 
     This implementation enforces NEST connect-time semantics:
@@ -446,7 +446,7 @@ class stdp_pl_synapse_hom(static_synapse):
         return new_w if new_w > 0.0 else 0.0
 
     def clear_post_history(self):
-        """Clear internal postsynaptic STDP history state.
+        r"""Clear internal postsynaptic STDP history state.
 
         Resets the internal postsynaptic spike history buffer and depression trace
         to initial conditions. This method is useful for:
@@ -616,7 +616,7 @@ class stdp_pl_synapse_hom(static_synapse):
         return 0.0
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize synapse state variables to default values.
+        r"""Initialize synapse state variables to default values.
 
         Resets all mutable state to initial conditions, including:
 
@@ -653,7 +653,7 @@ class stdp_pl_synapse_hom(static_synapse):
         self.clear_post_history()
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all NEST-compatible public parameters and per-connection state
         variables as a dictionary. This method is used for introspection, logging,
@@ -720,7 +720,7 @@ class stdp_pl_synapse_hom(static_synapse):
         return params
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Validate connect-time synapse parameter specification.
+        r"""Validate connect-time synapse parameter specification.
 
         Enforces NEST's homogeneous-property semantics by rejecting attempts to
         override common model properties (``tau_plus``, ``lambda``, ``alpha``, ``mu``)
@@ -807,7 +807,7 @@ class stdp_pl_synapse_hom(static_synapse):
         Kplus: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Updates model parameters (common properties and per-connection state) with
         validation. This method supports partial updates—only specified parameters

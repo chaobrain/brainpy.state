@@ -311,7 +311,7 @@ class erfc_neuron(Dynamics):
         self.rng_seed = int(rng_seed)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize binary state, input accumulator, and update timing.
+        r"""Initialize binary state, input accumulator, and update timing.
 
         Parameters
         ----------
@@ -351,7 +351,7 @@ class erfc_neuron(Dynamics):
             self.t_next = brainstate.ShortTermState(next_interval)
 
     def _sample_uniform(self, shape):
-        """Sample uniform random numbers in [0, 1) with functional RNG state update.
+        r"""Sample uniform random numbers in [0, 1) with functional RNG state update.
 
         Parameters
         ----------
@@ -373,7 +373,7 @@ class erfc_neuron(Dynamics):
         return jax.random.uniform(subkey, shape=shape, dtype=jnp.float64)
 
     def _sample_exponential(self, shape):
-        """Sample exponential random variables with rate 1 (mean 1).
+        r"""Sample exponential random variables with rate 1 (mean 1).
 
         Parameters
         ----------
@@ -420,7 +420,7 @@ class erfc_neuron(Dynamics):
         return 0.5 * jspecial.erfc(u.math.asarray(arg, dtype=jnp.float64))
 
     def update(self, x=0. * u.mV):
-        """Advance the binary neuron by one simulation step.
+        r"""Advance the binary neuron by one simulation step.
 
         Follows NEST update ordering:
 

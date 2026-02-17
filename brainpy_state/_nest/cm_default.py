@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Multi-compartment neuron model (``cm_default``), compatible with NEST.
 
 This module implements a compartmental neuron model with a user-defined
@@ -342,7 +342,7 @@ class _KChannel:
         return n_inf, tau_n
 
     def f_numstep(self, v_comp: float, dt: float):
-        """Advance channel state by one timestep and compute Crank-Nicolson contributions.
+        r"""Advance channel state by one timestep and compute Crank-Nicolson contributions.
 
         This method updates the activation variable n_K using exact exponential integration,
         then computes the linearized conductance and current terms needed for the
@@ -515,7 +515,7 @@ class _AMPAReceptor:
         self.prop_d = 0.0
 
     def pre_run_hook(self, dt: float):
-        """Precompute time-step-dependent exponential decay factors for efficient simulation.
+        r"""Precompute time-step-dependent exponential decay factors for efficient simulation.
 
         Parameters
         ----------
@@ -532,7 +532,7 @@ class _AMPAReceptor:
         self.prop_d = math.exp(-dt / self.tau_d)
 
     def f_numstep(self, v_comp: float, spike_weight: float):
-        """Advance receptor state by one timestep and compute Crank-Nicolson contributions.
+        r"""Advance receptor state by one timestep and compute Crank-Nicolson contributions.
 
         Updates the dual-exponential conductance state variables and computes the linearized
         conductance and current terms for implicit integration.
@@ -660,7 +660,7 @@ class _GABAReceptor:
         self.prop_d = 0.0
 
     def pre_run_hook(self, dt: float):
-        """Precompute time-step-dependent exponential decay factors for efficient simulation.
+        r"""Precompute time-step-dependent exponential decay factors for efficient simulation.
 
         Parameters
         ----------
@@ -676,7 +676,7 @@ class _GABAReceptor:
         self.prop_d = math.exp(-dt / self.tau_d)
 
     def f_numstep(self, v_comp: float, spike_weight: float):
-        """Advance receptor state by one timestep and compute Crank-Nicolson contributions.
+        r"""Advance receptor state by one timestep and compute Crank-Nicolson contributions.
 
         Updates the dual-exponential conductance state variables and computes the linearized
         conductance and current terms for implicit integration.
@@ -869,7 +869,7 @@ class _NMDAReceptor:
         self.prop_d = 0.0
 
     def pre_run_hook(self, dt: float):
-        """Precompute time-step-dependent exponential decay factors for efficient simulation.
+        r"""Precompute time-step-dependent exponential decay factors for efficient simulation.
 
         Parameters
         ----------
@@ -1051,7 +1051,7 @@ class _AMPA_NMDAReceptor:
         self.prop_d_NMDA = 0.0
 
     def pre_run_hook(self, dt: float):
-        """Precompute time-step-dependent exponential decay factors for both receptor types.
+        r"""Precompute time-step-dependent exponential decay factors for both receptor types.
 
         Parameters
         ----------
@@ -1226,6 +1226,7 @@ class _Compartment:
         gg_i \cdot V_i^{new} + hh_i \cdot V_{parent}^{new} + \sum_j terms_j = ff_i
 
     where:
+
     - gg: diagonal element (self-conductance + coupling conductances + channel conductances)
     - hh: off-diagonal coupling to parent
     - ff: right-hand side (incorporates old voltages and driving currents)
@@ -1301,7 +1302,7 @@ class _Compartment:
         self._current_buffer: List[float] = []
 
     def add_receptor(self, receptor):
-        """Add a synaptic receptor to this compartment.
+        r"""Add a synaptic receptor to this compartment.
 
         Parameters
         ----------
@@ -1318,7 +1319,7 @@ class _Compartment:
         self.receptors.append(receptor)
 
     def pre_run_hook(self, dt: float):
-        """Precompute time-step-dependent constants for efficient numerical integration.
+        r"""Precompute time-step-dependent constants for efficient numerical integration.
 
         Parameters
         ----------
@@ -1434,12 +1435,12 @@ class _Compartment:
             self.ff += self._current_buffer.pop(0)
 
     def gather_input(self, g_val: float, f_val: float):
-        """Accumulate input from a child compartment during down-sweep."""
+        r"""Accumulate input from a child compartment during down-sweep."""
         self._xx += g_val
         self._yy += f_val
 
     def io(self):
-        """Compute input-output transformation for down-sweep.
+        r"""Compute input-output transformation for down-sweep.
 
         Returns (g_val, f_val) to pass to parent.
         """
@@ -1451,7 +1452,7 @@ class _Compartment:
         return g_val, f_val
 
     def calc_v(self, v_in: float) -> float:
-        """Compute new voltage during up-sweep.
+        r"""Compute new voltage during up-sweep.
 
         Parameters
         ----------
@@ -1597,6 +1598,7 @@ class cm_default:
             + I_{\text{syn}}^{(i)} + I_{\text{ext}}^{(i)}
 
     where:
+
     - First term: passive leak current
     - Second term: axial current to parent (absent for root)
     - Third term: axial currents from all children
@@ -1749,7 +1751,7 @@ class cm_default:
         self._v_history: List[List[float]] = []
 
     def add_compartment(self, parent_idx: int, params: Optional[Dict] = None) -> int:
-        """Add a compartment to the neuron's morphological tree structure.
+        r"""Add a compartment to the neuron's morphological tree structure.
 
         Compartments are added incrementally to build the dendritic tree. The first
         compartment should have parent_idx=-1 (root/soma), and subsequent compartments
@@ -1830,7 +1832,7 @@ class cm_default:
 
     def add_receptor(self, comp_idx: int, receptor_type: str,
                      params: Optional[Dict] = None) -> int:
-        """Add a synaptic receptor to a specific compartment.
+        r"""Add a synaptic receptor to a specific compartment.
 
         Receptors define the postsynaptic response to presynaptic spikes. Multiple
         receptors of the same or different types can be added to a single compartment
@@ -1937,7 +1939,7 @@ class cm_default:
         return receptor_idx
 
     def pre_run_hook(self, dt: float):
-        """Initialize the model for simulation after construction is complete.
+        r"""Initialize the model for simulation after construction is complete.
 
         This method performs essential preprocessing that must occur after all
         compartments and receptors have been added but before the first simulation
@@ -2007,7 +2009,7 @@ class cm_default:
             comp.pre_run_hook(dt)
 
     def add_spike(self, receptor_idx: int, weight: float):
-        """Schedule a presynaptic spike for delivery to a specific receptor.
+        r"""Schedule a presynaptic spike for delivery to a specific receptor.
 
         Spikes added via this method will be processed during the next call to step().
         Multiple spikes to the same receptor within a single timestep are accumulated
@@ -2244,7 +2246,7 @@ class cm_default:
         return spike
 
     def get_voltage(self, comp_idx: int) -> float:
-        """Get the current membrane voltage of a specific compartment.
+        r"""Get the current membrane voltage of a specific compartment.
 
         Parameters
         ----------
@@ -2284,7 +2286,7 @@ class cm_default:
         return self._get_compartment(comp_idx).v_comp
 
     def get_voltages(self) -> List[float]:
-        """Get membrane voltages of all compartments simultaneously.
+        r"""Get membrane voltages of all compartments simultaneously.
 
         Returns
         -------
@@ -2319,7 +2321,7 @@ class cm_default:
         return [comp.v_comp for comp in self._compartments]
 
     def get_na_state(self, comp_idx: int):
-        """Get sodium channel gating variable states for a specific compartment.
+        r"""Get sodium channel gating variable states for a specific compartment.
 
         Parameters
         ----------
@@ -2354,7 +2356,7 @@ class cm_default:
         return comp.na_chan.m_Na, comp.na_chan.h_Na
 
     def get_k_state(self, comp_idx: int):
-        """Get potassium channel activation state for a specific compartment.
+        r"""Get potassium channel activation state for a specific compartment.
 
         Parameters
         ----------
@@ -2379,7 +2381,7 @@ class cm_default:
         return comp.k_chan.n_K
 
     def get_receptor_state(self, receptor_idx: int):
-        """Get synaptic receptor conductance state variables.
+        r"""Get synaptic receptor conductance state variables.
 
         Parameters
         ----------
@@ -2453,13 +2455,13 @@ class cm_default:
     # ----- Internal methods -----
 
     def _get_compartment(self, comp_idx: int) -> Optional[_Compartment]:
-        """Find compartment by index via search."""
+        r"""Find compartment by index via search."""
         if comp_idx < 0 or comp_idx >= len(self._compartments):
             return None
         return self._compartments[comp_idx]
 
     def _update_compartment_list(self):
-        """Rebuild flat list of compartments in index order."""
+        r"""Rebuild flat list of compartments in index order."""
         self._compartments = []
         for idx in self._compartment_indices:
             comp = self._find_compartment(self._root, idx)
@@ -2468,7 +2470,7 @@ class cm_default:
 
     def _find_compartment(self, comp: Optional[_Compartment],
                           target_idx: int) -> Optional[_Compartment]:
-        """Recursively find compartment by index."""
+        r"""Recursively find compartment by index."""
         if comp is None:
             return None
         if comp.comp_index == target_idx:
@@ -2480,7 +2482,7 @@ class cm_default:
         return None
 
     def _set_parents(self):
-        """Set parent pointers for all compartments."""
+        r"""Set parent pointers for all compartments."""
         for comp in self._compartments:
             if comp.p_index >= 0:
                 parent = self._get_compartment(comp.p_index)
@@ -2489,14 +2491,14 @@ class cm_default:
                 comp.parent = None
 
     def _set_leafs(self):
-        """Identify leaf compartments (no children)."""
+        r"""Identify leaf compartments (no children)."""
         self._leafs = [
             comp for comp in self._compartments
             if len(comp.children) == 0
         ]
 
     def _solve_matrix(self):
-        """Solve the tridiagonal-on-tree system using O(n) algorithm."""
+        r"""Solve the tridiagonal-on-tree system using O(n) algorithm."""
         if len(self._leafs) == 0:
             # Single compartment (root only)
             self._root.v_comp = self._root.ff / self._root.gg
@@ -2511,7 +2513,7 @@ class cm_default:
         self._solve_upsweep(self._root, 0.0)
 
     def _solve_downsweep(self, comp: _Compartment, leaf_iter):
-        """Recursive down-sweep from leaves to root."""
+        r"""Recursive down-sweep from leaves to root."""
         g_val, f_val = comp.io()
 
         if comp.parent is not None:
@@ -2530,7 +2532,7 @@ class cm_default:
                     pass
 
     def _solve_upsweep(self, comp: _Compartment, v_in: float):
-        """Recursive up-sweep from root to leaves."""
+        r"""Recursive up-sweep from root to leaves."""
         v_new = comp.calc_v(v_in)
         for child in comp.children:
             self._solve_upsweep(child, v_new)

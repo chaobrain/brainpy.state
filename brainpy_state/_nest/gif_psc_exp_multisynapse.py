@@ -74,8 +74,8 @@ References
 ----------
 .. [1] Mensi S, Naud R, Pozzorini C, Avermann M, Petersen CC, Gerstner W
        (2012). Parameter extraction and classification of three cortical
-       neuron types reveals two distinct adaptation mechanisms. *J.
-       Neurophysiol.*, 107(6):1756-1775.
+       neuron types reveals two distinct adaptation mechanisms.
+       *J. Neurophysiol.*, 107(6):1756-1775.
 .. [2] Pozzorini C, Mensi S, Hagens O, Naud R, Koch C, Gerstner W (2015).
        Automated high-throughput characterization of single neurons by means
        of simplified spiking models. *PLoS Comput. Biol.*, 11(6), e1004275.
@@ -117,6 +117,7 @@ class gif_psc_exp_multisynapse(Neuron):
     firing dynamics, update ordering, and all default parameter values.
 
     The model combines four key features:
+
     1. **Multiple receptor ports**: Each with independent exponential
        synaptic time constants (``tau_syn`` parameter)
     2. **Spike-triggered currents (STC)**: Post-spike current injection
@@ -138,6 +139,7 @@ class gif_psc_exp_multisynapse(Neuron):
            + \sum_k I_{\mathrm{syn},k}(t) + I_e + I_{\mathrm{stim}}(t)
 
     where:
+
       - :math:`g_L (V - E_L)` is the passive leak current
       - :math:`\eta_j(t)` are spike-triggered currents (STCs)
       - :math:`I_{\mathrm{syn},k}(t)` are synaptic currents for each receptor port :math:`k`
@@ -424,18 +426,18 @@ class gif_psc_exp_multisynapse(Neuron):
 
     State Variables
     ---------------
-    V : HiddenState, shape ``(batch_size, *in_size)``
+    V : HiddenState, shape ``(batch_size, \*in_size)``
         Membrane potential :math:`V_m(t)` in millivolts.
-    i_syn : ShortTermState, shape ``(batch_size, *in_size, n_receptors)``
+    i_syn : ShortTermState, shape ``(batch_size, \*in_size, n_receptors)``
         Synaptic currents in picoamperes, one per receptor port.
         :math:`I_{\mathrm{syn},k}(t)` for :math:`k = 0, \ldots, n_{\mathrm{receptors}} - 1`.
-    refractory_step_count : ShortTermState, shape ``(batch_size, *in_size)``
+    refractory_step_count : ShortTermState, shape ``(batch_size, \*in_size)``
         Remaining refractory time steps (int32). Counts down from
         :math:`\lceil t_{\mathrm{ref}} / dt \rceil` to 0 after each spike.
-    I_stim : ShortTermState, shape ``(batch_size, *in_size)``
+    I_stim : ShortTermState, shape ``(batch_size, \*in_size)``
         Buffered external current (picoamperes) applied in the next time
         step. Implements NEST's ring-buffer semantics (one-step delay).
-    last_spike_time : ShortTermState, shape ``(batch_size, *in_size)``
+    last_spike_time : ShortTermState, shape ``(batch_size, \*in_size)``
         Time of the last emitted spike (milliseconds). Initialized to a
         large negative value (-1e7 ms).
 
@@ -648,7 +650,7 @@ class gif_psc_exp_multisynapse(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of synaptic receptor ports.
+        r"""Number of synaptic receptor ports.
 
         Returns
         -------
@@ -696,7 +698,7 @@ class gif_psc_exp_multisynapse(Neuron):
                 )
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes state variables including membrane potential,
         synaptic currents, refractory counters, adaptation elements, and
@@ -708,7 +710,7 @@ class gif_psc_exp_multisynapse(Neuron):
         batch_size : int, optional
             Batch dimension size for vectorized simulation. If ``None``, no
             batch dimension is added. If provided, all state variables will
-            have shape ``(batch_size, *in_size, ...)``. Default: None.
+            have shape ``(batch_size, \*in_size, ...)``. Default: None.
         **kwargs
             Additional keyword arguments (reserved for future extensions,
             currently unused).
@@ -720,7 +722,7 @@ class gif_psc_exp_multisynapse(Neuron):
         - ``V``: Membrane potential initialized using ``V_initializer``
           (default: -70 mV, resting potential).
         - ``i_syn``: Synaptic currents initialized to zero for all
-          receptors. Shape: ``(*v_shape, n_receptors)``.
+          receptors. Shape: ``(\*v_shape, n_receptors)``.
         - ``refractory_step_count``: Refractory counter initialized to 0
           (not refractory).
         - ``I_stim``: Buffered external current initialized to 0 pA.
@@ -784,7 +786,7 @@ class gif_psc_exp_multisynapse(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets membrane potential, synaptic currents, refractory counters,
         adaptation elements, and buffered currents to their initial states.
@@ -892,7 +894,7 @@ class gif_psc_exp_multisynapse(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
-        """Parse spike events into per-receptor weight arrays.
+        r"""Parse spike events into per-receptor weight arrays.
 
         This method accumulates incoming spike weights into a multi-dimensional
         array organized by receptor port. It handles both tuple and dictionary
@@ -942,7 +944,7 @@ class gif_psc_exp_multisynapse(Neuron):
         return out
 
     def update(self, x=0.0 * u.pA, spike_events=None):
-        """Update neuron state for one simulation step.
+        r"""Update neuron state for one simulation step.
 
         This method advances the neuron state by one time step ``dt``,
         integrating membrane dynamics, synaptic currents, adaptation
@@ -950,6 +952,7 @@ class gif_psc_exp_multisynapse(Neuron):
         update order for ``gif_psc_exp_multisynapse``.
 
         The update sequence is:
+
         1. Decay STC and SFA elements, compute their totals
         2. Process synaptic currents for each receptor (propagate, decay, add spikes)
         3. Update membrane potential (if not refractory) or decrement refractory counter
@@ -959,8 +962,8 @@ class gif_psc_exp_multisynapse(Neuron):
         Parameters
         ----------
         x : Quantity, optional
-            External current input (picoamperes). This current is **buffered
-            by one time step** (NEST ring-buffer semantics): the current
+            External current input (picoamperes). This current is
+            **buffered by one time step** (NEST ring-buffer semantics): the current
             provided at time :math:`t` is applied at time :math:`t + dt`.
             Default: 0.0 pA.
         spike_events : iterable, optional
@@ -979,7 +982,7 @@ class gif_psc_exp_multisynapse(Neuron):
         Returns
         -------
         ndarray
-            Spike output for this time step. Shape: ``(batch_size, *in_size)``.
+            Spike output for this time step. Shape: ``(batch_size, \*in_size)``.
             Data type: float32. Values are in [0, 1] via the surrogate
             gradient function (typically binary in forward pass, continuous
             in backward pass for gradient computation).
@@ -998,6 +1001,7 @@ class gif_psc_exp_multisynapse(Neuron):
         being applied.
 
         **Receptor Mapping:**
+
         - Spike events explicitly specify their target receptor via
           ``receptor_type`` (1-based).
         - Delta inputs registered via ``add_delta_input()`` are always
@@ -1007,6 +1011,7 @@ class gif_psc_exp_multisynapse(Neuron):
           receptor-specific).
 
         **Failure Modes:**
+
         - If ``receptor_type`` in ``spike_events`` is out of range [1,
           ``n_receptors``], raises ``ValueError``.
         - If ``Delta_V`` is extremely small, the exponential firing

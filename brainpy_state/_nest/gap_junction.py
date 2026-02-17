@@ -66,6 +66,7 @@ class gap_junction:
         I_{\text{gap},i} = -\sum_j g_{ij} V_i + P_{\text{interp}}(t)
 
     where:
+
       - :math:`g_{ij}` is the gap junction conductance (weight) from neuron :math:`j` to :math:`i`
       - :math:`V_i` is the membrane potential of the post-synaptic neuron
       - :math:`P_{\text{interp}}(t)` is the interpolation polynomial constructed from
@@ -81,6 +82,7 @@ class gap_junction:
         c_k &\leftarrow c_k + w_{ij} \cdot a_k
 
     where:
+
       - :math:`w_{ij}` is the connection weight
       - :math:`a_k` are source neuron interpolation coefficients
       - :math:`c_k` are target-side summed coefficients for polynomial reconstruction
@@ -230,8 +232,8 @@ class gap_junction:
     .. [2] NEST gap current evaluation in neuron models:
            ``models/hh_psc_alpha_gap.cpp`` and ``models/hh_cond_beta_gap_traub.cpp``.
     .. [3] Hahne, J., et al. (2015). "A unified framework for spiking and gap-junction
-           interactions in distributed neuronal network simulations." *Frontiers in
-           Neuroinformatics*, 9:22. doi:10.3389/fninf.2015.00022
+           interactions in distributed neuronal network simulations."
+           *Frontiers in Neuroinformatics*, 9:22. doi:10.3389/fninf.2015.00022
     """
 
     __module__ = 'brainpy.state'
@@ -255,7 +257,7 @@ class gap_junction:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Get static connection model properties.
+        r"""Get static connection model properties.
 
         Returns
         -------
@@ -278,7 +280,7 @@ class gap_junction:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve the current connection status and parameters.
+        r"""Retrieve the current connection status and parameters.
 
         Returns
         -------
@@ -317,7 +319,7 @@ class gap_junction:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters from a status dictionary or keyword arguments.
+        r"""Update connection parameters from a status dictionary or keyword arguments.
 
         Parameters
         ----------
@@ -366,7 +368,7 @@ class gap_junction:
             self.set_weight(updates['weight'])
 
     def get(self, key: str = 'status'):
-        """Retrieve a specific status parameter or the full status dictionary.
+        r"""Retrieve a specific status parameter or the full status dictionary.
 
         Parameters
         ----------
@@ -409,7 +411,7 @@ class gap_junction:
         raise KeyError(f'Unsupported key "{key}" for gap_junction.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update the gap junction conductance weight.
+        r"""Update the gap junction conductance weight.
 
         Parameters
         ----------
@@ -437,7 +439,7 @@ class gap_junction:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, _):
-        """Attempt to set delay (always raises an error).
+        r"""Attempt to set delay (always raises an error).
 
         Gap junctions are instantaneous electrical connections and do not support
         synaptic delays. This method exists for API compatibility with NEST but
@@ -468,7 +470,7 @@ class gap_junction:
         raise ValueError('gap_junction connection has no delay')
 
     def begin_wfr_cycle(self, min_delay_steps: ArrayLike, interpolation_order: int = 0):
-        """Initialize a new waveform-relaxation (WFR) cycle.
+        r"""Initialize a new waveform-relaxation (WFR) cycle.
 
         Resets runtime state (``sumj_g_ij`` and ``interpolation_coefficients``)
         and allocates the coefficient buffer based on the number of delay steps
@@ -481,9 +483,11 @@ class gap_junction:
             number of lag slots in the interpolation coefficient buffer.
         interpolation_order : int, optional
             Interpolation polynomial order. Must be in ``{0, 1, 3}``:
-              - ``0``: Constant interpolation (piecewise constant).
-              - ``1``: Linear interpolation.
-              - ``3``: Cubic Hermite interpolation.
+
+            - ``0`` -- Constant interpolation (piecewise constant).
+            - ``1`` -- Linear interpolation.
+            - ``3`` -- Cubic Hermite interpolation.
+
             Default: ``0``.
 
         Raises
@@ -526,7 +530,7 @@ class gap_junction:
         self.interpolation_coefficients = np.zeros((coeff_len,), dtype=np.float64)
 
     def reset_runtime_state(self):
-        """Clear runtime state accumulated from gap junction events.
+        r"""Clear runtime state accumulated from gap junction events.
 
         Resets ``sumj_g_ij`` to ``0.0`` and zeros out the interpolation coefficient
         buffer without reallocating it. This method is typically called at the end
@@ -557,7 +561,7 @@ class gap_junction:
             self.interpolation_coefficients.fill(0.0)
 
     def prepare_secondary_event(self, coeffarray: ArrayLike) -> dict[str, Any]:
-        """Prepare a secondary gap junction event payload for transmission.
+        r"""Prepare a secondary gap junction event payload for transmission.
 
         Packages the connection weight and pre-synaptic interpolation coefficients
         into a dictionary suitable for transmission as a ``GapJunctionEvent`` in
@@ -846,7 +850,7 @@ class gap_junction:
 
     @classmethod
     def _validate_interpolation_order(cls, order: int) -> int:
-        """Validate that the interpolation order is supported.
+        r"""Validate that the interpolation order is supported.
 
         Parameters
         ----------
@@ -870,7 +874,7 @@ class gap_junction:
 
     @staticmethod
     def _to_coeff_array(value: ArrayLike) -> np.ndarray:
-        """Convert input to a 1D float64 coefficient array.
+        r"""Convert input to a 1D float64 coefficient array.
 
         Parameters
         ----------
@@ -896,7 +900,7 @@ class gap_junction:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert input to a scalar float value.
+        r"""Convert input to a scalar float value.
 
         Parameters
         ----------
@@ -924,7 +928,7 @@ class gap_junction:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert input to a scalar integer value.
+        r"""Convert input to a scalar integer value.
 
         Parameters
         ----------

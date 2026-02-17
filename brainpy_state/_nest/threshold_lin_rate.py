@@ -521,8 +521,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
            https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html
     .. [3] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
            Helias, M., & Diesmann, M. (2017). Integration of continuous-time
-           dynamics in a spiking neural network simulator. *Frontiers in
-           Neuroinformatics*, 11, 34.
+           dynamics in a spiking neural network simulator.
+           *Frontiers in Neuroinformatics*, 11, 34.
            https://doi.org/10.3389/fninf.2017.00034
 
     See Also
@@ -1187,8 +1187,8 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
            https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html
     .. [3] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
            Helias, M., & Diesmann, M. (2017). Integration of continuous-time
-           dynamics in a spiking neural network simulator. *Frontiers in
-           Neuroinformatics*, 11, 34.
+           dynamics in a spiking neural network simulator.
+           *Frontiers in Neuroinformatics*, 11, 34.
            https://doi.org/10.3389/fninf.2017.00034
 
     See Also

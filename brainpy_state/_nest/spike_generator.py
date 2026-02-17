@@ -181,6 +181,37 @@ class spike_generator(brainstate.nn.Dynamics):
         At update time, if simulation context lacks required time information
         (for example ``'t'`` or ``dt``), depending on environment behavior.
 
+    Notes
+    -----
+    Unlike current generators (``dc_generator``, ``step_current_generator``),
+    ``spike_generator`` emits dimensionless impulses (or weighted real values)
+    rather than physical current quantities. The output is intended to be
+    consumed directly as pre-synaptic spike events or injected into a synapse
+    model that scales by connection weight.
+
+    NEST's ``spike_generator`` uses multiplicity to allow multiple spikes per
+    time step; this implementation preserves that semantics by scanning all
+    ``spike_times`` and keeping the last matching weight (the last duplicate
+    effectively replaces earlier ones). If accumulation of duplicate weights is
+    needed instead, multiple ``spike_generator`` instances can be chained.
+
+    Spike times should ideally be aligned to the simulation grid (multiples of
+    ``dt``) to avoid off-by-one steps due to floating-point comparison. The
+    half-open tolerance ``dt/2`` generally covers one-ULP rounding errors for
+    grid-aligned times.
+
+    See Also
+    --------
+    dc_generator : Constant-current stimulation device.
+    ac_generator : Sinusoidal current stimulation device.
+    step_current_generator : Piecewise-constant current stimulation device.
+    spike_train_injector : Inject pre-recorded spike trains into the network.
+
+    References
+    ----------
+    .. [1] NEST Simulator, ``spike_generator`` device.
+           https://nest-simulator.readthedocs.io/en/stable/models/spike_generator.html
+
     Examples
     --------
     .. code-block:: python
@@ -209,17 +240,6 @@ class spike_generator(brainstate.nn.Dynamics):
        ...     with brainstate.environ.context(t=5.0 * u.ms):
        ...         spk = sg.update()
        ...     _ = spk.shape
-
-    References
-    ----------
-    .. [1] NEST Simulator, ``spike_generator`` device.
-           https://nest-simulator.readthedocs.io/en/stable/models/spike_generator.html
-
-    See Also
-    --------
-    dc_generator : Constant current generator
-    ac_generator : Sinusoidal current generator
-    step_current_generator : Piecewise constant current generator
     """
     __module__ = 'brainpy.state'
 
@@ -278,7 +298,7 @@ class spike_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Float-valued JAX array with shape ``self.varshape``.
             Output semantics:
 
@@ -293,10 +313,10 @@ class spike_generator(brainstate.nn.Dynamics):
         ------
         KeyError
             If required simulation context values are missing from
-            ``brainstate.environ``.
+            ``brainstate.environ`` (e.g. ``'t'`` or ``dt``).
         TypeError
             If scalar conversion of time parameters fails due to incompatible
-            shapes/dtypes/units.
+            shapes, dtypes, or units.
         ValueError
             If downstream unit conversion raises an invalid-value error.
 
@@ -304,7 +324,18 @@ class spike_generator(brainstate.nn.Dynamics):
         -----
         The matching tolerance is ``dt/2`` in ms. When multiple entries in
         ``spike_times`` match the same step, this implementation intentionally
-        keeps only the last matching weight/value.
+        keeps only the last matching weight/value, consistent with NEST's
+        last-event-wins multiplicity semantics.
+
+        The activity-window check is applied before the spike-matching scan;
+        steps outside ``[origin + start, origin + stop)`` short-circuit to a
+        zero array without iterating over ``spike_times``.
+
+        See Also
+        --------
+        spike_generator : Class-level parameter definitions and model equations.
+        dc_generator.update : Windowed constant-current update rule.
+        step_current_generator.update : Windowed piecewise-constant update rule.
 
         Examples
         --------

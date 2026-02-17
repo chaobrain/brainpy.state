@@ -231,23 +231,23 @@ class gif_cond_exp(Neuron):
     **Parameter**        **Default**         **Math equivalent**                 **Description**
     ==================== =================== =================================== ======================================================
     ``in_size``          (required)                                              Population shape
-    ``g_L``              4.0 nS              :math:`g_\mathrm{L}`               Leak conductance
-    ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`               Leak reversal potential
-    ``C_m``              80.0 pF             :math:`C_\mathrm{m}`               Membrane capacitance
-    ``V_reset``          -55.0 mV            :math:`V_\mathrm{reset}`           Reset potential
-    ``Delta_V``          0.5 mV              :math:`\Delta_V`                   Stochasticity level
-    ``V_T_star``         -35.0 mV            :math:`V_{T^*}`                    Base firing threshold
-    ``lambda_0``         1.0 /s              :math:`\lambda_0`                  Stochastic intensity at threshold
-    ``t_ref``            4.0 ms              :math:`t_\mathrm{ref}`             Absolute refractory period
-    ``E_ex``             0.0 mV              :math:`E_\mathrm{ex}`              Excitatory reversal potential
-    ``E_in``             -85.0 mV            :math:`E_\mathrm{in}`              Inhibitory reversal potential
-    ``tau_syn_ex``       2.0 ms              :math:`\tau_{\mathrm{syn,ex}}`     Excitatory conductance time constant
-    ``tau_syn_in``       2.0 ms              :math:`\tau_{\mathrm{syn,in}}`     Inhibitory conductance time constant
-    ``I_e``              0.0 pA              :math:`I_\mathrm{e}`               Constant external current
-    ``tau_sfa``          () ms               :math:`\tau_{\gamma_i}`            SFA time constants (tuple/list)
-    ``q_sfa``            () mV               :math:`q_{\gamma_i}`               SFA jump values (tuple/list)
-    ``tau_stc``          () ms               :math:`\tau_{\eta_i}`              STC time constants (tuple/list)
-    ``q_stc``            () nA               :math:`q_{\eta_i}`                 STC jump values (tuple/list)
+    ``g_L``              4.0 nS              :math:`g_\mathrm{L}`                Leak conductance
+    ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`                Leak reversal potential
+    ``C_m``              80.0 pF             :math:`C_\mathrm{m}`                Membrane capacitance
+    ``V_reset``          -55.0 mV            :math:`V_\mathrm{reset}`            Reset potential
+    ``Delta_V``          0.5 mV              :math:`\Delta_V`                    Stochasticity level
+    ``V_T_star``         -35.0 mV            :math:`V_{T^*}`                     Base firing threshold
+    ``lambda_0``         1.0 /s              :math:`\lambda_0`                   Stochastic intensity at threshold
+    ``t_ref``            4.0 ms              :math:`t_\mathrm{ref}`              Absolute refractory period
+    ``E_ex``             0.0 mV              :math:`E_\mathrm{ex}`               Excitatory reversal potential
+    ``E_in``             -85.0 mV            :math:`E_\mathrm{in}`               Inhibitory reversal potential
+    ``tau_syn_ex``       2.0 ms              :math:`\tau_{\mathrm{syn,ex}}`      Excitatory conductance time constant
+    ``tau_syn_in``       2.0 ms              :math:`\tau_{\mathrm{syn,in}}`      Inhibitory conductance time constant
+    ``I_e``              0.0 pA              :math:`I_\mathrm{e}`                Constant external current
+    ``tau_sfa``          () ms               :math:`\tau_{\gamma_i}`             SFA time constants (tuple/list)
+    ``q_sfa``            () mV               :math:`q_{\gamma_i}`                SFA jump values (tuple/list)
+    ``tau_stc``          () ms               :math:`\tau_{\eta_i}`               STC time constants (tuple/list)
+    ``q_stc``            () nA               :math:`q_{\eta_i}`                  STC jump values (tuple/list)
     ``rng_key``          None                                                    JAX PRNG key for stochastic spiking
     ``V_initializer``    Constant(-70 mV)                                        Initializer for membrane potential
     ``g_ex_initializer`` Constant(0 nS)                                          Initializer for excitatory conductance
@@ -274,10 +274,10 @@ class gif_cond_exp(Neuron):
 
     Additionally, the following NumPy arrays are maintained internally:
 
-    - ``_stc_elems``: shape ``(len(tau_stc), *in_size)`` — individual stc elements (nA)
-    - ``_sfa_elems``: shape ``(len(tau_sfa), *in_size)`` — individual sfa elements (mV)
-    - ``_stc_val``: shape ``in_size`` — total spike-triggered current (nA)
-    - ``_sfa_val``: shape ``in_size`` — adaptive threshold :math:`V_T(t)` (mV)
+    - ``_stc_elems`` -- shape ``(len(tau_stc), \*in_size)`` -- individual stc elements (nA)
+    - ``_sfa_elems`` -- shape ``(len(tau_sfa), \*in_size)`` -- individual sfa elements (mV)
+    - ``_stc_val`` -- shape ``in_size`` -- total spike-triggered current (nA)
+    - ``_sfa_val`` -- shape ``in_size`` -- adaptive threshold :math:`V_T(t)` (mV)
 
     Raises
     ------
@@ -467,7 +467,7 @@ class gif_cond_exp(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the GIF neuron.
+        r"""Initialize all state variables for the GIF neuron.
 
         Initializes membrane potential (``V``), conductances (``g_ex``, ``g_in``),
         adaptation elements (``_stc_elems``, ``_sfa_elems``), refractory counter,
@@ -529,7 +529,7 @@ class gif_cond_exp(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets membrane potential, conductances, adaptation elements, refractory counter,
         integration step size, buffered current, and RNG state to their initialized values.
@@ -577,7 +577,7 @@ class gif_cond_exp(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike signal using surrogate gradient.
+        r"""Compute differentiable spike signal using surrogate gradient.
 
         Parameters
         ----------
@@ -625,7 +625,7 @@ class gif_cond_exp(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, g_ex, g_in, is_refractory, i_stim, stc, p):
-        """Compute derivatives for the ODE system [V_m, g_ex, g_in].
+        r"""Compute derivatives for the ODE system [V_m, g_ex, g_in].
 
         This matches the NEST gif_cond_exp_dynamics() function exactly.
         During refractory period, V is clamped to V_reset and dV/dt=0.
@@ -665,7 +665,7 @@ class gif_cond_exp(Neuron):
         return dv, dg_ex, dg_in
 
     def _rkf45_integrate_scalar(self, v0, ge0, gi0, is_refractory, i_stim, stc, h0, dt, p):
-        """Adaptive RKF45 integration matching GSL gsl_odeiv_evolve_apply behavior.
+        r"""Adaptive RKF45 integration matching GSL gsl_odeiv_evolve_apply behavior.
 
         Integrates the ODE system [V, g_ex, g_in] over the interval [0, dt] using
         a Runge-Kutta-Fehlberg 4(5) method with adaptive step size control.

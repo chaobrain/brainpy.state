@@ -482,7 +482,7 @@ class iaf_cond_alpha_mc(Neuron):
 
     @property
     def receptor_types(self):
-        """Mapping of receptor labels to numeric receptor type IDs.
+        r"""Mapping of receptor labels to numeric receptor type IDs.
 
         Returns
         -------
@@ -502,7 +502,7 @@ class iaf_cond_alpha_mc(Neuron):
 
     @property
     def recordables(self):
-        """List of recordable state variable names.
+        r"""List of recordable state variable names.
 
         Returns
         -------
@@ -655,7 +655,7 @@ class iaf_cond_alpha_mc(Neuron):
         return np.stack(vals, axis=-1)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Sets initial values for membrane potentials (using ``V_initializer``),
         synaptic conductances (zero), refractory counters (zero), integration
@@ -704,7 +704,7 @@ class iaf_cond_alpha_mc(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets membrane potentials, synaptic conductances, refractory counters,
         integration step size, and current buffer. Identical to ``init_state``
@@ -987,7 +987,7 @@ class iaf_cond_alpha_mc(Neuron):
         return y, h
 
     def update(self, x=0. * u.pA, spike_events=None, current_events=None):
-        """Advance the neuron state by one time step.
+        r"""Advance the neuron state by one time step.
 
         Integrates membrane and synaptic ODEs using adaptive RKF45, applies spike
         and current inputs, checks threshold, emits spikes, and updates refractory

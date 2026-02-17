@@ -310,7 +310,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
         return 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Returns the NEST-compatible parameter dictionary for this synapse,
         excluding ``Kplus`` (which is not used in this model).
@@ -336,7 +336,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
         return params
 
     def set(self, **kwargs):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Accepts keyword arguments matching NEST parameter names for this
         synapse model. Raises an error if ``Kplus`` is provided (not used in
@@ -374,7 +374,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``stdp_nn_restr_synapse`` dynamics.
+        r"""Schedule one outgoing event with NEST ``stdp_nn_restr_synapse`` dynamics.
 
         Implements the restricted nearest-neighbor STDP pairing rule. On each
         presynaptic spike:
@@ -382,6 +382,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
         1. Reads postsynaptic spike history in the interval
            :math:`(t_{\mathrm{last}}-d,\, t_{pre}-d]`.
         2. If the history is non-empty:
+
            - Applies facilitation (LTP) using the first postsynaptic spike in
              the interval.
            - Applies depression (LTD) using the nearest-neighbor postsynaptic

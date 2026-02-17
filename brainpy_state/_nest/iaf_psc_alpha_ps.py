@@ -474,7 +474,7 @@ class iaf_psc_alpha_ps(Neuron):
         return 0.5 * (lo + hi)
 
     def update(self, x=0. * u.pA, spike_events=None):
-        """Advance one simulation step with optional precise within-step events.
+        r"""Advance one simulation step with optional precise within-step events.
 
         Parameters
         ----------

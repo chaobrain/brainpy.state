@@ -327,7 +327,7 @@ class urbanczik_synapse:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Return synapse capability flags.
+        r"""Return synapse capability flags.
 
         Returns
         -------
@@ -355,41 +355,19 @@ class urbanczik_synapse:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Return current synapse state and parameters.
+        r"""Return current synapse state and parameters.
 
         Returns
         -------
         dict[str, Any]
-            Complete synapse state dictionary containing:
-            - ``weight`` : float
-                Current synaptic weight
-            - ``delay`` : float
-                Dendritic delay in milliseconds
-            - ``delay_steps`` : int
-                Event delivery delay in simulation steps
-            - ``tau_Delta`` : float
-                Low-pass filter time constant in milliseconds
-            - ``eta`` : float
-                Learning rate
-            - ``Wmin`` : float
-                Lower weight bound
-            - ``Wmax`` : float
-                Upper weight bound
-            - ``init_weight`` : float
-                Baseline weight for plasticity computation
-            - ``PI_integral`` : float
-                Current unfiltered plasticity integral
-            - ``PI_exp_integral`` : float
-                Current exponentially filtered plasticity integral
-            - ``tau_L_trace`` : float
-                Current membrane time constant trace state
-            - ``tau_s_trace`` : float
-                Current synaptic time constant trace state
-            - ``t_last_spike_ms`` : float
-                Time of last presynaptic spike in milliseconds
-            - ``size_of`` : int
-                Memory footprint in bytes
-            - Capability flags (``has_delay``, ``is_primary``, etc.)
+            Complete synapse state dictionary. Keys include:
+            ``weight`` (float), ``delay`` (float), ``delay_steps`` (int),
+            ``tau_Delta`` (float), ``eta`` (float), ``Wmin`` (float),
+            ``Wmax`` (float), ``init_weight`` (float), ``PI_integral`` (float),
+            ``PI_exp_integral`` (float), ``tau_L_trace`` (float),
+            ``tau_s_trace`` (float), ``t_last_spike_ms`` (float),
+            ``size_of`` (int), and capability flags
+            (``has_delay``, ``is_primary``, etc.).
 
         Notes
         -----
@@ -429,7 +407,7 @@ class urbanczik_synapse:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update synapse parameters and state.
+        r"""Update synapse parameters and state.
 
         Parameters
         ----------
@@ -522,7 +500,7 @@ class urbanczik_synapse:
         self._check_weight_sign_constraints()
 
     def get(self, key: str = 'status'):
-        """Retrieve synapse parameter or full status.
+        r"""Retrieve synapse parameter or full status.
 
         Parameters
         ----------
@@ -562,7 +540,7 @@ class urbanczik_synapse:
         raise KeyError(f'Unsupported key "{key}" for urbanczik_synapse.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update synaptic weight with sign constraint validation.
+        r"""Update synaptic weight with sign constraint validation.
 
         Parameters
         ----------
@@ -578,7 +556,7 @@ class urbanczik_synapse:
         self._check_weight_sign_constraints()
 
     def set_delay(self, delay: ArrayLike):
-        """Update dendritic delay.
+        r"""Update dendritic delay.
 
         Parameters
         ----------
@@ -593,7 +571,7 @@ class urbanczik_synapse:
         self.delay = self._validate_positive_delay(delay)
 
     def set_delay_steps(self, delay_steps: ArrayLike):
-        """Update event delivery delay in time steps.
+        r"""Update event delivery delay in time steps.
 
         Parameters
         ----------
@@ -655,29 +633,13 @@ class urbanczik_synapse:
         Returns
         -------
         dict[str, Any]
-            Spike event dictionary containing:
-            - ``weight`` : float
-                Updated synaptic weight after plasticity computation
-            - ``delay`` : float
-                Dendritic delay used (milliseconds)
-            - ``delay_steps`` : int
-                Event delivery delay (time steps)
-            - ``receptor_type`` : int
-                Target receptor channel index
-            - ``multiplicity`` : float
-                Spike event multiplicity
-            - ``t_spike_ms`` : float
-                Spike time (milliseconds)
-            - ``tau_s_ms`` : float
-                Synaptic time constant used (``tau_syn_ex`` or ``tau_syn_in``)
-            - ``PI_integral`` : float
-                Updated unfiltered plasticity integral
-            - ``PI_exp_integral`` : float
-                Updated exponentially filtered plasticity integral
-            - ``tau_L_trace_post`` : float
-                Updated :math:`\tau_L` trace after spike
-            - ``tau_s_trace_post`` : float
-                Updated :math:`\tau_s` trace after spike
+            Spike event dictionary. Keys: ``weight`` (float, updated synaptic weight),
+            ``delay`` (float, dendritic delay in ms), ``delay_steps`` (int),
+            ``receptor_type`` (int), ``multiplicity`` (float),
+            ``t_spike_ms`` (float, spike time in ms),
+            ``tau_s_ms`` (float, synaptic time constant used),
+            ``PI_integral`` (float), ``PI_exp_integral`` (float),
+            ``tau_L_trace_post`` (float), ``tau_s_trace_post`` (float).
 
         Raises
         ------
@@ -816,7 +778,7 @@ class urbanczik_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Alias for ``send()`` method.
+        r"""Alias for ``send()`` method.
 
         This method provides an alternative API name for spike event generation, matching
         common naming conventions in event-based simulators.
@@ -863,7 +825,7 @@ class urbanczik_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> list[dict[str, Any]]:
-        """Process sequence of presynaptic spikes and return event history.
+        r"""Process sequence of presynaptic spikes and return event history.
 
         Convenience method for batch processing of spike trains. Each spike is processed
         sequentially using ``send()``, with synapse state (weight, traces, integrals)
@@ -945,7 +907,7 @@ class urbanczik_synapse:
         return events
 
     def _check_weight_sign_constraints(self):
-        """Validate that weight, Wmin, and Wmax share consistent signs.
+        r"""Validate that weight, Wmin, and Wmax share consistent signs.
 
         Raises
         ------
@@ -966,7 +928,7 @@ class urbanczik_synapse:
 
     @staticmethod
     def _sign_like_wmax(x: float) -> int:
-        """NEST-compatible sign function for weight bound validation.
+        r"""NEST-compatible sign function for weight bound validation.
 
         Parameters
         ----------
@@ -987,7 +949,7 @@ class urbanczik_synapse:
 
     @staticmethod
     def _get_urbanczik_history(target: Any, t1: float, t2: float, comp: int):
-        """Retrieve dendritic prediction error history from target neuron.
+        r"""Retrieve dendritic prediction error history from target neuron.
 
         Parameters
         ----------
@@ -1037,7 +999,7 @@ class urbanczik_synapse:
 
     @classmethod
     def _get_tau_L(cls, target: Any, comp: int) -> float:
-        """Retrieve membrane time constant tau_L from target neuron.
+        r"""Retrieve membrane time constant tau_L from target neuron.
 
         Parameters
         ----------
@@ -1081,7 +1043,7 @@ class urbanczik_synapse:
 
     @staticmethod
     def _get_compartment_value(target: Any, names: list[str], comp: int, field: str) -> float:
-        """Retrieve compartment-specific parameter from target neuron.
+        r"""Retrieve compartment-specific parameter from target neuron.
 
         Parameters
         ----------
@@ -1124,7 +1086,7 @@ class urbanczik_synapse:
 
     @staticmethod
     def _extract_history_entry(entry: Any) -> tuple[float, float]:
-        """Parse history entry into (time, delta_w) tuple.
+        r"""Parse history entry into (time, delta_w) tuple.
 
         Parameters
         ----------
@@ -1171,7 +1133,7 @@ class urbanczik_synapse:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert value to finite float scalar with validation.
+        r"""Convert value to finite float scalar with validation.
 
         Parameters
         ----------
@@ -1207,7 +1169,7 @@ class urbanczik_synapse:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert value to integer scalar with validation.
+        r"""Convert value to integer scalar with validation.
 
         Parameters
         ----------
@@ -1247,7 +1209,7 @@ class urbanczik_synapse:
 
     @classmethod
     def _validate_positive_delay(cls, value: ArrayLike) -> float:
-        """Validate dendritic delay is positive.
+        r"""Validate dendritic delay is positive.
 
         Parameters
         ----------
@@ -1271,7 +1233,7 @@ class urbanczik_synapse:
 
     @classmethod
     def _validate_delay_steps(cls, value: ArrayLike) -> int:
-        """Validate event delivery delay steps.
+        r"""Validate event delivery delay steps.
 
         Parameters
         ----------
@@ -1295,7 +1257,7 @@ class urbanczik_synapse:
 
     @classmethod
     def _validate_multiplicity(cls, value: ArrayLike) -> float:
-        """Validate spike event multiplicity is non-negative.
+        r"""Validate spike event multiplicity is non-negative.
 
         Parameters
         ----------

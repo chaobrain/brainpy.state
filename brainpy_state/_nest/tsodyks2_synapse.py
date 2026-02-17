@@ -104,16 +104,16 @@ class tsodyks2_synapse(static_synapse):
 
     **State variables:**
 
-    - :math:`x(t)`: scaling factor representing available resources
-    - :math:`u(t)`: utilization (release probability)
-    - :math:`t_{\mathrm{last}}`: timestamp of last presynaptic spike
+    - :math:`x(t)` -- scaling factor representing available resources
+    - :math:`u(t)` -- utilization (release probability)
+    - :math:`t_{\mathrm{last}}` -- timestamp of last presynaptic spike
 
     **Parameters:**
 
-    - :math:`U`: baseline utilization increment (facilitation magnitude)
-    - :math:`\tau_{rec}`: recovery time constant (depression timescale)
-    - :math:`\tau_{fac}`: facilitation time constant
-    - :math:`w`: baseline synaptic weight
+    - :math:`U` -- baseline utilization increment (facilitation magnitude)
+    - :math:`\tau_{rec}` -- recovery time constant (depression timescale)
+    - :math:`\tau_{fac}` -- facilitation time constant
+    - :math:`w` -- baseline synaptic weight
 
     **Dynamics:**
 
@@ -477,7 +477,7 @@ class tsodyks2_synapse(static_synapse):
             raise ValueError("'tau_fac' must be >= 0.")
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize or reset synapse state variables.
+        r"""Initialize or reset synapse state variables.
 
         Resets the event delivery queue and restores dynamic state variables
         (``x``, ``u``, ``t_lastspike``) to their configured initial values.
@@ -511,7 +511,7 @@ class tsodyks2_synapse(static_synapse):
         self.t_lastspike = -1.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves a dictionary containing all NEST-compatible parameters and
         current dynamic state variables. This is useful for introspection,
@@ -584,7 +584,7 @@ class tsodyks2_synapse(static_synapse):
         tau_fac: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Updates one or more synapse parameters or state variables. All
         arguments are keyword-only and optional. Only provided parameters
@@ -820,7 +820,7 @@ class tsodyks2_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events, then schedule current-step presynaptic input.
+        r"""Deliver due events, then schedule current-step presynaptic input.
 
         Primary update method called at each simulation timestep. Performs
         two operations in sequence:

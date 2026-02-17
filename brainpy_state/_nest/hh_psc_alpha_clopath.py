@@ -467,43 +467,43 @@ class hh_psc_alpha_clopath(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential :math:`V_m`. Shape: ``(*in_size, *batch_size)``.
+        Membrane potential :math:`V_m`. Shape: ``(\*in_size, \*batch_size)``.
         Units: mV.
     m : brainstate.HiddenState
-        Na activation gating variable (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Na activation gating variable (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
         Range: [0, 1].
     h : brainstate.HiddenState
-        Na inactivation gating variable (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Na inactivation gating variable (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
         Range: [0, 1].
     n : brainstate.HiddenState
-        K activation gating variable (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        K activation gating variable (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
         Range: [0, 1].
     I_syn_ex : brainstate.ShortTermState
-        Excitatory postsynaptic current :math:`I_{syn,ex}`. Shape: ``(*in_size, *batch_size)``.
+        Excitatory postsynaptic current :math:`I_{syn,ex}`. Shape: ``(\*in_size, \*batch_size)``.
         Units: pA.
     I_syn_in : brainstate.ShortTermState
-        Inhibitory postsynaptic current :math:`I_{syn,in}`. Shape: ``(*in_size, *batch_size)``.
+        Inhibitory postsynaptic current :math:`I_{syn,in}`. Shape: ``(\*in_size, \*batch_size)``.
         Units: pA.
     dI_syn_ex : brainstate.ShortTermState
-        Excitatory alpha-kernel derivative state (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Excitatory alpha-kernel derivative state (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
     dI_syn_in : brainstate.ShortTermState
-        Inhibitory alpha-kernel derivative state (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Inhibitory alpha-kernel derivative state (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
     u_bar_plus : brainstate.HiddenState
-        Slow-filtered voltage :math:`\bar{u}_+` for Clopath LTP. Shape: ``(*in_size, *batch_size)``.
+        Slow-filtered voltage :math:`\bar{u}_+` for Clopath LTP. Shape: ``(\*in_size, \*batch_size)``.
         Units: mV.
     u_bar_minus : brainstate.HiddenState
-        Fast-filtered voltage :math:`\bar{u}_-` for Clopath LTD. Shape: ``(*in_size, *batch_size)``.
+        Fast-filtered voltage :math:`\bar{u}_-` for Clopath LTD. Shape: ``(\*in_size, \*batch_size)``.
         Units: mV.
     u_bar_bar : brainstate.HiddenState
         Second-stage filtered voltage :math:`\bar{\bar{u}}` for Clopath homeostasis.
-        Shape: ``(*in_size, *batch_size)``. Units: mV.
+        Shape: ``(\*in_size, \*batch_size)``. Units: mV.
     I_stim : brainstate.ShortTermState
-        One-step delayed external current buffer. Shape: ``(*in_size, *batch_size)``.
+        One-step delayed external current buffer. Shape: ``(\*in_size, \*batch_size)``.
         Units: pA.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory steps. Shape: ``(*in_size, *batch_size)``. Dtype: int32.
+        Remaining refractory steps. Shape: ``(\*in_size, \*batch_size)``. Dtype: int32.
     last_spike_time : brainstate.ShortTermState
-        Time of most recent spike emission. Shape: ``(*in_size, *batch_size)``.
+        Time of most recent spike emission. Shape: ``(\*in_size, \*batch_size)``.
         Units: ms. Updated to ``t + dt`` on spike emission.
 
     Raises
@@ -644,7 +644,7 @@ class hh_psc_alpha_clopath(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert brainunit quantity to unitless NumPy float64 array.
+        r"""Convert brainunit quantity to unitless NumPy float64 array.
 
         Parameters
         ----------
@@ -662,7 +662,7 @@ class hh_psc_alpha_clopath(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast NumPy array to target state shape.
+        r"""Broadcast NumPy array to target state shape.
 
         Parameters
         ----------
@@ -680,7 +680,7 @@ class hh_psc_alpha_clopath(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter constraints at construction time.
+        r"""Validate parameter constraints at construction time.
 
         Raises
         ------
@@ -704,7 +704,7 @@ class hh_psc_alpha_clopath(Neuron):
             raise ValueError('All conductances must be non-negative.')
 
     def _refractory_counts(self):
-        """Compute refractory period duration in integer time steps.
+        r"""Compute refractory period duration in integer time steps.
 
         Converts the refractory period ``t_ref`` (in ms) to an integer number
         of simulation steps using the current simulation time step ``dt``. The
@@ -728,7 +728,7 @@ class hh_psc_alpha_clopath(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all neuron state variables.
+        r"""Initialize all neuron state variables.
 
         Creates and initializes the 11-dimensional state vector for each neuron:
         membrane potential, three gating variables (m, h, n), two pairs of alpha-kernel
@@ -748,7 +748,7 @@ class hh_psc_alpha_clopath(Neuron):
         - **Auxiliary states**: ``I_stim`` set to 0 pA, ``refractory_step_count`` set to 0,
           ``last_spike_time`` set to -1e7 ms (far past).
 
-        All states are broadcast to shape ``(*in_size, *batch_size)`` when ``batch_size``
+        All states are broadcast to shape ``(\*in_size, \*batch_size)`` when ``batch_size``
         is specified.
 
         Parameters
@@ -756,7 +756,7 @@ class hh_psc_alpha_clopath(Neuron):
         batch_size : int or None, optional
             Optional batch dimension prepended to all state shapes. If ``None``,
             states have shape ``self.varshape`` (derived from ``in_size``). If
-            an integer, states have shape ``(*batch_size_tuple, *self.varshape)``.
+            an integer, states have shape ``(\*batch_size_tuple, \*self.varshape)``.
         **kwargs
             Reserved for future extensions; currently ignored.
 
@@ -832,7 +832,7 @@ class hh_psc_alpha_clopath(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate differentiable spike output via surrogate gradient function.
+        r"""Generate differentiable spike output via surrogate gradient function.
 
         Applies the surrogate spike function ``self.spk_fun`` to the membrane
         potential, producing a differentiable approximation of the Heaviside
@@ -946,7 +946,7 @@ class hh_psc_alpha_clopath(Neuron):
         Returns
         -------
         ArrayLike
-            Spike output array with shape ``(*batch_size, *in_size)``. Values are
+            Spike output array with shape ``(\*batch_size, \*in_size)``. Values are
             differentiable surrogate gradients produced by ``self.spk_fun`` applied
             to a spike indicator (1e-12 for spiking neurons, -1.0 otherwise). For
             binary spike trains, threshold at 0.

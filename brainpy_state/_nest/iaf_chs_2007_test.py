@@ -32,7 +32,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 
 def _reference_step(state, params, w_step):
-    """Single-step scalar reference that mirrors NEST iaf_chs_2007 C++ update."""
+    r"""Single-step scalar reference that mirrors NEST iaf_chs_2007 C++ update."""
     h = params['dt']
 
     p11 = math.exp(-h / params['tau_epsp'])

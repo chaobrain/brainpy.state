@@ -53,12 +53,12 @@ class stdp_synapse_hom(stdp_synapse):
 
     **Shared Plasticity Parameters (model-level):**
 
-    - :math:`\tau_+`: Presynaptic trace time constant
-    - :math:`\lambda`: Potentiation learning rate
-    - :math:`\alpha`: Depression/potentiation ratio
-    - :math:`\mu_+`: Potentiation weight-dependence exponent
-    - :math:`\mu_-`: Depression weight-dependence exponent
-    - :math:`W_{\max}`: Maximum allowed weight magnitude
+    - :math:`\tau_+` -- Presynaptic trace time constant
+    - :math:`\lambda` -- Potentiation learning rate
+    - :math:`\alpha` -- Depression/potentiation ratio
+    - :math:`\mu_+` -- Potentiation weight-dependence exponent
+    - :math:`\mu_-` -- Depression weight-dependence exponent
+    - :math:`W_{\max}` -- Maximum allowed weight magnitude
 
     **Weight Updates:**
 
@@ -380,7 +380,7 @@ class stdp_synapse_hom(stdp_synapse):
 
     @staticmethod
     def _validate_non_negative(value: float, *, name: str):
-        """Override parent validation to disable ``Kplus >= 0`` constraint.
+        r"""Override parent validation to disable ``Kplus >= 0`` constraint.
 
         NEST ``stdp_synapse_hom::set_status`` does not enforce non-negativity
         constraints on the presynaptic eligibility trace ``Kplus``, allowing
@@ -404,7 +404,7 @@ class stdp_synapse_hom(stdp_synapse):
 
     @classmethod
     def _validate_weight_wmax_sign(cls, weight: float, Wmax: float):
-        """Override parent validation to disable ``weight``/``Wmax`` sign check.
+        r"""Override parent validation to disable ``weight``/``Wmax`` sign check.
 
         NEST ``stdp_synapse_hom::set_status`` does not enforce sign consistency
         between ``weight`` and ``Wmax``, allowing mixed positive/negative values.
@@ -431,7 +431,7 @@ class stdp_synapse_hom(stdp_synapse):
         del cls, weight, Wmax
 
     def get(self) -> dict:
-        """Return current public parameters and mutable connection state.
+        r"""Return current public parameters and mutable connection state.
 
         Retrieves all model parameters, common properties, and per-connection state
         variables as a dictionary. The returned dictionary includes both model-level
@@ -497,7 +497,7 @@ class stdp_synapse_hom(stdp_synapse):
         return params
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Validate connection-time synapse parameters and reject common properties.
+        r"""Validate connection-time synapse parameters and reject common properties.
 
         Enforces that common model properties (``tau_plus``, ``lambda``, ``alpha``,
         ``mu_plus``, ``mu_minus``, ``Wmax``) cannot be specified in per-connection

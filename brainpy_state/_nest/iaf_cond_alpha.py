@@ -366,7 +366,7 @@ class iaf_cond_alpha(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes membrane potential, conductance states, refractory
         counters, integration step size, and optional refractory indicator.
@@ -417,7 +417,7 @@ class iaf_cond_alpha(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to their initial values.
+        r"""Reset all state variables to their initial values.
 
         Re-initializes all states without recreating the state objects themselves.
         Useful for resetting between simulation runs or trials.
@@ -508,7 +508,7 @@ class iaf_cond_alpha(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, dg_ex, g_ex, dg_in, g_in, is_refractory, i_stim, p):
-        """Compute right-hand side of ODEs for a single neuron.
+        r"""Compute right-hand side of ODEs for a single neuron.
 
         Evaluates derivatives for membrane potential and alpha conductance states
         according to NEST semantics (voltage clamping during refractory period,
@@ -563,7 +563,7 @@ class iaf_cond_alpha(Neuron):
         return dv, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt
 
     def _rkf45_integrate_scalar(self, v0, dg_ex0, g_ex0, dg_in0, g_in0, is_refractory, i_stim, h0, dt, p):
-        """Integrate ODEs for one neuron over time interval [0, dt] using RKF45.
+        r"""Integrate ODEs for one neuron over time interval [0, dt] using RKF45.
 
         Performs adaptive-step Runge-Kutta-Fehlberg 4(5) integration with error
         control and step size adjustment. Matches NEST's GSL-based integrator behavior.
@@ -656,7 +656,7 @@ class iaf_cond_alpha(Neuron):
         return y[0], y[1], y[2], y[3], y[4], h
 
     def update(self, x=0. * u.pA):
-        """Advance neuron state by one simulation timestep.
+        r"""Advance neuron state by one simulation timestep.
 
         Integrates ODEs, handles refractory period and spike emission, applies
         synaptic conductance jumps, and buffers external current for next step.
@@ -682,6 +682,7 @@ class iaf_cond_alpha(Neuron):
         1. **Integrate ODEs**: Use RKF45 to advance ``V``, ``dg_ex``, ``g_ex``,
            ``dg_in``, ``g_in`` over ``(t, t+dt]`` with ``I_stim`` from previous step.
         2. **Refractory/spike handling**:
+
            - If in refractory period: clamp ``V`` to ``V_reset``, decrement counter.
            - Else if ``V >= V_th``: emit spike, reset ``V`` to ``V_reset``, set
              refractory counter.

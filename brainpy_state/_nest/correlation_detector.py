@@ -348,7 +348,7 @@ class correlation_detector(brainstate.nn.Dynamics):
         return np.asarray(self._count_histogram, dtype=np.int64)
 
     def get(self, key: str = 'histogram'):
-        """Return one detector state variable or calibrated scalar parameter.
+        r"""Return one detector state variable or calibrated scalar parameter.
 
         Parameters
         ----------
@@ -403,7 +403,7 @@ class correlation_detector(brainstate.nn.Dynamics):
         raise KeyError(f'Unsupported key "{key}" for correlation_detector.get().')
 
     def connect(self):
-        """Compatibility no-op for NEST-like device interface.
+        r"""Compatibility no-op for NEST-like device interface.
 
         Returns
         -------
@@ -413,7 +413,7 @@ class correlation_detector(brainstate.nn.Dynamics):
         return None
 
     def flush(self):
-        """Return current detector outputs without consuming internal state.
+        r"""Return current detector outputs without consuming internal state.
 
         Returns
         -------
@@ -430,7 +430,7 @@ class correlation_detector(brainstate.nn.Dynamics):
         }
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Reset detector buffers and histogram state for current calibration.
+        r"""Reset detector buffers and histogram state for current calibration.
 
         Parameters
         ----------
@@ -458,7 +458,7 @@ class correlation_detector(brainstate.nn.Dynamics):
         multiplicities: ArrayLike = None,
         stamp_steps: ArrayLike = None,
     ):
-        """Process one simulation step of incoming events and return outputs.
+        r"""Process one simulation step of incoming events and return outputs.
 
         Parameters
         ----------

@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the ``astrocyte_lr_1994`` model.
 
 This test module validates the brainpy.state implementation against:
@@ -42,7 +42,7 @@ from brainpy_state._nest.astrocyte_lr_1994 import astrocyte_lr_1994
 
 
 def _reference_dynamics(y, t, params, spike_times=None, spike_weights=None):
-    """ODE RHS for the astrocyte model, matching NEST's astrocyte_lr_1994_dynamics.
+    r"""ODE RHS for the astrocyte model, matching NEST's astrocyte_lr_1994_dynamics.
 
     Parameters
     ----------
@@ -95,7 +95,7 @@ def _reference_dynamics(y, t, params, spike_times=None, spike_weights=None):
 
 def _generate_reference_trace(params, y0, simtime_ms, dt_ms,
                               spike_times=None, spike_weights=None):
-    """Generate reference traces using SciPy ODEINT with spike injection.
+    r"""Generate reference traces using SciPy ODEINT with spike injection.
 
     This matches NEST's approach:
     - Integrate ODEs continuously between spikes
@@ -179,7 +179,7 @@ NEST_DEFAULTS = {
 
 
 class TestAstrocyteLR1994DefaultParameters(unittest.TestCase):
-    """Test that default parameters match NEST."""
+    r"""Test that default parameters match NEST."""
 
     def test_nest_defaults(self):
         astro = astrocyte_lr_1994(1)
@@ -201,7 +201,7 @@ class TestAstrocyteLR1994DefaultParameters(unittest.TestCase):
         self.assertEqual(astro.tau_IP3, 7142.0)
 
     def test_default_initial_state(self):
-        """IP3 initialized to IP3_0, Ca to 0.073, h to 0.793 (NEST defaults)."""
+        r"""IP3 initialized to IP3_0, Ca to 0.073, h to 0.793 (NEST defaults)."""
         astro = astrocyte_lr_1994(1)
         with brainstate.environ.context(dt=0.1 * u.ms):
             astro.init_state()
@@ -217,7 +217,7 @@ class TestAstrocyteLR1994DefaultParameters(unittest.TestCase):
 
 
 class TestAstrocyteLR1994ParameterValidation(unittest.TestCase):
-    """Test parameter validation constraints."""
+    r"""Test parameter validation constraints."""
 
     def test_Ca_tot_must_be_positive(self):
         with self.assertRaises(ValueError):
@@ -247,14 +247,14 @@ class TestAstrocyteLR1994ParameterValidation(unittest.TestCase):
 
 
 class TestAstrocyteLR1994Dynamics(unittest.TestCase):
-    """Test astrocyte dynamics against SciPy ODEINT reference solution."""
+    r"""Test astrocyte dynamics against SciPy ODEINT reference solution."""
 
     def setUp(self):
         self.dt = 0.1  # ms
         self.dt_q = 0.1 * u.ms
 
     def test_free_decay_matches_odeint(self):
-        """Test passive dynamics (no input) against ODEINT reference.
+        r"""Test passive dynamics (no input) against ODEINT reference.
 
         Uses NEST test initial conditions: IP3=1.0, Ca=1.0, h=1.0.
         """
@@ -296,7 +296,7 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
                                    err_msg="h_IP3R mismatch in free decay")
 
     def test_spike_input_matches_odeint(self):
-        """Test dynamics with a spike at t=10ms, matching NEST test conditions.
+        r"""Test dynamics with a spike at t=10ms, matching NEST test conditions.
 
         NEST test uses: IP3=1.0, Ca=1.0, h=1.0, spike at t=10ms with weight=1.0.
         """
@@ -345,7 +345,7 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
                                    err_msg="h_IP3R mismatch with spike input")
 
     def test_default_state_steady(self):
-        """Default initial state should be near steady state."""
+        r"""Default initial state should be near steady state."""
         simtime = 100.0  # ms
         y0 = [0.16, 0.073, 0.793]
 
@@ -374,10 +374,10 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
 
 
 class TestAstrocyteLR1994SIC(unittest.TestCase):
-    """Test SIC output generation."""
+    r"""Test SIC output generation."""
 
     def test_sic_zero_below_threshold(self):
-        """SIC should be zero when Ca < SIC_th."""
+        r"""SIC should be zero when Ca < SIC_th."""
         astro = astrocyte_lr_1994(1)
         with brainstate.environ.context(dt=0.1 * u.ms):
             astro.init_state()
@@ -386,7 +386,7 @@ class TestAstrocyteLR1994SIC(unittest.TestCase):
         self.assertEqual(float(np.asarray(astro.SIC.value).squeeze()), 0.0)
 
     def test_sic_positive_above_threshold(self):
-        """SIC should be positive when Ca > SIC_th + 1/1000 (nM conversion)."""
+        r"""SIC should be positive when Ca > SIC_th + 1/1000 (nM conversion)."""
         # Set Ca above threshold such that (Ca - SIC_th)*1000 > 1
         # Need Ca > SIC_th + 0.001 = 0.19769
         astro = astrocyte_lr_1994(
@@ -399,7 +399,7 @@ class TestAstrocyteLR1994SIC(unittest.TestCase):
         self.assertGreater(float(np.asarray(sic).squeeze()), 0.0)
 
     def test_sic_formula_exact(self):
-        """Verify SIC = SIC_scale * log((Ca - SIC_th) * 1000) for Ca above threshold."""
+        r"""Verify SIC = SIC_scale * log((Ca - SIC_th) * 1000) for Ca above threshold."""
         ca_val = 0.5
         sic_th = 0.19669
         sic_scale = 1.0
@@ -426,7 +426,7 @@ class TestAstrocyteLR1994SIC(unittest.TestCase):
         )
 
     def test_sic_scales_with_parameter(self):
-        """SIC should scale with SIC_scale."""
+        r"""SIC should scale with SIC_scale."""
         ca_val = 0.5
         astro1 = astrocyte_lr_1994(1, Ca_initializer=ca_val, SIC_scale=1.0)
         astro2 = astrocyte_lr_1994(1, Ca_initializer=ca_val, SIC_scale=2.0)
@@ -441,10 +441,10 @@ class TestAstrocyteLR1994SIC(unittest.TestCase):
 
 
 class TestAstrocyteLR1994SpikeInput(unittest.TestCase):
-    """Test spike input handling."""
+    r"""Test spike input handling."""
 
     def test_spike_increases_ip3(self):
-        """A spike should instantaneously increase IP3 by delta_IP3 * weight."""
+        r"""A spike should instantaneously increase IP3 by delta_IP3 * weight."""
         astro = astrocyte_lr_1994(1, delta_IP3=0.5)
         with brainstate.environ.context(dt=0.1 * u.ms):
             astro.init_state()
@@ -460,7 +460,7 @@ class TestAstrocyteLR1994SpikeInput(unittest.TestCase):
         self.assertGreater(ip3_jump, 0.9)
 
     def test_multiple_spikes_accumulate(self):
-        """Multiple spikes in same step accumulate additively."""
+        r"""Multiple spikes in same step accumulate additively."""
         astro = astrocyte_lr_1994(1, delta_IP3=0.1)
         with brainstate.environ.context(dt=0.1 * u.ms):
             astro.init_state()
@@ -474,10 +474,10 @@ class TestAstrocyteLR1994SpikeInput(unittest.TestCase):
 
 
 class TestAstrocyteLR1994CurrentInput(unittest.TestCase):
-    """Test current (J_noise) input handling."""
+    r"""Test current (J_noise) input handling."""
 
     def test_current_input_affects_calcium(self):
-        """External current input should affect calcium concentration."""
+        r"""External current input should affect calcium concentration."""
         astro = astrocyte_lr_1994(1)
         with brainstate.environ.context(dt=0.1 * u.ms):
             astro.init_state()
@@ -499,7 +499,7 @@ class TestAstrocyteLR1994CurrentInput(unittest.TestCase):
 
 
 class TestAstrocyteLR1994BatchShape(unittest.TestCase):
-    """Test that the model handles different population shapes."""
+    r"""Test that the model handles different population shapes."""
 
     def test_scalar_shape(self):
         astro = astrocyte_lr_1994(1)
@@ -527,10 +527,10 @@ class TestAstrocyteLR1994BatchShape(unittest.TestCase):
 
 
 class TestAstrocyteLR1994NestComparison(unittest.TestCase):
-    """Compare against NEST simulator if available."""
+    r"""Compare against NEST simulator if available."""
 
     def test_matches_nest_reference_data(self):
-        """Compare against NEST test reference data (test_astrocyte.dat).
+        r"""Compare against NEST test reference data (test_astrocyte.dat).
 
         The reference data was generated using SciPy ODEINT with:
         - simtime = 100 ms, dt = 0.1 ms
@@ -596,7 +596,7 @@ class TestAstrocyteLR1994NestComparison(unittest.TestCase):
         )
 
     def test_matches_nest_simulator(self):
-        """Run identical simulation in NEST and compare.
+        r"""Run identical simulation in NEST and compare.
 
         Skip if NEST is not installed.
         """

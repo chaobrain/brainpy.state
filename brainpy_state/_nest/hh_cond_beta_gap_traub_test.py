@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Tests for NEST-compatible hh_cond_beta_gap_traub neuron model.
+r"""Tests for NEST-compatible hh_cond_beta_gap_traub neuron model.
 
 Tests cover:
 - Default parameter values matching NEST
@@ -57,7 +57,7 @@ def _nest_hh_cond_beta_gap_traub_dynamics(t, y, g_Na, g_K, g_L, E_Na, E_K, E_L,
                                            V_T, E_ex, E_in, C_m, I_e, I_stim,
                                            tau_rise_ex, tau_decay_ex,
                                            tau_rise_in, tau_decay_in):
-    """Reference dynamics matching NEST hh_cond_beta_gap_traub_dynamics exactly.
+    r"""Reference dynamics matching NEST hh_cond_beta_gap_traub_dynamics exactly.
 
     State vector y = [V_m, m, h, n, dg_ex, g_ex, dg_in, g_in].
     """
@@ -104,7 +104,7 @@ def _nest_hh_cond_beta_gap_traub_dynamics(t, y, g_Na, g_K, g_L, E_Na, E_K, E_L,
 
 
 def _get_scalar(x):
-    """Extract a scalar float from a possibly 1D array."""
+    r"""Extract a scalar float from a possibly 1D array."""
     x = np.asarray(x)
     if x.ndim > 0:
         return float(x.flat[0])
@@ -112,20 +112,20 @@ def _get_scalar(x):
 
 
 def _V_mV(neuron):
-    """Get membrane potential as scalar float in mV."""
+    r"""Get membrane potential as scalar float in mV."""
     return _get_scalar(u.math.asarray(neuron.V.value / u.mV))
 
 
 def _g_nS(state_val):
-    """Get conductance value as scalar float in nS."""
+    r"""Get conductance value as scalar float in nS."""
     return _get_scalar(u.math.asarray(state_val / u.nS))
 
 
 class TestBetaNormalizationFactor(unittest.TestCase):
-    """Test the beta normalization factor computation."""
+    r"""Test the beta normalization factor computation."""
 
     def test_known_values(self):
-        """Test against manually computed values."""
+        r"""Test against manually computed values."""
         # For tau_rise=0.5, tau_decay=5.0 (default excitatory)
         tau_r, tau_d = 0.5, 5.0
         t_peak = tau_d * tau_r * math.log(tau_d / tau_r) / (tau_d - tau_r)
@@ -135,14 +135,14 @@ class TestBetaNormalizationFactor(unittest.TestCase):
         self.assertAlmostEqual(result, expected, places=10)
 
     def test_equal_tau_falls_back_to_alpha(self):
-        """When tau_rise == tau_decay, should use alpha function fallback."""
+        r"""When tau_rise == tau_decay, should use alpha function fallback."""
         tau = 5.0
         result = _beta_normalization_factor(tau, tau)
         expected = math.e / tau
         self.assertAlmostEqual(result, expected, places=10)
 
     def test_positive_result(self):
-        """Normalization factor should always be positive."""
+        r"""Normalization factor should always be positive."""
         test_cases = [(0.1, 1.0), (0.5, 5.0), (1.0, 10.0), (2.0, 2.0)]
         for tau_r, tau_d in test_cases:
             with self.subTest(tau_rise=tau_r, tau_decay=tau_d):
@@ -150,7 +150,7 @@ class TestBetaNormalizationFactor(unittest.TestCase):
                 self.assertGreater(result, 0.0)
 
     def test_symmetry_tau_swap(self):
-        """Swapping tau_rise and tau_decay should give a different (valid) result."""
+        r"""Swapping tau_rise and tau_decay should give a different (valid) result."""
         result1 = _beta_normalization_factor(0.5, 5.0)
         result2 = _beta_normalization_factor(5.0, 0.5)
         self.assertGreater(result1, 0.0)
@@ -158,7 +158,7 @@ class TestBetaNormalizationFactor(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
-    """Test that default parameter values match NEST hh_cond_beta_gap_traub."""
+    r"""Test that default parameter values match NEST hh_cond_beta_gap_traub."""
 
     def test_default_parameters(self):
         neuron = hh_cond_beta_gap_traub(1)
@@ -180,7 +180,7 @@ class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
         self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
 
     def test_initial_state_values(self):
-        """Initial V should be E_L; gating at equilibrium for V=E_L."""
+        r"""Initial V should be E_L; gating at equilibrium for V=E_L."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = hh_cond_beta_gap_traub(1)
             neuron.init_state()
@@ -214,7 +214,7 @@ class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
             self.assertEqual(int(neuron.refractory_step_count.value[0]), 0)
 
     def test_equilibrium_function(self):
-        """Test the equilibrium function directly."""
+        r"""Test the equilibrium function directly."""
         m_inf, h_inf, n_inf = _hh_cond_beta_gap_traub_equilibrium(-60.0)
         self.assertGreater(m_inf, 0.0)
         self.assertLess(m_inf, 1.0)
@@ -225,7 +225,7 @@ class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_negative_capacitance(self):
         with self.assertRaises(ValueError):
@@ -265,7 +265,7 @@ class TestHHCondBetaGapTraubValidation(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
-    """Test subthreshold dynamics against direct ODE integration."""
+    r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -277,7 +277,7 @@ class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_subthreshold_relaxation(self):
-        """Test that neuron evolves from initial state without input.
+        r"""Test that neuron evolves from initial state without input.
 
         With default parameters, the NEST initialization sets gating variables
         at equilibrium for raw V_m (not V_m - V_T), so the neuron is NOT at
@@ -297,7 +297,7 @@ class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
             self.assertLess(V_final, V_T_val + 30.0)
 
     def test_ode_integration_matches_reference(self):
-        """Verify that one step of our model matches a reference RK45 solve."""
+        r"""Verify that one step of our model matches a reference RK45 solve."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=500. * u.pA)
             neuron.init_state()
@@ -333,7 +333,7 @@ class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
             self.assertAlmostEqual(n_model, yf[3], places=10)
 
     def test_dc_drives_depolarization(self):
-        """Strong DC input should depolarize the membrane."""
+        r"""Strong DC input should depolarize the membrane."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1000. * u.pA)
             neuron.init_state()
@@ -347,7 +347,7 @@ class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
-    """Test spike detection and refractory behavior."""
+    r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -363,7 +363,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
         return bool(u.math.all(spk > 0.0))
 
     def test_spike_occurs_with_strong_dc(self):
-        """With a strong DC input, the neuron should fire a spike."""
+        r"""With a strong DC input, the neuron should fire a spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1000. * u.pA)
             neuron.init_state()
@@ -378,7 +378,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
             self.assertTrue(spike_detected, "Neuron should fire with 1000 pA DC input within 20 ms")
 
     def test_no_spike_with_hyperpolarized_start(self):
-        """With hyperpolarized initial V and no input, the neuron should not spike."""
+        r"""With hyperpolarized initial V and no input, the neuron should not spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA, V_m_init=-80. * u.mV)
             neuron.init_state()
@@ -388,7 +388,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
                 self.assertFalse(self._is_spike(spk), f"No spike expected at step {k}")
 
     def test_spike_detection_threshold(self):
-        """Verify spike uses V_T + 30 threshold."""
+        r"""Verify spike uses V_T + 30 threshold."""
         with brainstate.environ.context(dt=self.dt):
             # With V_T = -50, threshold is -20 mV
             neuron = hh_cond_beta_gap_traub(1, I_e=1500. * u.pA)
@@ -408,7 +408,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
             self.assertGreater(V_max, -20.0, "V should exceed V_T + 30 mV during action potential")
 
     def test_refractory_period(self):
-        """After a spike, no more spikes should occur for t_ref ms."""
+        r"""After a spike, no more spikes should occur for t_ref ms."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1500. * u.pA, t_ref=5. * u.ms)
             neuron.init_state()
@@ -427,7 +427,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
                                         f"ISI {isi:.1f} ms violates refractory period of 5 ms")
 
     def test_refractory_counter_decrements(self):
-        """Refractory counter should decrement each step after spike."""
+        r"""Refractory counter should decrement each step after spike."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1500. * u.pA, t_ref=2. * u.ms)
             neuron.init_state()
@@ -454,7 +454,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
                 r_prev = r_now
 
     def test_dynamics_evolve_during_refractory(self):
-        """Unlike IAF, HH dynamics should continue during the refractory period."""
+        r"""Unlike IAF, HH dynamics should continue during the refractory period."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1500. * u.pA, t_ref=5. * u.ms)
             neuron.init_state()
@@ -477,7 +477,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
-    """Test synaptic conductance dynamics (beta-function / double-exponential)."""
+    r"""Test synaptic conductance dynamics (beta-function / double-exponential)."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -489,7 +489,7 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_excitatory_conductance_input(self):
-        """A positive weight spike input should increase g_ex."""
+        r"""A positive weight spike input should increase g_ex."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
             neuron.init_state()
@@ -510,7 +510,7 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             self.assertGreater(g_after, 0.0, "g_ex should be positive after dg_ex drives it")
 
     def test_inhibitory_conductance_input(self):
-        """A negative weight spike input should increase g_in."""
+        r"""A negative weight spike input should increase g_in."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
             neuron.init_state()
@@ -521,7 +521,7 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             self.assertGreater(dg_in, 0.0, "dg_in should be positive after inhibitory input (sign flipped)")
 
     def test_beta_conductance_rise_and_decay(self):
-        """Conductance should rise and then decay (beta function shape)."""
+        r"""Conductance should rise and then decay (beta function shape)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(
                 1, I_e=0. * u.pA,
@@ -553,7 +553,7 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
                                 "Conductance should decay after peak")
 
     def test_conductance_eventually_returns_to_zero(self):
-        """After a spike input, conductance should eventually decay back to ~0."""
+        r"""After a spike input, conductance should eventually decay back to ~0."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(
                 1, I_e=0. * u.pA,
@@ -572,7 +572,7 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
-    """Multi-step integration tests comparing against a reference solver."""
+    r"""Multi-step integration tests comparing against a reference solver."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -584,7 +584,7 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_multi_step_no_input(self):
-        """Multiple steps without input should match reference ODE solve."""
+        r"""Multiple steps without input should match reference ODE solve."""
         n_steps = 50
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
@@ -621,7 +621,7 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
                                        msg=f"V mismatch at step {k}")
 
     def test_dc_spiking_trajectory(self):
-        """With strong DC, verify the model produces action potentials with
+        r"""With strong DC, verify the model produces action potentials with
         reasonable peak voltage and recovery."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1000. * u.pA)
@@ -639,7 +639,7 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
             self.assertLess(V_min, -60.0, "AHP should be below -60 mV")
 
     def test_firing_rate_increases_with_current(self):
-        """Firing rate should increase monotonically with input current."""
+        r"""Firing rate should increase monotonically with input current."""
         with brainstate.environ.context(dt=self.dt):
             rates = []
             for I_amp in [500., 1000., 1500.]:
@@ -664,7 +664,7 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubNESTReference(unittest.TestCase):
-    """Test against NEST gap-junction reference data.
+    r"""Test against NEST gap-junction reference data.
 
     The NEST test (test_hh_cond_beta_gap_traub.py) simulates two neurons:
     - Neuron 1: receives I_e = 200 pA
@@ -685,7 +685,7 @@ class TestHHCondBetaGapTraubNESTReference(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_dc_200pA_produces_spikes(self):
-        """With I_e=200 pA, the neuron should fire spikes (NEST test uses this)."""
+        r"""With I_e=200 pA, the neuron should fire spikes (NEST test uses this)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=200. * u.pA)
             neuron.init_state()
@@ -701,7 +701,7 @@ class TestHHCondBetaGapTraubNESTReference(unittest.TestCase):
                             "Neuron should fire with 200 pA DC input within 200 ms")
 
     def test_nest_reference_voltage_qualitative(self):
-        """Test that the model's voltage trajectory is qualitatively correct.
+        r"""Test that the model's voltage trajectory is qualitatively correct.
 
         The NEST reference for neuron 2 (no input, gap-coupled) starts at -60 mV
         and slowly depolarizes due to gap current from neuron 1. We test neuron 1
@@ -728,7 +728,7 @@ class TestHHCondBetaGapTraubNESTReference(unittest.TestCase):
 
 
 class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
-    """Test edge cases and special configurations."""
+    r"""Test edge cases and special configurations."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -740,7 +740,7 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_custom_initial_gating(self):
-        """Test that custom initial gating variables are used correctly."""
+        r"""Test that custom initial gating variables are used correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, Act_m_init=0.5, Inact_h_init=0.3, Act_n_init=0.4)
             neuron.init_state()
@@ -750,14 +750,14 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
             self.assertAlmostEqual(_get_scalar(neuron.n.value), 0.4, places=10)
 
     def test_custom_V_T(self):
-        """Test that a different V_T shifts the effective threshold."""
+        r"""Test that a different V_T shifts the effective threshold."""
         with brainstate.environ.context(dt=self.dt):
             # With V_T = -63, threshold is V_T + 30 = -33 mV
             neuron = hh_cond_beta_gap_traub(1, V_T=-63. * u.mV)
             self.assertAlmostEqual(float(u.math.asarray(neuron.V_T / u.mV)), -63.0)
 
     def test_population_size(self):
-        """Test with a population of neurons."""
+        r"""Test with a population of neurons."""
         with brainstate.environ.context(dt=self.dt):
             n_neurons = 5
             neuron = hh_cond_beta_gap_traub(n_neurons, I_e=1000. * u.pA)
@@ -772,7 +772,7 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
                 self.assertAlmostEqual(float(V[i]), float(V[0]), places=10)
 
     def test_zero_refractory_period(self):
-        """With t_ref=0, spikes should not be suppressed by refractoriness."""
+        r"""With t_ref=0, spikes should not be suppressed by refractoriness."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1500. * u.pA, t_ref=0. * u.ms)
             neuron.init_state()
@@ -787,7 +787,7 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
             self.assertTrue(spike_detected)
 
     def test_last_spike_time_updated(self):
-        """Verify that last_spike_time is updated on spike emission."""
+        r"""Verify that last_spike_time is updated on spike emission."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=1500. * u.pA)
             neuron.init_state()
@@ -804,7 +804,7 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
                     break
 
     def test_excitatory_reversal_potential_effect(self):
-        """Excitatory synaptic input should depolarize when V < E_ex."""
+        r"""Excitatory synaptic input should depolarize when V < E_ex."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
             neuron.init_state()
@@ -821,7 +821,7 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
                                "Excitatory input should depolarize (V < E_ex)")
 
     def test_inhibitory_reversal_potential_effect(self):
-        """Inhibitory synaptic input should hyperpolarize when V > E_in."""
+        r"""Inhibitory synaptic input should hyperpolarize when V > E_in."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
             neuron.init_state()
@@ -837,13 +837,13 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
                             "Inhibitory input should hyperpolarize (V > E_in)")
 
     def test_different_V_T_default_from_hh_cond_exp_traub(self):
-        """Verify V_T default is -50 mV (different from hh_cond_exp_traub's -63 mV)."""
+        r"""Verify V_T default is -50 mV (different from hh_cond_exp_traub's -63 mV)."""
         neuron = hh_cond_beta_gap_traub(1)
         self.assertAlmostEqual(float(u.math.asarray(neuron.V_T / u.mV)), -50.0, places=10)
 
 
 class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
-    """Test beta-function synapse ODE dynamics in isolation."""
+    r"""Test beta-function synapse ODE dynamics in isolation."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -855,7 +855,7 @@ class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_beta_ode_matches_reference(self):
-        """Test that synapse ODE integration matches reference solve_ivp."""
+        r"""Test that synapse ODE integration matches reference solve_ivp."""
         tau_rise = 0.5
         tau_decay = 5.0
         pscon = _beta_normalization_factor(tau_rise, tau_decay)
@@ -877,7 +877,7 @@ class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
                                    msg=f"dg_ex after spike should be ~PSConInit ({pscon:.6f})")
 
     def test_peak_conductance_near_unity(self):
-        """The beta normalization should give peak conductance ~1 nS for weight=1."""
+        r"""The beta normalization should give peak conductance ~1 nS for weight=1."""
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(
                 1, I_e=0. * u.pA,

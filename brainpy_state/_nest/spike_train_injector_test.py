@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the spike_train_injector neuron device.
 
 Validates the brainpy.state ``spike_train_injector`` against:
@@ -41,13 +41,13 @@ from brainpy.state import spike_train_injector
 
 
 class TestSpikeTrainInjectorBasic(unittest.TestCase):
-    """Unit tests for spike_train_injector output values and timing."""
+    r"""Unit tests for spike_train_injector output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_empty_spike_times(self):
-        """With no spike times, output is always zero."""
+        r"""With no spike times, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector()
             for t_val in [0., 1., 10., 100.]:
@@ -57,7 +57,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
                                     err_msg=f"Should be 0 at t={t_val} ms")
 
     def test_single_spike(self):
-        """Single spike at specified time."""
+        r"""Single spike at specified time."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[5. * u.ms],
@@ -78,7 +78,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.0, atol=1e-15)
 
     def test_multiple_spikes(self):
-        """Multiple spikes at different times."""
+        r"""Multiple spikes at different times."""
         spike_times_ms = [1.0, 2.0, 3.0]
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
@@ -98,7 +98,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
                                     err_msg=f"Should be 1 at t={t_val}")
 
     def test_spike_multiplicities(self):
-        """Spikes with custom multiplicities."""
+        r"""Spikes with custom multiplicities."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[5. * u.ms, 10. * u.ms],
@@ -113,7 +113,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
             npt.assert_allclose(out, 5.0, atol=1e-15)
 
     def test_same_time_multiplicities_accumulate(self):
-        """Multiple spike times at the same time accumulate multiplicities."""
+        r"""Multiple spike times at the same time accumulate multiplicities."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[5. * u.ms, 5. * u.ms],
@@ -125,7 +125,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
                                 err_msg="Multiplicities should accumulate")
 
     def test_same_time_no_multiplicities_count(self):
-        """Multiple spike times at same time without multiplicities count events."""
+        r"""Multiple spike times at same time without multiplicities count events."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[5. * u.ms, 5. * u.ms, 5. * u.ms],
@@ -136,7 +136,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
                                 err_msg="Should count 3 spikes at same time")
 
     def test_start_stop_gating(self):
-        """Spikes outside active window are suppressed."""
+        r"""Spikes outside active window are suppressed."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[3. * u.ms, 7. * u.ms, 12. * u.ms],
@@ -159,7 +159,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.0, atol=1e-15)
 
     def test_origin_shifts_window(self):
-        """Origin shifts the active window."""
+        r"""Origin shifts the active window."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[5. * u.ms, 15. * u.ms],
@@ -179,7 +179,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
             npt.assert_allclose(out, 0.0, atol=1e-15)
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 in_size=5,
@@ -190,7 +190,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
             self.assertEqual(out.shape, (5,))
 
     def test_unitless_spike_times(self):
-        """Spike times can be given as plain floats (interpreted as ms)."""
+        r"""Spike times can be given as plain floats (interpreted as ms)."""
         with brainstate.environ.context(dt=self.dt):
             inj = spike_train_injector(
                 spike_times=[5.0, 10.0],
@@ -204,7 +204,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
             npt.assert_allclose(out, 1.0, atol=1e-15)
 
     def test_default_parameters(self):
-        """Default parameters match NEST defaults."""
+        r"""Default parameters match NEST defaults."""
         inj = spike_train_injector()
         self.assertFalse(inj.precise_times)
         self.assertFalse(inj.allow_offgrid_times)
@@ -214,17 +214,17 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
 
 
 class TestSpikeTrainInjectorValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_unsorted_spike_times_raises(self):
-        """Non-sorted spike times raises error."""
+        r"""Non-sorted spike times raises error."""
         with self.assertRaises(ValueError):
             spike_train_injector(
                 spike_times=[3. * u.ms, 1. * u.ms, 5. * u.ms],
             )
 
     def test_mismatched_multiplicities_raises(self):
-        """Different sized spike_times and spike_multiplicities raises error."""
+        r"""Different sized spike_times and spike_multiplicities raises error."""
         with self.assertRaises(ValueError):
             spike_train_injector(
                 spike_times=[1. * u.ms, 2. * u.ms],
@@ -232,7 +232,7 @@ class TestSpikeTrainInjectorValidation(unittest.TestCase):
             )
 
     def test_precise_times_with_allow_offgrid_raises(self):
-        """Setting precise_times with allow_offgrid_times raises error."""
+        r"""Setting precise_times with allow_offgrid_times raises error."""
         with self.assertRaises(ValueError):
             spike_train_injector(
                 precise_times=True,
@@ -240,7 +240,7 @@ class TestSpikeTrainInjectorValidation(unittest.TestCase):
             )
 
     def test_precise_times_with_shift_now_spikes_raises(self):
-        """Setting precise_times with shift_now_spikes raises error."""
+        r"""Setting precise_times with shift_now_spikes raises error."""
         with self.assertRaises(ValueError):
             spike_train_injector(
                 precise_times=True,
@@ -248,7 +248,7 @@ class TestSpikeTrainInjectorValidation(unittest.TestCase):
             )
 
     def test_empty_multiplicities_allowed(self):
-        """Empty spike_multiplicities is valid regardless of spike_times."""
+        r"""Empty spike_multiplicities is valid regardless of spike_times."""
         inj = spike_train_injector(
             spike_times=[1. * u.ms, 2. * u.ms],
             spike_multiplicities=[],
@@ -257,10 +257,10 @@ class TestSpikeTrainInjectorValidation(unittest.TestCase):
 
 
 class TestSpikeTrainInjectorSimulation(unittest.TestCase):
-    """Integration tests: full simulation with spike recording."""
+    r"""Integration tests: full simulation with spike recording."""
 
     def test_spike_train_recording(self):
-        """Run simulation and record all spike times."""
+        r"""Run simulation and record all spike times."""
         dt_ms = 0.1
         spike_times_ms = [1.0, 2.0, 3.0, 5.0, 10.0]
         simtime = 15.0
@@ -283,7 +283,7 @@ class TestSpikeTrainInjectorSimulation(unittest.TestCase):
                             err_msg="Recorded spike times don't match input")
 
     def test_spike_gated_recording(self):
-        """Only spikes within active window are recorded."""
+        r"""Only spikes within active window are recorded."""
         dt_ms = 0.1
         spike_times_ms = [1.0, 3.0, 5.0, 7.0, 9.0]
         start = 3.0
@@ -312,7 +312,7 @@ class TestSpikeTrainInjectorSimulation(unittest.TestCase):
                             err_msg="Gated spike times don't match expected")
 
     def test_multiplicity_recording(self):
-        """Multiplicities are correctly reflected in output values."""
+        r"""Multiplicities are correctly reflected in output values."""
         dt_ms = 0.1
         spike_times_ms = [1.0, 2.0]
         multiplicities = [3, 5]
@@ -339,7 +339,7 @@ class TestSpikeTrainInjectorSimulation(unittest.TestCase):
 
 
 class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
-    """Compare against NEST simulator."""
+    r"""Compare against NEST simulator."""
 
     def setUp(self):
         self.dt_ms = 0.1
@@ -354,7 +354,7 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
             return False
 
     def test_basic_spike_times_vs_nest(self):
-        """Compare basic spike timing against NEST spike_train_injector."""
+        r"""Compare basic spike timing against NEST spike_train_injector."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -396,7 +396,7 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
                             err_msg="brainpy spike times don't match expected")
 
     def test_grid_rounding_vs_nest(self):
-        """Compare spike time rounding behavior against NEST."""
+        r"""Compare spike time rounding behavior against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -436,7 +436,7 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
                             err_msg="Rounded spike times don't match NEST")
 
     def test_multiplicities_vs_nest(self):
-        """Compare spike multiplicities against NEST."""
+        r"""Compare spike multiplicities against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 

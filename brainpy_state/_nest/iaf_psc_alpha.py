@@ -100,10 +100,10 @@ class iaf_psc_alpha(Neuron):
 
     Internal state (NEST notation):
 
-    - :math:`y_0`: buffered external current for next step,
-    - :math:`dI_{ex}, I_{ex}` and :math:`dI_{in}, I_{in}`: alpha-kernel states,
+    - :math:`y_0` -- buffered external current for next step,
+    - :math:`dI_{ex}, I_{ex}` and :math:`dI_{in}, I_{in}` -- alpha-kernel states,
     - :math:`y_3 = V_m - E_L`,
-    - :math:`r`: refractory countdown in grid steps.
+    - :math:`r` -- refractory countdown in grid steps.
 
     Per-step order is exactly:
 
@@ -411,7 +411,7 @@ class iaf_psc_alpha(Neuron):
             raise ValueError('Reset potential must be smaller than threshold.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize runtime states for membrane, synapses, and refractoriness.
+        r"""Initialize runtime states for membrane, synapses, and refractoriness.
 
         Parameters
         ----------
@@ -456,7 +456,7 @@ class iaf_psc_alpha(Neuron):
             self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
-        """Evaluate surrogate spike output for a voltage tensor.
+        r"""Evaluate surrogate spike output for a voltage tensor.
 
         Parameters
         ----------
@@ -480,7 +480,7 @@ class iaf_psc_alpha(Neuron):
 
     @staticmethod
     def _alpha_propagator_p31_p32(tau_syn: np.ndarray, tau_m: np.ndarray, c_m: np.ndarray, h_ms: float):
-        """Compute alpha-kernel membrane propagator terms ``P31`` and ``P32``.
+        r"""Compute alpha-kernel membrane propagator terms ``P31`` and ``P32``.
 
         Parameters
         ----------
@@ -537,7 +537,7 @@ class iaf_psc_alpha(Neuron):
         return p31, p32
 
     def update(self, x=0. * u.pA):
-        """Advance the neuron by one simulation step.
+        r"""Advance the neuron by one simulation step.
 
         Parameters
         ----------

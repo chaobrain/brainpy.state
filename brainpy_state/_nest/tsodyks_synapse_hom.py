@@ -378,7 +378,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
         self.t_lastspike = 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all public parameters (``weight``, ``delay``, ``receptor_type``, ``tau_psc``,
         ``tau_fac``, ``tau_rec``, ``U``) and current state variables (``x``, ``y``, ``u``)
@@ -419,7 +419,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
         return params
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Reject common-property assignments in connect-time synapse specs.
+        r"""Reject common-property assignments in connect-time synapse specs.
 
         Validates that connect-time synapse specifications do not attempt to override
         common (homogeneous) properties that must be shared across all connections.
@@ -474,7 +474,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
         u: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set public parameters following NEST-style validation semantics.
+        r"""Set public parameters following NEST-style validation semantics.
 
         Updates model parameters and/or state variables with comprehensive validation.
         All parameters are optional; only specified values are updated. This method
@@ -711,7 +711,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events, then schedule current-step presynaptic input.
+        r"""Deliver due events, then schedule current-step presynaptic input.
 
         This is the main simulation-step method, combining event delivery and spike
         transmission. It first delivers all queued events that are due for the current

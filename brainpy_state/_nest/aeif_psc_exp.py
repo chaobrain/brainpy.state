@@ -210,8 +210,8 @@ class aeif_psc_exp(Neuron):
     ``a``                4 nS               :math:`a`                                  Subthreshold adaptation
     ``b``                80.5 pA            :math:`b`                                  Spike-triggered adaptation increment
     ``V_th``             -50.4 mV           :math:`V_\mathrm{th}`                      Spike initiation threshold (in exponential term)
-    ``tau_syn_ex``       0.2 ms             :math:`\tau_{\mathrm{syn,ex}}`            Excitatory exponential time constant
-    ``tau_syn_in``       2.0 ms             :math:`\tau_{\mathrm{syn,in}}`            Inhibitory exponential time constant
+    ``tau_syn_ex``       0.2 ms             :math:`\tau_{\mathrm{syn,ex}}`             Excitatory exponential time constant
+    ``tau_syn_in``       2.0 ms             :math:`\tau_{\mathrm{syn,in}}`             Inhibitory exponential time constant
     ``I_e``              0 pA               :math:`I_\mathrm{e}`                       Constant external current
     ``gsl_error_tol``    1e-6               (solver tolerance)                         RKF45 local error tolerance
     ``V_initializer``    Constant(-70.6 mV)                                            Membrane initializer
@@ -226,25 +226,25 @@ class aeif_psc_exp(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential. Shape: ``(*in_size, *batch_size)``. Units: mV.
+        Membrane potential. Shape: ``(\*in_size, \*batch_size)``. Units: mV.
     I_ex : brainstate.HiddenState
-        Excitatory synaptic current. Shape: ``(*in_size, *batch_size)``. Units: pA.
+        Excitatory synaptic current. Shape: ``(\*in_size, \*batch_size)``. Units: pA.
     I_in : brainstate.HiddenState
-        Inhibitory synaptic current. Shape: ``(*in_size, *batch_size)``. Units: pA.
+        Inhibitory synaptic current. Shape: ``(\*in_size, \*batch_size)``. Units: pA.
     w : brainstate.HiddenState
-        Adaptation current. Shape: ``(*in_size, *batch_size)``. Units: pA.
+        Adaptation current. Shape: ``(\*in_size, \*batch_size)``. Units: pA.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory steps. Shape: ``(*in_size, *batch_size)``. Dtype: int32.
+        Remaining refractory steps. Shape: ``(\*in_size, \*batch_size)``. Dtype: int32.
     integration_step : brainstate.ShortTermState
-        Persistent RKF45 internal step size. Shape: ``(*in_size, *batch_size)``. Units: ms.
+        Persistent RKF45 internal step size. Shape: ``(\*in_size, \*batch_size)``. Units: ms.
     I_stim : brainstate.ShortTermState
-        One-step delayed current buffer. Shape: ``(*in_size, *batch_size)``. Units: pA.
+        One-step delayed current buffer. Shape: ``(\*in_size, \*batch_size)``. Units: pA.
     last_spike_time : brainstate.ShortTermState
-        Last emitted spike time. Shape: ``(*in_size, *batch_size)``. Units: ms.
+        Last emitted spike time. Shape: ``(\*in_size, \*batch_size)``. Units: ms.
         Updated to ``t + dt`` on spike emission.
     refractory : brainstate.ShortTermState, optional
         Boolean refractory indicator. Only exists if ``ref_var=True``.
-        Shape: ``(*in_size, *batch_size)``. Dtype: bool.
+        Shape: ``(\*in_size, \*batch_size)``. Dtype: bool.
 
     Raises
     ------
@@ -395,7 +395,7 @@ class aeif_psc_exp(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert quantity to unitless NumPy array.
+        r"""Convert quantity to unitless NumPy array.
 
         Parameters
         ----------
@@ -413,7 +413,7 @@ class aeif_psc_exp(Neuron):
 
     @staticmethod
     def _to_numpy_unitless(x):
-        """Convert dimensionless quantity to NumPy array.
+        r"""Convert dimensionless quantity to NumPy array.
 
         Parameters
         ----------
@@ -429,7 +429,7 @@ class aeif_psc_exp(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast array to target shape.
+        r"""Broadcast array to target shape.
 
         Parameters
         ----------
@@ -446,7 +446,7 @@ class aeif_psc_exp(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter consistency and numerical stability.
+        r"""Validate parameter consistency and numerical stability.
 
         Checks parameter constraints following NEST validation rules:
           - ``V_reset < V_peak``
@@ -499,7 +499,7 @@ class aeif_psc_exp(Neuron):
                 )
 
     def _safe_dt(self):
-        """Get simulation timestep with fallback.
+        r"""Get simulation timestep with fallback.
 
         Returns
         -------
@@ -512,7 +512,7 @@ class aeif_psc_exp(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes state variables:
           - ``V``: membrane potential (HiddenState)
@@ -528,7 +528,7 @@ class aeif_psc_exp(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension size. If None, no batch dimension is added.
-            State shape will be ``(*in_size, batch_size)``.
+            State shape will be ``(\*in_size, batch_size)``.
         **kwargs
             Additional keyword arguments (unused).
 
@@ -567,7 +567,7 @@ class aeif_psc_exp(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Re-initializes all state variables using the configured initializers.
         Equivalent to calling ``init_state`` but reuses existing state objects.
@@ -605,7 +605,7 @@ class aeif_psc_exp(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradient.
+        r"""Compute differentiable spike output using surrogate gradient.
 
         Applies the surrogate gradient function ``spk_fun`` to a scaled voltage.
         The scaling maps the threshold region to a suitable range for the surrogate.
@@ -614,12 +614,12 @@ class aeif_psc_exp(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential. Units: mV. If None, uses ``self.V.value``.
-            Shape: ``(*in_size, *batch_size)``.
+            Shape: ``(\*in_size, \*batch_size)``.
 
         Returns
         -------
         ArrayLike
-            Differentiable spike output in [0, 1]. Shape: ``(*in_size, *batch_size)``.
+            Differentiable spike output in [0, 1]. Shape: ``(\*in_size, \*batch_size)``.
             Dtype: float. Values close to 1 indicate spike, close to 0 indicate silence.
 
         Notes
@@ -633,12 +633,12 @@ class aeif_psc_exp(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Compute number of refractory steps from refractory duration.
+        r"""Compute number of refractory steps from refractory duration.
 
         Returns
         -------
         ArrayLike
-            Number of refractory steps. Shape: ``(*in_size,)``. Dtype: int32.
+            Number of refractory steps. Shape: ``(\*in_size,)``. Dtype: int32.
             Computed as ``ceil(t_ref / dt)``.
 
         Notes
@@ -649,7 +649,7 @@ class aeif_psc_exp(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _sum_signed_delta_inputs(self):
-        """Collect and split delta inputs by sign into excitatory/inhibitory currents.
+        r"""Collect and split delta inputs by sign into excitatory/inhibitory currents.
 
         Iterates over all registered delta inputs, evaluates callables, and splits
         contributions by sign. Positive weights accumulate in excitatory current,
@@ -658,10 +658,10 @@ class aeif_psc_exp(Neuron):
         Returns
         -------
         w_ex : ArrayLike
-            Total excitatory delta input. Shape: ``(*in_size, *batch_size)``. Units: pA.
+            Total excitatory delta input. Shape: ``(\*in_size, \*batch_size)``. Units: pA.
             Sum of all positive delta inputs.
         w_in : ArrayLike
-            Total inhibitory delta input. Shape: ``(*in_size, *batch_size)``. Units: pA.
+            Total inhibitory delta input. Shape: ``(\*in_size, \*batch_size)``. Units: pA.
             Sum of absolute values of all negative delta inputs.
 
         Notes
@@ -690,7 +690,7 @@ class aeif_psc_exp(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, I_ex, I_in, w, is_refractory, i_stim, p):
-        """Compute RHS of ODEs for scalar state (single neuron).
+        r"""Compute RHS of ODEs for scalar state (single neuron).
 
         Implements the AdEx dynamics equations for membrane potential, synaptic
         currents, and adaptation current. Handles refractory clamping and exponential
@@ -769,6 +769,7 @@ class aeif_psc_exp(Neuron):
         The update sequence follows NEST semantics:
 
         1. **Integrate ODEs** over :math:`[t, t+dt]` using adaptive RKF45:
+
            - Per-neuron loop with scalar integration
            - Adaptive step size :math:`h` adjusted to meet ``gsl_error_tol``
            - Inside integration: apply refractory clamp, detect spikes, reset voltage,
@@ -776,25 +777,27 @@ class aeif_psc_exp(Neuron):
            - Step size persists across simulation steps for efficiency
 
         2. **Post-integration processing:**
+
            - Decrement refractory counter by 1
            - Apply delta inputs (spike weights) to :math:`I_{ex}`, :math:`I_{in}`
            - Store external current :math:`x` into one-step delayed buffer :math:`I_{\text{stim}}`
            - Update ``last_spike_time`` for neurons that spiked
 
         3. **Return spike tensor:**
+
            - Binary array indicating which neurons spiked during :math:`[t, t+dt]`
 
         Parameters
         ----------
         x : ArrayLike, optional
             External current input. Units: pA. Default: 0.0 pA.
-            Shape: scalar or broadcastable to ``(*in_size, *batch_size)``.
+            Shape: scalar or broadcastable to ``(\*in_size, \*batch_size)``.
             Combined with ``current_inputs`` and stored in ``I_stim`` for next step.
 
         Returns
         -------
         ArrayLike
-            Binary spike array. Shape: ``(*in_size, *batch_size)``. Dtype: float.
+            Binary spike array. Shape: ``(\*in_size, \*batch_size)``. Dtype: float.
             Value 1.0 indicates spike during this timestep, 0.0 indicates silence.
             For neurons with ``t_ref=0``, multiple internal spikes collapse to single
             output spike (binary per step).

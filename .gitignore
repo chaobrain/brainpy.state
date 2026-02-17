@@ -222,3 +222,4 @@ cython_debug/
 /scripts/
 /codex_logs_numpy_doc/
 /claude_logs_numpy_doc/
+/docs/jupyter_execute/

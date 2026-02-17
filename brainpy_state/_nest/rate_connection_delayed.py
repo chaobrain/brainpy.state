@@ -260,7 +260,7 @@ class rate_connection_delayed:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Return connection model properties.
+        r"""Return connection model properties.
 
         Returns
         -------
@@ -276,7 +276,7 @@ class rate_connection_delayed:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve all connection parameters as a dictionary.
+        r"""Retrieve all connection parameters as a dictionary.
 
         Follows NEST's ``GetStatus`` API convention.
 
@@ -311,7 +311,7 @@ class rate_connection_delayed:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters from a dictionary or keyword arguments.
+        r"""Update connection parameters from a dictionary or keyword arguments.
 
         Follows NEST's ``SetStatus`` API convention. Accepts both ``delay`` and
         ``delay_steps`` as aliases (if both provided, they must match).
@@ -366,7 +366,7 @@ class rate_connection_delayed:
             self.set_delay(updates['delay'])
 
     def get(self, key: str = 'status'):
-        """Retrieve a specific parameter or full status dictionary.
+        r"""Retrieve a specific parameter or full status dictionary.
 
         Parameters
         ----------
@@ -407,7 +407,7 @@ class rate_connection_delayed:
         raise KeyError(f'Unsupported key "{key}" for rate_connection_delayed.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update the connection weight.
+        r"""Update the connection weight.
 
         Parameters
         ----------
@@ -432,7 +432,7 @@ class rate_connection_delayed:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, delay: ArrayLike):
-        """Update the connection delay (alias for ``set_delay_steps``).
+        r"""Update the connection delay (alias for ``set_delay_steps``).
 
         Parameters
         ----------
@@ -457,7 +457,7 @@ class rate_connection_delayed:
         self.delay_steps = self._validate_delay_steps(delay, name='delay')
 
     def set_delay_steps(self, delay_steps: ArrayLike):
-        """Update the connection delay in simulation steps.
+        r"""Update the connection delay in simulation steps.
 
         Parameters
         ----------
@@ -482,7 +482,7 @@ class rate_connection_delayed:
         self.delay_steps = self._validate_delay_steps(delay_steps, name='delay_steps')
 
     def prepare_secondary_event(self, coeffarray: ArrayLike) -> dict[str, Any]:
-        """Create a delayed secondary-event payload.
+        r"""Create a delayed secondary-event payload.
 
         Secondary events are used in implicit integration schemes for rate neurons.
         The coefficient array represents contributions at multiple time lags.
@@ -536,7 +536,7 @@ class rate_connection_delayed:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Create a delayed-rate event payload for step-based simulation APIs.
+        r"""Create a delayed-rate event payload for step-based simulation APIs.
 
         Constructs an event dictionary that can be passed to rate neuron receivers
         to transmit a rate signal with the connection's weight and delay.
@@ -676,7 +676,7 @@ class rate_connection_delayed:
 
         References
         ----------
-        .. [1] NEST delayed-rate receiver implementation:
+        .. [3] NEST delayed-rate receiver implementation:
                ``models/rate_neuron_ipn_impl.h`` and ``models/rate_neuron_opn_impl.h``.
 
         Examples
@@ -737,7 +737,7 @@ class rate_connection_delayed:
 
     @staticmethod
     def _to_coeff_array(value: ArrayLike) -> np.ndarray:
-        """Convert input to a validated 1D float64 coefficient array.
+        r"""Convert input to a validated 1D float64 coefficient array.
 
         Parameters
         ----------
@@ -763,7 +763,7 @@ class rate_connection_delayed:
 
     @staticmethod
     def _to_rate_value(value: ArrayLike):
-        """Convert input to a rate value (scalar float or array).
+        r"""Convert input to a rate value (scalar float or array).
 
         Parameters
         ----------
@@ -785,7 +785,7 @@ class rate_connection_delayed:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert input to a validated scalar float.
+        r"""Convert input to a validated scalar float.
 
         Parameters
         ----------
@@ -813,7 +813,7 @@ class rate_connection_delayed:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert input to a validated integer scalar.
+        r"""Convert input to a validated integer scalar.
 
         Parameters
         ----------
@@ -847,7 +847,7 @@ class rate_connection_delayed:
         return vr
 
     def _validate_delay_steps(self, delay_steps: ArrayLike, name: str = 'delay_steps') -> int:
-        """Validate and convert delay parameter to integer >= 1.
+        r"""Validate and convert delay parameter to integer >= 1.
 
         Parameters
         ----------

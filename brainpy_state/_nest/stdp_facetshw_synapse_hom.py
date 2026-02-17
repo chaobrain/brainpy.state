@@ -103,10 +103,10 @@ class stdp_facetshw_synapse_hom(static_synapse):
 
     c. **LUT selection and weight update**:
 
-       - If :math:`(E_0, E_1) = (1, 0)`: apply ``lookuptable_0[w_discrete]`` → :math:`w_{\text{discrete}}'`
-       - If :math:`(E_0, E_1) = (0, 1)`: apply ``lookuptable_1[w_discrete]`` → :math:`w_{\text{discrete}}'`
-       - If :math:`(E_0, E_1) = (1, 1)`: apply ``lookuptable_2[w_discrete]`` → :math:`w_{\text{discrete}}'`
-       - If :math:`(E_0, E_1) = (0, 0)`: no weight change
+       - If :math:`(E_0, E_1) = (1, 0)` -- apply ``lookuptable_0[w_discrete]`` → :math:`w_{\text{discrete}}'`
+       - If :math:`(E_0, E_1) = (0, 1)` -- apply ``lookuptable_1[w_discrete]`` → :math:`w_{\text{discrete}}'`
+       - If :math:`(E_0, E_1) = (1, 1)` -- apply ``lookuptable_2[w_discrete]`` → :math:`w_{\text{discrete}}'`
+       - If :math:`(E_0, E_1) = (0, 0)` -- no weight change
 
     d. **Capacitor reset**: After LUT application, accumulators may be reset to zero based on
        6-bit ``reset_pattern`` (pairs of causal/acausal reset bits for each LUT).
@@ -726,7 +726,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         *,
         t_spike_ms: ArrayLike | None = None,
     ) -> int:
-        """Record postsynaptic spikes into internal history buffer.
+        r"""Record postsynaptic spikes into internal history buffer.
 
         Registers postsynaptic spike events for subsequent spike-timing calculations during
         presynaptic spike processing. Recorded spikes are stored in an internal buffer and queried
@@ -830,7 +830,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         self._post_hist_t = []
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all user-accessible parameters and state variables in NEST-compatible format.
         Includes inherited static synapse properties (``weight``, ``delay``, ``receptor_type``),
@@ -923,7 +923,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         return params
 
     def check_synapse_params(self, syn_spec: Mapping[str, object] | None):
-        """Validate synapse specification for connection-time parameter assignment.
+        r"""Validate synapse specification for connection-time parameter assignment.
 
         Ensures that model-level (common) properties are not included in per-synapse connection
         specifications. The ``_hom`` (homogeneous) variant requires all plasticity parameters to be
@@ -1035,7 +1035,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         next_readout_time: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Update public parameters and mutable state variables.
+        r"""Update public parameters and mutable state variables.
 
         Provides NEST-compatible interface for modifying synapse properties and state after
         instantiation. All parameters are optional; only provided arguments are updated. Performs
@@ -1317,7 +1317,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Process presynaptic spike and schedule outgoing synaptic event.
+        r"""Process presynaptic spike and schedule outgoing synaptic event.
 
         Implements the full NEST ``stdp_facetshw_synapse_hom::send`` protocol: controller
         initialization, readout-cycle-based weight update via look-up tables, nearest-neighbor
@@ -1336,10 +1336,11 @@ class stdp_facetshw_synapse_hom(static_synapse):
            - Convert continuous ``weight`` to 4-bit discrete representation via rounding
            - Evaluate two comparator functions ``E_0`` and ``E_1`` from accumulators and thresholds
            - Select LUT based on evaluation bits:
-             * ``(1, 0)`` → apply ``lookuptable_0`` (typically potentiation)
-             * ``(0, 1)`` → apply ``lookuptable_1`` (typically depression)
-             * ``(1, 1)`` → apply ``lookuptable_2`` (typically no change or combined rule)
-             * ``(0, 0)`` → no weight update
+
+             * ``(1, 0)`` -- apply ``lookuptable_0`` (typically potentiation)
+             * ``(0, 1)`` -- apply ``lookuptable_1`` (typically depression)
+             * ``(1, 1)`` -- apply ``lookuptable_2`` (typically no change or combined rule)
+             * ``(0, 0)`` -- no weight update
            - Reset accumulators to zero according to selected LUT's reset bits in ``reset_pattern``
            - Advance ``next_readout_time`` by ``readout_cycle_duration`` until it exceeds current time
            - Convert updated discrete weight back to continuous value
@@ -1536,7 +1537,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Advance synapse state by one time step.
+        r"""Advance synapse state by one time step.
 
         Orchestrates the full update cycle: delivers due events from the internal queue, records
         postsynaptic spikes into history, aggregates presynaptic input from all sources, and

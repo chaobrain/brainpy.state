@@ -52,11 +52,11 @@ class clopath_synapse:
 
     Each connection maintains:
 
-    - :math:`w`: Current synaptic weight
-    - :math:`\bar{x}`: Presynaptic trace (low-pass filtered spike train)
-    - :math:`t_\text{last}`: Timestamp of most recent presynaptic spike (milliseconds)
-    - :math:`\tau_x`: Time constant for presynaptic trace decay (milliseconds)
-    - :math:`W_\text{min}, W_\text{max}`: Hard lower/upper weight bounds
+    - :math:`w` -- Current synaptic weight
+    - :math:`\bar{x}` -- Presynaptic trace (low-pass filtered spike train)
+    - :math:`t_\text{last}` -- Timestamp of most recent presynaptic spike (milliseconds)
+    - :math:`\tau_x` -- Time constant for presynaptic trace decay (milliseconds)
+    - :math:`W_\text{min}, W_\text{max}` -- Hard lower/upper weight bounds
 
     **3. Plasticity Update Sequence**
 
@@ -363,7 +363,7 @@ class clopath_synapse:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Return dictionary of connection model properties and capabilities.
+        r"""Return dictionary of connection model properties and capabilities.
 
         Returns
         -------
@@ -387,7 +387,7 @@ class clopath_synapse:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve current connection state and parameter values.
+        r"""Retrieve current connection state and parameter values.
 
         Returns
         -------
@@ -434,7 +434,7 @@ class clopath_synapse:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters and state variables.
+        r"""Update connection parameters and state variables.
 
         Parameters
         ----------
@@ -505,7 +505,7 @@ class clopath_synapse:
         self._check_weight_sign_constraints()
 
     def get(self, key: str = 'status'):
-        """Retrieve connection status or specific parameter value.
+        r"""Retrieve connection status or specific parameter value.
 
         Parameters
         ----------
@@ -546,7 +546,7 @@ class clopath_synapse:
         raise KeyError(f'Unsupported key "{key}" for clopath_synapse.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Set synaptic weight value.
+        r"""Set synaptic weight value.
 
         Parameters
         ----------
@@ -567,7 +567,7 @@ class clopath_synapse:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, delay: ArrayLike):
-        """Set dendritic propagation delay.
+        r"""Set dendritic propagation delay.
 
         Parameters
         ----------
@@ -582,7 +582,7 @@ class clopath_synapse:
         self.delay = self._validate_positive_delay(delay)
 
     def set_delay_steps(self, delay_steps: ArrayLike):
-        """Set integer delay in simulation time steps.
+        r"""Set integer delay in simulation time steps.
 
         Parameters
         ----------
@@ -605,7 +605,7 @@ class clopath_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Process one presynaptic spike with Clopath plasticity and return spike event payload.
+        r"""Process one presynaptic spike with Clopath plasticity and return spike event payload.
 
         This method implements the core plasticity update sequence:
 
@@ -786,7 +786,7 @@ class clopath_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Alias for ``send()`` method with identical semantics.
+        r"""Alias for ``send()`` method with identical semantics.
 
         This method provides an alternative name for spike event generation, maintaining
         compatibility with different naming conventions. All parameters and return values
@@ -814,7 +814,7 @@ class clopath_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> list[dict[str, Any]]:
-        """Process a sequence of presynaptic spikes and return event payloads for each.
+        r"""Process a sequence of presynaptic spikes and return event payloads for each.
 
         This method sequentially processes multiple presynaptic spikes, updating connection
         state (weight, presynaptic trace, last spike time) after each spike. The plasticity
@@ -922,7 +922,7 @@ class clopath_synapse:
         return events
 
     def _check_weight_sign_constraints(self):
-        """Validate sign consistency between weight and bounds using NEST's exact sign tests.
+        r"""Validate sign consistency between weight and bounds using NEST's exact sign tests.
 
         Raises
         ------
@@ -951,7 +951,7 @@ class clopath_synapse:
 
     @staticmethod
     def _sign_like_wmin(x: float) -> int:
-        """Compute NEST-compatible sign test for Wmin comparison (>= 0 vs < 0).
+        r"""Compute NEST-compatible sign test for Wmin comparison (>= 0 vs < 0).
 
         Returns -1 for negative, +1 for non-negative.
         """
@@ -959,14 +959,14 @@ class clopath_synapse:
 
     @staticmethod
     def _sign_like_wmax(x: float) -> int:
-        """Compute NEST-compatible sign test for Wmax comparison (> 0 vs <= 0).
+        r"""Compute NEST-compatible sign test for Wmax comparison (> 0 vs <= 0).
 
         Returns -1 for non-positive, +1 for positive.
         """
         return int((x > 0.0) - (x <= 0.0))
 
     def _depress(self, w: float, dw: float) -> float:
-        """Apply LTD weight depression with hard lower bound clipping.
+        r"""Apply LTD weight depression with hard lower bound clipping.
 
         Parameters
         ----------
@@ -984,7 +984,7 @@ class clopath_synapse:
         return w_new if w_new > self.Wmin else self.Wmin
 
     def _facilitate(self, w: float, dw: float, x_trace: float) -> float:
-        """Apply LTP weight facilitation with hard upper bound clipping.
+        r"""Apply LTP weight facilitation with hard upper bound clipping.
 
         Parameters
         ----------
@@ -1004,7 +1004,7 @@ class clopath_synapse:
         return w_new if w_new < self.Wmax else self.Wmax
 
     def _get_ltp_history(self, target: Any, t1: float, t2: float):
-        """Query postsynaptic LTP history entries in time interval (t1, t2].
+        r"""Query postsynaptic LTP history entries in time interval (t1, t2].
 
         Parameters
         ----------
@@ -1038,7 +1038,7 @@ class clopath_synapse:
         return history
 
     def _get_ltd_value(self, target: Any, t: float) -> float:
-        """Query postsynaptic LTD depression amplitude at given time.
+        r"""Query postsynaptic LTD depression amplitude at given time.
 
         Parameters
         ----------
@@ -1068,7 +1068,7 @@ class clopath_synapse:
 
     @staticmethod
     def _extract_history_entry(entry: Any) -> tuple[float, float]:
-        """Extract time and weight change from LTP history entry.
+        r"""Extract time and weight change from LTP history entry.
 
         Supports multiple entry formats:
 
@@ -1111,7 +1111,7 @@ class clopath_synapse:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert array-like value to scalar float with validation.
+        r"""Convert array-like value to scalar float with validation.
 
         Strips brainunit Quantity wrapper if present, converts to float64 array, and validates
         scalar shape and finite value.
@@ -1145,7 +1145,7 @@ class clopath_synapse:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert array-like value to scalar integer with validation.
+        r"""Convert array-like value to scalar integer with validation.
 
         Strips brainunit Quantity wrapper if present, converts to float64, validates scalar shape
         and finite value, then rounds to nearest integer and checks for integer-valued input.
@@ -1181,7 +1181,7 @@ class clopath_synapse:
         return vr
 
     def _validate_positive_delay(self, value: ArrayLike) -> float:
-        """Validate and convert delay to positive float scalar.
+        r"""Validate and convert delay to positive float scalar.
 
         Parameters
         ----------
@@ -1204,7 +1204,7 @@ class clopath_synapse:
         return d
 
     def _validate_delay_steps(self, value: ArrayLike) -> int:
-        """Validate and convert delay_steps to positive integer scalar.
+        r"""Validate and convert delay_steps to positive integer scalar.
 
         Parameters
         ----------
@@ -1227,7 +1227,7 @@ class clopath_synapse:
         return d
 
     def _validate_multiplicity(self, value: ArrayLike) -> float:
-        """Validate and convert multiplicity to non-negative float scalar.
+        r"""Validate and convert multiplicity to non-negative float scalar.
 
         Parameters
         ----------

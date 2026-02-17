@@ -159,7 +159,7 @@ class TestIAFPscDelta(unittest.TestCase):
             self.assertEqual(neuron.refractory.value.shape, (3, 4))
 
     def test_matches_nest_reference_trace(self):
-        """Regression: validate a deterministic trace against NEST step equations."""
+        r"""Regression: validate a deterministic trace against NEST step equations."""
         with brainstate.environ.context(dt=self.dt):
             neuron = iaf_psc_delta(
                 1,

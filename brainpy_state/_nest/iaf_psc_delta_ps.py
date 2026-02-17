@@ -436,7 +436,7 @@ class iaf_psc_delta_ps(Neuron):
             raise ValueError('Refractory time must not be negative.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize membrane, timing, and refractory runtime states.
+        r"""Initialize membrane, timing, and refractory runtime states.
 
         Parameters
         ----------
@@ -481,7 +481,7 @@ class iaf_psc_delta_ps(Neuron):
             self.refractory = brainstate.ShortTermState(is_refractory)
 
     def get_spike(self, V: ArrayLike = None):
-        """Evaluate surrogate spike activation for a voltage tensor.
+        r"""Evaluate surrogate spike activation for a voltage tensor.
 
         Parameters
         ----------
@@ -509,7 +509,7 @@ class iaf_psc_delta_ps(Neuron):
     def _canonicalize_spike_events(
         spike_events: Optional[Union[Sequence, dict, Tuple]],
     ) -> Sequence:
-        """Normalize accepted spike-event container variants.
+        r"""Normalize accepted spike-event container variants.
 
         Parameters
         ----------
@@ -537,7 +537,7 @@ class iaf_psc_delta_ps(Neuron):
         spike_events: Optional[Union[Sequence, dict, Tuple]],
         shape,
     ) -> Sequence[Tuple[float, np.ndarray]]:
-        """Parse precise spike events into numeric offsets and broadcast weights.
+        r"""Parse precise spike events into numeric offsets and broadcast weights.
 
         Parameters
         ----------
@@ -582,7 +582,7 @@ class iaf_psc_delta_ps(Neuron):
         return parsed
 
     def update(self, x=0. * u.pA, spike_events: Optional[Union[Sequence, dict, Tuple]] = None):
-        """Advance one simulation step with optional precise within-step events.
+        r"""Advance one simulation step with optional precise within-step events.
 
         Parameters
         ----------

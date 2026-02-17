@@ -30,7 +30,7 @@ __all__ = [
 
 @dataclass(frozen=True)
 class spikecounter:
-    """Entry in neuromodulatory spike history.
+    r"""Entry in neuromodulatory spike history.
 
     Attributes
     ----------
@@ -46,7 +46,7 @@ class spikecounter:
 
 @dataclass(frozen=True)
 class _StepCalibration:
-    """Discrete-time calibration used by :class:`volume_transmitter`.
+    r"""Discrete-time calibration used by :class:`volume_transmitter`.
 
     Attributes
     ----------
@@ -80,9 +80,9 @@ class volume_transmitter(brainstate.nn.Dynamics):
     on-grid delivery stamp for current step ``step`` as
     :math:`n = step + 1`. Internal mutable state is:
 
-    - :math:`P[s]`: pending multiplicity scheduled for delivery stamp ``s``
+    - :math:`P[s]` -- pending multiplicity scheduled for delivery stamp ``s``
       (implemented as ``dict[int, float]``).
-    - :math:`H`: ordered spike-history vector of entries
+    - :math:`H` -- ordered spike-history vector of entries
       :math:`(t_i, m_i)` with time in ms and multiplicity.
     - delivery metadata: latest delivered history, trigger time, and count.
 
@@ -269,34 +269,34 @@ class volume_transmitter(brainstate.nn.Dynamics):
 
     @property
     def local_device_id(self) -> int:
-        """Return local device id used for NEST-compatible duplication logic."""
+        r"""Return local device id used for NEST-compatible duplication logic."""
         return int(self._local_device_id)
 
     @property
     def last_delivery_time(self) -> float:
-        """Return most recent trigger time in milliseconds."""
+        r"""Return most recent trigger time in milliseconds."""
         return float(self._last_delivery_time_ms)
 
     @property
     def last_delivery_spikes(self) -> tuple[spikecounter, ...]:
-        """Return spike-history tuple delivered at the most recent trigger."""
+        r"""Return spike-history tuple delivered at the most recent trigger."""
         return tuple(self._last_delivery_spikes)
 
     @property
     def n_deliveries(self) -> int:
-        """Return number of completed delivery triggers since initialization."""
+        r"""Return number of completed delivery triggers since initialization."""
         return int(self._delivery_count)
 
     def set_local_device_id(self, ldid: ArrayLike):
-        """Set local device id from a scalar integer-like value."""
+        r"""Set local device id from a scalar integer-like value."""
         self._local_device_id = int(self._to_int_scalar(ldid, name='local_device_id'))
 
     def get_local_device_id(self) -> int:
-        """Get current local device id as Python ``int``."""
+        r"""Get current local device id as Python ``int``."""
         return int(self._local_device_id)
 
     def handles_test_event(self, receptor_type: ArrayLike) -> int:
-        """Validate receptor id and return accepted receptor index.
+        r"""Validate receptor id and return accepted receptor index.
 
         Parameters
         ----------
@@ -319,7 +319,7 @@ class volume_transmitter(brainstate.nn.Dynamics):
         return 0
 
     def deliver_spikes(self) -> tuple[spikecounter, ...]:
-        """Return current spike-history vector.
+        r"""Return current spike-history vector.
 
         Returns
         -------
@@ -331,7 +331,7 @@ class volume_transmitter(brainstate.nn.Dynamics):
         return tuple(self._spikecounter)
 
     def get(self, key: str = 'deliver_interval'):
-        """Query transmitter parameters and mutable state by key.
+        r"""Query transmitter parameters and mutable state by key.
 
         Parameters
         ----------
@@ -368,7 +368,7 @@ class volume_transmitter(brainstate.nn.Dynamics):
         raise KeyError(f'Unsupported key "{key}" for volume_transmitter.get().')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Reset queue/history state to NEST-compatible initial conditions.
+        r"""Reset queue/history state to NEST-compatible initial conditions.
 
         Parameters
         ----------
@@ -391,11 +391,11 @@ class volume_transmitter(brainstate.nn.Dynamics):
         self._delivery_count = 0
 
     def connect(self):
-        """No-op compatibility hook for NEST-style device interface."""
+        r"""No-op compatibility hook for NEST-style device interface."""
         return None
 
     def flush(self):
-        """Return a non-triggering snapshot payload for integration code.
+        r"""Return a non-triggering snapshot payload for integration code.
 
         Returns
         -------

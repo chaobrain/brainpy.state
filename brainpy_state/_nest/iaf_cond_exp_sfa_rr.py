@@ -358,7 +358,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         ref_var: bool = False,
         name: str = None,
     ):
-        """Initialize the iaf_cond_exp_sfa_rr neuron model.
+        r"""Initialize the iaf_cond_exp_sfa_rr neuron model.
 
         All parameters are validated to ensure physical consistency. Parameters can be scalars
         (broadcast to all neurons) or arrays matching ``in_size``.
@@ -394,7 +394,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert brainunit quantity to plain NumPy array.
+        r"""Convert brainunit quantity to plain NumPy array.
 
         Parameters
         ----------
@@ -412,7 +412,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast parameter array to match state shape.
+        r"""Broadcast parameter array to match state shape.
 
         Parameters
         ----------
@@ -429,7 +429,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter consistency and physical constraints.
+        r"""Validate parameter consistency and physical constraints.
 
         Checks that:
 
@@ -463,7 +463,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
             raise ValueError('All time constants must be strictly positive.')
 
     def _safe_dt(self):
-        """Get simulation time step from environment with fallback.
+        r"""Get simulation time step from environment with fallback.
 
         Returns
         -------
@@ -481,7 +481,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and registers state variables for membrane potential, conductances,
         refractory counter, adaptive integration step, delayed current buffer, and
@@ -532,7 +532,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets membrane potential, conductances, refractory counter, and other state variables
         to their initial values as specified by the initializers.
@@ -571,7 +571,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradient.
+        r"""Compute differentiable spike output using surrogate gradient.
 
         Applies the surrogate gradient function to the scaled voltage difference. The voltage
         is scaled to :math:`[0, 1]` range where 0 corresponds to ``V_reset`` and 1 corresponds
@@ -599,7 +599,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Compute number of simulation steps in absolute refractory period.
+        r"""Compute number of simulation steps in absolute refractory period.
 
         Returns
         -------
@@ -617,7 +617,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _sum_signed_delta_inputs(self):
-        """Accumulate delta inputs from synaptic projections into excitatory and inhibitory conductances.
+        r"""Accumulate delta inputs from synaptic projections into excitatory and inhibitory conductances.
 
         Processes all entries in ``self.delta_inputs`` dictionary, which is populated by
         synaptic projections during their update phase. Positive values are accumulated into
@@ -656,7 +656,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, g_ex, g_in, g_sfa, g_rr, is_refractory, i_stim, p):
-        """Compute ODE right-hand side for a single neuron (scalar implementation).
+        r"""Compute ODE right-hand side for a single neuron (scalar implementation).
 
         This function implements the membrane potential and conductance dynamics for a single
         neuron. It is called repeatedly by the RKF45 integrator. All values are in NEST
@@ -712,7 +712,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         return dv, dg_ex, dg_in, dg_sfa, dg_rr
 
     def _rkf45_integrate_scalar(self, v0, ge0, gi0, gsfa0, grr0, is_refractory, i_stim, h0, dt, p):
-        """Integrate ODEs for one time step using adaptive Runge-Kutta-Fehlberg 4(5) method.
+        r"""Integrate ODEs for one time step using adaptive Runge-Kutta-Fehlberg 4(5) method.
 
         Performs adaptive step-size integration using RKF45 algorithm. The method computes
         both 4th and 5th order solutions, estimates local error, and adjusts step size
@@ -796,7 +796,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         return y[0], y[1], y[2], y[3], y[4], h
 
     def update(self, x=0. * u.pA):
-        """Advance the neuron state by one simulation time step.
+        r"""Advance the neuron state by one simulation time step.
 
         Implements the complete NEST update cycle:
 

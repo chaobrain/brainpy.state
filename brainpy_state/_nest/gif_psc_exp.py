@@ -242,7 +242,8 @@ class gif_psc_exp(Neuron):
     name : str, optional
         Name of the neuron group. Default: None (auto-generated).
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     ==================== =================== =================================== =====================================================
     **Parameter**        **Default**         **Math equivalent**                 **Description**
@@ -285,10 +286,10 @@ class gif_psc_exp(Neuron):
 
     Warnings
     --------
-    - **Stochastic spiking**: Because spiking is stochastic (random number drawn each
+    - Stochastic spiking: Because spiking is stochastic (random number drawn each
       step), exact spike-time reproducibility requires matching the random number
       generator state. For deterministic testing, set ``rng_key`` explicitly.
-    - **GIF toolbox compatibility**: In the NEST implementation, stc and sfa element
+    - GIF toolbox compatibility: In the NEST implementation, stc and sfa element
       jumps occur immediately after spike emission. The GIF toolbox uses a different
       convention where jumps occur after the refractory period. Conversion:
 
@@ -297,7 +298,7 @@ class gif_psc_exp(Neuron):
          q_{\eta,\text{toolbox}} = q_{\eta,\text{NEST}} \cdot
              (1 - \exp(-t_\mathrm{ref} / \tau_\eta))
 
-    - **Numerical stability**: If ``tau_m`` is very close to ``tau_syn_ex`` or
+    - Numerical stability: If ``tau_m`` is very close to ``tau_syn_ex`` or
       ``tau_syn_in``, the model numerically behaves as if ``tau_m`` equals the
       synaptic time constant to avoid singularities in the propagator computation.
 
@@ -459,7 +460,7 @@ class gif_psc_exp(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _sum_signed_delta_inputs(self):
-        """Route delta inputs by sign: positive -> excitatory, negative -> inhibitory.
+        r"""Route delta inputs by sign: positive -> excitatory, negative -> inhibitory.
 
         This matches NEST's spike routing where each spike event is individually
         directed to the excitatory or inhibitory buffer based on weight sign.
@@ -517,7 +518,7 @@ class gif_psc_exp(Neuron):
                 raise ValueError('All STC time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes:
         - Membrane potential ``V`` (via ``V_initializer``)
@@ -532,7 +533,7 @@ class gif_psc_exp(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension size. If None, no batch dimension is added. If provided,
-            state arrays have shape ``(batch_size, *in_size)``. Default: None.
+            state arrays have shape ``(batch_size, \*in_size)``. Default: None.
         **kwargs
             Additional keyword arguments (ignored).
 
@@ -574,7 +575,7 @@ class gif_psc_exp(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets all state variables to the same initial values as ``init_state()``,
         but preserves the state objects (only updates their ``.value`` attributes).
@@ -583,7 +584,7 @@ class gif_psc_exp(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension size. If None, no batch dimension is added. If provided,
-            state arrays have shape ``(batch_size, *in_size)``. Default: None.
+            state arrays have shape ``(batch_size, \*in_size)``. Default: None.
         **kwargs
             Additional keyword arguments (ignored).
 
@@ -619,7 +620,7 @@ class gif_psc_exp(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate surrogate spike output for gradient-based learning.
+        r"""Generate surrogate spike output for gradient-based learning.
 
         Applies the surrogate gradient function to a scaled membrane potential to
         produce a differentiable spike signal. This is used for gradient-based
@@ -736,14 +737,14 @@ class gif_psc_exp(Neuron):
         ----------
         x : ArrayLike, optional
             External current input (pA). Scalar or array matching population shape.
-            This input is *buffered* and applied in the *next* time step, matching
+            This input is ``buffered`` and applied in the ``next`` time step, matching
             NEST's ring buffer semantics. Default: 0.0 pA.
 
         Returns
         -------
         spike : jax.Array
             Binary spike output (0 or 1) as float32 array. Shape matches neuron
-            population (batch_size, *in_size) if batched, or (*in_size) otherwise.
+            population (batch_size, \*in_size) if batched, or (\*in_size) otherwise.
             Spikes are generated stochastically based on firing intensity :math:`\lambda(t)`.
 
         Notes

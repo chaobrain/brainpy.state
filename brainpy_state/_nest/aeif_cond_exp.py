@@ -452,7 +452,7 @@ class aeif_cond_exp(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Creates and initializes hidden states (V, g_ex, g_in, w) and short-term states
         (last_spike_time, refractory_step_count, integration_step, I_stim). If ``ref_var=True``,
@@ -504,7 +504,7 @@ class aeif_cond_exp(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets all states to their initialized values without recreating state objects.
         Useful for running multiple trials without reinitializing the model.
@@ -542,7 +542,7 @@ class aeif_cond_exp(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate differentiable spike signal using surrogate gradient.
+        r"""Generate differentiable spike signal using surrogate gradient.
 
         Computes a continuous spike probability using the surrogate gradient function
         (``spk_fun``) applied to scaled membrane potential. This enables gradient-based
@@ -598,7 +598,7 @@ class aeif_cond_exp(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, g_ex, g_in, w, is_refractory, i_stim, p):
-        """Compute ODE derivatives for a single neuron.
+        r"""Compute ODE derivatives for a single neuron.
 
         Evaluates the right-hand side of the AdEx ODE system with refractory clamping
         and voltage overflow protection. Used internally by RKF45 integrator.

@@ -386,34 +386,34 @@ class hh_psc_alpha(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential :math:`V_m`. Shape: ``(*in_size, *batch_size)``.
+        Membrane potential :math:`V_m`. Shape: ``(\*in_size, \*batch_size)``.
         Units: mV.
     m : brainstate.HiddenState
-        Na activation gating variable (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Na activation gating variable (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
         Range: [0, 1].
     h : brainstate.HiddenState
-        Na inactivation gating variable (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Na inactivation gating variable (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
         Range: [0, 1].
     n : brainstate.HiddenState
-        K activation gating variable (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        K activation gating variable (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
         Range: [0, 1].
     I_syn_ex : brainstate.ShortTermState
-        Excitatory postsynaptic current :math:`I_{syn,ex}`. Shape: ``(*in_size, *batch_size)``.
+        Excitatory postsynaptic current :math:`I_{syn,ex}`. Shape: ``(\*in_size, \*batch_size)``.
         Units: pA.
     I_syn_in : brainstate.ShortTermState
-        Inhibitory postsynaptic current :math:`I_{syn,in}`. Shape: ``(*in_size, *batch_size)``.
+        Inhibitory postsynaptic current :math:`I_{syn,in}`. Shape: ``(\*in_size, \*batch_size)``.
         Units: pA.
     dI_syn_ex : brainstate.ShortTermState
-        Excitatory alpha-kernel derivative state (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Excitatory alpha-kernel derivative state (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
     dI_syn_in : brainstate.ShortTermState
-        Inhibitory alpha-kernel derivative state (dimensionless). Shape: ``(*in_size, *batch_size)``.
+        Inhibitory alpha-kernel derivative state (dimensionless). Shape: ``(\*in_size, \*batch_size)``.
     I_stim : brainstate.ShortTermState
-        One-step delayed external current buffer. Shape: ``(*in_size, *batch_size)``.
+        One-step delayed external current buffer. Shape: ``(\*in_size, \*batch_size)``.
         Units: pA.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory steps. Shape: ``(*in_size, *batch_size)``. Dtype: int32.
+        Remaining refractory steps. Shape: ``(\*in_size, \*batch_size)``. Dtype: int32.
     last_spike_time : brainstate.ShortTermState
-        Time of most recent spike emission. Shape: ``(*in_size, *batch_size)``.
+        Time of most recent spike emission. Shape: ``(\*in_size, \*batch_size)``.
         Units: ms. Updated to ``t + dt`` on spike emission.
 
     Raises
@@ -539,7 +539,7 @@ class hh_psc_alpha(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert a BrainUnit quantity to a NumPy float64 array.
+        r"""Convert a BrainUnit quantity to a NumPy float64 array.
 
         Parameters
         ----------
@@ -557,7 +557,7 @@ class hh_psc_alpha(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast a NumPy array to match state shape.
+        r"""Broadcast a NumPy array to match state shape.
 
         Parameters
         ----------
@@ -574,7 +574,7 @@ class hh_psc_alpha(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter constraints at construction time.
+        r"""Validate parameter constraints at construction time.
 
         Raises
         ------
@@ -592,7 +592,7 @@ class hh_psc_alpha(Neuron):
             raise ValueError('All conductances must be non-negative.')
 
     def _refractory_counts(self):
-        """Convert refractory period to integer grid step counts.
+        r"""Convert refractory period to integer grid step counts.
 
         Returns
         -------
@@ -605,7 +605,7 @@ class hh_psc_alpha(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Sets initial values for membrane potential, gating variables, synaptic
         currents, refractory counters, and buffers. If gating variable initial
@@ -675,7 +675,7 @@ class hh_psc_alpha(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate differentiable spike output using surrogate gradient.
+        r"""Generate differentiable spike output using surrogate gradient.
 
         Applies the surrogate spike function to the membrane potential scaled
         relative to the 0 mV threshold. This enables gradient-based learning
@@ -690,7 +690,7 @@ class hh_psc_alpha(Neuron):
         Returns
         -------
         ArrayLike
-            Differentiable spike signal with shape ``(*in_size, *batch_size)``.
+            Differentiable spike signal with shape ``(\*in_size, \*batch_size)``.
             Typically near 0 for subthreshold, near 1 for suprathreshold.
 
         Notes
@@ -728,13 +728,13 @@ class hh_psc_alpha(Neuron):
         ----------
         x : ArrayLike, optional
             External stimulation current input in pA (in addition to ``I_e``).
-            Shape must broadcast with ``(*in_size, *batch_size)``.
+            Shape must broadcast with ``(\*in_size, \*batch_size)``.
             Default is ``0. * u.pA``.
 
         Returns
         -------
         ArrayLike
-            Differentiable spike output with shape ``(*in_size, *batch_size)``.
+            Differentiable spike output with shape ``(\*in_size, \*batch_size)``.
             Generated by applying ``self.spk_fun`` to the spike condition.
             Near 1 when spike detected, near 0 otherwise.
 

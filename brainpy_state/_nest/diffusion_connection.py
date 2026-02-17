@@ -420,7 +420,7 @@ class diffusion_connection:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Retrieve current connection parameters (NEST ``GetStatus`` equivalent).
+        r"""Retrieve current connection parameters (NEST ``GetStatus`` equivalent).
 
         Returns a dictionary of all connection parameters, including pseudo-parameters
         ``weight`` and ``delay`` for NEST API compatibility.
@@ -472,7 +472,7 @@ class diffusion_connection:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters (NEST ``SetStatus`` equivalent).
+        r"""Update connection parameters (NEST ``SetStatus`` equivalent).
 
         Modifies ``drift_factor`` and/or ``diffusion_factor`` while rejecting
         attempts to set unsupported parameters (``weight``, ``delay``). Accepts
@@ -597,7 +597,7 @@ class diffusion_connection:
             self.set_diffusion_factor(updates['diffusion_factor'])
 
     def get(self, key: str = 'status'):
-        """Retrieve connection parameter(s) with flexible key-based access.
+        r"""Retrieve connection parameter(s) with flexible key-based access.
 
         Provides unified access to connection status via string keys. Can return
         the full status dictionary or individual parameter values.
@@ -699,7 +699,7 @@ class diffusion_connection:
         raise KeyError(f'Unsupported key "{key}" for diffusion_connection.get().')
 
     def set_drift_factor(self, drift_factor: ArrayLike):
-        """Update drift scaling factor.
+        r"""Update drift scaling factor.
 
         Convenience method to modify ``drift_factor`` independently of other
         parameters. Validates and converts input to scalar float.
@@ -732,7 +732,7 @@ class diffusion_connection:
         self.drift_factor = self._to_float_scalar(drift_factor, name='drift_factor')
 
     def set_diffusion_factor(self, diffusion_factor: ArrayLike):
-        """Update diffusion scaling factor.
+        r"""Update diffusion scaling factor.
 
         Convenience method to modify ``diffusion_factor`` independently of other
         parameters. Validates and converts input to scalar float.
@@ -765,7 +765,7 @@ class diffusion_connection:
         self.diffusion_factor = self._to_float_scalar(diffusion_factor, name='diffusion_factor')
 
     def set_weight(self, _):
-        """Reject attempts to set weight (NEST compatibility stub).
+        r"""Reject attempts to set weight (NEST compatibility stub).
 
         ``diffusion_connection`` does not support the standard ``weight`` parameter.
         This method exists solely for NEST API compatibility and always raises an error.
@@ -805,7 +805,7 @@ class diffusion_connection:
         raise ValueError(self._WEIGHT_ERROR)
 
     def set_delay(self, _):
-        """Reject attempts to set delay (NEST compatibility stub).
+        r"""Reject attempts to set delay (NEST compatibility stub).
 
         ``diffusion_connection`` is instantaneous and does not support transmission
         delay. This method exists solely for NEST API compatibility and always raises

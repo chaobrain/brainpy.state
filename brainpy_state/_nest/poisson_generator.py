@@ -323,20 +323,45 @@ class poisson_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize RNG state used by Poisson sampling.
+        r"""Initialize the RNG state used by Poisson sampling.
 
         Parameters
         ----------
         batch_size : int or None, optional
-            Unused. Present for framework API compatibility.
-        **kwargs
-            Unused keyword arguments for API compatibility.
+            Unused. Present for framework API compatibility with
+            :class:`brainstate.nn.Dynamics`. Default is ``None``.
+        **kwargs : Any
+            Unused keyword arguments accepted for API compatibility.
 
         Returns
         -------
-        out : Any
-            ``None``. Side effect: creates ``rng_key`` as a
-            :class:`brainstate.ShortTermState` wrapping ``jax.random.PRNGKey``.
+        out : None
+            The method mutates internal state by creating one attribute:
+
+            - ``rng_key`` -- :class:`brainstate.ShortTermState` wrapping a
+              ``jax.random.PRNGKey`` derived from ``self.rng_seed``.
+
+        Notes
+        -----
+        :meth:`update` lazily calls this method on the first step if
+        ``init_state`` has not been invoked explicitly. Calling ``init_state``
+        resets the RNG to the original seed, so repeated calls restart the
+        stochastic sequence from the beginning.
+
+        See Also
+        --------
+        poisson_generator.update : Consumes ``rng_key`` populated here.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import poisson_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = poisson_generator(in_size=4, rate=800.0 * u.Hz, rng_seed=7)
+           ...     gen.init_state()
         """
         del batch_size, kwargs
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
@@ -349,37 +374,66 @@ class poisson_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Update public parameters and refresh timing cache when needed.
+        r"""Update public parameters and refresh the timing cache when needed.
+
+        Only keyword arguments that are explicitly passed are modified; omitted
+        arguments retain their current values.
 
         Parameters
         ----------
         rate : ArrayLike or object, optional
-            New scalar rate in spikes/s (Hz). Use ``_UNSET`` to keep current
-            value. Must be non-negative after conversion.
+            New scalar firing rate in spikes/s (Hz). Accepts any
+            ``ArrayLike`` with exactly one element, or a
+            :class:`brainunit.Quantity` convertible to ``u.Hz``.
+            Must satisfy ``rate >= 0`` after conversion. Omit to keep the
+            current value.
         start : ArrayLike or object, optional
-            New scalar relative start in ms. Use ``_UNSET`` to keep current
+            New scalar relative start time in ms (exclusive lower bound after
+            adding ``origin``). Must be scalar-convertible and, when ``dt`` is
+            in the environment, grid-representable. Omit to keep the current
             value.
         stop : ArrayLike or None or object, optional
-            New scalar relative stop in ms. ``None`` maps to ``+inf``.
-            Use ``_UNSET`` to keep current value.
+            New scalar relative stop time in ms (inclusive upper bound after
+            adding ``origin``). ``None`` maps to ``+inf``. Must satisfy
+            ``stop >= start`` after conversion. Omit to keep the current value.
         origin : ArrayLike or object, optional
-            New scalar origin offset in ms. Use ``_UNSET`` to keep current
-            value.
+            New scalar time origin offset in ms added to both ``start`` and
+            ``stop``. Must be scalar-convertible and grid-representable when
+            ``dt`` is available. Omit to keep the current value.
 
         Returns
         -------
-        out : Any
-            ``None``. Side effect: updates ``rate``, ``start``, ``stop``,
-            ``origin`` and recalculates cached step bounds when ``dt`` is
-            available in ``brainstate.environ``.
+        out : None
+            Mutates ``self.rate``, ``self.start``, ``self.stop``, and
+            ``self.origin`` in place, then calls
+            :meth:`_refresh_timing_cache` when ``dt`` is present in the
+            environment so that :meth:`update` step bounds stay consistent.
 
         Raises
         ------
         ValueError
-            If ``rate < 0``; if ``stop < start`` after conversion; or if
-            finite timing parameters are off-grid for the current ``dt``.
+            If ``rate < 0`` after conversion; if ``stop < start`` after
+            conversion; or if any finite timing parameter is not representable
+            on the current simulation grid (checked via
+            :meth:`_assert_grid_time`).
         TypeError
-            If unit conversion to Hz/ms fails for supplied values.
+            If unit conversion to ``u.Hz`` or ``u.ms`` fails for any supplied
+            value.
+
+        See Also
+        --------
+        poisson_generator.get : Read-back current parameter values.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainunit as u
+           >>> gen = brainpy.state.poisson_generator(rate=500.0 * u.Hz)
+           >>> gen.set(rate=1000.0 * u.Hz, stop=50.0 * u.ms)
+           >>> params = gen.get()
+           >>> _ = params['rate'], params['stop']
         """
         new_rate = self.rate if rate is _UNSET else self._to_scalar_rate_hz(rate)
         new_start = self.start if start is _UNSET else self._to_scalar_time_ms(start)
@@ -406,7 +460,7 @@ class poisson_generator(brainstate.nn.Dynamics):
             self._refresh_timing_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters in scalar SI-compatible values.
+        r"""Return current public parameters as scalar SI-compatible values.
 
         Parameters
         ----------
@@ -414,10 +468,43 @@ class poisson_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
-            ``dict`` with keys ``'rate'``, ``'start'``, ``'stop'``, and
-            ``'origin'``. Values are Python ``float`` in Hz/ms public units;
-            ``stop`` is ``inf`` when deactivation is disabled.
+        params : dict
+            Dictionary with four ``float`` entries:
+
+            - ``'rate'`` -- firing rate in spikes/s (Hz).
+            - ``'start'`` -- relative exclusive lower bound in ms.
+            - ``'stop'`` -- relative inclusive upper bound in ms; ``inf``
+              when no deactivation time has been set.
+            - ``'origin'`` -- time origin offset in ms.
+
+        Notes
+        -----
+        Returned values are plain Python ``float`` scalars (``float64``
+        precision). They mirror the internal scalar attributes set in
+        :meth:`__init__` or updated by :meth:`set` and are not bound to any
+        ``brainunit`` quantities.
+
+        See Also
+        --------
+        poisson_generator.set : Update one or more parameters in place.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainunit as u
+           >>> gen = brainpy.state.poisson_generator(
+           ...     rate=800.0 * u.Hz,
+           ...     start=5.0 * u.ms,
+           ...     stop=100.0 * u.ms,
+           ...     origin=2.0 * u.ms,
+           ... )
+           >>> params = gen.get()
+           >>> params['rate']
+           800.0
+           >>> params['stop']
+           100.0
         """
         return {
             'rate': float(self.rate),
@@ -436,27 +523,81 @@ class poisson_generator(brainstate.nn.Dynamics):
         ).astype(jnp.int64)
 
     def update(self):
-        """Advance one simulation step and return spike multiplicities.
+        r"""Advance one simulation step and return per-step spike multiplicities.
 
         Parameters
         ----------
         None
+            Uses runtime values from ``brainstate.environ``: simulation time
+            ``t`` (via :meth:`_current_time_ms`) and resolution ``dt`` (via
+            :meth:`_dt_ms`).
 
         Returns
         -------
-        out : Any
-            ``jax.Array`` with dtype ``int64`` and shape ``self.varshape``.
-            When active and ``rate > 0``, entries are Poisson-distributed
-            counts with mean ``rate * dt_ms / 1000``; otherwise all zeros.
+        spikes : jax.Array
+            Integer array with dtype ``int64`` and shape ``self.varshape``.
+            Each element is the number of spikes emitted by the corresponding
+            independent output train in the current time step.
+
+            - **Active and** ``rate > 0``: entries are i.i.d.
+              Poisson(:math:`\lambda`) samples with
+              :math:`\lambda = r \cdot \Delta t / 1000`.
+            - **Inactive or** ``rate <= 0``: all entries are exactly ``0``.
 
         Raises
         ------
         ValueError
-            If cached timing is refreshed and finite time parameters are not
-            representable on the current simulation grid.
+            If the timing cache is stale and a finite ``origin``, ``start``,
+            or ``stop`` is not representable on the current simulation grid
+            (checked by :meth:`_assert_grid_time`).
         KeyError
-            If required simulation context values (notably ``dt``) are
-            unavailable via ``brainstate.environ``.
+            If ``dt`` is unavailable from ``brainstate.environ.get_dt()`` or
+            ``t`` is expected but cannot be resolved.
+
+        Notes
+        -----
+        The update proceeds as follows each call:
+
+        1. **Lazy init** -- If ``rng_key`` has not been created by
+           :meth:`init_state`, it is initialized automatically with
+           ``self.rng_seed``.
+        2. **Cache refresh** -- When ``dt`` changes from the previously cached
+           value, :meth:`_refresh_timing_cache` recomputes the integer step
+           bounds :math:`t_{\min}` and :math:`t_{\max}`.
+        3. **Rate guard** -- If ``rate <= 0``, an all-zero array is returned
+           without touching the PRNG state.
+        4. **Activity check** -- The current step index is compared against
+           the cached step bounds: active iff
+           :math:`t_{\min,\mathrm{step}} < \mathrm{curr\_step} \le
+           t_{\max,\mathrm{step}}`. Inactive steps return zeros.
+        5. **Poisson draw** -- If active, one vectorized sample
+           ``jax.random.poisson(lam, shape=self.varshape)`` is drawn via
+           :meth:`_sample_poisson`, consuming one PRNG split.
+
+        See Also
+        --------
+        poisson_generator.init_state : RNG initialization called lazily here.
+        poisson_generator.set : Update parameters between runs.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainpy
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = brainpy.state.poisson_generator(
+           ...         in_size=(2, 3),
+           ...         rate=1000.0 * u.Hz,
+           ...         start=0.0 * u.ms,
+           ...         stop=50.0 * u.ms,
+           ...         rng_seed=0,
+           ...     )
+           ...     gen.init_state()
+           ...     with brainstate.environ.context(t=10.0 * u.ms):
+           ...         spikes = gen.update()
+           ...     _ = spikes.shape  # (2, 3)
         """
         if not hasattr(self, 'rng_key'):
             self.init_state()

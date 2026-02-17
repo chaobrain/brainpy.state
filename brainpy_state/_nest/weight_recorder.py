@@ -59,12 +59,12 @@ class weight_recorder(brainstate.nn.Dynamics):
     :math:`j \in \{1,\dots,N\}`, define the payload tuple
     :math:`(w_j, s_j, q_j, r_j, p_j, \delta_j)`:
 
-    - :math:`w_j`: synaptic weight (unitless/implementation-specific value),
-    - :math:`s_j`: sender node ID,
-    - :math:`q_j`: target node ID,
-    - :math:`r_j`: receptor port (rport),
-    - :math:`p_j`: connection port metadata,
-    - :math:`\delta_j`: sub-step offset in ms.
+    - :math:`w_j` -- synaptic weight (unitless/implementation-specific value),
+    - :math:`s_j` -- sender node ID,
+    - :math:`q_j` -- target node ID,
+    - :math:`r_j` -- receptor port (rport),
+    - :math:`p_j` -- connection port metadata,
+    - :math:`\delta_j` -- sub-step offset in ms.
 
     If ``stamp_steps`` is omitted, :math:`s^{(\mathrm{step})}_j = n + 1` for all
     items, matching NEST's event stamp convention for events generated during
@@ -395,7 +395,7 @@ class weight_recorder(brainstate.nn.Dynamics):
         return out
 
     def get(self, key: str = 'events'):
-        """Return a recorder property by key.
+        r"""Return a recorder property by key.
 
         Parameters
         ----------
@@ -430,7 +430,7 @@ class weight_recorder(brainstate.nn.Dynamics):
         raise KeyError(f'Unsupported key "{key}" for weight_recorder.get().')
 
     def clear_events(self):
-        """Clear all stored event buffers in-place.
+        r"""Clear all stored event buffers in-place.
 
         Returns
         -------
@@ -448,7 +448,7 @@ class weight_recorder(brainstate.nn.Dynamics):
         self._events_offsets: list[float] = []
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize dynamic state by clearing recorded events.
+        r"""Initialize dynamic state by clearing recorded events.
 
         Parameters
         ----------
@@ -467,7 +467,7 @@ class weight_recorder(brainstate.nn.Dynamics):
         self.clear_events()
 
     def connect(self):
-        """Compatibility no-op for device connection phase.
+        r"""Compatibility no-op for device connection phase.
 
         Returns
         -------
@@ -477,7 +477,7 @@ class weight_recorder(brainstate.nn.Dynamics):
         return None
 
     def flush(self):
-        """Return a snapshot of all recorded events.
+        r"""Return a snapshot of all recorded events.
 
         Returns
         -------

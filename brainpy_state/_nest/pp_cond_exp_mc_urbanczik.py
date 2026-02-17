@@ -52,7 +52,7 @@ _STATE_VEC_SIZE = _STATE_VEC_COMPS * NCOMP
 
 
 def _idx(comp, elem):
-    """Compute linear index into state array from compartment and element."""
+    r"""Compute linear index into state array from compartment and element."""
     return comp * _STATE_VEC_COMPS + elem
 
 
@@ -784,7 +784,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         return u.math.asarray(u.math.round(self.t_ref / dt), dtype=jnp.int32)
 
     def _collect_receptor_delta_inputs(self):
-        """Collect delta inputs labeled by receptor type.
+        r"""Collect delta inputs labeled by receptor type.
 
         Expected labels: 'soma_exc', 'soma_inh', 'dend_exc', 'dend_inh'.
 
@@ -968,7 +968,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         return f
 
     def update(self, x=0.0 * u.pA):
-        """Advance neuron state by one simulation time step with ODE integration and stochastic spiking.
+        r"""Advance neuron state by one simulation time step with ODE integration and stochastic spiking.
 
         This method performs a complete update cycle for the two-compartment model,
         including numerical integration of differential equations, synaptic input

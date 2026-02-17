@@ -225,6 +225,8 @@ class noise_generator(brainstate.nn.Dynamics):
 
     Examples
     --------
+    Basic usage: unmodulated white-noise drive injected into a single neuron.
+
     .. code-block:: python
 
        >>> import brainpy
@@ -243,6 +245,26 @@ class noise_generator(brainstate.nn.Dynamics):
        ...     with brainstate.environ.context(t=1.0 * u.ms):
        ...         current = stim.update()
        ...         _ = neuron.update(x=current)
+
+    Sinusoidally modulated noise: variance oscillates at gamma frequency (40 Hz)
+    within a restricted activity window.
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> gen = brainpy.state.noise_generator(
+       ...     in_size=4,
+       ...     mean=50.0 * u.pA,
+       ...     std=80.0 * u.pA,
+       ...     noise_dt=1.0 * u.ms,
+       ...     std_mod=40.0 * u.pA,
+       ...     frequency=40.0 * u.Hz,
+       ...     phase=0.0,
+       ...     start=10.0 * u.ms,
+       ...     stop=110.0 * u.ms,
+       ...     seed=0,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -279,7 +301,7 @@ class noise_generator(brainstate.nn.Dynamics):
         self.seed = seed
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize RNG and internal state buffers for piecewise noise updates.
+        r"""Initialize RNG and internal state buffers for piecewise noise updates.
 
         Parameters
         ----------
@@ -293,10 +315,16 @@ class noise_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
-            ``None``. The method mutates internal state by creating:
-            ``_rng_key`` (JAX key), ``current_amp`` (current buffer), and
-            ``_step_counter`` (integer update counter).
+        out : None
+            The method mutates internal state by creating three attributes:
+
+            - ``_rng_key`` -- JAX PRNG key derived from ``seed`` (or ``0`` when
+              ``seed is None``).
+            - ``current_amp`` -- :class:`brainstate.ShortTermState` holding the
+              piecewise-constant current amplitude, initialized to
+              ``0. * u.pA`` broadcast to ``self.varshape``.
+            - ``_step_counter`` -- :class:`brainstate.ShortTermState` holding a
+              scalar ``int32`` step counter, initialized to ``0``.
 
         Raises
         ------
@@ -305,6 +333,34 @@ class noise_generator(brainstate.nn.Dynamics):
         ValueError
             If ``batch_size`` or shape metadata is incompatible with
             :func:`braintools.init.param`.
+
+        Notes
+        -----
+        The PRNG key is stored as a plain Python/JAX attribute rather than a
+        :class:`brainstate.ShortTermState`, meaning it is **not** managed by
+        the brainstate state-management system and will not be checkpointed
+        automatically. Reproducible runs therefore require re-calling
+        ``init_state`` with the same ``seed`` before each simulation.
+
+        See Also
+        --------
+        noise_generator.update : Uses ``_rng_key``, ``current_amp``, and
+            ``_step_counter`` populated by this method.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import noise_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = noise_generator(
+           ...         in_size=2,
+           ...         std=50.0 * u.pA,
+           ...         seed=7,
+           ...     )
+           ...     gen.init_state()
         """
         if self.seed is not None:
             self._rng_key = jax.random.PRNGKey(self.seed)
@@ -349,13 +405,60 @@ class noise_generator(brainstate.nn.Dynamics):
 
         Notes
         -----
-        - ``noise_dt`` defaults to ``dt`` when unset.
-        - Modulation uses
-          :math:`\sigma_{\mathrm{eff}}^2=\sigma^2 + \sigma_{\mathrm{mod}}^2
-          \sin(\omega t + \phi)` with clamping at zero before square root.
-        - The activity interval is
-          ``origin + start <= t < origin + stop`` (or only lower-bounded when
-          ``stop is None``).
+        The update proceeds in four phases each call:
+
+        1. **Step scheduling** -- ``noise_dt`` is resolved to a whole number of
+           simulation steps ``dt_steps = round(noise_dt / dt)``.  A boolean
+           flag ``need_update = (step_counter % dt_steps) == 0`` gates whether
+           a new amplitude is drawn.
+        2. **Effective standard deviation** -- computed as
+
+           .. math::
+
+               \sigma_{\mathrm{eff}} =
+               \sqrt{\max\!\left(\sigma^2 +
+               \sigma_{\mathrm{mod}}^2 \sin(\omega t + \phi),\, 0\right)}
+
+           using :func:`u.math.maximum` before :func:`u.math.sqrt` so the
+           radicand is always non-negative.
+
+        3. **Sample draw** -- ``noise = jax.random.normal(subkey, varshape)``;
+           the PRNG key is advanced every call regardless of ``need_update``.
+        4. **Masked update** -- ``current_amp`` retains its previous value on
+           steps where ``need_update`` is ``False``, avoiding redundant draws
+           while keeping the sample schedule deterministic.
+
+        The activity window is ``origin + start <= t < origin + stop``
+        (lower-bounded only when ``stop is None``). While inactive the output
+        is exactly zero regardless of ``current_amp``.
+
+        See Also
+        --------
+        noise_generator.init_state : Must be called before the first update.
+        noise_generator : Class-level parameter definitions and model equations.
+        ac_generator.update : Windowed sinusoidal-current update rule.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import noise_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = noise_generator(
+           ...         in_size=3,
+           ...         mean=0.0 * u.pA,
+           ...         std=120.0 * u.pA,
+           ...         noise_dt=1.0 * u.ms,
+           ...         start=0.0 * u.ms,
+           ...         stop=10.0 * u.ms,
+           ...         seed=1,
+           ...     )
+           ...     gen.init_state()
+           ...     with brainstate.environ.context(t=5.0 * u.ms):
+           ...         current = gen.update()
+           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

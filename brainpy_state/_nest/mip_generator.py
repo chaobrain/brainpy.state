@@ -373,7 +373,7 @@ class mip_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize RNG state for parent and child stochastic paths.
+        r"""Initialize RNG state for parent and child stochastic paths.
 
         Parameters
         ----------
@@ -412,7 +412,7 @@ class mip_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Update public generator parameters using NEST-style semantics.
+        r"""Update public generator parameters using NEST-style semantics.
 
         Parameters
         ----------
@@ -482,7 +482,7 @@ class mip_generator(brainstate.nn.Dynamics):
             self._refresh_timing_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters as plain Python floats.
+        r"""Return current public parameters as plain Python floats.
 
         Parameters
         ----------

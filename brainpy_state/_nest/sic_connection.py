@@ -233,7 +233,7 @@ class sic_connection:
 
     @property
     def properties(self) -> dict[str, Any]:
-        """Return connection capability flags and supported model types.
+        r"""Return connection capability flags and supported model types.
 
         Returns
         -------
@@ -258,7 +258,7 @@ class sic_connection:
         }
 
     def get_status(self) -> dict[str, Any]:
-        """Return complete connection state and metadata.
+        r"""Return complete connection state and metadata.
 
         Returns
         -------
@@ -290,7 +290,7 @@ class sic_connection:
         }
 
     def set_status(self, status: dict[str, Any] | None = None, **kwargs):
-        """Update connection parameters (NEST ``SetStatus`` API).
+        r"""Update connection parameters (NEST ``SetStatus`` API).
 
         Parameters
         ----------
@@ -346,7 +346,7 @@ class sic_connection:
             self.set_delay(updates['delay'])
 
     def get(self, key: str = 'status'):
-        """Retrieve connection parameter or full status dictionary.
+        r"""Retrieve connection parameter or full status dictionary.
 
         Parameters
         ----------
@@ -384,7 +384,7 @@ class sic_connection:
         raise KeyError(f'Unsupported key "{key}" for sic_connection.get().')
 
     def set_weight(self, weight: ArrayLike):
-        """Update connection weight.
+        r"""Update connection weight.
 
         Parameters
         ----------
@@ -408,7 +408,7 @@ class sic_connection:
         self.weight = self._to_float_scalar(weight, name='weight')
 
     def set_delay(self, delay: ArrayLike):
-        """Update connection delay (alias for :meth:`set_delay_steps`).
+        r"""Update connection delay (alias for :meth:`set_delay_steps`).
 
         Parameters
         ----------
@@ -423,7 +423,7 @@ class sic_connection:
         self.delay_steps = self._validate_delay_steps(delay, name='delay')
 
     def set_delay_steps(self, delay_steps: ArrayLike):
-        """Update connection delay in simulation steps.
+        r"""Update connection delay in simulation steps.
 
         Parameters
         ----------
@@ -448,7 +448,7 @@ class sic_connection:
 
     @classmethod
     def _model_name(cls, model: Any) -> str:
-        """Extract model name from string, class, or instance.
+        r"""Extract model name from string, class, or instance.
 
         Parameters
         ----------
@@ -478,7 +478,7 @@ class sic_connection:
 
     @classmethod
     def supports_connection(cls, source_model: Any, target_model: Any) -> bool:
-        """Check if source-target model pair is compatible with ``sic_connection``.
+        r"""Check if source-target model pair is compatible with ``sic_connection``.
 
         Parameters
         ----------
@@ -513,7 +513,7 @@ class sic_connection:
 
     @classmethod
     def check_connection(cls, source_model: Any, target_model: Any) -> bool:
-        """Validate source-target model pair and raise error if incompatible.
+        r"""Validate source-target model pair and raise error if incompatible.
 
         Parameters
         ----------
@@ -561,7 +561,7 @@ class sic_connection:
         coeffarray: ArrayLike,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Create a NEST-style ``SICEvent`` payload with coefficient array.
+        r"""Create a NEST-style ``SICEvent`` payload with coefficient array.
 
         Parameters
         ----------
@@ -616,7 +616,7 @@ class sic_connection:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Create SIC event payload consumable by ``aeif_cond_alpha_astro.update``.
+        r"""Create SIC event payload consumable by ``aeif_cond_alpha_astro.update``.
 
         Applies delay mapping from NEST absolute delay to local step-based offset:
         ``local_delay = (delay - min_delay) + 1``.
@@ -689,7 +689,7 @@ class sic_connection:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Create single-coefficient SIC event for local step-based APIs.
+        r"""Create single-coefficient SIC event for local step-based APIs.
 
         This is an alias for :meth:`to_aeif_sic_event` supporting both single-value
         and array-valued coefficients.
@@ -735,7 +735,7 @@ class sic_connection:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> list[dict[str, Any]]:
-        """Map lag-indexed SIC coefficients to one event per future time step.
+        r"""Map lag-indexed SIC coefficients to one event per future time step.
 
         Decomposes an ``n``-element coefficient array into ``n`` separate events,
         each scheduled for a distinct future step. Coefficient ``i`` is delivered
@@ -817,7 +817,7 @@ class sic_connection:
         delay_steps: ArrayLike,
         min_delay_steps: ArrayLike = 1,
     ) -> int:
-        """Convert NEST absolute delay to local step-based offset.
+        r"""Convert NEST absolute delay to local step-based offset.
 
         Implements the mapping: ``local_delay = (delay - min_delay) + 1``.
 
@@ -852,7 +852,7 @@ class sic_connection:
 
     @staticmethod
     def _to_coeff_array(value: ArrayLike) -> np.ndarray:
-        """Convert input to validated 1D float64 coefficient array.
+        r"""Convert input to validated 1D float64 coefficient array.
 
         Parameters
         ----------
@@ -884,7 +884,7 @@ class sic_connection:
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
-        """Convert input to validated scalar float.
+        r"""Convert input to validated scalar float.
 
         Parameters
         ----------
@@ -917,7 +917,7 @@ class sic_connection:
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
-        """Convert input to validated scalar integer.
+        r"""Convert input to validated scalar integer.
 
         Parameters
         ----------
@@ -959,7 +959,7 @@ class sic_connection:
 
     @classmethod
     def _validate_delay_steps(cls, delay_steps: ArrayLike, name: str = 'delay_steps') -> int:
-        """Validate delay parameter and ensure it is a positive integer.
+        r"""Validate delay parameter and ensure it is a positive integer.
 
         Parameters
         ----------

@@ -178,9 +178,9 @@ class pp_psc_delta(Neuron):
 
     By adjusting ``c_1``, ``c_2``, and ``c_3``, the transfer function can be:
 
-    - **Linear**: Set ``c_3 = 0``, ``c_1 > 0`` → :math:`\text{rate} = c_1 V' + c_2`
-    - **Exponential**: Set ``c_1 = 0`` → :math:`\text{rate} = c_2 \exp(c_3 V')`
-    - **Mixed**: All coefficients nonzero → linear + exponential
+    - Linear: Set ``c_3 = 0``, ``c_1 > 0`` → :math:`\text{rate} = c_1 V' + c_2`
+    - Exponential: Set ``c_1 = 0`` → :math:`\text{rate} = c_2 \exp(c_3 V')`
+    - Mixed: All coefficients nonzero → linear + exponential
 
     **1.3. Spike-Frequency Adaptation**
 
@@ -208,7 +208,7 @@ class pp_psc_delta(Neuron):
 
     **1.4. Stochastic Spike Generation**
 
-    - **With dead time** (``dead_time > 0``): At most one spike per time step.
+    - With dead time (``dead_time > 0``): At most one spike per time step.
       A uniform random number :math:`u \sim \mathcal{U}(0,1)` is compared to
       the spike probability:
 
@@ -218,7 +218,7 @@ class pp_psc_delta(Neuron):
 
       A spike is generated if :math:`u \le P(\text{spike})`.
 
-    - **Without dead time** (``dead_time = 0``): Multiple spikes per step are
+    - Without dead time (``dead_time = 0``): Multiple spikes per step are
       possible. The number of spikes is drawn from a Poisson distribution:
 
       .. math::
@@ -231,9 +231,9 @@ class pp_psc_delta(Neuron):
 
     After each spike, the neuron enters a dead time during which it cannot spike:
 
-    - **Fixed dead time**: ``dead_time_random = False``. The neuron is refractory
+    - Fixed dead time: ``dead_time_random = False``. The neuron is refractory
       for exactly ``dead_time`` milliseconds, converted to grid steps.
-    - **Random dead time**: ``dead_time_random = True``. The dead time is drawn
+    - Random dead time: ``dead_time_random = True``. The dead time is drawn
       from a gamma distribution with shape ``dead_time_shape`` and mean ``dead_time``.
 
     If ``dead_time`` is nonzero but smaller than the simulation resolution :math:`h`,
@@ -252,9 +252,9 @@ class pp_psc_delta(Neuron):
          compute instantaneous rate, draw random number and potentially emit spike(s).
          If spike occurs:
 
-         - Jump all adaptation elements by ``q_sfa``
-         - Optionally reset :math:`V_\mathrm{m}` to 0 (if ``with_reset = True``)
-         - Set dead time counter
+           - Jump all adaptation elements by ``q_sfa``
+           - Optionally reset :math:`V_\mathrm{m}` to 0 (if ``with_reset = True``)
+           - Set dead time counter
 
        - If refractory: decrement dead time counter
 
@@ -262,17 +262,17 @@ class pp_psc_delta(Neuron):
 
     **3. Important Implementation Notes**
 
-    - **Relative membrane potential**: The membrane potential :math:`V_\mathrm{m}`
-      is stored **relative to the resting potential** (resting potential = 0 mV).
+    - Relative membrane potential: The membrane potential :math:`V_\mathrm{m}`
+      is stored relative to the resting potential (resting potential = 0 mV).
       This differs from ``iaf_psc_delta``, which uses absolute potentials.
-    - **Stochastic reproducibility**: Because spiking is stochastic (random number
+    - Stochastic reproducibility: Because spiking is stochastic (random number
       drawn each step), exact spike-time reproducibility requires matching the
       random number generator state. For deterministic testing, set ``rng_key``
       explicitly.
-    - **Dead time < dt clamping**: If ``dead_time`` is nonzero but smaller than
+    - Dead time < dt clamping: If ``dead_time`` is nonzero but smaller than
       the simulation resolution, it is internally clamped to the resolution to
       match NEST behavior.
-    - **Poisson mode performance**: For non-refractory neurons (``dead_time = 0``),
+    - Poisson mode performance: For non-refractory neurons (``dead_time = 0``),
       Poisson random draws are used, which are slower than uniform random draws.
       For typical firing rates (<1 spike/time_step), setting a small ``dead_time``
       (e.g., 1e-8 ms) is faster and nearly equivalent.
@@ -490,7 +490,7 @@ class pp_psc_delta(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert brainunit quantity to NumPy array in specified units.
+        r"""Convert brainunit quantity to NumPy array in specified units.
 
         Parameters
         ----------
@@ -513,7 +513,7 @@ class pp_psc_delta(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast NumPy array to match state variable shape.
+        r"""Broadcast NumPy array to match state variable shape.
 
         Parameters
         ----------
@@ -535,7 +535,7 @@ class pp_psc_delta(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate all model parameters.
+        r"""Validate all model parameters.
 
         Raises
         ------
@@ -572,7 +572,7 @@ class pp_psc_delta(Neuron):
                 raise ValueError('All SFA time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables.
+        r"""Initialize all state variables.
 
         Allocates and initializes membrane potential, spike times, refractory
         counters, buffered currents, adaptation kernels, and random number
@@ -629,7 +629,7 @@ class pp_psc_delta(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        """Reset all state variables to initial values.
+        r"""Reset all state variables to initial values.
 
         Resets membrane potential, spike times, refractory counters, buffered
         currents, adaptation kernels, and random number generator state to
@@ -677,7 +677,7 @@ class pp_psc_delta(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute surrogate gradient spike output for backpropagation.
+        r"""Compute surrogate gradient spike output for backpropagation.
 
         This method is used for computing differentiable spike outputs during
         training. For a stochastic point process neuron, the true spike output
@@ -725,7 +725,7 @@ class pp_psc_delta(Neuron):
         Returns
         -------
         spike : jax.Array
-            Binary spike output array. Shape: ``(batch_size, *in_size)`` if
+            Binary spike output array. Shape: ``(batch_size, \*in_size)`` if
             batched, ``in_size`` otherwise. Values are 1.0 where spikes occurred,
             0.0 otherwise. In Poisson mode (``dead_time = 0``), values can be
             integers > 1 representing multiple spikes per step.
@@ -755,9 +755,9 @@ class pp_psc_delta(Neuron):
 
         **Spike generation modes:**
 
-        - **With dead time** (``dead_time > 0``): At most one spike per step.
+        - With dead time (``dead_time > 0``): At most one spike per step.
           Uses uniform random numbers and spike probability.
-        - **Without dead time** (``dead_time = 0``): Poisson-distributed spikes.
+        - Without dead time (``dead_time = 0``): Poisson-distributed spikes.
           Multiple spikes per step are possible.
 
         **Failure modes:**

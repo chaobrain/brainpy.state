@@ -487,7 +487,7 @@ class stdp_synapse(static_synapse):
         return norm_w * self.Wmax if norm_w > 0.0 else 0.0
 
     def clear_post_history(self):
-        """Clear internal postsynaptic spike history and reset trace state.
+        r"""Clear internal postsynaptic spike history and reset trace state.
 
         Resets all postsynaptic STDP state to initial conditions:
 
@@ -523,7 +523,7 @@ class stdp_synapse(static_synapse):
         *,
         t_spike_ms: ArrayLike | None = None,
     ) -> int:
-        """Record postsynaptic spikes into the internal STDP history buffer.
+        r"""Record postsynaptic spikes into the internal STDP history buffer.
 
         This method updates the postsynaptic eligibility trace :math:`K^-` and stores
         the spike timestamp for later use by :meth:`send` when processing presynaptic
@@ -537,7 +537,7 @@ class stdp_synapse(static_synapse):
            K^- \\leftarrow K^- \\cdot e^{(t_{\\text{last\\_post}} - t_{\\text{spike}}) / \\tau_-} + 1
 
         where :math:`t_{\\text{last\\_post}}` is the timestamp of the previous postsynaptic
-        spike and :math:`\tau_-` is the postsynaptic trace time constant.
+        spike and :math:`\\tau_-` is the postsynaptic trace time constant.
 
         Multiple spikes can be recorded by setting ``multiplicity > 1``. This is
         equivalent to calling the method ``multiplicity`` times at the same timestamp.
@@ -632,7 +632,7 @@ class stdp_synapse(static_synapse):
         return 0.0
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize synapse state for simulation.
+        r"""Initialize synapse state for simulation.
 
         Resets all dynamic state variables to their initial values:
 
@@ -662,7 +662,7 @@ class stdp_synapse(static_synapse):
         self.clear_post_history()
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state.
+        r"""Return current public parameters and mutable state.
 
         Retrieves all NEST-compatible parameters and dynamic state variables in a
         dictionary format suitable for inspection, logging, or serialization. Includes
@@ -733,7 +733,7 @@ class stdp_synapse(static_synapse):
         Kplus: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and mutable state.
+        r"""Set NEST-style public parameters and mutable state.
 
         Updates one or more synapse parameters and state variables without reinitializing
         the full simulation state. Mimics NEST's ``SetStatus`` API. All parameters are
@@ -883,7 +883,7 @@ class stdp_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``stdp_synapse`` dynamics.
+        r"""Schedule one outgoing event with NEST ``stdp_synapse`` dynamics.
 
         Processes a presynaptic spike, applies STDP weight updates (facilitation from
         past postsynaptic spikes and depression from current spike), then schedules
@@ -1017,7 +1017,7 @@ class stdp_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events, update post history, then process pre spikes.
+        r"""Deliver due events, update post history, then process pre spikes.
 
         High-level update method combining all STDP synapse operations for a single
         simulation time step. This method is typically called once per time step in

@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the ac_generator stimulation device.
 
 Validates the brainpy.state ``ac_generator`` against:
@@ -46,13 +46,13 @@ from brainpy.state import ac_generator
 # ===================================================================
 
 class TestACGenerator(unittest.TestCase):
-    """Unit tests for ac_generator output values and timing."""
+    r"""Unit tests for ac_generator output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):
-        """Default amplitude=0, offset=0, frequency=0, phase=0."""
+        r"""Default amplitude=0, offset=0, frequency=0, phase=0."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator()
         self.assertTrue(u.math.allclose(ac.amplitude, 0. * u.pA))
@@ -62,7 +62,7 @@ class TestACGenerator(unittest.TestCase):
         self.assertTrue(u.math.allclose(ac.origin, 0. * u.ms))
 
     def test_output_zero_with_default_params(self):
-        """With all-zero defaults, output should be zero at any time."""
+        r"""With all-zero defaults, output should be zero at any time."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator()
             for t_val in [0., 1., 10., 100.]:
@@ -72,7 +72,7 @@ class TestACGenerator(unittest.TestCase):
                                 f"Failed at t={t_val} ms")
 
     def test_dc_offset_only(self):
-        """With zero amplitude and nonzero offset, output should be constant."""
+        r"""With zero amplitude and nonzero offset, output should be constant."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator(offset=500. * u.pA)
             for t_val in [0., 5., 50.]:
@@ -82,7 +82,7 @@ class TestACGenerator(unittest.TestCase):
                                 f"Failed at t={t_val} ms")
 
     def test_pure_sine_at_known_times(self):
-        """Test pure sine output at specific times."""
+        r"""Test pure sine output at specific times."""
         amp = 100.  # pA
         freq = 250.  # Hz -> period = 4 ms
         omega = 2 * math.pi * freq / 1000.0  # rad/ms
@@ -108,7 +108,7 @@ class TestACGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA, atol=1e-10 * u.pA))
 
     def test_phase_shift(self):
-        """Test that phase shifts the sine correctly."""
+        r"""Test that phase shifts the sine correctly."""
         amp = 100.  # pA
         freq = 250.  # Hz
         phase = 90.  # degrees -> phi_rad = pi/2
@@ -122,7 +122,7 @@ class TestACGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, amp * u.pA, atol=1e-10 * u.pA))
 
     def test_output_before_start_is_zero(self):
-        """Before start time, output is zero."""
+        r"""Before start time, output is zero."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator(amplitude=100. * u.pA,
                               offset=50. * u.pA,
@@ -133,7 +133,7 @@ class TestACGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA))
 
     def test_output_after_stop_is_zero(self):
-        """After stop time, output is zero."""
+        r"""After stop time, output is zero."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator(amplitude=100. * u.pA,
                               offset=50. * u.pA,
@@ -145,7 +145,7 @@ class TestACGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA))
 
     def test_output_during_active_window(self):
-        """During active window, output is nonzero (for nonzero offset+amplitude)."""
+        r"""During active window, output is nonzero (for nonzero offset+amplitude)."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator(amplitude=100. * u.pA,
                               offset=200. * u.pA,
@@ -161,7 +161,7 @@ class TestACGenerator(unittest.TestCase):
                 u.math.allclose(out, expected * u.pA, atol=1e-10 * u.pA))
 
     def test_origin_shifts_window(self):
-        """Origin shifts start and stop."""
+        r"""Origin shifts start and stop."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator(amplitude=100. * u.pA,
                               frequency=100. * u.Hz,
@@ -182,7 +182,7 @@ class TestACGenerator(unittest.TestCase):
                 u.math.allclose(out, expected * u.pA, atol=1e-10 * u.pA))
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             ac = ac_generator(in_size=5, amplitude=100. * u.pA,
                               frequency=100. * u.Hz)
@@ -196,7 +196,7 @@ class TestACGenerator(unittest.TestCase):
 # ===================================================================
 
 class TestACGeneratorVsStepCurrent(unittest.TestCase):
-    """Compare ac_generator against manually computed sine values.
+    r"""Compare ac_generator against manually computed sine values.
 
     This mirrors the NEST test_ac_generator.py: an ac_generator should produce
     the same current as a step_current_generator loaded with the equivalent
@@ -204,7 +204,7 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
     """
 
     def test_ac_vs_manual_sine_trace(self):
-        """AC generator output matches manual sin() computation at each step.
+        r"""AC generator output matches manual sin() computation at each step.
 
         Reproduces the logic of NEST's test_ac_generator.py.
         """
@@ -250,7 +250,7 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
                             err_msg="AC generator does not match manual sine trace")
 
     def test_ac_full_range_frequencies(self):
-        """Test at various frequencies that the output matches sin()."""
+        r"""Test at various frequencies that the output matches sin()."""
         dt_ms = 0.1
         simtime = 20.0
         n_steps = int(round(simtime / dt_ms))
@@ -284,7 +284,7 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
 # ===================================================================
 
 class TestACGeneratorVsNEST(unittest.TestCase):
-    """Compare ac_generator against NEST. Skipped when NEST is not installed."""
+    r"""Compare ac_generator against NEST. Skipped when NEST is not installed."""
 
     def setUp(self):
         self.dt_ms = 0.1
@@ -299,7 +299,7 @@ class TestACGeneratorVsNEST(unittest.TestCase):
             return False
 
     def test_ac_current_trace_vs_nest(self):
-        """Compare AC current output trace against NEST ac_generator."""
+        r"""Compare AC current output trace against NEST ac_generator."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -357,7 +357,7 @@ class TestACGeneratorVsNEST(unittest.TestCase):
                             err_msg="AC current trace differs from NEST")
 
     def test_ac_driven_neuron_vs_nest(self):
-        """Compare neuron V_m when driven by AC generator vs NEST."""
+        r"""Compare neuron V_m when driven by AC generator vs NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 

@@ -216,11 +216,11 @@ class hh_cond_beta_gap_traub(Neuron):
 
     **Physical interpretation:**
 
-    - :math:`I_{Na}`: Fast sodium current responsible for spike upstroke.
-    - :math:`I_K`: Delayed rectifier potassium current for repolarization.
-    - :math:`I_L`: Leak current maintaining resting potential.
-    - :math:`I_{syn,ex}`, :math:`I_{syn,in}`: Excitatory and inhibitory synaptic currents.
-    - :math:`I_{gap}`: Gap-junction current from electrically coupled neighbors.
+    - :math:`I_{Na}` -- Fast sodium current responsible for spike upstroke.
+    - :math:`I_K` -- Delayed rectifier potassium current for repolarization.
+    - :math:`I_L` -- Leak current maintaining resting potential.
+    - :math:`I_{syn,ex}`, :math:`I_{syn,in}` -- Excitatory and inhibitory synaptic currents.
+    - :math:`I_{gap}` -- Gap-junction current from electrically coupled neighbors.
 
     **3. Gating Variable Dynamics**
 
@@ -401,7 +401,7 @@ class hh_cond_beta_gap_traub(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential in mV. Shape: ``(batch_size, *in_size)`` or ``(*in_size,)``.
+        Membrane potential in mV. Shape: ``(batch_size, \*in_size)`` or ``(\*in_size,)``.
     m : brainstate.HiddenState
         Sodium activation gating variable (unitless, 0-1 range).
     h : brainstate.HiddenState
@@ -616,7 +616,7 @@ class hh_cond_beta_gap_traub(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        """Convert brainunit quantity to NumPy float64 array in specified unit.
+        r"""Convert brainunit quantity to NumPy float64 array in specified unit.
 
         Parameters
         ----------
@@ -634,7 +634,7 @@ class hh_cond_beta_gap_traub(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
-        """Broadcast NumPy array to match state variable shape.
+        r"""Broadcast NumPy array to match state variable shape.
 
         Parameters
         ----------
@@ -651,7 +651,7 @@ class hh_cond_beta_gap_traub(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter constraints at initialization.
+        r"""Validate parameter constraints at initialization.
 
         Raises
         ------
@@ -720,8 +720,8 @@ class hh_cond_beta_gap_traub(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension size for parallel simulation of multiple independent trials.
-            If None, no batch dimension is added (states have shape ``(*in_size,)``).
-            If provided, states have shape ``(batch_size, *in_size)``.
+            If None, no batch dimension is added (states have shape ``(\*in_size,)``).
+            If provided, states have shape ``(batch_size, \*in_size)``.
         **kwargs : dict, optional
             Additional keyword arguments (reserved for future extensions, currently ignored).
 
@@ -888,7 +888,7 @@ class hh_cond_beta_gap_traub(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential in millivolts. If None, uses ``self.V.value`` (current state).
-            Shape must match ``(batch_size, *in_size)`` or ``(*in_size,)``.
+            Shape must match ``(batch_size, \*in_size)`` or ``(\*in_size,)``.
 
         Returns
         -------
@@ -1090,13 +1090,13 @@ class hh_cond_beta_gap_traub(Neuron):
             - Gap-junction current: :math:`I_{gap} = \sum_j g_{gap,ij}(V_j - V_i)`
             - Any additional bias or time-varying input current
 
-            Shape must broadcast with ``(batch_size, *in_size)`` or be scalar.
+            Shape must broadcast with ``(batch_size, \*in_size)`` or be scalar.
             Unit: picoamperes (pA).
 
         Returns
         -------
         spike : ArrayLike
-            Differentiable spike output with shape ``(batch_size, *in_size)`` or ``(*in_size,)``.
+            Differentiable spike output with shape ``(batch_size, \*in_size)`` or ``(\*in_size,)``.
             Binary spike indicator processed through ``spk_fun`` for gradient computation.
             Forward pass: 1.0 where spike occurred, 0.0 otherwise.
             Backward pass: gradient provided by surrogate function (e.g., ``ReluGrad``).
