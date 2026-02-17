@@ -32,23 +32,21 @@ __all__ = [
 class stdp_nn_restr_synapse(stdp_synapse):
     r"""NEST-compatible ``stdp_nn_restr_synapse`` connection model.
 
-    Short description
-    -----------------
+    **Short description**
 
     Synapse type for spike-timing dependent plasticity with restricted
     symmetric nearest-neighbour spike pairing.
 
-    Description
-    -----------
+    **Description**
 
     ``stdp_nn_restr_synapse`` mirrors NEST
     ``models/stdp_nn_restr_synapse.h`` and implements the restricted
     nearest-neighbor pairing scheme from Morrison et al. (2008, fig. 7C):
 
-    - on a presynaptic spike, depression uses the nearest preceding
+    - On a presynaptic spike, depression uses the nearest preceding
       postsynaptic spike only if that postsynaptic spike occurred after the
       previous presynaptic spike,
-    - on postsynaptic spikes, facilitation pairs only with the nearest
+    - On postsynaptic spikes, facilitation pairs only with the nearest
       preceding presynaptic spike that has not already been used for
       facilitation.
 
@@ -58,12 +56,42 @@ class stdp_nn_restr_synapse(stdp_synapse):
     Compared with :class:`stdp_synapse`, this model changes two core STDP
     mechanisms:
 
-    - no running presynaptic ``Kplus`` trace is used,
-    - depression is nearest-neighbor and restricted to intervals where at
+    - No running presynaptic ``Kplus`` trace is used,
+    - Depression is nearest-neighbor and restricted to intervals where at
       least one postsynaptic spike occurred since the last presynaptic spike.
 
-    Update order (NEST source equivalent)
-    -------------------------------------
+    **1. Mathematical Formulation**
+
+    With normalized weight :math:`\hat w = w/W_{max}`:
+
+    .. math::
+       \hat w \leftarrow \hat w
+       + \lambda (1-\hat w)^{\mu_+} k_+
+
+    .. math::
+       \hat w \leftarrow \hat w
+       - \alpha \lambda \hat w^{\mu_-} k_-
+
+    with clipping to ``[0, Wmax]`` in normalized coordinates, as in NEST.
+
+    The potentiation trace factor for the restricted rule is:
+
+    .. math::
+       k_+ = \exp\left(\frac{t_{\mathrm{last}} - (t_{post} + d)}{\tau_+}\right)
+
+    where :math:`t_{\mathrm{last}}` is the previous presynaptic spike time,
+    :math:`t_{post}` is the first postsynaptic spike time in the readout
+    window, and :math:`d` is the dendritic delay.
+
+    The depression trace factor is:
+
+    .. math::
+       k_- = \exp\left(\frac{t_{post}^{\mathrm{nn}} - (t_{pre} - d)}{\tau_-}\right)
+
+    where :math:`t_{post}^{\mathrm{nn}}` is the nearest postsynaptic spike
+    strictly before :math:`t_{pre} - d`.
+
+    **2. Update Order (NEST Source Equivalent)**
 
     For a presynaptic spike at :math:`t_{pre}` with dendritic delay :math:`d`,
     NEST ``stdp_nn_restr_synapse::send`` performs:
@@ -81,8 +109,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
 
     This implementation preserves that exact ordering.
 
-    Coincidence semantics
-    ---------------------
+    **3. Coincidence Semantics**
 
     Pairs with exact coincidence are discarded by strict time comparisons
     (NEST ``stdp_eps`` behavior). If
@@ -90,42 +117,118 @@ class stdp_nn_restr_synapse(stdp_synapse):
     :math:`\Delta t = 0` is not used; the nearest strictly earlier valid
     post-spike is used instead.
 
+    **4. Restricted Pairing Constraint**
+
+    The "restricted" property ensures that a postsynaptic spike contributes to
+    plasticity only if it occurred in the inter-spike interval between two
+    consecutive presynaptic spikes. This prevents accumulation of plasticity
+    from postsynaptic spikes that precede the synapse's activation history.
+
     Parameters
     ----------
     weight : ArrayLike, optional
-        Initial synaptic weight. Default: ``1.0``.
+        Initial synaptic weight (scalar, float). Must have same sign as
+        ``Wmax``. Default: ``1.0``.
     delay : ArrayLike, optional
-        Synaptic delay in ms. Default: ``1.0 * u.ms``.
+        Synaptic delay (scalar, brainunit time). Dendritic delay for spike
+        transmission. Default: ``1.0 * u.ms``.
     receptor_type : int, optional
-        Receiver port/receptor id. Default: ``0``.
+        Receiver port/receptor id (non-negative integer). Identifies which
+        input channel of the postsynaptic neuron this synapse targets.
+        Default: ``0``.
     tau_plus : ArrayLike, optional
-        Potentiation time constant ``tau_plus`` in ms. Default: ``20.0 * u.ms``.
+        Potentiation time constant (scalar, brainunit time, positive).
+        Controls the temporal window for LTP. Default: ``20.0 * u.ms``.
     tau_minus : ArrayLike, optional
-        Depression trace time constant ``tau_minus`` in ms.
-        In NEST this belongs to the postsynaptic archiving neuron; here it is
-        stored on the synapse for standalone compatibility.
-        Default: ``20.0 * u.ms``.
+        Depression trace time constant (scalar, brainunit time, positive).
+        Controls the temporal window for LTD. In NEST this belongs to the
+        postsynaptic archiving neuron; here it is stored on the synapse for
+        standalone compatibility. Default: ``20.0 * u.ms``.
     lambda_ : ArrayLike, optional
-        Learning-rate parameter ``lambda``. Default: ``0.01``.
+        Learning-rate parameter (scalar, float, positive). Global scaling
+        factor for weight updates. Default: ``0.01``.
     alpha : ArrayLike, optional
-        Depression scaling parameter. Default: ``1.0``.
+        Depression scaling parameter (scalar, float, positive). Relative
+        strength of LTD versus LTP. Default: ``1.0``.
     mu_plus : ArrayLike, optional
-        Potentiation exponent. Default: ``1.0``.
+        Potentiation exponent (scalar, float, non-negative). Controls the
+        weight-dependence of LTP. ``mu_plus=0`` gives additive LTP,
+        ``mu_plus=1`` gives multiplicative LTP. Default: ``1.0``.
     mu_minus : ArrayLike, optional
-        Depression exponent. Default: ``1.0``.
+        Depression exponent (scalar, float, non-negative). Controls the
+        weight-dependence of LTD. ``mu_minus=0`` gives additive LTD,
+        ``mu_minus=1`` gives multiplicative LTD. Default: ``1.0``.
     Wmax : ArrayLike, optional
-        Maximum weight bound. Must have same sign as ``weight``.
-        Default: ``100.0``.
+        Maximum weight bound (scalar, float). Must have same sign as
+        ``weight``. Weights are clipped to the range ``[0, Wmax]`` or
+        ``[Wmax, 0]`` depending on sign. Default: ``100.0``.
     post : object, optional
-        Default receiver object.
+        Default receiver object. Must implement postsynaptic input methods.
+        If ``None``, must be specified in ``send()`` calls. Default: ``None``.
     name : str, optional
-        Object name.
+        Object name for identification. Default: ``None``.
+
+    **Parameter Mapping**
+
+    The following table maps NEST parameter names to their brainpy.state
+    equivalents:
+
+    ================== ==================== ===================================
+    NEST Parameter     brainpy.state        Notes
+    ================== ==================== ===================================
+    ``weight``         ``weight``           Synaptic efficacy
+    ``delay``          ``delay``            Dendritic delay (ms)
+    ``receptor_type``  ``receptor_type``    Target receptor port
+    ``tau_plus``       ``tau_plus``         LTP time constant (ms)
+    ``tau_minus``      ``tau_minus``        LTD time constant (ms)
+    ``lambda``         ``lambda_``          Learning rate
+    ``alpha``          ``alpha``            LTD scaling factor
+    ``mu_plus``        ``mu_plus``          LTP weight-dependence exponent
+    ``mu_minus``       ``mu_minus``         LTD weight-dependence exponent
+    ``Wmax``           ``Wmax``             Maximum weight bound
+    ``t_lastspike``    ``t_lastspike``      Previous presynaptic spike time
+    ================== ==================== ===================================
 
     Notes
     -----
     - In NEST, ``tau_minus`` is a postsynaptic-neuron parameter.
     - As in NEST, STDP updates are based on on-grid spike stamps and ignore
       sub-step precise offsets.
+    - ``Kplus`` is not a parameter of this model (unlike ``stdp_synapse``).
+    - The restriction mechanism ensures each spike participates in at most one
+      pair of each type (facilitation and depression).
+
+    Examples
+    --------
+    Create a restricted nearest-neighbor STDP synapse:
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainunit as u
+       >>> syn = bst.nn.stdp_nn_restr_synapse(
+       ...     weight=0.5,
+       ...     delay=1.5 * u.ms,
+       ...     tau_plus=20.0 * u.ms,
+       ...     tau_minus=20.0 * u.ms,
+       ...     lambda_=0.01,
+       ...     alpha=1.0,
+       ...     mu_plus=1.0,
+       ...     mu_minus=1.0,
+       ...     Wmax=100.0
+       ... )
+
+    Configure asymmetric learning rates:
+
+    .. code-block:: python
+
+       >>> syn = bst.nn.stdp_nn_restr_synapse(
+       ...     weight=1.0,
+       ...     lambda_=0.005,
+       ...     alpha=1.05,  # Slightly stronger depression
+       ...     mu_plus=0.0,  # Additive LTP
+       ...     mu_minus=1.0  # Multiplicative LTD
+       ... )
 
     References
     ----------
@@ -134,6 +237,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
     .. [2] Morrison A, Diesmann M, Gerstner W (2008).
            Phenomenological models of synaptic plasticity based on spike timing.
            Biological Cybernetics, 98:459-478.
+           DOI: 10.1007/s00422-008-0233-1
     """
 
     __module__ = 'brainpy.state'
@@ -170,6 +274,33 @@ class stdp_nn_restr_synapse(stdp_synapse):
         )
 
     def _get_nearest_neighbor_K_value(self, t_ms: float) -> float:
+        """Compute nearest-neighbor depression trace value at given time.
+
+        Matches NEST ``ArchivingNode::get_K_values`` nearest-neighbor behavior:
+        searches backward through the postsynaptic spike history to find the
+        latest postsynaptic spike strictly before ``t_ms``, then returns the
+        exponentially decayed trace value.
+
+        Parameters
+        ----------
+        t_ms : float
+            Query time in milliseconds (on-grid spike stamp).
+
+        Returns
+        -------
+        float
+            Decayed depression trace value :math:`\exp((t_{post}^{\mathrm{nn}} - t_{ms})/\tau_-)`,
+            where :math:`t_{post}^{\mathrm{nn}}` is the nearest postsynaptic spike
+            strictly before ``t_ms``. Returns ``0.0`` if no valid postsynaptic
+            spike is found.
+
+        Notes
+        -----
+        - Uses strict inequality ``(t_ms - t_post) > _STDP_EPS`` to exclude
+          exact coincidences (NEST ``stdp_eps`` semantics).
+        - Iterates backward through ``_post_hist_t`` for efficiency (most
+          recent spikes are typically nearest).
+        """
         # Match ArchivingNode::get_K_values nearest-neighbor behavior:
         # use latest post spike strictly before t and decay a unit trace.
         for idx in range(len(self._post_hist_t) - 1, -1, -1):
@@ -179,14 +310,59 @@ class stdp_nn_restr_synapse(stdp_synapse):
         return 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state."""
+        """Return current public parameters and mutable state.
+
+        Returns the NEST-compatible parameter dictionary for this synapse,
+        excluding ``Kplus`` (which is not used in this model).
+
+        Returns
+        -------
+        dict
+            Dictionary containing all public parameters and mutable state:
+            ``weight``, ``delay``, ``receptor_type``, ``tau_plus``,
+            ``tau_minus``, ``lambda``, ``alpha``, ``mu_plus``, ``mu_minus``,
+            ``Wmax``, ``t_lastspike``, and ``synapse_model``.
+
+        Notes
+        -----
+        - The returned dictionary has ``synapse_model='stdp_nn_restr_synapse'``
+          for NEST compatibility.
+        - ``Kplus`` is removed from the parent class's output since it is not
+          part of the restricted nearest-neighbor pairing scheme.
+        """
         params = super().get()
         params.pop('Kplus', None)
         params['synapse_model'] = 'stdp_nn_restr_synapse'
         return params
 
     def set(self, **kwargs):
-        """Set NEST-style public parameters and mutable state."""
+        """Set NEST-style public parameters and mutable state.
+
+        Accepts keyword arguments matching NEST parameter names for this
+        synapse model. Raises an error if ``Kplus`` is provided (not used in
+        this model).
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments for parameters to update. Valid keys: ``weight``,
+            ``delay``, ``receptor_type``, ``tau_plus``, ``tau_minus``,
+            ``lambda``, ``alpha``, ``mu_plus``, ``mu_minus``, ``Wmax``,
+            ``t_lastspike``.
+
+        Raises
+        ------
+        ValueError
+            If ``Kplus`` is provided (not a valid parameter for this model).
+        ValueError
+            If any provided value fails validation (e.g., negative time
+            constant, incompatible weight/Wmax signs).
+
+        Notes
+        -----
+        - Setting ``weight`` or ``Wmax`` will re-validate the sign consistency
+          constraint (both must have the same sign).
+        """
         if 'Kplus' in kwargs:
             raise ValueError('Kplus is not a parameter of stdp_nn_restr_synapse.')
         super().set(**kwargs)
@@ -198,7 +374,69 @@ class stdp_nn_restr_synapse(stdp_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``stdp_nn_restr_synapse`` dynamics."""
+        """Schedule one outgoing event with NEST ``stdp_nn_restr_synapse`` dynamics.
+
+        Implements the restricted nearest-neighbor STDP pairing rule. On each
+        presynaptic spike:
+
+        1. Reads postsynaptic spike history in the interval
+           :math:`(t_{\mathrm{last}}-d,\, t_{pre}-d]`.
+        2. If the history is non-empty:
+           - Applies facilitation (LTP) using the first postsynaptic spike in
+             the interval.
+           - Applies depression (LTD) using the nearest-neighbor postsynaptic
+             trace.
+        3. Schedules the spike event with updated weight for delivery after
+           the dendritic delay.
+        4. Updates ``t_lastspike`` to the current spike time.
+
+        Parameters
+        ----------
+        multiplicity : ArrayLike, optional
+            Scalar event weight multiplier (e.g., spike count). If zero or
+            very small, no event is sent. Default: ``1.0``.
+        post : object, optional
+            Target receiver object. If ``None``, uses the default receiver set
+            during initialization. Must implement postsynaptic input methods.
+        receptor_type : ArrayLike, optional
+            Target receptor port (non-negative integer). If ``None``, uses
+            ``self.receptor_type``. Default: ``None``.
+
+        Returns
+        -------
+        bool
+            ``True`` if an event was scheduled, ``False`` if ``multiplicity``
+            was zero and no event was sent.
+
+        Notes
+        -----
+        - **Restricted pairing**: Both LTP and LTD are applied only if at
+          least one postsynaptic spike occurred between the previous and
+          current presynaptic spikes.
+        - **Facilitation**: Uses the first postsynaptic spike in the readout
+          window with trace factor
+          :math:`\exp((t_{\mathrm{last}} - (t_{post} + d))/\tau_+)`.
+        - **Depression**: Uses the nearest-neighbor postsynaptic trace at
+          :math:`t_{pre} - d`.
+        - **Event timing**: Uses on-grid spike stamps (ignores sub-step
+          precise offsets).
+        - **Weight bounds**: Updated weight is clipped to ``[0, Wmax]`` or
+          ``[Wmax, 0]`` depending on sign.
+
+        Examples
+        --------
+        Send a presynaptic spike with default multiplicity:
+
+        .. code-block:: python
+
+           >>> sent = syn.send()
+
+        Send with custom multiplicity and receptor type:
+
+        .. code-block:: python
+
+           >>> sent = syn.send(multiplicity=2.0, receptor_type=1)
+        """
         if not self._is_nonzero(multiplicity):
             return False
 

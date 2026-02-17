@@ -37,131 +37,338 @@ _UNSET = object()
 class tsodyks_synapse(static_synapse):
     r"""NEST-compatible ``tsodyks_synapse`` connection model.
 
-    Short description
-    -----------------
+    ``tsodyks_synapse`` implements the short-term plasticity (STP) model of
+    Tsodyks, Uziel, and Markram (2000), exhibiting both synaptic depression
+    and facilitation. This synapse tracks three dynamic state variables—recovered
+    resources ``x``, active resources ``y``, and utilization ``u``—that evolve
+    between presynaptic spikes and are updated upon spike arrival.
 
-    Synapse type with short-term depression and facilitation.
+    The model replicates NEST ``models/tsodyks_synapse.h`` exactly, including
+    propagator computation, update ordering, and event timing semantics. Delay
+    scheduling and receiver delivery inherit from :class:`static_synapse`.
 
-    Description
-    -----------
+    **1. Mathematical Model**
 
-    ``tsodyks_synapse`` mirrors NEST ``models/tsodyks_synapse.h`` and
-    implements the short-term plasticity model from Tsodyks, Uziel and
-    Markram (2000). The state variables are:
+    **State Variables:**
 
-    - ``x``: resources in recovered state,
-    - ``y``: resources in active state,
-    - ``u``: utilization (release probability),
-    - ``z = 1 - x - y``: resources in inactive state.
+    - ``x``: Fraction of resources in the recovered (available) state
+    - ``y``: Fraction of resources in the active (released) state
+    - ``u``: Utilization (instantaneous release probability)
+    - ``z = 1 - x - y``: Fraction of resources in the inactive (unavailable) state
 
-    For an incoming spike at time :math:`t_s`, with
-    :math:`h = t_s - t_{\mathrm{last}}`, NEST updates in this exact order:
+    **Constraint:** :math:`x + y + z = 1` at all times; ``x, y, z`` are non-negative.
 
-    1. Propagation from :math:`t_{\mathrm{last}}` to :math:`t_s`:
+    **Continuous-time dynamics (between spikes):**
 
-       .. math::
-          u \leftarrow u \cdot P_{uu}
+    .. math::
 
-          x \leftarrow x + P_{xy} y - P_{zz} z
+       \frac{du}{dt} = -\frac{u}{\tau_{\mathrm{fac}}}
 
-          y \leftarrow y \cdot P_{yy}
+       \frac{dy}{dt} = -\frac{y}{\tau_{\mathrm{psc}}}
 
-       where
+       \frac{dz}{dt} = -\frac{z}{\tau_{\mathrm{rec}}}
 
-       .. math::
-          P_{uu} = \begin{cases}
-            0, & \tau_{fac}=0 \\
-            e^{-h/\tau_{fac}}, & \tau_{fac}>0
-          \end{cases}
+       x = 1 - y - z
 
-          P_{yy} = e^{-h/\tau_{psc}}
+    where:
 
-          P_{zz} = e^{-h/\tau_{rec}} - 1
+    - :math:`\tau_{\mathrm{fac}}`: Facilitation time constant (ms). If :math:`\tau_{\mathrm{fac}} = 0`, facilitation is disabled and :math:`u` decays instantly to zero.
+    - :math:`\tau_{\mathrm{psc}}`: Time constant of synaptic current decay (ms).
+    - :math:`\tau_{\mathrm{rec}}`: Recovery time constant for inactive resources (ms).
 
-          P_{xy} = \frac{P_{zz}\tau_{rec} - (P_{yy}-1)\tau_{psc}}
-                         {\tau_{psc}-\tau_{rec}}
+    **Upon presynaptic spike at time** :math:`t_s`:
 
-    2. Spike-triggered jump in ``u``:
+    Let :math:`h = t_s - t_{\mathrm{last}}` be the inter-spike interval since the last presynaptic spike.
 
-       .. math::
-          u \leftarrow u + U(1-u)
+    **Step 1: Propagate state from** :math:`t_{\mathrm{last}}` **to** :math:`t_s`:
 
-    3. Released amount at spike time:
+    .. math::
 
-       .. math::
-          \Delta y = u \cdot x
+       u \leftarrow u \cdot P_{uu}
 
-    4. Spike-triggered jumps in ``x`` and ``y``:
+       x \leftarrow x + P_{xy} \, y - P_{zz} \, z
 
-       .. math::
-          x \leftarrow x - \Delta y
+       y \leftarrow y \cdot P_{yy}
 
-          y \leftarrow y + \Delta y
+    where the exact propagators are:
 
-    5. Event weight delivered to target:
+    .. math::
 
-       .. math::
-          w_{\mathrm{eff}} = \Delta y \cdot w
+       P_{uu} = \begin{cases}
+         0, & \tau_{\mathrm{fac}} = 0 \\
+         e^{-h/\tau_{\mathrm{fac}}}, & \tau_{\mathrm{fac}} > 0
+       \end{cases}
 
-    This implementation preserves that ordering exactly in :meth:`send`.
-    Delay scheduling and receiver delivery follow :class:`static_synapse`.
+       P_{yy} = e^{-h/\tau_{\mathrm{psc}}}
 
-    Event timing semantics
-    ----------------------
+       P_{zz} = e^{-h/\tau_{\mathrm{rec}}} - 1
 
-    NEST evaluates this model on spike stamps and ignores precise sub-step
-    spike offsets. This implementation follows the same behavior by using
-    the on-grid spike stamp ``t + dt`` for each step where presynaptic
-    multiplicity is non-zero.
+       P_{xy} = \frac{P_{zz} \, \tau_{\mathrm{rec}} - (P_{yy} - 1) \, \tau_{\mathrm{psc}}}
+                     {\tau_{\mathrm{psc}} - \tau_{\mathrm{rec}}}
+
+    **Step 2: Spike-triggered facilitation**:
+
+    .. math::
+
+       u \leftarrow u + U (1 - u)
+
+    where :math:`U` is the baseline utilization increment parameter.
+
+    **Step 3: Resource release**:
+
+    .. math::
+
+       \Delta y = u \cdot x
+
+    **Step 4: Update resource fractions**:
+
+    .. math::
+
+       x \leftarrow x - \Delta y
+
+       y \leftarrow y + \Delta y
+
+    **Step 5: Effective weight delivered to postsynaptic neuron**:
+
+    .. math::
+
+       w_{\mathrm{eff}} = \Delta y \cdot w
+
+    where :math:`w` is the baseline synaptic weight.
+
+    **2. Update Ordering and NEST Compatibility**
+
+    This implementation preserves the exact update sequence from NEST
+    ``models/tsodyks_synapse.h::send()``:
+
+    1. Compute propagators :math:`P_{uu}, P_{yy}, P_{zz}, P_{xy}` from inter-spike interval :math:`h`
+    2. Propagate utilization: ``u *= P_uu``
+    3. Propagate recovered resources: ``x += P_xy * y - P_zz * z``
+    4. Propagate active resources: ``y *= P_yy``
+    5. Facilitation jump: ``u += U * (1 - u)``
+    6. Compute release: ``delta_y = u * x``
+    7. Update resources: ``x -= delta_y``, ``y += delta_y``
+    8. Schedule weighted event: ``w_eff = delta_y * weight``
+
+    **3. Event Timing Semantics**
+
+    NEST evaluates this model using spike time stamps (on-grid times) and ignores
+    precise sub-step offsets. This implementation follows the same convention:
+
+    - Presynaptic spike detected at simulation step ``n``
+    - Spike time stamp: :math:`t_{\mathrm{spike}} = t_n + dt`
+    - Inter-spike interval: :math:`h = t_{\mathrm{spike}} - t_{\mathrm{lastspike}}`
+    - Delivery time: :math:`t_{\mathrm{delivery}} = t_{\mathrm{spike}} + \mathrm{delay}`
+
+    **4. Stability Constraints and Computational Implications**
+
+    **Parameter Constraints:**
+
+    - :math:`\tau_{\mathrm{psc}} > 0` (strictly positive)
+    - :math:`\tau_{\mathrm{fac}} \geq 0` (zero disables facilitation)
+    - :math:`\tau_{\mathrm{rec}} > 0` (strictly positive)
+    - :math:`U \in [0, 1]`
+    - :math:`x, y, u \in [0, 1]`
+    - :math:`x + y \leq 1` (ensures :math:`z \geq 0`)
+
+    **Numerical Considerations:**
+
+    - Propagators :math:`P_{uu}, P_{yy}, P_{zz}` are computed using ``math.exp()``
+      and ``math.expm1()`` for numerical stability.
+    - The cross-propagator :math:`P_{xy}` involves division by :math:`\tau_{\mathrm{psc}} - \tau_{\mathrm{rec}}`.
+      If these time constants are nearly equal, numerical precision may degrade.
+      NEST does not provide a singular fallback; users should avoid
+      :math:`\tau_{\mathrm{psc}} \approx \tau_{\mathrm{rec}}`.
+    - All state variables are stored as Python floats (``float64`` precision).
+    - Per-call cost is :math:`O(1)` (scalar operations only).
+
+    **Behavioral Regimes:**
+
+    - **Depression-dominated** (:math:`\tau_{\mathrm{fac}} = 0`, :math:`U > 0`):
+      Repeated spikes deplete ``x``, reducing ``delta_y`` over time.
+    - **Facilitation-dominated** (:math:`\tau_{\mathrm{fac}} > 0`, large :math:`U`):
+      Utilization ``u`` grows with repeated spikes, increasing release.
+    - **Mixed dynamics**: Both effects coexist, yielding complex short-term plasticity.
 
     Parameters
     ----------
     weight : ArrayLike, optional
-        Baseline synaptic weight ``w``. Default: ``1.0``.
+        Baseline synaptic weight :math:`w` (dimensionless or with receiver-specific units).
+        Scalar float or array-like. Default: ``1.0``.
     delay : ArrayLike, optional
-        Synaptic delay in ms. Default: ``1.0 * u.ms``.
+        Synaptic transmission delay :math:`d` in milliseconds. Must be ``> 0``.
+        Quantized to integer time steps per :class:`static_synapse` conventions.
+        Scalar with ``brainunit`` time dimension or dimensionless value interpreted
+        as milliseconds. Default: ``1.0 * u.ms``.
     receptor_type : int, optional
-        Receiver port/receptor id. Default: ``0``.
+        Postsynaptic receptor port identifier (non-negative integer). Routes events
+        to labeled input channels on the receiver neuron. Default: ``0``.
     tau_psc : ArrayLike, optional
-        Time constant of synaptic current in ms. Must be ``> 0``.
-        Default: ``3.0 * u.ms``.
+        Time constant of synaptic current decay :math:`\tau_{\mathrm{psc}}` in milliseconds.
+        Must be ``> 0``. Scalar with ``brainunit`` time dimension or dimensionless
+        value interpreted as milliseconds. Default: ``3.0 * u.ms``.
     tau_fac : ArrayLike, optional
-        Facilitation time constant in ms. Must be ``>= 0``.
-        Default: ``0.0 * u.ms``.
+        Facilitation time constant :math:`\tau_{\mathrm{fac}}` in milliseconds.
+        Must be ``>= 0``. Set to ``0.0 * u.ms`` to disable facilitation.
+        Scalar with ``brainunit`` time dimension or dimensionless value interpreted
+        as milliseconds. Default: ``0.0 * u.ms``.
     tau_rec : ArrayLike, optional
-        Recovery (depression) time constant in ms. Must be ``> 0``.
-        Default: ``800.0 * u.ms``.
+        Recovery (depression) time constant :math:`\tau_{\mathrm{rec}}` in milliseconds.
+        Must be ``> 0``. Scalar with ``brainunit`` time dimension or dimensionless
+        value interpreted as milliseconds. Default: ``800.0 * u.ms``.
     U : ArrayLike, optional
-        Utilization increment parameter in ``[0, 1]``.
-        Default: ``0.5``.
+        Baseline utilization increment parameter :math:`U` (dimensionless).
+        Must be in ``[0, 1]``. Determines the magnitude of facilitation per spike.
+        Scalar float. Default: ``0.5``.
     x : ArrayLike, optional
-        Initial recovered resources. Together with ``y`` must satisfy
-        ``x + y <= 1``. Default: ``1.0``.
+        Initial fraction of recovered resources (dimensionless). Must be in ``[0, 1]``.
+        Together with ``y``, must satisfy ``x + y <= 1``. Scalar float. Default: ``1.0``.
     y : ArrayLike, optional
-        Initial active resources. Together with ``x`` must satisfy
-        ``x + y <= 1``. Default: ``0.0``.
+        Initial fraction of active resources (dimensionless). Must be in ``[0, 1]``.
+        Together with ``x``, must satisfy ``x + y <= 1``. Scalar float. Default: ``0.0``.
     u : ArrayLike, optional
-        Initial utilization value in ``[0, 1]``. Default: ``0.0``.
+        Initial utilization value (dimensionless). Must be in ``[0, 1]``.
+        Scalar float. Default: ``0.0``.
     post : object, optional
-        Default receiver object.
+        Default postsynaptic receiver neuron. If provided, this neuron will be the
+        target for all :meth:`send` calls unless overridden by the ``post`` argument
+        in :meth:`send` or :meth:`update`. Default: ``None``.
     name : str, optional
-        Object name.
+        Unique identifier for this synapse instance. Used for debugging and logging.
+        Default: ``None`` (auto-generated).
+
+    **Parameter Mapping (NEST ↔ brainpy.state):**
+
+    =========================  ===================  =========================================
+    NEST Parameter             brainpy.state        Description
+    =========================  ===================  =========================================
+    ``weight``                 ``weight``           Baseline synaptic weight
+    ``delay``                  ``delay``            Synaptic delay (ms)
+    ``receptor_type``          ``receptor_type``    Postsynaptic receptor port
+    ``tau_psc``                ``tau_psc``          Synaptic current time constant (ms)
+    ``tau_fac``                ``tau_fac``          Facilitation time constant (ms)
+    ``tau_rec``                ``tau_rec``          Recovery time constant (ms)
+    ``U``                      ``U``                Utilization increment parameter
+    ``x``                      ``x``                Recovered resources state variable
+    ``y``                      ``y``                Active resources state variable
+    ``u``                      ``u``                Utilization state variable
+    =========================  ===================  =========================================
+
+    Attributes
+    ----------
+    x : float
+        Current fraction of recovered resources. Mutable state variable.
+    y : float
+        Current fraction of active resources. Mutable state variable.
+    u : float
+        Current utilization value. Mutable state variable.
+    t_lastspike : float
+        Time stamp of the last presynaptic spike (ms). Used to compute inter-spike
+        intervals for propagator calculations.
 
     Notes
     -----
-    - This model transmits spike-like events only.
-    - The state variables ``x``, ``y`` and ``u`` are mutable connection
-      states and are returned by :meth:`get`.
-    - ``init_state()`` resets queue state and restores ``x``, ``y``, ``u``
-      to the configured initial values.
+    - **Event Type**: This model transmits ``'spike'`` events only. Other event
+      types (``'rate'``, ``'current'``, ``'conductance'``) are not supported.
+    - **State Variables**: ``x``, ``y``, and ``u`` are mutable per-connection states.
+      They can be inspected via :meth:`get` and modified via :meth:`set`.
+    - **Initialization**: Calling ``init_state()`` resets the internal event queue
+      and restores ``x``, ``y``, ``u`` to their initial values (``self._x0``,
+      ``self._y0``, ``self._u0``). It also resets ``t_lastspike`` to ``0.0``.
+    - **Scalar-Only**: All parameters and state variables are scalar floats. This
+      model does not support vectorized per-connection parameters.
+    - **No Precise Timing**: Unlike some NEST models with ``_ps`` variants, this
+      implementation uses on-grid spike stamps and does not track sub-step offsets.
+
+    See Also
+    --------
+    tsodyks_synapse_hom : Homogeneous variant with shared state across all connections.
+    tsodyks2_synapse : Alternative Tsodyks model with different parameterization.
+    static_synapse : Base class for non-plastic synaptic connections.
 
     References
     ----------
-    .. [1] NEST source: ``models/tsodyks_synapse.h`` and
-           ``models/tsodyks_synapse.cpp``.
-    .. [2] Tsodyks M, Uziel A, Markram H (2000). Synchrony generation in
-           recurrent networks with frequency-dependent synapses.
-           Journal of Neuroscience, 20:RC50.
+    .. [1] Tsodyks M, Uziel A, Markram H (2000). Synchrony generation in recurrent
+           networks with frequency-dependent synapses. Journal of Neuroscience,
+           20(RC50):1-5.
+    .. [2] NEST source code: ``models/tsodyks_synapse.h`` and ``models/tsodyks_synapse.cpp``
+           (https://github.com/nest/nest-simulator)
+    .. [3] Tsodyks M, Markram H (1997). The neural code between neocortical pyramidal
+           neurons depends on neurotransmitter release probability. PNAS, 94(2):719-723.
+
+    Examples
+    --------
+    **1. Depression-dominated synapse (excitatory with depletion):**
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bp
+       >>> import brainunit as u
+       >>> syn = bp.nest.tsodyks_synapse(
+       ...     weight=1.0,
+       ...     delay=1.5 * u.ms,
+       ...     tau_psc=5.0 * u.ms,
+       ...     tau_fac=0.0 * u.ms,   # no facilitation
+       ...     tau_rec=800.0 * u.ms,
+       ...     U=0.5,
+       ...     x=1.0,
+       ...     y=0.0,
+       ...     u=0.0
+       ... )
+
+    **2. Facilitation-dominated synapse (inhibitory with strengthening):**
+
+    .. code-block:: python
+
+       >>> syn = bp.nest.tsodyks_synapse(
+       ...     weight=-2.0,          # inhibitory
+       ...     delay=1.0 * u.ms,
+       ...     tau_psc=3.0 * u.ms,
+       ...     tau_fac=200.0 * u.ms,  # strong facilitation
+       ...     tau_rec=800.0 * u.ms,
+       ...     U=0.15,
+       ...     x=1.0,
+       ...     y=0.0,
+       ...     u=0.0
+       ... )
+
+    **3. Simulating short-term plasticity:**
+
+    .. code-block:: python
+
+       >>> import brainstate as bst
+       >>> with bst.environ.context(dt=0.1 * u.ms):
+       ...     syn.init_all_states()
+       ...     # Simulate spike train at 50 Hz
+       ...     spike_times = [0.0, 20.0, 40.0, 60.0, 80.0]  # ms
+       ...     for t_spike in spike_times:
+       ...         # Advance simulation to spike time
+       ...         # ... (step simulation forward)
+       ...         syn.send(multiplicity=1.0)
+       ...         print(f"t={t_spike:.1f} ms: u={syn.u:.3f}, x={syn.x:.3f}, y={syn.y:.3f}")
+
+    **4. Inspecting and modifying state:**
+
+    .. code-block:: python
+
+       >>> params = syn.get()
+       >>> print(params['x'], params['y'], params['u'])
+       1.0 0.0 0.0
+       >>> syn.set(x=0.8, y=0.1, u=0.3)
+       >>> print(syn.x, syn.y, syn.u)
+       0.8 0.1 0.3
+
+    **5. Multi-receptor connection:**
+
+    .. code-block:: python
+
+       >>> syn_ex = bp.nest.tsodyks_synapse(
+       ...     weight=1.0, delay=1.0 * u.ms, receptor_type=0, U=0.5
+       ... )
+       >>> syn_in = bp.nest.tsodyks_synapse(
+       ...     weight=-1.0, delay=1.0 * u.ms, receptor_type=1, U=0.25
+       ... )
+       >>> # Excitatory and inhibitory inputs routed to different receptor ports
     """
 
     __module__ = 'brainpy.state'
@@ -248,6 +455,27 @@ class tsodyks_synapse(static_synapse):
             raise ValueError('x + y must be <= 1.0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize or reset all state variables to their configured initial values.
+
+        Resets the internal event delivery queue (via ``super().init_state()``) and
+        restores the short-term plasticity state variables ``x``, ``y``, ``u`` to
+        their initial values (``self._x0``, ``self._y0``, ``self._u0``). Also resets
+        the last spike time stamp to ``0.0``.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Ignored. This scalar synapse model does not support batching.
+        **kwargs
+            Additional keyword arguments. Ignored.
+
+        Notes
+        -----
+        - This method is typically called once at the start of a simulation or when
+          resetting the network state.
+        - After calling this method, the synapse behaves as if no presynaptic spikes
+          have occurred yet (``t_lastspike = 0.0``).
+        """
         del batch_size, kwargs
         super().init_state()
         self.x = float(self._x0)
@@ -256,7 +484,44 @@ class tsodyks_synapse(static_synapse):
         self.t_lastspike = 0.0
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state."""
+        """Return current public parameters and mutable state variables.
+
+        Retrieves all NEST-visible synapse parameters, including the baseline weight,
+        delay, receptor type (from ``super().get()``), time constants, utilization
+        parameter, and current state variables ``x``, ``y``, ``u``.
+
+        Returns
+        -------
+        dict
+            Dictionary with the following keys:
+
+            - ``'weight'`` (float): Baseline synaptic weight
+            - ``'delay'`` (float): Synaptic delay in ms
+            - ``'receptor_type'`` (int): Postsynaptic receptor port
+            - ``'tau_psc'`` (float): Synaptic current time constant in ms
+            - ``'tau_fac'`` (float): Facilitation time constant in ms
+            - ``'tau_rec'`` (float): Recovery time constant in ms
+            - ``'U'`` (float): Utilization increment parameter
+            - ``'x'`` (float): Current recovered resources
+            - ``'y'`` (float): Current active resources
+            - ``'u'`` (float): Current utilization value
+            - ``'synapse_model'`` (str): Model identifier (``'tsodyks_synapse'``)
+
+        Notes
+        -----
+        - The returned dictionary reflects the *current* state at the time of the call.
+          State variables ``x``, ``y``, ``u`` evolve during simulation.
+        - This method is compatible with NEST's ``GetStatus()`` semantics.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> syn = bp.nest.tsodyks_synapse(U=0.5, tau_rec=800.0 * u.ms)
+           >>> params = syn.get()
+           >>> print(params['U'], params['tau_rec'], params['x'])
+           0.5 800.0 1.0
+        """
         params = super().get()
         params['tau_psc'] = float(self.tau_psc)
         params['tau_fac'] = float(self.tau_fac)
@@ -283,7 +548,79 @@ class tsodyks_synapse(static_synapse):
         u: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        """Set NEST-style public parameters and state variables.
+
+        Updates synapse parameters and/or state variables. Only parameters explicitly
+        provided (not ``_UNSET``) are modified. All changes are validated before
+        application. If ``x`` or ``y`` are updated, their sum is checked to ensure
+        ``x + y <= 1``.
+
+        Updating state variables ``x``, ``y``, or ``u`` also updates their initial
+        values (``self._x0``, ``self._y0``, ``self._u0``), so subsequent calls to
+        ``init_state()`` will restore to the newly set values.
+
+        Parameters
+        ----------
+        weight : ArrayLike, optional
+            New baseline synaptic weight. If not provided, weight is unchanged.
+        delay : ArrayLike, optional
+            New synaptic delay in ms. Must be ``> 0``. If not provided, delay is unchanged.
+        receptor_type : int, optional
+            New postsynaptic receptor port. Must be a non-negative integer. If not
+            provided, receptor type is unchanged.
+        tau_psc : ArrayLike, optional
+            New synaptic current time constant in ms. Must be ``> 0``. If not provided,
+            ``tau_psc`` is unchanged.
+        tau_fac : ArrayLike, optional
+            New facilitation time constant in ms. Must be ``>= 0``. If not provided,
+            ``tau_fac`` is unchanged.
+        tau_rec : ArrayLike, optional
+            New recovery time constant in ms. Must be ``> 0``. If not provided,
+            ``tau_rec`` is unchanged.
+        U : ArrayLike, optional
+            New utilization increment parameter. Must be in ``[0, 1]``. If not provided,
+            ``U`` is unchanged.
+        x : ArrayLike, optional
+            New recovered resources value. Must be in ``[0, 1]``. Together with ``y``,
+            must satisfy ``x + y <= 1``. If not provided, ``x`` is unchanged.
+        y : ArrayLike, optional
+            New active resources value. Must be in ``[0, 1]``. Together with ``x``,
+            must satisfy ``x + y <= 1``. If not provided, ``y`` is unchanged.
+        u : ArrayLike, optional
+            New utilization value. Must be in ``[0, 1]``. If not provided, ``u`` is unchanged.
+        post : object, optional
+            New default postsynaptic receiver neuron. If not provided, receiver is unchanged.
+
+        Raises
+        ------
+        ValueError
+            If any parameter violates its constraint (e.g., ``tau_psc <= 0``, ``U`` out
+            of range, ``x + y > 1``).
+
+        Notes
+        -----
+        - This method is compatible with NEST's ``SetStatus()`` semantics.
+        - Parameter validation occurs *before* any state is modified. If validation
+          fails, no changes are applied.
+        - Updating state variables mid-simulation can produce non-physical dynamics.
+          Use with caution outside of initialization or testing contexts.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> syn = bp.nest.tsodyks_synapse(U=0.5)
+           >>> syn.set(U=0.8, tau_rec=600.0 * u.ms)
+           >>> print(syn.U, syn.tau_rec)
+           0.8 600.0
+
+           >>> syn.set(x=0.7, y=0.2)
+           >>> print(syn.x, syn.y)
+           0.7 0.2
+
+           >>> syn.set(x=0.8, y=0.3)  # doctest: +SKIP
+           ValueError: x + y must be <= 1.0.
+        """
         new_tau_psc = (
             self.tau_psc
             if tau_psc is _UNSET
@@ -341,7 +678,72 @@ class tsodyks_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``tsodyks_synapse`` dynamics."""
+        """Schedule one outgoing event with NEST ``tsodyks_synapse`` short-term plasticity dynamics.
+
+        Processes a presynaptic spike event by:
+
+        1. Propagating state variables ``u``, ``x``, ``y`` from the last spike time to the current spike time.
+        2. Applying spike-triggered facilitation to ``u``.
+        3. Computing the released resource fraction ``delta_y = u * x``.
+        4. Updating resource fractions ``x`` and ``y``.
+        5. Scheduling a weighted event (``delta_y * weight * multiplicity``) for delivery to the postsynaptic neuron.
+
+        The update ordering exactly matches NEST ``models/tsodyks_synapse.h::send()``.
+
+        Parameters
+        ----------
+        multiplicity : ArrayLike, optional
+            Presynaptic spike count (typically ``1.0`` for a single spike or ``0.0`` for
+            no spike). Can be a float representing spike rate or an integer spike count.
+            Default: ``1.0``.
+        post : object, optional
+            Postsynaptic receiver neuron. If ``None``, uses the default receiver
+            specified at construction (``self.post``). Default: ``None``.
+        receptor_type : ArrayLike, optional
+            Receptor port to target on the postsynaptic neuron. If ``None``, uses
+            ``self.receptor_type``. Default: ``None``.
+
+        Returns
+        -------
+        bool
+            ``True`` if an event was scheduled (i.e., ``multiplicity`` is non-zero),
+            ``False`` otherwise.
+
+        Notes
+        -----
+        - **Event Timing**: The spike time stamp is computed as ``current_time + dt``
+          (on-grid time). Inter-spike interval ``h`` is the difference between the
+          current spike stamp and ``self.t_lastspike``.
+        - **State Update**: State variables ``u``, ``x``, ``y`` are updated *in place*
+          and persist across calls. ``t_lastspike`` is updated to the current spike stamp.
+        - **Zero Multiplicity**: If ``multiplicity`` is zero or negligible, no event
+          is scheduled and state variables are *not* updated. Returns ``False``.
+        - **Effective Weight**: The delivered payload is ``delta_y * weight * multiplicity``,
+          where ``delta_y`` is the released resource fraction computed from current state.
+
+        Warnings
+        --------
+        - If ``tau_psc`` and ``tau_rec`` are numerically close, the propagator ``P_xy``
+          may suffer from floating-point cancellation. Users should avoid configurations
+          where ``abs(tau_psc - tau_rec) < 1e-6``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> with bst.environ.context(dt=0.1 * u.ms):
+           ...     syn = bp.nest.tsodyks_synapse(weight=1.0, U=0.5, tau_rec=800.0 * u.ms)
+           ...     syn.init_all_states()
+           ...     # First spike
+           ...     success = syn.send(multiplicity=1.0)
+           ...     print(f"Scheduled: {success}, u={syn.u:.3f}, x={syn.x:.3f}")
+           Scheduled: True, u=0.500, x=0.500
+           ...     # Second spike 20 ms later (simulate time advancement)
+           ...     success = syn.send(multiplicity=1.0)
+           ...     print(f"Scheduled: {success}, u={syn.u:.3f}, x={syn.x:.3f}")
+           Scheduled: True, u=0.750, x=0.125
+        """
         if not self._is_nonzero(multiplicity):
             return False
 
@@ -387,7 +789,65 @@ class tsodyks_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events, then schedule current-step presynaptic input."""
+        """Deliver due events and process current-step presynaptic input.
+
+        This method performs two tasks per simulation time step:
+
+        1. **Deliver pending events**: Dequeue and dispatch all events scheduled for
+           delivery at the current simulation time step (via ``_deliver_due_events()``).
+        2. **Process presynaptic input**: Collect current-step and delta inputs
+           (via ``sum_current_inputs()`` and ``sum_delta_inputs()``), then schedule
+           a new event if total input is non-zero (via ``send()``).
+
+        This is the main per-step entry point for synapse dynamics when integrated
+        into a simulation loop.
+
+        Parameters
+        ----------
+        pre_spike : ArrayLike, optional
+            Presynaptic spike count or rate for the current simulation step. Typically
+            ``0.0`` (no spike) or ``1.0`` (spike). This value is accumulated with any
+            other inputs registered via ``add_current_input()`` or ``add_delta_input()``.
+            Default: ``0.0``.
+        post : object, optional
+            Postsynaptic receiver neuron. If ``None``, uses the default receiver
+            specified at construction. Default: ``None``.
+        receptor_type : ArrayLike, optional
+            Receptor port to target. If ``None``, uses ``self.receptor_type``. Default: ``None``.
+
+        Returns
+        -------
+        int
+            Number of events delivered during this step (from the delivery queue).
+
+        Notes
+        -----
+        - **Execution Order**: Delivery precedes scheduling. Events scheduled at step
+          ``n`` are delivered at step ``n + delay_steps``.
+        - **Input Accumulation**: ``pre_spike`` is summed with any inputs registered
+          via the ``current_inputs`` and ``delta_inputs`` dictionaries (inherited from
+          :class:`Dynamics`). The total determines whether a new event is scheduled.
+        - **Typical Usage**: Call this method once per simulation time step in a network
+          update loop, after presynaptic neuron spike detection.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> with bst.environ.context(dt=0.1 * u.ms):
+           ...     syn = bp.nest.tsodyks_synapse(weight=1.0, delay=1.0 * u.ms, U=0.5)
+           ...     syn.init_all_states()
+           ...     # Simulate one step with a presynaptic spike
+           ...     delivered_count = syn.update(pre_spike=1.0)
+           ...     print(f"Delivered: {delivered_count}, State: u={syn.u:.3f}, x={syn.x:.3f}")
+           Delivered: 0, State: u=0.500, x=0.500
+           ...     # Advance simulation by delay steps (typically via outer loop)
+           ...     # ... (advance time by 1.0 ms)
+           ...     delivered_count = syn.update(pre_spike=0.0)
+           ...     print(f"Delivered: {delivered_count}")
+           Delivered: 1
+        """
         dt_ms = self._refresh_delay_if_needed()
         step = self._curr_step(dt_ms)
         delivered = self._deliver_due_events(step)

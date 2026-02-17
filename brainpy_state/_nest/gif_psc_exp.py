@@ -37,28 +37,35 @@ __all__ = [
 class gif_psc_exp(Neuron):
     r"""Current-based generalized integrate-and-fire neuron (GIF) model.
 
-    Description
-    -----------
+    This is a brainpy.state re-implementation of the NEST simulator's ``gif_psc_exp``
+    model according to Mensi et al. (2012) [1]_ and Pozzorini et al. (2015) [2]_, using
+    NEST-standard parameterization and exact integration.
 
-    ``gif_psc_exp`` is the generalized integrate-and-fire neuron according to
-    Mensi et al. (2012) [1]_ and Pozzorini et al. (2015) [2]_, with exponential
-    shaped postsynaptic currents.
+    The GIF model features both spike-triggered adaptation currents and a dynamic
+    firing threshold for spike-frequency adaptation. It generates spikes stochastically
+    based on a point process with intensity that depends on the distance between the
+    membrane potential and the adaptive threshold.
 
-    This is a brainpy.state re-implementation of the NEST simulator model of the
-    same name, using NEST-standard parameterization and exact integration.
+    **1. Mathematical Model**
 
-    This model features both an adaptation current and a dynamic threshold for
-    spike-frequency adaptation. The membrane potential :math:`V` is described by
-    the differential equation:
+    **1.1 Membrane Dynamics**
+
+    The membrane potential :math:`V` is governed by:
 
     .. math::
 
        C_\mathrm{m} \frac{dV(t)}{dt} = -g_\mathrm{L}(V(t) - E_\mathrm{L})
-           - \eta_1(t) - \eta_2(t) - \ldots - \eta_n(t)
-           + I(t)
+           - \eta_1(t) - \eta_2(t) - \ldots - \eta_n(t) + I(t)
 
-    where each :math:`\eta_i` is a spike-triggered current (stc), and the neuron
-    model can have an arbitrary number of them.
+    where:
+
+    - :math:`C_\mathrm{m}` is the membrane capacitance
+    - :math:`g_\mathrm{L}` is the leak conductance
+    - :math:`E_\mathrm{L}` is the leak reversal potential
+    - :math:`\eta_i(t)` are spike-triggered currents (stc)
+    - :math:`I(t) = I_\mathrm{syn,ex}(t) + I_\mathrm{syn,in}(t) + I_\mathrm{e} + I_\mathrm{stim}(t)`
+
+    **1.2 Synaptic Currents**
 
     Synaptic currents decay exponentially:
 
@@ -66,175 +73,291 @@ class gif_psc_exp(Neuron):
 
        \frac{dI_{\mathrm{syn,ex}}}{dt} = -\frac{I_{\mathrm{syn,ex}}}{\tau_{\mathrm{syn,ex}}},
        \qquad
-       \frac{dI_{\mathrm{syn,in}}}{dt} = -\frac{I_{\mathrm{syn,in}}}{\tau_{\mathrm{syn,in}}}.
+       \frac{dI_{\mathrm{syn,in}}}{dt} = -\frac{I_{\mathrm{syn,in}}}{\tau_{\mathrm{syn,in}}}
 
-    Spike-triggered currents
-    ........................
+    Incoming spike weights (in pA) are routed by sign: positive weights to
+    :math:`I_{\mathrm{syn,ex}}`, negative to :math:`I_{\mathrm{syn,in}}`.
 
-    Dynamic of each :math:`\eta_i` is described by:
+    **1.3 Spike-Triggered Currents (STC)**
 
-    .. math::
-
-       \tau_{\eta_i} \cdot \frac{d\eta_i}{dt} = -\eta_i
-
-    and in case of spike emission, its value is increased by a constant:
+    Each spike-triggered current element :math:`\eta_i` evolves as:
 
     .. math::
 
-       \eta_i = \eta_i + q_{\eta_i} \quad \text{(on spike emission)}
+       \tau_{\eta_i} \frac{d\eta_i}{dt} = -\eta_i
 
-    Spike-frequency adaptation
-    ..........................
+    On spike emission:
 
-    The neuron produces spikes stochastically according to a point process with
-    the firing intensity:
+    .. math::
+
+       \eta_i \leftarrow \eta_i + q_{\eta_i}
+
+    **1.4 Spike-Frequency Adaptation (SFA)**
+
+    The neuron fires stochastically with intensity:
 
     .. math::
 
        \lambda(t) = \lambda_0 \cdot \exp\left(\frac{V(t) - V_T(t)}{\Delta_V}\right)
 
-    where :math:`V_T(t)` is a time-dependent firing threshold:
+    where the dynamic threshold :math:`V_T(t)` is:
 
     .. math::
 
        V_T(t) = V_{T^*} + \gamma_1(t) + \gamma_2(t) + \ldots + \gamma_m(t)
 
-    where :math:`\gamma_i` is a kernel of spike-frequency adaptation (sfa).
-    Dynamic of each :math:`\gamma_i` is described by:
+    Each adaptation element :math:`\gamma_i` evolves as:
 
     .. math::
 
-       \tau_{\gamma_i} \cdot \frac{d\gamma_i}{dt} = -\gamma_i
+       \tau_{\gamma_i} \frac{d\gamma_i}{dt} = -\gamma_i
 
-    and in case of spike emission, its value is increased by a constant:
+    On spike emission:
 
     .. math::
 
-       \gamma_i = \gamma_i + q_{\gamma_i} \quad \text{(on spike emission)}
+       \gamma_i \leftarrow \gamma_i + q_{\gamma_i}
 
-    Stochastic spiking
-    ..................
+    **1.5 Stochastic Spiking**
 
-    The probability of firing within a time step :math:`dt` is computed using
-    the hazard function:
+    The probability of firing within a time step :math:`dt` is:
 
     .. math::
 
        P(\text{spike}) = 1 - \exp(-\lambda(t) \cdot dt)
 
-    A random number is drawn each (non-refractory) time step and compared to
-    this probability to determine whether a spike occurs.
+    A uniformly distributed random number is drawn each (non-refractory) time step
+    and compared to this probability to determine spike emission.
 
-    Refractory mechanism
-    ....................
+    **1.6 Refractory Period**
 
     After a spike, the neuron enters an absolute refractory period of duration
     :math:`t_\mathrm{ref}`. During this period:
 
-    * the refractory counter decrements each step,
-    * :math:`V_\mathrm{m}` is clamped to :math:`V_\mathrm{reset}`,
-    * synaptic currents continue to decay and receive inputs.
+    - The refractory counter decrements each step
+    - :math:`V_\mathrm{m}` is clamped to :math:`V_\mathrm{reset}`
+    - Synaptic currents continue to decay and receive inputs
+    - No spike checks are performed
 
-    Numerical integration and update order
-    ......................................
+    **2. Numerical Integration**
 
-    NEST integrates this model with exact (analytic) propagators for the linear
-    subthreshold dynamics. The discrete-time update order per simulation step is:
+    The model uses exact (analytic) propagators for the linear subthreshold dynamics,
+    matching NEST's integration scheme. The discrete-time update order per simulation
+    step is:
 
-    1. Compute total stc (sum of stc elements) and sfa threshold (V_T_star + sum
-       of sfa elements). Then decay all stc and sfa elements by their respective
-       exponential factors.
-    2. Decay synaptic currents: :math:`I_{\mathrm{syn}} \leftarrow I_{\mathrm{syn}} \cdot P_{11}`.
-    3. Add synaptic weight jumps from spike inputs arriving this step.
-    4. If not refractory: update membrane potential via exact propagator
-       :math:`V \leftarrow P_{30}(I_\mathrm{stim} + I_e - \mathrm{stc})
-       + P_{33} V + P_{31} E_L + I_{\mathrm{syn,ex}} P_{21,\mathrm{ex}}
-       + I_{\mathrm{syn,in}} P_{21,\mathrm{in}}`.
-       Compute firing intensity, draw random number, potentially emit spike
-       (update stc/sfa elements, set refractory counter).
-       If refractory: decrement counter, clamp V to V_reset.
-    5. Store external current input as :math:`I_\mathrm{stim}` for the next step.
+    1. **Adaptation decay**: Compute total stc (sum of :math:`\eta_i`) and sfa threshold
+       (:math:`V_{T^*} + \sum \gamma_i`), then decay all elements by :math:`\exp(-dt/\tau_i)`.
+    2. **Synaptic decay**: :math:`I_{\mathrm{syn}} \leftarrow I_{\mathrm{syn}} \cdot \exp(-dt/\tau_\mathrm{syn})`.
+    3. **Synaptic input**: Add spike weight jumps from spikes arriving this step.
+    4. **Membrane update / spike check**:
 
-    .. note::
+       - If not refractory: update :math:`V` via exact propagator:
 
-       In the NEST implementation, the stc and sfa element jumps occur immediately
-       after spike emission. The GIF toolbox uses a different convention where
-       jumps occur after the refractory period. Conversion:
+         .. math::
 
-       .. math::
+            V \leftarrow P_{30}(I_\mathrm{stim} + I_e - \sum\eta_i) + P_{33} V + P_{31} E_L
+                + I_{\mathrm{syn,ex}} P_{21,\mathrm{ex}} + I_{\mathrm{syn,in}} P_{21,\mathrm{in}}
 
-          q_{\eta,\text{toolbox}} = q_{\eta,\text{NEST}} \cdot
-              (1 - \exp(-t_\mathrm{ref} / \tau_\eta))
+         Compute :math:`\lambda(t)`, draw random number, potentially emit spike (increment
+         stc/sfa elements by :math:`q_i`, set refractory counter).
 
-    .. note::
+       - If refractory: decrement counter, clamp :math:`V` to :math:`V_\mathrm{reset}`.
 
-       If ``tau_m`` is very close to ``tau_syn_ex`` or ``tau_syn_in``, the model
-       will numerically behave as if ``tau_m`` is equal to ``tau_syn_ex`` or
-       ``tau_syn_in``, respectively, to avoid numerical instabilities.
+    5. **Buffer external input**: Store :math:`I_\mathrm{stim}` for the next step
+       (NEST ring buffer semantics).
 
-    .. note::
+    **3. Propagator Coefficients**
 
-       Because spiking is stochastic (random number drawn each step), exact
-       spike-time reproducibility requires matching the random number generator
-       state. For deterministic testing, set ``rng_key`` explicitly.
+    The exact integration uses the following propagators (see NEST ``gif_psc_exp.cpp``):
+
+    - :math:`\tau_\mathrm{m} = C_\mathrm{m} / g_\mathrm{L}` (membrane time constant)
+    - :math:`P_{33} = \exp(-dt/\tau_\mathrm{m})` (membrane potential decay)
+    - :math:`P_{31} = 1 - \exp(-dt/\tau_\mathrm{m})` (:math:`E_L` contribution)
+    - :math:`P_{30} = \tau_\mathrm{m}/C_\mathrm{m} \cdot (1 - \exp(-dt/\tau_\mathrm{m}))` (current contribution)
+    - :math:`P_{21}` (synaptic current → membrane): computed via ``_propagator_exp()``
+      with singularity handling when :math:`\tau_\mathrm{syn} \approx \tau_\mathrm{m}`.
 
     Parameters
     ----------
+    in_size : int, tuple of int
+        Shape of the neuron population. Can be an integer for 1D or a tuple for
+        multi-dimensional populations.
+    g_L : ArrayLike, optional
+        Leak conductance :math:`g_\mathrm{L}`. Scalar or array matching ``in_size``.
+        Must be strictly positive. Default: 4.0 nS.
+    E_L : ArrayLike, optional
+        Leak reversal potential :math:`E_\mathrm{L}`. Scalar or array matching
+        ``in_size``. Default: -70.0 mV.
+    C_m : ArrayLike, optional
+        Membrane capacitance :math:`C_\mathrm{m}`. Scalar or array matching ``in_size``.
+        Must be strictly positive. Default: 80.0 pF.
+    V_reset : ArrayLike, optional
+        Reset potential :math:`V_\mathrm{reset}` after spike. Scalar or array matching
+        ``in_size``. Default: -55.0 mV.
+    Delta_V : ArrayLike, optional
+        Stochasticity level :math:`\Delta_V` (noise intensity). Scalar or array matching
+        ``in_size``. Must be strictly positive. Default: 0.5 mV.
+    V_T_star : ArrayLike, optional
+        Base firing threshold :math:`V_{T^*}` (before adaptation). Scalar or array
+        matching ``in_size``. Default: -35.0 mV.
+    lambda_0 : float, optional
+        Stochastic intensity at threshold :math:`\lambda_0` in 1/s. Must be non-negative.
+        Default: 1.0 /s (converted internally to 1/ms).
+    t_ref : ArrayLike, optional
+        Absolute refractory period :math:`t_\mathrm{ref}`. Scalar or array matching
+        ``in_size``. Must be non-negative. Default: 4.0 ms.
+    tau_syn_ex : ArrayLike, optional
+        Excitatory synaptic time constant :math:`\tau_{\mathrm{syn,ex}}`. Scalar or
+        array matching ``in_size``. Must be strictly positive. Default: 2.0 ms.
+    tau_syn_in : ArrayLike, optional
+        Inhibitory synaptic time constant :math:`\tau_{\mathrm{syn,in}}`. Scalar or
+        array matching ``in_size``. Must be strictly positive. Default: 2.0 ms.
+    I_e : ArrayLike, optional
+        Constant external current :math:`I_\mathrm{e}`. Scalar or array matching
+        ``in_size``. Default: 0.0 pA.
+    tau_sfa : Sequence[float], optional
+        SFA time constants :math:`\tau_{\gamma_i}` in ms. Each element must be strictly
+        positive. Length must match ``q_sfa``. Default: () (no SFA).
+    q_sfa : Sequence[float], optional
+        SFA jump values :math:`q_{\gamma_i}` in mV (added to :math:`\gamma_i` on spike).
+        Length must match ``tau_sfa``. Default: () (no SFA).
+    tau_stc : Sequence[float], optional
+        STC time constants :math:`\tau_{\eta_i}` in ms. Each element must be strictly
+        positive. Length must match ``q_stc``. Default: () (no STC).
+    q_stc : Sequence[float], optional
+        STC jump values :math:`q_{\eta_i}` in nA (added to :math:`\eta_i` on spike).
+        Length must match ``tau_stc``. Default: () (no STC).
+    rng_key : jax.Array, optional
+        JAX PRNG key for stochastic spiking. If None, uses a default key (seed 0).
+        For reproducible results, provide an explicit key. Default: None.
+    V_initializer : Callable, optional
+        Initializer for membrane potential. Must accept shape and batch_size arguments.
+        Default: ``braintools.init.Constant(-70.0 * u.mV)``.
+    spk_fun : Callable, optional
+        Surrogate gradient function for spike generation. Used for gradient-based
+        learning. Default: ``braintools.surrogate.ReluGrad()``.
+    spk_reset : str, optional
+        Spike reset mode. ``'hard'`` (stop gradient) matches NEST behavior; ``'soft'``
+        subtracts threshold. Default: ``'hard'``.
+    name : str, optional
+        Name of the neuron group. Default: None (auto-generated).
+
+    **Parameter Mapping**
 
     ==================== =================== =================================== =====================================================
     **Parameter**        **Default**         **Math equivalent**                 **Description**
     ==================== =================== =================================== =====================================================
-    ``in_size``          (required)                                              Population shape
-    ``g_L``              4.0 nS              :math:`g_\mathrm{L}`               Leak conductance
-    ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`               Leak reversal potential
-    ``C_m``              80.0 pF             :math:`C_\mathrm{m}`               Membrane capacitance
-    ``V_reset``          -55.0 mV            :math:`V_\mathrm{reset}`           Reset potential
-    ``Delta_V``          0.5 mV              :math:`\Delta_V`                   Stochasticity level
-    ``V_T_star``         -35.0 mV            :math:`V_{T^*}`                    Base firing threshold
-    ``lambda_0``         1.0 /s              :math:`\lambda_0`                  Stochastic intensity at threshold
-    ``t_ref``            4.0 ms              :math:`t_\mathrm{ref}`             Absolute refractory period
-    ``tau_syn_ex``       2.0 ms              :math:`\tau_{\mathrm{syn,ex}}`     Excitatory synaptic time constant
-    ``tau_syn_in``       2.0 ms              :math:`\tau_{\mathrm{syn,in}}`     Inhibitory synaptic time constant
-    ``I_e``              0.0 pA              :math:`I_\mathrm{e}`               Constant external current
-    ``tau_sfa``          () ms               :math:`\tau_{\gamma_i}`            SFA time constants (tuple/list)
-    ``q_sfa``            () mV               :math:`q_{\gamma_i}`              SFA jump values (tuple/list)
-    ``tau_stc``          () ms               :math:`\tau_{\eta_i}`              STC time constants (tuple/list)
-    ``q_stc``            () nA               :math:`q_{\eta_i}`                STC jump values (tuple/list)
-    ``rng_key``          None                                                    JAX PRNG key for stochastic spiking
-    ``V_initializer``    Constant(-70 mV)                                        Initializer for membrane potential
-    ``spk_fun``          ReluGrad()                                              Surrogate spike function
-    ``spk_reset``        ``'hard'``                                              Reset mode; hard reset matches NEST
+    ``in_size``          (required)          —                                   Population shape
+    ``g_L``              4.0 nS              :math:`g_\mathrm{L}`                Leak conductance
+    ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`                Leak reversal potential
+    ``C_m``              80.0 pF             :math:`C_\mathrm{m}`                Membrane capacitance
+    ``V_reset``          -55.0 mV            :math:`V_\mathrm{reset}`            Reset potential
+    ``Delta_V``          0.5 mV              :math:`\Delta_V`                    Stochasticity level
+    ``V_T_star``         -35.0 mV            :math:`V_{T^*}`                     Base firing threshold
+    ``lambda_0``         1.0 /s              :math:`\lambda_0`                   Stochastic intensity at threshold
+    ``t_ref``            4.0 ms              :math:`t_\mathrm{ref}`              Absolute refractory period
+    ``tau_syn_ex``       2.0 ms              :math:`\tau_{\mathrm{syn,ex}}`      Excitatory synaptic time constant
+    ``tau_syn_in``       2.0 ms              :math:`\tau_{\mathrm{syn,in}}`      Inhibitory synaptic time constant
+    ``I_e``              0.0 pA              :math:`I_\mathrm{e}`                Constant external current
+    ``tau_sfa``          () ms               :math:`\tau_{\gamma_i}`             SFA time constants (tuple/list)
+    ``q_sfa``            () mV               :math:`q_{\gamma_i}`                SFA jump values (tuple/list)
+    ``tau_stc``          () ms               :math:`\tau_{\eta_i}`               STC time constants (tuple/list)
+    ``q_stc``            () nA               :math:`q_{\eta_i}`                  STC jump values (tuple/list)
+    ``rng_key``          None                —                                   JAX PRNG key for stochastic spiking
+    ``V_initializer``    Constant(-70 mV)    —                                   Initializer for membrane potential
+    ``spk_fun``          ReluGrad()          —                                   Surrogate spike function
+    ``spk_reset``        ``'hard'``          —                                   Reset mode; hard reset matches NEST
     ==================== =================== =================================== =====================================================
 
-    State Variables
-    ---------------
+    Raises
+    ------
+    ValueError
+        - If ``C_m <= 0`` (capacitance must be strictly positive).
+        - If ``g_L <= 0`` (conductance must be strictly positive).
+        - If ``Delta_V <= 0`` (stochasticity level must be strictly positive).
+        - If ``t_ref < 0`` (refractory time cannot be negative).
+        - If ``lambda_0 < 0`` (intensity cannot be negative).
+        - If ``tau_syn_ex <= 0`` or ``tau_syn_in <= 0`` (synaptic time constants must
+          be strictly positive).
+        - If lengths of ``tau_sfa`` and ``q_sfa`` do not match.
+        - If lengths of ``tau_stc`` and ``q_stc`` do not match.
+        - If any element of ``tau_sfa`` or ``tau_stc`` is non-positive.
 
-    ========================== ===========================================
-    **State variable**         **Description**
-    ========================== ===========================================
-    ``V``                      Membrane potential :math:`V_\mathrm{m}`
-    ``I_syn_ex``               Excitatory synaptic current
-    ``I_syn_in``               Inhibitory synaptic current
-    ``stc``                    Total spike-triggered current
-    ``sfa``                    Adaptive threshold :math:`V_T(t)`
-    ``stc_elems``              Individual stc adaptation elements
-    ``sfa_elems``              Individual sfa adaptation elements
-    ``refractory_step_count``  Remaining refractory grid steps
-    ``I_stim``                 Buffered current applied in next step
-    ``last_spike_time``        Last spike time
-    ========================== ===========================================
+    Warnings
+    --------
+    - **Stochastic spiking**: Because spiking is stochastic (random number drawn each
+      step), exact spike-time reproducibility requires matching the random number
+      generator state. For deterministic testing, set ``rng_key`` explicitly.
+    - **GIF toolbox compatibility**: In the NEST implementation, stc and sfa element
+      jumps occur immediately after spike emission. The GIF toolbox uses a different
+      convention where jumps occur after the refractory period. Conversion:
+
+      .. math::
+
+         q_{\eta,\text{toolbox}} = q_{\eta,\text{NEST}} \cdot
+             (1 - \exp(-t_\mathrm{ref} / \tau_\eta))
+
+    - **Numerical stability**: If ``tau_m`` is very close to ``tau_syn_ex`` or
+      ``tau_syn_in``, the model numerically behaves as if ``tau_m`` equals the
+      synaptic time constant to avoid singularities in the propagator computation.
 
     Notes
     -----
-
-    - Defaults follow NEST C++ source for ``gif_psc_exp``.
+    - Defaults follow NEST C++ source for ``gif_psc_exp`` (``models/gif_psc_exp.cpp``).
     - ``lambda_0`` is specified in 1/s (as in NEST's Python interface) and is
       internally converted to 1/ms for computation.
-    - Synaptic spike weights are interpreted in current units (pA), with
-      positive/negative sign selecting excitatory/inhibitory channel.
+    - Synaptic spike weights are interpreted in current units (pA), with positive/
+      negative sign selecting excitatory/inhibitory channel.
     - The subthreshold dynamics use exact (analytic) integration via propagator
-      coefficients, matching NEST's integration scheme. This is different from
-      ``gif_cond_exp`` which uses RKF45 adaptive integration.
+      coefficients, matching NEST's integration scheme. This differs from
+      ``gif_cond_exp``, which uses RKF45 adaptive integration.
+    - State variables (``V``, ``I_syn_ex``, ``I_syn_in``, etc.) are accessible as
+      attributes after calling ``init_state()`` or ``reset_state()``.
+
+    Examples
+    --------
+    Create a single GIF neuron with default parameters:
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bst
+        >>> import brainunit as u
+        >>> import brainstate as bs
+        >>> bs.environ.set(dt=0.1 * u.ms)
+        >>> neuron = bst.gif_psc_exp(in_size=1)
+        >>> neuron.init_state()
+        >>> spike = neuron.update(x=100 * u.pA)
+
+    Create a population with spike-triggered current adaptation:
+
+    .. code-block:: python
+
+        >>> neuron = bst.gif_psc_exp(
+        ...     in_size=100,
+        ...     tau_stc=[5.0, 50.0],  # two stc elements
+        ...     q_stc=[10.0, 50.0],   # jump values in nA
+        ... )
+        >>> neuron.init_state()
+
+    Create a neuron with spike-frequency adaptation (dynamic threshold):
+
+    .. code-block:: python
+
+        >>> neuron = bst.gif_psc_exp(
+        ...     in_size=1,
+        ...     tau_sfa=[10.0, 100.0],  # two sfa elements
+        ...     q_sfa=[5.0, 10.0],      # jump values in mV
+        ... )
+        >>> neuron.init_state()
+
+    Use a custom RNG key for reproducible stochastic spiking:
+
+    .. code-block:: python
+
+        >>> import jax
+        >>> key = jax.random.PRNGKey(42)
+        >>> neuron = bst.gif_psc_exp(in_size=1, rng_key=key)
+        >>> neuron.init_state()
 
     References
     ----------
@@ -253,7 +376,9 @@ class gif_psc_exp(Neuron):
 
     See Also
     --------
-    gif_cond_exp, iaf_psc_exp
+    gif_cond_exp : Conductance-based GIF model with adaptive integration.
+    iaf_psc_exp : Simple integrate-and-fire neuron with exponential synapses.
+    gif_psc_exp_multisynapse : GIF model with multiple receptor ports.
     """
     __module__ = 'brainpy.state'
 
@@ -338,6 +463,20 @@ class gif_psc_exp(Neuron):
 
         This matches NEST's spike routing where each spike event is individually
         directed to the excitatory or inhibitory buffer based on weight sign.
+
+        Returns
+        -------
+        w_ex : ArrayLike
+            Total excitatory synaptic weight jumps (pA) for this time step. Array
+            matching neuron population shape.
+        w_in : ArrayLike
+            Total inhibitory synaptic weight jumps (pA, as negative values) for this
+            time step. Array matching neuron population shape.
+
+        Notes
+        -----
+        Consumes callable delta inputs from ``self.delta_inputs`` dict after evaluation.
+        Non-callable entries remain until next call.
         """
         w_ex = u.math.zeros_like(self.I_syn_ex.value)
         w_in = u.math.zeros_like(self.I_syn_in.value)
@@ -378,6 +517,31 @@ class gif_psc_exp(Neuron):
                 raise ValueError('All STC time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize all state variables.
+
+        Creates and initializes:
+        - Membrane potential ``V`` (via ``V_initializer``)
+        - Synaptic currents ``I_syn_ex``, ``I_syn_in`` (zero)
+        - Refractory counter ``refractory_step_count`` (zero)
+        - Buffered stimulus current ``I_stim`` (zero)
+        - Last spike time ``last_spike_time`` (-1e7 ms, i.e., far past)
+        - Adaptation elements ``_stc_elems``, ``_sfa_elems`` (zero arrays)
+        - RNG state ``_rng_state`` (from ``rng_key`` or default)
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size. If None, no batch dimension is added. If provided,
+            state arrays have shape ``(batch_size, *in_size)``. Default: None.
+        **kwargs
+            Additional keyword arguments (ignored).
+
+        Notes
+        -----
+        Must be called before ``update()`` or ``reset_state()``. State variables are
+        stored as ``brainstate.HiddenState`` or ``brainstate.ShortTermState`` and are
+        accessible as instance attributes.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
 
@@ -410,6 +574,24 @@ class gif_psc_exp(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        """Reset all state variables to initial values.
+
+        Resets all state variables to the same initial values as ``init_state()``,
+        but preserves the state objects (only updates their ``.value`` attributes).
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size. If None, no batch dimension is added. If provided,
+            state arrays have shape ``(batch_size, *in_size)``. Default: None.
+        **kwargs
+            Additional keyword arguments (ignored).
+
+        Notes
+        -----
+        Use this to reset the neuron to initial conditions without recreating state
+        objects. Useful for running multiple trials or resetting after a simulation.
+        """
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         zeros = u.math.zeros_like(u.math.asarray(self.V.value / u.mV))
         self.I_syn_ex.value = zeros * u.pA
@@ -437,6 +619,30 @@ class gif_psc_exp(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def get_spike(self, V: ArrayLike = None):
+        """Generate surrogate spike output for gradient-based learning.
+
+        Applies the surrogate gradient function to a scaled membrane potential to
+        produce a differentiable spike signal. This is used for gradient-based
+        learning, not for the actual stochastic spike generation (which happens in
+        ``update()``).
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential (mV). If None, uses ``self.V.value``. Default: None.
+
+        Returns
+        -------
+        spike : array
+            Differentiable spike output (float). Shape matches ``V``. Values are
+            in [0, 1] or similar range depending on ``spk_fun``.
+
+        Notes
+        -----
+        The scaling used is ``(V - V_reset) / Delta_V`` before applying ``spk_fun``.
+        This function is typically used internally by the framework for gradient
+        computation, not called directly by users.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_reset) / (self.Delta_V)
         return self.spk_fun(v_scaled)
@@ -449,23 +655,50 @@ class gif_psc_exp(Neuron):
     def _propagator_exp(tau_syn: np.ndarray, tau_m: np.ndarray, c_m: np.ndarray, h_ms: float):
         """Compute the propagator coefficient P21 (I_syn -> V_m) for exact integration.
 
-        This matches NEST's IAFPropagatorExp::evaluate() with singularity handling.
+        This matches NEST's ``IAFPropagatorExp::evaluate()`` with singularity handling.
+        The propagator describes how a synaptic current at step :math:`n` contributes
+        to the membrane potential at step :math:`n+1` under exact exponential integration.
+
+        When :math:`\tau_\mathrm{syn} \approx \tau_\mathrm{m}`, the formula develops
+        a singularity. The implementation detects this numerically and falls back to
+        the limit form.
 
         Parameters
         ----------
         tau_syn : float or ndarray
-            Synaptic time constant in ms.
+            Synaptic time constant in ms. Must be strictly positive. Scalar or array.
         tau_m : float or ndarray
-            Membrane time constant in ms.
+            Membrane time constant in ms. Must be strictly positive. Scalar or array.
         c_m : float or ndarray
-            Membrane capacitance in pF.
+            Membrane capacitance in pF. Must be strictly positive. Scalar or array.
         h_ms : float
-            Time step in ms.
+            Time step in ms. Must be strictly positive.
 
         Returns
         -------
         P21 : float or ndarray
-            Propagator coefficient.
+            Propagator coefficient (unitless, but effectively in mV/pA when applied).
+            Shape matches broadcasted shape of inputs. Falls back to singularity-safe
+            limit when :math:`\tau_\mathrm{syn} \approx \tau_\mathrm{m}`.
+
+        Notes
+        -----
+        The regular formula is:
+
+        .. math::
+
+           P_{21} = \frac{\tau_\mathrm{syn} \tau_\mathrm{m}}{C_\mathrm{m}(\tau_\mathrm{m} - \tau_\mathrm{syn})}
+               \exp(-h/\tau_\mathrm{syn})
+               \left[\exp\left(h \frac{\tau_\mathrm{m} - \tau_\mathrm{syn}}{\tau_\mathrm{syn} \tau_\mathrm{m}}\right) - 1\right]
+
+        The singular limit (:math:`\tau_\mathrm{syn} \to \tau_\mathrm{m}`) is:
+
+        .. math::
+
+           P_{21} = \frac{h}{C_\mathrm{m}} \exp(-h/\tau_\mathrm{m})
+
+        Singularity detection checks for non-finite results, subnormal floats, or
+        non-positive values.
         """
         with np.errstate(divide='ignore', invalid='ignore', over='ignore', under='ignore'):
             beta = tau_syn * tau_m / (tau_m - tau_syn)
@@ -483,15 +716,48 @@ class gif_psc_exp(Neuron):
     def update(self, x=0.0 * u.pA):
         """Update neuron state for one simulation step.
 
+        Performs a complete simulation step following NEST's ``gif_psc_exp`` update
+        order: decay adaptation elements, decay and update synaptic currents, update
+        membrane potential via exact propagator (if not refractory), perform stochastic
+        spike check, and buffer external input for the next step.
+
+        The update order matches NEST's implementation:
+
+        1. Decay stc/sfa elements, compute totals
+        2. Decay synaptic currents exponentially
+        3. Add spike weight jumps from incoming spikes
+        4. If not refractory: update membrane potential via exact propagator, perform
+           stochastic spike check (draw random number, compare to firing probability),
+           potentially emit spike (increment adaptation elements, set refractory counter).
+           If refractory: decrement counter, clamp V to V_reset.
+        5. Buffer external current for next step (NEST ring buffer semantics)
+
         Parameters
         ----------
-        x : Quantity, optional
-            External current input (pA). Default is 0.
+        x : ArrayLike, optional
+            External current input (pA). Scalar or array matching population shape.
+            This input is *buffered* and applied in the *next* time step, matching
+            NEST's ring buffer semantics. Default: 0.0 pA.
 
         Returns
         -------
-        spike : array
-            Spike output (float, via surrogate gradient function).
+        spike : jax.Array
+            Binary spike output (0 or 1) as float32 array. Shape matches neuron
+            population (batch_size, *in_size) if batched, or (*in_size) otherwise.
+            Spikes are generated stochastically based on firing intensity :math:`\lambda(t)`.
+
+        Notes
+        -----
+        - The returned spike array is binary (0 or 1) from the stochastic spike check,
+          not the differentiable surrogate output from ``get_spike()``.
+        - Random number generation advances the internal RNG state each call. For
+          reproducible results, set ``rng_key`` explicitly at construction.
+        - Synaptic spike inputs are summed from ``self.delta_inputs`` (registered by
+          projections) and routed by sign: positive weights → excitatory channel,
+          negative weights → inhibitory channel.
+        - Current inputs (including ``x``) are summed from ``self.current_inputs`` and
+          buffered as ``I_stim`` for application in the *next* step.
+        - State variables (``V``, ``I_syn_ex``, ``I_syn_in``, etc.) are updated in-place.
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

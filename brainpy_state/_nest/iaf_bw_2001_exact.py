@@ -35,149 +35,264 @@ __all__ = [
 
 
 class iaf_bw_2001_exact(Neuron):
-    r"""NEST-compatible ``iaf_bw_2001_exact`` neuron model.
+    r"""NEST-compatible conductance-based LIF neuron with exact per-synapse NMDA dynamics.
 
-    Short description
-    -----------------
-
-    Conductance-based leaky integrate-and-fire neuron with AMPA, GABA and
-    exact per-synapse NMDA dynamics, equivalent to NEST
-    ``models/iaf_bw_2001_exact.{h,cpp}``.
-
-    Description
-    -----------
-
-    ``iaf_bw_2001_exact`` implements the Brunel-Wang style NMDA kinetics
-    without the presynaptic-jump approximation used by :class:`iaf_bw_2001`.
-    For each NMDA connection, the model stores explicit NMDA rise/decay states.
-
-    The model follows NEST update ordering:
-
-    1. Integrate ODE state on :math:`(t, t+dt]` with adaptive RKF45 and
-       persistent internal step size.
-    2. Add AMPA/GABA spike jumps to ``s_AMPA/s_GABA`` and NMDA jumps to each
-       NMDA rise variable ``x_j``.
-    3. Apply refractory countdown or threshold/reset/spike emission.
-    4. Store external current in one-step delayed buffer ``I_stim``.
-
-    Neuron and synaptic dynamics
-    ............................
-
-    Let :math:`j` index NMDA synapses. The continuous-time dynamics are
-
-    .. math::
-
-       C_m \frac{dV_m}{dt} = -g_L(V_m - E_L) - I_{syn} + I_{stim},
-
-    .. math::
-
-       I_{syn} = I_{AMPA} + I_{GABA} + I_{NMDA},
-
-    .. math::
-
-       I_{AMPA} = (V_m - E_{ex}) s_{AMPA},
-       \quad
-       I_{GABA} = (V_m - E_{in}) s_{GABA},
-
-    .. math::
-
-       I_{NMDA} = \frac{(V_m - E_{ex})}
-       {1 + [Mg^{2+}]\exp(-0.062V_m)/3.57}
-       \sum_j w_j s_j,
-
-    .. math::
-
-       \frac{ds_{AMPA}}{dt} = -\frac{s_{AMPA}}{\tau_{AMPA}},
-       \qquad
-       \frac{ds_{GABA}}{dt} = -\frac{s_{GABA}}{\tau_{GABA}},
-
-    .. math::
-
-       \frac{dx_j}{dt} = -\frac{x_j}{\tau_{NMDA,rise}},
-       \qquad
-       \frac{ds_j}{dt} =
-       -\frac{s_j}{\tau_{NMDA,decay}} + \alpha x_j (1-s_j).
-
-    Here :math:`w_j` is the connection weight associated with NMDA port
-    :math:`j`.
-
-    NMDA event and port semantics
-    .............................
-
-    NEST gives every NMDA connection a unique receptor port at connect time and
-    forbids adding new NMDA connections after the first simulation call.
-    This implementation mirrors that behavior:
-
-    - Each NMDA event uses a ``port`` identifier (hashable value).
-    - The first NMDA event seen for a new ``port`` registers that port with a
-      fixed weight.
-    - The same ``port`` must always use the same weight.
-    - New NMDA ports are allowed only before the first :meth:`update` call.
-
-    Accepted ``spike_events`` formats:
-
-    - ``(receptor, weight)``
-    - ``(receptor, weight, third)``
-      where ``third`` is multiplicity for AMPA/GABA and ``port`` for NMDA
-    - ``(receptor, weight, port, multiplicity)`` for NMDA
-    - ``dict`` with keys:
-      ``receptor_type``/``receptor``, ``weight``, ``multiplicity``, and
-      optional ``port``/``rport``/``synapse_id``.
-
-    AMPA and GABA increments are ``weight * multiplicity``.
-    NMDA increments are multiplicity-only jumps of ``x_j`` with
-    fixed per-port weights.
+    This model implements the Brunel-Wang (2001) neuron with exact NMDA kinetics, maintaining
+    separate rise and decay variables for each NMDA synapse without presynaptic-jump approximation.
+    Each NMDA connection is assigned a unique port with a fixed weight, enforcing NEST's constraint
+    that NMDA connections cannot be added after the first simulation step.
 
     Parameters
     ----------
+    in_size : int, tuple of int, Sequence of int
+        Population shape. Defines the number and arrangement of neurons.
+    E_L : ArrayLike, optional
+        Leak reversal potential. Default: -70 mV.
+        Determines the resting potential in the absence of input.
+    E_ex : ArrayLike, optional
+        Excitatory reversal potential. Default: 0 mV.
+        Reversal potential for AMPA and NMDA receptors.
+    E_in : ArrayLike, optional
+        Inhibitory reversal potential. Default: -70 mV.
+        Reversal potential for GABA receptors.
+    V_th : ArrayLike, optional
+        Spike threshold potential. Default: -55 mV.
+        Membrane potential at which a spike is emitted.
+    V_reset : ArrayLike, optional
+        Reset potential. Default: -60 mV.
+        Membrane potential immediately after spike emission. Must be < V_th.
+    C_m : ArrayLike, optional
+        Membrane capacitance. Default: 500 pF.
+        Must be strictly positive.
+    g_L : ArrayLike, optional
+        Leak conductance. Default: 25 nS.
+        Conductance through passive leak channels.
+    t_ref : ArrayLike, optional
+        Absolute refractory period duration. Default: 2 ms.
+        Time after spike during which membrane is clamped to V_reset.
+    tau_AMPA : ArrayLike, optional
+        AMPA decay time constant. Default: 2 ms.
+        Governs exponential decay of AMPA conductance. Must be > 0.
+    tau_GABA : ArrayLike, optional
+        GABA decay time constant. Default: 5 ms.
+        Governs exponential decay of GABA conductance. Must be > 0.
+    tau_rise_NMDA : ArrayLike, optional
+        NMDA rise time constant. Default: 2 ms.
+        Time constant for NMDA activation variable x_j. Must be > 0.
+    tau_decay_NMDA : ArrayLike, optional
+        NMDA decay time constant. Default: 100 ms.
+        Time constant for NMDA gating variable s_j. Must be > 0.
+    alpha : ArrayLike, optional
+        NMDA rise coupling strength. Default: 0.5 / ms.
+        Scales the coupling between rise (x_j) and gating (s_j) variables. Must be > 0.
+    conc_Mg2 : ArrayLike, optional
+        Extracellular magnesium concentration. Default: 1 mM.
+        Controls voltage-dependent NMDA blockade. Must be > 0.
+    gsl_error_tol : ArrayLike, optional
+        RKF45 local error tolerance. Default: 1e-3.
+        Controls adaptive step size in Runge-Kutta-Fehlberg integration. Must be > 0.
+        Smaller values improve accuracy at the cost of more iterations.
+    V_initializer : Callable, optional
+        Membrane potential initializer. Default: Constant(-70 mV).
+        Function that generates initial V_m values.
+    s_AMPA_initializer : Callable, optional
+        AMPA conductance state initializer. Default: Constant(0 nS).
+        Function that generates initial s_AMPA values.
+    s_GABA_initializer : Callable, optional
+        GABA conductance state initializer. Default: Constant(0 nS).
+        Function that generates initial s_GABA values.
+    spk_fun : Callable, optional
+        Surrogate gradient function for spike generation. Default: ReluGrad().
+        Maps scaled voltage to differentiable spike output.
+    spk_reset : str, optional
+        Spike reset mode. Default: 'hard'.
+        - 'hard': Stop gradient through reset (matches NEST)
+        - 'soft': Gradient flows through reset (V -= V_th)
+    ref_var : bool, optional
+        If True, expose boolean refractory state variable. Default: False.
+        Adds a `refractory` attribute for monitoring refractory state.
+    name : str, optional
+        Module name. Default: None (auto-generated).
 
-    ==================== ================== ===========================================================
-    **Parameter**        **Default**        **Description**
-    ==================== ================== ===========================================================
-    ``in_size``          (required)         Population shape
-    ``E_L``              -70 mV             Leak reversal potential
-    ``E_ex``             0 mV               Excitatory reversal potential
-    ``E_in``             -70 mV             Inhibitory reversal potential
-    ``V_th``             -55 mV             Spike threshold
-    ``V_reset``          -60 mV             Reset potential
-    ``C_m``              500 pF             Membrane capacitance
-    ``g_L``              25 nS              Leak conductance
-    ``t_ref``            2 ms               Absolute refractory duration
-    ``tau_AMPA``         2 ms               AMPA decay time constant
-    ``tau_GABA``         5 ms               GABA decay time constant
-    ``tau_rise_NMDA``    2 ms               NMDA rise time constant
-    ``tau_decay_NMDA``   100 ms             NMDA decay time constant
-    ``alpha``            0.5 / ms           NMDA rise coupling strength
-    ``conc_Mg2``         1 mM               Extracellular magnesium concentration
-    ``gsl_error_tol``    1e-3               RKF45 local error tolerance
-    ``V_initializer``    Constant(-70 mV)   Membrane initializer
-    ``s_AMPA_initializer`` Constant(0 nS)   AMPA state initializer
-    ``s_GABA_initializer`` Constant(0 nS)   GABA state initializer
-    ``spk_fun``          ReluGrad()         Surrogate spike function
-    ``spk_reset``        ``'hard'``         Reset mode; hard reset matches NEST behavior
-    ``ref_var``          ``False``          If True, expose boolean refractory indicator
-    ==================== ================== ===========================================================
+    **Parameter Mapping (NEST ↔ brainpy.state)**
 
-    Recordables
-    -----------
+    ============================ ======================== ============================================
+    **NEST Parameter**           **brainpy.state**        **Notes**
+    ============================ ======================== ============================================
+    ``E_L``                      ``E_L``                  Leak reversal potential (mV)
+    ``E_ex``                     ``E_ex``                 Excitatory reversal (mV)
+    ``E_in``                     ``E_in``                 Inhibitory reversal (mV)
+    ``V_th``                     ``V_th``                 Spike threshold (mV)
+    ``V_reset``                  ``V_reset``              Reset potential (mV)
+    ``C_m``                      ``C_m``                  Membrane capacitance (pF)
+    ``g_L``                      ``g_L``                  Leak conductance (nS)
+    ``t_ref``                    ``t_ref``                Refractory period (ms)
+    ``tau_AMPA``                 ``tau_AMPA``             AMPA decay time (ms)
+    ``tau_GABA``                 ``tau_GABA``             GABA decay time (ms)
+    ``tau_rise_NMDA``            ``tau_rise_NMDA``        NMDA rise time (ms)
+    ``tau_decay_NMDA``           ``tau_decay_NMDA``       NMDA decay time (ms)
+    ``alpha``                    ``alpha``                NMDA coupling (1/ms)
+    ``conc_Mg2``                 ``conc_Mg2``             Mg²⁺ concentration (mM)
+    ``gsl_error_tol``            ``gsl_error_tol``        RKF45 tolerance (dimensionless)
+    ============================ ======================== ============================================
 
-    - ``V_m``
-    - ``s_AMPA``
-    - ``s_GABA``
-    - ``s_NMDA`` (weighted NMDA sum, :math:`\sum_j w_j s_j`)
-    - ``I_NMDA``
-    - ``I_AMPA``
-    - ``I_GABA``
+    **Mathematical Model**
 
-    Additional state
-    ----------------
+    **1. Membrane Dynamics**
 
-    - ``x_NMDA``: NMDA rise variables for each registered NMDA port.
-    - ``s_NMDA_components``: NMDA decay/gating variables for each NMDA port.
-    - ``nmda_weights``: fixed per-port NMDA weights.
-    - ``refractory_step_count``: absolute refractory countdown.
-    - ``integration_step``: persistent adaptive RKF45 step state.
-    - ``I_stim``: one-step delayed external current buffer.
+    The subthreshold membrane potential evolves according to:
+
+    .. math::
+
+       C_m \frac{dV_m}{dt} = -g_L(V_m - E_L) - I_{syn} + I_{stim}
+
+    where :math:`I_{syn} = I_{AMPA} + I_{GABA} + I_{NMDA}` is the total synaptic current.
+
+    **2. Synaptic Currents**
+
+    AMPA and GABA currents are ohmic:
+
+    .. math::
+
+       I_{AMPA} &= (V_m - E_{ex}) s_{AMPA} \\
+       I_{GABA} &= (V_m - E_{in}) s_{GABA}
+
+    NMDA current includes voltage-dependent Mg²⁺ blockade:
+
+    .. math::
+
+       I_{NMDA} = \frac{(V_m - E_{ex})}{1 + [Mg^{2+}]\exp(-0.062V_m)/3.57} \sum_j w_j s_j
+
+    where :math:`j` indexes individual NMDA synapses, :math:`w_j` is the fixed weight for port :math:`j`,
+    and :math:`s_j` is the gating variable for that synapse.
+
+    **3. Synaptic Gating Variables**
+
+    AMPA and GABA conductances decay exponentially:
+
+    .. math::
+
+       \frac{ds_{AMPA}}{dt} &= -\frac{s_{AMPA}}{\tau_{AMPA}} \\
+       \frac{ds_{GABA}}{dt} &= -\frac{s_{GABA}}{\tau_{GABA}}
+
+    Each NMDA synapse :math:`j` has dual-timescale kinetics:
+
+    .. math::
+
+       \frac{dx_j}{dt} &= -\frac{x_j}{\tau_{NMDA,rise}} \\
+       \frac{ds_j}{dt} &= -\frac{s_j}{\tau_{NMDA,decay}} + \alpha x_j (1-s_j)
+
+    where :math:`x_j` is the rise variable (fast activation) and :math:`s_j` is the gating variable
+    (slow inactivation with saturation).
+
+    **4. Spike Generation and Reset**
+
+    When :math:`V_m \geq V_{th}` and the neuron is not refractory:
+
+    - Emit a spike
+    - Set :math:`V_m \leftarrow V_{reset}`
+    - Enter refractory state for :math:`t_{ref}` ms
+
+    During refractoriness, :math:`V_m` is clamped to :math:`V_{reset}`.
+
+    **5. Numerical Integration**
+
+    The continuous dynamics are integrated using adaptive Runge-Kutta-Fehlberg (RKF45) with:
+
+    - 4th and 5th order embedded methods for error estimation
+    - Persistent step size :math:`h` that adapts to maintain local error < ``gsl_error_tol``
+    - Minimum step size :math:`h_{min} = 10^{-8}` ms
+    - Maximum iterations per simulation step: 10,000
+
+    **NMDA Port Semantics**
+
+    NEST assigns each NMDA connection a unique receptor port at connect time and prohibits adding
+    new NMDA connections after the first simulation step. This implementation mirrors that behavior:
+
+    - Each NMDA event requires a ``port`` identifier (any hashable value)
+    - The first event for a new port registers that port with the provided weight
+    - Subsequent events to the same port must use the same weight (enforced)
+    - New ports can only be added before the first :meth:`update` call
+    - AMPA/GABA events do not use ports (weights accumulate directly)
+
+    **Spike Event Formats**
+
+    The ``spike_events`` parameter accepts multiple formats:
+
+    **Tuple formats:**
+
+    - ``(receptor, weight)`` — receptor ∈ {1, 2, 3} or {'AMPA', 'GABA', 'NMDA'}
+    - ``(receptor, weight, third)`` — ``third`` is multiplicity for AMPA/GABA, port for NMDA
+    - ``(receptor, weight, port, multiplicity)`` — full NMDA specification
+
+    **Dict format:**
+
+    - Required keys: ``receptor_type`` or ``receptor`` (1/2/3 or 'AMPA'/'GABA'/'NMDA'), ``weight``
+    - Optional keys: ``multiplicity`` (default 1.0), ``port``/``rport``/``synapse_id`` (for NMDA)
+
+    **Update Ordering (matches NEST)**
+
+    Each :meth:`update` call executes in this order:
+
+    1. **Integrate ODEs** on :math:`(t, t+dt]` using RKF45 with persistent step size
+    2. **Apply spike jumps**: add to ``s_AMPA``, ``s_GABA``, and ``x_j`` for each NMDA port
+    3. **Threshold check and reset**: emit spikes, reset voltage, update refractory countdown
+    4. **Store external current**: buffer ``I_stim`` for next step (one-step delay)
+
+    **Recordable Variables**
+
+    - ``V_m`` — Membrane potential (mV)
+    - ``s_AMPA`` — AMPA conductance state (nS)
+    - ``s_GABA`` — GABA conductance state (nS)
+    - ``s_NMDA`` — Weighted sum of NMDA gating variables (nS), :math:`\sum_j w_j s_j`
+    - ``I_AMPA`` — AMPA current (pA)
+    - ``I_GABA`` — GABA current (pA)
+    - ``I_NMDA`` — NMDA current (pA)
+
+    **Additional State Variables**
+
+    - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[*in_size, n_ports]``)
+    - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[*in_size, n_ports]``)
+    - ``nmda_weights`` — Fixed weights for each NMDA port (shape: ``[*in_size, n_ports]``)
+    - ``refractory_step_count`` — Remaining refractory steps (int32)
+    - ``integration_step`` — Persistent RKF45 step size (ms)
+    - ``I_stim`` — One-step delayed external current buffer (pA)
+    - ``refractory`` — Boolean refractory indicator (only if ``ref_var=True``)
+
+    Raises
+    ------
+    ValueError
+        If V_reset >= V_th, or any of C_m, tau_*, alpha, conc_Mg2, gsl_error_tol <= 0.
+    ValueError
+        If attempting to change NMDA port weights after first registration.
+    ValueError
+        If attempting to add new NMDA ports after first :meth:`update` call.
+    ValueError
+        If NMDA port is not hashable.
+    ValueError
+        If spike event format is invalid.
+
+    See Also
+    --------
+    iaf_bw_2001 : Approximate version using presynaptic-jump NMDA dynamics
+    iaf_cond_exp : Simpler conductance-based LIF without NMDA
+    aeif_cond_alpha : Adaptive exponential IF with alpha-shaped conductances
+
+    Notes
+    -----
+    **Performance Considerations:**
+
+    - RKF45 integration is performed per-neuron in NumPy (not vectorized)
+    - Computational cost scales linearly with the number of NMDA ports
+    - Large ``gsl_error_tol`` reduces accuracy but improves speed
+    - This model is significantly slower than ``iaf_bw_2001`` due to per-synapse state
+
+    **Comparison to iaf_bw_2001:**
+
+    - ``iaf_bw_2001`` approximates all NMDA synapses with a single pair of state variables
+    - ``iaf_bw_2001_exact`` tracks rise and decay for each NMDA connection separately
+    - Use ``iaf_bw_2001_exact`` when NMDA synapse heterogeneity matters (e.g., detailed working memory models)
+    - Use ``iaf_bw_2001`` for large-scale simulations where approximation is acceptable
 
     References
     ----------
@@ -192,8 +307,77 @@ class iaf_bw_2001_exact(Neuron):
     .. [3] Wang X-J (2002). Probabilistic decision making by slow
            reverberation in cortical circuits. Neuron, 36(5):955-968.
            DOI: https://doi.org/10.1016/S0896-6273(02)01092-9
-    .. [4] NEST source: ``models/iaf_bw_2001_exact.h`` and
-           ``models/iaf_bw_2001_exact.cpp``.
+    .. [4] NEST Simulator. Models: iaf_bw_2001_exact.
+           https://nest-simulator.readthedocs.io/en/stable/models/iaf_bw_2001_exact.html
+
+    Examples
+    --------
+    **Basic usage with AMPA input:**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> brainstate.environ.context(dt=0.1 * u.ms)
+        >>> net = bp.iaf_bw_2001_exact(in_size=10)
+        >>> net.init_all_states()
+        >>> # Apply AMPA input spike
+        >>> spike = bp.iaf_bw_2001_exact.get_spike(net(spike_events=[(1, 100*u.nS)]))
+        >>> print(net.V.value)  # doctest: +SKIP
+
+    **NMDA connections with unique ports:**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> brainstate.environ.context(dt=0.1 * u.ms)
+        >>> net = bp.iaf_bw_2001_exact(in_size=5)
+        >>> net.init_all_states()
+        >>> # Register two NMDA ports with different weights
+        >>> events = [
+        ...     (3, 50*u.nS, 'port_A', 1.0),  # NMDA port A, weight 50 nS
+        ...     (3, 75*u.nS, 'port_B', 1.0),  # NMDA port B, weight 75 nS
+        ... ]
+        >>> spike = net(spike_events=events)
+        >>> print(net.s_NMDA_components.value.shape)  # doctest: +SKIP
+        (5, 2)  # 5 neurons × 2 NMDA ports
+
+    **Mixing AMPA, GABA, and NMDA:**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> brainstate.environ.context(dt=0.1 * u.ms)
+        >>> net = bp.iaf_bw_2001_exact(in_size=1, V_th=-50*u.mV)
+        >>> net.init_all_states()
+        >>> events = [
+        ...     {'receptor': 'AMPA', 'weight': 200*u.nS, 'multiplicity': 2.0},
+        ...     {'receptor': 'GABA', 'weight': 100*u.nS},
+        ...     {'receptor': 'NMDA', 'weight': 50*u.nS, 'port': 0},
+        ... ]
+        >>> for _ in range(100):
+        ...     spike = net(spike_events=events if _ == 10 else None)
+        >>> print(net.last_spike_time.value)  # doctest: +SKIP
+
+    **Monitoring refractory state:**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> brainstate.environ.context(dt=0.1 * u.ms)
+        >>> net = bp.iaf_bw_2001_exact(in_size=3, ref_var=True, t_ref=5*u.ms)
+        >>> net.init_all_states()
+        >>> net.V.value = net.V_th + 1*u.mV  # Force spike
+        >>> spike = net()
+        >>> print(net.refractory.value)  # doctest: +SKIP
+        [True True True]
     """
 
     __module__ = 'brainpy.state'
@@ -279,14 +463,42 @@ class iaf_bw_2001_exact(Neuron):
 
     @property
     def receptor_types(self):
+        """Mapping of receptor names to numeric identifiers.
+
+        Returns
+        -------
+        dict
+            Dictionary mapping {'AMPA': 1, 'GABA': 2, 'NMDA': 3}.
+        """
         return dict(self.RECEPTOR_TYPES)
 
     @property
     def recordables(self):
+        """List of variables available for recording.
+
+        Returns
+        -------
+        list of str
+            ['V_m', 's_AMPA', 's_GABA', 's_NMDA', 'I_NMDA', 'I_AMPA', 'I_GABA'].
+        """
         return list(self.RECORDABLES)
 
     @staticmethod
     def _value_to_float(x, unit=None):
+        """Convert quantity with units to float64 NumPy array.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Input value, possibly with units.
+        unit : brainunit.Unit, optional
+            Target unit for division. If None, return dimensionless float.
+
+        Returns
+        -------
+        np.ndarray
+            Float64 array, dimensionless if unit is provided (x / unit), else raw conversion.
+        """
         if unit is None:
             return np.asarray(u.math.asarray(x), dtype=np.float64)
         try:
@@ -296,10 +508,41 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
+        """Broadcast array to target state shape.
+
+        Parameters
+        ----------
+        x_np : np.ndarray
+            Input array.
+        shape : tuple of int
+            Target shape.
+
+        Returns
+        -------
+        np.ndarray
+            Broadcasted view of input array with target shape.
+        """
         return np.broadcast_to(x_np, shape)
 
     @classmethod
     def _normalize_spike_receptor(cls, receptor):
+        """Normalize receptor identifier to numeric code.
+
+        Parameters
+        ----------
+        receptor : str or int
+            Receptor identifier. Accepts 'AMPA', 'GABA', 'NMDA', or numeric codes 1/2/3.
+
+        Returns
+        -------
+        int
+            Numeric receptor code (1=AMPA, 2=GABA, 3=NMDA).
+
+        Raises
+        ------
+        ValueError
+            If receptor is not recognized or is out of valid range [1, 3].
+        """
         if isinstance(receptor, str):
             key = receptor.strip()
             if key in cls.RECEPTOR_TYPES:
@@ -315,6 +558,25 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _normalize_nmda_port(port) -> Hashable:
+        """Normalize NMDA port identifier to hashable value.
+
+        Parameters
+        ----------
+        port : Hashable or None
+            NMDA port identifier. Can be int, str, or any hashable type.
+            If None, defaults to port 0.
+
+        Returns
+        -------
+        Hashable
+            Normalized port identifier. Numeric strings converted to int,
+            None converted to 0, other hashable values returned as-is.
+
+        Raises
+        ------
+        ValueError
+            If port is not hashable.
+        """
         if port is None:
             return 0
         if isinstance(port, str):
@@ -329,6 +591,18 @@ class iaf_bw_2001_exact(Neuron):
         return port
 
     def _validate_parameters(self):
+        """Validate model parameters at initialization.
+
+        Raises
+        ------
+        ValueError
+            If V_reset >= V_th.
+        ValueError
+            If C_m, tau_AMPA, tau_GABA, tau_rise_NMDA, tau_decay_NMDA, alpha,
+            conc_Mg2, or gsl_error_tol are non-positive.
+        ValueError
+            If t_ref is negative.
+        """
         if np.any(self._value_to_float(self.V_reset, u.mV) >= self._value_to_float(self.V_th, u.mV)):
             raise ValueError('Reset potential must be smaller than threshold.')
         if np.any(self._value_to_float(self.C_m, u.pF) <= 0.0):
@@ -362,6 +636,27 @@ class iaf_bw_2001_exact(Neuron):
         return 0
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize all state variables.
+
+        Creates and initializes membrane potential, synaptic conductances, currents,
+        NMDA port arrays (initially empty), refractory state, and integration step size.
+        NMDA port registry is cleared.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size for state variables. Default: None (no batching).
+            If provided, adds a leading batch dimension to all state variables.
+        **kwargs
+            Additional keyword arguments (currently unused).
+
+        Notes
+        -----
+        - NMDA port arrays (x_NMDA, s_NMDA_components, nmda_weights) start empty (shape: [..., 0])
+        - Ports are allocated dynamically when first NMDA spike arrives
+        - Clears the internal ``_nmda_port_index`` registry
+        - Resets ``_updates_started`` flag to False
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         s_ampa = braintools.init.param(self.s_AMPA_initializer, self.varshape, batch_size)
         s_gaba = braintools.init.param(self.s_GABA_initializer, self.varshape, batch_size)
@@ -403,6 +698,26 @@ class iaf_bw_2001_exact(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        """Reset all state variables to initial values.
+
+        Unlike :meth:`init_state`, this preserves NMDA port structure (number of ports
+        and their weights remain unchanged). Resets voltage, conductances, currents,
+        NMDA gating variables, refractory state, and integration step size.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size for state variables. Default: None (no batching).
+            If provided, reshapes state variables with a leading batch dimension.
+        **kwargs
+            Additional keyword arguments (currently unused).
+
+        Notes
+        -----
+        - NMDA port count and weights are preserved (but x_NMDA and s_NMDA_components are zeroed)
+        - Does NOT clear ``_nmda_port_index`` (port registry persists)
+        - Does NOT reset ``_updates_started`` flag
+        """
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.s_AMPA.value = braintools.init.param(self.s_AMPA_initializer, self.varshape, batch_size)
         self.s_GABA.value = braintools.init.param(self.s_GABA_initializer, self.varshape, batch_size)
@@ -437,6 +752,31 @@ class iaf_bw_2001_exact(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
+        """Generate differentiable spike output from membrane potential.
+
+        Scales voltage relative to threshold and applies surrogate gradient function
+        for gradient-based learning. Voltage is scaled linearly between V_reset (0)
+        and V_th (1).
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential (mV). Default: None (uses current ``self.V.value``).
+            Shape must match ``self.varshape`` or be broadcastable to it.
+
+        Returns
+        -------
+        ArrayLike
+            Differentiable spike output in [0, 1]. Shape matches input voltage.
+            Values close to 1 indicate spiking; values close to 0 indicate quiescence.
+            Exact output depends on ``self.spk_fun`` (e.g., ReLU, sigmoid, etc.).
+
+        Notes
+        -----
+        - Used internally during :meth:`update` to compute spike output before reset
+        - Scaling formula: :math:`v_{scaled} = (V - V_{th}) / (V_{th} - V_{reset})`
+        - For hard reset mode, actual spike detection uses :math:`V \geq V_{th}`
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
@@ -559,6 +899,34 @@ class iaf_bw_2001_exact(Neuron):
 
     @staticmethod
     def _nmda_currents_scalar(v, s_ampa, s_gaba, s_nmda_sum, p):
+        """Compute synaptic currents for a single neuron (scalar computation).
+
+        Parameters
+        ----------
+        v : float
+            Membrane potential (mV).
+        s_ampa : float
+            AMPA conductance state (nS).
+        s_gaba : float
+            GABA conductance state (nS).
+        s_nmda_sum : float
+            Weighted sum of NMDA gating variables (nS), sum_j w_j s_j.
+        p : dict
+            Parameter dictionary with keys 'E_ex', 'E_in', 'conc_Mg2' (all floats in base units).
+
+        Returns
+        -------
+        i_ampa : float
+            AMPA current (pA).
+        i_gaba : float
+            GABA current (pA).
+        i_nmda : float
+            NMDA current with Mg2+ blockade (pA).
+
+        Notes
+        -----
+        NMDA Mg2+ blockade: denom = 1 + [Mg2+] * exp(-0.062 * V) / 3.57
+        """
         i_ampa = (v - p['E_ex']) * s_ampa
         i_gaba = (v - p['E_in']) * s_gaba
         denom = 1.0 + p['conc_Mg2'] * math.exp(-0.062 * v) / 3.57
@@ -567,6 +935,42 @@ class iaf_bw_2001_exact(Neuron):
 
     @classmethod
     def _dynamics_scalar(cls, y, i_stim, p, nmda_weights):
+        """Compute ODE right-hand side for a single neuron (scalar computation).
+
+        Parameters
+        ----------
+        y : np.ndarray
+            State vector with layout: [V_m, s_AMPA, s_GABA, x_0, ..., x_{n-1}, s_0, ..., s_{n-1}]
+            where n is the number of NMDA ports. Shape: (3 + 2*n_nmda,).
+        i_stim : float
+            External input current (pA).
+        p : dict
+            Parameter dictionary (all values in base units).
+        nmda_weights : np.ndarray
+            Fixed NMDA weights for each port (nS). Shape: (n_nmda,).
+
+        Returns
+        -------
+        dy : np.ndarray
+            Time derivatives dy/dt with same shape as y.
+        i_ampa : float
+            AMPA current (pA).
+        i_gaba : float
+            GABA current (pA).
+        i_nmda : float
+            NMDA current (pA).
+        s_nmda_sum : float
+            Weighted NMDA sum (nS).
+
+        Notes
+        -----
+        ODE system:
+            dV/dt = (-g_L(V - E_L) - I_syn + I_stim) / C_m
+            ds_AMPA/dt = -s_AMPA / tau_AMPA
+            ds_GABA/dt = -s_GABA / tau_GABA
+            dx_j/dt = -x_j / tau_rise_NMDA
+            ds_j/dt = -s_j / tau_decay_NMDA + alpha * x_j * (1 - s_j)
+        """
         n_nmda = int(nmda_weights.shape[0])
         v = float(y[0])
         s_ampa = float(y[1])
@@ -596,6 +1000,63 @@ class iaf_bw_2001_exact(Neuron):
         return dy, i_ampa, i_gaba, i_nmda, s_nmda_sum
 
     def _rkf45_integrate_scalar(self, y0, i_stim, h0, dt, p, nmda_weights, atol):
+        """Integrate ODEs for a single neuron using adaptive RKF45 method.
+
+        Uses Runge-Kutta-Fehlberg (RKF45) with embedded 4th and 5th order methods
+        for local error estimation and adaptive step size control.
+
+        Parameters
+        ----------
+        y0 : np.ndarray
+            Initial state vector [V_m, s_AMPA, s_GABA, x_0, ..., s_0, ...]. Shape: (3 + 2*n_nmda,).
+        i_stim : float
+            External input current (pA).
+        h0 : float
+            Initial step size (ms).
+        dt : float
+            Total integration interval (ms).
+        p : dict
+            Parameter dictionary (all values in base units).
+        nmda_weights : np.ndarray
+            Fixed NMDA weights (nS). Shape: (n_nmda,).
+        atol : float
+            Absolute local error tolerance (dimensionless).
+
+        Returns
+        -------
+        y : np.ndarray
+            Final state vector after integration.
+        h : float
+            Final adaptive step size (ms), used as initial step for next time step.
+        i_ampa : float
+            Final AMPA current (pA).
+        i_gaba : float
+            Final GABA current (pA).
+        i_nmda : float
+            Final NMDA current (pA).
+        s_nmda_sum : float
+            Final weighted NMDA sum (nS).
+
+        Notes
+        -----
+        **Adaptive step size control:**
+
+        - If local error < atol, accept step and increase h by factor <= 5
+        - If local error > atol, reject step and decrease h by factor >= 0.2
+        - Step size clipped to [MIN_H, dt - t] where MIN_H = 1e-8 ms
+        - Maximum iterations: 10,000 (to prevent infinite loops)
+
+        **RKF45 coefficients:**
+
+        - 4th order: Butcher tableau with (25/216, 0, 1408/2565, 2197/4104, -1/5, 0)
+        - 5th order: (16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55)
+        - Error estimate: max|y5 - y4|
+
+        **Persistence:**
+
+        - Returned step size h is stored in ``integration_step`` state
+        - Provides continuity across time steps for smooth adaptation
+        """
         t = 0.0
         h = max(h0, self._MIN_H)
         y = np.asarray(y0, dtype=np.float64)
@@ -657,6 +1118,135 @@ class iaf_bw_2001_exact(Neuron):
         return y, h, i_ampa, i_gaba, i_nmda, s_nmda_sum
 
     def update(self, x=0. * u.pA, spike_events=None):
+        """Advance neuron state by one simulation time step.
+
+        Performs RKF45 integration of ODEs, applies spike jumps to conductances,
+        checks threshold, resets spiking neurons, and updates refractory state.
+        External current is buffered with one-step delay (NEST compatibility).
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            External input current (pA). Default: 0 pA.
+            Shape must match ``self.varshape`` or be broadcastable to it.
+            Summed with registered ``current_inputs`` to form total stimulus.
+        spike_events : iterable, optional
+            Collection of synaptic spike events. Default: None (no spikes).
+            Each event can be a tuple or dict specifying receptor, weight, multiplicity, and port.
+
+            **Tuple formats:**
+
+            - ``(receptor, weight)``
+            - ``(receptor, weight, third)`` where ``third`` is multiplicity for AMPA/GABA, port for NMDA
+            - ``(receptor, weight, port, multiplicity)`` for full NMDA specification
+
+            **Dict format:**
+
+            - ``receptor_type`` or ``receptor``: int (1/2/3) or str ('AMPA'/'GABA'/'NMDA')
+            - ``weight``: ArrayLike (nS), synaptic weight
+            - ``multiplicity``: float, optional (default 1.0)
+            - ``port`` / ``rport`` / ``synapse_id``: Hashable, optional (required for NMDA)
+
+        Returns
+        -------
+        ArrayLike
+            Differentiable spike output for current time step. Shape: ``self.varshape``.
+            Computed from voltage before reset using ``self.get_spike()``.
+
+        Raises
+        ------
+        ValueError
+            If attempting to add new NMDA ports after first :meth:`update` call.
+        ValueError
+            If NMDA port weight changes after initial registration.
+        ValueError
+            If spike event format is invalid.
+
+        Notes
+        -----
+        **Update sequence (matches NEST ordering):**
+
+        1. **RKF45 integration**: Integrate V_m, s_AMPA, s_GABA, x_NMDA, s_NMDA on (t, t+dt]
+        2. **Spike jumps**: Add to s_AMPA, s_GABA (weight × multiplicity), x_NMDA (multiplicity only)
+        3. **Threshold check**: If V_m >= V_th and not refractory, emit spike and reset
+        4. **Refractory update**: Decrement refractory countdown or clamp V_m to V_reset
+        5. **Buffer stimulus**: Store current input in ``I_stim`` for next step (one-step delay)
+
+        **NMDA port constraints:**
+
+        - New ports can only be added before first :meth:`update` call
+        - Port weights are fixed at first registration and cannot change
+        - Attempting to violate these constraints raises ``ValueError``
+
+        **Integration details:**
+
+        - Uses adaptive RKF45 with per-neuron step size (not vectorized)
+        - Local error tolerance controlled by ``gsl_error_tol``
+        - Minimum step size: 1e-8 ms; maximum iterations: 10,000
+        - Step size persists across time steps in ``integration_step`` state
+
+        **Refractory behavior:**
+
+        - During refractory period, V_m is clamped to V_reset
+        - Refractory countdown decrements each time step
+        - Threshold check bypassed while refractory
+
+        Examples
+        --------
+        **Single neuron with AMPA spike:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bp
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> brainstate.environ.context(dt=0.1 * u.ms)
+            >>> net = bp.iaf_bw_2001_exact(in_size=1)
+            >>> net.init_all_states()
+            >>> spike = net(spike_events=[(1, 500*u.nS)])
+            >>> print(net.s_AMPA.value)  # doctest: +SKIP
+
+        **Population with mixed input:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bp
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> import jax.numpy as jnp
+            >>> brainstate.environ.context(dt=0.1 * u.ms)
+            >>> net = bp.iaf_bw_2001_exact(in_size=10)
+            >>> net.init_all_states()
+            >>> # AMPA to all, GABA to subset
+            >>> events = [
+            ...     (1, jnp.ones(10) * 100*u.nS),  # AMPA
+            ...     (2, jnp.array([0,0,0,0,0,50,50,50,50,50])*u.nS),  # GABA
+            ... ]
+            >>> spike = net(spike_events=events)
+            >>> print(spike)  # doctest: +SKIP
+
+        **NMDA port registration:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bp
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> brainstate.environ.context(dt=0.1 * u.ms)
+            >>> net = bp.iaf_bw_2001_exact(in_size=2)
+            >>> net.init_all_states()
+            >>> # First update: register ports 'A' and 'B'
+            >>> events = [
+            ...     (3, 60*u.nS, 'A', 1.0),
+            ...     (3, 80*u.nS, 'B', 2.0),
+            ... ]
+            >>> spike = net(spike_events=events)
+            >>> print(net.nmda_weights.value.shape)  # doctest: +SKIP
+            (2, 2)  # 2 neurons × 2 ports
+            >>> # Subsequent updates: ports A and B exist, weights fixed
+            >>> spike = net(spike_events=[(3, 60*u.nS, 'A', 3.0)])  # OK
+            >>> spike = net(spike_events=[(3, 99*u.nS, 'A', 1.0)])  # Raises ValueError
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

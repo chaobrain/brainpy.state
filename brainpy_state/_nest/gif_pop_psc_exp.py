@@ -38,9 +38,6 @@ class gif_pop_psc_exp(Dynamics):
     r"""Population of generalized integrate-and-fire neurons (GIF) with
     exponential postsynaptic currents and adaptation.
 
-    Description
-    -----------
-
     ``gif_pop_psc_exp`` simulates a population of spike-response model neurons
     with multi-timescale adaptation and exponential postsynaptic currents.
     It directly models the population activity (sum of all spikes) without
@@ -50,11 +47,13 @@ class gif_pop_psc_exp(Dynamics):
     This is a brainpy.state re-implementation of the NEST simulator model of
     the same name, using NEST-standard parameterization.
 
+    **1. Mathematical Model**
+
     The single neuron model is defined by the hazard function:
 
     .. math::
 
-       h(t) = \lambda_0 \exp\frac{V_m(t) - E_{\mathrm{sfa}}(t)}{\Delta_V}
+       h(t) = \lambda_0 \exp\left(\frac{V_m(t) - E_{\mathrm{sfa}}(t)}{\Delta_V}\right)
 
     After each spike, the membrane potential :math:`V_m` is reset to
     :math:`V_{\mathrm{reset}}`. Spike frequency adaptation is implemented by a
@@ -63,8 +62,7 @@ class gif_pop_psc_exp(Dynamics):
     incremented by the respective :math:`q_{\mathrm{sfa}}` and decays with the
     respective time constant :math:`\tau_{\mathrm{sfa}}`.
 
-    Population dynamics algorithm
-    .............................
+    **2. Population Dynamics Algorithm**
 
     The model uses the algorithm from Figures 11 and 12 of [1]_ to simulate
     the population activity directly:
@@ -98,8 +96,7 @@ class gif_pop_psc_exp(Dynamics):
        membrane potentials, and variances of each refractory cohort are
        maintained in rotating circular buffers.
 
-    Synaptic currents
-    .................
+    **3. Synaptic Currents**
 
     Exponential postsynaptic currents follow first-order dynamics:
 
@@ -120,45 +117,67 @@ class gif_pop_psc_exp(Dynamics):
     neuron in each population. An approximation of random connectivity can be
     implemented by connecting populations using a ``bernoulli_synapse``.
 
-    .. note::
-
-       As ``gif_pop_psc_exp`` represents many neurons in one node, it may
-       generate many spikes per time step. The ``n_spikes`` state variable
-       records the number of spikes emitted by the population each step.
-
-    .. note::
-
-       The computational cost of this model is largely independent of the
-       number N of neurons represented.
-
     Parameters
     ----------
+    in_size : int, sequence of int
+        Shape of the population. Typically a scalar for 1D populations.
+    N : int, optional
+        Number of neurons represented by this population node. Default: 100.
+    tau_m : float, optional
+        Membrane time constant in milliseconds. Default: 20.0.
+    C_m : float, optional
+        Membrane capacitance in picofarads. Default: 250.0.
+    t_ref : float, optional
+        Duration of absolute refractory period in milliseconds. Default: 4.0.
+    lambda_0 : float, optional
+        Firing rate at threshold in 1/s (Hz). Default: 10.0.
+    Delta_V : float, optional
+        Noise level (voltage sensitivity) of the escape rate in millivolts.
+        Determines how sharply the firing rate increases with membrane potential.
+        Default: 2.0.
+    E_L : float, optional
+        Resting (leak) potential in millivolts. Default: 0.0.
+    V_reset : float, optional
+        Reset potential after spike in millivolts. Default: 0.0.
+    V_T_star : float, optional
+        Baseline threshold level in millivolts. Effective threshold is
+        :math:`V_{T^*} + E_{\mathrm{sfa}}`. Default: 15.0.
+    I_e : float, optional
+        Constant external DC input current in picoamperes. Default: 0.0.
+    tau_syn_ex : float, optional
+        Excitatory synaptic time constant in milliseconds. Default: 3.0.
+    tau_syn_in : float, optional
+        Inhibitory synaptic time constant in milliseconds. Default: 6.0.
+    tau_sfa : sequence of float, optional
+        Adaptation time constants in milliseconds. Multiple timescales can be
+        specified as a tuple. Default: (300.0,).
+    q_sfa : sequence of float, optional
+        Adaptation kernel amplitudes in millivolts. Must have the same length
+        as `tau_sfa`. Default: (0.5,).
+    len_kernel : int, optional
+        History kernel length in time steps. If -1 (default), automatically
+        computed to ensure convergence. Default: -1.
+    BinoRand : bool, optional
+        If True, use binomial distribution for spike generation. If False,
+        use Poisson distribution. Default: True.
+    rng_seed : int, optional
+        Random number generator seed for reproducibility. Default: 0.
+    name : str, optional
+        Name of the population. Default: None.
 
-    ==================== ======================= =================================== =================================================
-    **Parameter**        **Default**             **Math equivalent**                 **Description**
-    ==================== ======================= =================================== =================================================
-    ``in_size``          (required)                                                  Population shape (scalar size)
-    ``N``                100                     :math:`N`                           Number of neurons in the population
-    ``tau_m``            20.0 ms                 :math:`\tau_m`                      Membrane time constant
-    ``C_m``              250.0 pF                :math:`C_m`                         Membrane capacitance
-    ``t_ref``            4.0 ms                  :math:`t_{\mathrm{ref}}`            Absolute refractory period
-    ``lambda_0``         10.0 1/s                :math:`\lambda_0`                   Firing rate at threshold
-    ``Delta_V``          2.0 mV                  :math:`\Delta_V`                    Noise level of escape rate
-    ``E_L``              0.0 mV                  :math:`E_L`                         Resting/leak potential
-    ``V_reset``          0.0 mV                  :math:`V_{\mathrm{reset}}`          Reset potential after spike
-    ``V_T_star``         15.0 mV                 :math:`V_{T^*}`                     Baseline threshold level
-    ``I_e``              0.0 pA                  :math:`I_e`                         Constant external DC current
-    ``tau_syn_ex``       3.0 ms                  :math:`\tau_{\mathrm{syn,ex}}`      Excitatory synaptic time constant
-    ``tau_syn_in``       6.0 ms                  :math:`\tau_{\mathrm{syn,in}}`      Inhibitory synaptic time constant
-    ``tau_sfa``          (300.0,) ms             :math:`\tau_{\mathrm{sfa},j}`       Adaptation time constants (tuple)
-    ``q_sfa``            (0.5,) mV               :math:`q_{\mathrm{sfa},j}`         Adaptation kernel amplitudes (tuple)
-    ``len_kernel``       -1                                                          History kernel length (-1 = automatic)
-    ``BinoRand``         True                                                        Use binomial (True) or Poisson (False) RNG
-    ``rng_seed``         0                                                           Random number generator seed
-    ==================== ======================= =================================== =================================================
+    Parameter Mapping
+    -----------------
+
+    =================== =============  =============================
+    gif_pop_psc_exp     gif_psc_exp    relation
+    =================== =============  =============================
+    tau_m               g_L            tau_m = C_m / g_L
+    N                   ---            use N gif_psc_exp neurons
+    =================== =============  =============================
 
     State Variables
     ---------------
+    The model exposes the following read-only properties:
 
     ========================== ===========================================
     **State variable**         **Description**
@@ -174,7 +193,11 @@ class gif_pop_psc_exp(Dynamics):
 
     Notes
     -----
-
+    - As ``gif_pop_psc_exp`` represents many neurons in one node, it may
+      generate many spikes per time step. The ``n_spikes`` state variable
+      records the number of spikes emitted by the population each step.
+    - The computational cost of this model is largely independent of the
+      number N of neurons represented.
     - Defaults follow NEST C++ source for ``gif_pop_psc_exp``.
     - ``lambda_0`` is specified in 1/s (as in NEST's Python interface); the
       conversion factor of 0.001 to 1/ms is applied in the update equations
@@ -183,14 +206,8 @@ class gif_pop_psc_exp(Dynamics):
       weights go to excitatory, negative to inhibitory channel.
     - The model does not inherit from ``Neuron`` because it represents a
       population, not a single spiking neuron with a surrogate gradient.
-
-    =================== =============  =============================
-    **Parameter translation to gif_psc_exp**
-    ---------------------------------------------------------
-    gif_pop_psc_exp      gif_psc_exp    relation
-    tau_m                g_L            tau_m = C_m / g_L
-    N                    ---            use N gif_psc_exp neurons
-    =================== =============  =============================
+    - Parameters are stored as plain floats (unitless) to match NEST's
+      internal representation.
 
     References
     ----------
@@ -204,7 +221,41 @@ class gif_pop_psc_exp(Dynamics):
 
     See Also
     --------
-    gif_cond_exp
+    gif_psc_exp, gif_cond_exp
+
+    Examples
+    --------
+    Create a population of 100 neurons with default parameters:
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> pop = bp.gif_pop_psc_exp(1, N=100)
+        >>> pop.init_all_states()
+
+    Create a population with custom adaptation parameters:
+
+    .. code-block:: python
+
+        >>> pop = bp.gif_pop_psc_exp(
+        ...     1,
+        ...     N=200,
+        ...     tau_sfa=(100.0, 500.0),
+        ...     q_sfa=(0.3, 0.6),
+        ...     lambda_0=5.0
+        ... )
+        >>> pop.init_all_states()
+
+    Simulate the population with external input:
+
+    .. code-block:: python
+
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     pop.init_all_states()
+        ...     for _ in range(1000):
+        ...         n_spikes = pop.update(x=100.0)  # 100 pA input
+        ...         print(f"Spikes: {n_spikes}, V_m: {pop.V_m:.2f}")
     """
     __module__ = 'brainpy.state'
 
@@ -254,6 +305,15 @@ class gif_pop_psc_exp(Dynamics):
         self._validate_parameters()
 
     def _validate_parameters(self):
+        """Validate model parameters for physical consistency.
+
+        Raises
+        ------
+        ValueError
+            If any parameter fails validation: length mismatch between tau_sfa
+            and q_sfa; non-positive capacitance, time constants, N, or Delta_V;
+            negative lambda_0 or t_ref.
+        """
         if len(self.tau_sfa) != len(self.q_sfa):
             raise ValueError(
                 f"'tau_sfa' and 'q_sfa' must have the same length. "
@@ -280,8 +340,27 @@ class gif_pop_psc_exp(Dynamics):
     def _adaptation_kernel(self, k: int, h: float) -> float:
         """Compute the adaptation kernel value at lag k time steps.
 
-        See below Eq. (87) of [1]. No division by tau because the result
-        must be in voltage units, matching q_sfa.
+        Implements the adaptation kernel theta(k*h) as the sum of exponentially
+        decaying components (see below Eq. (87) of [1]_). This kernel determines
+        how past spikes contribute to the current adaptive threshold.
+
+        Parameters
+        ----------
+        k : int
+            Time lag in units of time steps.
+        h : float
+            Integration time step in milliseconds.
+
+        Returns
+        -------
+        float
+            Adaptation kernel value in millivolts. Sum of all adaptation
+            components at time lag k*h.
+
+        Notes
+        -----
+        No division by tau is applied because the result must be in voltage
+        units, matching q_sfa (mV).
         """
         theta_tmp = 0.0
         for j in range(len(self.tau_sfa)):
@@ -291,7 +370,28 @@ class gif_pop_psc_exp(Dynamics):
     def _get_history_size(self, h: float) -> int:
         """Automatically determine a suitable history kernel size.
 
-        See [1], Eq. (86) and Fig 11, Procedure GetHistoryLength.
+        Computes the minimum kernel length needed to capture adaptation dynamics
+        by finding the time lag where the adaptation kernel decays below 10% of
+        the noise level Delta_V. Implements Procedure GetHistoryLength from
+        Fig. 11 of [1]_.
+
+        Parameters
+        ----------
+        h : float
+            Integration time step in milliseconds.
+
+        Returns
+        -------
+        int
+            History kernel length in time steps. Guaranteed to be at least
+            max(5*tau_m/h, t_ref/h + 1).
+
+        Notes
+        -----
+        - Starts from tmax = 20000 ms and decreases until kernel(k*h) / Delta_V
+          reaches 0.1 or k reaches kmin = 5*tau_m/h.
+        - Ensures kernel length covers at least the refractory period.
+        - This adaptive sizing balances memory usage against accuracy.
         """
         tmax = 20000.0  # ms, maximum automatic kernel length
         k = int(tmax / h)
@@ -305,11 +405,53 @@ class gif_pop_psc_exp(Dynamics):
     def _escrate(self, x: float) -> float:
         """Escape rate (hazard function).
 
+        Computes the instantaneous firing rate as an exponential function of
+        the distance from threshold.
+
+        Parameters
+        ----------
+        x : float
+            Distance from effective threshold in millivolts, computed as
+            V_m - theta_effective.
+
+        Returns
+        -------
+        float
+            Escape rate (hazard function) in 1/s (Hz). Equals lambda_0 when
+            x = 0 (at threshold).
+
+        Notes
+        -----
         h(t) = lambda_0 * exp(x / Delta_V)
+
+        This exponential hazard is the key ingredient of the GIF model,
+        allowing for stochastic spike generation with a soft threshold.
         """
         return self.lambda_0 * math.exp(x / self.Delta_V)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize all population state variables and history buffers.
+
+        Allocates and initializes circular buffers for tracking refractory
+        cohorts, computes integration constants, and sets initial conditions
+        following Procedure InitPopulations from Fig. 11 of [1]_.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch size for state initialization. Not used in this model (all
+            states are scalars or 1D arrays). Default: None.
+        **kwargs
+            Additional keyword arguments (ignored).
+
+        Notes
+        -----
+        - Computes integration time step h from the global brainstate dt.
+        - Determines history kernel length (automatic if len_kernel < 1).
+        - Initializes all neurons in the free (non-refractory) state.
+        - Precomputes adaptation kernel values and propagator constants.
+        - Resets the random number generator to rng_seed.
+        """
         dt = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt / u.ms))
         self._h = h
@@ -384,10 +526,41 @@ class gif_pop_psc_exp(Dynamics):
         self._rng = np.random.RandomState(self.rng_seed)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        """Reset all population state to initial conditions.
+
+        Equivalent to calling init_state. Resets all history buffers,
+        state variables, and the random number generator.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch size for state initialization. Default: None.
+        **kwargs
+            Additional keyword arguments passed to init_state.
+        """
         self.init_state(batch_size=batch_size, **kwargs)
 
     def _draw_binomial(self, n_expect: float) -> int:
-        """Draw a binomial random number of spikes, matching NEST."""
+        """Draw a binomial random number of spikes, matching NEST.
+
+        Each of the N neurons fires independently with probability p = n_expect / N.
+
+        Parameters
+        ----------
+        n_expect : float
+            Expected number of spikes (may exceed N).
+
+        Returns
+        -------
+        int
+            Actual number of spikes drawn from Binomial(N, p), clipped to [0, N].
+            Returns N if p >= 1, returns 0 if p <= 0.
+
+        Notes
+        -----
+        This implementation exactly replicates NEST's binomial spike generation
+        logic for gif_pop_psc_exp.
+        """
         p_bino = n_expect / self.N
         if p_bino >= 1.0:
             return self.N
@@ -397,7 +570,30 @@ class gif_pop_psc_exp(Dynamics):
             return int(self._rng.binomial(self.N, p_bino))
 
     def _draw_poisson(self, n_expect: float) -> int:
-        """Draw a Poisson random number of spikes, matching NEST."""
+        """Draw a Poisson random number of spikes, matching NEST.
+
+        When n_expect is very small, switches to Bernoulli to avoid numerical
+        issues with the Poisson distribution.
+
+        Parameters
+        ----------
+        n_expect : float
+            Expected number of spikes (may exceed N).
+
+        Returns
+        -------
+        int
+            Actual number of spikes drawn from Poisson(n_expect), clipped to [0, N].
+            Returns N if n_expect > N. Uses Bernoulli fallback when probability
+            of multiple spikes is numerically indistinguishable from single spike.
+
+        Notes
+        -----
+        This implementation exactly replicates NEST's Poisson spike generation
+        logic, including the numerical safeguards for very small rates.
+        The condition 1.0 - (n_expect + 1.0) * exp(-n_expect) > min_double
+        detects when P(k >= 2) is negligible.
+        """
         min_double = np.finfo(np.float64).tiny
         if n_expect > self.N:
             return self.N
@@ -416,17 +612,39 @@ class gif_pop_psc_exp(Dynamics):
     def update(self, x=0.0):
         """Advance the population model by one time step.
 
+        Implements the full population update algorithm from Figures 11 and 12
+        of [1]_, including:
+
+        1. Exact exponential integration of membrane potential and synaptic currents
+        2. Multi-timescale adaptation state update
+        3. Escape rate computation for each refractory cohort
+        4. Stochastic spike generation (binomial or Poisson)
+        5. Circular buffer rotation for history tracking
+
         Parameters
         ----------
-        x : float
-            External input current (pA). This corresponds to the sum of
-            weighted spike inputs from other populations. Positive values
-            go to excitatory channel, negative to inhibitory.
+        x : float, optional
+            External input current in picoamperes. Positive values are routed to
+            the excitatory channel, negative values to the inhibitory channel.
+            Default: 0.0.
 
         Returns
         -------
         int
-            Number of spikes emitted by the population in this step.
+            Number of spikes emitted by the population in this time step. Ranges
+            from 0 to N. Stored in the ``n_spikes`` property.
+
+        Notes
+        -----
+        - Delta inputs (spike events) are collected from ``_delta_inputs`` and
+          separated into excitatory and inhibitory components.
+        - Current inputs are collected from ``_current_inputs`` and accumulated
+          into the ``y0`` state for the next time step.
+        - The membrane potential ``V_m``, synaptic currents ``I_syn_ex`` and
+          ``I_syn_in``, adaptive threshold ``theta_hat``, and expected spike
+          count ``n_expect`` are all updated and accessible via properties.
+        - The actual spike count is drawn stochastically from the expected count
+          using either a binomial or Poisson distribution (controlled by ``BinoRand``).
         """
         h = self._h
 
@@ -603,35 +821,84 @@ class gif_pop_psc_exp(Dynamics):
 
     @property
     def V_m(self) -> float:
-        """Mean membrane potential (mV)."""
+        """Mean membrane potential in millivolts.
+
+        Returns
+        -------
+        float
+            Population-averaged membrane potential of all neurons (mV).
+            Updated each time step by exact exponential integration.
+        """
         return self._V_m
 
     @property
     def I_syn_ex(self) -> float:
-        """Excitatory synaptic current (pA)."""
+        """Excitatory synaptic current in picoamperes.
+
+        Returns
+        -------
+        float
+            Current excitatory synaptic current (pA), evolving according to
+            exponential dynamics with time constant tau_syn_ex.
+        """
         return self._I_syn_ex
 
     @property
     def I_syn_in(self) -> float:
-        """Inhibitory synaptic current (pA)."""
+        """Inhibitory synaptic current in picoamperes.
+
+        Returns
+        -------
+        float
+            Current inhibitory synaptic current (pA), evolving according to
+            exponential dynamics with time constant tau_syn_in.
+        """
         return self._I_syn_in
 
     @property
     def n_spikes(self) -> int:
-        """Number of spikes in the current time step."""
+        """Number of spikes emitted in the current time step.
+
+        Returns
+        -------
+        int
+            Spike count drawn stochastically from the expected rate, ranging
+            from 0 to N.
+        """
         return self._n_spikes
 
     @property
     def n_expect(self) -> float:
-        """Expected number of spikes in the current time step."""
+        """Expected number of spikes in the current time step.
+
+        Returns
+        -------
+        float
+            Mean spike count computed from the population escape rates before
+            stochastic sampling. May exceed N in principle.
+        """
         return self._n_expect
 
     @property
     def theta_hat(self) -> float:
-        """Adaptive threshold for non-refractory neurons (mV)."""
+        """Adaptive threshold for non-refractory neurons in millivolts.
+
+        Returns
+        -------
+        float
+            Effective threshold including all adaptation contributions (mV).
+            Equals V_T_star plus the sum of all adaptation traces.
+        """
         return self._theta_hat
 
     @property
     def y0(self) -> float:
-        """External current input state (pA)."""
+        """External current input state in picoamperes.
+
+        Returns
+        -------
+        float
+            Accumulated external current input (pA) that will be applied in
+            the next time step.
+        """
         return self._y0

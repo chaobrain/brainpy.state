@@ -43,6 +43,8 @@ class erfc_neuron(Dynamics):
     its binary output :math:`y \in \{0, 1\}` at Poisson-distributed update
     times with mean interval :math:`\tau_m`.
 
+    **1. Gain function and state transition**
+
     At each scheduled update, the new binary state is sampled as
 
     .. math::
@@ -59,8 +61,23 @@ class erfc_neuron(Dynamics):
     The model corresponds to a McCulloch-Pitts threshold unit with additive
     Gaussian noise of standard deviation :math:`\sigma`.
 
-    Update order (NEST semantics)
-    -----------------------------
+    **2. Interpretation: threshold unit with Gaussian noise**
+
+    The complementary error function gain arises from a threshold model with
+    Gaussian noise. Suppose the neuron fires when :math:`h + \xi > \theta`,
+    where :math:`\xi \sim \mathcal{N}(0, \sigma^2)`. The activation probability
+    is then
+
+    .. math::
+
+       P(\text{fire}) = P(h + \xi > \theta)
+                      = P\left(\frac{\xi}{\sigma} > \frac{\theta - h}{\sigma}\right)
+                      = \frac{1}{2}\,\mathrm{erfc}\!\left(\frac{\theta - h}{\sqrt{2}\,\sigma}\right).
+
+    This establishes the connection to the McCulloch-Pitts neuron with additive
+    Gaussian noise.
+
+    **3. Update order (NEST semantics)**
 
     Each simulation step follows the same ordering as NEST's
     ``binary_neuron::update()``:
@@ -72,29 +89,130 @@ class erfc_neuron(Dynamics):
     4. If an update happened, advance ``t_next`` by ``Exp(1) * tau_m``.
 
     As in NEST, probabilities are not explicitly clipped before comparing
-    against uniform random numbers.
+    against uniform random numbers. The comparison with a uniform random number
+    implies effective clipping: gain values below 0 yield probability 0, values
+    above 1 yield probability 1.
+
+    **4. Assumptions, constraints, and computational implications**
+
+    - The model assumes unit-compatible parameters and broadcast-compatible
+      shapes against ``self.varshape``.
+    - ``tau_m`` must be strictly positive (enforced in :meth:`__init__`).
+    - Per-step compute is :math:`O(\prod \mathrm{varshape})` with vectorized
+      elementwise operations plus random sampling overhead.
+    - Stochastic update times are sampled from an exponential distribution, so
+      the inter-update intervals are memoryless (Poisson process property).
+    - When ``stochastic_update=False``, the model updates at every time step
+      but retains stochastic state transitions according to the same gain
+      function.
 
     Parameters
     ----------
     in_size : Size
-        Number/shape of neurons.
+        Population shape specification. All neuron parameters are broadcast to
+        ``self.varshape`` derived from ``in_size``.
     tau_m : ArrayLike, optional
-        Mean inter-update interval :math:`\tau_m`. Default: ``10.0 * u.ms``.
+        Mean inter-update interval :math:`\tau_m` in ms; scalar or array
+        broadcastable to ``self.varshape``. Must be strictly positive. Default
+        is ``10.0 * u.ms``.
     theta : ArrayLike, optional
-        Threshold :math:`\theta`. Default: ``0.0 * u.mV``.
+        Threshold :math:`\theta` in mV; scalar or array broadcastable to
+        ``self.varshape``. Default is ``0.0 * u.mV``.
     sigma : ArrayLike, optional
-        Gain/noise parameter :math:`\sigma`. Default: ``1.0 * u.mV``.
+        Gain/noise parameter :math:`\sigma` in mV; scalar or array broadcastable
+        to ``self.varshape``. Larger values produce smoother gain transitions.
+        Default is ``1.0 * u.mV``.
     y_initializer : Callable, optional
-        Initializer for initial binary state ``y``. Default:
+        Initializer for initial binary state ``y`` in :meth:`init_state`. Output
+        should be float64 values (typically 0.0 or 1.0) shape-compatible with
+        ``self.varshape`` (and optional batch prefix). Default is
         ``braintools.init.Constant(0.0)``.
     stochastic_update : bool, optional
-        If ``True`` (default), use Poisson update scheduling as in NEST.
-        If ``False``, update each time step while retaining stochastic
-        state sampling from the same gain function.
+        If ``True`` (default), use Poisson update scheduling as in NEST
+        (updates occur at intervals sampled from ``Exp(tau_m)``). If ``False``,
+        update each time step while retaining stochastic state sampling from
+        the same gain function. Default is ``True``.
     rng_seed : int, optional
-        Seed for internal random sampling. Default: ``0``.
-    name : str, optional
-        Object name.
+        Seed for internal random sampling (both for uniform and exponential
+        random variables). Different seeds produce different random sequences.
+        Default is ``0``.
+    name : str or None, optional
+        Optional node name.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 20 28 14 16 35
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar/tuple
+         - required
+         - --
+         - Defines population/state shape ``self.varshape``.
+       * - ``tau_m``
+         - ArrayLike, broadcastable to ``self.varshape`` (ms)
+         - ``10.0 * u.ms``
+         - :math:`\tau_m`
+         - Mean Poisson inter-update interval.
+       * - ``theta``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``0.0 * u.mV``
+         - :math:`\theta`
+         - Activation threshold in gain function.
+       * - ``sigma``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``1.0 * u.mV``
+         - :math:`\sigma`
+         - Noise standard deviation / gain slope parameter.
+       * - ``y_initializer``
+         - Callable
+         - ``Constant(0.0)``
+         - --
+         - Initializes binary output state ``y``.
+       * - ``stochastic_update``
+         - bool
+         - ``True``
+         - --
+         - Enables Poisson-timed updates vs. every-step updates.
+       * - ``rng_seed``
+         - int
+         - ``0``
+         - --
+         - Random number generator seed.
+       * - ``name``
+         - str | None
+         - ``None``
+         - --
+         - Optional node identifier.
+
+    Returns
+    -------
+    out : Any
+        Configured binary neuron node. Each :meth:`update` call returns binary
+        output ``self.y.value`` with shape ``self.varshape`` (or
+        ``(batch_size,) + self.varshape`` if batched).
+
+    Raises
+    ------
+    ValueError
+        If ``tau_m`` contains any non-positive values (checked in
+        :meth:`__init__`), or if parameter initialization or broadcasting fails.
+    TypeError
+        If provided values are not compatible with expected units/types
+        (ms, mV, or callable initializer).
+    KeyError
+        At runtime, if required simulation context entries (``t`` or ``dt``)
+        are missing when :meth:`update` is called (only when
+        ``stochastic_update=True``).
+    AttributeError
+        If :meth:`update` is called before :meth:`init_state` creates required
+        state variables.
 
     Attributes
     ----------
@@ -104,13 +222,51 @@ class erfc_neuron(Dynamics):
         Persistent summed synaptic input.
     t_next : ShortTermState
         Next stochastic update time (only if ``stochastic_update=True``).
+    rng_key : ShortTermState
+        JAX PRNGKey for random sampling (internal state).
 
     Notes
     -----
-    In NEST, binary-neuron communication encodes state transitions using spike
-    multiplicity (double spike for up-transition, single spike for
-    down-transition). Here, equivalent effects are represented through delta
-    inputs added to :math:`h`.
+    - State variables are ``y``, ``h``, ``rng_key``, and optionally ``t_next``
+      (when ``stochastic_update=True``).
+    - In NEST, binary-neuron communication encodes state transitions using spike
+      multiplicity (double spike for up-transition, single spike for
+      down-transition). Here, equivalent effects are represented through delta
+      inputs added to :math:`h`.
+    - The gain function is evaluated at :math:`h + c`, where :math:`c` is the
+      sum of current inputs for the present step.
+    - Random sampling uses JAX's functional random number generation with state
+      splitting for reproducibility and compatibility with JAX transformations.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = brainpy.state.erfc_neuron(in_size=10, tau_m=5.0 * u.ms)
+       ...     neu.init_state(batch_size=1)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         out = neu.update(x=2.0 * u.mV)
+       ...     _ = out.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = brainpy.state.erfc_neuron(
+       ...         in_size=(2, 3),
+       ...         theta=1.0 * u.mV,
+       ...         sigma=0.5 * u.mV,
+       ...         stochastic_update=False
+       ...     )
+       ...     neu.init_state()
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = neu.update(x=1.5 * u.mV)
 
     References
     ----------
@@ -123,6 +279,11 @@ class erfc_neuron(Dynamics):
     .. [3] Morrison A, Diesmann M (2007). Maintaining causality in discrete
            time neuronal simulations. Lectures in Supercomputational
            Neuroscience. DOI: https://doi.org/10.1007/978-3-540-73159-7_10
+
+    See Also
+    --------
+    ginzburg_neuron : Binary neuron with sigmoidal/affine gain function
+    mcculloch_pitts_neuron : Binary neuron with hard threshold
     """
     __module__ = 'brainpy.state'
 
@@ -150,6 +311,33 @@ class erfc_neuron(Dynamics):
         self.rng_seed = int(rng_seed)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize binary state, input accumulator, and update timing.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Optional leading batch dimension. If ``None``, states are created
+            with shape ``self.varshape``; otherwise with
+            ``(batch_size,) + self.varshape``.
+        **kwargs : Any
+            Unused compatibility arguments.
+
+        Returns
+        -------
+        out : Any
+            ``None``. The method mutates the object in-place by creating
+            ``y`` (binary output), ``h`` (persistent input), ``rng_key``
+            (random state), and optionally ``t_next`` (next update time when
+            ``stochastic_update=True``).
+
+        Raises
+        ------
+        ValueError
+            If initializer outputs cannot be broadcast to target state shape.
+        TypeError
+            If initializer values are incompatible with required numeric/unit
+            conversions.
+        """
         shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
 
         y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
@@ -163,20 +351,127 @@ class erfc_neuron(Dynamics):
             self.t_next = brainstate.ShortTermState(next_interval)
 
     def _sample_uniform(self, shape):
+        """Sample uniform random numbers in [0, 1) with functional RNG state update.
+
+        Parameters
+        ----------
+        shape : tuple
+            Shape of the output random array.
+
+        Returns
+        -------
+        out : jnp.ndarray
+            Uniform random samples with dtype ``jnp.float64``.
+
+        Raises
+        ------
+        ValueError
+            If ``shape`` is not a valid tuple for ``jax.random.uniform``.
+        """
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
         return jax.random.uniform(subkey, shape=shape, dtype=jnp.float64)
 
     def _sample_exponential(self, shape):
+        """Sample exponential random variables with rate 1 (mean 1).
+
+        Parameters
+        ----------
+        shape : tuple
+            Shape of the output random array.
+
+        Returns
+        -------
+        out : jnp.ndarray
+            Exponential random samples (rate=1) with dtype ``jnp.float64``.
+
+        Raises
+        ------
+        ValueError
+            If ``shape`` is not a valid tuple for ``jax.random.exponential``.
+        """
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
         return jax.random.exponential(subkey, shape=shape, dtype=jnp.float64)
 
     def _gain_probability(self, h):
+        """Evaluate complementary error function gain at input ``h``.
+
+        Computes :math:`g(h) = \\frac{1}{2}\\,\\mathrm{erfc}\\!\\left(-\\frac{h - \\theta}{\\sqrt{2}\\,\\sigma}\\right)`.
+
+        Parameters
+        ----------
+        h : ArrayLike
+            Effective input (synaptic state plus current input) in mV,
+            broadcast-compatible with ``self.varshape``.
+
+        Returns
+        -------
+        out : Any
+            Activation probability with the same shape as ``h`` (unitless float64).
+
+        Raises
+        ------
+        TypeError
+            If ``h`` is not unit-compatible with ``theta`` and ``sigma`` (all
+            should be in mV).
+        """
         arg = -(h - self.theta) / (u.math.asarray(jnp.sqrt(2.0), dtype=jnp.float64) * self.sigma)
         return 0.5 * jspecial.erfc(u.math.asarray(arg, dtype=jnp.float64))
 
     def update(self, x=0. * u.mV):
+        """Advance the binary neuron by one simulation step.
+
+        Follows NEST update ordering:
+
+        1. Integrate delta inputs into persistent ``h``.
+        2. Compute total input ``h + c`` where ``c`` is current input.
+        3. Evaluate gain function :math:`g(h + c)`.
+        4. If Poisson-scheduled update is due (``t + dt > t_next``), sample new
+           binary state from :math:`g(h + c)` and schedule next update.
+        5. Return updated binary output ``y``.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            External current input in mV for this step. Combined with additional
+            current sources from :meth:`sum_current_inputs`. Default is
+            ``0.0 * u.mV``.
+
+        Returns
+        -------
+        out : Any
+            Binary output state ``self.y.value`` with shape ``self.varshape``
+            (or ``(batch_size,) + self.varshape`` if batched). Values are
+            float64 (0.0 or 1.0) wrapped in ``jax.lax.stop_gradient`` to
+            prevent gradient flow through stochastic sampling.
+
+        Raises
+        ------
+        KeyError
+            If simulation context does not provide required entries ``t`` or
+            ``dt`` when ``stochastic_update=True``.
+        AttributeError
+            If required states are missing because :meth:`init_state` has not
+            been called.
+        TypeError
+            If input/state values are not unit-compatible with expected mV
+            arithmetic.
+
+        Notes
+        -----
+        - When ``stochastic_update=True``, updates only occur at Poisson-
+          distributed times (mean interval ``tau_m``). Between updates, ``y``
+          remains constant.
+        - When ``stochastic_update=False``, the binary state is resampled at
+          every time step according to the same gain function.
+        - The gain function is never explicitly clipped; effective clipping
+          occurs through comparison with uniform random numbers: if
+          :math:`g(h + c) < 0`, firing probability is 0; if :math:`g(h + c) > 1`,
+          firing probability is 1.
+        - All random sampling uses functional JAX RNG state splitting for
+          reproducibility and JAX transformation compatibility.
+        """
         # NEST ordering: first integrate binary-event deltas into persistent h.
         delta_h = self.sum_delta_inputs(u.math.zeros_like(self.h.value))
         self.h.value = self.h.value + delta_h

@@ -60,8 +60,38 @@ class bernoulli_synapse(static_synapse):
 
     A failed trial drops the event entirely.
 
-    Event send ordering (NEST source equivalent)
-    --------------------------------------------
+    **1. Mathematical formulation**
+
+    Stochastic transmission probability: Each spike arriving at the synapse
+    triggers a Bernoulli trial with success probability :math:`p_{\mathrm{transmit}}`.
+    The trial outcome determines whether the event is forwarded to the
+    postsynaptic target. Formally:
+
+    .. math::
+
+       P(\text{transmit spike}) = p_{\mathrm{transmit}}
+
+    The transmission decision for each spike is independent of previous trials.
+    No state variables are maintained across spikes — the synapse is memoryless.
+
+    **2. Implementation details**
+
+    Random number generation uses NumPy's global RNG state (``np.random.random()``).
+    The trial outcome is computed by comparing a uniform random variate
+    :math:`U \sim \mathrm{Uniform}(0, 1)` to the threshold :math:`p_{\mathrm{transmit}}`:
+
+    .. math::
+
+       \text{transmit} = \begin{cases}
+         \text{True}, & U < p_{\mathrm{transmit}} \\
+         \text{False}, & \text{otherwise}
+       \end{cases}
+
+    If the trial fails, the spike is discarded before scheduling. If successful,
+    the spike is forwarded using the parent :class:`static_synapse` delivery
+    mechanism with the configured ``weight`` and ``delay``.
+
+    **3. Event send ordering (NEST source equivalent)**
 
     NEST ``models/bernoulli_synapse.h`` performs:
 
@@ -78,30 +108,121 @@ class bernoulli_synapse(static_synapse):
     :class:`static_synapse` scheduling applies weight, delay steps, receiver
     and receptor port in the same effective order.
 
+    **4. Biological motivation**
+
+    Synaptic transmission in real neural circuits is stochastic due to finite
+    vesicle release probabilities and quantal failures. This model approximates
+    such unreliable transmission using a simple Bernoulli process, which is
+    computationally efficient and captures the essential statistical properties
+    of transmission failures.
+
+    Applications include:
+
+    - Sparse networks with probabilistic connectivity (e.g., cortical column
+      models, [2]_).
+    - Networks with strong-sparse and weak-dense connectivity motifs [3]_.
+    - Recurrent networks where transmission failures contribute to decorrelation
+      and robustness [4]_.
+
+    **5. Computational considerations**
+
+    - Random number generation introduces non-determinism. For reproducible
+      simulations, seed the NumPy RNG before initializing the network:
+      ``np.random.seed(42)``.
+    - Each spike invokes one call to ``np.random.random()``, adding negligible
+      computational overhead compared to deterministic synapses.
+    - The model is stateless and suitable for large-scale network simulations
+      where memory footprint per synapse is a constraint.
+
     Parameters
     ----------
     weight : ArrayLike, optional
-        Fixed synaptic weight. Default: ``1.0``.
+        Fixed synaptic weight (dimensionless or receiver-dependent units such as
+        pA, nS, or mV). Must be scalar. Default: ``1.0``.
     delay : ArrayLike, optional
-        Synaptic delay in ms. Default: ``1.0 * u.ms``.
+        Synaptic delay in ms. Must be scalar. Converted to integer simulation
+        steps using round-to-nearest with midpoint-up (NEST convention).
+        Default: ``1.0 * u.ms``.
     receptor_type : int, optional
-        Receiver port/receptor id. Default: ``0``.
+        Receiver port/receptor id. Used to target specific synaptic receptor
+        channels on the postsynaptic neuron. Default: ``0``.
     p_transmit : ArrayLike, optional
-        Spike transmission probability in ``[0, 1]``.
-        Default: ``1.0``.
+        Spike transmission probability in ``[0, 1]``. Must be scalar. Values
+        outside this range raise ``ValueError``. Default: ``1.0``.
     post : object, optional
-        Default receiver object.
+        Default receiver object (postsynaptic neuron or target module). If not
+        provided, a receiver must be passed explicitly to :meth:`send` when
+        scheduling events.
     event_type : str, optional
-        Event transmission type (same options as :class:`static_synapse`).
-        Default: ``'spike'``.
+        Event transmission type. Inherited from :class:`static_synapse`. One of
+        ``'spike'``, ``'rate'``, ``'current'``, ``'conductance'``,
+        ``'double_data'``, ``'data_logging'``. Default: ``'spike'``.
     name : str, optional
-        Object name.
+        Object name for debugging and introspection.
+
+    Raises
+    ------
+    ValueError
+        If ``p_transmit`` is not scalar or is outside ``[0, 1]``.
+
+    See Also
+    --------
+    static_synapse : Parent class implementing deterministic event scheduling.
+    tsodyks_synapse : Short-term plasticity model with dynamic transmission.
 
     Notes
     -----
-    - This model does not implement plasticity.
+    - This model does not implement plasticity (no weight updates, no state
+      evolution).
     - Random draws use NumPy's global RNG state. Use ``np.random.seed(...)``
       for reproducible test traces when needed.
+    - The model is compatible with all event types supported by
+      :class:`static_synapse`, though biological applications typically use
+      ``event_type='spike'``.
+    - Transmission failures are independent across spikes and across different
+      synapse instances.
+
+    Examples
+    --------
+    Create a stochastic synapse with 50% transmission probability:
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainunit as u
+       >>> post_neuron = bst.LIF(1)
+       >>> syn = bst.bernoulli_synapse(
+       ...     weight=5.0,
+       ...     delay=2.0 * u.ms,
+       ...     p_transmit=0.5,
+       ...     post=post_neuron,
+       ... )
+
+    Simulate stochastic transmission and observe dropped spikes:
+
+    .. code-block:: python
+
+       >>> import numpy as np
+       >>> np.random.seed(42)  # for reproducibility
+       >>> transmitted = [syn.send(multiplicity=1.0) for _ in range(10)]
+       >>> transmitted
+       [False, True, False, True, True, False, True, False, False, True]
+
+    Query current parameters:
+
+    .. code-block:: python
+
+       >>> params = syn.get()
+       >>> params['p_transmit']
+       0.5
+
+    Update transmission probability dynamically:
+
+    .. code-block:: python
+
+       >>> syn.set(p_transmit=0.8)
+       >>> syn.p_transmit
+       0.8
 
     References
     ----------
@@ -147,6 +268,23 @@ class bernoulli_synapse(static_synapse):
 
     @staticmethod
     def _to_scalar_probability(value: ArrayLike) -> float:
+        """Convert input to scalar float for probability validation.
+
+        Parameters
+        ----------
+        value : ArrayLike
+            Input value to convert. Must be scalar-compatible (size 1).
+
+        Returns
+        -------
+        float
+            Scalar float value extracted from input.
+
+        Raises
+        ------
+        ValueError
+            If input is not scalar (size != 1).
+        """
         arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('p_transmit must be scalar.')
@@ -154,15 +292,63 @@ class bernoulli_synapse(static_synapse):
 
     @staticmethod
     def _validate_probability(p_transmit: float):
+        """Validate that transmission probability is in valid range.
+
+        Parameters
+        ----------
+        p_transmit : float
+            Transmission probability to validate.
+
+        Raises
+        ------
+        ValueError
+            If ``p_transmit`` is outside the interval ``[0, 1]``.
+        """
         if p_transmit < 0.0 or p_transmit > 1.0:
             raise ValueError('Spike transmission probability must be in [0, 1].')
 
     @staticmethod
     def _sample_uniform() -> float:
+        """Draw one uniform random variate in [0, 1).
+
+        Uses NumPy's global RNG state (``np.random.random()``).
+
+        Returns
+        -------
+        float
+            Uniform random value in ``[0, 1)``.
+
+        Notes
+        -----
+        This method is stateless and relies on NumPy's global random number
+        generator. For reproducible results, seed the RNG before simulation:
+        ``np.random.seed(42)``.
+        """
         return float(np.random.random())
 
     def get(self) -> dict:
-        """Return current public parameters."""
+        """Return current public parameters.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all connection parameters:
+
+            - ``'weight'`` : float — synaptic weight.
+            - ``'delay'`` : float — synaptic delay in ms.
+            - ``'receptor_type'`` : int — receiver port id.
+            - ``'p_transmit'`` : float — transmission probability in ``[0, 1]``.
+            - ``'synapse_model'`` : str — model identifier (``'bernoulli_synapse'``).
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> syn = bst.bernoulli_synapse(weight=2.0, p_transmit=0.7)
+           >>> params = syn.get()
+           >>> params['p_transmit']
+           0.7
+        """
         params = super().get()
         params['p_transmit'] = float(self.p_transmit)
         params['synapse_model'] = 'bernoulli_synapse'
@@ -178,7 +364,41 @@ class bernoulli_synapse(static_synapse):
         post: object = _UNSET,
         event_type: str | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        """Set NEST-style public parameters.
+
+        Updates one or more connection parameters. All parameters are optional;
+        unspecified parameters retain their current values.
+
+        Parameters
+        ----------
+        weight : ArrayLike, optional
+            New synaptic weight. Must be scalar.
+        delay : ArrayLike, optional
+            New synaptic delay in ms. Must be scalar.
+        receptor_type : int, optional
+            New receiver port/receptor id.
+        p_transmit : ArrayLike, optional
+            New transmission probability in ``[0, 1]``. Must be scalar.
+        post : object, optional
+            New default receiver object.
+        event_type : str, optional
+            New event transmission type (``'spike'``, ``'rate'``, ``'current'``,
+            ``'conductance'``, ``'double_data'``, ``'data_logging'``).
+
+        Raises
+        ------
+        ValueError
+            If ``p_transmit`` is provided and is not scalar or is outside ``[0, 1]``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> syn = bst.bernoulli_synapse(weight=1.0, p_transmit=0.5)
+           >>> syn.set(p_transmit=0.8, weight=2.0)
+           >>> syn.p_transmit
+           0.8
+        """
         new_p = (
             self.p_transmit
             if p_transmit is _UNSET
@@ -210,7 +430,63 @@ class bernoulli_synapse(static_synapse):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> bool:
-        """Stochastically schedule one outgoing event."""
+        """Stochastically schedule one outgoing event.
+
+        Performs a Bernoulli trial to decide whether to transmit the event. If
+        the trial succeeds, the event is scheduled for delivery using the
+        inherited :class:`static_synapse` mechanism. If the trial fails, the
+        event is discarded.
+
+        Parameters
+        ----------
+        multiplicity : ArrayLike, optional
+            Event payload value (spike count, rate, or current). If zero or
+            negligible (< 1e-12), the event is dropped without drawing a random
+            number. Default: ``1.0``.
+        post : object, optional
+            Receiver object (postsynaptic neuron). Overrides the default
+            receiver set in :meth:`__init__` or :meth:`set`. If both are
+            ``None``, scheduling will fail.
+        receptor_type : int, optional
+            Receiver port/receptor id. Overrides the default receptor type.
+        event_type : str, optional
+            Event transmission type. Overrides the default event type.
+
+        Returns
+        -------
+        bool
+            ``True`` if the event was successfully transmitted and scheduled.
+            ``False`` if the event was zero, or if the Bernoulli trial failed.
+
+        Notes
+        -----
+        - Zero-valued events (``multiplicity < 1e-12``) are dropped before the
+          Bernoulli trial to avoid unnecessary random number generation.
+        - Each call draws one uniform random variate from NumPy's global RNG.
+        - The transmission decision is independent of previous calls.
+
+        Examples
+        --------
+        Simulate stochastic transmission with 50% probability:
+
+        .. code-block:: python
+
+           >>> import numpy as np
+           >>> np.random.seed(42)
+           >>> syn = bst.bernoulli_synapse(p_transmit=0.5, post=post_neuron)
+           >>> results = [syn.send(multiplicity=1.0) for _ in range(10)]
+           >>> results
+           [False, True, False, True, True, False, True, False, False, True]
+           >>> sum(results)  # approximately 5 out of 10
+           5
+
+        Zero-valued events are dropped without drawing random numbers:
+
+        .. code-block:: python
+
+           >>> syn.send(multiplicity=0.0)
+           False
+        """
         if not self._is_nonzero(multiplicity):
             return False
 

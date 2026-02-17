@@ -37,165 +37,284 @@ __all__ = [
 class aeif_cond_beta_multisynapse(Neuron):
     r"""NEST-compatible ``aeif_cond_beta_multisynapse`` neuron model.
 
-    Short description
-    -----------------
-
     Conductance-based adaptive exponential integrate-and-fire neuron with
-    beta-shaped synapses and an arbitrary number of receptor ports.
+    beta-shaped synaptic conductances and an arbitrary number of receptor ports.
+    Implements NEST's ``aeif_cond_beta_multisynapse`` model with source-level
+    parity in update ordering, refractory handling, and spike detection.
 
-    Description
-    -----------
-
-    ``aeif_cond_beta_multisynapse`` follows NEST
-    ``models/aeif_cond_beta_multisynapse.{h,cpp}``.
-    It is the multisynapse beta-conductance extension of the adaptive
-    exponential integrate-and-fire model from Brette and Gerstner (2005).
-
-    Each receptor ``k`` has:
-
-    - rise time ``tau_rise[k]``,
-    - decay time ``tau_decay[k]``,
-    - reversal potential ``E_rev[k]``,
-    - beta states ``dg[k]`` and ``g[k]``.
-
-    Receptor ports are 1-based (NEST convention): ``1..n_receptors``.
-
-    Continuous dynamics
-    ...................
-
-    Let :math:`V` be membrane voltage, :math:`w` adaptation current,
-    :math:`g_k` receptor conductances, and :math:`I_{stim}` the delayed
-    injected current.
-
-    .. math::
-
-       C_m \frac{dV}{dt}
-       =
-       -g_L (V - E_L)
-       + g_L \Delta_T \exp\!\left(\frac{V - V_{th}}{\Delta_T}\right)
-       + \sum_k g_k (E_{\mathrm{rev},k} - V)
-       - w + I_e + I_{stim}.
-
-    Adaptation dynamics:
-
-    .. math::
-
-       \tau_w \frac{dw}{dt} = a (V - E_L) - w.
-
-    Receptor beta states:
-
-    .. math::
-
-       \frac{d\,dg_k}{dt} = -\frac{dg_k}{\tau_{\mathrm{rise},k}},
-       \qquad
-       \frac{d g_k}{dt} = dg_k - \frac{g_k}{\tau_{\mathrm{decay},k}}.
-
-    Incoming spike weights ``w_k`` (nS) are applied as:
-
-    .. math::
-
-       dg_k \leftarrow dg_k + g_{0,k}\, w_k,
-
-    where ``g0`` is NEST's beta normalization factor so unit weight produces a
-    unit peak conductance; in the equal-time-constant limit this reduces to the
-    alpha normalization :math:`e / \tau`.
-
-    Spike and refractory semantics
-    ..............................
-
-    - During refractory integration, effective voltage is clamped to
-      ``V_reset`` and :math:`dV/dt = 0`.
-    - Outside refractory period, the RHS uses :math:`\min(V, V_{peak})`.
-    - Spike detection threshold is:
-      - ``V_peak`` if ``Delta_T > 0``,
-      - ``V_th`` if ``Delta_T == 0``.
-    - On each detected spike (inside RKF45 substeps):
-      - ``V <- V_reset``
-      - ``w <- w + b``
-      - refractory counter ``r <- refractory_counts + 1`` if refractory is enabled.
-
-    Update order per simulation step (NEST semantics)
-    ..................................................
-
-    1. Integrate ODEs on :math:`(t, t+dt]` using adaptive RKF45.
-    2. Inside integration loop: refractory clamp and spike/reset/adaptation.
-    3. Decrement refractory counter once.
-    4. Apply incoming receptor-specific spike events to ``dg``.
-    5. Store continuous current input ``x`` into one-step delayed ``I_stim``.
-
-    Event semantics
-    ...............
-
-    ``spike_events`` passed to :meth:`update` must be an iterable of
-    ``(receptor_type, weight)`` or dictionaries with keys
-    ``receptor_type``/``receptor`` and ``weight``.
-
-    - Receptor types are 1-based and must satisfy ``1 <= receptor_type <= n_receptors``.
-    - Weights are conductances (nS) and must be non-negative, matching NEST
-      conductance multisynapse constraints.
-    - ``add_delta_input`` stream is mapped to receptor 1 by default; those
-      values must also be non-negative.
+    This model extends the adaptive exponential integrate-and-fire (AdEx) framework
+    [1]_ with beta-function synaptic conductances instead of exponential or alpha
+    shapes. Each receptor port maintains independent rise/decay time constants and
+    reversal potentials, enabling multi-receptor networks (e.g., AMPA + GABA_A).
 
     Parameters
     ----------
+    in_size : Size
+        Population shape as integer, tuple, or Size object. Required.
+    V_peak : ArrayLike, optional
+        Spike detection threshold (mV). Used when ``Delta_T > 0``; otherwise
+        ``V_th`` is used. Must satisfy ``V_peak >= V_th``. Default: 0.0 mV.
+    V_reset : ArrayLike, optional
+        Post-spike reset potential (mV). Must satisfy ``V_reset < V_peak``.
+        Default: -60.0 mV.
+    t_ref : ArrayLike, optional
+        Absolute refractory period (ms). During refractory, ``dV/dt = 0`` and
+        voltage is clamped to ``V_reset``. Default: 0.0 ms (no refractory).
+    g_L : ArrayLike, optional
+        Leak conductance (nS). Must be strictly positive. Default: 30.0 nS.
+    C_m : ArrayLike, optional
+        Membrane capacitance (pF). Must be strictly positive. Default: 281.0 pF.
+    E_L : ArrayLike, optional
+        Leak reversal potential (mV). Default: -70.6 mV.
+    Delta_T : ArrayLike, optional
+        Exponential slope factor (mV). Must be non-negative. When ``Delta_T = 0``,
+        reduces to LIF-like dynamics. Default: 2.0 mV.
+    tau_w : ArrayLike, optional
+        Adaptation time constant (ms). Must be strictly positive. Default: 144.0 ms.
+    a : ArrayLike, optional
+        Subthreshold adaptation coupling (nS). Default: 4.0 nS.
+    b : ArrayLike, optional
+        Spike-triggered adaptation increment (pA). Added to ``w`` on each spike.
+        Default: 80.5 pA.
+    V_th : ArrayLike, optional
+        Spike initiation threshold (mV) for exponential term. Must satisfy
+        ``V_th <= V_peak``. Default: -50.4 mV.
+    tau_rise : ArrayLike, optional
+        Synaptic rise time constants (ms) per receptor, shape ``(n_receptors,)``.
+        Must be strictly positive and satisfy ``tau_rise <= tau_decay`` element-wise.
+        Default: (2.0,) ms (single receptor).
+    tau_decay : ArrayLike, optional
+        Synaptic decay time constants (ms) per receptor, shape ``(n_receptors,)``.
+        Must be strictly positive and satisfy ``tau_decay >= tau_rise`` element-wise.
+        Default: (20.0,) ms (single receptor).
+    E_rev : ArrayLike, optional
+        Reversal potentials (mV) per receptor, shape ``(n_receptors,)``.
+        Default: (0.0,) mV (excitatory-like).
+    I_e : ArrayLike, optional
+        Constant external current (pA). Default: 0.0 pA.
+    gsl_error_tol : ArrayLike, optional
+        RKF45 local error tolerance (unitless). Smaller values improve accuracy
+        but increase computational cost. Must be strictly positive. Default: 1e-6.
+    V_initializer : Callable, optional
+        Membrane potential initializer. Default: Constant(-70.6 mV).
+    g_initializer : Callable, optional
+        Conductance state initializer with shape ``[..., n_receptors]``.
+        Default: Constant(0.0 nS).
+    w_initializer : Callable, optional
+        Adaptation current initializer. Default: Constant(0.0 pA).
+    spk_fun : Callable, optional
+        Surrogate gradient function for differentiable spike generation.
+        Default: ReluGrad().
+    spk_reset : str, optional
+        Spike reset mode. ``'hard'`` (stop_gradient, matches NEST) or ``'soft'``
+        (subtract threshold). Default: ``'hard'``.
+    ref_var : bool, optional
+        If True, expose ``refractory`` state variable (boolean indicator).
+        Default: False.
+    name : str, optional
+        Instance name. If None, auto-generated.
 
-    ==================== =================== ============================================== =====================================================
-    **Parameter**        **Default**         **Math equivalent**                             **Description**
-    ==================== =================== ============================================== =====================================================
-    ``in_size``          (required)                                                         Population shape
-    ``V_peak``           0 mV                :math:`V_\mathrm{peak}`                         Spike detection threshold (if ``Delta_T > 0``)
-    ``V_reset``          -60 mV              :math:`V_\mathrm{reset}`                        Reset potential
-    ``t_ref``            0 ms                :math:`t_\mathrm{ref}`                          Absolute refractory duration
-    ``g_L``              30 nS               :math:`g_\mathrm{L}`                            Leak conductance
-    ``C_m``              281 pF              :math:`C_\mathrm{m}`                            Membrane capacitance
-    ``E_L``              -70.6 mV            :math:`E_\mathrm{L}`                            Leak reversal potential
-    ``Delta_T``          2 mV                :math:`\Delta_T`                                Exponential slope factor
-    ``tau_w``            144 ms              :math:`\tau_w`                                  Adaptation time constant
-    ``a``                4 nS                :math:`a`                                       Subthreshold adaptation
-    ``b``                80.5 pA             :math:`b`                                       Spike-triggered adaptation increment
-    ``V_th``             -50.4 mV            :math:`V_\mathrm{th}`                           Spike initiation threshold (exponential term)
-    ``tau_rise``         ``[2.0]`` ms        :math:`\tau_{\mathrm{rise},k}`                  Synaptic rise constants per receptor
-    ``tau_decay``        ``[20.0]`` ms       :math:`\tau_{\mathrm{decay},k}`                 Synaptic decay constants per receptor
-    ``E_rev``            ``[0.0]`` mV        :math:`E_{\mathrm{rev},k}`                      Reversal potentials per receptor
-    ``I_e``              0 pA                :math:`I_\mathrm{e}`                            Constant external current
-    ``gsl_error_tol``    1e-6                (solver tolerance)                              RKF45 local error tolerance
-    ``V_initializer``    Constant(-70.6 mV)                                                  Membrane initializer
-    ``g_initializer``    Constant(0 nS)                                                      Conductance initializer ``[..., n_receptors]``
-    ``w_initializer``    Constant(0 pA)                                                      Adaptation current initializer
-    ``spk_fun``          ReluGrad()                                                          Surrogate spike function
-    ``spk_reset``        ``'hard'``                                                          Reset mode; hard reset matches NEST behavior
-    ``ref_var``          ``False``                                                           If True, expose boolean refractory indicator
-    ==================== =================== ============================================== =====================================================
+    **Parameter Mapping (NEST Compatibility)**
 
-    State variables
-    ---------------
+    ======================== ===================== ===============================================
+    **BrainPy Parameter**    **NEST Parameter**    **Description**
+    ======================== ===================== ===============================================
+    ``in_size``              (model count)         Population shape
+    ``V_peak``               ``V_peak``            Spike detection threshold
+    ``V_reset``              ``V_reset``           Reset potential
+    ``t_ref``                ``t_ref``             Refractory period
+    ``g_L``                  ``g_L``               Leak conductance
+    ``C_m``                  ``C_m``               Membrane capacitance
+    ``E_L``                  ``E_L``               Leak reversal
+    ``Delta_T``              ``Delta_T``           Slope factor
+    ``tau_w``                ``tau_w``             Adaptation time constant
+    ``a``                    ``a``                 Subthreshold adaptation
+    ``b``                    ``b``                 Spike-triggered adaptation
+    ``V_th``                 ``V_th``              Exponential threshold
+    ``tau_rise``             ``tau_rise``          Rise time per receptor
+    ``tau_decay``            ``tau_decay``         Decay time per receptor
+    ``E_rev``                ``E_rev``             Reversal potential per receptor
+    ``I_e``                  ``I_e``               Constant external current
+    ``gsl_error_tol``        ``gsl_error_tol``     RKF45 tolerance
+    ======================== ===================== ===============================================
 
-    - ``V``: membrane potential :math:`V_m`.
-    - ``w``: adaptation current.
-    - ``dg``: beta auxiliary states per receptor ``[..., n_receptors]``.
-    - ``g``: receptor conductances ``[..., n_receptors]``.
-    - ``refractory_step_count``: remaining refractory grid steps.
-    - ``integration_step``: persistent RKF45 internal step size.
-    - ``I_stim``: one-step delayed current buffer.
-    - ``last_spike_time``: last emitted spike time (:math:`t+dt` on spike).
-    - ``refractory``: optional boolean refractory indicator.
+    **Mathematical Model**
 
-    Recordables
-    -----------
+    **1. Membrane Dynamics**
 
-    Dynamic recordables follow NEST naming:
+    The membrane voltage :math:`V` evolves according to:
 
-    - ``V_m``
-    - ``w``
-    - ``g_1``, ``g_2``, ..., ``g_n``
+    .. math::
+
+       C_m \frac{dV}{dt} = -g_L (V - E_L) + g_L \Delta_T \exp\!\left(\frac{V - V_{th}}{\Delta_T}\right)
+                           + \sum_{k=1}^{n_{\text{rec}}} g_k (E_{\text{rev},k} - V)
+                           - w + I_e + I_{\text{stim}},
+
+    where:
+
+    - :math:`C_m`: membrane capacitance (pF)
+    - :math:`g_L`: leak conductance (nS)
+    - :math:`E_L`: leak reversal potential (mV)
+    - :math:`\Delta_T`: exponential slope factor (mV)
+    - :math:`V_{th}`: spike initiation threshold (mV)
+    - :math:`g_k`: conductance of receptor :math:`k` (nS)
+    - :math:`E_{\text{rev},k}`: reversal potential of receptor :math:`k` (mV)
+    - :math:`w`: adaptation current (pA)
+    - :math:`I_e`: constant external current (pA)
+    - :math:`I_{\text{stim}}`: delayed injected current (pA)
+
+    During refractory period, :math:`dV/dt = 0` and :math:`V` is clamped to
+    :math:`V_{\text{reset}}`. Outside refractory, the exponential term uses
+    :math:`\min(V, V_{\text{peak}})` to prevent numerical overflow.
+
+    **2. Adaptation Dynamics**
+
+    The adaptation current :math:`w` follows:
+
+    .. math::
+
+       \tau_w \frac{dw}{dt} = a (V - E_L) - w,
+
+    where :math:`a` (nS) couples subthreshold membrane voltage fluctuations to
+    adaptation. On each spike, :math:`w \leftarrow w + b` implements spike-
+    triggered adaptation.
+
+    **3. Beta-Function Synaptic Conductances**
+
+    Each receptor :math:`k` maintains two state variables:
+
+    .. math::
+
+       \frac{d\,dg_k}{dt} = -\frac{dg_k}{\tau_{\text{rise},k}}, \quad
+       \frac{dg_k}{dt} = dg_k - \frac{g_k}{\tau_{\text{decay},k}}.
+
+    Incoming spikes with weight :math:`w_k` (nS) increment the auxiliary state:
+
+    .. math::
+
+       dg_k \leftarrow dg_k + g_{0,k} w_k,
+
+    where :math:`g_{0,k}` is the beta normalization factor ensuring unit weight
+    produces unit peak conductance:
+
+    .. math::
+
+       g_{0,k} = \frac{1/\tau_{\text{rise},k} - 1/\tau_{\text{decay},k}}{\exp(-t_{\text{peak}}/\tau_{\text{decay},k}) - \exp(-t_{\text{peak}}/\tau_{\text{rise},k})},
+
+    with :math:`t_{\text{peak}} = \tau_{\text{decay},k} \tau_{\text{rise},k} \log(\tau_{\text{decay},k}/\tau_{\text{rise},k}) / (\tau_{\text{decay},k} - \tau_{\text{rise},k})`.
+    In the equal-time-constant limit, this reduces to the alpha normalization
+    :math:`e / \tau`.
+
+    **4. Spike Detection and Reset**
+
+    A spike is detected when:
+
+    - :math:`V \geq V_{\text{peak}}` if :math:`\Delta_T > 0`
+    - :math:`V \geq V_{th}` if :math:`\Delta_T = 0`
+
+    Upon spike detection (within RKF45 substeps):
+
+    1. :math:`V \leftarrow V_{\text{reset}}`
+    2. :math:`w \leftarrow w + b`
+    3. Refractory counter :math:`r \leftarrow \lceil t_{\text{ref}} / dt \rceil + 1` (if ``t_ref > 0``)
+
+    **5. Update Order (NEST Semantics)**
+
+    Each simulation step :math:`(t, t+dt]` proceeds as:
+
+    1. Integrate ODEs using adaptive RKF45 with internal substeps
+    2. Inside integration: apply refractory clamp and spike/reset logic
+    3. Decrement refractory counter once (outside integration)
+    4. Apply incoming spike events to ``dg`` states with beta normalization
+    5. Store continuous current input for next step (one-step delay)
+
+    **Computational Notes**
+
+    - **Numerical integration**: Runge-Kutta-Fehlberg (RKF45) adaptive solver
+      with local error tolerance ``gsl_error_tol``. Internal step size adapts
+      dynamically and persists across simulation steps.
+    - **Refractory handling**: During refractory, effective voltage is clamped
+      to ``V_reset`` for all ODE terms, including adaptation coupling.
+    - **Overflow protection**: Exponential term uses :math:`\min(V, V_{\text{peak}})`
+      outside refractory to prevent :math:`\exp(\cdot)` overflow. Validation
+      ensures :math:`(V_{\text{peak}} - V_{th}) / \Delta_T` stays below overflow
+      threshold when :math:`\Delta_T > 0`.
+    - **Spike event format**: ``spike_events`` must be an iterable of
+      ``(receptor_type, weight)`` tuples or dicts with keys ``receptor_type``/
+      ``receptor`` and ``weight``. Receptor types are 1-based (NEST convention):
+      ``1 <= receptor_type <= n_receptors``. Weights (nS) must be non-negative.
+    - **Default input mapping**: ``add_delta_input`` stream is mapped to receptor 1;
+      weights must be non-negative.
+    - **Instability detection**: Integration raises ``ValueError`` if
+      :math:`V < -1000` mV or :math:`|w| > 10^6` pA, indicating numerical collapse.
+
+    Attributes
+    ----------
+    V : HiddenState
+        Membrane potential (mV), shape ``(*in_size,)``.
+    w : HiddenState
+        Adaptation current (pA), shape ``(*in_size,)``.
+    dg : ShortTermState
+        Beta auxiliary states (unitless), shape ``(*in_size, n_receptors)``.
+    g : HiddenState
+        Receptor conductances (nS), shape ``(*in_size, n_receptors)``.
+    refractory_step_count : ShortTermState
+        Remaining refractory steps (int32), shape ``(*in_size,)``.
+    integration_step : ShortTermState
+        Persistent RKF45 step size (ms), shape ``(*in_size,)``.
+    I_stim : ShortTermState
+        One-step delayed current buffer (pA), shape ``(*in_size,)``.
+    last_spike_time : ShortTermState
+        Last spike time (ms), shape ``(*in_size,)``. Initialized to -1e7 ms.
+    refractory : ShortTermState, optional
+        Boolean refractory indicator, shape ``(*in_size,)``. Only present if
+        ``ref_var=True``.
+    n_receptors : int
+        Number of receptor ports, inferred from ``tau_rise.size``.
+    recordables : list of str
+        Dynamic recordable names: ``['V_m', 'w', 'g_1', 'g_2', ..., 'g_n']``.
+
+    Raises
+    ------
+    ValueError
+        If ``tau_rise.size != tau_decay.size != E_rev.size``.
+    ValueError
+        If any ``tau_rise <= 0`` or ``tau_decay <= 0``.
+    ValueError
+        If any ``tau_decay < tau_rise``.
+    ValueError
+        If any ``V_peak < V_th`` or ``V_reset >= V_peak``.
+    ValueError
+        If ``Delta_T < 0`` or ``C_m <= 0`` or ``t_ref < 0`` or ``tau_w <= 0``.
+    ValueError
+        If ``gsl_error_tol <= 0``.
+    ValueError
+        If :math:`(V_{\text{peak}} - V_{th}) / \Delta_T` exceeds overflow threshold
+        (when :math:`\Delta_T > 0`).
+    ValueError
+        During ``update``, if receptor type out of range ``[1, n_receptors]``.
+    ValueError
+        During ``update``, if synaptic weight is negative (conductance constraint).
+    ValueError
+        During ``update``, if numerical instability detected (:math:`V < -1000` mV
+        or :math:`|w| > 10^6` pA).
+
+    See Also
+    --------
+    aeif_cond_alpha_multisynapse : Alpha-function variant
+    aeif_cond_exp : Single exponential synapse
+    aeif_psc_exp : Current-based AdEx
 
     Notes
     -----
-
-    - Default ``t_ref = 0`` matches NEST and can allow multiple spikes inside
-      one simulation step.
-    - This implementation targets source-level parity with NEST update ordering
-      rather than high-performance vectorization.
+    - Default ``t_ref = 0`` matches NEST and allows multiple spikes per timestep.
+      Set ``t_ref > 0`` to enforce physiological refractory periods.
+    - This implementation prioritizes NEST compatibility over vectorization.
+      Per-neuron scalar loops ensure identical update ordering and spike semantics.
+    - Beta conductances provide more realistic synaptic shapes than single
+      exponentials but require two state variables per receptor (``dg`` and ``g``).
+    - When ``tau_rise = tau_decay``, normalization degenerates to alpha-function
+      limit :math:`e / \tau`.
 
     References
     ----------
@@ -205,8 +324,48 @@ class aeif_cond_beta_multisynapse(Neuron):
            DOI: https://doi.org/10.1152/jn.00686.2005
     .. [2] Roth A, van Rossum M (2013). Modeling synapses.
            In *Computational Modeling Methods for Neuroscientists*.
-    .. [3] NEST source: ``models/aeif_cond_beta_multisynapse.h`` and
+           MIT Press, Cambridge, MA.
+    .. [3] NEST 3.9+ source: ``models/aeif_cond_beta_multisynapse.h`` and
            ``models/aeif_cond_beta_multisynapse.cpp``.
+
+    Examples
+    --------
+    Create a two-receptor neuron (excitatory + inhibitory):
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bp
+       >>> import brainunit as u
+       >>> neuron = bp.aeif_cond_beta_multisynapse(
+       ...     in_size=10,
+       ...     tau_rise=(2.0, 0.5) * u.ms,
+       ...     tau_decay=(20.0, 8.0) * u.ms,
+       ...     E_rev=(0.0, -80.0) * u.mV,  # excitatory, inhibitory
+       ... )
+       >>> neuron.n_receptors
+       2
+
+    Simulate with receptor-specific spike events:
+
+    .. code-block:: python
+
+       >>> import brainstate as bst
+       >>> with bst.environ.context(dt=0.1 * u.ms):
+       ...     neuron.init_all_states()
+       ...     # Excitatory spike to receptor 1
+       ...     events = [(1, 5.0 * u.nS)]
+       ...     spk = neuron.update(x=100.0 * u.pA, spike_events=events)
+       ...     print(neuron.V.value)  # doctest: +SKIP
+
+    Multi-receptor dictionary format:
+
+    .. code-block:: python
+
+       >>> events = [
+       ...     {'receptor_type': 1, 'weight': 3.0 * u.nS},
+       ...     {'receptor_type': 2, 'weight': 2.0 * u.nS},
+       ... ]
+       >>> spk = neuron.update(spike_events=events)  # doctest: +SKIP
     """
 
     __module__ = 'brainpy.state'
@@ -242,6 +401,10 @@ class aeif_cond_beta_multisynapse(Neuron):
         ref_var: bool = False,
         name: str = None,
     ):
+        """Initialize aeif_cond_beta_multisynapse neuron.
+
+        All parameters are documented in the class docstring.
+        """
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
         self.V_peak = braintools.init.param(V_peak, self.varshape)
@@ -275,30 +438,129 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @property
     def n_receptors(self):
+        """Number of receptor ports.
+
+        Returns
+        -------
+        int
+            Number of receptor types, inferred from ``tau_rise.size``.
+        """
         return int(self.tau_rise.size)
 
     @property
     def recordables(self):
+        """List of recordable state variable names.
+
+        Returns
+        -------
+        list of str
+            Dynamic recordables following NEST naming: ``['V_m', 'w', 'g_1', 'g_2', ..., 'g_n']``.
+        """
         return ['V_m', 'w', *[f'g_{i + 1}' for i in range(self.n_receptors)]]
 
     @staticmethod
     def _to_numpy(x, unit):
+        """Convert quantity to NumPy array in specified unit.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Quantity with units.
+        unit : brainunit.Unit
+            Target unit for conversion.
+
+        Returns
+        -------
+        np.ndarray
+            Float64 array in target unit (unitless).
+        """
         return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
 
     @staticmethod
     def _to_numpy_unitless(x):
+        """Convert unitless quantity to NumPy array.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Unitless quantity.
+
+        Returns
+        -------
+        np.ndarray
+            Float64 array.
+        """
         return np.asarray(u.math.asarray(x), dtype=np.float64)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
+        """Broadcast parameter to state shape.
+
+        Parameters
+        ----------
+        x_np : np.ndarray
+            Parameter array to broadcast.
+        shape : tuple
+            Target shape (neuron population shape).
+
+        Returns
+        -------
+        np.ndarray
+            Broadcast array with shape ``shape``.
+        """
         return np.broadcast_to(x_np, shape)
 
     @staticmethod
     def _broadcast_to_receptors(x_np: np.ndarray, shape, n_receptors: int):
+        """Broadcast parameter to receptor array shape.
+
+        Parameters
+        ----------
+        x_np : np.ndarray
+            Parameter array to broadcast.
+        shape : tuple
+            Neuron population shape.
+        n_receptors : int
+            Number of receptor ports.
+
+        Returns
+        -------
+        np.ndarray
+            Broadcast array with shape ``(*shape, n_receptors)``.
+        """
         return np.broadcast_to(x_np, shape + (n_receptors,))
 
     @classmethod
     def _beta_normalization_factor_scalar(cls, tau_rise: float, tau_decay: float):
+        """Compute beta normalization factor for single receptor.
+
+        Ensures unit weight produces unit peak conductance. Implements NEST's
+        beta normalization formula, degenerating to alpha normalization
+        :math:`e / \tau` when :math:`\tau_{\text{rise}} = \tau_{\text{decay}}`.
+
+        Parameters
+        ----------
+        tau_rise : float
+            Synaptic rise time constant (ms, unitless).
+        tau_decay : float
+            Synaptic decay time constant (ms, unitless).
+
+        Returns
+        -------
+        float
+            Normalization factor :math:`g_0` such that unit weight produces unit peak.
+            If :math:`\tau_{\text{rise}} \approx \tau_{\text{decay}}`, returns :math:`e / \tau_{\text{decay}}`.
+
+        Notes
+        -----
+        The normalization factor is:
+
+        .. math::
+
+           g_0 = \frac{1/\tau_{\text{rise}} - 1/\tau_{\text{decay}}}{\exp(-t_{\text{peak}}/\tau_{\text{decay}}) - \exp(-t_{\text{peak}}/\tau_{\text{rise}})},
+
+        where :math:`t_{\text{peak}} = \tau_{\text{decay}} \tau_{\text{rise}} \log(\tau_{\text{decay}}/\tau_{\text{rise}}) / (\tau_{\text{decay}} - \tau_{\text{rise}})`.
+        """
         tau_difference = tau_decay - tau_rise
         peak_value = 0.0
         if abs(tau_difference) > cls._EPS:
@@ -311,6 +573,19 @@ class aeif_cond_beta_multisynapse(Neuron):
         return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
     def _validate_parameters(self):
+        """Validate model parameters at initialization.
+
+        Raises
+        ------
+        ValueError
+            If parameter constraints are violated (see class docstring for details).
+            Specific checks include:
+            - Receptor array size consistency (``tau_rise``, ``tau_decay``, ``E_rev``)
+            - Strict positivity (``tau_rise``, ``tau_decay``, ``C_m``, ``tau_w``, ``gsl_error_tol``)
+            - Ordering constraints (``tau_decay >= tau_rise``, ``V_peak >= V_th``, ``V_reset < V_peak``)
+            - Non-negativity (``Delta_T``, ``t_ref``)
+            - Overflow prevention (exponential term when ``Delta_T > 0``)
+        """
         v_reset = self._to_numpy(self.V_reset, u.mV)
         v_peak = self._to_numpy(self.V_peak, u.mV)
         v_th = self._to_numpy(self.V_th, u.mV)
@@ -348,12 +623,46 @@ class aeif_cond_beta_multisynapse(Neuron):
                 )
 
     def _safe_dt(self):
+        """Get simulation timestep with fallback.
+
+        Returns
+        -------
+        Quantity
+            Simulation timestep (ms). Returns 0.1 ms if environment context is not set.
+        """
         try:
             return brainstate.environ.get_dt()
         except KeyError:
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize all state variables.
+
+        Creates ``HiddenState`` and ``ShortTermState`` attributes for membrane
+        potential, adaptation current, receptor conductances, refractory counters,
+        RKF45 step size, and delayed current buffer.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension prepended to ``in_size``. If None, states have shape
+            ``(*in_size,)`` or ``(*in_size, n_receptors)`` for receptor arrays.
+        **kwargs
+            Additional initialization arguments (unused).
+
+        Notes
+        -----
+        Initializes:
+        - ``V`` (HiddenState): membrane potential from ``V_initializer``
+        - ``w`` (HiddenState): adaptation current from ``w_initializer``
+        - ``dg`` (ShortTermState): beta auxiliary states, initialized to zero
+        - ``g`` (HiddenState): receptor conductances from ``g_initializer``
+        - ``last_spike_time`` (ShortTermState): initialized to -1e7 ms
+        - ``refractory_step_count`` (ShortTermState): initialized to 0
+        - ``integration_step`` (ShortTermState): RKF45 step size, initialized to ``dt``
+        - ``I_stim`` (ShortTermState): delayed current buffer, initialized to 0 pA
+        - ``refractory`` (ShortTermState, optional): boolean indicator if ``ref_var=True``
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         w = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         g = braintools.init.param(self.g_initializer, self.varshape + (self.n_receptors,), batch_size)
@@ -381,6 +690,18 @@ class aeif_cond_beta_multisynapse(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        """Reset all state variables to initial values.
+
+        Reapplies initializers to all state variables without recreating state
+        objects. Useful for resetting between simulation trials.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension for reinitialization. If None, uses existing batch size.
+        **kwargs
+            Additional reset arguments (unused).
+        """
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         self.g.value = braintools.init.param(self.g_initializer, self.varshape + (self.n_receptors,), batch_size)
@@ -402,15 +723,84 @@ class aeif_cond_beta_multisynapse(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
+        """Compute surrogate spike output for gradient-based learning.
+
+        Applies surrogate gradient function to scaled membrane potential for
+        differentiable spike generation. Does not modify state variables.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential (mV). If None, uses current ``self.V.value``.
+
+        Returns
+        -------
+        ArrayLike
+            Surrogate spike output in [0, 1], shape ``(*in_size,)``. Produced by
+            ``spk_fun`` applied to ``(V - V_th) / (V_th - V_reset)``.
+
+        Notes
+        -----
+        This method is primarily used for gradient computation in training contexts.
+        Actual spike detection during forward simulation uses hard thresholds in
+        ``update`` method.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
+        """Compute refractory period in simulation timesteps.
+
+        Returns
+        -------
+        ArrayLike
+            Number of timesteps for refractory period, shape ``(*in_size,)``.
+            Computed as :math:`\lceil t_{\text{ref}} / dt \rceil` (int32).
+
+        Notes
+        -----
+        Returns 0 when ``t_ref = 0``. Used to initialize refractory counter on
+        spike detection.
+        """
         dt = brainstate.environ.get_dt()
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
+        """Parse incoming spike events into receptor-specific weight array.
+
+        Converts event list/dict format into NumPy array with receptor-specific
+        conductance increments, validating receptor types and weight non-negativity.
+
+        Parameters
+        ----------
+        spike_events : Iterable or None
+            Spike events as:
+            - List of ``(receptor_type, weight)`` tuples
+            - List of dicts with keys ``'receptor_type'``/``'receptor'`` and ``'weight'``
+            - Single dict (auto-wrapped to list)
+            - None (returns zero array)
+        v_shape : tuple
+            Neuron population shape for broadcasting.
+
+        Returns
+        -------
+        np.ndarray
+            Weight array (nS, unitless) with shape ``(*v_shape, n_receptors)``.
+            Element ``[..., k]`` contains total conductance increment for receptor ``k+1``.
+
+        Raises
+        ------
+        ValueError
+            If receptor type out of range ``[1, n_receptors]``.
+        ValueError
+            If any weight is negative (conductance constraint).
+
+        Notes
+        -----
+        Receptor types are 1-based (NEST convention). Internal indexing is 0-based.
+        Multiple events for the same receptor are summed.
+        """
         out = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
         if spike_events is None:
             return out
@@ -437,6 +827,38 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @staticmethod
     def _dynamics_scalar(y, is_refractory, i_stim, p):
+        """Compute ODE right-hand side for single neuron (RKF45 substep).
+
+        Parameters
+        ----------
+        y : np.ndarray
+            State vector with shape ``(2 + 2*n_receptors,)``::
+                y[0]: V (mV, unitless)
+                y[1]: w (pA, unitless)
+                y[2::2]: dg[k] (unitless)
+                y[3::2]: g[k] (nS, unitless)
+        is_refractory : bool
+            Whether neuron is in refractory period.
+        i_stim : float
+            Delayed injected current (pA, unitless).
+        p : dict
+            Parameter dict with keys: ``'V_reset'``, ``'V_peak_rhs'``, ``'E_L'``,
+            ``'C_m'``, ``'g_L'``, ``'Delta_T'``, ``'tau_w'``, ``'a'``, ``'V_th'``,
+            ``'I_e'``, ``'tau_rise'``, ``'tau_decay'``, ``'E_rev'`` (all unitless
+            scalars or receptor arrays).
+
+        Returns
+        -------
+        np.ndarray
+            Derivative vector ``dy/dt`` with same shape as ``y`` (unitless).
+
+        Notes
+        -----
+        - During refractory, effective voltage is clamped to ``V_reset`` and ``dV/dt = 0``.
+        - Outside refractory, exponential term uses ``min(V, V_peak_rhs)`` to prevent overflow.
+        - Adaptation coupling ``a * (V_eff - E_L)`` persists during refractory.
+        - Beta states evolve independently of refractory status.
+        """
         v_eff = p['V_reset'] if is_refractory else min(y[0], p['V_peak_rhs'])
         w = y[1]
         dg = y[2::2]
@@ -459,6 +881,128 @@ class aeif_cond_beta_multisynapse(Neuron):
         return dy
 
     def update(self, x=0.0 * u.pA, spike_events=None):
+        """Advance model by one simulation timestep (NEST-compatible update).
+
+        Integrates ODEs over :math:`(t, t+dt]` using adaptive RKF45 with per-neuron
+        scalar loops, spike detection, refractory handling, and receptor-specific
+        spike event application. Follows NEST's update ordering exactly.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            Continuous current input (pA), shape broadcastable to ``(*in_size,)``.
+            Summed with ``current_inputs`` and ``I_e``, then delayed by one timestep
+            (NEST semantics). Default: 0.0 pA.
+        spike_events : Iterable or None, optional
+            Incoming spike events as:
+            - List of ``(receptor_type, weight)`` tuples
+            - List of dicts with keys ``'receptor_type'``/``'receptor'`` and ``'weight'``
+            - Single dict (auto-wrapped to list)
+            - None (no spike input)
+            Receptor types are 1-based: ``1 <= receptor_type <= n_receptors``.
+            Weights (nS) must be non-negative. Default: None.
+
+        Returns
+        -------
+        ArrayLike
+            Binary spike indicator (0 or 1), shape ``(*in_size,)``. Float64 for
+            gradient compatibility. Value is 1.0 if spike occurred during
+            :math:`(t, t+dt]`, else 0.0.
+
+        Raises
+        ------
+        ValueError
+            If receptor type out of range ``[1, n_receptors]``.
+        ValueError
+            If any spike event weight is negative (conductance constraint).
+        ValueError
+            If ``add_delta_input`` stream contains negative values (mapped to receptor 1).
+        ValueError
+            If no receptor ports exist but ``delta_inputs`` or ``spike_events`` are non-zero.
+        ValueError
+            If numerical instability detected during integration (:math:`V < -1000` mV
+            or :math:`|w| > 10^6` pA).
+
+        Notes
+        -----
+        **Update Order (NEST Semantics)**
+
+        1. **ODE Integration**: Adaptive RKF45 integrates :math:`(V, w, dg, g)` from
+           :math:`t` to :math:`t+dt` using internal substeps. Integration step size
+           persists across simulation steps.
+
+        2. **Refractory Handling**: During refractory integration, :math:`V` is clamped
+           to :math:`V_{\text{reset}}` and :math:`dV/dt = 0`. Adaptation :math:`w`
+           continues to evolve.
+
+        3. **Spike Detection**: Within each RKF45 substep, if :math:`V \geq V_{\text{peak}}`
+           (or :math:`V \geq V_{th}` if :math:`\Delta_T = 0`):
+           - :math:`V \leftarrow V_{\text{reset}}`
+           - :math:`w \leftarrow w + b`
+           - Refractory counter :math:`r \leftarrow \lceil t_{\text{ref}} / dt \rceil + 1`
+             (if ``t_ref > 0``)
+
+        4. **Refractory Decrement**: After integration completes, refractory counter
+           is decremented once: :math:`r \leftarrow \max(0, r - 1)`.
+
+        5. **Spike Event Application**: Incoming weights are applied to ``dg`` states:
+           :math:`dg_k \leftarrow dg_k + g_{0,k} w_k`, where :math:`g_{0,k}` is the
+           beta normalization factor.
+
+        6. **Current Delay**: Current input :math:`x + \sum \text{current\_inputs}`
+           is stored in ``I_stim`` for use in the **next** timestep (one-step delay,
+           matching NEST's event delivery semantics).
+
+        **Computational Details**
+
+        - **Per-neuron scalar loops**: Each neuron integrates independently to ensure
+          NEST-compatible update ordering and spike semantics.
+        - **Adaptive step size**: RKF45 local error tolerance ``gsl_error_tol``
+          controls accuracy. Step size adapts dynamically (5th-order error estimate).
+        - **Instability detection**: Raises ``ValueError`` if :math:`V < -1000` mV
+          or :math:`|w| > 10^6` pA, indicating parameter issues or numerical collapse.
+        - **Default input mapping**: ``add_delta_input`` stream maps to receptor 1.
+          If no receptors exist, non-zero delta inputs raise ``ValueError``.
+        - **State updates**: All state variables (``V``, ``w``, ``dg``, ``g``,
+          ``refractory_step_count``, ``integration_step``, ``I_stim``,
+          ``last_spike_time``, optionally ``refractory``) are updated in-place.
+
+        **Performance Notes**
+
+        This implementation prioritizes NEST compatibility over vectorization.
+        Per-neuron loops with Python scalar operations are ~10-100x slower than
+        fully vectorized implementations but ensure identical spike timing and
+        update ordering. For large-scale simulations, consider NEST-GPU or
+        vectorized BrainPy models.
+
+        Examples
+        --------
+        Single timestep with continuous current:
+
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> import brainunit as u
+           >>> neuron = bp.aeif_cond_beta_multisynapse(in_size=5)
+           >>> with bst.environ.context(dt=0.1 * u.ms):
+           ...     neuron.init_all_states()
+           ...     spk = neuron.update(x=300.0 * u.pA)
+           ...     print(spk)  # doctest: +SKIP
+
+        With receptor-specific spike events:
+
+        .. code-block:: python
+
+           >>> events = [(1, 5.0 * u.nS), (2, 3.0 * u.nS)]
+           >>> spk = neuron.update(x=100.0 * u.pA, spike_events=events)  # doctest: +SKIP
+
+        Accessing updated state:
+
+        .. code-block:: python
+
+           >>> print(neuron.V.value)  # doctest: +SKIP
+           >>> print(neuron.g.value)  # shape: (*in_size, n_receptors)  # doctest: +SKIP
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

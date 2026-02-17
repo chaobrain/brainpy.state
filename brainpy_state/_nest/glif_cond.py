@@ -37,28 +37,24 @@ __all__ = [
 class glif_cond(Neuron):
     r"""Conductance-based generalized leaky integrate-and-fire (GLIF) neuron model.
 
-    Description
-    -----------
+    Implements the five-level GLIF model hierarchy from Teeter et al. (2018) [1]_,
+    with conductance-based alpha-function synapses and adaptive RKF45 integration.
+    Designed for fitting to Allen Institute single-neuron electrophysiology data.
+    Supports multiple receptor ports with distinct reversal potentials and synaptic
+    time constants.
 
-    ``glif_cond`` provides five generalized leaky integrate-and-fire (GLIF)
-    models [1]_ with conductance-based synapses. Incoming spike events induce a
-    postsynaptic change of conductance modeled by an alpha function [2]_. The
-    alpha function is normalized such that an event of weight 1.0 results in a
-    peak conductance change of 1 nS at :math:`t = \tau_\mathrm{syn}`. On the
-    postsynaptic side, there can be arbitrarily many synaptic time constants
-    (multiple receptor ports).
+    **Model Selection**
 
-    The five GLIF models are:
+    The five GLIF variants are:
 
-    * **GLIF Model 1** (LIF) — Traditional leaky integrate-and-fire
-    * **GLIF Model 2** (LIF_R) — LIF with biologically defined reset rules
-    * **GLIF Model 3** (LIF_ASC) — LIF with after-spike currents
-    * **GLIF Model 4** (LIF_R_ASC) — LIF with reset rules and after-spike
-      currents
-    * **GLIF Model 5** (LIF_R_ASC_A) — LIF with reset rules, after-spike
-      currents, and a voltage-dependent threshold
+    1. **GLIF1 (LIF)** — Traditional leaky integrate-and-fire
+    2. **GLIF2 (LIF_R)** — LIF with biologically defined voltage reset rules
+    3. **GLIF3 (LIF_ASC)** — LIF with after-spike currents (adaptation)
+    4. **GLIF4 (LIF_R_ASC)** — LIF with reset rules and after-spike currents
+    5. **GLIF5 (LIF_R_ASC_A)** — LIF with reset rules, after-spike currents, and
+       voltage-dependent threshold
 
-    Model mechanism selection is based on three boolean parameters:
+    Model mechanism selection is controlled by three boolean parameters:
 
     +--------+---------------------------+----------------------+--------------------+
     | Model  | spike_dependent_threshold | after_spike_currents | adapting_threshold |
@@ -74,11 +70,12 @@ class glif_cond(Neuron):
     | GLIF5  | True                      | True                 | True               |
     +--------+---------------------------+----------------------+--------------------+
 
-    Membrane dynamics
-    .................
+    **Mathematical Formulation**
 
-    The membrane potential :math:`V` (stored relative to :math:`E_L`) evolves
-    according to:
+    **1. Membrane Dynamics**
+
+    The membrane potential :math:`V` (tracked relative to :math:`E_L` internally)
+    evolves according to:
 
     .. math::
 
@@ -86,17 +83,18 @@ class glif_cond(Neuron):
            - \sum_k g_k(t) \left( V + E_L - E_{\mathrm{rev},k} \right)
            + I_\mathrm{e} + I_\mathrm{ASC,sum}
 
-    where :math:`g` is the membrane (leak) conductance, :math:`g_k` is the
-    synaptic conductance for receptor port :math:`k`, :math:`E_{\mathrm{rev},k}`
-    is the reversal potential for port :math:`k`, :math:`I_\mathrm{e}` is the
-    external current input, and :math:`I_\mathrm{ASC,sum}` is the sum of
-    after-spike currents.
+    where:
 
-    Synaptic conductances (alpha function)
-    ......................................
+    * :math:`g` — membrane (leak) conductance
+    * :math:`g_k(t)` — synaptic conductance for receptor port :math:`k`
+    * :math:`E_{\mathrm{rev},k}` — reversal potential for port :math:`k`
+    * :math:`I_\mathrm{e}` — constant external current
+    * :math:`I_\mathrm{ASC,sum}` — sum of after-spike currents (GLIF3/4/5 only)
 
-    Each receptor port has a conductance modeled by an alpha function with two
-    state variables :math:`dg_k` and :math:`g_k`:
+    **2. Synaptic Conductances (Alpha Function)**
+
+    Each receptor port :math:`k` has a conductance modeled by an alpha function
+    with two state variables :math:`dg_k` and :math:`g_k`:
 
     .. math::
 
@@ -106,61 +104,67 @@ class glif_cond(Neuron):
 
        \frac{dg_k}{dt} = dg_k - \frac{g_k}{\tau_{\mathrm{syn},k}}
 
-    On a presynaptic spike of weight :math:`w`:
+    On a presynaptic spike with weight :math:`w`, the derivative is incremented:
 
     .. math::
 
        dg_k \leftarrow dg_k + w \cdot \frac{e}{\tau_{\mathrm{syn},k}}
 
-    After-spike currents (GLIF3/4/5)
-    .................................
+    This normalization ensures that a spike of weight 1.0 produces a peak conductance
+    of 1 nS at time :math:`t = \tau_{\mathrm{syn},k}`.
 
-    After-spike currents (ASC) are modeled as exponentially decaying currents
-    with exact integration. Each ASC component :math:`I_j` decays with rate
-    :math:`k_j`:
+    **3. After-Spike Currents (GLIF3/4/5)**
+
+    After-spike currents (ASC) model spike-triggered adaptation as exponentially
+    decaying currents. Each ASC component :math:`I_j` decays with rate :math:`k_j`:
 
     .. math::
 
        I_j(t+dt) = I_j(t) \cdot \exp(-k_j \cdot dt)
 
-    The time-averaged ASC over a step uses the stable coefficient:
+    The time-averaged ASC over a simulation step uses the exact integral (stable
+    coefficient method):
 
     .. math::
 
        \bar{I}_j = \frac{1 - \exp(-k_j \cdot dt)}{k_j \cdot dt} \cdot I_j(t)
 
-    On spike, ASC values are reset:
+    On spike, ASC values are updated with amplitude and refractory decay:
 
     .. math::
 
        I_j \leftarrow \Delta I_j + I_j \cdot r_j \cdot \exp(-k_j \cdot t_\mathrm{ref})
 
-    Spike-dependent threshold (GLIF2/4/5)
-    ......................................
+    where :math:`\Delta I_j` is the amplitude jump and :math:`r_j \in [0, 1]` is
+    the retention fraction.
 
-    The spike component of the threshold decays exponentially:
+    **4. Spike-Dependent Threshold (GLIF2/4/5)**
+
+    The spike component of the threshold :math:`\theta_s` decays exponentially:
 
     .. math::
 
        \theta_s(t+dt) = \theta_s(t) \cdot \exp(-b_s \cdot dt)
 
-    On spike, after refractory decay:
+    On spike, after accounting for refractory decay, it is incremented:
 
     .. math::
 
        \theta_s \leftarrow \theta_s \cdot \exp(-b_s \cdot t_\mathrm{ref})
            + \Delta\theta_s
 
-    Voltage reset (with spike-dependent threshold):
+    Voltage reset with spike-dependent threshold uses:
 
     .. math::
 
        V \leftarrow f_v \cdot V_\mathrm{old} + V_\mathrm{add}
 
-    Voltage-dependent threshold (GLIF5)
-    ....................................
+    where :math:`f_v \in [0, 1]` is the fraction coefficient and :math:`V_\mathrm{add}`
+    is the additive term (both in mV, dimensionless in NEST convention).
 
-    The voltage component of the threshold evolves according to:
+    **5. Voltage-Dependent Threshold (GLIF5)**
+
+    The voltage component :math:`\theta_v` evolves according to:
 
     .. math::
 
@@ -170,12 +174,14 @@ class glif_cond(Neuron):
                - \frac{a_v}{b_v} \cdot \beta \right)
            + \frac{a_v}{b_v} \cdot \beta
 
-    where :math:`\phi = a_v / (b_v - g/C_m)`,
-    :math:`P_\mathrm{decay} = \exp(-g \cdot dt / C_m)`,
-    :math:`P_{\theta,v} = \exp(b_v \cdot dt)`,
-    and :math:`\beta = (I_e + I_\mathrm{ASC,sum}) / g`.
+    where:
 
-    Overall threshold:
+    * :math:`\phi = a_v / (b_v - g/C_m)`
+    * :math:`P_\mathrm{decay} = \exp(-g \cdot dt / C_m)`
+    * :math:`P_{\theta,v} = \exp(b_v \cdot dt)`
+    * :math:`\beta = (I_e + I_\mathrm{ASC,sum}) / g`
+
+    The total threshold is the sum of all components:
 
     .. math::
 
@@ -187,32 +193,111 @@ class glif_cond(Neuron):
 
        V > \theta
 
-    Numerical integration and update order
-    ......................................
+    **Numerical Integration**
 
-    NEST integrates the ODE system [V, dg_0, g_0, dg_1, g_1, ...] with
-    adaptive RKF45 (GSL). This implementation mirrors that behavior with an
-    RKF45(4,5) integrator.
+    The ODE system :math:`[V, dg_0, g_0, dg_1, g_1, \ldots]` is integrated using
+    an adaptive RKF45(4,5) Runge-Kutta-Fehlberg method with error tolerance
+    ``ATOL = 1e-3`` and minimum step size ``MIN_H = 1e-8`` ms, matching NEST's
+    GSL integrator behavior.
 
-    The discrete-time update order per simulation step is:
+    **Update Order (Per Simulation Step)**
 
-    1. Record :math:`V_\mathrm{old}` (relative to :math:`E_L`).
-    2. Integrate ODE system over :math:`(t, t+dt]` using RKF45.
+    1. Record :math:`V_\mathrm{old}` (relative to :math:`E_L`)
+    2. Integrate ODE system over :math:`(t, t+dt]` using RKF45
     3. If not refractory:
 
-       a. Decay spike threshold component.
-       b. Compute time-averaged ASC and decay ASC values.
-       c. Compute voltage-dependent threshold component (using :math:`V_\mathrm{old}`).
-       d. Update total threshold.
-       e. If :math:`V > \theta`: emit spike, apply reset rules.
+       a. Decay spike threshold component :math:`\theta_s`
+       b. Compute time-averaged ASC :math:`\bar{I}_\mathrm{ASC,sum}` and decay ASC values
+       c. Compute voltage-dependent threshold :math:`\theta_v` (using :math:`V_\mathrm{old}`)
+       d. Update total threshold :math:`\theta = \theta_\infty + \theta_s + \theta_v`
+       e. If :math:`V > \theta`: emit spike, apply reset rules
 
-    4. If refractory: decrement counter, hold V at :math:`V_\mathrm{old}`.
-    5. Add incoming spike conductance jumps (scaled by :math:`e/\tau_\mathrm{syn}`).
-    6. Update external current input :math:`I_e`.
-    7. Record and save :math:`V_\mathrm{old}` for next step.
+    4. If refractory: decrement counter, clamp :math:`V` to :math:`V_\mathrm{old}`
+    5. Add incoming spike conductance jumps (scaled by :math:`e/\tau_\mathrm{syn}`)
+    6. Update external current buffer :math:`I_\mathrm{stim}`
+    7. Save :math:`V_\mathrm{old}` for next step
 
     Parameters
     ----------
+    in_size : Size
+        Shape of the neuron population. Can be an int for 1D or tuple for multi-D.
+    g : ArrayLike, optional
+        Membrane (leak) conductance in nS. Broadcast to population shape.
+        Default: 9.43 nS (from Allen Cell 490626718 GLIF5).
+    E_L : ArrayLike, optional
+        Resting membrane potential (leak reversal) in mV. Default: -78.85 mV.
+    V_th : ArrayLike, optional
+        Instantaneous spike threshold (absolute) in mV. Default: -51.68 mV.
+        Internally, threshold is tracked relative to ``E_L``.
+    C_m : ArrayLike, optional
+        Membrane capacitance in pF. Must be strictly positive. Default: 58.72 pF.
+    t_ref : ArrayLike, optional
+        Absolute refractory period in ms. During this period, voltage is clamped
+        and spike detection is disabled. Must be > 0. Default: 3.75 ms.
+    V_reset : ArrayLike, optional
+        Reset potential (absolute) in mV for GLIF1/3 models. Ignored if
+        ``spike_dependent_threshold=True``. Default: -78.85 mV (same as ``E_L``).
+    th_spike_add : float, optional
+        Threshold additive constant :math:`\Delta\theta_s` after spike (mV,
+        dimensionless in NEST units). Only used if ``spike_dependent_threshold=True``.
+        Default: 0.37 mV.
+    th_spike_decay : float, optional
+        Spike threshold decay rate :math:`b_s` in 1/ms. Must be > 0 if
+        ``spike_dependent_threshold=True``. Default: 0.009 /ms.
+    voltage_reset_fraction : float, optional
+        Voltage fraction coefficient :math:`f_v \in [0, 1]` after spike.
+        Only used if ``spike_dependent_threshold=True``. Default: 0.20.
+    voltage_reset_add : float, optional
+        Voltage additive term :math:`V_\mathrm{add}` after spike (mV, dimensionless).
+        Only used if ``spike_dependent_threshold=True``. Default: 18.51 mV.
+    th_voltage_index : float, optional
+        Voltage-dependent threshold leak :math:`a_v` in 1/ms. Only used if
+        ``adapting_threshold=True``. Default: 0.005 /ms.
+    th_voltage_decay : float, optional
+        Voltage-dependent threshold decay rate :math:`b_v` in 1/ms. Must be > 0 if
+        ``adapting_threshold=True``. Default: 0.09 /ms.
+    asc_init : Sequence[float], optional
+        Initial values of after-spike currents in pA. Tuple/list of length ``n_asc``.
+        Default: (0.0, 0.0) pA.
+    asc_decay : Sequence[float], optional
+        ASC decay rates :math:`k_j` in 1/ms. All values must be > 0. Length must
+        match ``asc_init``. Default: (0.003, 0.1) /ms.
+    asc_amps : Sequence[float], optional
+        ASC amplitude jumps :math:`\Delta I_j` on spike, in pA. Length must match
+        ``asc_init``. Negative values cause hyperpolarizing adaptation. Default:
+        (-9.18, -198.94) pA.
+    asc_r : Sequence[float], optional
+        ASC retention fraction coefficients :math:`r_j \in [0, 1]`. Length must
+        match ``asc_init``. Default: (1.0, 1.0).
+    tau_syn : Sequence[float], optional
+        Synaptic alpha-function time constants :math:`\tau_{\mathrm{syn},k}` in ms,
+        one per receptor port. All values must be > 0. Default: (0.2, 2.0) ms
+        (fast excitatory, slow inhibitory).
+    E_rev : Sequence[float], optional
+        Synaptic reversal potentials :math:`E_{\mathrm{rev},k}` in mV, one per
+        receptor port. Must have same length as ``tau_syn``. Default: (0.0, -85.0) mV
+        (excitatory, inhibitory).
+    spike_dependent_threshold : bool, optional
+        Enable biologically defined voltage reset rules (GLIF2/4/5). Default: False.
+    after_spike_currents : bool, optional
+        Enable after-spike currents (adaptation) (GLIF3/4/5). Default: False.
+    adapting_threshold : bool, optional
+        Enable voltage-dependent threshold component (GLIF5 only). Requires
+        ``spike_dependent_threshold=True`` and ``after_spike_currents=True``.
+        Default: False.
+    I_e : ArrayLike, optional
+        Constant external current in pA. Broadcast to population shape. Default: 0.0 pA.
+    V_initializer : Callable, optional
+        Initializer for membrane potential. If None, defaults to ``Constant(E_L)``.
+    spk_fun : Callable, optional
+        Surrogate gradient function for spike generation. Default: ``ReluGrad()``.
+    spk_reset : str, optional
+        Spike reset mode: ``'hard'`` (stop gradient) or ``'soft'`` (subtract threshold).
+        Default: ``'hard'``.
+    name : str, optional
+        Name of the neuron population.
+
+    **Parameter Mapping**
 
     =============================== =================== ========================================== =====================================================
     **Parameter**                   **Default**         **Math equivalent**                        **Description**
@@ -245,41 +330,62 @@ class glif_cond(Neuron):
     ``spk_reset``                   ``'hard'``                                                     Reset mode
     =============================== =================== ========================================== =====================================================
 
-    State Variables
-    ---------------
-
-    ============================ ===========================================
-    **State variable**           **Description**
-    ============================ ===========================================
-    ``V``                        Membrane potential :math:`V_\mathrm{m}`
-    ``g_syn``                    Synaptic conductances :math:`g_k` (list per receptor)
-    ``dg_syn``                   Synaptic conductance derivatives (list per receptor)
-    ``threshold``                Total threshold
-    ``threshold_spike``          Spike component of threshold
-    ``threshold_voltage``        Voltage component of threshold
-    ``ASCurrents``               After-spike current values (numpy array)
-    ``ASCurrents_sum``           Sum of after-spike currents
-    ``refractory_step_count``    Remaining refractory grid steps
-    ``integration_step``         Internal RKF45 step-size state
-    ``I_stim``                   Buffered external current
-    ``last_spike_time``          Last spike time
-    ============================ ===========================================
+    Attributes
+    ----------
+    V : HiddenState
+        Membrane potential in mV (absolute, broadcast to population shape).
+    g_syn : list[HiddenState]
+        Synaptic conductances :math:`g_k` in nS, one per receptor port.
+    dg_syn : list[HiddenState]
+        Synaptic conductance derivatives :math:`dg_k` in nS, one per receptor port.
+    last_spike_time : ShortTermState
+        Time of last spike in ms, shape ``(batch_size, *in_size)`` if batched.
+    refractory_step_count : ShortTermState
+        Remaining refractory steps (int32), decremented each step.
+    integration_step : ShortTermState
+        Internal RKF45 adaptive step size in ms (updated per neuron).
+    I_stim : ShortTermState
+        Buffered external current in pA (applied with one-step delay).
 
     Notes
     -----
+    **Implementation Details**
 
-    - Default parameter values are from GLIF Model 5 of Cell 490626718 from the
-      `Allen Cell Type Database <https://celltypes.brain-map.org>`_.
-    - Parameters ``V_th`` and ``V_reset`` are specified in absolute mV. Internally,
-      membrane potential is tracked relative to ``E_L``, matching NEST's convention.
-    - For models with spike-dependent threshold (GLIF2/4/5), the reset condition
-      should satisfy:
+    * **Internal state convention**: Membrane potential is tracked relative to ``E_L``
+      internally (matching NEST), but exposed as absolute values in mV.
+    * **Threshold components**: ``_threshold_spike``, ``_threshold_voltage``, and
+      ``_th_inf`` are stored as numpy arrays (not JAX) for exact NEST replication.
+    * **After-spike currents**: ``_ASCurrents`` is a numpy array of shape
+      ``(n_asc, batch_size, *in_size)``.
+    * **Receptor port routing**: Delta inputs (from projections) with keys containing
+      ``'receptor_<k>'`` (0-based) are routed to receptor port ``k``. Inputs without
+      a receptor tag default to receptor 0.
+    * **Stability constraint**: For GLIF2/4/5, the reset condition must satisfy:
 
       .. math::
 
-          E_L + f_v \cdot (V_{th} - E_L) + V_{add} < V_{th} + \Delta\theta_s
+          E_L + f_v \cdot (V_\mathrm{th} - E_L) + V_\mathrm{add} < V_\mathrm{th} + \Delta\theta_s
 
       Otherwise the neuron may spike continuously.
+
+    * **Valid mechanism combinations**: Only the five combinations listed in the
+      parameter table are valid. Other combinations will raise ``ValueError``.
+    * **Adaptive integration**: RKF45 step size adapts per-neuron and is preserved
+      across simulation steps.
+
+    **Failure Modes**
+
+    * Raises ``ValueError`` if parameter validation fails (invalid model combination,
+      non-positive capacitance/conductance/time constants, mismatched sequence lengths).
+    * Raises ``ValueError`` if ``V_reset >= V_th`` (relative to ``E_L``).
+    * Integration may fail to converge if ``dt`` is too large relative to ``tau_syn``
+      or if threshold parameters cause continuous spiking.
+
+    **Default Parameters**
+
+    Default parameter values are from GLIF Model 5 of Cell 490626718 from the
+    `Allen Cell Type Database <https://celltypes.brain-map.org>`_, fitted to
+    mouse visual cortex layer 5 pyramidal neuron electrophysiology.
 
     References
     ----------
@@ -287,16 +393,74 @@ class glif_cond(Neuron):
            Cain N, Zeng H, Hawrylycz M, Koch C, & Mihalas S (2018).
            Generalized leaky integrate-and-fire models classify multiple neuron
            types. Nature Communications 9:709.
+           DOI: `10.1038/s41467-017-02717-4 <https://doi.org/10.1038/s41467-017-02717-4>`_
     .. [2] Meffin H, Burkitt AN, Grayden DB (2004). An analytical model for
            the large, fluctuating synaptic conductance state typical of
            neocortical neurons in vivo. J. Comput. Neurosci. 16:159-175.
+           DOI: `10.1023/B:JCNS.0000014108.03012.81 <https://doi.org/10.1023/B:JCNS.0000014108.03012.81>`_
     .. [3] NEST Simulator ``glif_cond`` model documentation and C++ source:
            ``models/glif_cond.h`` and ``models/glif_cond.cpp``.
 
+    Examples
+    --------
+    **Example 1: GLIF1 (simple LIF) with dual-receptor synapses**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bst
+        >>> import brainunit as u
+        >>> import brainstate as bts
+        >>> # Create GLIF1 neuron (all mechanisms disabled)
+        >>> neuron = bst.glif_cond(
+        ...     100,
+        ...     spike_dependent_threshold=False,
+        ...     after_spike_currents=False,
+        ...     adapting_threshold=False,
+        ...     tau_syn=(0.2, 2.0),  # fast excitatory, slow inhibitory
+        ...     E_rev=(0.0, -85.0)   # mV
+        ... )
+        >>> neuron.init_all_states()
+        >>> # Stimulate with constant current
+        >>> with bts.environ.context(dt=0.1 * u.ms):
+        ...     for _ in range(100):
+        ...         spike = neuron(200.0 * u.pA)
+
+    **Example 2: GLIF5 (full model) with custom parameters**
+
+    .. code-block:: python
+
+        >>> # Create GLIF5 with all mechanisms enabled
+        >>> neuron = bst.glif_cond(
+        ...     (10, 10),  # 10x10 population
+        ...     spike_dependent_threshold=True,
+        ...     after_spike_currents=True,
+        ...     adapting_threshold=True,
+        ...     g=10.0 * u.nS,
+        ...     C_m=100.0 * u.pF,
+        ...     tau_syn=(0.5, 1.5, 5.0),  # three receptor ports
+        ...     E_rev=(0.0, 0.0, -80.0)   # two excitatory, one inhibitory
+        ... )
+        >>> neuron.init_all_states()
+        >>> print(neuron.n_receptors)  # 3
+
+    **Example 3: Multi-receptor input routing**
+
+    .. code-block:: python
+
+        >>> from brainevent.nn import FixedProb
+        >>> # Create projection targeting receptor 1
+        >>> proj = bst.align_post_projection(
+        ...     pre=pre_neurons,
+        ...     post=glif_neurons,
+        ...     comm=FixedProb(0.1, weight=0.5 * u.nS),
+        ...     label='receptor_1'  # route to receptor port 1
+        ... )
+
     See Also
     --------
-    iaf_cond_exp
-    gif_cond_exp_multisynapse
+    iaf_cond_exp : Simpler conductance-based LIF with exponential synapses
+    gif_cond_exp_multisynapse : Generalized integrate-and-fire with exponential synapses
+    glif_psc : Current-based GLIF variant
     """
     __module__ = 'brainpy.state'
 
@@ -381,7 +545,13 @@ class glif_cond(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of synaptic receptor ports."""
+        """Number of synaptic receptor ports.
+
+        Returns
+        -------
+        int
+            Number of receptor ports, determined by length of ``tau_syn``.
+        """
         return self._n_receptors
 
     @staticmethod
@@ -552,6 +722,30 @@ class glif_cond(Neuron):
         self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
 
     def get_spike(self, V: ArrayLike = None):
+        """Generate surrogate spike signal from membrane potential.
+
+        Computes a differentiable spike signal by scaling membrane potential
+        relative to threshold range and applying the surrogate gradient function.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential in mV. If None, uses ``self.V.value``.
+            Shape: ``(*batch_dims, *in_size)``.
+
+        Returns
+        -------
+        spike : ArrayLike
+            Surrogate spike output in [0, 1], same shape as input.
+            Values near 1 indicate spiking neurons.
+
+        Notes
+        -----
+        Scaling: :math:`v_\mathrm{scaled} = (V - V_\mathrm{th}) / (V_\mathrm{th} - V_\mathrm{reset})`
+
+        This method is used internally for gradient computation but does not
+        affect the discrete spike logic in ``update()``.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
@@ -561,13 +755,33 @@ class glif_cond(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _collect_receptor_delta_inputs(self):
-        """Collect delta inputs per receptor port.
+        """Collect and route delta inputs to receptor ports.
 
-        Delta inputs for receptor port k should be registered with key
-        containing 'receptor_<k>' (0-based). Any input not matching a specific
-        receptor pattern is added to receptor 0 as default.
+        Scans ``self.delta_inputs`` dict and routes inputs to receptor ports based
+        on key naming convention. Keys containing ``'receptor_<k>'`` (0-based index)
+        are routed to port ``k``; all other inputs default to receptor 0.
 
-        Returns a list of arrays, one per receptor, in nS (numpy float64).
+        Returns
+        -------
+        dg : list[np.ndarray]
+            List of length ``n_receptors``. Each element is a float64 array of
+            shape ``(*batch_dims, *in_size)`` containing conductance jumps in nS
+            for that receptor port. Summed across all matching input keys.
+
+        Notes
+        -----
+        **Routing Logic**
+
+        - Input key ``'exc_receptor_1'`` → receptor port 1
+        - Input key ``'inh_receptor_2'`` → receptor port 2
+        - Input key ``'external'`` → receptor port 0 (default)
+
+        Callables in ``delta_inputs`` are invoked and removed from the dict.
+        Non-callable values are assumed to be immediate and removed after use.
+
+        **Unit Conversion**
+
+        All inputs are converted to nS and broadcast to the current state shape.
         """
         v_shape = self.V.value.shape
         dg = [np.zeros(v_shape, dtype=np.float64) for _ in range(self._n_receptors)]
@@ -605,13 +819,60 @@ class glif_cond(Neuron):
     def _dynamics_scalar(self, v_rel, dg_vals, g_vals, is_refractory, i_ext, asc_sum, p):
         """Compute derivatives for ODE system [V_rel, dg_0, g_0, dg_1, g_1, ...].
 
-        Matches NEST's glif_cond_dynamics() function exactly.
-        V is relative to E_L. During refractory period, V is clamped to V_reset_rel.
+        Implements NEST's ``glif_cond_dynamics()`` function exactly. Membrane potential
+        is relative to ``E_L``. During refractory period, voltage is clamped to
+        ``V_reset_rel`` and ``dV/dt = 0``.
 
         Parameters
         ----------
+        v_rel : float
+            Membrane potential relative to ``E_L`` in mV.
+        dg_vals : list[float]
+            Conductance derivatives ``dg_k`` in nS, one per receptor port.
+        g_vals : list[float]
+            Conductances ``g_k`` in nS, one per receptor port.
+        is_refractory : bool
+            If True, clamps voltage and disables membrane dynamics.
         i_ext : float
-            Total external current (I_e + I_stim) in pA, matching NEST's B_.I_.
+            Total external current ``I_e + I_stim`` in pA (matches NEST's ``B_.I_``).
+        asc_sum : float
+            Sum of after-spike currents in pA (0.0 if ASC disabled).
+        p : dict
+            Parameter dict containing: ``'G'`` (nS), ``'E_L'`` (mV), ``'C_m'`` (pF),
+            ``'V_reset_rel'`` (mV), ``'I_e'`` (pA).
+
+        Returns
+        -------
+        derivatives : tuple[float, ...]
+            Tuple of derivatives ``(dV/dt, d(dg_0)/dt, d(dg_1)/dt, ..., dg_0/dt, dg_1/dt, ...)``.
+            Length: ``1 + 2*n_receptors``. All in NEST-compatible units (mV/ms, nS/ms).
+
+        Notes
+        -----
+        **Membrane Current Equation**
+
+        .. math::
+
+            C_\mathrm{m} \frac{dV}{dt} = -g \cdot V
+                - \sum_k g_k (V + E_L - E_{\mathrm{rev},k})
+                + I_\mathrm{ext} + I_\mathrm{ASC,sum}
+
+        **Alpha Function Dynamics**
+
+        For each receptor port :math:`k`:
+
+        .. math::
+
+            \frac{d(dg_k)}{dt} = -\frac{dg_k}{\tau_{\mathrm{syn},k}}
+
+        .. math::
+
+            \frac{dg_k}{dt} = dg_k - \frac{g_k}{\tau_{\mathrm{syn},k}}
+
+        **Refractory Behavior**
+
+        If ``is_refractory=True``, ``dV/dt = 0`` and ``V`` is clamped to ``V_reset_rel``.
+        Synaptic dynamics continue normally during refractoriness.
         """
         V = p['V_reset_rel'] if is_refractory else v_rel
 
@@ -637,9 +898,70 @@ class glif_cond(Neuron):
         return (dv,) + tuple(ddg) + tuple(dg_out)
 
     def _rkf45_integrate_scalar(self, v0, dg0_vals, g0_vals, is_refractory, i_stim, asc_sum, h0, dt, p):
-        """Adaptive RKF45 integration.
+        """Adaptive RKF45(4,5) integration for single-neuron ODE system.
 
-        State vector: [V_rel, dg_0, g_0, dg_1, g_1, ...]
+        Implements Runge-Kutta-Fehlberg method with embedded 4th/5th-order pairs
+        for error estimation and automatic step size control, matching NEST's GSL
+        integrator behavior.
+
+        Parameters
+        ----------
+        v0 : float
+            Initial membrane potential relative to ``E_L`` in mV.
+        dg0_vals : list[float]
+            Initial conductance derivatives ``dg_k`` in nS, length ``n_receptors``.
+        g0_vals : list[float]
+            Initial conductances ``g_k`` in nS, length ``n_receptors``.
+        is_refractory : bool
+            If True, voltage is clamped during integration.
+        i_stim : float
+            External current input in pA (buffered from previous step).
+        asc_sum : float
+            Sum of after-spike currents in pA.
+        h0 : float
+            Initial step size in ms (from previous integration).
+        dt : float
+            Total integration interval in ms.
+        p : dict
+            Parameter dict (see ``_dynamics_scalar``).
+
+        Returns
+        -------
+        v_out : float
+            Final membrane potential relative to ``E_L`` in mV.
+        dg_out : list[float]
+            Final conductance derivatives in nS.
+        g_out : list[float]
+            Final conductances in nS.
+        h_out : float
+            Final step size in ms (saved for next integration).
+
+        Notes
+        -----
+        **Adaptive Step Size Control**
+
+        - Error tolerance: ``ATOL = 1e-3``
+        - Minimum step size: ``MIN_H = 1e-8`` ms
+        - Maximum iterations: ``MAX_ITERS = 10000``
+        - Step size adjustment: :math:`h_\mathrm{new} = 0.9 \cdot h \cdot (\mathrm{ATOL} / \mathrm{err})^{0.2}`
+
+        **Butcher Tableau (RKF45)**
+
+        Uses the Fehlberg 4(5) coefficients:
+
+        - 4th-order solution: ``[25/216, 0, 1408/2565, 2197/4104, -1/5]``
+        - 5th-order solution: ``[16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55]``
+
+        **Failure Modes**
+
+        If integration does not converge within ``MAX_ITERS``, the method returns
+        the current state without error (matching NEST behavior). This can occur
+        if ``dt`` is too large or dynamics are stiff.
+
+        **State Vector Packing**
+
+        Internal state vector: ``[V_rel, dg_0, dg_1, ..., g_0, g_1, ...]``
+        Length: ``1 + 2*n_receptors``
         """
         n_rec = self._n_receptors
         n = 1 + 2 * n_rec  # V + (dg + g) per receptor
@@ -706,17 +1028,120 @@ class glif_cond(Neuron):
         return v_out, dg_out, g_out, h
 
     def update(self, x=0.0 * u.pA):
-        """Perform a single simulation step.
+        """Perform a single simulation step with GLIF dynamics.
+
+        Executes the full GLIF update cycle: ODE integration via RKF45, threshold
+        computation (spike/voltage-dependent components if enabled), spike detection,
+        reset rules, refractory handling, and synaptic input application.
 
         Parameters
         ----------
-        x : ArrayLike
-            External current input (pA). Applied with one-step delay (buffered).
+        x : ArrayLike, optional
+            External current input in pA. Shape: scalar, ``(*in_size,)``, or
+            ``(*batch_dims, *in_size)``. Applied with one-step delay (buffered
+            to ``I_stim`` and used in next step). Default: 0.0 pA.
 
         Returns
         -------
-        spike : array
-            Spike output via surrogate gradient function.
+        spike : jax.Array
+            Binary spike output (float32), shape ``(*batch_dims, *in_size)``.
+            Values are 1.0 for spiking neurons, 0.0 otherwise. This is a discrete
+            binary signal, not the surrogate gradient output.
+
+        Notes
+        -----
+        **Update Sequence (Per Simulation Step)**
+
+        1. **State extraction**: Extract current state as numpy float64 arrays
+           (matching NEST's double precision).
+        2. **Parameter setup**: Prepare decay rates, stable coefficients, and
+           integration parameters (computed once per step).
+        3. **Per-neuron loop**: For each neuron (indexed by ``np.ndindex``):
+
+           a. Record :math:`V_\mathrm{old}` (relative to :math:`E_L`)
+           b. Integrate ODE system :math:`[V, dg_0, g_0, \ldots]` via RKF45
+           c. If not refractory:
+
+              i. Decay spike threshold component :math:`\theta_s`
+              ii. Compute time-averaged ASC and decay ASC values
+              iii. Compute voltage-dependent threshold :math:`\theta_v` (GLIF5 only)
+              iv. Update total threshold :math:`\theta = \theta_\infty + \theta_s + \theta_v`
+              v. **Spike check**: if :math:`V > \theta`, emit spike and apply reset rules:
+
+                 - Set refractory counter
+                 - Reset ASC values (if enabled)
+                 - Reset voltage (simple or biologically defined)
+                 - Update spike threshold component (GLIF2/4/5)
+
+           d. If refractory: decrement counter, clamp voltage to :math:`V_\mathrm{old}`
+
+        4. **Synaptic input application**: Add incoming spike conductance jumps
+           (scaled by :math:`e/\tau_\mathrm{syn}`) to all receptor ports.
+        5. **Current buffering**: Update ``I_stim`` with new external current ``x``
+           (applied in next step).
+        6. **State writeback**: Convert numpy results back to JAX arrays with units
+           and update ``self.V``, ``self.g_syn``, ``self.dg_syn``, etc.
+        7. **Spike time recording**: Update ``last_spike_time`` for spiking neurons.
+
+        **Refractory Behavior**
+
+        During refractory period (``refractory_step_count > 0``):
+
+        - Membrane potential is clamped to previous value (no integration of :math:`dV/dt`)
+        - Synaptic conductances continue to evolve normally
+        - Spike detection is disabled
+        - Threshold components continue to decay
+        - Refractory counter is decremented each step
+
+        **Receptor Port Routing**
+
+        Delta inputs (from projections) are routed to receptor ports based on key
+        naming. See ``_collect_receptor_delta_inputs()`` for details.
+
+        **Numerical Precision**
+
+        All computations use numpy float64 (matching NEST's C++ ``double``) to ensure
+        exact replication of NEST results. Final state is converted to JAX arrays
+        for gradient computation compatibility.
+
+        **Performance Considerations**
+
+        This implementation uses per-neuron loops (``np.ndindex``) for exact NEST
+        compatibility. For large populations, this may be slower than vectorized
+        approaches but ensures numerical correctness for benchmarking and validation.
+
+        **Failure Modes**
+
+        - If RKF45 integration fails to converge, the method proceeds with the
+          current state (no exception raised).
+        - If threshold parameters cause continuous spiking (violating stability
+          constraint), spike output will be 1.0 every step.
+
+        Examples
+        --------
+        **Example 1: Constant current stimulation**
+
+        .. code-block:: python
+
+            >>> with bts.environ.context(dt=0.1 * u.ms):
+            ...     for t in range(1000):
+            ...         spike = neuron.update(200.0 * u.pA)
+
+        **Example 2: Time-varying input**
+
+        .. code-block:: python
+
+            >>> import numpy as np
+            >>> t = np.arange(0, 100, 0.1)  # ms
+            >>> I_input = 100 * np.sin(2 * np.pi * 0.01 * t) * u.pA
+            >>> with bts.environ.context(dt=0.1 * u.ms):
+            ...     for I in I_input:
+            ...         spike = neuron.update(I)
+
+        See Also
+        --------
+        get_spike : Compute surrogate spike signal for gradient computation
+        _rkf45_integrate_scalar : Adaptive RKF45 integration method
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

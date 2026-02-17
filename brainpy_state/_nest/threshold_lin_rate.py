@@ -179,89 +179,357 @@ class _threshold_lin_rate_base(_lin_rate_base):
 
 
 class threshold_lin_rate_ipn(_threshold_lin_rate_base):
-    r"""NEST-compatible ``threshold_lin_rate_ipn`` with threshold-linear gain.
+    r"""NEST-compatible input-noise threshold-linear rate neuron.
 
-    Description
-    -----------
+    Implements the NEST ``threshold_lin_rate_ipn`` model, an input-noise rate neuron
+    with threshold-linear gain function. This model provides a piecewise-linear
+    activation with lower and upper saturation bounds, commonly used for modeling
+    neural populations with firing rate constraints and additive stochastic drive.
 
-    ``threshold_lin_rate_ipn`` implements NEST's input-noise threshold-linear
-    rate neuron:
+    **Mathematical Description**
 
-    .. math::
+    **1. Continuous-Time Stochastic Dynamics**
 
-       \tau\,dX(t)=
-       \left[-\lambda X(t)+\mu+\phi(\cdot)\right]dt
-       +\left[\sqrt{\tau}\,\sigma\right]dW(t),
-
-    with gain function
+    The rate state :math:`X(t)` evolves according to the Langevin equation:
 
     .. math::
 
-       \phi(h)=\min(\max(g(h-\theta),0),\alpha).
+       \tau\,dX(t) = [-\lambda X(t) + \mu + I_\mathrm{net}(t)]\,dt
+       + \sqrt{\tau}\,\sigma\,dW(t),
 
-    This matches NEST's ``threshold_lin_rate`` nonlinearity class where
-    multiplicative-coupling factors are constant one, so ``mult_coupling`` is
-    accepted for API compatibility but has no effect on dynamics.
+    where:
 
-    Update ordering (matching NEST ``rate_neuron_ipn``)
-    ...................................................
+    - :math:`\tau > 0` is the time constant (ms).
+    - :math:`\lambda \ge 0` is the passive decay rate (dimensionless). Controls
+      exponential relaxation; :math:`\lambda=0` yields driftless diffusion.
+    - :math:`\mu` is the mean drive (dimensionless, external constant input).
+    - :math:`\sigma \ge 0` is the input-noise strength (dimensionless).
+    - :math:`W(t)` is a standard Wiener process.
+    - :math:`I_\mathrm{net}(t)` is the network input (see below).
+
+    **2. Threshold-Linear Gain Function**
+
+    The input nonlinearity :math:`\phi(h)` is a threshold-linear function with
+    saturation:
+
+    .. math::
+
+       \phi(h) = \min(\max(g(h-\theta), 0), \alpha),
+
+    where:
+
+    - :math:`g > 0` is the gain slope (dimensionless).
+    - :math:`\theta` is the activation threshold (dimensionless).
+    - :math:`\alpha > 0` is the saturation level (dimensionless).
+
+    This function is zero for :math:`h < \theta`, linear with slope :math:`g` for
+    :math:`\theta \le h < \theta + \alpha/g`, and saturates at :math:`\alpha` for
+    :math:`h \ge \theta + \alpha/g`.
+
+    **3. Network Input Structure**
+
+    The network input :math:`I_\mathrm{net}(t)` is computed according to:
+
+    .. math::
+
+       I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t) + I_\mathrm{in}(t))
+       \quad\text{(if linear_summation=True)},
+
+    or:
+
+    .. math::
+
+       I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t)) + \phi(I_\mathrm{in}(t))
+       \quad\text{(if linear_summation=False)},
+
+    where :math:`I_\mathrm{ex}(t)` and :math:`I_\mathrm{in}(t)` are excitatory and
+    inhibitory branches (sign-separated by event weight).
+
+    **Note**: Unlike the base ``rate_neuron_ipn`` model, multiplicative coupling
+    :math:`H_\mathrm{ex}(X)`, :math:`H_\mathrm{in}(X)` is **not** supported for
+    threshold-linear neurons in NEST. The ``mult_coupling`` parameter is accepted
+    for API compatibility but has no effect on dynamics (coupling factors are
+    constant 1.0).
+
+    **4. Discrete-Time Integration (Stochastic Exponential Euler)**
+
+    For time step :math:`h=dt` (in ms), the model uses exact Ornstein-Uhlenbeck
+    integration for the linear part:
+
+    .. math::
+
+       X_{n+1} = P_1 X_n + P_2 (\mu + I_\mathrm{net,n}) + N\,\xi_n,
+
+    where :math:`\xi_n\sim\mathcal{N}(0,1)` is standard Gaussian noise.
+
+    **For** :math:`\lambda > 0`:
+
+    .. math::
+
+       P_1 = \exp\left(-\frac{\lambda h}{\tau}\right), \quad
+       P_2 = \frac{1-P_1}{\lambda}, \quad
+       N = \sigma\sqrt{\frac{1-P_1^2}{2\lambda}}.
+
+    **For** :math:`\lambda = 0` (Euler-Maruyama):
+
+    .. math::
+
+       P_1=1, \quad P_2=\frac{h}{\tau}, \quad N=\sigma\sqrt{\frac{h}{\tau}}.
+
+    **5. Update Ordering (Matching NEST ``rate_neuron_ipn_impl.h``)**
 
     Per simulation step:
 
-    1. Store outgoing delayed value as current ``rate``.
-    2. Draw ``noise = sigma * xi``.
-    3. Propagate intrinsic dynamics with stochastic exponential Euler
-       (Euler-Maruyama for ``lambda=0``).
-    4. Read delayed and instantaneous event buffers.
-    5. Add input contributions:
-       - ``linear_summation=True``: apply threshold-linear gain to branch sums.
-       - ``linear_summation=False``: apply threshold-linear gain per event before summation.
-    6. Apply rectification if ``rectify_output=True``.
-    7. Store outgoing instantaneous value as updated ``rate``.
+    1. **Store outgoing delayed value**: current ``rate`` is recorded as
+       ``delayed_rate``.
+    2. **Draw noise**: sample :math:`\xi_n\sim\mathcal{N}(0,1)`, compute
+       :math:`\mathrm{noise}_n=\sigma\,\xi_n`.
+    3. **Propagate intrinsic dynamics**: apply stochastic exponential Euler to
+       :math:`X_n` with external drive and noise.
+    4. **Read event buffers**: drain delayed events arriving at current step;
+       accumulate instantaneous events.
+    5. **Apply network input with threshold-linear gain**:
+
+       - ``linear_summation=True``: nonlinearity applied to summed branch input
+         during update: :math:`I_\mathrm{net}=\phi(I_\mathrm{ex}+I_\mathrm{in})`.
+       - ``linear_summation=False``: nonlinearity applied per event during
+         buffering: :math:`I_\mathrm{net}=\phi(I_\mathrm{ex})+\phi(I_\mathrm{in})`.
+
+    6. **Rectification** (optional): if ``rectify_output=True``, clamp
+       :math:`X_{n+1}\gets\max(X_{n+1},\,\mathrm{rectify\_rate})`.
+    7. **Update state variables**: ``rate``, ``noise``, ``delayed_rate``,
+       ``instant_rate``, ``_step_count``.
+
+    **6. Numerical Stability and Computational Complexity**
+
+    - Construction enforces :math:`\tau>0`, :math:`\lambda\ge 0`,
+      :math:`\sigma\ge 0`, :math:`\mathrm{rectify\_rate}\ge 0`.
+    - The threshold-linear gain is evaluated using ``np.minimum`` and ``np.maximum``
+      for numerically stable clipping.
+    - Per-call cost is :math:`O(\prod\mathrm{varshape})` with vectorized NumPy
+      operations in float64.
+    - The exponential Euler scheme is numerically stable for all :math:`h>0`.
 
     Parameters
     ----------
     in_size : Size
-        Population shape.
-    tau : Quantity[ms], optional
-        Time constant of rate dynamics. Default ``10 ms``.
-    lambda_ : float, optional
-        Passive decay rate :math:`\lambda`. Default ``1.0``.
-    sigma : float, optional
-        Input noise scale. Default ``1.0``.
-    mu : float, optional
-        Mean drive. Default ``0.0``.
-    g : float, optional
-        Gain slope before clipping. Default ``1.0``.
-    theta : float, optional
-        Activation threshold. Default ``0.0``.
-    alpha : float, optional
-        Saturation threshold. Default ``+inf``.
+        Population shape (tuple or int). All per-neuron parameters are broadcast
+        to ``self.varshape``.
+    tau : ArrayLike, optional
+        Time constant :math:`\tau` (ms). Scalar or array broadcastable to
+        ``self.varshape``. Must be :math:`>0`. Default: ``10.0 * u.ms``.
+    lambda_ : ArrayLike, optional
+        Passive decay rate :math:`\lambda` (dimensionless). Scalar or array
+        broadcastable to ``self.varshape``. Must be :math:`\ge 0`. Controls
+        exponential relaxation (:math:`\lambda=0` yields driftless diffusion).
+        Default: ``1.0``.
+    sigma : ArrayLike, optional
+        Input-noise scale :math:`\sigma` (dimensionless). Scalar or array
+        broadcastable to ``self.varshape``. Must be :math:`\ge 0`. Default:
+        ``1.0``.
+    mu : ArrayLike, optional
+        Mean drive :math:`\mu` (dimensionless). Scalar or array broadcastable to
+        ``self.varshape``. External constant input to the rate dynamics. Default:
+        ``0.0``.
+    g : ArrayLike, optional
+        Gain slope :math:`g` (dimensionless) for the threshold-linear function
+        :math:`\phi(h)=\min(\max(g(h-\theta),0),\alpha)`. Scalar or array
+        broadcastable to ``self.varshape``. Default: ``1.0``.
+    theta : ArrayLike, optional
+        Activation threshold :math:`\theta` (dimensionless). The gain function is
+        zero for :math:`h<\theta`. Scalar or array broadcastable to
+        ``self.varshape``. Default: ``0.0``.
+    alpha : ArrayLike, optional
+        Saturation level :math:`\alpha` (dimensionless). The gain function
+        saturates at :math:`\alpha` for large inputs. Scalar or array broadcastable
+        to ``self.varshape``. Default: ``np.inf`` (no saturation).
     mult_coupling : bool, optional
-        Compatibility flag; no effect for this model.
+        API compatibility flag. Has **no effect** on dynamics for threshold-linear
+        neurons (multiplicative coupling factors are constant 1.0). Default:
+        ``False``.
     linear_summation : bool, optional
-        If ``True`` apply gain function to summed branch inputs; if ``False``
-        apply gain function per event before weighted summation.
-    rectify_rate : float, optional
-        Lower bound when ``rectify_output=True``. Default ``0.0``.
+        Controls where the threshold-linear gain is applied. If ``True``, the gain
+        is applied to the sum of excitatory and inhibitory inputs. If ``False``,
+        the gain is applied separately to each input branch (matching NEST event
+        semantics). Default: ``True``.
+    rectify_rate : ArrayLike, optional
+        Lower bound :math:`X_\mathrm{min}` for the rate when
+        ``rectify_output=True`` (dimensionless). Scalar or array broadcastable to
+        ``self.varshape``. Must be :math:`\ge 0`. Default: ``0.0``.
     rectify_output : bool, optional
-        If ``True`` clamp updated rate to ``>= rectify_rate``.
+        If ``True``, clamp the rate output to
+        :math:`X\ge\mathrm{rectify\_rate}` after each update step. Default:
+        ``False``.
     rate_initializer : Callable, optional
-        Initializer for ``rate``. Default ``Constant(0.0)``.
+        Initializer for the ``rate`` state variable :math:`X_0`. Callable
+        compatible with ``braintools.init`` API. Default:
+        ``braintools.init.Constant(0.0)``.
     noise_initializer : Callable, optional
-        Initializer for ``noise``. Default ``Constant(0.0)``.
-    name : str, optional
-        Module name.
+        Initializer for the ``noise`` state variable (records last noise sample
+        :math:`\sigma\,\xi_{n-1}`). Callable compatible with ``braintools.init``
+        API. Default: ``braintools.init.Constant(0.0)``.
+    name : str or None, optional
+        Module name for identification in hierarchies. If ``None``, an
+        auto-generated name is used. Default: ``None``.
+
+    Parameter Mapping
+    -----------------
+
+    The following table maps NEST ``threshold_lin_rate_ipn`` parameters to
+    brainpy.state equivalents:
+
+    =============================== ===================== =========
+    NEST Parameter                  brainpy.state         Default
+    =============================== ===================== =========
+    ``tau``                         ``tau``               10 ms
+    ``lambda``                      ``lambda_``           1.0
+    ``sigma``                       ``sigma``             1.0
+    ``mu``                          ``mu``                0.0
+    ``g`` (gain slope)              ``g``                 1.0
+    ``theta`` (threshold)           ``theta``             0.0
+    ``alpha`` (saturation)          ``alpha``             inf
+    ``mult_coupling``               ``mult_coupling``     False
+                                    (no effect)
+    ``linear_summation``            ``linear_summation``  True
+    ``rectify_rate``                ``rectify_rate``      0.0
+    ``rectify_output``              ``rectify_output``    False
+    =============================== ===================== =========
+
+    Attributes
+    ----------
+    rate : brainstate.ShortTermState
+        Current rate state :math:`X_n` (float64 array of shape ``self.varshape``
+        or ``(batch_size,) + self.varshape``).
+    noise : brainstate.ShortTermState
+        Last noise sample :math:`\sigma\,\xi_{n-1}` (float64 array, same shape as
+        ``rate``).
+    instant_rate : brainstate.ShortTermState
+        Rate value after instantaneous event application (float64 array, same
+        shape as ``rate``).
+    delayed_rate : brainstate.ShortTermState
+        Rate value before current update, used for delayed projections (float64
+        array, same shape as ``rate``).
+    _step_count : brainstate.ShortTermState
+        Internal step counter for delayed event scheduling (int64 scalar).
+    _delayed_ex_queue : dict
+        Internal queue mapping ``step_idx`` to accumulated excitatory delayed
+        events.
+    _delayed_in_queue : dict
+        Internal queue mapping ``step_idx`` to accumulated inhibitory delayed
+        events.
+
+    Raises
+    ------
+    ValueError
+        If ``tau <= 0``, ``lambda_ < 0``, ``sigma < 0``, or
+        ``rectify_rate < 0``.
+    ValueError
+        If ``instant_rate_events`` contain non-zero ``delay_steps``.
+    ValueError
+        If ``delayed_rate_events`` contain negative ``delay_steps``.
+    ValueError
+        If event tuples have length other than 2, 3, or 4.
 
     Notes
     -----
-    Runtime events:
+    **Runtime Event Semantics**
 
-    - ``instant_rate_events`` are applied in the current step.
-    - ``delayed_rate_events`` use integer ``delay_steps``.
-    - Event format supports dict or tuple:
-      ``(rate, weight)``, ``(rate, weight, delay_steps)``,
-      ``(rate, weight, delay_steps, multiplicity)``.
+    - ``instant_rate_events``: Applied in the current step without delay. Each
+      event can be:
+
+      - A scalar (treated as ``rate`` value with ``weight=1.0``).
+      - A tuple ``(rate, weight)`` or ``(rate, weight, delay_steps)`` or
+        ``(rate, weight, delay_steps, multiplicity)``.
+      - A dict with keys ``'rate'``/``'coeff'``/``'value'``, ``'weight'``,
+        ``'delay_steps'``/``'delay'``, ``'multiplicity'``.
+
+    - ``delayed_rate_events``: Scheduled with integer ``delay_steps`` (units of
+      simulation time step). Same format as ``instant_rate_events``.
+
+    - Sign convention: events with ``weight >= 0`` contribute to the excitatory
+      branch; events with ``weight < 0`` contribute to the inhibitory branch.
+
+    - For ``linear_summation=False``, event values are transformed by the
+      threshold-linear gain during buffering (matching NEST event handlers).
+
+    **Comparison to Other Rate Neuron Variants**
+
+    - ``rate_neuron_ipn``: Uses linear or custom gain function with optional
+      multiplicative coupling. ``threshold_lin_rate_ipn`` is a special case with
+      fixed threshold-linear gain and no multiplicative coupling.
+    - ``threshold_lin_rate_opn``: Output-noise variant (noise applied after
+      nonlinearity) vs. input noise (applied before dynamics propagation).
+
+    **Failure Modes**
+
+    - No automatic failure handling. Negative time constants, decay rates, or
+      noise parameters are caught at construction by ``_validate_parameters``.
+    - Invalid event formats raise ``ValueError`` during update.
+    - Numerical instability is unlikely due to exact OU integration and stable
+      clipping operations, but extreme parameter combinations (very large
+      :math:`\sigma`, very small :math:`\tau`) may lead to rate explosions
+      without ``rectify_output=True``.
+
+    Examples
+    --------
+    **Example 1**: Minimal threshold-linear rate neuron with external drive.
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainunit as u
+       >>> model = bst.threshold_lin_rate_ipn(
+       ...     in_size=10, tau=20*u.ms, sigma=0.5, g=2.0, theta=1.0
+       ... )
+       >>> model.init_all_states(batch_size=1)
+       >>> rate = model(x=0.5)  # external drive
+       >>> print(rate.shape)
+       (1, 10)
+
+    **Example 2**: Saturating threshold-linear neuron with rectification.
+
+    .. code-block:: python
+
+       >>> model = bst.threshold_lin_rate_ipn(
+       ...     in_size=5,
+       ...     tau=10*u.ms,
+       ...     lambda_=2.0,
+       ...     g=1.0, theta=0.5, alpha=5.0,
+       ...     rectify_rate=0.0, rectify_output=True
+       ... )
+       >>> model.init_all_states()
+
+    **Example 3**: Update with instantaneous and delayed events.
+
+    .. code-block:: python
+
+       >>> model = bst.threshold_lin_rate_ipn(in_size=3, tau=10*u.ms, sigma=0.1)
+       >>> model.init_all_states()
+       >>> instant_event = {'rate': 2.0, 'weight': 0.1}
+       >>> delayed_event = {'rate': 1.5, 'weight': -0.05, 'delay_steps': 3}
+       >>> rate = model.update(
+       ...     x=0.2,
+       ...     instant_rate_events=instant_event,
+       ...     delayed_rate_events=delayed_event
+       ... )
+
+    References
+    ----------
+    .. [1] NEST Simulator Documentation: ``threshold_lin_rate_ipn``
+           https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_ipn.html
+    .. [2] NEST Simulator Documentation: ``threshold_lin_rate`` nonlinearity
+           https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html
+    .. [3] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
+           Helias, M., & Diesmann, M. (2017). Integration of continuous-time
+           dynamics in a spiking neural network simulator. *Frontiers in
+           Neuroinformatics*, 11, 34.
+           https://doi.org/10.3389/fninf.2017.00034
+
+    See Also
+    --------
+    threshold_lin_rate_opn : Output-noise variant of the threshold-linear rate neuron.
+    rate_neuron_ipn : General input-noise rate neuron with custom gain functions.
+    lin_rate : Deterministic linear rate neuron (``sigma=0``, no threshold).
     """
 
     __module__ = 'brainpy.state'
@@ -309,13 +577,55 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
     @property
     def recordables(self):
+        r"""List of state variable names that can be recorded during simulation.
+
+        Returns
+        -------
+        list of str
+            ``['rate', 'noise']``. The ``rate`` variable records the current rate
+            state :math:`X_n`, and ``noise`` records the last noise sample
+            :math:`\sigma\,\xi_{n-1}`.
+
+        Notes
+        -----
+        These variables can be accessed via recording tools in BrainPy for
+        post-simulation analysis of rate dynamics and noise contributions.
+        """
         return ['rate', 'noise']
 
     @property
     def receptor_types(self):
+        r"""Receptor type dictionary for projection compatibility.
+
+        Returns
+        -------
+        dict of {str: int}
+            ``{'RATE': 0}``. Rate neurons have a single unified receptor port
+            for all rate-based inputs. Excitatory vs. inhibitory separation is
+            handled internally via event weight signs.
+
+        Notes
+        -----
+        This property is used by projection objects to validate connection targets.
+        Unlike spiking neurons with separate AMPA/GABA receptor ports, rate neurons
+        use sign-based branch routing (``weight >= 0`` → excitatory branch,
+        ``weight < 0`` → inhibitory branch).
+        """
         return {'RATE': 0}
 
     def _validate_parameters(self):
+        r"""Validate model parameters at construction time.
+
+        Raises
+        ------
+        ValueError
+            If ``tau <= 0``, ``lambda_ < 0``, ``sigma < 0``, or
+            ``rectify_rate < 0``.
+
+        Notes
+        -----
+        This method is called automatically during ``__init__``.
+        """
         if np.any(self._to_numpy_ms(self.tau) <= 0.0):
             raise ValueError('Time constant tau must be > 0.')
         if np.any(self._to_numpy(self.lambda_) < 0.0):
@@ -326,6 +636,31 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
             raise ValueError('Rectifying rate must be >= 0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables for simulation.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size. If ``None`` (default), state shape is
+            ``self.varshape``. If ``int``, state shape is
+            ``(batch_size,) + self.varshape``.
+        **kwargs
+            Additional keyword arguments (reserved for future use).
+
+        Notes
+        -----
+        This method initializes:
+
+        - ``rate``: Current rate state :math:`X_n`.
+        - ``noise``: Last noise sample :math:`\sigma\,\xi_{n-1}`.
+        - ``instant_rate``: Rate after instantaneous event application.
+        - ``delayed_rate``: Rate before current update (for delayed projections).
+        - ``_step_count``: Internal step counter for delay scheduling.
+        - ``_delayed_ex_queue``, ``_delayed_in_queue``: Delay queues.
+
+        All state arrays are initialized as float64 NumPy arrays using the
+        provided initializers.
+        """
         rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
         noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
         rate_np = self._to_numpy(rate)
@@ -341,6 +676,114 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         self._delayed_in_queue = {}
 
     def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
+        r"""Perform one simulation step of stochastic threshold-linear rate dynamics.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            External drive (scalar or array broadcastable to ``self.varshape``).
+            Added to ``mu`` as constant forcing. Default is ``0.0``.
+        instant_rate_events : None, dict, tuple, list, or iterable, optional
+            Instantaneous rate events applied in the current step without delay.
+            See class docstring for event format. Default is ``None``.
+        delayed_rate_events : None, dict, tuple, list, or iterable, optional
+            Delayed rate events scheduled with integer ``delay_steps`` (units of
+            simulation time step). See class docstring for event format. Default
+            is ``None``.
+        noise : ArrayLike, optional
+            Externally supplied noise sample :math:`\xi_n` (scalar or array
+            broadcastable to state shape). If ``None`` (default), draws
+            :math:`\xi_n\sim\mathcal{N}(0,1)` internally.
+
+        Returns
+        -------
+        rate_new : np.ndarray
+            Updated rate state :math:`X_{n+1}` (float64 array of shape
+            ``self.rate.value.shape``).
+
+        Notes
+        -----
+        **Update algorithm**:
+
+        1. Collect input contributions:
+
+           - Delayed events arriving at current step (from internal queues).
+           - Newly scheduled delayed events with ``delay_steps=0``.
+           - Instantaneous events.
+           - Delta inputs (sign-separated into excitatory/inhibitory).
+           - Current inputs via ``sum_current_inputs(x, rate)``.
+
+        2. Compute propagator coefficients:
+
+           For :math:`\lambda>0`:
+
+           .. math::
+
+              P_1 = \exp(-\lambda h/\tau), \quad
+              P_2 = (1-P_1)/\lambda, \quad
+              N = \sigma\sqrt{(1-P_1^2)/(2\lambda)}.
+
+           For :math:`\lambda=0`: :math:`P_1=1`, :math:`P_2=h/\tau`,
+           :math:`N=\sigma\sqrt{h/\tau}`.
+
+        3. Propagate intrinsic dynamics:
+
+           .. math::
+
+              X' = P_1 X_n + P_2(\mu + \mu_\mathrm{ext}) + N\,\xi_n.
+
+        4. Apply network input with threshold-linear gain:
+
+           - ``linear_summation=True``:
+             :math:`X' \gets X' + P_2\,\phi(I_\mathrm{ex}+I_\mathrm{in})`.
+           - ``linear_summation=False``:
+             :math:`X' \gets X' + P_2\,[\phi(I_\mathrm{ex})+\phi(I_\mathrm{in})]`.
+
+           where :math:`\phi(h)=\min(\max(g(h-\theta),0),\alpha)`.
+
+        5. Apply optional output rectification:
+           :math:`X_{n+1}\gets\max(X',\,\mathrm{rectify\_rate})`.
+
+        6. Update state variables: ``rate``, ``noise``, ``delayed_rate``,
+           ``instant_rate``, ``_step_count``.
+
+        **Numerical stability**: The threshold-linear gain uses ``np.minimum`` and
+        ``np.maximum`` for stable clipping. The exponential Euler scheme uses
+        ``np.expm1`` for numerically stable evaluation of :math:`1-e^{-x}` and
+        handles the :math:`\lambda=0` limit explicitly.
+
+        **Failure modes**: No automatic failure handling. Negative time constants,
+        decay rates, or noise parameters are caught at construction by
+        ``_validate_parameters``. Invalid event formats raise ``ValueError``.
+
+        Examples
+        --------
+        Single update step with external drive:
+
+        .. code-block:: python
+
+           >>> import brainpy.state as bst
+           >>> import brainunit as u
+           >>> model = bst.threshold_lin_rate_ipn(
+           ...     in_size=5, tau=10*u.ms, g=2.0, theta=1.0
+           ... )
+           >>> model.init_all_states()
+           >>> rate = model.update(x=0.5)
+
+        Update with instantaneous event:
+
+        .. code-block:: python
+
+           >>> event = {'rate': 2.0, 'weight': 0.1}
+           >>> rate = model.update(instant_rate_events=event)
+
+        Update with delayed event (arrives 3 steps later):
+
+        .. code-block:: python
+
+           >>> event = {'rate': 1.5, 'weight': 0.1, 'delay_steps': 3}
+           >>> rate = model.update(delayed_rate_events=event)
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 
@@ -413,69 +856,346 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
 
 class threshold_lin_rate_opn(_threshold_lin_rate_base):
-    r"""NEST-compatible ``threshold_lin_rate_opn`` with threshold-linear gain.
+    r"""NEST-compatible output-noise threshold-linear rate neuron.
 
-    Description
-    -----------
+    Implements the NEST ``threshold_lin_rate_opn`` model, an output-noise rate
+    neuron with threshold-linear gain function. Unlike the input-noise variant
+    (``threshold_lin_rate_ipn``), noise is applied to the output after deterministic
+    dynamics, leading to different stationary distributions and noise scaling.
 
-    ``threshold_lin_rate_opn`` implements NEST's output-noise threshold-linear
-    rate neuron:
+    **Mathematical Description**
 
-    .. math::
+    **1. Continuous-Time Deterministic Dynamics with Output Noise**
 
-       \tau\frac{dX(t)}{dt}=-X(t)+\mu+\phi(\cdot), \qquad
-       X_\mathrm{noisy}(t)=X(t)+\sqrt{\frac{\tau}{h}}\sigma\xi(t),
-
-    where
+    The rate state :math:`X(t)` evolves according to the deterministic ODE:
 
     .. math::
 
-       \phi(h)=\min(\max(g(h-\theta),0),\alpha).
+       \tau\frac{dX(t)}{dt} = -X(t) + \mu + I_\mathrm{net}(t),
 
-    Update ordering (matching NEST ``rate_neuron_opn``)
-    ...................................................
+    where:
+
+    - :math:`\tau > 0` is the time constant (ms).
+    - :math:`\mu` is the mean drive (dimensionless, external constant input).
+    - :math:`I_\mathrm{net}(t)` is the network input (see below).
+
+    The **output** rate :math:`X_\mathrm{noisy}(t)` is obtained by adding noise to
+    the deterministic state:
+
+    .. math::
+
+       X_\mathrm{noisy}(t) = X(t) + \sqrt{\frac{\tau}{h}}\,\sigma\,\xi(t),
+
+    where:
+
+    - :math:`\sigma \ge 0` is the output-noise scale (dimensionless).
+    - :math:`\xi(t)\sim\mathcal{N}(0,1)` is standard Gaussian white noise.
+    - :math:`h=dt` is the simulation time step (ms).
+
+    The :math:`\sqrt{\tau/h}` scaling ensures the noise variance is independent of
+    the time step for small :math:`h`.
+
+    **2. Threshold-Linear Gain Function**
+
+    The input nonlinearity :math:`\phi(h)` is identical to the input-noise variant:
+
+    .. math::
+
+       \phi(h) = \min(\max(g(h-\theta), 0), \alpha),
+
+    where:
+
+    - :math:`g > 0` is the gain slope (dimensionless).
+    - :math:`\theta` is the activation threshold (dimensionless).
+    - :math:`\alpha > 0` is the saturation level (dimensionless).
+
+    **3. Network Input Structure**
+
+    The network input :math:`I_\mathrm{net}(t)` is computed according to:
+
+    .. math::
+
+       I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t) + I_\mathrm{in}(t))
+       \quad\text{(if linear_summation=True)},
+
+    or:
+
+    .. math::
+
+       I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t)) + \phi(I_\mathrm{in}(t))
+       \quad\text{(if linear_summation=False)},
+
+    where :math:`I_\mathrm{ex}(t)` and :math:`I_\mathrm{in}(t)` are excitatory and
+    inhibitory branches (sign-separated by event weight).
+
+    **Note**: Multiplicative coupling is **not** supported (``mult_coupling``
+    parameter is accepted for API compatibility but has no effect).
+
+    **4. Discrete-Time Integration (Exponential Euler)**
+
+    For time step :math:`h=dt` (in ms), the deterministic dynamics are integrated
+    using exponential Euler:
+
+    .. math::
+
+       X_{n+1} = P_1 X_n + P_2 (\mu + I_\mathrm{net,n}),
+
+    where:
+
+    .. math::
+
+       P_1 = \exp\left(-\frac{h}{\tau}\right), \quad
+       P_2 = 1 - P_1 = -\mathrm{expm1}\left(-\frac{h}{\tau}\right).
+
+    The noisy output is:
+
+    .. math::
+
+       X_\mathrm{noisy,n} = X_n + \sqrt{\frac{\tau}{h}}\,\sigma\,\xi_n,
+
+    where :math:`\xi_n\sim\mathcal{N}(0,1)`.
+
+    **5. Update Ordering (Matching NEST ``rate_neuron_opn_impl.h``)**
 
     Per simulation step:
 
-    1. Draw ``noise = sigma * xi``.
-    2. Build ``noisy_rate`` from current ``rate`` and store as delayed output.
-    3. Propagate deterministic intrinsic dynamics.
-    4. Add input contributions using threshold-linear gain.
-    5. Store ``noisy_rate`` as instantaneous output.
+    1. **Draw noise**: sample :math:`\xi_n\sim\mathcal{N}(0,1)`, compute
+       :math:`\mathrm{noise}_n=\sigma\,\xi_n`.
+    2. **Build noisy output**: compute
+       :math:`X_\mathrm{noisy,n}=X_n+\sqrt{\tau/h}\,\mathrm{noise}_n` and store
+       as both ``delayed_rate`` and ``instant_rate`` (outgoing values for
+       projections).
+    3. **Propagate deterministic dynamics**: apply exponential Euler to update
+       :math:`X_n`.
+    4. **Read event buffers**: drain delayed events arriving at current step;
+       accumulate instantaneous events.
+    5. **Apply network input with threshold-linear gain**:
+
+       - ``linear_summation=True``:
+         :math:`X_{n+1} \gets X_{n+1} + P_2\,\phi(I_\mathrm{ex}+I_\mathrm{in})`.
+       - ``linear_summation=False``:
+         :math:`X_{n+1} \gets X_{n+1} + P_2\,[\phi(I_\mathrm{ex})+\phi(I_\mathrm{in})]`.
+
+    6. **Update state variables**: ``rate``, ``noise``, ``noisy_rate``,
+       ``delayed_rate``, ``instant_rate``, ``_step_count``.
+
+    **Note**: Unlike input-noise variant, there is **no** rectification option for
+    output-noise neurons. The noise is applied to the output only and does not
+    affect the internal deterministic state.
+
+    **6. Numerical Stability and Computational Complexity**
+
+    - Construction enforces :math:`\tau>0`, :math:`\sigma\ge 0`.
+    - The threshold-linear gain is evaluated using ``np.minimum`` and ``np.maximum``
+      for numerically stable clipping.
+    - Per-call cost is :math:`O(\prod\mathrm{varshape})` with vectorized NumPy
+      operations in float64.
+    - The exponential Euler scheme is numerically stable for all :math:`h>0`.
 
     Parameters
     ----------
     in_size : Size
-        Population shape.
-    tau : Quantity[ms], optional
-        Time constant of rate dynamics. Default ``10 ms``.
-    sigma : float, optional
-        Output noise scale. Default ``1.0``.
-    mu : float, optional
-        Mean drive. Default ``0.0``.
-    g : float, optional
-        Gain slope before clipping. Default ``1.0``.
-    theta : float, optional
-        Activation threshold. Default ``0.0``.
-    alpha : float, optional
-        Saturation threshold. Default ``+inf``.
+        Population shape (tuple or int). All per-neuron parameters are broadcast
+        to ``self.varshape``.
+    tau : ArrayLike, optional
+        Time constant :math:`\tau` (ms). Scalar or array broadcastable to
+        ``self.varshape``. Must be :math:`>0`. Default: ``10.0 * u.ms``.
+    sigma : ArrayLike, optional
+        Output-noise scale :math:`\sigma` (dimensionless). Scalar or array
+        broadcastable to ``self.varshape``. Must be :math:`\ge 0`. Default:
+        ``1.0``.
+    mu : ArrayLike, optional
+        Mean drive :math:`\mu` (dimensionless). Scalar or array broadcastable to
+        ``self.varshape``. External constant input to the rate dynamics. Default:
+        ``0.0``.
+    g : ArrayLike, optional
+        Gain slope :math:`g` (dimensionless) for the threshold-linear function
+        :math:`\phi(h)=\min(\max(g(h-\theta),0),\alpha)`. Scalar or array
+        broadcastable to ``self.varshape``. Default: ``1.0``.
+    theta : ArrayLike, optional
+        Activation threshold :math:`\theta` (dimensionless). The gain function is
+        zero for :math:`h<\theta`. Scalar or array broadcastable to
+        ``self.varshape``. Default: ``0.0``.
+    alpha : ArrayLike, optional
+        Saturation level :math:`\alpha` (dimensionless). The gain function
+        saturates at :math:`\alpha` for large inputs. Scalar or array broadcastable
+        to ``self.varshape``. Default: ``np.inf`` (no saturation).
     mult_coupling : bool, optional
-        Compatibility flag; no effect for this model.
+        API compatibility flag. Has **no effect** on dynamics for threshold-linear
+        neurons (multiplicative coupling factors are constant 1.0). Default:
+        ``False``.
     linear_summation : bool, optional
-        If ``True`` apply gain function to summed branch inputs; if ``False``
-        apply gain function per event before weighted summation.
+        Controls where the threshold-linear gain is applied. If ``True``, the gain
+        is applied to the sum of excitatory and inhibitory inputs. If ``False``,
+        the gain is applied separately to each input branch (matching NEST event
+        semantics). Default: ``True``.
     rate_initializer : Callable, optional
-        Initializer for ``rate``. Default ``Constant(0.0)``.
+        Initializer for the ``rate`` state variable :math:`X_0`. Callable
+        compatible with ``braintools.init`` API. Default:
+        ``braintools.init.Constant(0.0)``.
     noise_initializer : Callable, optional
-        Initializer for ``noise``. Default ``Constant(0.0)``.
+        Initializer for the ``noise`` state variable (records last noise sample
+        :math:`\sigma\,\xi_{n-1}`). Callable compatible with ``braintools.init``
+        API. Default: ``braintools.init.Constant(0.0)``.
     noisy_rate_initializer : Callable, optional
-        Initializer for ``noisy_rate``. Default ``Constant(0.0)``.
-    name : str, optional
-        Module name.
+        Initializer for the ``noisy_rate`` state variable :math:`X_\mathrm{noisy,0}`
+        (initial noisy output). Callable compatible with ``braintools.init`` API.
+        Default: ``braintools.init.Constant(0.0)``.
+    name : str or None, optional
+        Module name for identification in hierarchies. If ``None``, an
+        auto-generated name is used. Default: ``None``.
+
+    Parameter Mapping
+    -----------------
+
+    The following table maps NEST ``threshold_lin_rate_opn`` parameters to
+    brainpy.state equivalents:
+
+    =============================== ===================== =========
+    NEST Parameter                  brainpy.state         Default
+    =============================== ===================== =========
+    ``tau``                         ``tau``               10 ms
+    ``sigma``                       ``sigma``             1.0
+    ``mu``                          ``mu``                0.0
+    ``g`` (gain slope)              ``g``                 1.0
+    ``theta`` (threshold)           ``theta``             0.0
+    ``alpha`` (saturation)          ``alpha``             inf
+    ``mult_coupling``               ``mult_coupling``     False
+                                    (no effect)
+    ``linear_summation``            ``linear_summation``  True
+    =============================== ===================== =========
+
+    **Note**: Unlike ``threshold_lin_rate_ipn``, this model does **not** have
+    ``lambda`` (passive decay is fixed at 1.0), ``rectify_rate``, or
+    ``rectify_output`` parameters.
+
+    Attributes
+    ----------
+    rate : brainstate.ShortTermState
+        Current deterministic rate state :math:`X_n` (float64 array of shape
+        ``self.varshape`` or ``(batch_size,) + self.varshape``).
+    noise : brainstate.ShortTermState
+        Last noise sample :math:`\sigma\,\xi_{n-1}` (float64 array, same shape as
+        ``rate``).
+    noisy_rate : brainstate.ShortTermState
+        Noisy output rate :math:`X_\mathrm{noisy,n}=X_n+\sqrt{\tau/h}\,\sigma\,\xi_n`
+        (float64 array, same shape as ``rate``).
+    instant_rate : brainstate.ShortTermState
+        Noisy rate value used for instantaneous projections (float64 array, same
+        shape as ``rate``).
+    delayed_rate : brainstate.ShortTermState
+        Noisy rate value used for delayed projections (float64 array, same shape
+        as ``rate``).
+    _step_count : brainstate.ShortTermState
+        Internal step counter for delayed event scheduling (int64 scalar).
+    _delayed_ex_queue : dict
+        Internal queue mapping ``step_idx`` to accumulated excitatory delayed
+        events.
+    _delayed_in_queue : dict
+        Internal queue mapping ``step_idx`` to accumulated inhibitory delayed
+        events.
+
+    Raises
+    ------
+    ValueError
+        If ``tau <= 0`` or ``sigma < 0``.
+    ValueError
+        If ``instant_rate_events`` contain non-zero ``delay_steps``.
+    ValueError
+        If ``delayed_rate_events`` contain negative ``delay_steps``.
+    ValueError
+        If event tuples have length other than 2, 3, or 4.
 
     Notes
     -----
-    Runtime event formats are identical to :class:`threshold_lin_rate_ipn`.
+    **Runtime Event Semantics**
+
+    Event formats are identical to :class:`threshold_lin_rate_ipn`:
+
+    - ``instant_rate_events``: Applied in the current step without delay.
+    - ``delayed_rate_events``: Scheduled with integer ``delay_steps``.
+    - Sign convention: ``weight >= 0`` → excitatory, ``weight < 0`` → inhibitory.
+
+    **Comparison to Input-Noise Variant**
+
+    The key differences between ``threshold_lin_rate_opn`` (output noise) and
+    ``threshold_lin_rate_ipn`` (input noise) are:
+
+    - **Noise location**: Output noise is added after nonlinearity; input noise is
+      integrated before nonlinearity.
+    - **Stationary distribution**: Output noise does not affect the mean of the
+      deterministic attractor; input noise shifts the effective drive.
+    - **Dynamics**: Output-noise model has simpler deterministic dynamics
+      (:math:`\lambda=1.0` fixed) with additive output corruption.
+    - **Rectification**: Input-noise variant supports ``rectify_output``; output-
+      noise variant does not (noise is on output only).
+
+    **Failure Modes**
+
+    - No automatic failure handling. Negative time constants or noise parameters
+      are caught at construction by ``_validate_parameters``.
+    - Invalid event formats raise ``ValueError`` during update.
+    - The noise scaling :math:`\sqrt{\tau/h}` can become large for small time
+      steps, but this is by design to ensure correct variance scaling.
+
+    Examples
+    --------
+    **Example 1**: Minimal output-noise threshold-linear neuron.
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainunit as u
+       >>> model = bst.threshold_lin_rate_opn(
+       ...     in_size=10, tau=20*u.ms, sigma=0.5, g=2.0, theta=1.0
+       ... )
+       >>> model.init_all_states(batch_size=1)
+       >>> rate = model(x=0.5)  # deterministic state
+       >>> noisy_rate = model.noisy_rate.value  # noisy output
+
+    **Example 2**: Saturating threshold-linear neuron with output noise.
+
+    .. code-block:: python
+
+       >>> model = bst.threshold_lin_rate_opn(
+       ...     in_size=5,
+       ...     tau=10*u.ms,
+       ...     sigma=0.2,
+       ...     g=1.5, theta=0.5, alpha=5.0
+       ... )
+       >>> model.init_all_states()
+
+    **Example 3**: Update with events (identical to input-noise variant).
+
+    .. code-block:: python
+
+       >>> model = bst.threshold_lin_rate_opn(in_size=3, tau=10*u.ms, sigma=0.1)
+       >>> model.init_all_states()
+       >>> instant_event = {'rate': 2.0, 'weight': 0.1}
+       >>> delayed_event = {'rate': 1.5, 'weight': -0.05, 'delay_steps': 3}
+       >>> rate = model.update(
+       ...     x=0.2,
+       ...     instant_rate_events=instant_event,
+       ...     delayed_rate_events=delayed_event
+       ... )
+
+    References
+    ----------
+    .. [1] NEST Simulator Documentation: ``threshold_lin_rate_opn``
+           https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_opn.html
+    .. [2] NEST Simulator Documentation: ``threshold_lin_rate`` nonlinearity
+           https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html
+    .. [3] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M.,
+           Helias, M., & Diesmann, M. (2017). Integration of continuous-time
+           dynamics in a spiking neural network simulator. *Frontiers in
+           Neuroinformatics*, 11, 34.
+           https://doi.org/10.3389/fninf.2017.00034
+
+    See Also
+    --------
+    threshold_lin_rate_ipn : Input-noise variant of the threshold-linear rate neuron.
+    rate_neuron_opn : General output-noise rate neuron with custom gain functions.
+    lin_rate : Deterministic linear rate neuron (``sigma=0``, no threshold).
     """
 
     __module__ = 'brainpy.state'
@@ -519,19 +1239,91 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
 
     @property
     def recordables(self):
+        r"""List of state variable names that can be recorded during simulation.
+
+        Returns
+        -------
+        list of str
+            ``['rate', 'noise', 'noisy_rate']``. The ``rate`` variable records the
+            deterministic rate state :math:`X_n`, ``noise`` records the last noise
+            sample :math:`\sigma\,\xi_{n-1}`, and ``noisy_rate`` records the noisy
+            output :math:`X_\mathrm{noisy,n}`.
+
+        Notes
+        -----
+        These variables can be accessed via recording tools in BrainPy for
+        post-simulation analysis. The ``noisy_rate`` is the value transmitted to
+        downstream neurons via projections.
+        """
         return ['rate', 'noise', 'noisy_rate']
 
     @property
     def receptor_types(self):
+        r"""Receptor type dictionary for projection compatibility.
+
+        Returns
+        -------
+        dict of {str: int}
+            ``{'RATE': 0}``. Rate neurons have a single unified receptor port
+            for all rate-based inputs. Excitatory vs. inhibitory separation is
+            handled internally via event weight signs.
+
+        Notes
+        -----
+        This property is used by projection objects to validate connection targets.
+        Unlike spiking neurons with separate AMPA/GABA receptor ports, rate neurons
+        use sign-based branch routing (``weight >= 0`` → excitatory branch,
+        ``weight < 0`` → inhibitory branch).
+        """
         return {'RATE': 0}
 
     def _validate_parameters(self):
+        r"""Validate model parameters at construction time.
+
+        Raises
+        ------
+        ValueError
+            If ``tau <= 0`` or ``sigma < 0``.
+
+        Notes
+        -----
+        This method is called automatically during ``__init__``. Unlike the input-
+        noise variant, this model does not have ``lambda_`` or ``rectify_rate``
+        parameters to validate.
+        """
         if np.any(self._to_numpy_ms(self.tau) <= 0.0):
             raise ValueError('Time constant tau must be > 0.')
         if np.any(self._to_numpy(self.sigma) < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables for simulation.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size. If ``None`` (default), state shape is
+            ``self.varshape``. If ``int``, state shape is
+            ``(batch_size,) + self.varshape``.
+        **kwargs
+            Additional keyword arguments (reserved for future use).
+
+        Notes
+        -----
+        This method initializes:
+
+        - ``rate``: Deterministic rate state :math:`X_n`.
+        - ``noise``: Last noise sample :math:`\sigma\,\xi_{n-1}`.
+        - ``noisy_rate``: Noisy output :math:`X_\mathrm{noisy,n}`.
+        - ``instant_rate``: Noisy rate for instantaneous projections.
+        - ``delayed_rate``: Noisy rate for delayed projections.
+        - ``_step_count``: Internal step counter for delay scheduling.
+        - ``_delayed_ex_queue``, ``_delayed_in_queue``: Delay queues.
+
+        All state arrays are initialized as float64 NumPy arrays using the
+        provided initializers. Both ``instant_rate`` and ``delayed_rate`` are
+        initialized to ``noisy_rate`` (outgoing values are noisy).
+        """
         rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
         noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
         noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape, batch_size)
@@ -550,6 +1342,121 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         self._delayed_in_queue = {}
 
     def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
+        r"""Perform one simulation step of deterministic threshold-linear rate dynamics with output noise.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            External drive (scalar or array broadcastable to ``self.varshape``).
+            Added to ``mu`` as constant forcing. Default is ``0.0``.
+        instant_rate_events : None, dict, tuple, list, or iterable, optional
+            Instantaneous rate events applied in the current step without delay.
+            See class docstring for event format. Default is ``None``.
+        delayed_rate_events : None, dict, tuple, list, or iterable, optional
+            Delayed rate events scheduled with integer ``delay_steps`` (units of
+            simulation time step). See class docstring for event format. Default
+            is ``None``.
+        noise : ArrayLike, optional
+            Externally supplied noise sample :math:`\xi_n` (scalar or array
+            broadcastable to state shape). If ``None`` (default), draws
+            :math:`\xi_n\sim\mathcal{N}(0,1)` internally.
+
+        Returns
+        -------
+        rate_new : np.ndarray
+            Updated deterministic rate state :math:`X_{n+1}` (float64 array of
+            shape ``self.rate.value.shape``).
+
+        Notes
+        -----
+        **Update algorithm**:
+
+        1. **Draw noise and compute noisy output**:
+
+           .. math::
+
+              \mathrm{noise}_n = \sigma\,\xi_n, \quad
+              X_\mathrm{noisy,n} = X_n + \sqrt{\frac{\tau}{h}}\,\mathrm{noise}_n.
+
+           Store :math:`X_\mathrm{noisy,n}` as ``delayed_rate`` and
+           ``instant_rate`` (outgoing values for projections).
+
+        2. **Collect input contributions**:
+
+           - Delayed events arriving at current step (from internal queues).
+           - Newly scheduled delayed events with ``delay_steps=0``.
+           - Instantaneous events.
+           - Delta inputs (sign-separated into excitatory/inhibitory).
+           - Current inputs via ``sum_current_inputs(x, rate)``.
+
+        3. **Compute propagator coefficients** (deterministic exponential Euler):
+
+           .. math::
+
+              P_1 = \exp(-h/\tau), \quad P_2 = 1 - P_1 = -\mathrm{expm1}(-h/\tau).
+
+        4. **Propagate deterministic dynamics**:
+
+           .. math::
+
+              X_{n+1} = P_1 X_n + P_2(\mu + \mu_\mathrm{ext}).
+
+        5. **Apply network input with threshold-linear gain**:
+
+           - ``linear_summation=True``:
+             :math:`X_{n+1} \gets X_{n+1} + P_2\,\phi(I_\mathrm{ex}+I_\mathrm{in})`.
+           - ``linear_summation=False``:
+             :math:`X_{n+1} \gets X_{n+1} + P_2\,[\phi(I_\mathrm{ex})+\phi(I_\mathrm{in})]`.
+
+           where :math:`\phi(h)=\min(\max(g(h-\theta),0),\alpha)`.
+
+        6. **Update state variables**: ``rate``, ``noise``, ``noisy_rate``,
+           ``delayed_rate``, ``instant_rate``, ``_step_count``.
+
+        **Key difference from input-noise variant**: Noise is added to the output
+        *before* the deterministic update, not during the stochastic integration.
+        This means the internal state :math:`X_n` evolves deterministically, and
+        only the transmitted rate is noisy.
+
+        **Numerical stability**: The threshold-linear gain uses ``np.minimum`` and
+        ``np.maximum`` for stable clipping. The exponential Euler scheme uses
+        ``np.expm1`` for numerically stable evaluation of :math:`1-e^{-x}`. The
+        noise scaling :math:`\sqrt{\tau/h}` ensures correct variance scaling as
+        :math:`h\to 0`.
+
+        **Failure modes**: No automatic failure handling. Negative time constants
+        or noise parameters are caught at construction by ``_validate_parameters``.
+        Invalid event formats raise ``ValueError``.
+
+        Examples
+        --------
+        Single update step with external drive:
+
+        .. code-block:: python
+
+           >>> import brainpy.state as bst
+           >>> import brainunit as u
+           >>> model = bst.threshold_lin_rate_opn(
+           ...     in_size=5, tau=10*u.ms, g=2.0, theta=1.0
+           ... )
+           >>> model.init_all_states()
+           >>> rate = model.update(x=0.5)  # deterministic state
+           >>> noisy_output = model.noisy_rate.value  # noisy transmitted value
+
+        Update with instantaneous event:
+
+        .. code-block:: python
+
+           >>> event = {'rate': 2.0, 'weight': 0.1}
+           >>> rate = model.update(instant_rate_events=event)
+
+        Update with delayed event (arrives 3 steps later):
+
+        .. code-block:: python
+
+           >>> event = {'rate': 1.5, 'weight': 0.1, 'delay_steps': 3}
+           >>> rate = model.update(delayed_rate_events=event)
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 

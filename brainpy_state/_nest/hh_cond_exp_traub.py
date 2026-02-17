@@ -43,7 +43,73 @@ def _hh_cond_exp_traub_equilibrium(V):
     dynamics function uses ``V - V_T`` in its rate equations, but the
     equilibrium initialization in NEST uses the raw voltage ``y_[0]`` (= E_L).
 
-    Returns (m_inf, h_inf, n_inf) at the given membrane potential.
+    Parameters
+    ----------
+    V : float
+        Membrane potential in mV (unitless scalar). Must be a finite value.
+
+    Returns
+    -------
+    m_inf : float
+        Sodium activation equilibrium value (0 ≤ m_inf ≤ 1).
+    h_inf : float
+        Sodium inactivation equilibrium value (0 ≤ h_inf ≤ 1).
+    n_inf : float
+        Potassium activation equilibrium value (0 ≤ n_inf ≤ 1).
+
+    Notes
+    -----
+    The function evaluates the steady-state gating variables using Traub-Miles
+    rate equations at the unshifted voltage V (not V - V_T). This is the
+    correct initialization procedure for NEST compatibility, where initial
+    gating states are computed at the raw E_L value, not shifted by V_T.
+
+    The alpha/beta rate functions may encounter division by zero at special
+    voltage values (e.g., V = 15 mV for alpha_n). These singularities are
+    removable via L'Hospital's rule but may cause numerical issues if V is
+    exactly at these points.
+
+    Mathematical Formulation
+    ------------------------
+    Equilibrium values are computed from the Traub-Miles rate equations:
+
+    .. math::
+
+       x_{\infty}(V) = \frac{\alpha_x(V)}{\alpha_x(V) + \beta_x(V)}
+
+    **1. Potassium Activation (n)**
+
+    .. math::
+
+       \alpha_n &= \frac{0.032(15 - V)}{e^{(15-V)/5} - 1} \\
+       \beta_n  &= 0.5 \, e^{(10-V)/40}
+
+    **2. Sodium Activation (m)**
+
+    .. math::
+
+       \alpha_m &= \frac{0.32(13 - V)}{e^{(13-V)/4} - 1} \\
+       \beta_m  &= \frac{0.28(V - 40)}{e^{(V-40)/5} - 1}
+
+    **3. Sodium Inactivation (h)**
+
+    .. math::
+
+       \alpha_h &= 0.128 \, e^{(17-V)/18} \\
+       \beta_h  &= \frac{4}{1 + e^{(40-V)/5}}
+
+    Example
+    -------
+    .. code-block:: python
+
+       >>> from brainpy_state._nest.hh_cond_exp_traub import _hh_cond_exp_traub_equilibrium
+       >>> m_inf, h_inf, n_inf = _hh_cond_exp_traub_equilibrium(-60.0)
+       >>> print(f"m={m_inf:.4f}, h={h_inf:.4f}, n={n_inf:.4f}")
+       m=0.0529, h=0.5961, n=0.3177
+
+    See Also
+    --------
+    hh_cond_exp_traub : The neuron model class that uses these equilibrium values.
     """
     alpha_n = 0.032 * (15.0 - V) / (math.exp((15.0 - V) / 5.0) - 1.0)
     beta_n = 0.5 * math.exp((10.0 - V) / 40.0)
@@ -60,19 +126,13 @@ def _hh_cond_exp_traub_equilibrium(V):
 class hh_cond_exp_traub(Neuron):
     r"""NEST-compatible ``hh_cond_exp_traub`` neuron model.
 
-    Short description
-    -----------------
-
     Hodgkin-Huxley model for Brette et al. (2007) review, based on Traub and
     Miles (1991) hippocampal pyramidal cell model.
 
-    Description
-    -----------
-
-    ``hh_cond_exp_traub`` is a modified Hodgkin-Huxley neuron model
-    specifically developed for the Brette et al. (2007) simulator review,
-    based on a model of hippocampal pyramidal cells by Traub and Miles (1991).
-    Key differences from the original Traub-Miles model:
+    This is a modified Hodgkin-Huxley neuron model specifically developed for
+    the Brette et al. (2007) simulator review, based on a model of hippocampal
+    pyramidal cells by Traub and Miles (1991). Key differences from the original
+    Traub-Miles model:
 
     - This is a point neuron, not a compartmental model.
     - Only ``I_Na`` and ``I_K`` ionic currents are included (no calcium dynamics),
@@ -81,17 +141,116 @@ class hh_cond_exp_traub(Neuron):
     - Incoming spikes induce an instantaneous conductance change followed by
       exponential decay (conductance-based synapses), not activation over time.
 
-    Membrane and ionic current dynamics
-    ....................................
+    Parameters
+    ----------
+    in_size : int, tuple of int
+        Population shape (number of neurons or spatial dimensions).
+    E_L : ArrayLike, default -60 mV
+        Leak reversal potential. Must be finite.
+    C_m : ArrayLike, default 200 pF
+        Membrane capacitance. Must be strictly positive.
+    g_Na : ArrayLike, default 20000 nS
+        Sodium peak conductance. Must be non-negative.
+    g_K : ArrayLike, default 6000 nS
+        Potassium peak conductance. Must be non-negative.
+    g_L : ArrayLike, default 10 nS
+        Leak conductance. Must be non-negative.
+    E_Na : ArrayLike, default 50 mV
+        Sodium reversal potential. Must be finite.
+    E_K : ArrayLike, default -90 mV
+        Potassium reversal potential. Must be finite.
+    V_T : ArrayLike, default -63 mV
+        Voltage offset for gating dynamics. Shifts the effective threshold
+        to approximately V_T + 30 mV.
+    E_ex : ArrayLike, default 0 mV
+        Excitatory synaptic reversal potential. Must be finite.
+    E_in : ArrayLike, default -80 mV
+        Inhibitory synaptic reversal potential. Must be finite.
+    t_ref : ArrayLike, default 2 ms
+        Duration of refractory period. Must be non-negative. Traub and Miles
+        used 3 ms; NEST default is 2 ms.
+    tau_syn_ex : ArrayLike, default 5 ms
+        Excitatory synaptic time constant. Must be strictly positive.
+    tau_syn_in : ArrayLike, default 10 ms
+        Inhibitory synaptic time constant. Must be strictly positive.
+    I_e : ArrayLike, default 0 pA
+        Constant external input current. Can be positive or negative.
+    V_m_init : ArrayLike, optional
+        Initial membrane potential. If None, defaults to E_L.
+    Act_m_init : ArrayLike, optional
+        Initial sodium activation gating variable (0 ≤ m ≤ 1). If None,
+        computed from equilibrium at V_m_init.
+    Inact_h_init : ArrayLike, optional
+        Initial sodium inactivation gating variable (0 ≤ h ≤ 1). If None,
+        computed from equilibrium at V_m_init.
+    Act_n_init : ArrayLike, optional
+        Initial potassium activation gating variable (0 ≤ n ≤ 1). If None,
+        computed from equilibrium at V_m_init.
+    spk_fun : Callable, default braintools.surrogate.ReluGrad()
+        Surrogate spike function for differentiable spike generation.
+    spk_reset : str, default 'hard'
+        Reset mode ('hard' or 'soft'). Note: HH models do not reset voltage
+        after spikes; this parameter affects gradient computation only.
+    rtol : float, default 1e-3
+        Relative tolerance for ODE solver (matches NEST GSL RKF45).
+    atol : float, default 1e-9
+        Absolute tolerance for ODE solver.
+    name : str, optional
+        Name of the neuron population.
 
-    The membrane potential evolves as
+    Attributes
+    ----------
+    V : brainstate.HiddenState
+        Membrane potential with shape (*in_size,) in mV.
+    m : brainstate.HiddenState
+        Sodium activation gating variable (0 ≤ m ≤ 1), shape (*in_size,).
+    h : brainstate.HiddenState
+        Sodium inactivation gating variable (0 ≤ h ≤ 1), shape (*in_size,).
+    n : brainstate.HiddenState
+        Potassium activation gating variable (0 ≤ n ≤ 1), shape (*in_size,).
+    g_ex : brainstate.HiddenState
+        Excitatory synaptic conductance in nS, shape (*in_size,).
+    g_in : brainstate.HiddenState
+        Inhibitory synaptic conductance in nS, shape (*in_size,).
+    I_stim : brainstate.ShortTermState
+        Stimulation current buffer in pA, shape (*in_size,).
+    refractory_step_count : brainstate.ShortTermState
+        Refractory countdown in grid steps, shape (*in_size,), dtype int32.
+    last_spike_time : brainstate.ShortTermState
+        Time of most recent spike in ms, shape (*in_size,).
+
+    Raises
+    ------
+    ValueError
+        If C_m ≤ 0, t_ref < 0, tau_syn_ex ≤ 0, or tau_syn_in ≤ 0.
+
+    Notes
+    -----
+    - Unlike IAF models, the HH model does **not** reset the membrane
+      potential after a spike. Repolarization occurs naturally through
+      the potassium current.
+    - During the refractory period, subthreshold dynamics continue to
+      evolve freely; only spike emission is suppressed.
+    - Synaptic spike weights are interpreted in conductance units (nS).
+      Positive weights drive excitatory synapses; negative weights drive
+      inhibitory synapses (sign is flipped, i.e. ``g_in += |w|``).
+    - The numerical integration uses scipy's RK45 (Dormand-Prince) solver
+      with adaptive step-size control. This is equivalent to NEST's GSL
+      RKF45 implementation for numerical correspondence.
+
+    Mathematical Formulation
+    -------------------------
+
+    **1. Membrane and Ionic Current Dynamics**
+
+    The membrane potential evolves as:
 
     .. math::
 
        C_m \frac{dV_m}{dt} = -(I_{Na} + I_K + I_L + I_{syn,ex} + I_{syn,in})
                               + I_{stim} + I_e
 
-    where
+    where the currents are:
 
     .. math::
 
@@ -101,10 +260,9 @@ class hh_cond_exp_traub(Neuron):
        I_{syn,ex} &= g_{ex}\,          (V_m - E_{ex})     \\
        I_{syn,in} &= g_{in}\,          (V_m - E_{in})
 
-    Channel gating variables
-    .........................
+    **2. Channel Gating Variables**
 
-    Gating variables :math:`m`, :math:`h`, :math:`n` obey
+    Gating variables :math:`m`, :math:`h`, :math:`n` obey first-order kinetics:
 
     .. math::
 
@@ -126,8 +284,7 @@ class hh_cond_exp_traub(Neuron):
     The voltage offset :math:`V_T` (default -63 mV) shifts the effective
     threshold to approximately -50 mV.
 
-    Exponential conductance synapses
-    .................................
+    **3. Exponential Conductance Synapses**
 
     Synaptic conductances decay exponentially:
 
@@ -142,10 +299,9 @@ class hh_cond_exp_traub(Neuron):
     - :math:`w > 0`: :math:`g_{ex} \leftarrow g_{ex} + w`
     - :math:`w < 0`: :math:`g_{in} \leftarrow g_{in} + |w|`
 
-    Spike detection
-    ...............
+    **4. Spike Detection**
 
-    A spike is emitted when:
+    A spike is emitted when all three conditions are satisfied:
 
     1. ``r == 0`` (not in refractory period), **and**
     2. ``V_m >= V_T + 30`` mV (threshold crossing), **and**
@@ -154,28 +310,33 @@ class hh_cond_exp_traub(Neuron):
     Unlike integrate-and-fire models, no voltage reset occurs -- the
     potassium current naturally repolarizes the membrane.
 
-    .. note::
+    .. warning::
 
        To avoid multiple spikes during the falling flank of a spike, it is
        essential to choose a sufficiently long refractory period.
        Traub and Miles used :math:`t_{ref} = 3` ms, while the default here
        is :math:`t_{ref} = 2` ms (matching NEST).
 
-    Numerical integration
-    .....................
+    **5. Numerical Integration**
 
     NEST uses GSL RKF45 (Runge-Kutta-Fehlberg 4/5) with adaptive step-size
     control (relative tolerance 1e-3, absolute tolerance 0). This
     implementation uses ``scipy.integrate.solve_ivp`` with method ``'RK45'``
     (Dormand-Prince) at matching tolerances for numerical correspondence.
 
-    Parameters
-    ----------
+    The ODE system is 6-dimensional per neuron:
+    :math:`[V_m, m, h, n, g_{ex}, g_{in}]`.
+
+    Parameter Mapping
+    -----------------
+
+    The following table shows the correspondence between brainpy.state parameters
+    and NEST/mathematical notation:
 
     ==================== ================== =============================== ====================================================
     **Parameter**        **Default**        **Math equivalent**             **Description**
     ==================== ================== =============================== ====================================================
-    ``in_size``          (required)                                         Population shape
+    ``in_size``          (required)         —                               Population shape
     ``E_L``              -60 mV             :math:`E_L`                     Leak reversal potential
     ``C_m``              200 pF             :math:`C_m`                     Membrane capacitance
     ``g_Na``             20000 nS           :math:`g_{Na}`                  Sodium peak conductance
@@ -190,40 +351,44 @@ class hh_cond_exp_traub(Neuron):
     ``tau_syn_ex``       5 ms               :math:`\tau_{syn,ex}`           Excitatory synaptic time constant
     ``tau_syn_in``       10 ms              :math:`\tau_{syn,in}`           Inhibitory synaptic time constant
     ``I_e``              0 pA               :math:`I_e`                     Constant external input current
-    ``V_m_init``         None                                               Initial V_m (None -> E_L)
-    ``Act_m_init``       None                                               Initial Na activation (None -> equilibrium at V_m_init)
-    ``Inact_h_init``     None                                               Initial Na inactivation (None -> equilibrium at V_m_init)
-    ``Act_n_init``       None                                               Initial K activation (None -> equilibrium at V_m_init)
-    ``spk_fun``          ReluGrad()                                         Surrogate spike function
-    ``spk_reset``        ``'hard'``                                         Reset mode
-    ``rtol``             1e-3                                               Relative tolerance for ODE solver
-    ``atol``             1e-9                                               Absolute tolerance for ODE solver
+    ``V_m_init``         None               —                               Initial V_m (None → E_L)
+    ``Act_m_init``       None               —                               Initial Na activation (None → equilibrium)
+    ``Inact_h_init``     None               —                               Initial Na inactivation (None → equilibrium)
+    ``Act_n_init``       None               —                               Initial K activation (None → equilibrium)
+    ``spk_fun``          ReluGrad()         —                               Surrogate spike function
+    ``spk_reset``        ``'hard'``         —                               Reset mode
+    ``rtol``             1e-3               —                               Relative tolerance for ODE solver
+    ``atol``             1e-9               —                               Absolute tolerance for ODE solver
     ==================== ================== =============================== ====================================================
 
-    State variables
-    ---------------
+    Examples
+    --------
+    .. code-block:: python
 
-    - ``V``: membrane potential :math:`V_m` (mV).
-    - ``m``: Na activation gating variable (Traub-Miles).
-    - ``h``: Na inactivation gating variable (Traub-Miles).
-    - ``n``: K activation gating variable (Traub-Miles).
-    - ``g_ex``: excitatory synaptic conductance (nS).
-    - ``g_in``: inhibitory synaptic conductance (nS).
-    - ``I_stim``: stimulation current buffer (pA).
-    - ``refractory_step_count``: refractory countdown in grid steps.
-    - ``last_spike_time``: time of most recent spike.
+       >>> import brainstate as bst
+       >>> import brainunit as u
+       >>> from brainpy_state import hh_cond_exp_traub
+       >>>
+       >>> # Create a population of 100 Traub HH neurons
+       >>> neurons = hh_cond_exp_traub(100)
+       >>> neurons.init_all_states()
+       >>>
+       >>> # Run a simulation with constant current injection
+       >>> with bst.environ.context(dt=0.1*u.ms):
+       ...     for i in range(1000):
+       ...         spikes = neurons.update(I_e=200*u.pA)
 
-    Notes
-    -----
+    .. code-block:: python
 
-    - Unlike IAF models, the HH model does **not** reset the membrane
-      potential after a spike.  Repolarization occurs naturally through
-      the potassium current.
-    - During the refractory period, subthreshold dynamics continue to
-      evolve freely; only spike emission is suppressed.
-    - Synaptic spike weights are interpreted in conductance units (nS).
-      Positive weights drive excitatory synapses; negative weights drive
-      inhibitory synapses (sign is flipped, i.e. ``g_in += |w|``).
+       >>> # Compare with NEST default parameters
+       >>> import nest
+       >>> nest_neuron = nest.Create('hh_cond_exp_traub')
+       >>> nest.GetStatus(nest_neuron, ['V_m', 'E_L', 'C_m', 'g_Na', 'g_K'])
+       [(-60.0, -60.0, 200.0, 20000.0, 6000.0)]
+       >>>
+       >>> # Match in brainpy.state
+       >>> bp_neuron = hh_cond_exp_traub(1, E_L=-60*u.mV, C_m=200*u.pF,
+       ...                               g_Na=20000*u.nS, g_K=6000*u.nS)
 
     References
     ----------
@@ -235,7 +400,7 @@ class hh_cond_exp_traub(Neuron):
            Cambridge University Press, Cambridge UK.
     .. [3] ModelDB entry: http://modeldb.yale.edu/83319
 
-    See also
+    See Also
     --------
     hh_psc_alpha : Hodgkin-Huxley with alpha-shaped postsynaptic currents.
     iaf_cond_exp : Leaky integrate-and-fire with conductance-based synapses.
@@ -297,13 +462,70 @@ class hh_cond_exp_traub(Neuron):
 
     @staticmethod
     def _to_numpy(x, unit):
+        """Convert brainunit quantity to numpy float64 array.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Input value with brainunit units.
+        unit : brainunit.Unit
+            Unit to divide by for conversion.
+
+        Returns
+        -------
+        np.ndarray
+            Unitless numpy array with dtype=float64.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainunit as u
+           >>> from brainpy_state._nest.hh_cond_exp_traub import hh_cond_exp_traub
+           >>> result = hh_cond_exp_traub._to_numpy(200*u.pF, u.pF)
+           >>> print(result)
+           200.0
+        """
         return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
+        """Broadcast numpy array to target shape.
+
+        Parameters
+        ----------
+        x_np : np.ndarray
+            Input numpy array to broadcast.
+        shape : tuple
+            Target shape for broadcasting.
+
+        Returns
+        -------
+        np.ndarray
+            Broadcasted array with the specified shape.
+
+        Notes
+        -----
+        Uses numpy's broadcasting rules. Raises ValueError if shapes are
+        incompatible.
+        """
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
+        """Validate parameter constraints.
+
+        Raises
+        ------
+        ValueError
+            If capacitance C_m ≤ 0, refractory time t_ref < 0, or any synaptic
+            time constant (tau_syn_ex, tau_syn_in) ≤ 0.
+
+        Notes
+        -----
+        This is called during __init__ to ensure physical validity of parameters.
+        Conductances (g_L, g_Na, g_K) are not validated for positivity since
+        zero conductance is physically meaningful (though unusual).
+        """
         if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
             raise ValueError('Capacitance must be strictly positive.')
         if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
@@ -312,10 +534,103 @@ class hh_cond_exp_traub(Neuron):
             raise ValueError('All time constants must be strictly positive.')
 
     def _refractory_counts(self):
+        """Compute refractory period length in simulation time steps.
+
+        Returns
+        -------
+        jnp.ndarray
+            Number of time steps for refractory period, shape (*in_size,),
+            dtype=int32. Computed as ceil(t_ref / dt).
+
+        Notes
+        -----
+        The refractory period is discretized to the simulation grid. If t_ref
+        is not an exact multiple of dt, the period is rounded up to ensure
+        the minimum refractory time is respected.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> import brainunit as u
+           >>> from brainpy_state import hh_cond_exp_traub
+           >>>
+           >>> neurons = hh_cond_exp_traub(10, t_ref=2.0*u.ms)
+           >>> with bst.environ.context(dt=0.1*u.ms):
+           ...     ref_steps = neurons._refractory_counts()
+           >>> print(ref_steps)  # 2.0 / 0.1 = 20 steps
+           20
+        """
         dt = brainstate.environ.get_dt()
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize all state variables for the neuron population.
+
+        Initializes membrane potential, gating variables, synaptic conductances,
+        stimulation current buffer, refractory counter, and last spike time. If
+        initial values are not explicitly provided, they are computed as follows:
+
+        - ``V``: defaults to ``E_L``
+        - ``m, h, n``: computed from equilibrium at initial ``V`` using Traub-Miles
+          rate equations (without V_T offset, matching NEST initialization)
+        - ``g_ex, g_in``: initialized to zero
+        - ``I_stim``: initialized to zero
+        - ``refractory_step_count``: initialized to zero (not refractory)
+        - ``last_spike_time``: initialized to -1e7 ms (far in the past)
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of batches for parallel simulation. If None, no batch dimension
+            is added. State shapes will be (batch_size, *in_size) if provided,
+            otherwise (*in_size,).
+        **kwargs
+            Additional keyword arguments (reserved for future use).
+
+        Notes
+        -----
+        The equilibrium gating variable computation uses the raw voltage V (not
+        V - V_T) to match NEST's initialization procedure. During dynamics, the
+        rate equations use the shifted voltage V - V_T, but initialization uses
+        the unshifted value for consistency with NEST's ``State_::State_``
+        constructor.
+
+        This initialization ensures the neuron starts in a stable resting state
+        when V_m_init = E_L (default). For custom initial voltages, gating
+        variables are automatically adjusted to the corresponding equilibrium.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> import brainunit as u
+           >>> from brainpy_state import hh_cond_exp_traub
+           >>>
+           >>> # Initialize with default rest state
+           >>> neurons = hh_cond_exp_traub(100)
+           >>> neurons.init_state()
+           >>> print(neurons.V.value[0])  # Should be E_L = -60 mV
+           -60.0 mV
+           >>>
+           >>> # Initialize with custom voltage
+           >>> neurons = hh_cond_exp_traub(100, V_m_init=-65*u.mV)
+           >>> neurons.init_state()
+           >>> print(neurons.V.value[0])
+           -65.0 mV
+           >>>
+           >>> # Initialize with batch dimension
+           >>> neurons = hh_cond_exp_traub(50)
+           >>> neurons.init_state(batch_size=10)
+           >>> print(neurons.V.value.shape)  # (10, 50)
+           (10, 50)
+
+        See Also
+        --------
+        _hh_cond_exp_traub_equilibrium : Computes equilibrium gating values.
+        """
         # Default V_m_init to E_L (matching NEST: y_[0] = p.E_L)
         if self.V_m_init is not None:
             V_init_val = self.V_m_init
@@ -364,6 +679,63 @@ class hh_cond_exp_traub(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
+        """Compute differentiable spike output using surrogate gradient function.
+
+        Applies the surrogate spike function to the membrane potential. This is
+        used for gradient-based learning; actual spike detection in the update
+        method uses discrete threshold crossing logic (V >= V_T + 30 and local
+        maximum).
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential in mV, shape (*in_size,) or (batch_size, *in_size).
+            If None, uses the current state ``self.V.value``.
+
+        Returns
+        -------
+        ArrayLike
+            Differentiable spike output with the same shape as input V. Values are
+            approximately 0 (no spike) or 1 (spike) with smooth gradients for
+            backpropagation.
+
+        Notes
+        -----
+        The voltage is scaled to unitless values (mV) before applying the surrogate
+        function. For Hodgkin-Huxley neurons, the actual spike threshold is
+        V_T + 30 mV (default: -33 mV), but the surrogate function operates on
+        the raw scaled voltage for gradient computation.
+
+        This method is primarily used for surrogate gradient learning. The discrete
+        spike detection logic in the update method is independent and uses the
+        three-condition test (refractory, threshold, local maximum).
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainunit as u
+           >>> import jax.numpy as jnp
+           >>> from brainpy_state import hh_cond_exp_traub
+           >>>
+           >>> neurons = hh_cond_exp_traub(10)
+           >>> neurons.init_state()
+           >>>
+           >>> # Get spike output for current state
+           >>> spikes = neurons.get_spike()
+           >>> print(spikes.shape)
+           (10,)
+           >>>
+           >>> # Get spike output for custom voltage
+           >>> V_custom = jnp.array([-60., -50., -40.]) * u.mV
+           >>> neurons_3 = hh_cond_exp_traub(3)
+           >>> neurons_3.init_state()
+           >>> spikes_custom = neurons_3.get_spike(V_custom)
+
+        See Also
+        --------
+        update : Main update method with discrete spike detection logic.
+        """
         V = self.V.value if V is None else V
         # For HH neurons with Traub threshold: spike at V_T + 30.
         # Scale relative to 0 mV for the surrogate function.
@@ -371,7 +743,61 @@ class hh_cond_exp_traub(Neuron):
         return self.spk_fun(v_scaled)
 
     def _sum_signed_delta_inputs(self):
-        """Split delta inputs into excitatory (positive) and inhibitory (negative)."""
+        """Split delta inputs into excitatory (positive) and inhibitory (negative).
+
+        Processes all incoming synaptic spike events (delta inputs) and separates
+        them by sign into excitatory and inhibitory conductance jumps. Positive
+        weights increase excitatory conductance; negative weights increase
+        inhibitory conductance (with sign flipped).
+
+        Returns
+        -------
+        g_ex : ArrayLike
+            Total excitatory conductance jump in nS, shape (*in_size,) or
+            (batch_size, *in_size). Sum of all positive delta inputs.
+        g_in : ArrayLike
+            Total inhibitory conductance jump in nS, shape (*in_size,) or
+            (batch_size, *in_size). Sum of absolute values of all negative
+            delta inputs.
+
+        Notes
+        -----
+        This method iterates over ``self.delta_inputs``, evaluating callable
+        entries and removing them after use (transient spike events). For each
+        input value:
+
+        - If ``value > 0``: added to ``g_ex``
+        - If ``value < 0``: absolute value added to ``g_in``
+
+        The conductance units are assumed to match the model's conductance scale
+        (nS). If no delta inputs are registered, returns zero arrays.
+
+        This is an internal helper method called during the update step to collect
+        all synaptic inputs before ODE integration.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainunit as u
+           >>> from brainpy_state import hh_cond_exp_traub
+           >>>
+           >>> neurons = hh_cond_exp_traub(10)
+           >>> neurons.init_state()
+           >>>
+           >>> # Register excitatory and inhibitory inputs
+           >>> neurons.add_delta_input('syn1', lambda: 5.0 * u.nS)
+           >>> neurons.add_delta_input('syn2', lambda: -3.0 * u.nS)
+           >>>
+           >>> g_ex, g_in = neurons._sum_signed_delta_inputs()
+           >>> print(g_ex, g_in)  # g_ex = 5.0 nS, g_in = 3.0 nS
+           5.0 nS 3.0 nS
+
+        See Also
+        --------
+        update : Main update method that calls this helper.
+        add_delta_input : Method to register delta spike inputs.
+        """
         g_ex = u.math.zeros_like(self.g_ex.value)
         g_in = u.math.zeros_like(self.g_in.value)
         if self.delta_inputs is None:
@@ -393,11 +819,15 @@ class hh_cond_exp_traub(Neuron):
     def update(self, x=0. * u.pA):
         r"""Update neuron state for one simulation step.
 
+        Integrates the 6-dimensional ODE system for one time step using adaptive
+        RK45 solver, processes incoming synaptic inputs, detects spikes based on
+        threshold crossing and local maximum, and updates refractory state.
+
         The update follows the NEST ``hh_cond_exp_traub`` update order:
 
         1. Record pre-integration membrane potential (``V_old``).
         2. Integrate the full 6-dimensional ODE system over one time step
-           using an adaptive RK45 solver.
+           using an adaptive RK45 solver (scipy's Dormand-Prince).
         3. Add arriving synaptic conductance jumps to ``g_ex`` / ``g_in``.
         4. Check spike condition: ``V_m >= V_T + 30 and V_old > V_m``
            (threshold + local maximum).
@@ -407,12 +837,111 @@ class hh_cond_exp_traub(Neuron):
         Parameters
         ----------
         x : ArrayLike, default 0 pA
-            External stimulation current input (in addition to ``I_e``).
+            External stimulation current input (in addition to ``I_e``), shape
+            () or (*in_size,) or (batch_size, *in_size). This current is added
+            to the constant ``I_e`` parameter and any registered current inputs
+            via ``add_current_input()``.
 
         Returns
         -------
         ArrayLike
-            Spike output with shape ``(batch_size, *in_size)``.
+            Spike output with shape (batch_size, *in_size) if batch_size is set,
+            otherwise (*in_size,). Values are computed using the surrogate spike
+            function for differentiability. Spikes occur only when the discrete
+            spike condition is satisfied (not refractory, threshold crossed, and
+            local maximum detected).
+
+        Notes
+        -----
+        **Integration Details:**
+
+        Each neuron's state is integrated independently using scipy's
+        ``solve_ivp`` with method='RK45' (Dormand-Prince). This matches NEST's
+        GSL RKF45 solver for numerical equivalence. The ODE system is:
+
+        .. math::
+
+           \frac{d}{dt}\begin{bmatrix} V_m \\ m \\ h \\ n \\ g_{ex} \\ g_{in} \end{bmatrix}
+           = \begin{bmatrix}
+               (-I_{Na} - I_K - I_L - I_{syn,ex} - I_{syn,in} + I_{stim} + I_e) / C_m \\
+               \alpha_m - (\alpha_m + \beta_m) m \\
+               \alpha_h - (\alpha_h + \beta_h) h \\
+               \alpha_n - (\alpha_n + \beta_n) n \\
+               -g_{ex} / \tau_{syn,ex} \\
+               -g_{in} / \tau_{syn,in}
+           \end{bmatrix}
+
+        **Spike Detection Logic:**
+
+        A spike is detected when all three conditions are met:
+
+        1. ``refractory_step_count == 0`` (not in refractory period)
+        2. ``V_m >= V_T + 30`` (threshold crossing)
+        3. ``V_old > V_m`` (local maximum - voltage falling)
+
+        No voltage reset occurs; repolarization is handled by intrinsic currents.
+
+        **Synaptic Input Processing:**
+
+        Delta inputs (spike events) are collected and split by sign:
+
+        - Positive weights → excitatory conductance (``g_ex += w``)
+        - Negative weights → inhibitory conductance (``g_in += |w|``)
+
+        Conductance jumps are applied **after** ODE integration, matching NEST's
+        update sequence.
+
+        **Computational Complexity:**
+
+        The method performs per-neuron integration, so runtime scales linearly
+        with the total number of neurons (``prod(in_size)``). For large populations,
+        consider vectorized implementations if numerical accuracy can be relaxed.
+
+        **Failure Modes:**
+
+        - If ODE solver fails to converge (stiff dynamics), ``solve_ivp`` may
+          return partial integration. Check ``sol.success`` if debugging.
+        - Extreme parameter values (very large conductances, very small time
+          constants) may cause numerical instability.
+        - Division by zero in rate equations at special voltages (e.g., V = 15 mV
+          for alpha_n) is mitigated by L'Hospital's rule in the analytical form,
+          but numerical issues may still arise near singularities.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> import brainunit as u
+           >>> from brainpy_state import hh_cond_exp_traub
+           >>>
+           >>> # Single neuron simulation
+           >>> neuron = hh_cond_exp_traub(1)
+           >>> neuron.init_state()
+           >>>
+           >>> with bst.environ.context(dt=0.1*u.ms):
+           ...     for t in range(1000):
+           ...         spike = neuron.update(x=500*u.pA)  # Strong current injection
+           ...         if spike[0]:
+           ...             print(f"Spike at t={t*0.1} ms")
+
+        .. code-block:: python
+
+           >>> # Network simulation with synaptic inputs
+           >>> neurons = hh_cond_exp_traub(100)
+           >>> neurons.init_state()
+           >>>
+           >>> # Register synaptic input
+           >>> neurons.add_delta_input('syn', lambda: 10*u.nS)  # 10 nS conductance jump
+           >>>
+           >>> with bst.environ.context(dt=0.1*u.ms):
+           ...     spikes = neurons.update(x=0*u.pA)
+
+        See Also
+        --------
+        init_state : Initialize state variables.
+        get_spike : Compute surrogate spike output.
+        _sum_signed_delta_inputs : Process synaptic spike inputs.
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

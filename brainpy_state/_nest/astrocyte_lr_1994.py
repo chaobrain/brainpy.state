@@ -34,233 +34,356 @@ __all__ = [
 
 
 class astrocyte_lr_1994(Dynamics):
-    r"""Summary
-    -------
-    
-    NEST-compatible ``astrocyte_lr_1994`` astrocyte model.
-    
+    r"""NEST-compatible astrocyte model with IP3-mediated calcium dynamics.
+
+    Implements the Li & Rinzel (1994) [1]_ astrocytic calcium oscillation model with
+    synaptic input and SIC output mechanisms from Nadkarni & Jung (2003) [3]_.
+    Models calcium release from intracellular stores (ER) via IP3 receptors,
+    calcium-induced calcium inhibition, SERCA pump-mediated sequestration, and
+    passive leak currents. Generates slow inward currents (SIC) when cytosolic
+    calcium exceeds threshold, enabling astrocyte-neuron signaling.
+
     Parameters
     ----------
-    
-    =============== ============= ========================================= ===================================================================
-    **Parameter**   **Default**   **Math equivalent**                       **Description**
-    =============== ============= ========================================= ===================================================================
-    ``in_size``     (required)                                              Population shape (number of astrocytes)
-    ``Ca_tot``      2.0 µM        :math:`C_{\mathrm{tot}}`                  Total free astrocytic Ca concentration (cytosolic vol basis)
-    ``IP3_0``       0.16 µM       :math:`[\mathrm{IP3}]_0`                  Baseline IP3 concentration
-    ``Kd_IP3_1``    0.13 µM       :math:`K_{d,\mathrm{IP3,1}}`              First IP3R dissociation constant for IP3
-    ``Kd_IP3_2``    0.9434 µM     :math:`K_{d,\mathrm{IP3,2}}`              Second IP3R dissociation constant for IP3
-    ``Kd_act``      0.08234 µM    :math:`K_{d,\mathrm{act}}`                IP3R Ca dissociation constant (activation)
-    ``Kd_inh``      1.049 µM      :math:`K_{d,\mathrm{inh}}`                IP3R Ca dissociation constant (inhibition)
-    ``Km_SERCA``    0.1 µM        :math:`K_{m,\mathrm{SERCA}}`              SERCA pump half-activation constant
-    ``SIC_scale``   1.0                                                     SIC output scaling factor (dimensionless)
-    ``SIC_th``      0.19669 µM    :math:`\mathrm{SIC_{th}}`                 Ca threshold for SIC generation
-    ``delta_IP3``   0.0002 µM     :math:`\Delta_{\mathrm{IP3}}`             IP3 increase per unit synaptic weight
-    ``k_IP3R``      0.0002        :math:`k_{\mathrm{IP3R}}`                 IP3R Ca inhibition rate constant (1/(µM·ms))
-    ``rate_IP3R``   0.006         :math:`r_{\mathrm{IP3R}}`                 Max Ca release rate via IP3R (1/ms)
-    ``rate_L``      0.00011       :math:`r_L`                               ER Ca leak rate constant (1/ms)
-    ``rate_SERCA``  0.0009        :math:`r_{\mathrm{SERCA}}`                Max SERCA pump rate (µM/ms)
-    ``ratio_ER_cyt``0.185         :math:`\rho`                              ER-to-cytosol volume ratio
-    ``tau_IP3``     7142.0 ms     :math:`\tau_{\mathrm{IP3}}`               IP3 exponential decay time constant
-    ``gsl_error_tol``1e-3         (solver tolerance)                        RKF45 local error tolerance
-    =============== ============= ========================================= ===================================================================
-    
+    in_size : int or tuple of int
+        Population shape specifying number of astrocytes. Can be scalar (1D) or
+        tuple for multi-dimensional astrocyte arrays.
+    Ca_tot : float, default: 2.0
+        Total free calcium concentration across cytosol and ER, in µM. Used for
+        calcium conservation: :math:`[\mathrm{Ca}]_{\mathrm{ER}} = (C_{\mathrm{tot}} - [\mathrm{Ca}]) / \rho`.
+        Must be positive.
+    IP3_0 : float, default: 0.16
+        Baseline (resting) IP3 concentration in µM. IP3 decays exponentially to this
+        value with time constant ``tau_IP3``. Must be non-negative.
+    Kd_IP3_1 : float, default: 0.13
+        First IP3 dissociation constant for IP3R activation (µM). Appears in the
+        activation gate :math:`m_\infty` and inactivation rate :math:`\alpha_h`.
+        Must be positive.
+    Kd_IP3_2 : float, default: 0.9434
+        Second IP3 dissociation constant for IP3R inactivation (µM). Modulates the
+        IP3 dependence of :math:`\alpha_h`. Must be positive.
+    Kd_act : float, default: 0.08234
+        Calcium dissociation constant for IP3R activation (µM). Controls the calcium
+        activation gate :math:`n_\infty`. Must be positive.
+    Kd_inh : float, default: 1.049
+        Calcium dissociation constant for IP3R inactivation (µM). Scales the
+        inactivation rate :math:`\alpha_h`. Must be non-negative.
+    Km_SERCA : float, default: 0.1
+        SERCA pump half-activation constant (µM). Calcium concentration at which the
+        pump operates at half-maximal rate. Must be positive.
+    SIC_scale : float, default: 1.0
+        Dimensionless scaling factor for SIC output amplitude. Multiplies the logarithmic
+        SIC response. Must be positive.
+    SIC_th : float, default: 0.19669
+        Calcium threshold for SIC generation (µM). No SIC is produced when
+        :math:`[\mathrm{Ca}] < \mathrm{SIC_{th}}`. Must be non-negative.
+    delta_IP3 : float, default: 0.0002
+        IP3 increase per unit synaptic weight (µM). Each spike with weight :math:`w`
+        increases IP3 by :math:`\Delta_{\mathrm{IP3}} \times w`. Must be non-negative.
+    k_IP3R : float, default: 0.0002
+        IP3R inactivation rate constant (1/(µM·ms)). Scales both activation and
+        inactivation rates of the IP3R inactivation gate. Must be non-negative.
+    rate_IP3R : float, default: 0.006
+        Maximal calcium release rate through IP3R (1/ms). Scales :math:`J_{\mathrm{channel}}`.
+        Must be non-negative.
+    rate_L : float, default: 0.00011
+        Passive ER leak rate constant (1/ms). Scales :math:`J_{\mathrm{leak}}`.
+        Must be non-negative.
+    rate_SERCA : float, default: 0.0009
+        Maximal SERCA pump rate (µM/ms). Maximum flux when :math:`[\mathrm{Ca}] \to \infty`.
+        Must be non-negative.
+    ratio_ER_cyt : float, default: 0.185
+        Volume ratio of ER to cytosol (dimensionless). Denoted :math:`\rho`, scales
+        ER-cytosol calcium fluxes. Must be positive.
+    tau_IP3 : float, default: 7142.0
+        IP3 exponential decay time constant (ms). IP3 relaxes to ``IP3_0`` with this
+        time scale. Must be positive.
+    gsl_error_tol : float, default: 1e-3
+        Local error tolerance for the RKF45 adaptive integrator. Smaller values increase
+        accuracy but require more substeps. Typical range: 1e-6 to 1e-2.
+    IP3_initializer : float, optional
+        Initial IP3 concentration (µM). If None, defaults to ``IP3_0``.
+    Ca_initializer : float, default: 0.073
+        Initial cytosolic calcium concentration (µM).
+    h_IP3R_initializer : float, default: 0.793
+        Initial fraction of non-inactivated IP3 receptors (dimensionless, 0–1).
+    name : str, optional
+        Instance name for identification.
+
+    **Parameter Mapping**
+
+    The following table maps constructor parameters to their mathematical symbols
+    and NEST equivalents:
+
+    ================= ============= ======================================== ======================================================
+    **Parameter**     **Default**   **Math Symbol**                          **Description**
+    ================= ============= ======================================== ======================================================
+    ``in_size``       (required)    —                                        Population shape (number of astrocytes)
+    ``Ca_tot``        2.0 µM        :math:`C_{\mathrm{tot}}`                 Total free Ca concentration (cytosol + ER basis)
+    ``IP3_0``         0.16 µM       :math:`[\mathrm{IP3}]_0`                 Baseline IP3 concentration
+    ``Kd_IP3_1``      0.13 µM       :math:`K_{d,\mathrm{IP3,1}}`             First IP3R dissociation constant for IP3
+    ``Kd_IP3_2``      0.9434 µM     :math:`K_{d,\mathrm{IP3,2}}`             Second IP3R dissociation constant for IP3
+    ``Kd_act``        0.08234 µM    :math:`K_{d,\mathrm{act}}`               IP3R Ca dissociation constant (activation)
+    ``Kd_inh``        1.049 µM      :math:`K_{d,\mathrm{inh}}`               IP3R Ca dissociation constant (inhibition)
+    ``Km_SERCA``      0.1 µM        :math:`K_{m,\mathrm{SERCA}}`             SERCA pump half-activation constant
+    ``SIC_scale``     1.0           —                                        SIC output scaling factor (dimensionless)
+    ``SIC_th``        0.19669 µM    :math:`\mathrm{SIC_{th}}`                Ca threshold for SIC generation
+    ``delta_IP3``     0.0002 µM     :math:`\Delta_{\mathrm{IP3}}`            IP3 increase per unit synaptic weight
+    ``k_IP3R``        0.0002        :math:`k_{\mathrm{IP3R}}`                IP3R Ca inhibition rate constant (1/(µM·ms))
+    ``rate_IP3R``     0.006         :math:`r_{\mathrm{IP3R}}`                Max Ca release rate via IP3R (1/ms)
+    ``rate_L``        0.00011       :math:`r_L`                              ER Ca leak rate constant (1/ms)
+    ``rate_SERCA``    0.0009        :math:`r_{\mathrm{SERCA}}`               Max SERCA pump rate (µM/ms)
+    ``ratio_ER_cyt``  0.185         :math:`\rho`                             ER-to-cytosol volume ratio
+    ``tau_IP3``       7142.0 ms     :math:`\tau_{\mathrm{IP3}}`              IP3 exponential decay time constant
+    ``gsl_error_tol`` 1e-3          —                                        RKF45 local error tolerance
+    ================= ============= ======================================== ======================================================
+
     Raises
     ------
-    
     ValueError
-        Raised when one of the following conditions is violated:
-        - Ca_tot must be positive.
-        - IP3_0 must be non-negative.
-        - Kd_act must be positive.
-        - Kd_inh must be non-negative.
-        - Kd_IP3_1 must be positive.
-        - Kd_IP3_2 must be positive.
-        - Km_SERCA must be positive.
-        - ratio_ER_cyt must be positive.
-        - delta_IP3 must be non-negative.
-        - k_IP3R must be non-negative.
-        - SIC_scale must be positive.
-        - SIC_th must be non-negative.
-        - rate_L must be non-negative.
-        - rate_IP3R must be non-negative.
-        - rate_SERCA must be non-negative.
-        - tau_IP3 must be positive.
-    
+        If any of the following parameter constraints are violated:
+
+        - ``Ca_tot`` must be positive
+        - ``IP3_0`` must be non-negative
+        - ``Kd_act`` must be positive
+        - ``Kd_inh`` must be non-negative
+        - ``Kd_IP3_1`` must be positive
+        - ``Kd_IP3_2`` must be positive
+        - ``Km_SERCA`` must be positive
+        - ``ratio_ER_cyt`` must be positive
+        - ``delta_IP3`` must be non-negative
+        - ``k_IP3R`` must be non-negative
+        - ``SIC_scale`` must be positive
+        - ``SIC_th`` must be non-negative
+        - ``rate_L`` must be non-negative
+        - ``rate_IP3R`` must be non-negative
+        - ``rate_SERCA`` must be non-negative
+        - ``tau_IP3`` must be positive
+
     See Also
     --------
-    
     aeif_cond_alpha_astro : AdEx neuron with astrocyte SIC input
-    
+
     Notes
     -----
-    
-    Short description
-    .................
-    
-    An astrocyte model based on Li & Rinzel (1994) with input/output from
-    Nadkarni & Jung (2003).
-    
-    Description
-    ...........
-    
-    ``astrocyte_lr_1994`` is a model of astrocytic calcium dynamics. The model
-    was first proposed by Li & Rinzel (1994) [1]_ and is based on earlier work of
-    De Young & Keizer (1992) [2]_. The input and output of the model are
-    implemented according to Nadkarni & Jung (2003) [3]_.
-    
-    The model has three dynamic state variables:
-    
-    - :math:`[\mathrm{IP3}]` : inositol 1,4,5-trisphosphate concentration in
-      the astrocytic cytosol (µM)
-    - :math:`[\mathrm{Ca^{2+}}]` : calcium concentration in the astrocytic
-      cytosol (µM)
-    - :math:`h_{\mathrm{IP3R}}` : fraction of IP3 receptors on the astrocytic
-      endoplasmic reticulum (ER) that are not yet inactivated by calcium
-      (dimensionless, 0–1)
-    
-    Calcium dynamics
-    ................
-    
-    The calcium concentration in the cytosol evolves according to:
-    
+    **1. Model Overview**
+
+    ``astrocyte_lr_1994`` simulates astrocytic calcium dynamics driven by IP3-mediated
+    calcium-induced calcium release (CICR) from the endoplasmic reticulum (ER). The
+    model integrates three coupled differential equations describing IP3 concentration,
+    cytosolic calcium concentration, and IP3 receptor inactivation state. Synaptic
+    input increases IP3, triggering calcium release; elevated calcium generates slow
+    inward currents (SIC) that can modulate postsynaptic neurons.
+
+    **2. Mathematical Model**
+
+    The model has three state variables:
+
+    - :math:`[\mathrm{IP3}]` : IP3 concentration in astrocytic cytosol (µM)
+    - :math:`[\mathrm{Ca^{2+}}]` : Calcium concentration in astrocytic cytosol (µM)
+    - :math:`h_{\mathrm{IP3R}}` : Fraction of non-inactivated IP3 receptors (0–1)
+
+    **2.1. Calcium Dynamics**
+
+    Cytosolic calcium evolves according to:
+
     .. math::
-    
+
        \frac{d[\mathrm{Ca^{2+}}]}{dt} =
          J_{\mathrm{channel}} - J_{\mathrm{pump}} + J_{\mathrm{leak}}
          + J_{\mathrm{noise}}
-    
-    where the individual flux terms are:
-    
+
+    where:
+
     .. math::
-    
+
        J_{\mathrm{channel}} = \rho \cdot r_{\mathrm{IP3R}} \cdot m_\infty^3
          \cdot n_\infty^3 \cdot h_{\mathrm{IP3R}}^3
          \cdot ([\mathrm{Ca^{2+}}]_{\mathrm{ER}} - [\mathrm{Ca^{2+}}])
-    
+
     .. math::
-    
+
        J_{\mathrm{pump}} = r_{\mathrm{SERCA}}
          \frac{[\mathrm{Ca^{2+}}]^2}{K_{m,\mathrm{SERCA}}^2 + [\mathrm{Ca^{2+}}]^2}
-    
+
     .. math::
-    
+
        J_{\mathrm{leak}} = \rho \cdot r_L
          \cdot ([\mathrm{Ca^{2+}}]_{\mathrm{ER}} - [\mathrm{Ca^{2+}}])
-    
-    with steady-state gating variables:
-    
+
+    Steady-state gating variables:
+
     .. math::
-    
+
        m_\infty = \frac{[\mathrm{IP3}]}{[\mathrm{IP3}] + K_{d,\mathrm{IP3,1}}}
-    
+
     .. math::
-    
+
        n_\infty = \frac{[\mathrm{Ca^{2+}}]}{[\mathrm{Ca^{2+}}] + K_{d,\mathrm{act}}}
-    
-    and ER calcium concentration (conservation):
-    
+
+    ER calcium (from conservation):
+
     .. math::
-    
+
        [\mathrm{Ca^{2+}}]_{\mathrm{ER}} =
          \frac{C_{\mathrm{tot}} - [\mathrm{Ca^{2+}}]}{\rho}
-    
-    where :math:`\rho` is ``ratio_ER_cyt``.
-    
-    IP3 dynamics
-    ............
-    
+
+    **2.2. IP3 Dynamics**
+
+    IP3 decays exponentially to baseline and is increased by synaptic input:
+
     .. math::
-    
+
        \frac{d[\mathrm{IP3}]}{dt} =
          \frac{[\mathrm{IP3}]_0 - [\mathrm{IP3}]}{\tau_{\mathrm{IP3}}}
          + \Delta_{\mathrm{IP3}} \cdot J_{\mathrm{syn}}(t)
-    
-    Each incoming spike instantaneously increases IP3 by
-    :math:`\Delta_{\mathrm{IP3}} \times w` where :math:`w` is the synaptic
-    weight.
-    
-    IP3R inactivation dynamics
-    ..........................
-    
+
+    Each incoming spike with weight :math:`w` instantaneously increases IP3 by
+    :math:`\Delta_{\mathrm{IP3}} \times w`.
+
+    **2.3. IP3 Receptor Inactivation Dynamics**
+
+    The IP3R inactivation gate evolves as:
+
     .. math::
-    
+
        \frac{dh_{\mathrm{IP3R}}}{dt} =
          \alpha_h (1 - h_{\mathrm{IP3R}}) - \beta_h \, h_{\mathrm{IP3R}}
-    
-    with
-    
+
+    with:
+
     .. math::
-    
+
        \alpha_h = k_{\mathrm{IP3R}} \cdot K_{d,\mathrm{inh}}
          \cdot \frac{[\mathrm{IP3}] + K_{d,\mathrm{IP3,1}}}
                     {[\mathrm{IP3}] + K_{d,\mathrm{IP3,2}}}
-    
+
     .. math::
-    
+
        \beta_h = k_{\mathrm{IP3R}} \cdot [\mathrm{Ca^{2+}}]
-    
-    SIC output
-    ..........
-    
-    When the cytosolic calcium exceeds a threshold :math:`\mathrm{SIC_{th}}`,
-    a slow inward current (SIC) is generated:
-    
+
+    **2.4. Slow Inward Current (SIC) Output**
+
+    When cytosolic calcium exceeds ``SIC_th``, a slow inward current is generated:
+
     .. math::
-    
-       y = ([\mathrm{Ca^{2+}}] - \mathrm{SIC_{th}}) / \mathrm{nM}
-    
+
+       y = ([\mathrm{Ca^{2+}}] - \mathrm{SIC_{th}}) \times 1000 \text{ (µM → nM)}
+
     .. math::
-    
+
        I_{\mathrm{SIC}} =
-         \mathrm{SIC_{scale}} \cdot H(\ln y) \cdot \ln y
-    
-    where :math:`H(\cdot)` is the Heaviside step function and the conversion
-    factor 1000 converts µM to nM.
-    
-    Integration method
-    ..................
-    
-    This implementation uses the Runge–Kutta–Fehlberg (RKF45) adaptive
-    step-size method, matching NEST's GSL-based RKF45 solver.
-    
-    Dynamic state variables
-    .......................
-    
-    ========== ======= ============================================================
-    ``IP3``    µM      IP3 concentration in the astrocytic cytosol
-    ``Ca``     µM      Ca²⁺ concentration in the astrocytic cytosol
-    ``h_IP3R`` (0–1)   Fraction of non-inactivated IP3 receptors on the ER
-    ========== ======= ============================================================
-    
+         \begin{cases}
+           \mathrm{SIC_{scale}} \cdot \ln y & \text{if } y > 1 \\
+           0 & \text{otherwise}
+         \end{cases}
+
+    **3. Numerical Integration**
+
+    This implementation uses the **Runge–Kutta–Fehlberg (RKF45)** adaptive step-size
+    method to match NEST's GSL-based solver. RKF45 computes both 4th-order and
+    5th-order solutions at each substep, estimates local error, and adjusts step size
+    accordingly. The algorithm:
+
+    1. Starts with step size equal to the simulation time step ``dt``
+    2. Computes 6 intermediate function evaluations (k1–k6)
+    3. Compares 4th-order (:math:`y_4`) and 5th-order (:math:`y_5`) solutions
+    4. If error :math:`\|y_5 - y_4\| \leq` ``gsl_error_tol``, accepts step and
+       increases step size; otherwise reduces step size and retries
+    5. Ensures step size remains in :math:`[h_{\min}, h_{\max}]` where
+       :math:`h_{\min} = 10^{-8}` ms
+
+    After integration, cytosolic calcium is clamped to :math:`[0, C_{\mathrm{tot}}]`
+    to enforce conservation and prevent numerical artifacts.
+
+    **4. State Variables**
+
+    The model maintains four state arrays:
+
+    ========== ============ ============================================================
+    Variable   Type         Description
+    ========== ============ ============================================================
+    ``IP3``    HiddenState  IP3 concentration (µM)
+    ``Ca``     HiddenState  Cytosolic Ca²⁺ concentration (µM)
+    ``h_IP3R`` HiddenState  Non-inactivated IP3R fraction (0–1)
+    ``SIC``    ShortTerm    SIC output (pA, computed from Ca each step)
+    ========== ============ ============================================================
+
+    **5. Computational Considerations**
+
+    - **Adaptive integration**: Each astrocyte requires multiple RKF45 substeps per
+      simulation time step. Computational cost scales with ``1 / gsl_error_tol``.
+    - **Per-element loop**: Integration is performed element-wise in NumPy (not
+      vectorized), matching NEST semantics but limiting performance on large arrays.
+    - **Input delay**: External current ``J_ext`` is applied with a one-step delay
+      to match NEST's event-driven semantics.
+    - **Spike input**: Incoming spike weights instantaneously increase IP3 *after*
+      the RKF45 integration step, consistent with NEST's discrete event handling.
+
+    **6. Usage with Neurons**
+
+    Astrocytes typically receive excitatory synaptic input from nearby neurons and
+    provide SIC feedback to postsynaptic neurons. Example workflow:
+
+    1. Connect neurons to astrocytes via projections with ``delta_IP3``-weighted synapses
+    2. Accumulate spike weights at each time step
+    3. Call ``astrocyte.update(spike_weights=w)`` to integrate dynamics
+    4. Use ``astrocyte.SIC`` as additional input current to postsynaptic neurons
+
+    See ``aeif_cond_alpha_astro`` for an integrated example of neuron-astrocyte coupling.
+
     References
     ----------
-    
     .. [1] Li, Y. X., & Rinzel, J. (1994). Equations for InsP3
            receptor-mediated [Ca2+]i oscillations derived from a detailed
-           kinetic model: a Hodgkin-Huxley like formalism. Journal of
-           theoretical Biology, 166(4), 461–473.
-           DOI: https://doi.org/10.1006/jtbi.1994.1041
-    
+           kinetic model: a Hodgkin-Huxley like formalism. *Journal of
+           Theoretical Biology*, 166(4), 461–473.
+           https://doi.org/10.1006/jtbi.1994.1041
+
     .. [2] De Young, G. W., & Keizer, J. (1992). A single-pool inositol
            1,4,5-trisphosphate-receptor-based model for agonist-stimulated
-           oscillations in Ca2+ concentration. Proceedings of the National
-           Academy of Sciences, 89(20), 9895–9899.
-           DOI: https://doi.org/10.1073/pnas.89.20.9895
-    
+           oscillations in Ca2+ concentration. *Proceedings of the National
+           Academy of Sciences*, 89(20), 9895–9899.
+           https://doi.org/10.1073/pnas.89.20.9895
+
     .. [3] Nadkarni, S., & Jung, P. (2003). Spontaneous oscillations of
-           dressed neurons: a new mechanism for epilepsy?. Physical review
-           letters, 91(26), 268101.
-           DOI: https://doi.org/10.1103/PhysRevLett.91.268101
-    
+           dressed neurons: a new mechanism for epilepsy?. *Physical Review
+           Letters*, 91(26), 268101.
+           https://doi.org/10.1103/PhysRevLett.91.268101
+
     Examples
     --------
-    
+    Basic astrocyte simulation:
+
     .. code-block:: python
-    
-       >>> import brainpy
-       >>> model = brainpy.state.astrocyte_lr_1994(in_size=1)
-       >>> model.init_state()
+
+       >>> import brainstate as bst
+       >>> import brainunit as u
+       >>> import brainpy_state as bps
+       >>> with bst.environ.context(dt=0.1 * u.ms):
+       ...     astro = bps.astrocyte_lr_1994(in_size=10)
+       ...     astro.init_state()
+       ...     # Simulate 100 ms with constant IP3 input
+       ...     for _ in range(1000):
+       ...         sic = astro.update(spike_weights=0.5)
+
+    Monitor calcium oscillations:
+
+    .. code-block:: python
+
+       >>> import numpy as np
+       >>> import matplotlib.pyplot as plt
+       >>> with bst.environ.context(dt=0.1 * u.ms):
+       ...     astro = bps.astrocyte_lr_1994(in_size=1)
+       ...     astro.init_state()
+       ...     ca_trace = []
+       ...     for _ in range(5000):  # 500 ms
+       ...         astro.update(spike_weights=0.3)
+       ...         ca_trace.append(float(astro.Ca.value[0]))
+       >>> plt.plot(ca_trace)
+       >>> plt.xlabel('Time step (0.1 ms)')
+       >>> plt.ylabel('[Ca²⁺] (µM)')
+       >>> plt.title('Astrocyte Calcium Oscillations')
     """
 
     __module__ = 'brainpy.state'
@@ -366,9 +489,39 @@ class astrocyte_lr_1994(Dynamics):
 
     @property
     def recordables(self):
+        """Return list of state variable names that can be recorded.
+
+        Returns
+        -------
+        list of str
+            ['IP3', 'Ca', 'h_IP3R', 'SIC'] — all dynamic state variables and output.
+        """
         return list(self.RECORDABLES)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize astrocyte state variables.
+
+        Creates state arrays for IP3 concentration, cytosolic calcium concentration,
+        IP3R inactivation gate, SIC output, and external current buffer. All states
+        are initialized to constructor-specified values.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            If provided, prepends an additional batch dimension to the state shape,
+            resulting in shape ``(batch_size,) + self.varshape``. Useful for parallel
+            simulation of multiple independent trials.
+        **kwargs : dict, optional
+            Reserved for future extensions; currently unused.
+
+        Notes
+        -----
+        - State variables are stored as JAX arrays via ``brainstate.HiddenState`` and
+          ``brainstate.ShortTermState``.
+        - Initial values are taken from constructor parameters: ``IP3_initializer``
+          (defaults to ``IP3_0``), ``Ca_initializer``, and ``h_IP3R_initializer``.
+        - SIC output and external current buffer are initialized to zero.
+        """
         shape = self.varshape
         if batch_size is not None:
             shape = (batch_size,) + shape
@@ -384,6 +537,26 @@ class astrocyte_lr_1994(Dynamics):
         self.J_noise = brainstate.ShortTermState(jnp.zeros(shape, dtype=jnp.float64))
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        """Reset astrocyte state variables to initial values.
+
+        Restores all state variables to their constructor-specified initial values,
+        clearing any accumulated dynamics. Useful for resetting simulations or
+        initializing new batches without recreating the model instance.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            If provided, reshapes state arrays to ``(batch_size,) + self.varshape``.
+            Must match the batch size used during ``init_state`` if states already exist.
+        **kwargs : dict, optional
+            Reserved for future extensions; currently unused.
+
+        Notes
+        -----
+        - This method modifies existing state arrays in-place via ``.value`` assignment.
+        - If ``init_state`` has not been called, this method will raise an ``AttributeError``.
+        - All states (IP3, Ca, h_IP3R, SIC, J_noise) are reset simultaneously.
+        """
         shape = self.varshape
         if batch_size is not None:
             shape = (batch_size,) + shape
@@ -395,25 +568,45 @@ class astrocyte_lr_1994(Dynamics):
         self.J_noise.value = jnp.zeros(shape, dtype=jnp.float64)
 
     def _dynamics(self, ip3, ca, h_ip3r, J_noise):
-        """Compute the RHS of the ODE system.
+        """Compute time derivatives of the IP3-calcium ODE system.
 
-        All quantities are in NEST internal units (µM, ms).
+        Evaluates the right-hand side of the three coupled differential equations
+        governing IP3 concentration, cytosolic calcium concentration, and IP3R
+        inactivation state. All quantities use NEST internal units (µM, ms).
 
         Parameters
         ----------
         ip3 : float
-            IP3 concentration (µM).
+            Current IP3 concentration in µM.
         ca : float
-            Cytosolic calcium concentration (µM), already clamped.
+            Current cytosolic calcium concentration in µM, pre-clamped to :math:`[0, C_{\mathrm{tot}}]`.
         h_ip3r : float
-            Fraction of non-inactivated IP3R.
+            Current fraction of non-inactivated IP3 receptors (dimensionless, 0–1).
         J_noise : float
-            External current input (µM/ms).
+            External calcium flux from noise or external input in µM/ms. Added directly
+            to :math:`d[\mathrm{Ca}]/dt`.
 
         Returns
         -------
-        dip3, dca, dh : float
-            Time derivatives of the three state variables.
+        dip3 : float
+            Time derivative of IP3 concentration in µM/ms. Includes exponential decay
+            to baseline and synaptic input (synaptic term not included here; applied
+            separately as discrete event).
+        dca : float
+            Time derivative of cytosolic calcium concentration in µM/ms. Sums IP3R
+            channel release, SERCA pump uptake, passive leak, and external input.
+        dh : float
+            Time derivative of IP3R inactivation gate in 1/ms. Balances
+            calcium-independent activation and calcium-dependent inactivation.
+
+        Notes
+        -----
+        - ``ca`` is clamped before calling this function to ensure ER calcium
+          :math:`[\mathrm{Ca}]_{\mathrm{ER}}` remains positive.
+        - Synaptic IP3 input is handled separately via instantaneous jumps after
+          integration, not within this ODE function.
+        - All steady-state gates (:math:`m_\infty`, :math:`n_\infty`) are computed
+          on-the-fly without storing intermediate states.
         """
         calc = max(0.0, min(ca, self.Ca_tot))
 
@@ -441,10 +634,44 @@ class astrocyte_lr_1994(Dynamics):
 
     @staticmethod
     def _compute_sic(ca, SIC_th, SIC_scale):
-        """Compute SIC output from calcium concentration.
+        """Compute slow inward current (SIC) from cytosolic calcium concentration.
 
-        Matches NEST: ``calc_thr = (Ca - SIC_th) * 1000.0``
-        ``sic = log(calc_thr) * SIC_scale  if calc_thr > 1  else 0``
+        Transforms calcium concentration above threshold into a logarithmic SIC output
+        signal. Matches NEST's implementation exactly.
+
+        Parameters
+        ----------
+        ca : float
+            Current cytosolic calcium concentration in µM.
+        SIC_th : float
+            Calcium threshold for SIC generation in µM. No SIC is produced below this value.
+        SIC_scale : float
+            Dimensionless scaling factor multiplying the logarithmic response.
+
+        Returns
+        -------
+        sic : float
+            Slow inward current output in pA (or dimensionless units, depending on
+            ``SIC_scale`` parameterization). Returns 0 if :math:`[\mathrm{Ca}] \leq \mathrm{SIC_{th}}`
+            or if the log argument is :math:`\leq 1` (nM basis).
+
+        Notes
+        -----
+        The SIC is computed as:
+
+        .. math::
+
+           y = ([\mathrm{Ca}] - \mathrm{SIC_{th}}) \times 1000
+
+           \mathrm{SIC} =
+           \begin{cases}
+             \mathrm{SIC_{scale}} \cdot \ln y & \text{if } y > 1 \\
+             0 & \text{otherwise}
+           \end{cases}
+
+        where the factor 1000 converts µM to nM. The logarithmic form produces a
+        graded response that grows slowly with calcium elevation, consistent with
+        experimental observations of astrocyte-mediated slow currents.
         """
         calc_thr = (ca - SIC_th) * 1000.0  # µM -> nM
         if calc_thr > 1.0:
@@ -452,21 +679,83 @@ class astrocyte_lr_1994(Dynamics):
         return 0.0
 
     def update(self, spike_weights=0.0, J_ext=0.0):
-        """Advance the astrocyte state by one simulation time step.
+        """Advance astrocyte state by one simulation time step using RKF45 integration.
+
+        Integrates the IP3-calcium ODE system over the interval :math:`[t, t+\Delta t]`
+        using adaptive Runge–Kutta–Fehlberg 4(5) substeps, applies incoming spike
+        input to IP3, clamps calcium to conserve total calcium, computes SIC output,
+        and stores the result. External current ``J_ext`` is delayed by one step to
+        match NEST's event-driven semantics.
 
         Parameters
         ----------
-        spike_weights : float or array
-            Total excitatory synaptic weight arriving at this step.
-            Each unit of weight increases IP3 by ``delta_IP3 * weight``.
-        J_ext : float or array
-            External current input added directly to the calcium flux
-            (µM/ms units). Corresponds to NEST's ``CurrentEvent`` input.
+        spike_weights : float or array_like, default: 0.0
+            Total accumulated synaptic weight from incoming spikes at this time step.
+            Shape must be broadcastable to ``self.varshape``. Each spike with weight
+            :math:`w` increases IP3 instantaneously by :math:`\Delta_{\mathrm{IP3}} \times w`.
+            Applied *after* ODE integration.
+        J_ext : float or array_like, default: 0.0
+            External calcium flux input in µM/ms. Shape must be broadcastable to
+            ``self.varshape``. Corresponds to NEST's ``CurrentEvent`` input channel.
+            Applied *in the next time step* (one-step delay).
 
         Returns
         -------
-        sic : array
-            The SIC output value for this time step.
+        sic : jax.numpy.ndarray
+            Slow inward current output array with shape ``self.varshape``. Computed from
+            current cytosolic calcium concentration via logarithmic threshold function.
+            Can be used as additional input current to postsynaptic neurons.
+
+        Notes
+        -----
+        - **Integration**: Uses RKF45 adaptive stepping with local error tolerance
+          ``gsl_error_tol``. Substeps are adjusted dynamically; typical substep count
+          ranges from 1 to 100 per simulation time step depending on stiffness.
+        - **Calcium clamping**: After integration, cytosolic calcium is clamped to
+          :math:`[0, C_{\mathrm{tot}}]` to enforce conservation and prevent numerical
+          overflow in the exponential SERCA term.
+        - **Event ordering**: The update sequence is:
+
+          1. Integrate ODEs from :math:`t` to :math:`t + \Delta t` using ``J_noise``
+             from the *previous* step
+          2. Clamp calcium to valid range
+          3. Apply spike input: :math:`[\mathrm{IP3}]_{\mathrm{new}} = [\mathrm{IP3}] + \Delta_{\mathrm{IP3}} \times \sum w`
+          4. Compute SIC output from updated calcium
+          5. Store ``J_ext`` for use in the *next* update call
+
+        - **Performance**: Integration is performed per-element in a NumPy loop (not
+          vectorized). For :math:`N` astrocytes, expect :math:`\mathcal{O}(N \times k)`
+          cost where :math:`k` is the average substep count (typically 5–20).
+
+        Examples
+        --------
+        Simulate astrocyte response to periodic synaptic input:
+
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> import brainunit as u
+           >>> import numpy as np
+           >>> with bst.environ.context(dt=0.1 * u.ms):
+           ...     astro = bps.astrocyte_lr_1994(in_size=5)
+           ...     astro.init_state()
+           ...     for i in range(1000):
+           ...         # Spike every 50 steps
+           ...         w = 1.0 if i % 50 == 0 else 0.0
+           ...         sic = astro.update(spike_weights=w)
+           ...         if i % 100 == 0:
+           ...             print(f"t={i*0.1:.1f} ms, Ca={float(astro.Ca.value[0]):.4f} µM")
+
+        Apply external current injection:
+
+        .. code-block:: python
+
+           >>> with bst.environ.context(dt=0.1 * u.ms):
+           ...     astro = bps.astrocyte_lr_1994(in_size=1)
+           ...     astro.init_state()
+           ...     # Apply constant external flux for 100 ms
+           ...     for _ in range(1000):
+           ...         sic = astro.update(J_ext=0.001)  # µM/ms
         """
         dt_q = brainstate.environ.get_dt()
         dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=np.float64))

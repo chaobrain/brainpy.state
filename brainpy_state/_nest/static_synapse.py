@@ -41,105 +41,337 @@ _ALL_EVENT_TYPES = {_SPIKE_EVENT, *_CURRENT_EVENT_TYPES, *_PASS_THROUGH_EVENT_TY
 
 
 class static_synapse(Dynamics):
-    r"""NEST-compatible ``static_synapse`` connection model.
+    r"""NEST-compatible static (non-plastic) synapse connection model.
 
-    Short description
-    -----------------
+    ``static_synapse`` implements a fixed-weight, fixed-delay synaptic connection
+    that transmits events from presynaptic to postsynaptic neurons without any
+    plasticity. This is the simplest and most commonly used synapse model in NEST,
+    serving as the baseline for all connection types.
 
-    Synapse type for static (non-plastic) connections.
+    The model maintains three immutable parameters (unless explicitly changed via
+    :meth:`set`): synaptic weight, transmission delay, and receptor port. When a
+    presynaptic event occurs, the payload is scaled by ``weight`` and scheduled
+    for delivery to the postsynaptic neuron after ``delay`` milliseconds at the
+    specified ``receptor_type`` port.
 
-    Description
-    -----------
+    **1. Mathematical Model**
 
-    ``static_synapse`` mirrors the NEST connection model of the same name.
-    The synapse stores fixed parameters and performs no plasticity:
-
-    - synaptic weight ``weight``,
-    - synaptic delay ``delay``,
-    - receiver port ``receptor_type``.
-
-    On every outgoing event, the payload is scaled by ``weight`` and scheduled
-    for delivery after ``delay``. Parameters remain constant unless explicitly
-    changed via :meth:`set`.
-
-    Event send ordering (NEST source equivalent)
-    --------------------------------------------
-
-    NEST ``models/static_synapse.h`` applies event fields in this strict order:
-
-    1. ``e.set_weight(weight_)``
-    2. ``e.set_delay_steps(get_delay_steps())``
-    3. ``e.set_receiver(*get_target(tid))``
-    4. ``e.set_rport(get_rport())``
-    5. ``e()`` (deliver event)
-
-    This implementation preserves the same semantic ordering during scheduling:
-    weight scaling is computed first, delay steps second, receiver selection
-    third, receptor port fourth, and delivery is performed when the scheduled
-    step is reached.
-
-    Delay semantics
-    ---------------
-
-    NEST stores delays in integer simulation steps and converts
-    milliseconds to steps using ``ld_round`` (round-to-nearest, midpoint-up).
-    This implementation reproduces that mapping:
+    The static synapse performs no dynamics computation. Event transmission is
+    purely a scheduling and scaling operation:
 
     .. math::
 
-       d_{\mathrm{steps}} = \left\lfloor \frac{d_{\mathrm{ms}}}{dt_{\mathrm{ms}}} + 0.5 \right\rfloor
+       \text{output}(t + d) = w \cdot \text{input}(t)
 
-    with the validity constraint :math:`d_{\mathrm{steps}} \ge 1`.
-    The effective public delay is then
-    :math:`d_{\mathrm{eff}} = d_{\mathrm{steps}} \cdot dt`.
+    where:
 
-    Event types
-    -----------
+    - :math:`w` is the synaptic weight (dimensionless or with units depending on receiver)
+    - :math:`d` is the transmission delay (ms)
+    - :math:`\text{input}(t)` is the presynaptic event multiplicity at time :math:`t`
+    - :math:`\text{output}(t + d)` is the postsynaptic input delivered at :math:`t + d`
 
-    The NEST model transmits several event classes (Spike/Rate/Current/
-    Conductance/DoubleData/DataLoggingRequest). In this backend, event delivery
-    is represented through receiver input APIs:
+    No state variables evolve over time. The weight and delay remain constant until
+    explicitly modified.
 
-    - ``event_type='spike'`` -> ``receiver.add_delta_input(...)``
-    - ``event_type in {'rate', 'current', 'conductance'}`` ->
-      ``receiver.add_current_input(...)``
-    - ``event_type in {'double_data', 'data_logging'}`` ->
-      try ``add_current_input``, otherwise ``add_delta_input``.
+    **2. Event Transmission Semantics**
 
-    If the receiver exposes ``handle_static_synapse_event(value, receptor_type, event_type)``,
-    that callback is used directly.
+    This implementation replicates the NEST ``static_synapse`` event processing
+    pipeline from ``models/static_synapse.h``:
+
+    1. **Weight scaling**: Multiply incoming multiplicity by ``weight``
+    2. **Delay computation**: Convert delay from milliseconds to simulation steps
+    3. **Receiver selection**: Identify the target postsynaptic neuron
+    4. **Receptor port assignment**: Route to the specified ``receptor_type``
+    5. **Scheduled delivery**: Enqueue the event for future delivery
+
+    The event is stored in an internal queue and delivered when the simulation
+    clock reaches the target time step.
+
+    **3. Delay Discretization**
+
+    NEST represents delays as integer multiples of the simulation time step :math:`dt`.
+    The conversion from continuous time to discrete steps follows the NEST ``ld_round``
+    convention (round-to-nearest, ties round up):
+
+    .. math::
+
+       d_{\text{steps}} = \left\lfloor \frac{d_{\text{ms}}}{dt_{\text{ms}}} + 0.5 \right\rfloor
+
+    **Constraints:**
+
+    - :math:`d_{\text{steps}} \geq 1` (minimum one-step delay)
+    - :math:`d_{\text{ms}} > 0` (delay must be strictly positive)
+
+    The effective delivered delay is quantized:
+
+    .. math::
+
+       d_{\text{effective}} = d_{\text{steps}} \cdot dt_{\text{ms}}
+
+    **Example:** With :math:`dt = 0.1\,\text{ms}`:
+
+    - Requested delay 1.44 ms → :math:`\lfloor 1.44/0.1 + 0.5 \rfloor = 14` steps → 1.4 ms effective
+    - Requested delay 1.45 ms → :math:`\lfloor 1.45/0.1 + 0.5 \rfloor = 15` steps → 1.5 ms effective
+
+    **4. Event Type Routing**
+
+    The synapse supports multiple event types corresponding to NEST's event class
+    hierarchy. Event delivery is routed to the appropriate receiver input method:
+
+    **Event type → Receiver method mapping:**
+
+    ==================  ====================================  ===========================
+    Event Type          Receiver Method                       Typical Use Case
+    ==================  ====================================  ===========================
+    ``'spike'``         ``add_delta_input(key, value, label)`` Binary spike transmission
+    ``'rate'``          ``add_current_input(key, value, label)`` Rate-coded signals
+    ``'current'``       ``add_current_input(key, value, label)`` Direct current injection
+    ``'conductance'``   ``add_current_input(key, value, label)`` Conductance-based input
+    ``'double_data'``   ``add_current_input`` (fallback)     Arbitrary data transmission
+    ``'data_logging'``  ``add_current_input`` (fallback)     Logging/monitoring signals
+    ==================  ====================================  ===========================
+
+    If the receiver implements ``handle_static_synapse_event(value, receptor_type, event_type)``,
+    that callback takes precedence over the standard routing.
+
+    **5. Receptor Port Mechanism**
+
+    The ``receptor_type`` parameter allows a single postsynaptic neuron to distinguish
+    between different input sources (e.g., excitatory vs. inhibitory, AMPA vs. NMDA).
+    This is implemented through labeled input accumulation:
+
+    - Receptor 0 → label ``"receptor_0"``
+    - Receptor 1 → label ``"receptor_1"``
+    - Receptor :math:`n` → label ``"receptor_n"``
+
+    The postsynaptic neuron's ``current_inputs`` and ``delta_inputs`` dictionaries
+    store accumulated input per receptor label.
 
     Parameters
     ----------
-    weight : ArrayLike, optional
-        Fixed synaptic weight. Default: ``1.0``.
-    delay : ArrayLike, optional
-        Synaptic delay in ms. Default: ``1.0 * u.ms``.
+    weight : float, array-like, or Quantity, optional
+        Fixed synaptic weight. Scalar value, dimensionless or with units.
+        Units depend on receiver requirements (e.g., pA for current-based,
+        nS for conductance-based, mV for voltage-based).
+        Default: ``1.0`` (dimensionless).
+    delay : float, array-like, or Quantity, optional
+        Synaptic transmission delay. Must be a positive scalar with time units
+        (recommended: ``brainunit.ms``). Will be discretized to integer time
+        steps according to simulation resolution ``dt``.
+        Default: ``1.0 * u.ms``.
     receptor_type : int, optional
-        Receiver port/receptor id. Default: ``0``.
-    post : object, optional
-        Default receiver object. If omitted, a receiver must be passed to
-        :meth:`send` / :meth:`update` when scheduling events.
+        Receptor port identifier on the postsynaptic neuron. Non-negative integer
+        specifying which input channel receives the event. Different receptor types
+        can implement different synaptic kinetics or reversal potentials.
+        Default: ``0`` (primary receptor port).
+    post : Dynamics, optional
+        Default postsynaptic receiver object. If provided, :meth:`send` and
+        :meth:`update` will target this receiver unless overridden. Must implement
+        either ``add_delta_input`` or ``add_current_input`` methods.
+        Default: ``None`` (must provide receiver explicitly in method calls).
     event_type : str, optional
-        Event transmission type. One of ``'spike'``, ``'rate'``, ``'current'``,
-        ``'conductance'``, ``'double_data'``, ``'data_logging'``.
-        Default: ``'spike'``.
+        Type of event to transmit. Determines delivery method and receiver handling.
+        Must be one of: ``'spike'``, ``'rate'``, ``'current'``, ``'conductance'``,
+        ``'double_data'``, ``'data_logging'``.
+        Default: ``'spike'`` (binary spike events).
     name : str, optional
-        Object name.
+        Unique identifier for this synapse instance.
+        Default: auto-generated.
+
+    Parameter Mapping
+
+    NEST ``static_synapse`` parameters map to this implementation as follows:
+
+    ==================  ====================  ========================================
+    NEST Parameter      brainpy.state Param   Notes
+    ==================  ====================  ========================================
+    ``weight``          ``weight``            Scalar, units depend on receiver
+    ``delay``           ``delay``             Converted to ms, discretized to steps
+    ``receptor_type``   ``receptor_type``     Integer ≥ 0
+    (connection target) ``post``              Explicit receiver object
+    (event class)       ``event_type``        String identifier for event routing
+    ==================  ====================  ========================================
+
+    Attributes
+    ----------
+    weight : float or Quantity
+        Current synaptic weight (read/write via :meth:`set`).
+    delay : float
+        Effective transmission delay in milliseconds (quantized to time steps).
+    receptor_type : int
+        Current receptor port identifier.
+    post : Dynamics or None
+        Default postsynaptic receiver.
+    event_type : str
+        Current event transmission type.
 
     Notes
     -----
-    - This is a connection abstraction (not a plastic synapse dynamics model).
-    - The class is intentionally lightweight and single-connection oriented.
-    - Weight units are receiver dependent (as in NEST). For spike events this
-      is typically pA, nS, or mV depending on the target model.
+    **Design differences from NEST:**
+
+    1. **Single-connection scope**: This class represents one synaptic connection.
+       NEST's ``static_synapse`` is a template applied to many connections. For
+       large-scale networks, use vectorized projection classes.
+
+    2. **Event queue**: The internal ``_queue`` is a simple defaultdict. For
+       production use with many synapses, consider a more efficient global event
+       delivery system.
+
+    3. **Weight units**: NEST is unit-agnostic at the connection level. This
+       implementation supports ``brainunit`` quantities, allowing type-safe
+       dimensional analysis.
+
+    4. **Delay caching**: The delay is recomputed whenever ``dt`` changes. NEST
+       performs this conversion once during connection setup.
+
+    **Typical usage patterns:**
+
+    - **Static networks**: Define fixed connectivity with heterogeneous weights/delays
+    - **Baseline benchmarks**: Compare against plastic synapse models
+    - **Event generators**: Connect spike generators to network populations
+    - **Hybrid architectures**: Interface between different neuron types
+
+    **Performance considerations:**
+
+    - Lightweight: No state updates, minimal computation per event
+    - Memory overhead: Queue storage scales with number of in-flight events
+    - Thread safety: Not thread-safe; use separate instances per thread
+
+    See Also
+    --------
+    static_synapse_hom_w : Homogeneous weight variant (all connections share one weight)
+    tsodyks_synapse : Short-term plasticity extension
+    stdp_synapse : Spike-timing dependent plasticity extension
 
     References
     ----------
-    .. [1] NEST source: ``models/static_synapse.h`` and
-           ``models/static_synapse.cpp``.
-    .. [2] NEST synapse specification docs:
+    .. [1] Diesmann, M., Gewaltig, M.-O., & Aertsen, A. (1999). Stable propagation
+           of synchronous spiking in cortical neural networks. *Nature*, 402(6761),
+           529-533. https://doi.org/10.1038/990101
+    .. [2] NEST Initiative (2025). NEST Synapse Specification.
            https://nest-simulator.readthedocs.io/en/stable/synapses/synapse_specification.html
+    .. [3] NEST source code: ``models/static_synapse.h``, ``models/static_synapse.cpp``
+           https://github.com/nest/nest-simulator
+
+    Examples
+    --------
+    **Basic usage with explicit receiver:**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bs
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     # Create postsynaptic neuron
+        ...     post_neuron = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+        ...
+        ...     # Create static synapse
+        ...     syn = bs.static_synapse(
+        ...         weight=0.5*u.nS,
+        ...         delay=1.5*u.ms,
+        ...         receptor_type=0,
+        ...         post=post_neuron,
+        ...     )
+        ...
+        ...     # Send spike event
+        ...     syn.send(multiplicity=1.0)
+        ...
+        ...     # Inspect parameters
+        ...     params = syn.get()
+        ...     print(f"Weight: {params['weight']}")
+        ...     print(f"Effective delay: {params['delay']} ms")
+        ...     print(f"Delay steps: {params['delay_steps']}")
+
+    **Simulation loop with update:**
+
+    .. code-block:: python
+
+        >>> with brainstate.environ.context(dt=0.1*u.ms):
+        ...     post = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+        ...     syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms, post=post)
+        ...
+        ...     # Initialize states
+        ...     post.init_all_states()
+        ...     syn.init_all_states()
+        ...
+        ...     # Simulate 10 steps
+        ...     for step in range(10):
+        ...         # Deliver queued events and schedule new ones
+        ...         delivered = syn.update(pre_spike=1.0 if step == 3 else 0.0)
+        ...         # Update postsynaptic neuron
+        ...         post.update()
+
+    **Multi-receptor configuration:**
+
+    .. code-block:: python
+
+        >>> # Excitatory and inhibitory inputs to same neuron
+        >>> with brainstate.environ.context(dt=0.1*u.ms):
+        ...     target = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+        ...
+        ...     # Excitatory synapse on receptor 0
+        ...     exc_syn = bs.static_synapse(
+        ...         weight=0.8*u.nS,
+        ...         delay=1.0*u.ms,
+        ...         receptor_type=0,
+        ...         post=target,
+        ...     )
+        ...
+        ...     # Inhibitory synapse on receptor 1
+        ...     inh_syn = bs.static_synapse(
+        ...         weight=-0.4*u.nS,
+        ...         delay=1.2*u.ms,
+        ...         receptor_type=1,
+        ...         post=target,
+        ...     )
+        ...
+        ...     # Both synapses can deliver to same neuron concurrently
+        ...     exc_syn.send(multiplicity=1.0)
+        ...     inh_syn.send(multiplicity=1.0)
+
+    **Dynamic parameter modification:**
+
+    .. code-block:: python
+
+        >>> with brainstate.environ.context(dt=0.1*u.ms):
+        ...     syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms)
+        ...
+        ...     # Change weight during simulation
+        ...     syn.set(weight=2.0)
+        ...
+        ...     # Change multiple parameters at once
+        ...     syn.set(weight=0.5, delay=2.0*u.ms, receptor_type=1)
+        ...
+        ...     # Verify changes
+        ...     params = syn.get()
+        ...     assert params['weight'] == 0.5
+        ...     assert params['receptor_type'] == 1
+
+    **Non-spike event types:**
+
+    .. code-block:: python
+
+        >>> # Rate-coded input
+        >>> with brainstate.environ.context(dt=0.1*u.ms):
+        ...     rate_syn = bs.static_synapse(
+        ...         weight=0.1,
+        ...         delay=1.0*u.ms,
+        ...         event_type='rate',
+        ...         post=target,
+        ...     )
+        ...
+        ...     # Send continuous rate value
+        ...     rate_syn.send(multiplicity=42.5)  # 42.5 Hz
+        ...
+        ...     # Current injection
+        ...     current_syn = bs.static_synapse(
+        ...         weight=100.0*u.pA,
+        ...         delay=0.5*u.ms,
+        ...         event_type='current',
+        ...         post=target,
+        ...     )
+        ...     current_syn.send(multiplicity=1.0)
     """
 
     __module__ = 'brainpy.state'
@@ -359,6 +591,26 @@ class static_synapse(Dynamics):
         return len(queued)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        """Initialize or reset synapse state (event queue).
+
+        Clears the internal event queue and resets the delivery counter. Should be
+        called before starting a new simulation or when resetting network state.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch size for state initialization (ignored; static synapses are scalar).
+        **kwargs
+            Additional initialization arguments (ignored).
+
+        Notes
+        -----
+        - The event queue is a per-synapse structure mapping future time steps to
+          lists of pending events: ``{step: [(receiver, value, receptor, type), ...]}``.
+        - Delivery counter generates unique input keys for the receiver's input dicts.
+        - Unlike stateful synapses (e.g., with facilitation/depression), static synapses
+          have no evolving state variables—only the transient event queue.
+        """
         del batch_size, kwargs
         self._queue = defaultdict(list)
         self._delivery_counter = 0
@@ -372,7 +624,98 @@ class static_synapse(Dynamics):
         post: object = _UNSET,
         event_type: str | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        """Update synapse parameters dynamically (NEST ``SetStatus`` equivalent).
+
+        Modifies one or more synapse parameters while preserving others. Delay changes
+        trigger re-discretization based on the current simulation time step. Parameters
+        can be changed at any point during simulation; in-flight events are not affected.
+
+        Parameters
+        ----------
+        weight : float, array-like, or Quantity, optional
+            New synaptic weight. Must be scalar. If omitted, weight is unchanged.
+        delay : float, array-like, or Quantity, optional
+            New transmission delay (ms). Must be positive. Will be discretized to
+            integer time steps. If omitted, delay is unchanged.
+        receptor_type : int, optional
+            New receptor port identifier. Must be non-negative integer. If omitted,
+            receptor type is unchanged.
+        post : Dynamics, optional
+            New default postsynaptic receiver. If omitted, receiver is unchanged.
+        event_type : str, optional
+            New event transmission type. Must be one of ``'spike'``, ``'rate'``,
+            ``'current'``, ``'conductance'``, ``'double_data'``, ``'data_logging'``.
+            If omitted, event type is unchanged.
+
+        Raises
+        ------
+        ValueError
+            If delay is non-positive, non-finite, or discretizes to less than one step.
+        ValueError
+            If weight or receptor_type is not scalar.
+        ValueError
+            If receptor_type is negative or non-integer.
+        ValueError
+            If event_type is not a recognized string.
+
+        Notes
+        -----
+        **Delay re-discretization:**
+
+        When ``delay`` is changed, the new value is immediately converted to time steps
+        using the current ``dt``. If ``dt`` has not been set in the environment, the
+        raw millisecond value is stored and discretization occurs on the next method
+        call that requires ``dt``.
+
+        **In-flight events:**
+
+        Events already scheduled in the queue are NOT retroactively modified. Only
+        future calls to :meth:`send` or :meth:`update` will use the new parameters.
+
+        **Thread safety:**
+
+        Not thread-safe. Concurrent calls to :meth:`set` from multiple threads will
+        cause race conditions on parameter updates.
+
+        Examples
+        --------
+        **Update single parameter:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bs
+            >>> import brainunit as u
+            >>> syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms)
+            >>> syn.set(weight=2.5)  # Only weight changes
+            >>> assert syn.weight == 2.5
+
+        **Update multiple parameters atomically:**
+
+        .. code-block:: python
+
+            >>> syn.set(weight=0.8, delay=2.0*u.ms, receptor_type=1)
+            >>> params = syn.get()
+            >>> assert params['weight'] == 0.8
+            >>> assert params['receptor_type'] == 1
+
+        **Switching event type during simulation:**
+
+        .. code-block:: python
+
+            >>> syn = bs.static_synapse(event_type='spike')
+            >>> syn.set(event_type='rate')  # Change to rate-coded transmission
+
+        **Delay quantization example:**
+
+        .. code-block:: python
+
+            >>> import brainstate
+            >>> with brainstate.environ.context(dt=0.1*u.ms):
+            ...     syn = bs.static_synapse(delay=1.44*u.ms)
+            ...     print(syn.get()['delay'])  # 1.4 ms (14 steps)
+            ...     syn.set(delay=1.45*u.ms)
+            ...     print(syn.get()['delay'])  # 1.5 ms (15 steps)
+        """
         new_weight = self.weight if weight is _UNSET else self._normalize_scalar_weight(weight)
         new_delay_ms = (
             self._delay_requested_ms
@@ -405,7 +748,80 @@ class static_synapse(Dynamics):
             self.delay = float(self._delay_requested_ms)
 
     def get(self) -> dict:
-        """Return current public parameters."""
+        """Retrieve current synapse parameters (NEST ``GetStatus`` equivalent).
+
+        Returns a dictionary of all public synapse parameters, including the
+        discretized delay in both milliseconds and time steps.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys:
+
+            - ``'weight'`` : float — Current synaptic weight (dimensionless if no units)
+            - ``'delay'`` : float — Effective delay in milliseconds (quantized)
+            - ``'delay_steps'`` : int — Delay in simulation time steps
+            - ``'receptor_type'`` : int — Receptor port identifier
+            - ``'event_type'`` : str — Event transmission type
+            - ``'synapse_model'`` : str — Always ``'static_synapse'`` (NEST compatibility)
+
+        Notes
+        -----
+        **Delay consistency:**
+
+        The method ensures delay values reflect the current simulation resolution by
+        calling :meth:`_refresh_delay_if_needed`. If ``dt`` changes between synapse
+        creation and this call, the delay is automatically re-discretized.
+
+        **Weight units:**
+
+        If ``weight`` was initialized as a ``brainunit.Quantity``, the returned value
+        is the dimensionless magnitude in the original units. To preserve units, access
+        ``synapse.weight`` directly.
+
+        **NEST compatibility:**
+
+        The returned dictionary structure matches NEST's ``GetStatus`` output format,
+        allowing easy translation between NEST scripts and brainpy.state models.
+
+        Examples
+        --------
+        **Basic parameter retrieval:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bs
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> with brainstate.environ.context(dt=0.1*u.ms):
+            ...     syn = bs.static_synapse(weight=1.5, delay=2.0*u.ms, receptor_type=1)
+            ...     params = syn.get()
+            ...     print(params)
+            {'weight': 1.5, 'delay': 2.0, 'delay_steps': 20,
+             'receptor_type': 1, 'event_type': 'spike',
+             'synapse_model': 'static_synapse'}
+
+        **Verifying delay quantization:**
+
+        .. code-block:: python
+
+            >>> with brainstate.environ.context(dt=0.1*u.ms):
+            ...     syn = bs.static_synapse(delay=1.47*u.ms)
+            ...     params = syn.get()
+            ...     print(f"Requested: 1.47 ms")
+            ...     print(f"Actual: {params['delay']} ms ({params['delay_steps']} steps)")
+            Requested: 1.47 ms
+            Actual: 1.5 ms (15 steps)
+
+        **Extracting all parameters for logging:**
+
+        .. code-block:: python
+
+            >>> synapses = [bs.static_synapse(weight=w) for w in [0.5, 1.0, 1.5]]
+            >>> weights = [s.get()['weight'] for s in synapses]
+            >>> print(f"Synapse weights: {weights}")
+            Synapse weights: [0.5, 1.0, 1.5]
+        """
         dt_ms = self._maybe_dt_ms()
         if dt_ms is not None:
             self._refresh_delay_if_needed()
@@ -420,7 +836,34 @@ class static_synapse(Dynamics):
         }
 
     def set_weight(self, weight: ArrayLike):
-        """Compatibility wrapper mirroring NEST ``set_weight``."""
+        """Update synaptic weight (NEST connection API compatibility).
+
+        Convenience method that modifies only the weight parameter, leaving delay,
+        receptor type, and event type unchanged. Equivalent to ``set(weight=...)``.
+
+        Parameters
+        ----------
+        weight : float, array-like, or Quantity
+            New synaptic weight. Must be scalar.
+
+        Raises
+        ------
+        ValueError
+            If weight is not scalar.
+
+        See Also
+        --------
+        set : General parameter update method
+
+        Examples
+        --------
+        .. code-block:: python
+
+            >>> import brainpy.state as bs
+            >>> syn = bs.static_synapse(weight=1.0)
+            >>> syn.set_weight(2.5)
+            >>> assert syn.weight == 2.5
+        """
         self.set(weight=weight)
 
     def send(
@@ -431,7 +874,153 @@ class static_synapse(Dynamics):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> bool:
-        """Schedule one outgoing event according to static synapse parameters."""
+        """Schedule an outgoing event for delayed delivery.
+
+        Immediately scales the input ``multiplicity`` by the synaptic ``weight`` and
+        enqueues the result for delivery after ``delay`` milliseconds. The event will
+        be delivered to the specified (or default) postsynaptic receiver at the target
+        time step.
+
+        This method replicates the NEST ``send`` event processing pipeline:
+
+        1. Check multiplicity is non-zero (zero events are ignored)
+        2. Scale by weight: ``payload = multiplicity * weight``
+        3. Compute delivery step: ``current_step + delay_steps``
+        4. Resolve receiver and receptor type
+        5. Enqueue for future delivery
+
+        Parameters
+        ----------
+        multiplicity : float, array-like, or Quantity, optional
+            Event magnitude to transmit. For spike events, typically ``1.0`` (single spike).
+            For rate-coded or current events, can be any real value. If zero or
+            all-zeros array, the event is ignored and nothing is scheduled.
+            Default: ``1.0`` (single unit event).
+        post : Dynamics, optional
+            Postsynaptic receiver for this event. Overrides the default ``self.post``
+            for this call only. Must implement ``add_delta_input`` or ``add_current_input``.
+            Default: ``None`` (use ``self.post``).
+        receptor_type : int, optional
+            Receptor port for this event. Overrides the default ``self.receptor_type``
+            for this call only. Must be non-negative integer.
+            Default: ``None`` (use ``self.receptor_type``).
+        event_type : str, optional
+            Event transmission type for this event. Overrides ``self.event_type``
+            for this call only. Must be valid event type string.
+            Default: ``None`` (use ``self.event_type``).
+
+        Returns
+        -------
+        bool
+            ``True`` if the event was scheduled (non-zero multiplicity),
+            ``False`` if the event was ignored (zero multiplicity).
+
+        Raises
+        ------
+        ValueError
+            If no receiver is available (``self.post`` is ``None`` and ``post`` not provided).
+        ValueError
+            If simulation resolution ``dt`` is not defined in ``brainstate.environ``.
+        ValueError
+            If delay is invalid or discretizes to less than one time step.
+        TypeError
+            If the receiver does not implement required input methods.
+
+        Notes
+        -----
+        **Event scheduling semantics:**
+
+        The event is delivered at simulation time :math:`t_{\text{delivery}} = t_{\text{current}} + d`,
+        where :math:`t_{\text{current}}` is the current simulation time and :math:`d`
+        is the effective quantized delay. The receiver's input accumulation occurs when
+        :meth:`update` is called at that future time step.
+
+        **Zero-weight handling:**
+
+        If ``weight`` is zero, the payload is zero regardless of multiplicity. The event
+        is still scheduled (returns ``True``), but the receiver will accumulate a zero
+        input contribution. To avoid unnecessary queue overhead, check weights before
+        calling :meth:`send`.
+
+        **Concurrent receiver override:**
+
+        Providing ``post`` does NOT change ``self.post``—it only applies to this single
+        event. Subsequent :meth:`send` calls without ``post`` argument will revert to
+        the default receiver.
+
+        **Performance considerations:**
+
+        - Each call allocates a queue entry: ``(receiver, payload, receptor, event_type)``
+        - Large numbers of events can cause queue memory overhead
+        - Consider using vectorized projection classes for high-throughput scenarios
+
+        Examples
+        --------
+        **Basic spike transmission:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bs
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
+            ...     post = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+            ...     syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms, post=post)
+            ...
+            ...     # Send single spike
+            ...     scheduled = syn.send(multiplicity=1.0)
+            ...     assert scheduled is True
+            ...
+            ...     # Sending zero has no effect
+            ...     scheduled = syn.send(multiplicity=0.0)
+            ...     assert scheduled is False
+
+        **Rate-coded transmission:**
+
+        .. code-block:: python
+
+            >>> with brainstate.environ.context(dt=0.1*u.ms):
+            ...     syn = bs.static_synapse(
+            ...         weight=0.1,
+            ...         delay=0.5*u.ms,
+            ...         event_type='rate',
+            ...         post=rate_neuron,
+            ...     )
+            ...
+            ...     # Send rate value (Hz)
+            ...     syn.send(multiplicity=42.5)
+
+        **Override receiver and receptor for single event:**
+
+        .. code-block:: python
+
+            >>> # Default: send to neuron_A on receptor 0
+            >>> syn = bs.static_synapse(weight=1.0, post=neuron_A, receptor_type=0)
+            >>> syn.send(multiplicity=1.0)  # Goes to neuron_A, receptor 0
+            >>>
+            >>> # Override for this event only
+            >>> syn.send(multiplicity=1.0, post=neuron_B, receptor_type=1)
+            >>> # Next call reverts to default
+            >>> syn.send(multiplicity=1.0)  # Back to neuron_A, receptor 0
+
+        **Multi-spike burst:**
+
+        .. code-block:: python
+
+            >>> # Simulate burst of 5 spikes at 100 Hz
+            >>> with brainstate.environ.context(dt=0.1*u.ms):
+            ...     syn = bs.static_synapse(weight=0.5, delay=1.0*u.ms, post=target)
+            ...     for spike_time in [0.0, 10.0, 20.0, 30.0, 40.0]:  # ms
+            ...         brainstate.environ.set(t=spike_time*u.ms)
+            ...         syn.send(multiplicity=1.0)
+
+        **Weighted population spike count:**
+
+        .. code-block:: python
+
+            >>> # 100 presynaptic neurons, 23 spike this step
+            >>> syn.send(multiplicity=23.0)  # Equivalent to 23 unit events
+        """
         if not self._is_nonzero(multiplicity):
             return False
 
@@ -457,19 +1046,205 @@ class static_synapse(Dynamics):
         receptor_type: ArrayLike | None = None,
         event_type: str | None = None,
     ) -> int:
-        """Deliver due events, then schedule current-step presynaptic input.
+        """Execute one simulation time step: deliver queued events and schedule new input.
 
-        This mirrors one simulation-step connection processing:
+        This method implements the standard NEST synapse update cycle:
 
-        1. Deliver all events scheduled for the current step.
-        2. Aggregate presynaptic multiplicity from argument plus registered
-           current/delta inputs.
-        3. If non-zero, schedule the weighted event with configured delay.
+        1. **Delivery phase**: Deliver all events whose scheduled time has arrived
+           (current simulation step). Events are removed from the queue and injected
+           into the postsynaptic receiver's input accumulation dictionaries.
+
+        2. **Accumulation phase**: Sum the ``pre_spike`` argument with any inputs
+           registered via ``add_current_input`` or ``add_delta_input`` (from other
+           sources connected to this synapse object).
+
+        3. **Scheduling phase**: If the total input is non-zero, call :meth:`send`
+           to schedule a new delayed event with the aggregated multiplicity.
+
+        This two-phase design ensures causal event delivery: events scheduled for
+        time :math:`t` are delivered before new inputs at time :math:`t` are processed.
+
+        Parameters
+        ----------
+        pre_spike : float, array-like, or Quantity, optional
+            Presynaptic input for this time step. For spike events, typically ``1.0``
+            (spike present) or ``0.0`` (no spike). For rate-coded signals, can be
+            any real value representing instantaneous firing rate. This is added to
+            any inputs already registered via ``add_current_input``/``add_delta_input``.
+            Default: ``0.0`` (no external input).
+        post : Dynamics, optional
+            Override default postsynaptic receiver for scheduled event (not for delivery).
+            Delivered events use the receiver stored when they were scheduled.
+            Default: ``None`` (use ``self.post``).
+        receptor_type : int, optional
+            Override receptor port for newly scheduled event only.
+            Default: ``None`` (use ``self.receptor_type``).
+        event_type : str, optional
+            Override event type for newly scheduled event only.
+            Default: ``None`` (use ``self.event_type``).
 
         Returns
         -------
         int
-            Number of events delivered in this step.
+            Number of events delivered to postsynaptic receiver(s) during the delivery
+            phase. Zero if no events were due. Does NOT count the newly scheduled event.
+
+        Raises
+        ------
+        ValueError
+            If simulation resolution ``dt`` is not defined in ``brainstate.environ``.
+        ValueError
+            If receiver is not configured when attempting to schedule a new event.
+        TypeError
+            If receiver does not implement required input methods during delivery.
+
+        Notes
+        -----
+        **Simulation loop integration:**
+
+        Typical usage pattern in a network simulation:
+
+        .. code-block:: python
+
+            for step in range(n_steps):
+                # 1. Update all synapses (deliver + schedule)
+                for syn in synapses:
+                    syn.update(pre_spike=presynaptic_activity[step])
+
+                # 2. Update all neurons (accumulate inputs, integrate dynamics)
+                for neuron in neurons:
+                    neuron.update()
+
+                # 3. Record outputs
+                record_state()
+
+        **Input accumulation semantics:**
+
+        The method calls:
+
+        .. code-block:: python
+
+            total = self.sum_current_inputs(pre_spike)
+            total = self.sum_delta_inputs(total)
+
+        This accumulates:
+
+        - ``pre_spike`` argument
+        - All ``current_inputs`` registered via ``add_current_input(key, value, ...)``
+        - All ``delta_inputs`` registered via ``add_delta_input(key, value, ...)``
+
+        After accumulation, these input dictionaries are automatically cleared for
+        the next time step (handled by ``Dynamics`` base class).
+
+        **Event delivery timing:**
+
+        Events scheduled at time :math:`t` with delay :math:`d` are delivered when
+        ``update()`` is called at time :math:`t + d`. The delivery step is:
+
+        .. math::
+
+           s_{\text{delivery}} = s_{\text{schedule}} + d_{\text{steps}}
+
+        where :math:`s` are discrete time step indices.
+
+        **Zero-input optimization:**
+
+        If the aggregated input is exactly zero, :meth:`send` is NOT called, avoiding
+        unnecessary queue overhead. However, the delivery phase still executes even
+        if no new events are scheduled.
+
+        **Return value interpretation:**
+
+        The return value indicates how many events were **delivered** (past events
+        arriving now), not how many were **scheduled** (new events for the future).
+        Use this for monitoring event throughput or debugging delivery issues.
+
+        Examples
+        --------
+        **Basic simulation loop:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bs
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
+            ...     post = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)
+            ...     syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms, post=post)
+            ...
+            ...     post.init_all_states()
+            ...     syn.init_all_states()
+            ...
+            ...     # Simulate 20 steps (2 ms)
+            ...     for step in range(20):
+            ...         t = step * 0.1 * u.ms
+            ...         brainstate.environ.set(t=t)
+            ...
+            ...         # Spike at step 5 (0.5 ms)
+            ...         spike = 1.0 if step == 5 else 0.0
+            ...
+            ...         # Update synapse
+            ...         delivered = syn.update(pre_spike=spike)
+            ...         if delivered > 0:
+            ...             print(f"Step {step}: delivered {delivered} event(s)")
+            ...
+            ...         # Update neuron
+            ...         post.update()
+            Step 15: delivered 1 event(s)
+
+        **Monitoring event delivery:**
+
+        .. code-block:: python
+
+            >>> total_delivered = 0
+            >>> for step in range(100):
+            ...     brainstate.environ.set(t=step*0.1*u.ms)
+            ...     n = syn.update(pre_spike=poisson_spike[step])
+            ...     total_delivered += n
+            >>> print(f"Total events delivered: {total_delivered}")
+
+        **Multi-source input accumulation:**
+
+        .. code-block:: python
+
+            >>> # Synapse receives input from multiple sources
+            >>> syn = bs.static_synapse(weight=1.0, post=target)
+            >>>
+            >>> # Source 1: direct spike input
+            >>> syn.add_delta_input('source1', 1.0, label='receptor_0')
+            >>>
+            >>> # Source 2: continuous current
+            >>> syn.add_current_input('source2', 0.5, label='receptor_0')
+            >>>
+            >>> # Update aggregates both sources
+            >>> syn.update(pre_spike=1.0)  # Total multiplicity = 1.0 + 1.0 + 0.5 = 2.5
+
+        **Conditional scheduling based on delivery count:**
+
+        .. code-block:: python
+
+            >>> # Homeostatic mechanism: reduce weight if too many events arrive
+            >>> delivered = syn.update(pre_spike=spike)
+            >>> if delivered > 5:
+            ...     syn.set_weight(syn.weight * 0.95)  # 5% weight decrease
+
+        **Override parameters for specific time step:**
+
+        .. code-block:: python
+
+            >>> # Normally send to receptor 0
+            >>> for step in range(10):
+            ...     brainstate.environ.set(t=step*0.1*u.ms)
+            ...     if step == 5:
+            ...         # Special case: route to receptor 1 this step only
+            ...         syn.update(pre_spike=1.0, receptor_type=1)
+            ...     else:
+            ...         syn.update(pre_spike=1.0)
+
+        See Also
+        --------
+        send : Direct event scheduling without delivery phase
+        init_state : Reset event queue and delivery counter
         """
         dt_ms = self._refresh_delay_if_needed()
         step = self._curr_step(dt_ms)
