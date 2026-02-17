@@ -1331,8 +1331,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
            - Convert updated discrete weight back to continuous value
 
         3. **Spike pairing** (if postsynaptic history exists):
-           - Query postsynaptic spikes in interval :math:`(t_{\text{last}} - d, t_{\text{pre}} - d]`
-             where :math:`d` is dendritic delay.
+           - Query postsynaptic spikes in interval :math:`(t_{\text{last}} - d, t_{\text{pre}} - d]` where :math:`d` is dendritic delay.
            - Update ``a_causal`` using *first* post-spike in interval (pre-before-post timing).
            - Update ``a_acausal`` using *last* post-spike in interval (post-before-pre timing).
 

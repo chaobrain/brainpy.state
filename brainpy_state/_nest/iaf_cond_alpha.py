@@ -185,9 +185,9 @@ class iaf_cond_alpha(Neuron):
     name : str, optional
         Name of the neuron group.
 
-
-    Parameter Mapping
-    -----------------
+    Notes
+    -----
+    **Parameter Mapping**
 
     ==================== ================== ========================================
     **Parameter**        **Default**        **Math equivalent**
@@ -212,8 +212,7 @@ class iaf_cond_alpha(Neuron):
     ``ref_var``          ``False``          —
     ==================== ================== ========================================
 
-    State Variables
-    ---------------
+    **State Variables**
 
     ========================= ================================================================
     **State variable**        **Description**
@@ -230,13 +229,11 @@ class iaf_cond_alpha(Neuron):
     ``refractory``            Optional boolean refractory indicator (if ``ref_var=True``)
     ========================= ================================================================
 
-    Sends
-    -----
+    **Sends:**
     ``SpikeEvent`` (conceptually; represented as returned spike tensor from ``update``).
 
-    Receives
-    --------
-    - Signed spike-weight conductance increments through ``add_delta_input``.
+    **Receives:**
+    Signed spike-weight conductance increments through ``add_delta_input``.
     - External current input through ``x`` in :meth:`update` (one-step delayed).
 
     Raises

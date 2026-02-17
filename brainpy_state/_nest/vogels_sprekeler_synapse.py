@@ -166,6 +166,13 @@ class vogels_sprekeler_synapse:
         Model instance name for identification.
         Default: ``None``.
 
+    See Also
+    --------
+    stdp_synapse : Classical asymmetric STDP rule
+    stdp_dopamine_synapse : Reward-modulated STDP
+
+    Notes
+    -----
     **Parameter Mapping (NEST to brainpy.state)**
 
     +-----------------+---------------------+-------------------+
@@ -202,13 +209,6 @@ class vogels_sprekeler_synapse:
     - ``get_K_value(t)`` or ``get_k_value(t)`` -- Returns postsynaptic STDP trace
       :math:`K_-` at time ``t`` (in ms). Must return float.
 
-    See Also
-    --------
-    stdp_synapse : Classical asymmetric STDP rule
-    stdp_dopamine_synapse : Reward-modulated STDP
-
-    Notes
-    -----
     1. **Dendritic delay semantics**: Unlike axonal delays (which shift spike
        arrival time), the ``delay`` parameter here controls the temporal window
        for history lookup: :math:`(t_{\text{last}} - d, t - d]`. This implements

@@ -84,8 +84,10 @@ def _phi(u_val, phi_max, rate_slope, beta, theta):
     rate : float
         Instantaneous firing rate in kHz. Range: [0, ``phi_max``].
 
-    Mathematical Formulation
-    ------------------------
+    Notes
+    -----
+    **Mathematical Formulation**
+
     The rate function is defined as:
 
     .. math::
@@ -106,8 +108,6 @@ def _phi(u_val, phi_max, rate_slope, beta, theta):
     * For :math:`u \ll \theta`: :math:`\phi(u) \to 0`
     * At :math:`u = \theta`: :math:`\phi(\theta) = \phi_\mathrm{max} / (1 + k)`
 
-    Notes
-    -----
     * All inputs are expected as raw numeric values (units already stripped).
     * The function is monotonically increasing in ``u_val``.
     * Numerical stability: For large negative ``(theta - u_val)``, ``exp`` approaches
@@ -990,8 +990,10 @@ class pp_cond_exp_mc_urbanczik(Neuron):
             without refractory period (t_ref=0), values can be >1 if multiple
             spikes occurred in one step.
 
-        Update Procedure
-        ----------------
+        Notes
+        -----
+        **Update Procedure**
+
         The method executes the following steps in order (per neuron):
 
         **1. ODE Integration**
@@ -1031,22 +1033,22 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         Collect all current inputs (via ``sum_current_inputs()``) and store for use
         in the next time step's ODE integration.
 
-        Computational Complexity
-        ------------------------
+        **Computational Complexity**
+
         * Time: O(N · S) where N is population size, S is adaptive ODE steps per neuron
         * Space: O(N) for state updates, O(N·T) for history accumulation over T steps
         * **Not vectorized:** Uses Python loop over all neuron indices
 
-        Side Effects
-        ------------
+        **Side Effects**
+
         * Updates all state variables (V_s, V_d, g_ex_s, g_in_s, I_ex_d, I_in_d)
         * Updates refractory counters and last_spike_time
         * Appends (t, δΠ) to internal ``_urbanczik_history`` dict
         * Advances internal PRNG state (``_rng_state``)
         * Consumes and clears delta_inputs from projections
 
-        Numerical Considerations
-        ------------------------
+        **Numerical Considerations**
+
         * The ODE solver is adaptive and may take variable numbers of internal steps
         * For stiff dynamics or large coupling conductances, integration may require
           more steps, increasing computation time
@@ -1055,13 +1057,11 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         * Dendritic inhibitory current is **subtracted** (line 758), matching NEST
           convention for inhibitory synapses
 
-        Raises
-        ------
-        No explicit exceptions, but numerical issues (NaN, Inf) can arise from:
+        .. warning::
 
-        * Invalid parameter combinations (e.g., zero capacitance)
-        * Extremely large input currents causing voltage overflow
-        * ODE solver failure (rare with RK45)
+           Numerical issues (NaN, Inf) can arise from invalid parameter
+           combinations (e.g., zero capacitance), extremely large input
+           currents, or ODE solver failure.
 
         Examples
         --------
