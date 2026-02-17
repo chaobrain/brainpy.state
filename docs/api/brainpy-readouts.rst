@@ -1,5 +1,5 @@
-BrainPy-style Readout
-=====================
+BrainPy-style Readouts
+======================
 
 Readout modules for converting spiking or rate-coded outputs.
 
