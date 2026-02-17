@@ -57,13 +57,17 @@ class _Calibration:
 class correlation_detector(brainstate.nn.Dynamics):
     r"""NEST-compatible ``correlation_detector`` device.
 
-    Short Description
-    -----------------
+    **1. Overview**
+
     ``correlation_detector`` receives spikes from two receptor ports
     (``0`` and ``1``) and accumulates lag histograms in both weighted
     (float64) and unweighted (int64) forms, following NEST event ordering.
+    It mirrors the semantics of the NEST ``correlation_detector`` recording
+    device, including dual-window filtering (activity window and counting
+    window), Kahan-compensated weighted histogram accumulation, and
+    NEST-compatible bin-edge conventions.
 
-    **1. Event model and histogram equations**
+    **2. Event Model and Histogram Equations**
 
     Let an accepted event be represented as
     :math:`e=(s, t, m, w)` where :math:`s\in\{0,1\}` is receptor port,
@@ -86,8 +90,12 @@ class correlation_detector(brainstate.nn.Dynamics):
        \tau_{\mathrm{edge}} = \tau_{\max} + \frac{\Delta_\tau}{2},
 
     with all times represented in integer steps for the index computation.
+    :math:`\sigma_s` encodes causality direction: ``+1`` for port-1 events
+    (event is the "post" spike) and ``-1`` for port-0 events (event is the
+    "pre" spike), so positive lags correspond to port-1 spikes occurring
+    after port-0 spikes.
 
-    For each matched opposite event :math:`j`, this implementation updates
+    For each matched opposite event :math:`j`, the histograms are updated as
 
     .. math::
 
@@ -96,8 +104,9 @@ class correlation_detector(brainstate.nn.Dynamics):
        C_b \leftarrow C_b + m,
 
     where :math:`H_b` is ``histogram`` and :math:`C_b` is
-    ``count_histogram``. ``histogram`` uses Kahan summation per bin; the
-    compensation terms are exposed as ``histogram_correction``.
+    ``count_histogram``. ``histogram`` uses Kahan summation per bin to
+    reduce floating-point accumulation error; the compensation terms are
+    exposed as ``histogram_correction``.
 
     The number of bins is
 
@@ -107,26 +116,28 @@ class correlation_detector(brainstate.nn.Dynamics):
        \left(\frac{\tau_{\max,\mathrm{steps}}}{\Delta_{\tau,\mathrm{steps}}}\right).
 
     Bin intervals are left-closed/right-open in the internal index rule, which
-    matches NEST edge handling in ``correlation_detector``.
+    matches NEST edge handling in ``correlation_detector``. The centre bin
+    (index :math:`N_{\mathrm{bins}}//2`) corresponds to zero lag.
 
-    **2. Windowing, assumptions, and constraints**
+    **3. Windowing, Assumptions, and Constraints**
 
     Two windows are applied exactly as in NEST:
 
-    - Activity window:
+    - **Activity window**:
       :math:`(\mathrm{origin}+\mathrm{start},\ \mathrm{origin}+\mathrm{stop}]`
       in simulation time. Events outside are discarded and never buffered.
-    - Counting window:
+    - **Counting window**:
       :math:`[\mathrm{Tstart},\ \mathrm{Tstop}]`. Only events in this window
       increment ``n_events`` and update histograms. Events outside this window
-      can still be buffered and can affect later counted events.
+      can still be buffered and can affect later counted events via
+      cross-correlation with subsequently counted events.
 
     Grid-alignment constraints are strict: ``start``, ``stop`` (if finite),
     ``origin``, ``delta_tau``, and ``tau_max`` must map to integer multiples
     of simulation ``dt``. Additionally, ``tau_max`` must be an exact multiple
-    of ``delta_tau``.
+    of ``delta_tau``. Violations raise ``ValueError`` at calibration time.
 
-    **3. Computational implications**
+    **4. Computational Implications**
 
     Per accepted event, work is linear in queue lengths:
 
@@ -135,48 +146,55 @@ class correlation_detector(brainstate.nn.Dynamics):
     - :math:`O(Q_{\mathrm{self}})` for sorted insertion into the sender queue.
 
     Memory usage is :math:`O(Q_0 + Q_1 + N_{\mathrm{bins}})`, where queue
-    length depends on event rate and ``tau_max``.
+    length depends on event rate and ``tau_max``. Calibration is triggered
+    lazily on first access; subsequent calls reuse cached state unless ``dt``
+    or window parameters change.
 
     Parameters
     ----------
     in_size : Size, optional
         Output size/shape metadata consumed by :class:`brainstate.nn.Dynamics`.
         This detector is event-driven and stores scalar histograms; ``in_size``
-        is retained for API consistency. Default is ``1``.
-    delta_tau : ArrayLike or None, optional
-        Bin width :math:`\Delta_\tau` in ms (unitful values accepted and
-        converted to ms). Must be finite, strictly positive, and an integer
-        multiple of simulation ``dt``. ``None`` selects ``5 * dt``.
+        is retained for API consistency and does not affect histogram shape.
+        Default is ``1``.
+    delta_tau : quantity (ms) or float or None, optional
+        Bin width :math:`\Delta_\tau`. Unitful ``brainunit`` quantities are
+        accepted and converted to ms; bare floats are interpreted as ms.
+        Must be finite, strictly positive, and an integer multiple of
+        simulation ``dt``. ``None`` auto-selects ``5 * dt``.
         Default is ``None``.
-    tau_max : ArrayLike or None, optional
-        One-sided lag limit :math:`\tau_{\max}` in ms. Must be finite,
-        non-negative, an integer multiple of ``dt``, and an exact multiple of
-        ``delta_tau``. ``None`` selects ``10 * delta_tau``.
+    tau_max : quantity (ms) or float or None, optional
+        One-sided lag limit :math:`\tau_{\max}`. Unitful quantities accepted.
+        Must be finite, non-negative, an integer multiple of ``dt``, and an
+        exact integer multiple of ``delta_tau``. ``None`` auto-selects
+        ``10 * delta_tau``. Default is ``None``.
+    Tstart : quantity (ms) or float, optional
+        Inclusive lower bound of the counting window in ms. Scalar-convertible;
+        unitful values are converted to ms. Default is ``0.0 * u.ms``.
+    Tstop : quantity (ms) or float or None, optional
+        Inclusive upper bound of the counting window in ms. ``None`` means
+        :math:`+\infty` (no upper bound). Scalar-convertible when provided.
         Default is ``None``.
-    Tstart : ArrayLike, optional
-        Inclusive lower bound of counting window in ms. Scalar-convertible.
-        Unitful values are converted to ms. Default is ``0.0 * u.ms``.
-    Tstop : ArrayLike or None, optional
-        Inclusive upper bound of counting window in ms. ``None`` means
-        :math:`+\infty`. Scalar-convertible when provided. Default is
-        ``None``.
-    start : ArrayLike, optional
-        Exclusive lower bound of activity window relative to ``origin`` in ms.
-        Must be scalar-convertible and aligned to simulation ``dt``.
+    start : quantity (ms) or float, optional
+        Exclusive lower bound of the activity window relative to ``origin``
+        in ms. Must be scalar-convertible and aligned to simulation ``dt``.
         Default is ``0.0 * u.ms``.
-    stop : ArrayLike or None, optional
-        Inclusive upper bound of activity window relative to ``origin`` in ms.
-        Must be scalar-convertible and aligned to ``dt`` when finite.
+    stop : quantity (ms) or float or None, optional
+        Inclusive upper bound of the activity window relative to ``origin``
+        in ms. Must be scalar-convertible and aligned to ``dt`` when finite.
         ``None`` means :math:`+\infty`. Default is ``None``.
-    origin : ArrayLike, optional
-        Time origin shift in ms for activity-window evaluation. Must be
-        scalar-convertible and aligned to ``dt``. Default is ``0.0 * u.ms``.
+    origin : quantity (ms) or float, optional
+        Global time origin shift in ms for activity-window evaluation.
+        The effective activity window becomes
+        ``(origin + start, origin + stop]``. Must be scalar-convertible
+        and aligned to ``dt``. Default is ``0.0 * u.ms``.
     name : str or None, optional
         Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
+        If ``None``, a name is auto-generated. Default is ``None``.
 
-    Parameter Mapping
-    -----------------
-    .. list-table:: Parameter mapping to model symbols
+    **Parameter Mapping (NEST ↔ brainpy.state)**
+
+    .. list-table::
        :header-rows: 1
        :widths: 18 17 24 41
 
@@ -185,48 +203,40 @@ class correlation_detector(brainstate.nn.Dynamics):
          - Math symbol
          - Semantics
        * - ``delta_tau``
-         - ``None``
+         - ``None`` → ``5 * dt``
          - :math:`\Delta_\tau`
-         - Bin width; resolved as ``5 * dt`` when omitted.
+         - Lag-histogram bin width; auto-resolved when omitted.
        * - ``tau_max``
-         - ``None``
+         - ``None`` → ``10 * delta_tau``
          - :math:`\tau_{\max}`
-         - One-sided correlation horizon; resolved as ``10 * delta_tau`` when omitted.
+         - One-sided correlation horizon; auto-resolved when omitted.
        * - ``Tstart``
-         - ``0.0 * u.ms``
+         - ``0.0 ms``
          - :math:`T_{\mathrm{start}}`
-         - Inclusive start of histogram/count update window.
+         - Inclusive start of histogram and event-count update window.
        * - ``Tstop``
-         - ``None``
+         - ``None`` (:math:`+\infty`)
          - :math:`T_{\mathrm{stop}}`
-         - Inclusive end of histogram/count update window.
+         - Inclusive end of histogram and event-count update window.
        * - ``start``
-         - ``0.0 * u.ms``
+         - ``0.0 ms``
          - :math:`t_{\mathrm{start,rel}}`
-         - Relative exclusive lower bound of activity window.
+         - Relative exclusive lower bound of the activity window.
        * - ``stop``
-         - ``None``
+         - ``None`` (:math:`+\infty`)
          - :math:`t_{\mathrm{stop,rel}}`
-         - Relative inclusive upper bound of activity window.
+         - Relative inclusive upper bound of the activity window.
        * - ``origin``
-         - ``0.0 * u.ms``
+         - ``0.0 ms``
          - :math:`t_0`
-         - Global shift applied to ``start`` and ``stop`` boundaries.
-
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` or :meth:`flush` returns a
-        mapping with keys ``'histogram'``, ``'histogram_correction'``,
-        ``'count_histogram'``, and ``'n_events'``. Shapes are
-        ``(N_bins,)``, ``(N_bins,)``, ``(N_bins,)``, and ``(2,)``.
+         - Global offset applied to ``start`` and ``stop`` boundaries.
 
     Raises
     ------
     ValueError
         If time parameters are non-scalar, non-finite where finite values are
         required, misaligned to simulation resolution, or violate consistency
-        constraints (for example ``tau_max % delta_tau != 0`` or ``stop < start``).
+        constraints (e.g. ``tau_max % delta_tau != 0`` or ``stop < start``).
         Also raised for invalid runtime event arguments (unknown receptor port,
         negative multiplicity, non-finite ``weights``, or size mismatches).
     KeyError
@@ -238,17 +248,21 @@ class correlation_detector(brainstate.nn.Dynamics):
 
     Notes
     -----
-    - ``n_events`` can only be set to ``[0, 0]``, which resets detector state
-      and clears histograms, matching NEST.
+    - ``n_events`` can only be assigned ``[0, 0]``, which resets all detector
+      state and clears histograms, matching NEST's reset semantics.
     - Runtime input events are provided through :meth:`update`:
-      ``spikes`` / ``receptor_ports`` / ``weights`` / ``multiplicities`` /
-      ``stamp_steps`` are each scalar-broadcastable to a common one-dimensional
-      event axis.
-    - Receptor ports are restricted to ``0`` and ``1``.
-    - Connection delays are ignored by design; only event time stamps are used.
+      ``spikes``, ``receptor_ports``, ``weights``, ``multiplicities``, and
+      ``stamp_steps`` are each scalar-broadcastable to a common 1-D event axis.
+    - Receptor ports are restricted to integer values ``0`` and ``1``.
+    - Connection delays are ignored by design; only event time stamps are used
+      for lag computation.
+    - Calibration is cached and reused across steps; it is automatically
+      invalidated if ``dt`` or any window parameter changes between calls.
 
     Examples
     --------
+    Basic correlation of simultaneous spikes on opposite ports:
+
     .. code-block:: python
 
        >>> import brainpy
@@ -268,7 +282,9 @@ class correlation_detector(brainstate.nn.Dynamics):
        ...             multiplicities=np.array([1, 1]),
        ...             stamp_steps=np.array([11, 11]),
        ...         )
-       ...     _ = out['histogram'].shape
+       ...     _ = out['histogram'].shape  # (21,) for tau_max=5ms, delta_tau=0.5ms
+
+    Default parameters with no input events and explicit state reset:
 
     .. code-block:: python
 

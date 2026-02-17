@@ -60,13 +60,16 @@ class _Calibration:
 class correlomatrix_detector(brainstate.nn.Dynamics):
     r"""NEST-compatible ``correlomatrix_detector`` device.
 
-    Short Description
-    -----------------
+    **1. Overview**
+
     ``correlomatrix_detector`` receives spikes from ``N_channels`` receptor
     pools and accumulates binned auto/cross-covariance matrices for
-    non-negative lags.
+    non-negative lags. It mirrors the semantics of the NEST
+    ``correlomatrix_detector`` recording device, including dual-window
+    filtering (activity window and counting window) and NEST-compatible
+    bin-edge and matrix-ordering conventions.
 
-    **1. Event model and covariance tensor equations**
+    **2. Event Model and Covariance Tensor Equations**
 
     Let an accepted event be
     :math:`e=(c, t, m, w)` with receptor channel :math:`c`,
@@ -120,18 +123,25 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
     At zero lag, off-diagonal or non-identical-event pairs mirror-update the
     transposed entry, reproducing NEST's symmetric zero-lag handling.
 
-    Output tensor shapes are
-    ``(N_channels, N_channels, N_bins)`` with
-    :math:`N_{\mathrm{bins}} = 1 + \tau_{\max}/\Delta_\tau`.
+    The number of bins is
 
-    **2. Windowing, assumptions, and constraints**
+    .. math::
+
+       N_{\mathrm{bins}} = 1 + \frac{\tau_{\max,\mathrm{steps}}}
+                                    {\Delta_{\tau,\mathrm{steps}}}.
+
+    Output tensor shapes are
+    ``(N_channels, N_channels, N_bins)`` where bin ``0`` corresponds to zero
+    lag and bin ``k`` to lag :math:`k \cdot \Delta_\tau`.
+
+    **3. Windowing, Assumptions, and Constraints**
 
     Two windows are applied:
 
-    - Activity window:
+    - *Activity window*:
       :math:`(\mathrm{origin}+\mathrm{start},\ \mathrm{origin}+\mathrm{stop}]`.
       Events outside this interval are discarded and never queued.
-    - Counting window:
+    - *Counting window*:
       :math:`[T_{\mathrm{start}},\ T_{\mathrm{stop}}]`. Only accepted events
       in this interval update ``n_events``, ``covariance``, and
       ``count_covariance``.
@@ -145,12 +155,12 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
     - ``tau_max`` must be a non-negative multiple of ``delta_tau``.
     - ``N_channels >= 1``.
 
-    **3. Computational implications**
+    **4. Computational Implications**
 
     Per accepted event, insertion is :math:`O(Q)` in queue length and
     correlation updates are :math:`O(Q)` over retained events, so total update
-    work scales linearly with active queue size. Memory is
-    :math:`O(Q + N_{\mathrm{channels}}^2 N_{\mathrm{bins}})`.
+    work scales linearly with the active queue size. Memory usage is
+    :math:`O(Q + N_{\mathrm{channels}}^2 \cdot N_{\mathrm{bins}})`.
 
     Parameters
     ----------
@@ -159,43 +169,44 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
         This detector stores internal tensors and does not emit batch-shaped
         arrays through ``update``. Default is ``1``.
     delta_tau : ArrayLike or None, optional
-        Lag bin width :math:`\Delta_\tau` in milliseconds. Accepts scalar
-        float-like values or ``brainunit`` quantities convertible to ms.
+        Lag bin width :math:`\Delta_\tau` in milliseconds. Accepts a scalar
+        float-like value or a ``brainunit`` quantity convertible to ms.
         Must be finite, strictly positive, aligned to ``dt``, and an odd
         multiple of ``dt``. ``None`` resolves to ``5 * dt``.
         Default is ``None``.
     tau_max : ArrayLike or None, optional
-        One-sided lag horizon :math:`\tau_{\max}` in milliseconds. Accepts
-        scalar float-like values or quantities convertible to ms. Must be
+        One-sided lag horizon :math:`\tau_{\max}` in milliseconds. Accepts a
+        scalar float-like value or a quantity convertible to ms. Must be
         finite, non-negative, aligned to ``dt``, and an exact multiple of
         ``delta_tau``. ``None`` resolves to ``10 * delta_tau``.
         Default is ``None``.
     Tstart : ArrayLike, optional
-        Inclusive lower bound of counting window in milliseconds.
-        Scalar-convertible; quantities are converted to ms.
-        Default is ``0.0 * u.ms``.
+        Inclusive lower bound of the counting window in milliseconds.
+        Must be scalar-convertible; ``brainunit`` quantities are converted
+        to ms. Default is ``0.0 * u.ms``.
     Tstop : ArrayLike or None, optional
-        Inclusive upper bound of counting window in milliseconds.
-        Scalar-convertible when provided. ``None`` means :math:`+\infty`.
-        Default is ``None``.
+        Inclusive upper bound of the counting window in milliseconds.
+        Must be scalar-convertible when provided. ``None`` means
+        :math:`+\infty`. Default is ``None``.
     N_channels : int or ArrayLike, optional
         Number of receptor channels. Must resolve to a scalar integer
         ``>= 1``. Channel IDs accepted at runtime are
         ``0, 1, ..., N_channels - 1``. Default is ``1``.
     start : ArrayLike, optional
-        Exclusive lower bound of activity window relative to ``origin`` in
-        milliseconds. Must be scalar-convertible and aligned to ``dt``.
+        Exclusive lower bound of the activity window relative to ``origin``
+        in milliseconds. Must be scalar-convertible and aligned to ``dt``.
         Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Inclusive upper bound of activity window relative to ``origin`` in
-        milliseconds. Must be scalar-convertible and aligned to ``dt`` when
-        finite. ``None`` means :math:`+\infty`. Default is ``None``.
+        Inclusive upper bound of the activity window relative to ``origin``
+        in milliseconds. Must be scalar-convertible and aligned to ``dt``
+        when finite. ``None`` means :math:`+\infty`. Default is ``None``.
     origin : ArrayLike, optional
         Activity-window origin shift in milliseconds. Must be
         scalar-convertible and aligned to ``dt``.
         Default is ``0.0 * u.ms``.
     name : str or None, optional
         Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
+        Default is ``None``.
 
     Parameter Mapping
     -----------------
@@ -230,44 +241,37 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
        * - ``start``
          - ``0.0 * u.ms``
          - :math:`t_{\mathrm{start,rel}}`
-         - Relative exclusive lower bound of activity window.
+         - Relative exclusive lower bound of the activity window.
        * - ``stop``
          - ``None``
          - :math:`t_{\mathrm{stop,rel}}`
-         - Relative inclusive upper bound of activity window.
+         - Relative inclusive upper bound of the activity window.
        * - ``origin``
          - ``0.0 * u.ms``
          - :math:`t_0`
          - Global shift added to ``start`` and ``stop`` boundaries.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. :meth:`update` and :meth:`flush` return a mapping with
-        keys ``'covariance'``, ``'count_covariance'``, and ``'n_events'``.
-        Shapes are ``(N_channels, N_channels, N_bins)``,
-        ``(N_channels, N_channels, N_bins)``, and ``(N_channels,)``.
-
     Raises
     ------
     ValueError
         If scalar parameters are invalid (non-scalar, non-finite where finite
-        values are required, misaligned to ``dt``), if consistency constraints
-        are violated (for example ``delta_tau`` even in steps, ``tau_max`` not
-        divisible by ``delta_tau``, ``stop < start``, or ``N_channels < 1``),
-        or if runtime event arrays contain invalid values/sizes (negative
-        multiplicities, non-finite ``weights``, unknown receptor channel, or
-        mismatched vector lengths).
+        values are required, or misaligned to ``dt``), if consistency
+        constraints are violated (e.g., ``delta_tau`` even in steps,
+        ``tau_max`` not divisible by ``delta_tau``, ``stop < start``, or
+        ``N_channels < 1``), or if runtime event arrays contain invalid
+        values/sizes (negative multiplicities, non-finite ``weights``,
+        unknown receptor channel, or mismatched vector lengths).
     KeyError
         If runtime environment keys such as simulation time ``'t'`` or
-        resolution ``dt`` are unavailable when calibration/update is called.
+        resolution ``dt`` are unavailable when calibration or update is
+        called.
 
     Notes
     -----
     - Unlike some NEST recording devices, ``n_events`` is read-only here,
-      matching ``correlomatrix_detector`` behavior.
+      matching ``correlomatrix_detector`` semantics.
     - This implementation uses default NEST kernel minimum delay semantics in
-      pruning (`min_delay = 1` simulation step).
+      pruning (``min_delay = 1`` simulation step).
     - Optional ``multiplicities`` emulate NEST ``SpikeEvent`` multiplicity.
     - Runtime event arguments accepted by :meth:`update` are one-dimensional
       scalar-broadcastable arrays over the same event axis:
@@ -358,6 +362,51 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
         return np.asarray(self._count_covariance, dtype=np.int64)
 
     def get(self, key: str = 'covariance'):
+        r"""Retrieve a named scalar or array from the detector.
+
+        Parameters
+        ----------
+        key : str, optional
+            Name of the quantity to retrieve. Supported keys:
+
+            - ``'covariance'`` — accumulated weighted covariance tensor,
+              shape ``(N_channels, N_channels, N_bins)``, dtype float64.
+            - ``'count_covariance'`` — unweighted spike-count covariance
+              tensor, same shape, dtype int64.
+            - ``'n_events'`` — per-channel accepted event counts,
+              shape ``(N_channels,)``, dtype int64.
+            - ``'delta_tau'`` — calibrated lag-bin width in ms, scalar
+              float or ``None`` if not yet calibrated.
+            - ``'tau_max'`` — calibrated one-sided lag horizon in ms,
+              scalar float or ``None`` if not yet calibrated.
+            - ``'Tstart'`` — counting-window lower bound in ms, scalar
+              float (may be ``-inf``).
+            - ``'Tstop'`` — counting-window upper bound in ms, scalar
+              float (may be ``+inf``).
+            - ``'N_channels'`` — number of receptor channels, scalar int.
+            - ``'start'`` — activity-window lower bound (relative) in ms,
+              scalar float.
+            - ``'stop'`` — activity-window upper bound (relative) in ms,
+              scalar float (may be ``+inf``).
+            - ``'origin'`` — activity-window origin shift in ms, scalar
+              float.
+
+            Default is ``'covariance'``.
+
+        Returns
+        -------
+        value : np.ndarray or float or int or None
+            The requested quantity. Array types match the shapes and dtypes
+            described above; scalar keys return Python numeric scalars.
+
+        Raises
+        ------
+        KeyError
+            If ``key`` is not one of the supported strings listed above.
+        ValueError
+            If the underlying parameter is non-scalar or non-convertible
+            during retrieval.
+        """
         if key == 'covariance':
             return self.covariance
         if key == 'count_covariance':
