@@ -13,7 +13,9 @@
 </p>
 
 
-`brainpy.state` provides **stateful spiking neural network models** built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate). It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/).
+[`brainpy.state`](https://github.com/chaobrain/brainpy.state) provides 
+comprehensive **spiking neural network models** built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate). 
+It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/).
 
 The library ships **167+ models** organized in three tiers:
 

@@ -1,7 +1,7 @@
 ``brainpy.state`` documentation
 =====================================
 
-``brainpy.state`` provides stateful spiking neural network models built on
+`brainpy.state <https://github.com/chaobrain/brainpy.state>`_ provides comprehensive spiking neural network models built on
 `JAX <https://github.com/jax-ml/jax>`_ and the
 `brainstate <https://github.com/chaobrain/brainstate>`_ state-management system.
 It is the point-neuron modeling layer of the
