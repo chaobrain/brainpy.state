@@ -66,24 +66,6 @@ Quick Example
    E = brainpy.state.LIF(3200, V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
    I = brainpy.state.LIF(800,  V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
 
-   # Connect them with projections
-   E2E = brainpy.state.DeltaProj(
-       comm=brainstate.nn.EventFixedProb(3200, 3200, prob=0.02, weight=0.6*u.mV),
-       post=E,
-   )
-   E2I = brainpy.state.DeltaProj(
-       comm=brainstate.nn.EventFixedProb(3200, 800, prob=0.02, weight=0.6*u.mV),
-       post=I,
-   )
-   I2E = brainpy.state.DeltaProj(
-       comm=brainstate.nn.EventFixedProb(800, 3200, prob=0.02, weight=-6.7*u.mV),
-       post=E,
-   )
-   I2I = brainpy.state.DeltaProj(
-       comm=brainstate.nn.EventFixedProb(800, 800, prob=0.02, weight=-6.7*u.mV),
-       post=I,
-   )
-
 
 ----
 
