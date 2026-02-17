@@ -1,5 +1,5 @@
-Synaptic Outputs (BrainPy)
-=========================
+BrainPy-style Synaptic Outputs
+==============================
 
 Synaptic output models for converting conductances to currents.
 

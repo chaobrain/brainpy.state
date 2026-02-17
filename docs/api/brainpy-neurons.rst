@@ -1,5 +1,5 @@
-Neuron Models (BrainPy)
-======================
+BrainPy-style Neurons
+=====================
 
 BrainPy-style spiking neuron models.
 

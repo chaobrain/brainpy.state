@@ -1,5 +1,5 @@
-Projections (BrainPy)
-====================
+BrainPy-style Projections
+=========================
 
 Connect neural populations with the Comm-Syn-Out architecture.
 

@@ -1,5 +1,5 @@
-Synapse Models (BrainPy)
-=======================
+BrainPy-style Synapses
+======================
 
 BrainPy-style synaptic dynamics models.
 

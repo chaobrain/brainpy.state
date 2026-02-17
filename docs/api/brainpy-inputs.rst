@@ -1,5 +1,5 @@
-Input Generators (BrainPy)
-=========================
+BrainPy-style Input Generators
+==============================
 
 Input spike and current generation models.
 
