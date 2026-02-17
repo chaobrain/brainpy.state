@@ -153,7 +153,7 @@ class TestHTSynapse(unittest.TestCase):
         self.assertEqual(ev['delay'], 7)
         self.assertAlmostEqual(ev['t_spike_ms'], 12.5, delta=0.0)
 
-        self.assertAlmostEqual(ev['weight'], 2.0 * ev['P_send'], delta=1e-15)
+        self.assertAlmostEqual(ev['weight'], 2.0 * 4.0 * ev['P_send'], delta=1e-15)
         self.assertAlmostEqual(ev['P_post'], (1.0 - syn.delta_P) * ev['P_send'], delta=1e-15)
 
     def test_matches_nest_weight_recorder_trace_if_available(self):

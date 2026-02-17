@@ -777,6 +777,7 @@ class glif_psc_double_alpha(Neuron):
         --------
         _collect_receptor_delta_inputs : Routes synaptic inputs to receptor ports.
         """
+        return self._n_receptors
 
     @staticmethod
     def _to_numpy(x, unit):
