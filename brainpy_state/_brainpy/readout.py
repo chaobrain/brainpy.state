@@ -43,6 +43,7 @@ class LeakyRateReadout(brainstate.nn.Module):
         r_{t} = \alpha r_{t-1} + x_{t} W
 
     where:
+
       - :math:`r_{t}` is the output at time t
       - :math:`\alpha = e^{-\Delta t / \tau}` is the decay factor
       - :math:`x_{t}` is the input at time t
@@ -151,6 +152,7 @@ class LeakySpikeReadout(Neuron):
         \frac{dV}{dt} = \frac{-V + I_{in}}{\tau}
 
     where:
+
       - :math:`V` is the membrane potential
       - :math:`\tau` is the membrane time constant
       - :math:`I_{in}` is the input current

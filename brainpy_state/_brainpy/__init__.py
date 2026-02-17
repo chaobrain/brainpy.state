@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 BrainPy-style models for brainpy.state.
 
 This subpackage provides high-level, composable neuron, synapse, projection,

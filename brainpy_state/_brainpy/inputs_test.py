@@ -32,7 +32,7 @@ from brainpy.state import SpikeTime, PoissonSpike, PoissonEncoder, poisson_input
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeConstruction(unittest.TestCase):
-    """Tests for SpikeTime.__init__ validation and CSR construction."""
+    r"""Tests for SpikeTime.__init__ validation and CSR construction."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -77,7 +77,7 @@ class TestSpikeTimeConstruction(unittest.TestCase):
                           weights=[1.0, 2.0, 3.0])
 
     def test_empty_events(self):
-        """Empty events with explicit Quantity arrays."""
+        r"""Empty events with explicit Quantity arrays."""
         with brainstate.environ.context(dt=self.dt):
             st = SpikeTime(3,
                            times=u.math.zeros(0) * u.ms,
@@ -102,7 +102,7 @@ class TestSpikeTimeConstruction(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeUpdate(unittest.TestCase):
-    """Tests for the three update() call paths: index, time, environ."""
+    r"""Tests for the three update() call paths: index, time, environ."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -152,14 +152,14 @@ class TestSpikeTimeUpdate(unittest.TestCase):
             npt.assert_array_equal(result, jnp.zeros(3, dtype=st._spk_dtype))
 
     def test_update_out_of_bounds_step(self):
-        """Steps beyond the max event step should return zeros."""
+        r"""Steps beyond the max event step should return zeros."""
         with brainstate.environ.context(dt=self.dt):
             st = SpikeTime(3, times=[10 * u.ms], indices=[0])
             result = st.update(index=99999)
             npt.assert_array_equal(result, jnp.zeros(3, dtype=st._spk_dtype))
 
     def test_update_step_zero(self):
-        """Step 0 with no events at time 0 returns zeros."""
+        r"""Step 0 with no events at time 0 returns zeros."""
         with brainstate.environ.context(dt=self.dt):
             st = SpikeTime(3, times=[10 * u.ms], indices=[0])
             result = st.update(index=0)
@@ -171,7 +171,7 @@ class TestSpikeTimeUpdate(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeSimultaneous(unittest.TestCase):
-    """Tests for multiple events at the same time step."""
+    r"""Tests for multiple events at the same time step."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -202,7 +202,7 @@ class TestSpikeTimeSimultaneous(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeWeights(unittest.TestCase):
-    """Tests for different weight modes."""
+    r"""Tests for different weight modes."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -248,7 +248,7 @@ class TestSpikeTimeWeights(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeRounding(unittest.TestCase):
-    """Tests for time_as_step rounding modes."""
+    r"""Tests for time_as_step rounding modes."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -298,7 +298,7 @@ class TestSpikeTimeRounding(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeSorting(unittest.TestCase):
-    """Tests that events are always sorted correctly during construction."""
+    r"""Tests that events are always sorted correctly during construction."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -317,7 +317,7 @@ class TestSpikeTimeSorting(unittest.TestCase):
             self.assertAlmostEqual(float(r2[0]), 0, places=5)
 
     def test_per_event_weights_sorted_correctly(self):
-        """Weights must follow their original event after sorting."""
+        r"""Weights must follow their original event after sorting."""
         with brainstate.environ.context(dt=self.dt):
             st = SpikeTime(3,
                            times=[30 * u.ms, 10 * u.ms, 20 * u.ms],
@@ -341,7 +341,7 @@ class TestSpikeTimeSorting(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeJIT(unittest.TestCase):
-    """Tests for JIT compatibility via brainstate.transform.for_loop and jax.jit."""
+    r"""Tests for JIT compatibility via brainstate.transform.for_loop and jax.jit."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -390,7 +390,7 @@ class TestSpikeTimeJIT(unittest.TestCase):
             self.assertAlmostEqual(float(spikes[30][2]), 1.2, places=4)
 
     def test_jit_compiled_update_with_index(self):
-        """Direct jax.jit wrapping of update(index=...)."""
+        r"""Direct jax.jit wrapping of update(index=...)."""
         with brainstate.environ.context(dt=self.dt):
             st = SpikeTime(3,
                            times=[10 * u.ms, 20 * u.ms],
@@ -414,13 +414,13 @@ class TestSpikeTimeJIT(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeDimenslessTimes(unittest.TestCase):
-    """Tests with dimensionless (plain float) spike times."""
+    r"""Tests with dimensionless (plain float) spike times."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_float_times_with_units(self):
-        """Float times with explicit units."""
+        r"""Float times with explicit units."""
         with brainstate.environ.context(dt=self.dt):
             st = SpikeTime(2, times=[10.0 * u.ms, 20.0 * u.ms], indices=[0, 1])
             self.assertEqual(st.num_times, 2)
@@ -434,7 +434,7 @@ class TestSpikeTimeDimenslessTimes(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestSpikeTimeLargeScale(unittest.TestCase):
-    """Test with a larger number of events."""
+    r"""Test with a larger number of events."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -494,7 +494,7 @@ class TestPoissonSpike(unittest.TestCase):
             self.assertTrue(jnp.issubdtype(result.dtype, jnp.floating))
 
     def test_high_frequency_produces_spikes(self):
-        """With very high frequency and many neurons, at least some should spike."""
+        r"""With very high frequency and many neurons, at least some should spike."""
         with brainstate.environ.context(dt=self.dt):
             brainstate.random.seed(0)
             ps = PoissonSpike(1000, freqs=5000 * u.Hz)
@@ -565,7 +565,7 @@ class TestPoissonEncoder(unittest.TestCase):
             npt.assert_array_equal(result, jnp.zeros(20, dtype=bool))
 
     def test_dynamic_rates(self):
-        """Encoder accepts different rates each call."""
+        r"""Encoder accepts different rates each call."""
         with brainstate.environ.context(dt=self.dt):
             enc = PoissonEncoder(10)
             r1 = enc.update(jnp.ones(10) * 0 * u.Hz)
@@ -642,7 +642,7 @@ class TestPoissonInputFunction(unittest.TestCase):
                 )
 
     def test_no_refractory(self):
-        """Without refractory, all neurons can be updated."""
+        r"""Without refractory, all neurons can be updated."""
         with brainstate.environ.context(dt=self.dt):
             brainstate.random.seed(42)
             V = brainstate.HiddenState(jnp.zeros(10) * u.mV)

@@ -27,7 +27,7 @@ __all__ = [
 
 
 class SynOut(brainstate.nn.Module, BindCondData):
-    """
+    r"""
     Base class for synaptic output modules.
 
     ``SynOut`` defines the interface for converting synaptic conductance values
