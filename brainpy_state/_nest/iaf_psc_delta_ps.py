@@ -48,7 +48,8 @@ class iaf_psc_delta_ps(Neuron):
     within-step offsets, analytic threshold-crossing localization for
     current-driven spikes, and optional accumulation of refractory-time inputs.
 
-    **1. Linear membrane dynamics and exact closed-form propagator**
+    1. Linear Membrane Dynamics and Exact Closed-Form Propagator
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     The subthreshold membrane potential dynamics are
 
@@ -71,16 +72,16 @@ class iaf_psc_delta_ps(Neuron):
     stability when :math:`\Delta t/\tau_m` is small, which reduces
     cancellation error in fine-step simulations.
 
-    **2. Spike generation mechanisms and precise spike-time derivation**
+    2. Spike Generation Mechanisms and Precise Spike-Time Derivation
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Two spike mechanisms are implemented:
 
-    - **Instantaneous event-driven spikes**:
-      if an incoming delta event at offset :math:`\delta` pushes
-      :math:`U \ge U_{th}`, spike time is the event time exactly.
-    - **Current-driven spikes**:
-      if propagation yields :math:`U \ge U_{th}`, spike offset is solved
-      analytically from the exact trajectory:
+    - **Instantaneous event-driven spikes**: if an incoming delta event at
+      offset :math:`\delta` pushes :math:`U \ge U_{th}`, spike time is the
+      event time exactly.
+    - **Current-driven spikes**: if propagation yields :math:`U \ge U_{th}`,
+      spike offset is solved analytically from the exact trajectory:
 
       .. math::
 
@@ -91,33 +92,37 @@ class iaf_psc_delta_ps(Neuron):
 
     The model stores:
 
-    - ``last_spike_time``: absolute spike time,
+    - ``last_spike_time``: absolute spike time in ms,
     - ``last_spike_offset``: off-grid offset relative to the right border of
       the current grid step (NEST semantics),
     - ``last_spike_step``: on-grid step index used internally for refractory logic.
 
-    **3. Refractory handling and deferred refractory-input accumulation**
+    3. Refractory Handling and Deferred Refractory-Input Accumulation
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     After a spike, membrane potential is reset to ``V_reset`` and clamped during
-    absolute refractory period.
+    the absolute refractory period.
 
     In NEST ``iaf_psc_delta_ps``, refractory duration in steps is derived as
     ``floor(t_ref / dt)`` (via ``Time(...).get_steps()``) and must be at least one
     simulation step. This implementation enforces the same runtime constraint.
 
     By default, spikes arriving during refractory are discarded. If
-    ``refractory_input=True``, they are accumulated and damped for decay until end
-    of refractoriness, then applied once at refractory release, matching NEST.
+    ``refractory_input=True``, they are accumulated and exponentially damped until
+    end of refractoriness, then applied once at refractory release, matching NEST.
 
-    **4. Event ordering, assumptions, constraints, and computational implications**
+    4. Event Ordering, Assumptions, Constraints, and Computational Implications
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    For each simulation step:
+    For each simulation step the update proceeds as follows:
 
     1. Optional immediate spike if state starts super-threshold.
-    2. Process within-step events in offset order (start -> end of step):
+    2. Process within-step events in offset order (start to end of step):
+
        - propagate to event time (if non-refractory),
        - check current-driven crossing,
        - apply event jump and check instant crossing.
+
     3. Propagate remaining interval (if any).
     4. Store new external current input buffer for next step.
 
@@ -139,6 +144,7 @@ class iaf_psc_delta_ps(Neuron):
     ----------
     in_size : Size
         Population shape specification used to derive ``self.varshape``.
+        Scalar integer for 1D populations or tuple for multi-dimensional.
     E_L : ArrayLike, optional
         Resting membrane potential :math:`E_L` in mV. Scalar or array-like
         broadcastable to ``self.varshape``. Default is ``-70. * u.mV``.
@@ -300,37 +306,49 @@ class iaf_psc_delta_ps(Neuron):
 
     Attributes
     ----------
-    V : HiddenState
-        Membrane potential state in mV.
-    I_stim : ShortTermState
-        One-step buffered continuous current input in pA.
-    last_spike_time : ShortTermState
-        Absolute precise spike time (ms) for latest emitted spike.
-    last_spike_step : ShortTermState
-        Integer step index associated with the latest emitted spike.
-    last_spike_offset : ShortTermState
-        Precise within-step offset (ms) measured from step right boundary.
-    is_refractory : ShortTermState
-        Boolean refractory mask.
-    refractory_spike_buffer : ShortTermState
-        Deferred refractory-time delta contribution (mV) used when
-        ``refractory_input=True``.
-    refractory : ShortTermState
-        Optional mirror of ``is_refractory`` when ``ref_var=True``.
+    V : brainstate.HiddenState
+        Membrane potential state in mV, shape ``self.varshape`` (or with
+        leading batch dimension when ``batch_size`` is specified).
+    I_stim : brainstate.ShortTermState
+        One-step buffered continuous current input in pA. Applied in the
+        *next* update call (NEST ring-buffer semantics).
+    last_spike_time : brainstate.ShortTermState
+        Absolute precise spike time (ms) for the latest emitted spike.
+        Initialized to ``-1e7 * u.ms`` (far past) to indicate no prior spike.
+    last_spike_step : brainstate.ShortTermState
+        Integer (``jnp.int32``) step index associated with the latest emitted
+        spike. Initialized to ``-1``.
+    last_spike_offset : brainstate.ShortTermState
+        Precise within-step offset (ms) measured from the step right boundary
+        (NEST convention: ``0`` at step end, ``dt`` at step start).
+    is_refractory : brainstate.ShortTermState
+        Boolean mask indicating which neurons are currently in the absolute
+        refractory period.
+    refractory_spike_buffer : brainstate.ShortTermState
+        Deferred refractory-time delta contribution (mV). Non-zero only when
+        ``refractory_input=True``; accumulates exponentially decayed delta
+        events and is released at end of refractoriness.
+    refractory : brainstate.ShortTermState
+        Mirror of ``is_refractory`` exposed for external inspection. Present
+        only when ``ref_var=True``.
 
     Notes
     -----
-
-    - ``x`` passed to ``update(x=...)`` is buffered and applied on the next step,
-      mirroring NEST ring-buffer semantics for current events.
+    - ``x`` passed to ``update(x=...)`` is buffered into ``I_stim`` and applied
+      on the *next* step, mirroring NEST ring-buffer semantics for current events.
     - Delta inputs from ``add_delta_input`` are interpreted as on-grid events at
-      step end (offset 0).
+      step end (offset ``0``).
     - Additional within-step precise events can be supplied through
       ``update(spike_events=...)`` where each event is ``(offset, weight)``
       or ``{'offset': ..., 'weight': ...}`` in units of ms and mV.
+    - This model uses ``floor(t_ref / dt)`` for refractory step conversion
+      (matching NEST ``iaf_psc_delta_ps``), whereas ``iaf_psc_delta`` uses
+      ``ceil(t_ref / dt)``.
 
     Examples
     --------
+    Basic usage with constant current drive:
+
     .. code-block:: python
 
        >>> import brainpy
@@ -342,6 +360,8 @@ class iaf_psc_delta_ps(Neuron):
        ...     with brainstate.environ.context(t=0.0 * u.ms):
        ...         spk = neu.update(x=200.0 * u.pA)
        ...     _ = spk.shape
+
+    Precise within-step spike events with ``refractory_input=True``:
 
     .. code-block:: python
 
@@ -364,13 +384,18 @@ class iaf_psc_delta_ps(Neuron):
            Neurocomputing 38-40:565-571.
            DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
     .. [3] Morrison A, Straube S, Plesser HE, Diesmann M (2007).
-           Exact Subthreshold Integration with Continuous Spike Times in
-           Discrete Time Neural Network Simulations. Neural Computation.
-           DOI: https://doi.org/10.1162/neco.2007.19.1.47
+           Exact subthreshold integration with continuous spike times in
+           discrete-time neural network simulations. Neural Computation
+           19(1):47-79. DOI: https://doi.org/10.1162/neco.2007.19.1.47
     .. [4] Hanuschkin A, Kunkel S, Helias M, Morrison A, Diesmann M (2010).
            A general and efficient method for incorporating exact spike times in
-           globally time-driven simulations. Frontiers in Neuroinformatics.
+           globally time-driven simulations. Frontiers in Neuroinformatics 4:113.
            DOI: https://doi.org/10.3389/fninf.2010.00113
+
+    See Also
+    --------
+    iaf_psc_delta : Current-based LIF with delta synapses (on-grid spike times)
+    iaf_cond_exp : Conductance-based LIF with exponential synapses
     """
 
     __module__ = 'brainpy.state'

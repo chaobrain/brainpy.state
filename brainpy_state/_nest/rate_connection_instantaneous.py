@@ -725,13 +725,6 @@ class rate_connection_instantaneous:
         prepare_secondary_event : Create secondary event with coefficient array.
         to_rate_event : Create single-rate event.
 
-        References
-        ----------
-        .. [3] NEST instantaneous-rate receiver implementation:
-               ``models/rate_neuron_ipn_impl.h`` and ``models/rate_neuron_opn_impl.h``.
-        .. [4] Hahne, J., et al. (2015). "A unified framework for spiking and rate-based
-               neural networks." Frontiers in Neuroinformatics, 9, 22.
-
         Examples
         --------
         Basic usage with 3 coefficients starting from step 0:

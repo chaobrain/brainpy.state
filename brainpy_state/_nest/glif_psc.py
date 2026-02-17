@@ -494,9 +494,6 @@ class glif_psc(Neuron):
         Spike component of threshold (mV). Shape: (batch, \*in_size).
     _threshold_voltage : numpy.ndarray
         Voltage component of threshold (mV). Shape: (batch, \*in_size).
-    n_receptors : int
-        Number of synaptic receptor ports (determined by len(tau_syn)).
-
     Returns
     -------
     spike : jax.numpy.ndarray

@@ -38,20 +38,15 @@ class _StepCalibration:
 class weight_recorder(brainstate.nn.Dynamics):
     r"""NEST-compatible recorder for synaptic weights.
 
-    Short Description
-    -----------------
     ``weight_recorder`` accumulates transmitted synaptic events in memory,
     storing weight, sender/target IDs, receptor/port metadata, and event time
-    with NEST-compatible activity-window and filtering semantics.
-
-    Description
-    -----------
-    This implementation follows NEST ``weight_recorder`` behavior
+    with NEST-compatible activity-window and filtering semantics. This
+    implementation follows NEST ``weight_recorder`` behavior
     (``models/weight_recorder.{h,cpp}`` and
     ``nestkernel/{recording_device.*,connector_base_impl.h}``) while exposing a
     direct batch API.
 
-    **1. Event payload model on the simulation grid**
+    **1. Event Payload Model on the Simulation Grid**
 
     Let :math:`dt > 0` be simulation resolution in ms, and
     :math:`n = \mathrm{round}(t/dt)` the current step when :meth:`update` is
@@ -66,9 +61,10 @@ class weight_recorder(brainstate.nn.Dynamics):
     - :math:`p_j` -- connection port metadata,
     - :math:`\delta_j` -- sub-step offset in ms.
 
-    If ``stamp_steps`` is omitted, :math:`s^{(\mathrm{step})}_j = n + 1` for all
-    items, matching NEST's event stamp convention for events generated during
-    :math:`(t, t+dt]`. Otherwise, user-provided integer stamp steps are used.
+    If ``stamp_steps`` is omitted, :math:`s^{(\mathrm{step})}_j = n + 1` for
+    all items, matching NEST's event stamp convention for events generated
+    during :math:`(t, t+dt]`. Otherwise, user-provided integer stamp steps are
+    used.
 
     With ``time_in_steps=False``, stored physical time for item :math:`j` is
 
@@ -77,9 +73,10 @@ class weight_recorder(brainstate.nn.Dynamics):
        t_j = s^{(\mathrm{step})}_j \cdot dt - \delta_j.
 
     With ``time_in_steps=True``, time is represented as
-    ``(events['times'], events['offsets']) = (s^{(\mathrm{step})}_j, \delta_j)``.
+    ``(events['times'], events['offsets']) = (s^{(\mathrm{step})}_j, \delta_j)``,
+    preserving sub-step precision.
 
-    **2. Activity-window gate and sender/target filtering**
+    **2. Activity-Window Gate and Sender/Target Filtering**
 
     Define recorder bounds on the step lattice:
 
@@ -87,18 +84,19 @@ class weight_recorder(brainstate.nn.Dynamics):
 
        s_{\min} = \frac{\mathrm{origin} + \mathrm{start}}{dt}, \qquad
        s_{\max} = \frac{\mathrm{origin} + \mathrm{stop}}{dt}
-       \ \ (\text{or } +\infty \text{ if stop is None}).
+       \quad (\text{or } +\infty \text{ if stop is None}).
 
     An event is recordable iff
 
     .. math::
 
-       s^{(\mathrm{step})}_j > s_{\min} \ \land\
+       s^{(\mathrm{step})}_j > s_{\min} \;\land\;
        s^{(\mathrm{step})}_j \le s_{\max}.
 
-    Therefore ``start`` is exclusive and ``stop`` is inclusive. Optional
-    filter sets :math:`\mathcal{S}` (``senders``) and :math:`\mathcal{T}`
-    (``targets``) further constrain recording:
+    Therefore ``start`` is exclusive and ``stop`` is inclusive, exactly as in
+    NEST recording devices. Optional filter sets :math:`\mathcal{S}`
+    (``senders``) and :math:`\mathcal{T}` (``targets``) further constrain
+    recording:
 
     .. math::
 
@@ -107,77 +105,81 @@ class weight_recorder(brainstate.nn.Dynamics):
 
     Events failing any gate/filter condition are discarded.
 
-    **3. Input normalization and broadcast rules**
+    **3. Input Normalization and Broadcast Rules**
 
     All update payload inputs are flattened to one-dimensional arrays.
-    ``weights`` defines :math:`N`. Optional payload arrays are interpreted as:
+    ``weights`` defines the batch size :math:`N`. Optional payload arrays are
+    interpreted as:
 
-    - ``None`` -> default scalar (broadcast to ``(N,)``),
-    - scalar-like -> broadcast to ``(N,)``,
-    - length-``N`` vector -> used directly.
+    - ``None`` — default scalar broadcast to ``(N,)``,
+    - scalar-like — broadcast to ``(N,)``,
+    - length-:math:`N` vector — used directly.
 
     This matches NEST-like behavior where missing sender/target/receptor/port
     fields receive default metadata and each accepted item contributes exactly
     one stored event.
 
-    **4. Assumptions, constraints, and computational implications**
+    **4. Assumptions, Constraints, and Computational Implications**
 
-    ``start``, ``stop`` (if finite), ``origin``, current ``t``, and ``dt`` must
-    be scalar-convertible and aligned to the simulation grid (checked by
+    ``start``, ``stop`` (if finite), ``origin``, current ``t``, and ``dt``
+    must be scalar-convertible and aligned to the simulation grid (checked by
     round-trip integer conversion with ``1e-12`` tolerance). ``stop`` must
     satisfy ``stop >= start`` when finite. Sender/target filters must contain
     strictly positive integer node IDs.
 
-    Per :meth:`update`, normalization and masking are :math:`O(N)`, and appends
-    are :math:`O(E_{\mathrm{new}})` where :math:`E_{\mathrm{new}}` is the
-    number of accepted events. Persistent storage cost is linear in total
-    accumulated events across calls.
+    Per :meth:`update`, normalization and masking are :math:`O(N)`, and
+    appends are :math:`O(E_{\mathrm{new}})` where :math:`E_{\mathrm{new}}` is
+    the number of accepted events. Persistent storage cost is linear in the
+    total number of accumulated events across calls.
 
     Parameters
     ----------
     in_size : Size, optional
         Shape/size passed to :class:`brainstate.nn.Dynamics`. This recorder
         emits dictionary outputs instead of dense tensors; ``in_size`` is
-        retained for API compatibility. Default is ``1``.
+        retained for API compatibility only. Default is ``1``.
     senders : ArrayLike, optional
-        Sender filter IDs. Interpreted as a 1-D integer array of shape
-        ``(K_s,)`` with strictly positive entries. Empty input disables sender
-        filtering. Default is ``()``.
+        Sender-node filter whitelist. Interpreted as a 1-D integer array of
+        shape ``(K_s,)`` with strictly positive entries. An empty sequence
+        disables sender filtering entirely. Default is ``()``.
     targets : ArrayLike, optional
-        Target filter IDs. Interpreted as a 1-D integer array of shape
-        ``(K_t,)`` with strictly positive entries. Empty input disables target
-        filtering. Default is ``()``.
-    start : ArrayLike, optional
-        Scalar relative lower bound of recording window, typically in
-        milliseconds (e.g., ``Quantity[ms]``). Effective gate is strict:
-        ``stamp_step > (origin + start) / dt``. Must be finite and dt-aligned.
-        Default is ``0.0 * u.ms``.
-    stop : ArrayLike or None, optional
-        Scalar relative upper bound of recording window, typically in
-        milliseconds. Gate is inclusive:
-        ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper bound.
-        Finite values must be dt-aligned and satisfy ``stop >= start``.
-        Default is ``None``.
-    origin : ArrayLike, optional
-        Scalar global origin shift (typically milliseconds) added to ``start``
-        and ``stop`` before window evaluation. Must be finite and dt-aligned.
-        Default is ``0.0 * u.ms``.
+        Target-node filter whitelist. Interpreted as a 1-D integer array of
+        shape ``(K_t,)`` with strictly positive entries. An empty sequence
+        disables target filtering entirely. Default is ``()``.
+    start : brainunit.Quantity or float, optional
+        Scalar relative exclusive lower bound of the recording window,
+        convertible to ms. Effective gate is strict:
+        ``stamp_step > (origin + start) / dt``. Must be finite and an integer
+        multiple of ``dt``. Default is ``0.0 * u.ms``.
+    stop : brainunit.Quantity, float, or None, optional
+        Scalar relative inclusive upper bound of the recording window,
+        convertible to ms. Gate is inclusive:
+        ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper bound
+        (:math:`s_{\max} = +\infty`). Finite values must be ``dt``-aligned and
+        satisfy ``stop >= start``. Default is ``None``.
+    origin : brainunit.Quantity or float, optional
+        Scalar global origin shift added to both ``start`` and ``stop`` before
+        window evaluation, convertible to ms. Shifting the origin displaces
+        the entire recording window without changing its duration. Must be
+        finite and ``dt``-aligned. Default is ``0.0 * u.ms``.
     time_in_steps : bool, optional
-        Time output representation. If ``False``, ``events['times']`` is
-        ``float64`` in ms. If ``True``, ``events['times']`` is ``int64`` step
-        stamps and ``events['offsets']`` is ``float64`` in ms. Default is
-        ``False``.
+        Time output representation. If ``False``, ``events['times']`` stores
+        ``float64`` milliseconds computed as :math:`s \cdot dt - \delta_j`.
+        If ``True``, ``events['times']`` stores ``int64`` step stamps and
+        ``events['offsets']`` stores ``float64`` offsets in ms. Becomes
+        immutable after the first :meth:`update` call. Default is ``False``.
     frozen : bool, optional
-        NEST-compatibility flag. ``True`` is rejected because this recorder is
-        not freezable in this backend. Default is ``False``.
+        NEST-compatibility flag. ``True`` is unconditionally rejected because
+        this recorder cannot be frozen in this backend. Default is ``False``.
     name : str or None, optional
         Optional node name passed to :class:`brainstate.nn.Dynamics`.
+        Default is ``None``.
 
     Parameter Mapping
     -----------------
-    .. list-table:: Parameter mapping to model symbols
+    .. list-table:: Mapping of constructor parameters to model symbols
        :header-rows: 1
-       :widths: 20 16 24 40
+       :widths: 22 18 22 38
 
        * - Parameter
          - Default
@@ -198,32 +200,39 @@ class weight_recorder(brainstate.nn.Dynamics):
        * - ``senders``
          - ``()``
          - :math:`\mathcal{S}`
-         - Optional sender-ID whitelist set.
+         - Optional sender-ID whitelist; empty disables sender filtering.
        * - ``targets``
          - ``()``
          - :math:`\mathcal{T}`
-         - Optional target-ID whitelist set.
+         - Optional target-ID whitelist; empty disables target filtering.
        * - ``time_in_steps``
          - ``False``
          - :math:`\mathrm{repr}_t`
-         - Time representation mode (physical ms vs. step+offset).
+         - Time representation: physical ms or integer step-stamp + offset.
 
     Returns
     -------
-    out : Any
-        Dynamics node. :meth:`update`, :meth:`flush`, and ``get('events')``
-        return an ``events`` dictionary of 1-D arrays with common length
-        ``(E,)``:
+    events : dict[str, np.ndarray]
+        Returned by :meth:`update`, :meth:`flush`, and the ``events``
+        property. All arrays are one-dimensional with length :math:`E` equal
+        to the total number of stored events accumulated so far:
 
-        - ``senders``: ``int64``,
-        - ``targets``: ``int64``,
-        - ``weights``: ``float64``,
-        - ``receptors``: ``int64``,
-        - ``ports``: ``int64``,
-        - ``times``: ``float64`` ms when ``time_in_steps=False``; otherwise
-          ``int64`` step stamps,
-        - ``offsets``: ``float64`` ms, present only when
-          ``time_in_steps=True``.
+        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for each
+          recorded event, defaulting to ``1`` when not supplied.
+        - ``'targets'`` — ``int64``, shape ``(E,)``: target node ID for each
+          recorded event, defaulting to ``1`` when not supplied.
+        - ``'weights'`` — ``float64``, shape ``(E,)``: synaptic weight value
+          for each recorded event.
+        - ``'receptors'`` — ``int64``, shape ``(E,)``: receptor port (rport)
+          per event, defaulting to ``0`` when not supplied.
+        - ``'ports'`` — ``int64``, shape ``(E,)``: connection port metadata
+          per event, defaulting to ``-1`` when not supplied.
+        - ``'times'`` — shape ``(E,)``: timestamp per event. ``float64`` in ms
+          (:math:`s \cdot dt - \delta_j`) when ``time_in_steps=False``;
+          ``int64`` step stamp :math:`s` when ``time_in_steps=True``.
+        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
+          ``time_in_steps=True``): per-event sub-step offset :math:`\delta_j`
+          in ms.
 
     Raises
     ------
@@ -231,35 +240,46 @@ class weight_recorder(brainstate.nn.Dynamics):
         If ``frozen=True``; if filter IDs are non-positive; if timing
         parameters are non-scalar, non-finite (where required), off-grid with
         respect to ``dt``, or violate ``stop >= start``; if ``time_in_steps``
-        is modified after simulation has started; if ``n_events`` is set to a
-        value other than ``0``; if event payload sizes mismatch; if
-        ``weights``/``offsets`` contain non-finite values; or if runtime
-        simulation time ``t`` is not grid-aligned.
+        is modified after the first :meth:`update` call; if ``n_events`` is
+        set to a value other than ``0``; if event payload array sizes mismatch
+        ``weights`` length after broadcasting; if ``weights`` or ``offsets``
+        contain non-finite values; or if the runtime simulation time ``t`` is
+        not grid-aligned.
     TypeError
-        If unit conversion or numeric casting of input arrays fails.
+        If unit conversion or numeric casting of any input array or time
+        parameter fails.
     KeyError
         If :meth:`get` is called with an unsupported key, or if simulation
-        context values needed by :meth:`update` are unavailable.
+        context values needed by :meth:`update` (such as ``'t'`` or ``dt``)
+        are unavailable via ``brainstate.environ``.
 
     Notes
     -----
-    - This recorder only stores events explicitly passed into :meth:`update`;
+    - This recorder stores only events explicitly passed to :meth:`update`;
       it does not introspect synapse objects or connection containers.
     - Filter checks are evaluated before event insertion, following NEST's
       handler ordering for ``weight_recorder``.
     - ``n_events`` is write-restricted to ``0`` to support explicit buffer
       reset while preventing partial truncation.
+    - ``time_in_steps`` becomes immutable after the first :meth:`update` call
+      that accesses simulation context, matching NEST backend constraints.
+    - ``weights=None`` in :meth:`update` is treated as a no-op that returns
+      the current ``events`` without writing any new events.
 
     References
     ----------
     .. [1] NEST Simulator, ``weight_recorder`` device.
            https://nest-simulator.readthedocs.io/en/stable/models/weight_recorder.html
-    .. [2] NEST source files:
-           ``models/weight_recorder.h``, ``models/weight_recorder.cpp``,
-           ``nestkernel/recording_device.h``, ``nestkernel/connector_base_impl.h``.
+    .. [2] NEST source files: ``models/weight_recorder.h``,
+           ``models/weight_recorder.cpp``,
+           ``nestkernel/recording_device.h``,
+           ``nestkernel/connector_base_impl.h``.
 
     Examples
     --------
+    Record weights from a filtered subset of senders over a 1 ms window,
+    then inspect the accepted event weights:
+
     .. code-block:: python
 
        >>> import brainpy
@@ -280,6 +300,9 @@ class weight_recorder(brainstate.nn.Dynamics):
        ...         )
        ...     ev = wr.flush()
        ...     _ = ev['weights'].shape
+
+    Record a single event with a sub-step offset using ``time_in_steps=True``,
+    which splits the timestamp into an integer step index and a float offset:
 
     .. code-block:: python
 

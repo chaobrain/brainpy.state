@@ -284,18 +284,18 @@ class rate_neuron_opn(_lin_rate_base):
     The following table maps NEST ``rate_neuron_opn`` / ``lin_rate_opn``
     parameters to brainpy.state equivalents:
 
-    =============================== ================== ===========
-    NEST Parameter                  brainpy.state      Default
-    =============================== ================== ===========
-    ``tau``                         ``tau``            10 ms
-    ``sigma``                       ``sigma``          1.0
-    ``mu``                          ``mu``             0.0
-    ``g`` (nonlinearity gain)       ``g``              1.0
-    ``mult_coupling``               ``mult_coupling``  False
-    ``g_ex``, ``g_in``              ``g_ex``, ``g_in`` 1.0
+    =============================== ========================== ===========
+    NEST Parameter                  brainpy.state              Default
+    =============================== ========================== ===========
+    ``tau``                         ``tau``                    10 ms
+    ``sigma``                       ``sigma``                  1.0
+    ``mu``                          ``mu``                     0.0
+    ``g`` (nonlinearity gain)       ``g``                      1.0
+    ``mult_coupling``               ``mult_coupling``          False
+    ``g_ex``, ``g_in``              ``g_ex``, ``g_in``         1.0
     ``theta_ex``, ``theta_in``      ``theta_ex``, ``theta_in`` 0.0
-    ``linear_summation``            ``linear_summation`` True
-    =============================== ================== ===========
+    ``linear_summation``            ``linear_summation``       True
+    =============================== ========================== ===========
 
     Attributes
     ----------

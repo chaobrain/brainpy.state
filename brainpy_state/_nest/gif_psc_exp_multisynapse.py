@@ -418,12 +418,6 @@ class gif_psc_exp_multisynapse(Neuron):
     ``spk_reset``        n/a                 —                                   Reset mode (brainpy.state-specific)
     ==================== =================== =================================== =====================================================
 
-    Attributes
-    ----------
-    n_receptors : int
-        Number of synaptic receptor ports (read-only property, equals
-        ``len(tau_syn)``).
-
     State Variables
     ---------------
     V : HiddenState, shape ``(batch_size, *in_size)``

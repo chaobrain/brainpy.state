@@ -47,7 +47,8 @@ class iaf_psc_exp_htum(Neuron):
     membrane integration is disabled during absolute refractory, while
     threshold crossing is disabled during total refractory.
 
-    **1. Continuous-time dynamics**
+    1. Continuous-Time Dynamics
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     For membrane potential :math:`V_m` and resting potential :math:`E_L`,
     subthreshold dynamics are:
@@ -68,7 +69,8 @@ class iaf_psc_exp_htum(Neuron):
        \frac{dI_{\mathrm{syn,in}}}{dt} =
        -\frac{I_{\mathrm{syn,in}}}{\tau_{\mathrm{syn,in}}}.
 
-    **2. Exact discrete-time propagation and dual refractory gating**
+    2. Exact Discrete-Time Propagation and Dual Refractory Gating
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     With :math:`h=dt` (ms), the implementation uses exact linear propagators:
 
@@ -112,7 +114,8 @@ class iaf_psc_exp_htum(Neuron):
     reloaded from their ceiling-converted refractory durations, and
     ``last_spike_time`` is set to ``t + dt`` (NEST-aligned grid timing).
 
-    **3. Step ordering and NEST timing equivalence**
+    3. Step Ordering and NEST Timing Equivalence
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     Per simulation step:
 
@@ -128,17 +131,12 @@ class iaf_psc_exp_htum(Neuron):
     This ordering preserves NEST's one-step delayed current-event handling and
     supports mixed per-neuron parameterization via broadcasted arrays.
 
-    **4. Constraints, assumptions, and computational implications**
+    4. Stability Constraints and Computational Implications
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    - Enforced at construction:
-      ``V_reset < V_th``,
-      ``C_m > 0``,
-      ``tau_m > 0``,
-      ``tau_syn_ex > 0``,
-      ``tau_syn_in > 0``,
-      ``t_ref_abs > 0``,
-      ``t_ref_tot > 0``,
-      and ``t_ref_tot >= t_ref_abs``.
+    - Construction enforces ``V_reset < V_th``, ``C_m > 0``, ``tau_m > 0``,
+      ``tau_syn_ex > 0``, ``tau_syn_in > 0``, ``t_ref_abs > 0``,
+      ``t_ref_tot > 0``, and ``t_ref_tot >= t_ref_abs``.
     - Refractory durations are discretized by ``ceil``; effective refractory
       lengths are therefore quantized in units of ``dt``.
     - Coefficient evaluation is vectorized in ``float64`` NumPy and scales as
@@ -231,23 +229,39 @@ class iaf_psc_exp_htum(Neuron):
          - ``10. * u.ms``
          - :math:`\tau_m`
          - Leak time constant.
-       * - ``t_ref_abs`` and ``t_ref_tot``
-         - ArrayLike, broadcastable (ms), each ``> 0`` and
-           ``t_ref_tot >= t_ref_abs``
+       * - ``t_ref_abs``
+         - ArrayLike, broadcastable (ms), ``> 0``
          - ``2. * u.ms``
-         - :math:`t_{\mathrm{ref,abs}}`, :math:`t_{\mathrm{ref,tot}}`
-         - Absolute membrane clamp duration and total spike-suppression
-           duration.
-       * - ``V_th`` and ``V_reset``
-         - ArrayLike, broadcastable (mV), with ``V_reset < V_th``
-         - ``-55. * u.mV``, ``-70. * u.mV``
-         - :math:`V_{th}`, :math:`V_{reset}`
-         - Spike threshold and post-spike reset potential.
-       * - ``tau_syn_ex`` and ``tau_syn_in``
-         - ArrayLike, broadcastable (ms), each ``> 0``
+         - :math:`t_{\mathrm{ref,abs}}`
+         - Absolute membrane clamp duration; quantized to
+           ``ceil(t_ref_abs / dt)`` steps.
+       * - ``t_ref_tot``
+         - ArrayLike, broadcastable (ms), ``> 0``,
+           ``>= t_ref_abs`` elementwise
          - ``2. * u.ms``
-         - :math:`\tau_{\mathrm{syn,ex}}`, :math:`\tau_{\mathrm{syn,in}}`
-         - Exponential synaptic decay constants.
+         - :math:`t_{\mathrm{ref,tot}}`
+         - Total spike-suppression duration; quantized to
+           ``ceil(t_ref_tot / dt)`` steps.
+       * - ``V_th``
+         - ArrayLike, broadcastable (mV)
+         - ``-55. * u.mV``
+         - :math:`V_{th}`
+         - Spike threshold potential.
+       * - ``V_reset``
+         - ArrayLike, broadcastable (mV), ``< V_th`` elementwise
+         - ``-70. * u.mV``
+         - :math:`V_{reset}`
+         - Post-spike reset potential.
+       * - ``tau_syn_ex``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``2. * u.ms``
+         - :math:`\tau_{\mathrm{syn,ex}}`
+         - Excitatory exponential synaptic decay constant.
+       * - ``tau_syn_in``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``2. * u.ms``
+         - :math:`\tau_{\mathrm{syn,in}}`
+         - Inhibitory exponential synaptic decay constant.
        * - ``I_e``
          - ArrayLike, broadcastable (pA)
          - ``0. * u.pA``
@@ -368,6 +382,42 @@ class iaf_psc_exp_htum(Neuron):
             raise ValueError('Synaptic time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Allocate and initialise all dynamic state variables.
+
+        Creates ``HiddenState`` and ``ShortTermState`` fields required by
+        :meth:`update`. All counters are zero-initialised; ``last_spike_time``
+        is set to ``-1e7 * u.ms`` (effectively never spiked).
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            If not ``None``, state arrays gain a leading batch dimension of
+            this size. Pass ``None`` for single-trial (non-batched) simulation.
+            Default is ``None``.
+        **kwargs
+            Absorbed for API compatibility with the base-class signature.
+
+        Notes
+        -----
+        After this call the following state attributes exist:
+
+        - ``self.V`` (:class:`~brainstate.HiddenState`, mV) — membrane
+          potential, shape ``(batch_size, *varshape)`` or ``varshape``.
+        - ``self.i_syn_ex`` / ``self.i_syn_in``
+          (:class:`~brainstate.ShortTermState`, pA) — exponential excitatory
+          and inhibitory synaptic current buffers.
+        - ``self.i_0`` (:class:`~brainstate.ShortTermState`, pA) — one-step
+          delayed continuous current buffer.
+        - ``self.refractory_abs_step_count`` /
+          ``self.refractory_tot_step_count``
+          (:class:`~brainstate.ShortTermState`, ``int32``) — remaining
+          absolute and total refractory step counters.
+        - ``self.last_spike_time`` (:class:`~brainstate.ShortTermState`, ms) —
+          time of most recent spike per neuron; initialised to ``-1e7 ms``.
+        - ``self.refractory`` (:class:`~brainstate.ShortTermState`, ``bool``)
+          — present only when ``ref_var=True``; mirrors
+          ``refractory_tot_step_count > 0``.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
@@ -385,6 +435,39 @@ class iaf_psc_exp_htum(Neuron):
             self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Compute surrogate spike output from membrane voltage.
+
+        Scales the membrane potential relative to the threshold/reset gap and
+        passes the result through the configured surrogate nonlinearity
+        ``self.spk_fun``, enabling gradient-based optimisation through
+        spike-generation events.
+
+        Parameters
+        ----------
+        V : ArrayLike or None, optional
+            Membrane potential in mV. If ``None``, uses the current value of
+            ``self.V.value``. Shape must be broadcastable to the neuron state
+            shape. Default is ``None``.
+
+        Returns
+        -------
+        spike : ArrayLike
+            Surrogate spike values with the same shape as ``V`` (or
+            ``self.V.value`` if ``V`` is ``None``). For hard thresholding,
+            non-zero values indicate a spike event at this step.
+
+        Notes
+        -----
+        The scaling is
+
+        .. math::
+
+           v_{\mathrm{scaled}} = \frac{V - V_{th}}{V_{th} - V_{reset}},
+
+        which places the threshold at :math:`v_{\mathrm{scaled}} = 0` and the
+        reset at :math:`v_{\mathrm{scaled}} = -1`.  The surrogate function
+        ``spk_fun`` (e.g., ``ReluGrad``) is then applied element-wise.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)

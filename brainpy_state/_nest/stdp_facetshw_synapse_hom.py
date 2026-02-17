@@ -301,21 +301,6 @@ class stdp_facetshw_synapse_hom(static_synapse):
         Timestamp (ms) of the most recent presynaptic spike. Used to determine the temporal window
         for querying postsynaptic spike history.
 
-    Methods
-    -------
-    record_post_spike(multiplicity=1.0, t_spike_ms=None)
-        Record postsynaptic spikes into internal history buffer for spike pairing.
-    send(multiplicity=1.0, post=None, receptor_type=None)
-        Process presynaptic spike: perform readout update, spike pairing, and event scheduling.
-    update(pre_spike=0.0, post_spike=0.0, post=None, receptor_type=None)
-        Deliver due events, update postsynaptic history, and process presynaptic spikes.
-    get()
-        Return dictionary of all current parameters and state variables.
-    set(**kwargs)
-        Update parameters and state variables (NEST-style interface).
-    check_synapse_params(syn_spec)
-        Validate that common (model-level) properties are not set in per-synapse specifications.
-
     Raises
     ------
     ValueError

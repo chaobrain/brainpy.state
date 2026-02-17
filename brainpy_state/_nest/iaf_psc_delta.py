@@ -44,7 +44,8 @@ class iaf_psc_delta(Neuron):
     ``iaf_psc_delta`` update semantics, including refractory handling and
     step-wise exact subthreshold propagation.
 
-    **1. Continuous-time dynamics and exact per-step propagator**
+    1. Continuous-Time Dynamics and Exact Per-Step Propagator
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     The membrane dynamics are
 
@@ -70,7 +71,8 @@ class iaf_psc_delta(Neuron):
     which is implemented directly in :meth:`update`. This is equivalent to
     the propagator formulation used in NEST for this linear system.
 
-    **2. Spike condition, reset, and refractory countdown**
+    2. Spike Condition, Reset, and Refractory Countdown
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     After adding delta-input jump :math:`\Delta_{\text{syn},k}`, a spike is
     emitted at step end if the post-update potential crosses threshold:
@@ -90,7 +92,8 @@ class iaf_psc_delta(Neuron):
     :math:`r > 0`, the membrane is clamped (no subthreshold integration is
     committed), then :math:`r` decrements by one each simulation step.
 
-    **3. Delta synapses, voltage jumps, and charge interpretation**
+    3. Delta Synapses, Voltage Jumps, and Charge Interpretation
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     The change in membrane potential due to synaptic inputs can be formulated as:
 
@@ -124,7 +127,8 @@ class iaf_psc_delta(Neuron):
 
        q = \int_0^{\infty}  i_{\text{syn}}(t)\, dt = C_{\text{m}} \cdot w \;.
 
-    **4. Assumptions, constraints, and computational implications**
+    4. Assumptions, Constraints, and Computational Implications
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     - The model assumes unit-compatible parameters and broadcast-compatible
       shapes against ``self.varshape``.

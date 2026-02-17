@@ -84,97 +84,123 @@ class _StepCalibration:
 class volume_transmitter(brainstate.nn.Dynamics):
     r"""NEST-compatible ``volume_transmitter`` support device.
 
-    Short description
-    -----------------
     ``volume_transmitter`` collects neuromodulatory spikes and periodically
-    exposes their cumulative spike history to dopamine-modulated synapses.
+    exposes their cumulative spike history to dopamine-modulated synapses
+    (e.g. ``stdp_dopamine_synapse``).  It reproduces the NEST ring-buffer
+    scheduling, trigger logic, and pseudo-spike reset conventions while
+    exposing a Python batch-update API.
 
-    Description
-    -----------
-    **1. Discrete-time model and state**
+    **1. Discrete-Time State**
 
-    Let simulation resolution be :math:`\Delta t` in ms, and define the
-    on-grid delivery stamp for current step ``step`` as
-    :math:`n = step + 1`. Internal mutable state is:
+    Let simulation resolution be :math:`\Delta t` (ms) and define the
+    on-grid delivery stamp for the current step index
+    :math:`n = \mathrm{round}(t / \Delta t)` as :math:`s = n + 1`.
+    Internal mutable state consists of:
 
-    - :math:`P[s]` -- pending multiplicity scheduled for delivery stamp ``s``
-      (implemented as ``dict[int, float]``).
-    - :math:`H` -- ordered spike-history vector of entries
-      :math:`(t_i, m_i)` with time in ms and multiplicity.
-    - delivery metadata: latest delivered history, trigger time, and count.
+    - :math:`P[s]` — pending multiplicity map, ``dict[int, float]``,
+      accumulating contributions scheduled for future delivery stamp ``s``.
+    - :math:`H` — ordered spike-history list of :class:`spikecounter` entries
+      :math:`(t_i, m_i)`, with time in ms and non-negative multiplicity.
+    - Delivery metadata: ``last_delivery_spikes``, ``last_delivery_time_ms``,
+      and ``delivery_count``.
 
-    Immediately after :meth:`init_state`, :math:`H=[(0, 0)]` (NEST pseudo
-    spike).
+    Immediately after :meth:`init_state`, :math:`H = [(0.0,\; 0.0)]`
+    (a NEST-compatible pseudo-spike with zero multiplicity).
 
-    **2. Update equations and trigger rule**
+    **2. Update Equations and Trigger Rule**
 
-    For each input item ``i`` in :meth:`update`, an effective count
-    :math:`c_i \ge 0` is added to :math:`P[s_i]`, where ``s_i`` is either
-    ``stamp_steps[i]`` or current stamp ``n``.
+    For each input item :math:`i` with spike indicator :math:`x_i > 0`,
+    an effective count :math:`c_i \ge 0` is accumulated into
+    :math:`P[s_i]`, where :math:`s_i` is either ``stamp_steps[i]`` or the
+    current stamp :math:`s`.
 
-    At each call:
+    At each :meth:`update` call, the pending multiplicity for stamp :math:`s`
+    is consumed:
 
     .. math::
 
-       m_n = P[n] \;\;(\text{or } 0 \text{ if absent}),
+       m_s = P[s] \quad (\text{or } 0 \text{ if absent}),
        \qquad
-       t_n = n \Delta t.
+       t_s = s \cdot \Delta t.
 
-    If :math:`m_n > 0`, append :math:`(t_n, m_n)` to :math:`H`.
+    If :math:`m_s > 0`, append :math:`(t_s,\, m_s)` to :math:`H`.
 
-    Delivery period is
-    :math:`T_s = \texttt{deliver\_interval} \cdot d_{\min,s}`, where
-    :math:`d_{\min,s} = \mathrm{round}(d_{\min}/\Delta t)` is ``min_delay``
-    in steps. A trigger occurs when :math:`n \bmod T_s = 0`.
+    The delivery period in steps is
+
+    .. math::
+
+       T_s = k \cdot d_{\min,s},
+       \qquad
+       d_{\min,s} = \mathrm{round}\!\left(\frac{d_{\min}}{\Delta t}\right),
+
+    where :math:`k = \texttt{deliver\_interval}`.  A delivery trigger fires
+    when :math:`s \bmod T_s = 0`.
 
     On trigger:
 
-    - return delivered history :math:`D = H`,
-    - store delivery metadata,
-    - reset history to one pseudo spike :math:`H=[(t_n, 0)]`.
+    1. Capture :math:`D = H` as the delivered history (spikes at stamp
+       :math:`s` are included before the reset).
+    2. Store :math:`D` and trigger time :math:`t_s` in delivery metadata.
+    3. Increment the delivery counter.
+    4. Reset :math:`H = [(t_s,\; 0.0)]` (new pseudo-spike).
 
-    This preserves NEST ordering where spikes stamped at the trigger step are
-    included in the delivered history before reset.
+    **3. Multiplicity Inference**
 
-    **3. Assumptions and constraints**
+    Incoming arrays are flattened to one-dimensional vectors of length
+    :math:`N`.  Let :math:`x_j` denote ``spikes[j]``:
 
-    - ``deliver_interval`` must be scalar integer ``>= 1``.
-    - ``min_delay`` must be scalar positive and an integer multiple of
-      ``dt``.
-    - simulation time ``t`` must be aligned to the simulation grid.
-    - if ``stamp_steps`` is provided, every stamp must satisfy
-      ``stamp_steps >= current_stamp``.
+    - If ``multiplicities is None`` and all :math:`x_j` are integer-like
+      (within ``1e-12`` tolerance):
+      :math:`c_j = \max(\mathrm{round}(x_j),\; 0)`.
+    - If ``multiplicities is None`` and :math:`x_j` contains non-integer
+      values: :math:`c_j = \mathbf{1}[x_j > 0]`.
+    - If ``multiplicities`` is provided with non-negative integers
+      :math:`m_j`: :math:`c_j = m_j \,\mathbf{1}[x_j > 0]`.
 
-    **4. Computational implications**
+    **4. Assumptions and Constraints**
 
-    For ``N`` incoming entries in one call, scheduling is :math:`O(N)` with
-    dictionary accumulation by target stamp. History memory grows with the
-    number of unique stamped events between consecutive triggers.
+    - ``deliver_interval`` must be a scalar integer ``>= 1``.
+    - ``min_delay`` must be scalar, strictly positive, and an integer multiple
+      of ``dt``.
+    - Simulation time ``t`` must be aligned to the simulation grid (enforced
+      at each :meth:`update` call).
+    - If ``stamp_steps`` is provided, every entry must satisfy
+      ``stamp_steps[i] >= current_stamp``.
+
+    **5. Computational Implications**
+
+    For :math:`N` incoming items per call, scheduling is :math:`O(N)` via
+    dictionary accumulation by target stamp.  History memory grows linearly
+    with the number of unique stamped events between consecutive triggers.
+    Each trigger resets the history to a single pseudo-spike, bounding
+    worst-case growth to one trigger period.
 
     Parameters
     ----------
     in_size : Size, optional
-        Dynamics size/shape specification consumed by
-        :class:`brainstate.nn.Dynamics`. The value is stored for compatibility
-        with other devices; it does not change transmitter state-update logic.
-        Default is ``1``.
+        Shape/size argument consumed by :class:`brainstate.nn.Dynamics`.
+        Stored for API compatibility with other device models; it does not
+        affect transmitter state-update logic. Default is ``1``.
     deliver_interval : ArrayLike, optional
-        Scalar integer-like value (unitless) defining trigger period in units
-        of ``min_delay``. Converted with nearest-integer validation and must be
-        ``>= 1``. Default is ``1``.
-    min_delay : ArrayLike, optional
-        Scalar delay representing effective global minimal synaptic delay.
-        Unitful values are converted to ms; unitless values are interpreted as
-        ms. Must be strictly positive and grid-aligned to current ``dt`` when
-        :meth:`update` is executed. Default is ``1.0 * u.ms``.
+        Scalar integer-like value (unitless) specifying the trigger period in
+        units of ``min_delay``.  Converted via nearest-integer rounding and
+        validated to be ``>= 1``.  Increasing this value reduces how often
+        connected synapses receive delivered spike histories.
+        Default is ``1``.
+    min_delay : brainunit.Quantity or float, optional
+        Scalar effective global minimal synaptic delay.  Unitful values are
+        converted to ms; plain floats are interpreted as ms.  Must be strictly
+        positive and an integer multiple of the simulation ``dt`` at the time
+        :meth:`update` is called.  Default is ``1.0 * u.ms``.
     name : str or None, optional
-        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+        Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
+        Default is ``None``.
 
     Parameter Mapping
     -----------------
-    .. list-table:: Parameter mapping to model symbols
+    .. list-table:: Mapping of constructor parameters to model symbols
        :header-rows: 1
-       :widths: 24 16 24 36
+       :widths: 24 16 22 38
 
        * - Parameter
          - Default
@@ -183,58 +209,71 @@ class volume_transmitter(brainstate.nn.Dynamics):
        * - ``deliver_interval``
          - ``1``
          - :math:`k`
-         - Number of minimal-delay intervals per trigger.
+         - Number of minimal-delay intervals per delivery trigger.
        * - ``min_delay``
          - ``1.0 * u.ms``
          - :math:`d_{\min}`
-         - Effective global minimal synaptic delay used for trigger period.
+         - Effective global minimal synaptic delay for trigger period.
        * - ``dt`` (environment)
          - runtime
          - :math:`\Delta t`
-         - Simulation resolution used to compute stamp index and ms times.
+         - Simulation resolution for stamp conversion and ms time computation.
        * - ``delivery_period_steps``
          - runtime
          - :math:`T_s`
-         - :math:`k \cdot \mathrm{round}(d_{\min}/\Delta t)`.
+         - :math:`k \cdot \mathrm{round}(d_{\min} / \Delta t)`.
 
     Returns
     -------
-    out : Any
-        Dynamics node instance. Calling :meth:`update` returns a dictionary
-        with trigger flag, trigger time (ms or ``None``), delivered spike
-        history, and current spike history.
+    out : volume_transmitter
+        Configured dynamics node instance.  Calling :meth:`update` returns a
+        ``dict`` with keys ``'triggered'`` (``bool``), ``'t_trig'`` (``float``
+        ms or ``None``), ``'delivered_spikes'`` (``tuple[spikecounter, ...]``),
+        and ``'spike_history'`` (``tuple[spikecounter, ...]``).
 
     Raises
     ------
     ValueError
-        If ``deliver_interval`` is non-scalar or not integer-like, or if
-        ``deliver_interval < 1``.
+        If ``deliver_interval`` is non-scalar, not integer-like, or ``< 1``
+        (raised during ``__init__``).
     ValueError
-        At update time, if ``dt <= 0``, if ``min_delay`` is not a positive
-        integer multiple of ``dt``, if time ``t`` is not grid-aligned, or if
-        invalid ``multiplicities``/``stamp_steps`` payloads are provided.
-    KeyError
-        At update time, if simulation context is missing required entries
-        (typically ``'t'`` or ``dt``), depending on
-        :mod:`brainstate.environ` behavior.
+        At :meth:`update` time: if ``dt <= 0``; if ``min_delay`` is not a
+        positive integer multiple of ``dt``; if time ``t`` is not
+        grid-aligned; if ``multiplicities`` contains negative values; if
+        ``stamp_steps`` contains past stamps; or if payload arrays are
+        non-integer where integer values are required or have mismatched
+        flattened sizes.
     TypeError
         If provided scalar/array inputs cannot be converted by
-        ``brainunit``/NumPy conversion paths.
+        ``brainunit`` or NumPy conversion paths.
+    KeyError
+        At :meth:`update` time, if the simulation context is missing the
+        required ``'t'`` or ``dt`` entries (depends on
+        :mod:`brainstate.environ` behaviour).
 
     Notes
     -----
-    - :meth:`deliver_spikes` returns current history vector.
-    - ``last_delivery_spikes`` stores history delivered at the most recent
-      trigger.
-    - ``last_delivery_time`` stores the most recent trigger time in ms.
-    - :meth:`update` aggregates multiplicities exactly by delivery step, as
-      NEST's internal ring-buffer logic does.
-    - ``handles_test_event`` accepts only receptor type ``0``, matching NEST.
-    - ``set_local_device_id`` / ``get_local_device_id`` are provided for
-      compatibility with NEST's device duplication logic.
+    - :meth:`deliver_spikes` returns the current (undelivered) history vector.
+    - :attr:`last_delivery_spikes` stores the history snapshot delivered at
+      the most recent trigger.
+    - :attr:`last_delivery_time` stores the most recent trigger time in ms.
+    - :meth:`update` aggregates multiplicities exactly by delivery step,
+      mirroring NEST's internal ring-buffer logic.
+    - :meth:`handles_test_event` accepts only receptor type ``0``, matching
+      the NEST ``volume_transmitter`` interface.
+    - :meth:`set_local_device_id` / :meth:`get_local_device_id` are provided
+      for compatibility with NEST's device duplication logic.
+
+    References
+    ----------
+    .. [1] NEST Simulator, ``volume_transmitter`` model.
+           https://github.com/nest/nest-simulator/blob/master/models/volume_transmitter.cpp
 
     Examples
     --------
+    Instantiate a transmitter with a two-step delivery period, inject two
+    simultaneous spikes, and advance one more step:
+
     .. code-block:: python
 
        >>> import brainstate
@@ -252,10 +291,17 @@ class volume_transmitter(brainstate.nn.Dynamics):
        ...         y1 = vt.update()
        ...     _ = (y0['triggered'], y1['triggered'])
 
-    References
-    ----------
-    .. [1] NEST Simulator, ``volume_transmitter`` model.
-           https://github.com/nest/nest-simulator/blob/master/models/volume_transmitter.cpp
+    Query transmitter state and delivery metadata via :meth:`get`:
+
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> from brainpy.state import volume_transmitter
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     vt = volume_transmitter(deliver_interval=1, min_delay=0.1 * u.ms)
+       ...     _ = vt.get('deliver_interval')
+       ...     _ = vt.get('spike_history')
     """
 
     __module__ = 'brainpy.state'
@@ -286,49 +332,110 @@ class volume_transmitter(brainstate.nn.Dynamics):
 
     @property
     def local_device_id(self) -> int:
-        r"""Return local device id used for NEST-compatible duplication logic."""
+        r"""Local device ID used for NEST-compatible device-duplication logic.
+
+        Returns
+        -------
+        int
+            Current local device ID as a Python ``int``.
+        """
         return int(self._local_device_id)
 
     @property
     def last_delivery_time(self) -> float:
-        r"""Return most recent trigger time in milliseconds."""
+        r"""Most recent delivery trigger time in milliseconds.
+
+        Returns ``0.0`` if no trigger has occurred since :meth:`init_state`.
+
+        Returns
+        -------
+        float
+            Trigger time :math:`t_s = s \cdot \Delta t` in ms at the most
+            recent trigger step, or ``0.0`` before the first trigger.
+        """
         return float(self._last_delivery_time_ms)
 
     @property
     def last_delivery_spikes(self) -> tuple[spikecounter, ...]:
-        r"""Return spike-history tuple delivered at the most recent trigger."""
+        r"""Spike-history tuple delivered at the most recent trigger.
+
+        Returns an empty tuple before the first trigger.
+
+        Returns
+        -------
+        tuple[spikecounter, ...]
+            Immutable copy of the history vector :math:`H` that was captured
+            at the most recent delivery trigger, including the pseudo-spike at
+            the trigger stamp.  Empty tuple if no trigger has fired yet.
+        """
         return tuple(self._last_delivery_spikes)
 
     @property
     def n_deliveries(self) -> int:
-        r"""Return number of completed delivery triggers since initialization."""
-        return int(self._delivery_count)
-
-    def set_local_device_id(self, ldid: ArrayLike):
-        r"""Set local device id from a scalar integer-like value."""
-        self._local_device_id = int(self._to_int_scalar(ldid, name='local_device_id'))
-
-    def get_local_device_id(self) -> int:
-        r"""Get current local device id as Python ``int``."""
-        return int(self._local_device_id)
-
-    def handles_test_event(self, receptor_type: ArrayLike) -> int:
-        r"""Validate receptor id and return accepted receptor index.
-
-        Parameters
-        ----------
-        receptor_type : ArrayLike
-            Scalar integer-like receptor identifier. Only ``0`` is accepted.
+        r"""Number of completed delivery triggers since initialization.
 
         Returns
         -------
-        out : Any
-            Integer receptor index ``0``.
+        int
+            Count of trigger events that have fired since the last
+            :meth:`init_state` call.  Increments only when
+            :math:`s \bmod T_s = 0` and the history vector is non-empty.
+        """
+        return int(self._delivery_count)
+
+    def set_local_device_id(self, ldid: ArrayLike):
+        r"""Set the local device ID from a scalar integer-like value.
+
+        Parameters
+        ----------
+        ldid : ArrayLike
+            Scalar integer-like value for the new local device ID.  Converted
+            via nearest-integer rounding; non-integer values raise
+            ``ValueError``.
 
         Raises
         ------
         ValueError
-            If ``receptor_type`` is non-scalar, non-integer-like, or not ``0``.
+            If ``ldid`` is non-scalar or not integer-like.
+        TypeError
+            If ``ldid`` cannot be converted to a numeric array.
+        """
+        self._local_device_id = int(self._to_int_scalar(ldid, name='local_device_id'))
+
+    def get_local_device_id(self) -> int:
+        r"""Return the current local device ID as a Python ``int``.
+
+        Returns
+        -------
+        int
+            Current value of the local device ID.
+        """
+        return int(self._local_device_id)
+
+    def handles_test_event(self, receptor_type: ArrayLike) -> int:
+        r"""Validate a receptor type identifier and return the accepted index.
+
+        Mirrors the NEST ``volume_transmitter::handles_test_event`` method.
+        Only receptor type ``0`` is accepted; all other values raise
+        ``ValueError``.
+
+        Parameters
+        ----------
+        receptor_type : ArrayLike
+            Scalar integer-like receptor identifier to validate.
+
+        Returns
+        -------
+        int
+            Always ``0`` when the receptor type is valid.
+
+        Raises
+        ------
+        ValueError
+            If ``receptor_type`` is non-scalar, not integer-like, or not
+            equal to ``0``.
+        TypeError
+            If ``receptor_type`` cannot be converted to a numeric array.
         """
         r = int(self._to_int_scalar(receptor_type, name='receptor_type'))
         if r != 0:
@@ -336,37 +443,50 @@ class volume_transmitter(brainstate.nn.Dynamics):
         return 0
 
     def deliver_spikes(self) -> tuple[spikecounter, ...]:
-        r"""Return current spike-history vector.
+        r"""Return the current (undelivered) spike-history vector.
+
+        The history always contains at least one entry: the pseudo-spike
+        ``spikecounter(t, 0.0)`` inserted by :meth:`init_state` or the most
+        recent trigger reset.
 
         Returns
         -------
-        out : Any
-            Tuple of :class:`spikecounter` entries representing current
-            undelivered history. Includes one pseudo spike immediately after
-            :meth:`init_state` and after each trigger reset.
+        tuple[spikecounter, ...]
+            Immutable copy of the current internal history list :math:`H`,
+            ordered chronologically by delivery stamp.
         """
         return tuple(self._spikecounter)
 
     def get(self, key: str = 'deliver_interval'):
-        r"""Query transmitter parameters and mutable state by key.
+        r"""Query transmitter parameters and mutable state by string key.
 
         Parameters
         ----------
         key : str, optional
-            Selector key. Supported values are ``'deliver_interval'``,
-            ``'min_delay'``, ``'local_device_id'``, ``'spike_history'``,
-            ``'last_delivery_spikes'``, ``'last_delivery_time'``, and
-            ``'n_deliveries'``. Default is ``'deliver_interval'``.
+            Selector string.  Supported values:
+
+            - ``'deliver_interval'`` — returns ``int``.
+            - ``'min_delay'`` — returns the stored ``min_delay`` value as
+              passed to the constructor (``brainunit.Quantity`` or ``float``).
+            - ``'local_device_id'`` — returns ``int``.
+            - ``'spike_history'`` — returns ``tuple[spikecounter, ...]``
+              (same as :meth:`deliver_spikes`).
+            - ``'last_delivery_spikes'`` — returns ``tuple[spikecounter, ...]``
+              (same as :attr:`last_delivery_spikes`).
+            - ``'last_delivery_time'`` — returns ``float`` ms.
+            - ``'n_deliveries'`` — returns ``int``.
+
+            Default is ``'deliver_interval'``.
 
         Returns
         -------
-        out : Any
-            Selected scalar, quantity, or tuple depending on ``key``.
+        int or float or brainunit.Quantity or tuple[spikecounter, ...]
+            The selected value.  Type depends on ``key`` as described above.
 
         Raises
         ------
         KeyError
-            If ``key`` is not one of the supported selectors.
+            If ``key`` is not one of the supported selector strings.
         """
         if key == 'deliver_interval':
             return int(self.deliver_interval)
@@ -385,20 +505,26 @@ class volume_transmitter(brainstate.nn.Dynamics):
         raise KeyError(f'Unsupported key "{key}" for volume_transmitter.get().')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        r"""Reset queue/history state to NEST-compatible initial conditions.
+        r"""Reset all queue and history state to NEST-compatible initial conditions.
+
+        Clears the pending-multiplicity map :math:`P`, resets the spike-history
+        vector :math:`H` to the single pseudo-spike ``spikecounter(0.0, 0.0)``,
+        and resets all delivery metadata (``last_delivery_spikes``,
+        ``last_delivery_time_ms``, ``delivery_count``) to their initial values.
 
         Parameters
         ----------
         batch_size : int or None, optional
-            Unused placeholder for :class:`brainstate.nn.Dynamics` API
-            compatibility.
+            Unused placeholder required by the :class:`brainstate.nn.Dynamics`
+            API.  Ignored. Default is ``None``.
         **kwargs
-            Unused keyword arguments for API compatibility.
+            Additional keyword arguments accepted for API compatibility and
+            silently ignored.
 
         Returns
         -------
-        out : Any
-            ``None``. Internal state is reset in-place.
+        None
+            State is reset in-place; no value is returned.
         """
         del batch_size, kwargs
         self._pending_multiplicities.clear()
@@ -408,18 +534,35 @@ class volume_transmitter(brainstate.nn.Dynamics):
         self._delivery_count = 0
 
     def connect(self):
-        r"""No-op compatibility hook for NEST-style device interface."""
-        return None
+        r"""No-op compatibility hook matching the NEST device interface.
 
-    def flush(self):
-        r"""Return a non-triggering snapshot payload for integration code.
+        Provided so that code that calls ``connect()`` on NEST devices works
+        without modification when targeting :class:`volume_transmitter`.
 
         Returns
         -------
-        out : Any
-            Dictionary with keys ``'triggered'``, ``'t_trig'``,
-            ``'delivered_spikes'``, and ``'spike_history'`` representing the
-            current history without consuming or resetting it.
+        None
+        """
+        return None
+
+    def flush(self):
+        r"""Return a non-triggering snapshot of the current state.
+
+        Unlike :meth:`update`, this method does not advance the simulation
+        step, consume pending multiplicities, or reset the history.  It is
+        useful for inspecting state between :meth:`update` calls (e.g. at
+        the end of a simulation run).
+
+        Returns
+        -------
+        dict
+            Dictionary with the following keys:
+
+            - ``'triggered'`` — ``False`` (no trigger occurs on flush).
+            - ``'t_trig'`` — ``None`` (no trigger time).
+            - ``'delivered_spikes'`` — empty ``tuple`` (no delivery).
+            - ``'spike_history'`` — ``tuple[spikecounter, ...]``, the current
+              history returned by :meth:`deliver_spikes`.
         """
         return {
             'triggered': False,
@@ -436,67 +579,84 @@ class volume_transmitter(brainstate.nn.Dynamics):
     ):
         r"""Advance transmitter state by one simulation step.
 
+        Reads the current simulation time ``t`` and resolution ``dt`` from
+        :mod:`brainstate.environ`, schedules incoming spike contributions into
+        the pending map :math:`P`, consumes the current-stamp entry, optionally
+        appends a new history entry, and evaluates the delivery trigger.
+
         Parameters
         ----------
         spikes : ArrayLike or None, optional
-            Scalar or 1-D array of event indicators/count-like values for the
-            current call, shape ``(N,)`` after flattening. Unitful inputs are
-            accepted but only mantissas are used. Semantics:
+            Scalar or 1-D array of spike event indicators/counts for the
+            current call, shape ``(N,)`` after flattening.  Unitful inputs are
+            accepted; only the mantissa is used.  Multiplicity inference rules:
 
-            - if ``multiplicities is None`` and ``spikes`` is integer-like,
-              each item contributes ``max(round(spikes[i]), 0)`` events;
-            - otherwise each item contributes ``1`` when ``spikes[i] > 0`` and
-              ``0`` when ``spikes[i] <= 0``.
+            - ``multiplicities is None`` and all values are integer-like
+              (within ``1e-12``): :math:`c_j = \max(\mathrm{round}(x_j),\; 0)`.
+            - ``multiplicities is None`` and values contain non-integers:
+              :math:`c_j = \mathbf{1}[x_j > 0]` (binary threshold).
+            - ``multiplicities`` provided: :math:`c_j = m_j \,\mathbf{1}[x_j > 0]`.
 
-            ``None`` means no incoming events.
+            ``None`` means no incoming events for this step.
         multiplicities : ArrayLike or None, optional
-            Scalar or 1-D integer-like array with shape ``(N,)`` matching
-            ``spikes``. Each value must be non-negative. Applied only where
-            ``spikes[i] > 0``; non-positive ``spikes`` force zero contribution.
-            ``None`` enables implicit multiplicity inference from ``spikes``.
+            Scalar or 1-D integer-like array, shape ``(N,)`` matching the
+            flattened size of ``spikes``.  Each value must be non-negative.
+            Applied only where ``spikes[j] > 0``; non-positive spike indicators
+            force zero contribution regardless of ``multiplicities[j]``.
+            ``None`` enables implicit inference from ``spikes``.
         stamp_steps : ArrayLike or None, optional
-            Scalar or 1-D integer-like array with shape ``(N,)`` matching
-            ``spikes``. Values are absolute delivery-stamp indices (step-space)
-            and must satisfy ``stamp_steps >= current_stamp``. ``None`` assigns
-            all contributions to current stamp.
+            Scalar or 1-D integer-like array, shape ``(N,)`` matching the
+            flattened size of ``spikes``.  Values are absolute delivery-stamp
+            indices in step-space and must satisfy
+            ``stamp_steps[j] >= current_stamp`` (past stamps raise
+            ``ValueError``).  ``None`` assigns all contributions to the
+            current stamp :math:`s`.
 
         Returns
         -------
-        out : Any
-            Dictionary with keys:
+        dict
+            Dictionary with the following keys:
 
-            - ``'triggered'``: ``bool``, whether this step triggers delivery;
-            - ``'t_trig'``: ``float`` ms trigger time or ``None``;
-            - ``'delivered_spikes'``: tuple of :class:`spikecounter` entries
-              delivered at this trigger, else empty tuple;
-            - ``'spike_history'``: current history tuple after step processing
-              (post-reset history if triggered).
+            - ``'triggered'`` — ``bool``: whether the current stamp fires the
+              delivery trigger (:math:`s \bmod T_s = 0`).
+            - ``'t_trig'`` — ``float`` ms or ``None``: trigger time
+              :math:`t_s = s \cdot \Delta t` if triggered, else ``None``.
+            - ``'delivered_spikes'`` — ``tuple[spikecounter, ...]``: history
+              :math:`H` captured before the trigger reset, or empty tuple if
+              not triggered.
+            - ``'spike_history'`` — ``tuple[spikecounter, ...]``: current
+              history after all processing (post-reset pseudo-spike if
+              triggered).
 
         Raises
         ------
         ValueError
-            If ``dt`` is non-positive, ``min_delay`` is not a positive multiple
-            of ``dt``, ``t`` is not grid-aligned, ``multiplicities`` contains
-            negative values, ``stamp_steps`` contains past steps, or provided
-            arrays are non-integer where integer values are required.
+            If ``dt <= 0``; if ``min_delay`` is not a positive integer multiple
+            of ``dt``; if ``t`` is not grid-aligned to ``dt``; if
+            ``multiplicities`` contains negative values; if ``stamp_steps``
+            contains stamps earlier than the current stamp; or if any array
+            payload is non-integer where integer values are required.
         ValueError
             If ``spikes``, ``multiplicities``, or ``stamp_steps`` are not
-            scalar/1-D or have mismatched flattened sizes.
+            scalar or 1-D, or have mismatched flattened sizes.
         TypeError
-            If numeric/unit conversion fails for payload values or environment
-            time values.
+            If numeric or unit conversion fails for any payload or environment
+            time value.
         KeyError
-            If required environment values (``'t'`` or ``dt``) are unavailable,
-            depending on :mod:`brainstate.environ` behavior.
+            If required environment values (``'t'`` or ``dt``) are unavailable
+            from :mod:`brainstate.environ`.
 
         Notes
         -----
-        Trigger evaluation uses current stamp ``n = step + 1`` and period
-        ``deliver_interval * min_delay_steps``. Spikes stamped at a trigger
-        stamp are included in ``delivered_spikes`` before history reset.
+        Trigger evaluation uses stamp :math:`s = n + 1` (one ahead of the step
+        index) and period :math:`T_s = k \cdot d_{\min,s}`.  Spikes stamped
+        exactly at the trigger stamp are included in ``'delivered_spikes'``
+        before the history reset, matching NEST ordering semantics.
 
         Examples
         --------
+        Schedule spikes at a future stamp and confirm delivery:
+
         .. code-block:: python
 
            >>> import brainstate
