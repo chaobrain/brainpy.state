@@ -48,8 +48,7 @@ class iaf_psc_delta_ps(Neuron):
     within-step offsets, analytic threshold-crossing localization for
     current-driven spikes, and optional accumulation of refractory-time inputs.
 
-    1. Linear Membrane Dynamics and Exact Closed-Form Propagator
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Linear Membrane Dynamics and Exact Closed-Form Propagator**
 
     The subthreshold membrane potential dynamics are
 
@@ -72,8 +71,7 @@ class iaf_psc_delta_ps(Neuron):
     stability when :math:`\Delta t/\tau_m` is small, which reduces
     cancellation error in fine-step simulations.
 
-    2. Spike Generation Mechanisms and Precise Spike-Time Derivation
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Spike Generation Mechanisms and Precise Spike-Time Derivation**
 
     Two spike mechanisms are implemented:
 
@@ -97,8 +95,7 @@ class iaf_psc_delta_ps(Neuron):
       the current grid step (NEST semantics),
     - ``last_spike_step``: on-grid step index used internally for refractory logic.
 
-    3. Refractory Handling and Deferred Refractory-Input Accumulation
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Refractory Handling and Deferred Refractory-Input Accumulation**
 
     After a spike, membrane potential is reset to ``V_reset`` and clamped during
     the absolute refractory period.
@@ -111,8 +108,7 @@ class iaf_psc_delta_ps(Neuron):
     ``refractory_input=True``, they are accumulated and exponentially damped until
     end of refractoriness, then applied once at refractory release, matching NEST.
 
-    4. Event Ordering, Assumptions, Constraints, and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Event Ordering, Assumptions, Constraints, and Computational Implications**
 
     For each simulation step the update proceeds as follows:
 
