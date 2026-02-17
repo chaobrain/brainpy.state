@@ -30,14 +30,23 @@ __all__ = [
 
 @dataclass(frozen=True)
 class spikecounter:
-    r"""Entry in neuromodulatory spike history.
+    r"""Immutable entry in a neuromodulatory spike-history vector.
+
+    Each instance records one on-grid delivery event produced by
+    :class:`volume_transmitter`.  The pseudo-spike inserted by
+    :meth:`volume_transmitter.init_state` and after each trigger reset
+    carries ``multiplicity=0.0``.
 
     Attributes
     ----------
     spike_time : float
-        Spike time in ms (grid stamp time).
+        On-grid spike time in milliseconds, computed as
+        :math:`s \cdot \Delta t` where :math:`s` is the delivery stamp index
+        and :math:`\Delta t` is the simulation resolution in ms.
     multiplicity : float
-        Summed multiplicity of all spikes at ``spike_time``.
+        Summed multiplicity of all spikes assigned to ``spike_time``.
+        Always ``>= 0.0``; the pseudo-spike inserted at reset has value
+        ``0.0``.
     """
 
     spike_time: float
@@ -46,17 +55,25 @@ class spikecounter:
 
 @dataclass(frozen=True)
 class _StepCalibration:
-    r"""Discrete-time calibration used by :class:`volume_transmitter`.
+    r"""Immutable discrete-time calibration record used by :class:`volume_transmitter`.
+
+    Computed once per :meth:`volume_transmitter.update` call from the
+    simulation environment's ``dt`` and the transmitter's ``min_delay`` and
+    ``deliver_interval`` parameters.
 
     Attributes
     ----------
     dt_ms : float
-        Simulation resolution in milliseconds.
+        Simulation resolution :math:`\Delta t` in milliseconds, derived from
+        ``brainstate.environ.get_dt()`` and converted to ms.  Strictly positive.
     min_delay_steps : int
-        ``min_delay`` converted to integer simulation steps.
+        ``min_delay`` converted to an integer number of simulation steps via
+        :math:`\mathrm{round}(d_{\min} / \Delta t)`.  Must be ``>= 1``.
     delivery_period_steps : int
-        Trigger period in steps, equal to
-        ``deliver_interval * min_delay_steps``.
+        Trigger period in steps:
+        :math:`T_s = \texttt{deliver\_interval} \times d_{\min,s}`.
+        A delivery trigger fires when
+        :math:`\mathrm{stamp} \bmod T_s = 0`.
     """
 
     dt_ms: float

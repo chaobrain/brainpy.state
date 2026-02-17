@@ -131,7 +131,7 @@ nitpick_ignore = [
     ("py:class", "docutils.nodes.document"),
     ("py:class", "docutils.parsers.rst.directives.body.Sidebar"),
 ]
-suppress_warnings = ["myst.domains", "ref.ref"]
+suppress_warnings = ["myst.domains", "ref.ref", "ref.footnote"]
 numfig = True
 myst_enable_extensions = ["dollarmath", "amsmath", "deflist", "colon_fence"]
 # List of patterns, relative to source directory, that match files and

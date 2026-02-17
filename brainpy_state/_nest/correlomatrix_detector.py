@@ -439,6 +439,30 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
         return None
 
     def flush(self):
+        r"""Return the current accumulated state as a dictionary.
+
+        Snapshots all three accumulated arrays without modifying internal
+        state. This is equivalent to calling ``get`` for each of the three
+        primary output keys.
+
+        Returns
+        -------
+        out : dict
+            A dictionary with the following keys:
+
+            - ``'covariance'`` : np.ndarray, shape
+              ``(N_channels, N_channels, N_bins)``, dtype float64.
+              Weighted auto/cross-covariance accumulated since the last
+              ``init_state`` call.
+            - ``'count_covariance'`` : np.ndarray, shape
+              ``(N_channels, N_channels, N_bins)``, dtype int64.
+              Unweighted spike-count covariance accumulated since the last
+              ``init_state`` call.
+            - ``'n_events'`` : np.ndarray, shape ``(N_channels,)``,
+              dtype int64. Total number of accepted events per channel
+              within the counting window since the last ``init_state``
+              call.
+        """
         return {
             'covariance': self.covariance,
             'count_covariance': self.count_covariance,
@@ -446,6 +470,22 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
         }
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Reset accumulated state and recalibrate from the environment.
+
+        Clears the event queue, zeroes all accumulated arrays
+        (``covariance``, ``count_covariance``, ``n_events``), and
+        recomputes calibration from the current ``brainstate`` environment
+        if ``dt`` is available. Must be called before the first
+        :meth:`update` when running inside a ``brainstate.environ.context``.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Ignored. Accepted for API compatibility with
+            :class:`brainstate.nn.Dynamics`. Default is ``None``.
+        **kwargs
+            Ignored. Accepted for API compatibility.
+        """
         del batch_size, kwargs
         self._ensure_calibrated_from_env_if_available()
         self._reset_state()
@@ -459,6 +499,69 @@ class correlomatrix_detector(brainstate.nn.Dynamics):
         multiplicities: ArrayLike = None,
         stamp_steps: ArrayLike = None,
     ):
+        r"""Process one batch of incoming spike events and update accumulators.
+
+        Reads the current simulation time ``'t'`` and resolution ``dt``
+        from the ``brainstate`` environment, calibrates if necessary, then
+        iterates over each event in the batch. Events outside the activity
+        window are silently discarded. Events inside the counting window
+        update ``covariance``, ``count_covariance``, and ``n_events``.
+
+        Parameters
+        ----------
+        spikes : ArrayLike or None, optional
+            1-D array of spike indicators over a batch of ``n_items``
+            senders. A value ``> 0`` is treated as a spike. If the array
+            contains integer-like floats, the rounded value is used as
+            multiplicity when ``multiplicities`` is ``None``. ``None`` or
+            empty array causes an immediate return of :meth:`flush` output.
+        receptor_ports : ArrayLike or None, optional
+            1-D integer array of receptor channel indices, shape
+            ``(n_items,)`` or broadcastable scalar. Values must be in
+            ``[0, N_channels - 1]``. Alias ``receptor_types`` is also
+            accepted; if both are provided, ``receptor_ports`` takes
+            precedence. Default (``None``) maps all events to channel ``0``.
+        receptor_types : ArrayLike or None, optional
+            Alias for ``receptor_ports``. Ignored when ``receptor_ports`` is
+            also provided.
+        weights : ArrayLike or None, optional
+            1-D float array of connection weights, shape ``(n_items,)`` or
+            broadcastable scalar. Must contain finite values. Default
+            (``None``) uses weight ``1.0`` for all events.
+        multiplicities : ArrayLike or None, optional
+            1-D non-negative integer array of NEST ``SpikeEvent``
+            multiplicities, shape ``(n_items,)`` or broadcastable scalar.
+            When ``None``, multiplicities are inferred from ``spikes``:
+            integer-like spike values are used directly; non-integer spike
+            values are binarized to ``0`` or ``1``.
+        stamp_steps : ArrayLike or None, optional
+            1-D integer array of simulation step stamps for each event,
+            shape ``(n_items,)`` or broadcastable scalar. When ``None``,
+            all events are stamped at ``step_now + 1`` (next step), matching
+            NEST's default delivery delay of one step.
+
+        Returns
+        -------
+        out : dict
+            Same mapping as :meth:`flush`:
+            ``{'covariance': ..., 'count_covariance': ..., 'n_events': ...}``.
+
+        Raises
+        ------
+        ValueError
+            If any of the following occur:
+
+            - ``multiplicities`` contains negative values.
+            - ``weights`` contains non-finite values.
+            - ``receptor_ports`` contains a channel index outside
+              ``[0, N_channels - 1]``.
+            - Any size-mismatched pair of ``(spikes, receptor_ports)``,
+              ``(spikes, weights)``, ``(spikes, multiplicities)``, or
+              ``(spikes, stamp_steps)`` where neither has size ``1``.
+        KeyError
+            If the ``brainstate`` environment does not expose ``'t'`` or
+            ``dt`` at call time.
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
 

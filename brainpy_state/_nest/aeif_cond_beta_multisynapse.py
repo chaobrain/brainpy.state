@@ -271,11 +271,6 @@ class aeif_cond_beta_multisynapse(Neuron):
     refractory : ShortTermState, optional
         Boolean refractory indicator, shape ``(*in_size,)``. Only present if
         ``ref_var=True``.
-    n_receptors : int
-        Number of receptor ports, inferred from ``tau_rise.size``.
-    recordables : list of str
-        Dynamic recordable names: ``['V_m', 'w', 'g_1', 'g_2', ..., 'g_n']``.
-
     Raises
     ------
     ValueError

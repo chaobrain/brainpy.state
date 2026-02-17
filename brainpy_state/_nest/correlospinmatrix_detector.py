@@ -57,17 +57,15 @@ class _Calibration:
 class correlospinmatrix_detector(brainstate.nn.Dynamics):
     r"""NEST-compatible ``correlospinmatrix_detector`` device.
 
-    Short Description
-    -----------------
+    **1. Overview**
+
     ``correlospinmatrix_detector`` receives binary-state spike streams from
     multiple receptor channels and accumulates raw auto/cross covariance
-    histograms over negative, zero, and positive lags.
+    histograms over negative, zero, and positive lags. It mirrors NEST
+    ``models/correlospinmatrix_detector.{h,cpp}`` for event decoding,
+    pulse finalization, and lag-bin accumulation.
 
-    **1. Binary-state decoding and pulse construction**
-
-    This implementation mirrors NEST
-    ``models/correlospinmatrix_detector.{h,cpp}`` for event decoding and
-    pulse finalization.
+    **2. Binary-State Decoding and Pulse Construction**
 
     For receptor channel :math:`c`, define a binary state
     :math:`x_c(t)\in\{0,1\}` on integer simulation steps.
@@ -76,57 +74,66 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
     Decoding rule (NEST compatible):
 
-    - :math:`m=1` -- mark a tentative down-transition.
+    - :math:`m=1` — mark a tentative down-transition.
     - A second event with identical ``(channel, stamp_step)`` or
       :math:`m=2`: confirm up-transition (:math:`x_c\leftarrow 1`) and cancel
       tentative-down handling for that event pair.
 
-    A covariance update is triggered only when a previous tentative down
-    transition becomes confirmed. The finalized pulse is
-    :math:`p_i=(i,t_i^{\mathrm{on}},t_i^{\mathrm{off}})`, where
-    ``t_i_on`` is taken from ``_last_change[i]`` and ``t_i_off`` from the
-    confirmed down-transition stamp.
+    A covariance update is triggered only when a previous tentative
+    down-transition becomes confirmed. The finalized pulse is
+    :math:`p_i=(i, t_i^{\mathrm{on}}, t_i^{\mathrm{off}})`, where
+    :math:`t_i^{\mathrm{on}}` is taken from ``_last_change[i]`` and
+    :math:`t_i^{\mathrm{off}}` from the confirmed down-transition stamp.
 
-    **2. Lag-bin accumulation equations**
+    **3. Lag-Bin Accumulation Equations**
 
     Let :math:`\Delta=\Delta_{\tau,\mathrm{steps}}`,
     :math:`H=\tau_{\max,\mathrm{steps}}/\Delta`, and
     :math:`k_0=H` (zero-lag bin index).
     For each finalized pulse :math:`p_i`, iterate retained history pulses
-    :math:`p_j=(j,t_j^{\mathrm{on}},t_j^{\mathrm{off}})`.
+    :math:`p_j=(j, t_j^{\mathrm{on}}, t_j^{\mathrm{off}})`.
 
     Integer lag offsets are constrained by
 
     .. math::
 
-       \delta_{\min}=\max(t_j^{\mathrm{on}}-t_i^{\mathrm{off}},
-       -\tau_{\max,\mathrm{steps}}),\quad
-       \delta_{\max}=\min(t_j^{\mathrm{off}}-t_i^{\mathrm{on}},
-       \tau_{\max,\mathrm{steps}}).
+       \delta_{\min}=\max\!\bigl(t_j^{\mathrm{on}}-t_i^{\mathrm{off}},
+       -\tau_{\max,\mathrm{steps}}\bigr),\qquad
+       \delta_{\max}=\min\!\bigl(t_j^{\mathrm{off}}-t_i^{\mathrm{on}},
+       \tau_{\max,\mathrm{steps}}\bigr).
 
     For an offset :math:`\delta`, overlap length in simulation steps is
 
     .. math::
 
        L_{ij}(\delta)=
-       \min(t_i^{\mathrm{off}}, t_j^{\mathrm{off}}-\delta\Delta)
-       -\max(t_i^{\mathrm{on}}, t_j^{\mathrm{on}}-\delta\Delta).
+       \min\!\bigl(t_i^{\mathrm{off}},\; t_j^{\mathrm{off}}-\delta\Delta\bigr)
+       -\max\!\bigl(t_i^{\mathrm{on}},\; t_j^{\mathrm{on}}-\delta\Delta\bigr).
 
     If :math:`L_{ij}(\delta)>0`, add this integer duration to
-    ``count_covariance`` bins. Zero lag updates ``(i,j,k_0)`` and, when
-    :math:`i\neq j`, mirrored entry ``(j,i,k_0)``. Negative offsets update
-    both mirrored bins; positive offsets are explicitly iterated only for
-    :math:`i\neq j`, matching NEST triangular edge conventions.
+    ``count_covariance`` bins:
 
-    ``count_covariance`` therefore has shape
-    ``(N_channels, N_channels, N_bins)`` with
-    ``N_bins = 1 + 2 * tau_max_steps / delta_tau_steps``, and stores overlap
-    lengths in simulation-step units (not milliseconds).
+    - **Zero lag** (:math:`\delta=0`): update ``(i, j, k_0)`` and, when
+      :math:`i\neq j`, the mirrored entry ``(j, i, k_0)``.
+    - **Negative offsets** (:math:`\delta<0`): update both mirrored bins
+      ``(i, j, k_0-\delta)`` and ``(j, i, k_0+\delta)``.
+    - **Positive offsets** (:math:`\delta>0`): update mirrored bins only
+      for :math:`i\neq j`, matching NEST triangular-edge conventions.
 
-    **3. Windowing, assumptions, and constraints**
+    ``count_covariance`` has shape ``(N_channels, N_channels, N_bins)`` with
 
-    Activity filtering follows ``(origin + start, origin + stop]`` in step
-    space. Events outside this interval are discarded before decoding.
+    .. math::
+
+       N_{\mathrm{bins}} = 1 + 2\,\frac{\tau_{\max,\mathrm{steps}}}
+                                        {\Delta_{\tau,\mathrm{steps}}},
+
+    and stores overlap lengths in simulation-step units (not milliseconds).
+
+    **4. Windowing, Assumptions, and Constraints**
+
+    Activity filtering follows the half-open interval
+    ``(origin + start, origin + stop]`` in step space. Events outside this
+    interval are discarded before decoding.
 
     ``Tstart`` and ``Tstop`` are validated and included in calibration
     signatures for reset behavior, but they do not gate accumulation in
@@ -136,21 +143,21 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
     - ``dt > 0``.
     - ``start``, ``stop`` (if finite), ``origin``, ``delta_tau``, and
-      ``tau_max`` must align exactly to integer ``dt`` steps.
+      ``tau_max`` must each align exactly to integer multiples of ``dt``.
     - ``delta_tau`` must be finite and strictly positive.
     - ``tau_max`` must be finite, non-negative, and divisible by
       ``delta_tau``.
-    - ``N_channels >= 1`` and runtime receptor IDs are
-      ``0, ..., N_channels - 1``.
+    - ``N_channels >= 1``; runtime receptor IDs must be in
+      ``[0, N_channels - 1]``.
 
-    **4. Computational implications**
+    **5. Computational Implications**
 
     For each accepted event, down-transition handling is constant-time, while
-    pulse insertion and pulse-to-history correlation are linear in retained
+    pulse insertion and pulse-to-history correlation are linear in the retained
     queue length :math:`Q`. Memory scales as
-    :math:`O(Q + N_{\mathrm{channels}}^2 N_{\mathrm{bins}})`.
-    Queue pruning uses NEST minimum-delay semantics
-    (``min_delay_steps = 1``).
+    :math:`O\!\left(Q + N_{\mathrm{channels}}^2 N_{\mathrm{bins}}\right)`.
+    Queue pruning uses NEST minimum-delay semantics with
+    ``min_delay_steps = 1``.
 
     Parameters
     ----------
@@ -159,49 +166,50 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         The detector is event-driven and stores internal tensors, so
         ``in_size`` does not change ``count_covariance`` shape.
         Default is ``1``.
-    delta_tau : ArrayLike or None, optional
-        Lag-bin width :math:`\Delta_\tau` in milliseconds. Accepts scalar
-        float-like values or ``brainunit`` quantities convertible to ms.
+    delta_tau : quantity (ms) or float or None, optional
+        Lag-bin width :math:`\Delta_\tau`. Unitful ``brainunit`` quantities are
+        accepted and converted to ms; bare floats are interpreted as ms.
         Must be finite, strictly positive, and an integer multiple of
-        simulation ``dt``. ``None`` resolves to ``dt``.
+        simulation ``dt``. ``None`` auto-selects ``dt``.
         Default is ``None``.
-    tau_max : ArrayLike or None, optional
-        One-sided lag horizon :math:`\tau_{\max}` in milliseconds.
-        Accepts scalar float-like values or quantities convertible to ms.
-        Must be finite, non-negative, aligned to ``dt``, and divisible by
-        ``delta_tau``. ``None`` resolves to ``10 * delta_tau``.
+    tau_max : quantity (ms) or float or None, optional
+        One-sided lag horizon :math:`\tau_{\max}`. Unitful quantities accepted.
+        Must be finite, non-negative, an integer multiple of ``dt``, and an
+        exact integer multiple of ``delta_tau``. ``None`` auto-selects
+        ``10 * delta_tau``. Default is ``None``.
+    Tstart : quantity (ms) or float, optional
+        Non-negative scalar lower time bound in ms retained for NEST API
+        compatibility. Participates in calibration signature and triggers a
+        state reset when changed. Default is ``0.0 * u.ms``.
+    Tstop : quantity (ms) or float or None, optional
+        Non-negative scalar upper time bound in ms retained for NEST API
+        compatibility. ``None`` means :math:`+\infty`. Participates in
+        calibration signature and triggers a state reset when changed.
         Default is ``None``.
-    Tstart : ArrayLike, optional
-        Non-negative scalar time in milliseconds (unitful allowed) retained
-        for NEST API compatibility. It participates in calibration signature
-        and reset behavior when changed. Default is ``0.0 * u.ms``.
-    Tstop : ArrayLike or None, optional
-        Non-negative scalar time in milliseconds (unitful allowed) retained
-        for NEST API compatibility. ``None`` means :math:`+\infty`.
-        It participates in calibration signature and reset behavior when
-        changed. Default is ``None``.
     N_channels : int or ArrayLike, optional
-        Number of receptor channels. Must resolve to a scalar integer
-        ``>= 1``. Runtime channel IDs must be in
-        ``[0, N_channels - 1]``. Default is ``1``.
-    start : ArrayLike, optional
-        Relative exclusive lower bound of activity window in milliseconds.
-        Must be scalar-convertible and aligned to ``dt``.
+        Number of receptor channels. Must resolve to a scalar integer ``>= 1``.
+        Runtime channel IDs must be in ``[0, N_channels - 1]``.
+        Default is ``1``.
+    start : quantity (ms) or float, optional
+        Exclusive lower bound of the activity window relative to ``origin``
+        in ms. Must be scalar-convertible and aligned to simulation ``dt``.
         Default is ``0.0 * u.ms``.
-    stop : ArrayLike or None, optional
-        Relative inclusive upper bound of activity window in milliseconds.
-        Must be scalar-convertible and aligned to ``dt`` when finite.
+    stop : quantity (ms) or float or None, optional
+        Inclusive upper bound of the activity window relative to ``origin``
+        in ms. Must be scalar-convertible and aligned to ``dt`` when finite.
         ``None`` means :math:`+\infty`. Default is ``None``.
-    origin : ArrayLike, optional
-        Activity-window origin shift in milliseconds. Must be
+    origin : quantity (ms) or float, optional
+        Activity-window origin shift in ms. The effective activity window
+        becomes ``(origin + start, origin + stop]``. Must be
         scalar-convertible and aligned to ``dt``.
         Default is ``0.0 * u.ms``.
     name : str or None, optional
         Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
+        If ``None``, a name is auto-generated. Default is ``None``.
 
-    Parameter Mapping
-    -----------------
-    .. list-table:: Parameter mapping to model symbols
+    **Parameter Mapping (NEST ↔ brainpy.state)**
+
+    .. list-table::
        :header-rows: 1
        :widths: 18 16 24 42
 
@@ -210,19 +218,19 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
          - Math symbol
          - Semantics
        * - ``delta_tau``
-         - ``None``
+         - ``None`` → ``dt``
          - :math:`\Delta_\tau`
-         - Lag-bin width; resolved as simulation ``dt`` when omitted.
+         - Lag-bin width; auto-resolved to simulation ``dt`` when omitted.
        * - ``tau_max``
-         - ``None``
+         - ``None`` → ``10 * delta_tau``
          - :math:`\tau_{\max}`
-         - One-sided lag horizon; resolved as ``10 * delta_tau`` when omitted.
+         - One-sided lag horizon; auto-resolved when omitted.
        * - ``Tstart``
-         - ``0.0 * u.ms``
+         - ``0.0 ms``
          - :math:`T_{\mathrm{start}}`
          - Calibration/reset compatibility parameter (not a runtime gate).
        * - ``Tstop``
-         - ``None``
+         - ``None`` (:math:`+\infty`)
          - :math:`T_{\mathrm{stop}}`
          - Calibration/reset compatibility parameter (not a runtime gate).
        * - ``N_channels``
@@ -230,36 +238,30 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
          - :math:`N_{\mathrm{channels}}`
          - Number of receptor channels and covariance matrix axes.
        * - ``start``
-         - ``0.0 * u.ms``
+         - ``0.0 ms``
          - :math:`t_{\mathrm{start,rel}}`
-         - Relative exclusive lower bound of activity window.
+         - Relative exclusive lower bound of the activity window.
        * - ``stop``
-         - ``None``
+         - ``None`` (:math:`+\infty`)
          - :math:`t_{\mathrm{stop,rel}}`
-         - Relative inclusive upper bound of activity window.
+         - Relative inclusive upper bound of the activity window.
        * - ``origin``
-         - ``0.0 * u.ms``
+         - ``0.0 ms``
          - :math:`t_0`
          - Global shift applied to ``start`` and ``stop`` boundaries.
-
-    Returns
-    -------
-    out : Any
-        Dynamics node. :meth:`update` and :meth:`flush` return a mapping with
-        key ``'count_covariance'`` whose value is an ``np.ndarray[int64]`` of
-        shape ``(N_channels, N_channels, N_bins)``.
 
     Raises
     ------
     ValueError
         If scalar parameters are non-scalar, non-finite where finite values
         are required, misaligned to simulation resolution, or violate
-        constraints (for example ``tau_max % delta_tau != 0``, ``stop < start``,
+        constraints (e.g. ``tau_max % delta_tau != 0``, ``stop < start``,
         ``N_channels < 1``, invalid runtime receptor IDs, negative
-        multiplicities, non-finite ``spikes``, or mismatched event-array sizes).
+        multiplicities, non-finite ``spikes``, or mismatched event-array
+        sizes).
     KeyError
         If runtime environment keys such as simulation time ``'t'`` or ``dt``
-        are unavailable during calibration/update.
+        are unavailable during calibration or update.
 
     Notes
     -----
@@ -268,11 +270,15 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
       (``spikes``, ``receptor_ports``/``receptor_types``, ``multiplicities``,
       ``stamp_steps``), each scalar-broadcastable to one event axis.
     - Optional ``multiplicities`` emulate NEST ``SpikeEvent`` multiplicity.
-    - History pruning uses NEST minimum delay semantics with
+    - History pruning uses NEST minimum-delay semantics with
       ``min_delay_steps = 1``.
+    - Calibration is cached and reused across steps; it is automatically
+      invalidated if ``dt`` or any window parameter changes between calls.
 
     Examples
     --------
+    Two-channel detector with explicit events:
+
     .. code-block:: python
 
        >>> import brainpy
@@ -295,6 +301,19 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
        ...     out = det.flush()
        >>> out['count_covariance'].shape
        (2, 2, 7)
+
+    Default parameters with no input events and explicit state reset:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     det = brainpy.state.correlospinmatrix_detector()
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = det.update()  # no events; returns current state
+       ...     det.init_state()  # explicit reset
 
     References
     ----------
