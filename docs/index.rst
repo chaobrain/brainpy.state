@@ -127,9 +127,8 @@ Learn more
 See also the ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``brainpy.state`` is one part of the `BrainPy project <https://brainpy.readthedocs.io/>`_ and the `BrainX ecosystem <https://brainmodeling.readthedocs.io/>`__:
+``brainpy.state`` is one part of the `BrainX ecosystem <https://brainmodeling.readthedocs.io/>`__:
 
-- `brainpy <https://brainpy.readthedocs.io/>`_ — general-purpose brain dynamics programming framework
 - `brainstate <https://github.com/chaobrain/brainstate>`_ — state management for JAX-based brain modeling
 - `brainunit <https://github.com/chaobrain/brainunit>`_ — physical units for neuroscience
 - `brainevent <https://github.com/chaobrain/brainevent>`_ — event-driven sparse operators

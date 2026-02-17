@@ -89,11 +89,10 @@ pip install BrainX -U
 
 ## Ecosystem
 
-`brainpy.state` is one part of the [BrainPy project](https://brainpy.readthedocs.io/) and the [BrainX ecosystem](https://brainmodeling.readthedocs.io/):
+`brainpy.state` is one part of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/):
 
 | Package | Description |
 |---------|-------------|
-| [brainpy](https://brainpy.readthedocs.io/) | General-purpose brain dynamics programming framework |
 | [brainstate](https://github.com/chaobrain/brainstate) | State management for JAX-based brain modeling |
 | [brainunit](https://github.com/chaobrain/brainunit) | Physical units for neuroscience |
 | [brainevent](https://github.com/chaobrain/brainevent) | Event-driven sparse operators |
