@@ -159,5 +159,5 @@ Next Steps
 Now that you have brainpy.state installed, you can:
 
 - Follow the :doc:`5-minute tutorial <5min-tutorial>` for a quick introduction
-- Read about :doc:`core concepts <core-concepts/index>` to understand brainpy.state's architecture
-- Explore the :doc:`tutorials <../tutorials/index>` for detailed guides
+- Read about :doc:`core concepts <../core-concepts/index>` to understand brainpy.state's architecture
+- Explore the `examples <https://github.com/chaobrain/brainpy.state/tree/main/examples>`_ for detailed guides

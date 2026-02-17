@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the dc_generator stimulation device.
 
 Validates the brainpy.state ``dc_generator`` against:
@@ -47,7 +47,7 @@ from brainpy.state import dc_generator, iaf_psc_delta
 
 def _run_bp_simulation(dt_ms, simtime_ms, amplitude_pA, start_ms=0.0,
                        stop_ms=None, origin_ms=0.0, neuron_params=None):
-    """Run a simulation and return the V_m trace (one value per step).
+    r"""Run a simulation and return the V_m trace (one value per step).
 
     Parameters
     ----------
@@ -105,7 +105,7 @@ def _analytical_vm_trace(dt_ms, n_steps, amplitude_pA, start_ms=0.0,
                          stop_ms=None, origin_ms=0.0,
                          E_L=-70.0, C_m=250.0, tau_m=10.0,
                          V_th=-55.0, V_reset=-70.0, t_ref_ms=2.0):
-    """Compute the exact discrete-time V_m trace for iaf_psc_delta + DC.
+    r"""Compute the exact discrete-time V_m trace for iaf_psc_delta + DC.
 
     Uses the propagator (exact integration) update rule matching
     iaf_psc_delta's implementation:
@@ -164,13 +164,13 @@ def _analytical_vm_trace(dt_ms, n_steps, amplitude_pA, start_ms=0.0,
 # ===================================================================
 
 class TestDCGenerator(unittest.TestCase):
-    """Unit tests for dc_generator output values and timing."""
+    r"""Unit tests for dc_generator output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):
-        """Default amplitude is 0 pA, start is 0 ms, stop is None."""
+        r"""Default amplitude is 0 pA, start is 0 ms, stop is None."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator()
         self.assertTrue(u.math.allclose(dc.amplitude, 0. * u.pA))
@@ -179,7 +179,7 @@ class TestDCGenerator(unittest.TestCase):
         self.assertTrue(u.math.allclose(dc.origin, 0. * u.ms))
 
     def test_output_always_active(self):
-        """With default start=0 and stop=None, always outputs amplitude."""
+        r"""With default start=0 and stop=None, always outputs amplitude."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=500. * u.pA)
             for t_val in [0., 1., 10., 100., 1000.]:
@@ -189,7 +189,7 @@ class TestDCGenerator(unittest.TestCase):
                                 f"Failed at t={t_val} ms")
 
     def test_output_before_start_is_zero(self):
-        """Before start time, output is zero."""
+        r"""Before start time, output is zero."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=500. * u.pA, start=10. * u.ms)
             for t_val in [0., 5., 9.9]:
@@ -199,7 +199,7 @@ class TestDCGenerator(unittest.TestCase):
                                 f"Should be 0 at t={t_val} ms")
 
     def test_output_during_active_window(self):
-        """During [start, stop), output equals amplitude."""
+        r"""During [start, stop), output equals amplitude."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=500. * u.pA,
                               start=10. * u.ms, stop=20. * u.ms)
@@ -210,7 +210,7 @@ class TestDCGenerator(unittest.TestCase):
                                 f"Should be 500 at t={t_val} ms")
 
     def test_output_after_stop_is_zero(self):
-        """At and after stop time, output is zero."""
+        r"""At and after stop time, output is zero."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=500. * u.pA,
                               start=10. * u.ms, stop=20. * u.ms)
@@ -221,7 +221,7 @@ class TestDCGenerator(unittest.TestCase):
                                 f"Should be 0 at t={t_val} ms")
 
     def test_start_boundary_inclusive(self):
-        """At t=start, output is amplitude (start is inclusive)."""
+        r"""At t=start, output is amplitude (start is inclusive)."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=123. * u.pA, start=10. * u.ms)
             with brainstate.environ.context(t=10. * u.ms):
@@ -229,7 +229,7 @@ class TestDCGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 123. * u.pA))
 
     def test_stop_boundary_exclusive(self):
-        """At t=stop, output is zero (stop is exclusive)."""
+        r"""At t=stop, output is zero (stop is exclusive)."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=123. * u.pA,
                               start=0. * u.ms, stop=10. * u.ms)
@@ -238,7 +238,7 @@ class TestDCGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA))
 
     def test_origin_shifts_window(self):
-        """Origin shifts both start and stop by the same amount."""
+        r"""Origin shifts both start and stop by the same amount."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=500. * u.pA,
                               start=10. * u.ms, stop=20. * u.ms,
@@ -254,7 +254,7 @@ class TestDCGenerator(unittest.TestCase):
                 self.assertTrue(u.math.allclose(dc.update(), 0. * u.pA))
 
     def test_negative_amplitude(self):
-        """Negative amplitude produces negative (inhibitory) current."""
+        r"""Negative amplitude produces negative (inhibitory) current."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=-800. * u.pA)
             with brainstate.environ.context(t=0. * u.ms):
@@ -262,7 +262,7 @@ class TestDCGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, -800. * u.pA))
 
     def test_zero_amplitude(self):
-        """Zero amplitude always outputs zero, even when active."""
+        r"""Zero amplitude always outputs zero, even when active."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=0. * u.pA)
             with brainstate.environ.context(t=50. * u.ms):
@@ -270,7 +270,7 @@ class TestDCGenerator(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA))
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(in_size=5, amplitude=100. * u.pA)
             with brainstate.environ.context(t=0. * u.ms):
@@ -278,7 +278,7 @@ class TestDCGenerator(unittest.TestCase):
             self.assertEqual(out.shape, (5,))
 
     def test_stop_before_start_always_zero(self):
-        """If stop <= start, the device is never active."""
+        r"""If stop <= start, the device is never active."""
         with brainstate.environ.context(dt=self.dt):
             dc = dc_generator(amplitude=500. * u.pA,
                               start=20. * u.ms, stop=10. * u.ms)
@@ -294,7 +294,7 @@ class TestDCGenerator(unittest.TestCase):
 # ===================================================================
 
 class TestDCGeneratorWithNeuron(unittest.TestCase):
-    """Integration tests: dc_generator + iaf_psc_delta."""
+    r"""Integration tests: dc_generator + iaf_psc_delta."""
 
     def setUp(self):
         self.dt_ms = 0.1
@@ -308,7 +308,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
         self.t_ref = 2.0  # ms
 
     def test_dc_vs_I_e_subthreshold(self):
-        """dc_generator matches neuron's I_e for subthreshold current.
+        r"""dc_generator matches neuron's I_e for subthreshold current.
 
         This mirrors NEST's test_dcgen_versus_I_e.py: a neuron driven by
         dc_generator should reach the same steady-state V_m as a neuron
@@ -339,7 +339,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                             err_msg="dc_generator trace differs from I_e trace")
 
     def test_dc_vs_I_e_suprathreshold(self):
-        """dc_generator matches I_e for suprathreshold (spiking) current.
+        r"""dc_generator matches I_e for suprathreshold (spiking) current.
 
         Both should produce identical spike times and V_m traces.
         """
@@ -365,7 +365,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                             err_msg="dc_generator trace differs from I_e trace (spiking)")
 
     def test_subthreshold_analytical_trace(self):
-        """V_m trace matches analytical solution for subthreshold DC.
+        r"""V_m trace matches analytical solution for subthreshold DC.
 
         The iaf_psc_delta update rule with constant current I is:
             V[n+1] = E_L + (V[n] - E_L) * P33 + I * P30
@@ -389,7 +389,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                             err_msg="V_m trace does not match analytical solution")
 
     def test_suprathreshold_analytical_trace(self):
-        """V_m trace (with spikes and reset) matches analytical solution."""
+        r"""V_m trace (with spikes and reset) matches analytical solution."""
         amplitude = 500.0  # pA, suprathreshold
         simtime = 100.0
         n_steps = int(round(simtime / self.dt_ms))
@@ -408,7 +408,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                             err_msg="V_m trace does not match analytical solution (spiking)")
 
     def test_dc_with_start_stop_analytical(self):
-        """V_m trace with start/stop matches analytical solution."""
+        r"""V_m trace with start/stop matches analytical solution."""
         amplitude = 300.0
         start = 20.0
         stop = 60.0
@@ -430,7 +430,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                                     "does not match analytical solution")
 
     def test_dc_with_origin_analytical(self):
-        """V_m trace with origin offset matches analytical solution."""
+        r"""V_m trace with origin offset matches analytical solution."""
         amplitude = 300.0
         start = 10.0
         stop = 50.0
@@ -455,7 +455,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                                     "does not match analytical solution")
 
     def test_membrane_returns_to_rest_after_stop(self):
-        """After DC stops, V_m should decay back towards E_L."""
+        r"""After DC stops, V_m should decay back towards E_L."""
         amplitude = 300.0
         stop = 50.0
         simtime = 200.0
@@ -471,7 +471,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                                msg="V_m did not return to E_L after DC stop")
 
     def test_steady_state_voltage(self):
-        """Steady-state V_m matches E_L + I * tau_m / C_m for subthreshold I."""
+        r"""Steady-state V_m matches E_L + I * tau_m / C_m for subthreshold I."""
         amplitude = 300.0  # pA
         V_ss_expected = self.E_L + amplitude * self.tau_m / self.C_m
         # V_ss = -70 + 300 * 10 / 250 = -70 + 12 = -58 mV
@@ -486,7 +486,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
                                msg=f"Steady-state V_m should be {V_ss_expected} mV")
 
     def test_two_dc_generators_additive(self):
-        """Two dc_generators with different windows produce additive currents."""
+        r"""Two dc_generators with different windows produce additive currents."""
         simtime = 100.0
         n_steps = int(round(simtime / self.dt_ms))
 
@@ -540,7 +540,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
 # ===================================================================
 
 class TestDCGeneratorVsNEST(unittest.TestCase):
-    """Compare dc_generator + iaf_psc_delta against NEST.
+    r"""Compare dc_generator + iaf_psc_delta against NEST.
 
     These tests are skipped when NEST is not installed.
     """
@@ -560,7 +560,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
     def _run_nest_dc_simulation(self, simtime_ms, amplitude_pA,
                                 start_ms=0.0, stop_ms=None,
                                 origin_ms=0.0):
-        """Run NEST dc_generator + iaf_psc_delta and return V_m trace."""
+        r"""Run NEST dc_generator + iaf_psc_delta and return V_m trace."""
         import nest
 
         nest.ResetKernel()
@@ -587,7 +587,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
         return np.array(events["V_m"])
 
     def test_subthreshold_vs_nest(self):
-        """Subthreshold DC: compare V_m trace against NEST."""
+        r"""Subthreshold DC: compare V_m trace against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -609,7 +609,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
                             err_msg="Subthreshold V_m differs from NEST")
 
     def test_suprathreshold_vs_nest(self):
-        """Suprathreshold (spiking) DC: compare V_m trace against NEST."""
+        r"""Suprathreshold (spiking) DC: compare V_m trace against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -629,7 +629,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
                             err_msg="Suprathreshold V_m differs from NEST")
 
     def test_start_stop_vs_nest(self):
-        """DC with start/stop window: compare V_m trace against NEST."""
+        r"""DC with start/stop window: compare V_m trace against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -652,7 +652,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
                             err_msg="V_m with start/stop differs from NEST")
 
     def test_dc_vs_I_e_matches_nest_test(self):
-        """Reproduce NEST's test_dcgen_versus_I_e.py logic.
+        r"""Reproduce NEST's test_dcgen_versus_I_e.py logic.
 
         A neuron driven by dc_generator from near the end of the first
         simulation block should converge to the same V_m as a neuron
@@ -719,7 +719,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
                                msg="brainpy.state V_m differs from NEST V_m")
 
     def test_negative_current_vs_nest(self):
-        """Negative (inhibitory) DC current: compare against NEST."""
+        r"""Negative (inhibitory) DC current: compare against NEST."""
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 

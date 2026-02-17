@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the noise_generator stimulation device.
 
 Validates the brainpy.state ``noise_generator`` against:
@@ -43,13 +43,13 @@ from brainpy.state import noise_generator
 
 
 class TestNoiseGeneratorBasic(unittest.TestCase):
-    """Unit tests for noise_generator output values and timing."""
+    r"""Unit tests for noise_generator output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):
-        """Default mean=0, std=0."""
+        r"""Default mean=0, std=0."""
         with brainstate.environ.context(dt=self.dt):
             ng = noise_generator()
         self.assertTrue(u.math.allclose(ng.mean, 0. * u.pA))
@@ -58,7 +58,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
         self.assertTrue(u.math.allclose(ng.frequency, 0. * u.Hz))
 
     def test_zero_std_produces_mean(self):
-        """With std=0, output should be exactly the mean when active."""
+        r"""With std=0, output should be exactly the mean when active."""
         with brainstate.environ.context(dt=self.dt):
             ng = noise_generator(mean=100. * u.pA, std=0. * u.pA, seed=42)
             ng.init_state()
@@ -68,7 +68,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 100. * u.pA))
 
     def test_output_before_start_is_zero(self):
-        """Before start time, output is zero."""
+        r"""Before start time, output is zero."""
         with brainstate.environ.context(dt=self.dt):
             ng = noise_generator(mean=100. * u.pA, std=50. * u.pA,
                                  start=10. * u.ms, seed=42)
@@ -78,7 +78,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA))
 
     def test_output_after_stop_is_zero(self):
-        """After stop time, output is zero."""
+        r"""After stop time, output is zero."""
         with brainstate.environ.context(dt=self.dt):
             ng = noise_generator(mean=100. * u.pA, std=50. * u.pA,
                                  start=0. * u.ms, stop=10. * u.ms, seed=42)
@@ -88,7 +88,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
             self.assertTrue(u.math.allclose(out, 0. * u.pA))
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             ng = noise_generator(in_size=5, mean=0. * u.pA,
                                  std=10. * u.pA, seed=42)
@@ -98,7 +98,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
             self.assertEqual(out.shape, (5,))
 
     def test_different_seeds_produce_different_output(self):
-        """Different seeds should produce different noise."""
+        r"""Different seeds should produce different noise."""
         with brainstate.environ.context(dt=self.dt):
             ng1 = noise_generator(mean=0. * u.pA, std=100. * u.pA, seed=42)
             ng1.init_state()
@@ -114,10 +114,10 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
 
 
 class TestNoiseGeneratorStatistics(unittest.TestCase):
-    """Test the statistical properties of generated noise."""
+    r"""Test the statistical properties of generated noise."""
 
     def test_mean_and_std(self):
-        """Generated noise should have approximately correct mean and std."""
+        r"""Generated noise should have approximately correct mean and std."""
         dt_ms = 0.1
         n_steps = 10000
         mean_val = 50.0
@@ -151,7 +151,7 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
                                    f"to expected {std_val:.2f}")
 
     def test_noise_is_piecewise_constant(self):
-        """When noise_dt > simulation dt, noise should be constant within intervals."""
+        r"""When noise_dt > simulation dt, noise should be constant within intervals."""
         dt_ms = 0.1
         noise_dt_ms = 1.0  # 10 steps per noise interval
         n_steps = 100
@@ -182,7 +182,7 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
 
 
 class TestNoiseGeneratorVsNEST(unittest.TestCase):
-    """Compare noise_generator statistical behavior against NEST."""
+    r"""Compare noise_generator statistical behavior against NEST."""
 
     @staticmethod
     def _is_nest_available():
@@ -193,7 +193,7 @@ class TestNoiseGeneratorVsNEST(unittest.TestCase):
             return False
 
     def test_noise_membrane_potential_statistics(self):
-        """Reproduce NEST's noise_generator test: V_m statistics.
+        r"""Reproduce NEST's noise_generator test: V_m statistics.
 
         For a neuron with V_th=inf, C_m=1, tau_m=1, E_L=0, the expected
         V_m standard deviation is:

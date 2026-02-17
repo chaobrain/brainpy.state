@@ -44,8 +44,7 @@ class ignore_and_fire(Dynamics):
     This is a brainpy.state re-implementation of the NEST simulator model of the
     same name, using NEST-standard parameterization.
 
-    Dynamics
-    ........
+    **1. Model equations and dynamics**
 
     The model's internal state variable, the ``phase``, describes the time to
     the next spike relative to the firing period (the inverse of the ``rate``).
@@ -75,6 +74,19 @@ class ignore_and_fire(Dynamics):
     To create asynchronous activity for a population of ``ignore_and_fire``
     neurons, the firing phases can be randomly initialized.
 
+    **2. Assumptions, constraints, and computational implications**
+
+    - The model assumes unit-compatible parameters and broadcast-compatible
+      shapes against ``self.varshape``.
+    - The ``phase`` parameter must satisfy :math:`0 < \text{phase} \le 1`,
+      representing fractional position within the firing period.
+    - The ``rate`` parameter must be positive. Extremely low rates (< 1/1000 Hz)
+      may cause integer overflow when converting to time steps.
+    - Per-step compute is :math:`O(\prod \mathrm{varshape})` with vectorized
+      elementwise operations (phase countdown and spike emission).
+    - All inputs to :meth:`update` are completely ignored; the model fires
+      deterministically based solely on its internal clock.
+
     .. note::
 
         The ``ignore_and_fire`` neuron is primarily used for neuronal-network
@@ -95,37 +107,77 @@ class ignore_and_fire(Dynamics):
 
     Parameters
     ----------
+    in_size : Size
+        Population shape specification. All neuron parameters are broadcast to
+        ``self.varshape`` derived from ``in_size``.
+    phase : ArrayLike, optional
+        Initial fractional position within the firing period, where 0 means
+        immediate firing and 1 means firing after a full period. Must satisfy
+        :math:`0 < \text{phase} \le 1`. Scalar or array broadcast-compatible
+        with ``varshape``. Unitless. Default is ``1.0``.
+    rate : ArrayLike, optional
+        Firing rate in spikes per second. Must be positive. Scalar or array
+        broadcast-compatible with ``varshape``. Default is ``10. * u.Hz``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set. Default values match the NEST simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to NEST ``ignore_and_fire``
+       :header-rows: 1
+       :widths: 22 18 22 38
 
-    ==================== ================== =============================== ====================================================
-    **Parameter**        **Default**        **Math equivalent**             **Description**
-    ==================== ================== =============================== ====================================================
-    ``in_size``          (required)                                         Size of the input / number of neurons
-    ``phase``            1.0                                                Phase (relative time to next spike; 0 < phase <= 1)
-    ``rate``             10.0 Hz                                            Firing rate in spikes/s
-    ==================== ================== =============================== ====================================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``phase``
+         - ``1.0``
+         - :math:`\phi \in (0, 1]`
+         - Fractional position in firing period; 1.0 = full period delay.
+       * - ``rate``
+         - ``10.0`` Hz
+         - :math:`f` (Hz)
+         - Spike rate; firing period :math:`T = 1/f`.
 
     Attributes
     ----------
     phase_steps : ShortTermState
-        Integer countdown to next spike (in simulation time steps).
+        Integer countdown to next spike (in simulation time steps). Decrements
+        each step; fires when reaching zero.
+    firing_period_steps : ShortTermState
+        Integer duration of firing period (in simulation time steps). Constant
+        after initialization.
 
     Examples
     --------
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> # Create an ignore_and_fire neuron with 10 Hz firing rate
-    >>> neuron = brainpy.state.ignore_and_fire(1, rate=10.0 * u.Hz)
-    >>>
-    >>> # Initialize the state
-    >>> neuron.init_state()
-    >>>
-    >>> # Step the neuron and check for spikes
-    >>> with brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
-    ...     spike = neuron.update()
+    Create an ``ignore_and_fire`` neuron with 10 Hz firing rate:
+
+    .. code-block:: python
+
+        >>> import brainpy
+        >>> import brainstate
+        >>> import brainunit as u
+        >>>
+        >>> # Create an ignore_and_fire neuron with 10 Hz firing rate
+        >>> neuron = brainpy.state.ignore_and_fire(1, rate=10.0 * u.Hz)
+        >>>
+        >>> # Initialize the state
+        >>> neuron.init_state()
+        >>>
+        >>> # Step the neuron and check for spikes
+        >>> with brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
+        ...     spike = neuron.update()
+        ...     print(f"Spike: {spike}")
+
+    Create a population with random phases for asynchronous activity:
+
+    .. code-block:: python
+
+        >>> import numpy as np
+        >>> # Create 100 neurons with random initial phases
+        >>> phases = np.random.uniform(0.01, 1.0, size=100)
+        >>> neurons = brainpy.state.ignore_and_fire(100, phase=phases, rate=20.0 * u.Hz)
 
     References
     ----------
@@ -141,6 +193,40 @@ class ignore_and_fire(Dynamics):
         rate: ArrayLike = 10. * u.Hz,
         name: str = None,
     ):
+        r"""Initialize the ignore_and_fire neuron model.
+
+        Stores parameters, initializes base :class:`Dynamics` state, and
+        validates parameter constraints. Does not initialize internal state
+        variables (``phase_steps``, ``firing_period_steps``); call
+        :meth:`init_state` before simulation.
+
+        Parameters
+        ----------
+        in_size : Size
+            Population shape specification passed to
+            :class:`brainstate.nn.Dynamics`. Determines ``self.varshape``.
+        phase : ArrayLike, optional
+            Initial fractional position within the firing period. Must satisfy
+            :math:`0 < \text{phase} \le 1`. Broadcast to ``varshape`` via
+            :func:`braintools.init.param`. Default is ``1.0``.
+        rate : ArrayLike, optional
+            Firing rate in spikes per second. Must be positive. Broadcast to
+            ``varshape`` via :func:`braintools.init.param`. Default is
+            ``10. * u.Hz``.
+        name : str or None, optional
+            Optional node name passed to :class:`brainstate.nn.Dynamics`.
+
+        Raises
+        ------
+        ValueError
+            If ``phase`` violates :math:`0 < \text{phase} \le 1` or ``rate``
+            is not strictly positive, raised by :meth:`_validate_parameters`.
+
+        See Also
+        --------
+        init_state : Initialize state variables before simulation.
+        update : Perform one simulation time step.
+        """
         super().__init__(in_size, name=name)
 
         # Store parameters
@@ -151,6 +237,30 @@ class ignore_and_fire(Dynamics):
         self._validate_parameters()
 
     def _validate_parameters(self):
+        r"""Validate ``phase`` and ``rate`` parameters after initialization.
+
+        Ensures that:
+
+        - ``phase`` satisfies :math:`0 < \text{phase} \le 1` element-wise.
+        - ``rate`` is strictly positive element-wise.
+
+        Called automatically from :meth:`__init__` after parameter storage.
+
+        Raises
+        ------
+        ValueError
+            If any element of ``phase`` is :math:`\le 0` or :math:`> 1`, with
+            message "Phase must be > 0 and <= 1."
+        ValueError
+            If any element of ``rate`` (after unit conversion to Hz) is
+            :math:`\le 0`, with message "Firing rate must be > 0."
+
+        Notes
+        -----
+        Unit conversion is applied to ``rate`` via
+        :func:`brainunit.get_magnitude` before validation. ``phase`` is
+        validated as a unitless scalar or array.
+        """
         phase = self.phase
         rate = self.rate
 
@@ -164,16 +274,49 @@ class ignore_and_fire(Dynamics):
             raise ValueError("Firing rate must be > 0.")
 
     def _calc_initial_variables(self, batch_size=None):
-        """Compute firing_period_steps and phase_steps matching NEST's
-        ``calc_initial_variables_`` method.
+        r"""Compute firing period and phase countdown in simulation time steps.
 
+        This method replicates NEST's ``calc_initial_variables_`` semantics,
+        which converts rate and phase parameters to integer step counts using
+        ``Time::get_steps()`` (nearest-integer rounding to the simulation grid).
+
+        The conversion formulas are:
+
+        .. math::
+
+            T_{\text{fire}} &= \text{round}\!\left(\frac{1000}{\text{rate}} / dt\right) \\
+            N_{\text{phase}} &= \text{round}\!\left(\frac{1000 \cdot \text{phase}}{\text{rate}} / dt\right)
+
+        where ``rate`` is in Hz, ``dt`` is in ms, and both results are integer
+        step counts.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Batch dimension size; not currently used by the implementation but
+            accepted for API compatibility with :meth:`init_state`.
+
+        Returns
+        -------
+        firing_period_steps : ndarray
+            Integer array with shape ``varshape`` containing firing period
+            durations in simulation time steps. Dtype is ``int32``.
+        phase_steps : ndarray
+            Integer array with shape ``varshape`` containing initial countdown
+            values in simulation time steps. Dtype is ``int32``.
+
+        Notes
+        -----
         NEST computes these as:
-            firing_period_steps = Time(ms(1/rate * 1000)).get_steps()
-            phase_steps         = Time(ms(phase/rate * 1000)).get_steps()
 
-        ``Time::get_steps()`` rounds to the nearest simulation time step.
-        We replicate this by computing the period/phase in ms and dividing
-        by dt, then rounding to the nearest integer.
+        .. code-block:: cpp
+
+            firing_period_steps = Time(Time::ms(1.0 / rate * 1000.0)).get_steps()
+            phase_steps = Time(Time::ms(phase / rate * 1000.0)).get_steps()
+
+        ``Time::get_steps()`` rounds to the nearest simulation time step. We
+        replicate this by computing the period/phase in ms, dividing by ``dt``,
+        then rounding to the nearest integer via ``np.rint``.
         """
         dt = brainstate.environ.get_dt()
         dt_ms = u.get_magnitude(u.maybe_decimal(dt / u.ms))
@@ -193,6 +336,44 @@ class ignore_and_fire(Dynamics):
         return firing_period_steps, phase_steps
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize internal state variables for simulation.
+
+        Computes and stores ``firing_period_steps`` and ``phase_steps`` as
+        :class:`brainstate.ShortTermState` arrays. Both are derived from
+        the ``rate`` and ``phase`` parameters via
+        :meth:`_calc_initial_variables`, then broadcast to batch shape if
+        ``batch_size`` is provided.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Batch dimension size. When provided, state arrays are broadcast to
+            shape ``(batch_size, *varshape)``. When ``None``, state shape is
+            ``varshape``. Default is ``None``.
+        **kwargs : dict
+            Additional keyword arguments passed to parent
+            :meth:`brainstate.nn.Dynamics.init_state` (currently unused).
+
+        Raises
+        ------
+        ValueError
+            If ``phase`` is not in :math:`(0, 1]` or ``rate`` is not positive,
+            raised during :meth:`_validate_parameters` called in
+            :meth:`__init__`.
+
+        Side Effects
+        ------------
+        Creates or overwrites the following instance attributes:
+
+        - ``self.firing_period_steps`` : :class:`brainstate.ShortTermState`
+        - ``self.phase_steps`` : :class:`brainstate.ShortTermState`
+
+        Notes
+        -----
+        This method must be called before the first :meth:`update` call,
+        typically via ``neuron.init_state()`` or automatically through
+        higher-level APIs like ``brainstate.nn.Module.init_all_states()``.
+        """
         firing_period_steps, phase_steps = self._calc_initial_variables(batch_size)
 
         if batch_size is not None:
@@ -207,22 +388,61 @@ class ignore_and_fire(Dynamics):
         )
 
     def update(self, x=None):
-        """Update the ignore_and_fire neuron for one simulation time step.
+        r"""Update the ignore_and_fire neuron for one simulation time step.
 
-        All inputs are ignored. The neuron fires deterministically based on
-        its internal phase counter.
+        Decrements the internal phase countdown and emits spikes when the
+        countdown reaches zero. All external inputs are completely ignored.
+
+        The update logic follows NEST's deterministic firing schedule:
+
+        1. Check if ``phase_steps == 0``:
+
+           - If yes: emit spike (output 1.0), reset countdown to
+             ``firing_period_steps - 1``.
+           - If no: emit no spike (output 0.0), decrement countdown by 1.
+
+        2. Update ``self.phase_steps`` with the new countdown value.
 
         Parameters
         ----------
-        x : optional
-            Input (ignored). Accepted for API compatibility with other neuron
-            models but has no effect on the dynamics.
+        x : ArrayLike or None, optional
+            Input signal (ignored). Accepted for API compatibility with other
+            neuron models but has no effect on the dynamics. Any value or shape
+            is permitted; the parameter is never accessed.
 
         Returns
         -------
         spike : jnp.ndarray
-            Float array of shape ``varshape`` (or ``(batch, *varshape)``) with
-            1.0 where a spike is emitted this step and 0.0 otherwise.
+            Float array with shape ``varshape`` (or ``(batch_size, *varshape)``
+            if initialized with batching). Contains ``1.0`` at positions where
+            a spike is emitted this step and ``0.0`` elsewhere. Dtype is
+            ``float32`` or the default JAX float dtype.
+
+        Notes
+        -----
+        This method must be called after :meth:`init_state`. Calling
+        :meth:`update` before initialization will raise an
+        :class:`AttributeError` due to missing ``phase_steps`` state.
+
+        The spike output is suitable for direct use as delta-synapse input
+        (units of spikes/step) or as a binary event indicator for recording.
+
+        Examples
+        --------
+        Typical usage in a simulation loop:
+
+        .. code-block:: python
+
+            >>> import brainstate
+            >>> import brainpy
+            >>> import brainunit as u
+            >>> neuron = brainpy.state.ignore_and_fire(1, rate=100.0 * u.Hz, phase=1.0)
+            >>> neuron.init_state()
+            >>> with brainstate.environ.context(dt=0.1 * u.ms):
+            ...     for _ in range(20):
+            ...         spike = neuron.update()
+            ...         if spike.item() > 0.5:
+            ...             print("Spike emitted")
         """
         phase_steps = self.phase_steps.value
         firing_period_steps = self.firing_period_steps.value

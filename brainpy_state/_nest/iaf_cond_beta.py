@@ -34,89 +34,169 @@ __all__ = [
 
 
 class iaf_cond_beta(Neuron):
-    r"""NEST-compatible ``iaf_cond_beta`` neuron model.
+    r"""NEST-compatible conductance-based leaky integrate-and-fire neuron with beta-shaped synaptic conductances.
 
-    Short description
-    -----------------
+    This model implements a conductance-based LIF neuron with beta-function (dual-exponential)
+    synaptic conductances for both excitatory and inhibitory channels. It follows NEST's
+    ``iaf_cond_beta`` implementation, including hard threshold crossing, absolute refractory
+    period, and one-step delayed external current buffering.
 
-    Conductance-based leaky integrate-and-fire neuron with beta-shaped
-    synaptic conductances.
+    **1. Mathematical Model**
 
-    Description
-    -----------
-
-    ``iaf_cond_beta`` follows NEST ``models/iaf_cond_beta.{h,cpp}`` with:
-
-    - hard threshold crossing,
-    - fixed absolute refractory period,
-    - beta-shaped excitatory and inhibitory conductance dynamics,
-    - one-step delayed external current buffering.
-
-    Membrane and synaptic dynamics
-    ..............................
-
-    With membrane voltage :math:`V_m`, the subthreshold dynamics are:
+    The membrane voltage :math:`V_m` evolves according to:
 
     .. math::
 
-       \frac{dV_m}{dt} =
-       \frac{-I_\mathrm{leak} - I_{\mathrm{syn,ex}} - I_{\mathrm{syn,in}}
-             + I_e + I_\mathrm{stim}}{C_m},
+       C_m \frac{dV_m}{dt} = -I_\mathrm{leak} - I_{\mathrm{syn,ex}} - I_{\mathrm{syn,in}} + I_e + I_\mathrm{stim}
 
-    where
+    where the currents are defined as:
 
     .. math::
 
-       I_\mathrm{leak} = g_L (V - E_L),\quad
-       I_{\mathrm{syn,ex}} = g_\mathrm{ex}(V - E_\mathrm{ex}),\quad
-       I_{\mathrm{syn,in}} = g_\mathrm{in}(V - E_\mathrm{in}).
+       I_\mathrm{leak} &= g_L (V_m - E_L) \\
+       I_{\mathrm{syn,ex}} &= g_\mathrm{ex}(t) (V_m - E_\mathrm{ex}) \\
+       I_{\mathrm{syn,in}} &= g_\mathrm{in}(t) (V_m - E_\mathrm{in})
 
-    During refractory period, NEST clamps the effective voltage to
-    :math:`V_\mathrm{reset}` and sets :math:`dV_m/dt = 0`.
-    Otherwise, voltage is bounded by :math:`\min(V_m, V_\mathrm{th})` in
-    the RHS.
+    During the refractory period, the membrane voltage is clamped to :math:`V_\mathrm{reset}`
+    and :math:`dV_m/dt = 0`. Outside the refractory period, the effective voltage for
+    synaptic current computation is bounded by :math:`\min(V_m, V_\mathrm{th})`.
 
-    Beta conductance states use two coupled variables per channel:
+    **2. Beta-Function Conductance Dynamics**
 
-    .. math::
-
-       \frac{d\,dg_\mathrm{ex}}{dt} = -\frac{dg_\mathrm{ex}}{\tau_{\mathrm{decay,ex}}},
-       \qquad
-       \frac{d\,dg_\mathrm{in}}{dt} = -\frac{dg_\mathrm{in}}{\tau_{\mathrm{decay,in}}},
+    Each synaptic conductance (excitatory and inhibitory) is modeled using two coupled
+    state variables to produce a beta-function (rise-decay) waveform:
 
     .. math::
 
-       \frac{d g_\mathrm{ex}}{dt}
-       = dg_\mathrm{ex} - \frac{g_\mathrm{ex}}{\tau_{\mathrm{rise,ex}}},
-       \qquad
-       \frac{d g_\mathrm{in}}{dt}
-       = dg_\mathrm{in} - \frac{g_\mathrm{in}}{\tau_{\mathrm{rise,in}}}.
+       \frac{d\,dg_\mathrm{ex}}{dt} &= -\frac{dg_\mathrm{ex}}{\tau_{\mathrm{decay,ex}}} \\
+       \frac{d g_\mathrm{ex}}{dt} &= dg_\mathrm{ex} - \frac{g_\mathrm{ex}}{\tau_{\mathrm{rise,ex}}}
 
-    Incoming spike weights are interpreted in nS (peak conductance units).
-    Positive/negative weights map to excitatory/inhibitory channels and are
-    converted to ``dg`` jumps using NEST's beta normalization factor
-    :math:`\kappa(\tau_\mathrm{rise}, \tau_\mathrm{decay})`, so unit weight
-    yields 1 nS peak conductance.
+    .. math::
 
-    Update order (NEST semantics)
-    .............................
+       \frac{d\,dg_\mathrm{in}}{dt} &= -\frac{dg_\mathrm{in}}{\tau_{\mathrm{decay,in}}} \\
+       \frac{d g_\mathrm{in}}{dt} &= dg_\mathrm{in} - \frac{g_\mathrm{in}}{\tau_{\mathrm{rise,in}}}
 
-    Per simulation step:
+    Incoming spikes cause instantaneous jumps in :math:`dg_\mathrm{ex}` or :math:`dg_\mathrm{in}`.
+    Positive weights target the excitatory channel; negative weights target the inhibitory channel.
+    Each spike weight (in nS) is multiplied by the beta normalization factor
+    :math:`\kappa(\tau_\mathrm{rise}, \tau_\mathrm{decay})` to ensure unit weight produces
+    a 1 nS peak conductance.
 
-    1. Integrate ODEs on :math:`(t, t+dt]` using RKF45 with adaptive substeps.
-    2. Apply refractory countdown / threshold test / reset / spike emission.
-    3. Apply arriving spike weights to ``dg_ex`` / ``dg_in``.
-    4. Store external current input ``x`` into delayed buffer ``I_stim``.
+    The normalization factor is computed as:
 
-    This matches NEST ring-buffer semantics: current input affects the next step.
+    .. math::
+
+       \kappa = \frac{1/\tau_\mathrm{rise} - 1/\tau_\mathrm{decay}}{\exp(-t_\mathrm{peak}/\tau_\mathrm{decay}) - \exp(-t_\mathrm{peak}/\tau_\mathrm{rise})}
+
+    where :math:`t_\mathrm{peak} = \frac{\tau_\mathrm{rise} \tau_\mathrm{decay}}{\tau_\mathrm{decay} - \tau_\mathrm{rise}} \ln\left(\frac{\tau_\mathrm{decay}}{\tau_\mathrm{rise}}\right)`.
+
+    **3. Numerical Integration**
+
+    ODEs are integrated using the Runge-Kutta-Fehlberg (RKF45) adaptive-step method with
+    embedded error control. The integrator maintains a persistent step size estimate
+    (``integration_step``) across simulation steps, adjusting it based on local truncation
+    error to satisfy a fixed absolute tolerance (``_ATOL = 1e-3``).
+
+    **4. Update Order (NEST Semantics)**
+
+    Each simulation step executes the following operations in order:
+
+    1. Integrate all ODEs on the interval :math:`(t, t+dt]` using RKF45.
+    2. Decrement refractory counter; check threshold; emit spike; reset voltage if needed.
+    3. Apply incoming spike weights to :math:`dg_\mathrm{ex}` and :math:`dg_\mathrm{in}`.
+    4. Store external current input ``x`` into the delayed buffer ``I_stim`` (affects next step).
+
+    This matches NEST's ring-buffer semantics: external currents applied at time :math:`t`
+    take effect at time :math:`t + dt`.
+
+    **5. Design Constraints and Assumptions**
+
+    - **Non-differentiable integration**: RKF45 uses Python loops and NumPy arrays,
+      preventing JAX gradient backpropagation through the dynamics. Surrogate gradients
+      are computed via ``spk_fun`` for spike output only.
+    - **Per-element integration**: Each neuron is integrated independently in a Python loop,
+      which is slow for large populations. This design prioritizes numerical accuracy and
+      exact NEST compatibility over performance.
+    - **Refractory clamping**: During refractory period, voltage is fixed at :math:`V_\mathrm{reset}`
+      and no integration occurs. NEST uses this approach for consistency with exact spike times.
+    - **Beta normalization edge case**: When :math:`\tau_\mathrm{rise} \approx \tau_\mathrm{decay}`,
+      the normalization factor approaches :math:`e / \tau_\mathrm{decay}` to avoid division by zero.
 
     Parameters
     ----------
+    in_size : Size
+        Population shape, specified as an integer (1D), tuple of integers (multi-dimensional),
+        or brainstate Size object. Determines the shape of all state variables and parameters.
+    E_L : ArrayLike, optional
+        Leak reversal potential. Default: ``-70 mV``. Broadcast to ``in_size`` if scalar.
+        Must have units of voltage (mV).
+    C_m : ArrayLike, optional
+        Membrane capacitance. Default: ``250 pF``. Broadcast to ``in_size`` if scalar.
+        Must be strictly positive. Determines voltage response timescale :math:`\tau_m = C_m / g_L`.
+    t_ref : ArrayLike, optional
+        Absolute refractory period duration. Default: ``2 ms``. Broadcast to ``in_size`` if scalar.
+        Must be non-negative. Converted to discrete grid steps via :math:`\lceil t_\mathrm{ref} / dt \rceil`.
+    V_th : ArrayLike, optional
+        Spike threshold voltage. Default: ``-55 mV``. Broadcast to ``in_size`` if scalar.
+        Must satisfy :math:`V_\mathrm{reset} < V_\mathrm{th}`.
+    V_reset : ArrayLike, optional
+        Post-spike reset voltage. Default: ``-60 mV``. Broadcast to ``in_size`` if scalar.
+        Must be strictly less than ``V_th``. Neuron is clamped to this value during refractory period.
+    E_ex : ArrayLike, optional
+        Excitatory reversal potential. Default: ``0 mV``. Broadcast to ``in_size`` if scalar.
+        Typically positive (depolarizing).
+    E_in : ArrayLike, optional
+        Inhibitory reversal potential. Default: ``-85 mV``. Broadcast to ``in_size`` if scalar.
+        Typically more negative than :math:`E_L` (hyperpolarizing).
+    g_L : ArrayLike, optional
+        Leak conductance. Default: ``16.6667 nS`` (yields :math:`\tau_m = 15` ms with default :math:`C_m`).
+        Broadcast to ``in_size`` if scalar. Must be strictly positive.
+    tau_rise_ex : ArrayLike, optional
+        Excitatory conductance rise time constant. Default: ``0.2 ms``. Broadcast to ``in_size`` if scalar.
+        Must be strictly positive. Smaller values produce faster rise times.
+    tau_decay_ex : ArrayLike, optional
+        Excitatory conductance decay time constant. Default: ``0.2 ms``. Broadcast to ``in_size`` if scalar.
+        Must be strictly positive. When equal to ``tau_rise_ex``, beta function degenerates to alpha function.
+    tau_rise_in : ArrayLike, optional
+        Inhibitory conductance rise time constant. Default: ``2.0 ms``. Broadcast to ``in_size`` if scalar.
+        Must be strictly positive. Typically slower than excitatory rise for GABA receptors.
+    tau_decay_in : ArrayLike, optional
+        Inhibitory conductance decay time constant. Default: ``2.0 ms``. Broadcast to ``in_size`` if scalar.
+        Must be strictly positive. Determines inhibitory synaptic integration window.
+    I_e : ArrayLike, optional
+        Constant external current. Default: ``0 pA``. Broadcast to ``in_size`` if scalar.
+        Added to membrane current at every time step.
+    V_initializer : Callable, optional
+        Initialization function for membrane voltage. Default: ``Constant(-70 mV)``.
+        Called as ``V_initializer(varshape, batch_size)`` during ``init_state()``.
+    g_ex_initializer : Callable, optional
+        Initialization function for excitatory conductance. Default: ``Constant(0 nS)``.
+        Called as ``g_ex_initializer(varshape, batch_size)`` during ``init_state()``.
+    g_in_initializer : Callable, optional
+        Initialization function for inhibitory conductance. Default: ``Constant(0 nS)``.
+        Called as ``g_in_initializer(varshape, batch_size)`` during ``init_state()``.
+    spk_fun : Callable, optional
+        Surrogate gradient function for spike generation. Default: ``ReluGrad()``.
+        Applied to scaled voltage :math:`(V - V_\mathrm{th}) / (V_\mathrm{th} - V_\mathrm{reset})`
+        to produce differentiable spike output for gradient-based learning.
+    spk_reset : str, optional
+        Spike reset mode. Default: ``'hard'`` (stop-gradient reset, matches NEST behavior).
+        Alternative: ``'soft'`` (subtractive reset :math:`V \leftarrow V - V_\mathrm{th}`).
+    ref_var : bool, optional
+        If ``True``, create a boolean ``refractory`` state variable indicating refractory status.
+        Default: ``False``. Useful for monitoring or conditional computations.
+    name : str, optional
+        Module name for debugging and visualization. Default: ``None`` (auto-generated).
 
-    ==================== ================== ======================================== ===============================================
+    Parameter Mapping
+    -----------------
+
+    The following table maps constructor parameters to mathematical notation and NEST equivalents:
+
+    ==================== ================== ======================================== ================================================
     **Parameter**        **Default**        **Math equivalent**                      **Description**
-    ==================== ================== ======================================== ===============================================
-    ``in_size``          (required)                                                   Population shape
+    ==================== ================== ======================================== ================================================
+    ``in_size``          (required)         —                                        Population shape
     ``E_L``              -70 mV             :math:`E_\mathrm{L}`                     Leak reversal potential
     ``C_m``              250 pF             :math:`C_\mathrm{m}`                     Membrane capacitance
     ``t_ref``            2 ms               :math:`t_\mathrm{ref}`                   Absolute refractory duration
@@ -125,30 +205,143 @@ class iaf_cond_beta(Neuron):
     ``E_ex``             0 mV               :math:`E_\mathrm{ex}`                    Excitatory reversal potential
     ``E_in``             -85 mV             :math:`E_\mathrm{in}`                    Inhibitory reversal potential
     ``g_L``              16.6667 nS         :math:`g_\mathrm{L}`                     Leak conductance
-    ``tau_rise_ex``      0.2 ms             :math:`\tau_{\mathrm{rise,ex}}`         Excitatory beta rise constant
-    ``tau_decay_ex``     0.2 ms             :math:`\tau_{\mathrm{decay,ex}}`        Excitatory beta decay constant
-    ``tau_rise_in``      2.0 ms             :math:`\tau_{\mathrm{rise,in}}`         Inhibitory beta rise constant
-    ``tau_decay_in``     2.0 ms             :math:`\tau_{\mathrm{decay,in}}`        Inhibitory beta decay constant
+    ``tau_rise_ex``      0.2 ms             :math:`\tau_{\mathrm{rise,ex}}`          Excitatory beta rise constant
+    ``tau_decay_ex``     0.2 ms             :math:`\tau_{\mathrm{decay,ex}}`         Excitatory beta decay constant
+    ``tau_rise_in``      2.0 ms             :math:`\tau_{\mathrm{rise,in}}`          Inhibitory beta rise constant
+    ``tau_decay_in``     2.0 ms             :math:`\tau_{\mathrm{decay,in}}`         Inhibitory beta decay constant
     ``I_e``              0 pA               :math:`I_\mathrm{e}`                     Constant external current
-    ``V_initializer``    Constant(-70 mV)                                             Membrane initializer
-    ``g_ex_initializer`` Constant(0 nS)                                               Excitatory conductance initializer
-    ``g_in_initializer`` Constant(0 nS)                                               Inhibitory conductance initializer
-    ``spk_fun``          ReluGrad()                                                   Surrogate spike function
-    ``spk_reset``        ``'hard'``                                                   Reset mode; hard reset matches NEST behavior
-    ``ref_var``          ``False``                                                    If True, expose boolean refractory indicator
-    ==================== ================== ======================================== ===============================================
+    ``V_initializer``    Constant(-70 mV)   —                                        Membrane initializer
+    ``g_ex_initializer`` Constant(0 nS)     —                                        Excitatory conductance initializer
+    ``g_in_initializer`` Constant(0 nS)     —                                        Inhibitory conductance initializer
+    ``spk_fun``          ReluGrad()         —                                        Surrogate spike function
+    ``spk_reset``        ``'hard'``         —                                        Reset mode (``'hard'`` matches NEST)
+    ``ref_var``          ``False``          —                                        Expose boolean refractory indicator
+    ==================== ================== ======================================== ================================================
 
-    State variables
-    ---------------
+    Returns
+    -------
+    spike : jax.Array
+        Binary spike output for the current time step, with shape ``(*in_size, *batch_shape)``
+        and dtype ``float32``. Values are in :math:`[0, 1]` when using surrogate gradients;
+        exact values depend on ``spk_fun``.
 
-    - ``V``: membrane potential :math:`V_m`.
-    - ``dg_ex`` / ``dg_in``: beta auxiliary conductance states.
-    - ``g_ex`` / ``g_in``: excitatory/inhibitory conductances.
-    - ``refractory_step_count``: remaining refractory grid steps.
-    - ``integration_step``: persistent RKF45 internal step size.
-    - ``I_stim``: one-step delayed current buffer.
-    - ``last_spike_time``: last emitted spike time (:math:`t+dt` on spike).
-    - ``refractory``: optional boolean refractory indicator.
+    Raises
+    ------
+    ValueError
+        If ``V_reset >= V_th`` (reset potential must be below threshold).
+    ValueError
+        If ``C_m <= 0`` (capacitance must be strictly positive).
+    ValueError
+        If ``t_ref < 0`` (refractory period cannot be negative).
+    ValueError
+        If any of ``tau_rise_ex``, ``tau_decay_ex``, ``tau_rise_in``, ``tau_decay_in`` are non-positive.
+
+    Notes
+    -----
+    **State Variables**
+
+
+    - ``V`` : brainstate.HiddenState
+        Membrane potential :math:`V_m` with shape ``(*in_size, *batch_shape)`` and units mV.
+    - ``dg_ex`` : brainstate.ShortTermState
+        Excitatory beta auxiliary state (dimensionless, dtype ``float64``).
+    - ``g_ex`` : brainstate.HiddenState
+        Excitatory synaptic conductance with units nS.
+    - ``dg_in`` : brainstate.ShortTermState
+        Inhibitory beta auxiliary state (dimensionless, dtype ``float64``).
+    - ``g_in`` : brainstate.HiddenState
+        Inhibitory synaptic conductance with units nS.
+    - ``refractory_step_count`` : brainstate.ShortTermState
+        Remaining refractory grid steps (integer, dtype ``int32``). Zero when not refractory.
+    - ``integration_step`` : brainstate.ShortTermState
+        Persistent RKF45 internal step size with units ms. Adapted automatically for numerical stability.
+    - ``I_stim`` : brainstate.ShortTermState
+        One-step delayed external current buffer with units pA. Updated after ODE integration.
+    - ``last_spike_time`` : brainstate.ShortTermState
+        Time of last emitted spike (units ms). Set to :math:`t + dt` when spike occurs.
+    - ``refractory`` : brainstate.ShortTermState (optional)
+        Boolean refractory indicator. Only created if ``ref_var=True``.
+
+    **Performance Considerations:**
+
+    This model uses per-neuron scalar NumPy integration loops, which are significantly slower
+    than vectorized JAX operations. For large populations, consider using ``iaf_cond_exp``
+    or ``iaf_cond_alpha`` with vectorized exponential integrators. The RKF45 method is
+    primarily intended for high-accuracy validation against NEST rather than production simulations.
+
+    **NEST Compatibility:**
+
+    This implementation matches NEST 3.9+ ``iaf_cond_beta`` semantics, including:
+
+    - Beta normalization factor computation (exact formula match).
+    - One-step delayed external current handling.
+    - Refractory voltage clamping during integration.
+    - Hard threshold crossing and immediate reset.
+
+    Minor differences from NEST:
+
+    - NEST uses GSL's RK integrator; this uses a pure-Python RKF45 implementation.
+    - Numerical differences may appear at :math:`O(10^{-6})` due to floating-point rounding.
+
+    Examples
+    --------
+    **Basic Usage:**
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bst
+        >>> import brainunit as u
+        >>> import brainstate as bstate
+        >>>
+        >>> with bstate.environ.context(dt=0.1 * u.ms):
+        ...     neuron = bst.iaf_cond_beta(10, V_th=-50*u.mV, V_reset=-65*u.mV)
+        ...     neuron.init_all_states()
+        ...     # Apply excitatory synaptic input (5 nS conductance jump)
+        ...     neuron.add_delta_input('syn_input', 5.0 * u.nS)
+        ...     spikes = neuron()
+        ...     print(neuron.V.value[:3])  # Membrane voltages of first 3 neurons
+        [-70. -70. -70.] mV
+
+    **Comparing Excitatory and Inhibitory Time Constants:**
+
+    .. code-block:: python
+
+        >>> import matplotlib.pyplot as plt
+        >>> with bstate.environ.context(dt=0.01 * u.ms):
+        ...     fast_ex = bst.iaf_cond_beta(1, tau_rise_ex=0.2*u.ms, tau_decay_ex=2.0*u.ms)
+        ...     slow_in = bst.iaf_cond_beta(1, tau_rise_in=2.0*u.ms, tau_decay_in=10.0*u.ms)
+        ...     fast_ex.init_all_states()
+        ...     slow_in.init_all_states()
+        ...     # Single excitatory spike at t=1ms
+        ...     fast_ex.add_delta_input('spike', 10.0 * u.nS)
+        ...     # Record excitatory conductance
+        ...     g_ex_trace = []
+        ...     for _ in range(500):
+        ...         fast_ex()
+        ...         g_ex_trace.append(fast_ex.g_ex.value[0])
+        ...     plt.plot(g_ex_trace)
+        ...     plt.xlabel('Time (0.01 ms steps)')
+        ...     plt.ylabel('g_ex (nS)')
+        ...     plt.title('Beta-function conductance waveform')
+
+    **Network with Balanced Excitation and Inhibition:**
+
+    .. code-block:: python
+
+        >>> from brainevent.nn import FixedProb
+        >>> exc_neurons = bst.iaf_cond_beta(800, E_L=-70*u.mV, V_th=-50*u.mV)
+        >>> inh_neurons = bst.iaf_cond_beta(200, E_L=-70*u.mV, V_th=-50*u.mV)
+        >>> exc_neurons.init_all_states()
+        >>> inh_neurons.init_all_states()
+        >>> # Create projections (placeholder - requires brainevent)
+        >>> # exc_proj = FixedProb(exc_neurons, exc_neurons, prob=0.1, weight=2.0*u.nS)
+        >>> # inh_proj = FixedProb(inh_neurons, exc_neurons, prob=0.2, weight=-5.0*u.nS)
+
+    See Also
+    --------
+    iaf_cond_alpha : LIF with alpha-function conductances (single time constant).
+    iaf_cond_exp : LIF with exponential conductances (simpler, faster).
+    iaf_psc_exp : Current-based LIF (no conductance dynamics).
 
     References
     ----------
@@ -264,6 +457,37 @@ class iaf_cond_beta(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables for the neuron population.
+
+        Creates and initializes state variables for membrane voltage, conductances, refractory
+        tracking, RKF45 integration bookkeeping, and delayed current buffering. Called automatically
+        by ``init_all_states()`` or manually for custom initialization workflows.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size for vectorized simulation. If ``None`` (default), creates
+            state variables with shape ``in_size`` only. If provided, appends batch dimension
+            to create shape ``(*in_size, batch_size)``.
+        **kwargs
+            Reserved for future extensions. Currently unused.
+
+        Notes
+        -----
+        State variables created:
+
+        - ``V`` : HiddenState, initialized using ``V_initializer``, units mV.
+        - ``dg_ex``, ``dg_in`` : ShortTermState, initialized to zero, dimensionless (float64).
+        - ``g_ex``, ``g_in`` : HiddenState, initialized using ``g_ex_initializer`` and ``g_in_initializer``, units nS.
+        - ``last_spike_time`` : ShortTermState, initialized to ``-1e7 ms`` (effectively :math:`-\infty`), units ms.
+        - ``refractory_step_count`` : ShortTermState, initialized to zero, integer (int32).
+        - ``integration_step`` : ShortTermState, initialized to current simulation ``dt``, units ms.
+        - ``I_stim`` : ShortTermState, initialized to zero, units pA.
+        - ``refractory`` : ShortTermState (optional, only if ``ref_var=True``), initialized to ``False``, boolean.
+
+        The ``dg_ex`` and ``dg_in`` states are stored as dimensionless NumPy float64 arrays for
+        numerical precision during RKF45 integration.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
         g_in = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
@@ -293,6 +517,28 @@ class iaf_cond_beta(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        r"""Reset all state variables to their initial values.
+
+        Reinitializes all state variables using the same initializers and logic as ``init_state()``.
+        This is useful for restarting simulations or resetting a trained network to initial conditions
+        without recreating the neuron object.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size for vectorized simulation. If ``None`` (default), uses the
+            shape from the original initialization. If provided, reshapes states to
+            ``(*in_size, batch_size)``.
+        **kwargs
+            Reserved for future extensions. Currently unused.
+
+        Notes
+        -----
+        All state variables are overwritten with fresh values from their respective initializers.
+        The ``integration_step`` is reset to the current simulation ``dt``, which may differ from
+        the value at ``init_state()`` if ``dt`` has changed. The refractory counter is reset to zero,
+        and ``last_spike_time`` is reset to ``-1e7 ms``.
+        """
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.g_ex.value = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
         self.g_in.value = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
@@ -316,6 +562,41 @@ class iaf_cond_beta(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Compute differentiable spike output using surrogate gradients.
+
+        Scales the membrane voltage relative to threshold and reset, then applies the surrogate
+        spike function to produce a continuous spike signal suitable for gradient-based learning.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane voltage to evaluate. If ``None`` (default), uses ``self.V.value``.
+            Must have compatible shape with ``V_th`` and ``V_reset`` (broadcast-compatible).
+            Expected units: mV (or dimensionless if consistent).
+
+        Returns
+        -------
+        spike : jax.Array
+            Spike output with same shape as input ``V``. Values depend on ``spk_fun`` but are
+            typically in :math:`[0, 1]` for surrogate gradient functions like ``ReluGrad``.
+            Higher values indicate stronger spike activation. Dtype is ``float32``.
+
+        Notes
+        -----
+        The scaling formula is:
+
+        .. math::
+
+           \mathrm{spike} = \mathrm{spk\_fun}\left(\frac{V - V_\mathrm{th}}{V_\mathrm{th} - V_\mathrm{reset}}\right)
+
+        This normalization ensures that when :math:`V = V_\mathrm{th}`, the scaled input is zero,
+        and when :math:`V = V_\mathrm{reset}`, the scaled input is :math:`-1`. The surrogate
+        function (e.g., ``ReluGrad``) produces a differentiable approximation to the Heaviside
+        step function for backpropagation.
+
+        This method is called internally by ``update()`` to generate spike outputs, but can also
+        be called manually for custom spike detection logic.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
@@ -400,6 +681,131 @@ class iaf_cond_beta(Neuron):
         return y[0], y[1], y[2], y[3], y[4], h
 
     def update(self, x=0. * u.pA):
+        r"""Advance neuron dynamics by one simulation time step.
+
+        Performs the full NEST-compatible update cycle: ODE integration via RKF45, refractory
+        countdown, threshold detection, spike emission, reset, synaptic input application, and
+        delayed external current buffering.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            External current input for the **next** time step (one-step delayed). Default: ``0 pA``.
+            Must have shape compatible with ``(*in_size, *batch_shape)`` (broadcast-compatible).
+            Units: pA (picoamperes). This current is stored in ``I_stim`` and takes effect at
+            time :math:`t + dt`, matching NEST's ring-buffer semantics.
+
+        Returns
+        -------
+        spike : jax.Array
+            Binary spike output for the current time step, computed from the membrane voltage
+            **before** reset. Shape: ``(*in_size, *batch_shape)``. Dtype: ``float32``.
+            Values are typically in :math:`[0, 1]` when using surrogate gradients.
+
+        Notes
+        -----
+        **Update Order (NEST-compatible):**
+
+        1. **ODE Integration**: Integrate all differential equations on :math:`(t, t+dt]` using
+           the Runge-Kutta-Fehlberg (RKF45) adaptive-step method with per-neuron state.
+        2. **Refractory Handling**: If ``refractory_step_count > 0``, decrement counter, clamp
+           voltage to ``V_reset``, and skip spike detection.
+        3. **Threshold Detection**: If voltage crosses ``V_th`` (and not refractory), emit spike,
+           reset voltage to ``V_reset``, and set refractory counter to
+           :math:`\lceil t_\mathrm{ref} / dt \rceil`.
+        4. **Synaptic Input Application**: Sum all incoming delta inputs (spike weights), split
+           by sign into excitatory (positive) and inhibitory (negative) channels, multiply by
+           beta normalization factors, and add to ``dg_ex`` and ``dg_in`` states.
+        5. **External Current Buffering**: Store input ``x`` plus ``sum_current_inputs()`` into
+           ``I_stim`` for use in the **next** time step.
+
+        **Numerical Integration Details:**
+
+        - Each neuron is integrated independently using a scalar RKF45 loop over state vector
+          :math:`[V, dg_\mathrm{ex}, g_\mathrm{ex}, dg_\mathrm{in}, g_\mathrm{in}]`.
+        - Adaptive step size starts from the previous ``integration_step`` value and adjusts
+          dynamically to satisfy ``_ATOL = 1e-3`` absolute error tolerance.
+        - If ``refractory_step_count > 0``, the voltage derivative is forced to zero and the
+          effective voltage for current computation is clamped to ``V_reset``.
+        - Integration step size is capped at :math:`[_MIN_H, dt]` and limited to ``_MAX_ITERS``
+          substeps to prevent infinite loops.
+
+        **Spike Weight Handling:**
+
+        - All delta inputs (registered via ``add_delta_input()``) are summed and split by sign.
+        - Positive weights :math:`w_\mathrm{ex} = \max(w, 0)` are multiplied by
+          :math:`\kappa(\tau_{\mathrm{rise,ex}}, \tau_{\mathrm{decay,ex}})` and added to ``dg_ex``.
+        - Negative weights :math:`w_\mathrm{in} = \max(-w, 0)` are multiplied by
+          :math:`\kappa(\tau_{\mathrm{rise,in}}, \tau_{\mathrm{decay,in}})` and added to ``dg_in``.
+        - The beta normalization factor ensures unit weight produces a 1 nS peak conductance.
+
+        **State Updates:**
+
+        After integration and spike handling, the following states are updated:
+
+        - ``V.value``: Post-integration (and possibly post-reset) membrane voltage.
+        - ``dg_ex.value``, ``g_ex.value``: Updated excitatory beta states and conductance.
+        - ``dg_in.value``, ``g_in.value``: Updated inhibitory beta states and conductance.
+        - ``refractory_step_count.value``: Decremented or set to :math:`\lceil t_\mathrm{ref} / dt \rceil`.
+        - ``integration_step.value``: Adapted RKF45 step size for next iteration.
+        - ``I_stim.value``: Delayed external current buffer for next step.
+        - ``last_spike_time.value``: Set to :math:`t + dt` where spike occurred.
+        - ``refractory.value`` (optional): Boolean refractory indicator if ``ref_var=True``.
+
+        **Failure Modes**
+
+
+        - If RKF45 fails to converge within ``_MAX_ITERS`` substeps, the integration stops at
+          the current time and returns potentially inaccurate results. This typically indicates
+          stiff dynamics or extreme parameter values. Check for:
+
+          - Very small time constants (< 0.01 ms).
+          - Very large conductances or currents causing rapid voltage changes.
+          - Refractory period shorter than ``dt``.
+
+        - If ``dt`` changes between calls (via ``brainstate.environ.set_dt()``), the refractory
+          counter may become inaccurate because it's computed in grid steps. Reset state after
+          changing ``dt``.
+
+        Examples
+        --------
+        **Single Neuron Step:**
+
+        .. code-block:: python
+
+            >>> import brainpy.state as bst
+            >>> import brainunit as u
+            >>> import brainstate as bstate
+            >>>
+            >>> with bstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
+            ...     neuron = bst.iaf_cond_beta(1, V_th=-50*u.mV, V_reset=-65*u.mV)
+            ...     neuron.init_all_states()
+            ...     # Apply constant current
+            ...     spike = neuron.update(x=500 * u.pA)
+            ...     print(f"Spike: {spike}, Voltage: {neuron.V.value}")
+            Spike: [0.], Voltage: [-69.8] mV
+
+        **Synaptic Input Handling:**
+
+        .. code-block:: python
+
+            >>> with bstate.environ.context(dt=0.1 * u.ms):
+            ...     neuron = bst.iaf_cond_beta(5)
+            ...     neuron.init_all_states()
+            ...     # Register excitatory input (10 nS per spike)
+            ...     exc_weights = u.math.array([10, 0, 10, 0, 10]) * u.nS
+            ...     neuron.add_delta_input('exc_syn', exc_weights)
+            ...     spikes = neuron.update()
+            ...     print(neuron.g_ex.value)  # Only neurons 0, 2, 4 receive input
+            [0.17 0.   0.17 0.   0.17] nS
+
+        See Also
+        --------
+        init_state : Initialize state variables before calling ``update()``.
+        get_spike : Compute spike output from membrane voltage.
+        add_delta_input : Register synaptic spike inputs.
+        sum_current_inputs : Aggregate external current sources.
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

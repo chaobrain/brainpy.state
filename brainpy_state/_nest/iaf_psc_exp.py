@@ -37,34 +37,27 @@ __all__ = [
 class iaf_psc_exp(Neuron):
     r"""NEST-compatible ``iaf_psc_exp`` neuron model.
 
-    Short description
-    -----------------
-
-    Leaky integrate-and-fire neuron with exponential postsynaptic currents.
-
     Description
     -----------
 
-    ``iaf_psc_exp`` is a current-based integrate-and-fire neuron with
+    ``iaf_psc_exp`` is a current-based leaky integrate-and-fire neuron with
+    hard reset, fixed absolute refractory period, and exponential excitatory
+    and inhibitory postsynaptic currents. The implementation follows NEST
+    ``models/iaf_psc_exp.{h,cpp}`` update order, including one-step buffered
+    current input and receptor-1 filtered current handling.
 
-    - hard threshold and reset (deterministic mode),
-    - fixed absolute refractory period,
-    - exponential excitatory and inhibitory synaptic currents.
+    1. Continuous-Time Dynamics
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    This implementation follows NEST ``iaf_psc_exp`` update ordering and
-    parameterization.
-
-    Membrane and synaptic dynamics
-    ..............................
-
-    The subthreshold membrane dynamics are
+    The subthreshold membrane equation is
 
     .. math::
 
        \frac{dV_m}{dt} = -\frac{V_m - E_L}{\tau_m}
        + \frac{I_{\mathrm{syn,ex}} + I_{\mathrm{syn,in}} + I_e + I_0}{C_m}
 
-    with exponentially decaying synaptic currents:
+    where :math:`I_0` is the buffered current from the previous simulation
+    step. Synaptic currents decay exponentially:
 
     .. math::
 
@@ -72,14 +65,45 @@ class iaf_psc_exp(Neuron):
        \qquad
        \frac{dI_{\mathrm{syn,in}}}{dt} = -\frac{I_{\mathrm{syn,in}}}{\tau_{\mathrm{syn,in}}}.
 
-    In addition to standard current input ``I_0``, NEST supports a second
-    current receptor ``I_1`` filtered through the excitatory synapse kernel.
-    This implementation exposes it as ``x_filtered`` in ``update``.
+    NEST also defines a second current receptor :math:`I_1` that is filtered
+    through the excitatory kernel; this is exposed via
+    ``update(x_filtered=...)``.
 
-    Update order
-    ............
+    2. Exact Step Propagator and NEST Update Ordering
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    For each simulation step (NEST order):
+    For time step :math:`h = dt` (in ms), exact exponentials are used for
+    all linear sub-systems:
+
+    .. math::
+
+       P_{11,\mathrm{ex}} = e^{-h/\tau_{\mathrm{syn,ex}}}, \quad
+       P_{11,\mathrm{in}} = e^{-h/\tau_{\mathrm{syn,in}}}, \quad
+       P_{22} = e^{-h/\tau_m},
+
+    .. math::
+
+       P_{20} = \frac{\tau_m}{C_m}(1 - P_{22}),
+
+    .. math::
+
+       P_{21}(\tau_{\mathrm{syn}}) =
+       \frac{\tau_{\mathrm{syn}}\tau_m}{C_m(\tau_m - \tau_{\mathrm{syn}})}
+       \left(e^{-h/\tau_m} - e^{-h/\tau_{\mathrm{syn}}}\right),
+
+    where :math:`P_{21}` is evaluated numerically stably by
+    :meth:`_propagator_exp`. Let :math:`V_\mathrm{rel} = V_m - E_L`.
+    The candidate membrane update is
+
+    .. math::
+
+       V_{\mathrm{rel},n+1} =
+       P_{22} V_{\mathrm{rel},n}
+       + P_{21,\mathrm{ex}} I_{\mathrm{syn,ex},n}
+       + P_{21,\mathrm{in}} I_{\mathrm{syn,in},n}
+       + P_{20}(I_e + I_{0,n}).
+
+    Per-step update order is:
 
     1. Update membrane potential if not refractory.
     2. Decay synaptic currents.
@@ -88,29 +112,280 @@ class iaf_psc_exp(Neuron):
     5. Threshold test, reset and refractory assignment.
     6. Store buffered currents for next step.
 
+    3. Escape-Noise Threshold Dynamics
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Deterministic thresholding is used when :math:`\delta < 10^{-10}`:
+    :math:`V_{\mathrm{rel}} \ge \theta`, where
+    :math:`\theta = V_{th} - E_L`.
+
+    For :math:`\delta > 0`, the model uses an exponential hazard:
+
+    .. math::
+
+       \phi(V) = \rho \exp\!\left(\frac{V_{\mathrm{rel}} - \theta}{\delta}\right),
+
+    and spikes with step probability :math:`p = \phi(V)\,h\times10^{-3}`
+    because :math:`\phi` is in ``1/s`` while ``h`` is in ms. Stochastic
+    decisions use ``numpy.random.random``.
+
+    4. Stability Constraints and Computational Implications
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    - Construction enforces ``V_reset < V_th``, ``C_m > 0``, ``tau_m > 0``,
+      ``tau_syn_ex > 0``, ``tau_syn_in > 0``, ``t_ref >= 0``, ``rho >= 0``,
+      and ``delta >= 0``.
+    - :meth:`_propagator_exp` uses a singular fallback
+      :math:`(h/C_m)\exp(-h/\tau_m)` when ``tau_syn`` is numerically close
+      to ``tau_m``, avoiding cancellation in
+      :math:`(e^{-h/\tau_m} - e^{-h/\tau_{\mathrm{syn}}})/(\tau_m - \tau_{\mathrm{syn}})`.
+    - Per-call cost is :math:`O(\prod \mathrm{varshape})` with vectorized
+      NumPy operations in ``float64`` for coefficient evaluation.
+    - Buffered current semantics match NEST ring-buffer timing:
+      ``x``/``x_filtered`` supplied at step ``n`` are stored and consumed at
+      step ``n+1``.
+
     Parameters
     ----------
+    in_size : Size
+        Population shape specification. All per-neuron parameters are
+        broadcast to ``self.varshape`` derived from ``in_size``.
+    E_L : ArrayLike, optional
+        Resting potential :math:`E_L` in mV; scalar or array broadcastable to
+        ``self.varshape``. Default is ``-70. * u.mV``.
+    C_m : ArrayLike, optional
+        Membrane capacitance :math:`C_m` in pF; broadcastable and strictly
+        positive. Default is ``250. * u.pF``.
+    tau_m : ArrayLike, optional
+        Membrane time constant :math:`\tau_m` in ms; broadcastable and
+        strictly positive. Default is ``10. * u.ms``.
+    t_ref : ArrayLike, optional
+        Absolute refractory period :math:`t_{ref}` in ms; broadcastable and
+        nonnegative. Converted to integer steps by ``ceil(t_ref / dt)``.
+        Default is ``2. * u.ms``.
+    V_th : ArrayLike, optional
+        Spike threshold :math:`V_{th}` in mV; broadcastable to
+        ``self.varshape``. Default is ``-55. * u.mV``.
+    V_reset : ArrayLike, optional
+        Post-spike reset potential :math:`V_{reset}` in mV; broadcastable and
+        must satisfy ``V_reset < V_th`` elementwise. Default is
+        ``-70. * u.mV``.
+    tau_syn_ex : ArrayLike, optional
+        Excitatory synaptic decay constant :math:`\tau_{\mathrm{syn,ex}}` in
+        ms; broadcastable and strictly positive. Default is ``2. * u.ms``.
+    tau_syn_in : ArrayLike, optional
+        Inhibitory synaptic decay constant :math:`\tau_{\mathrm{syn,in}}` in
+        ms; broadcastable and strictly positive. Default is ``2. * u.ms``.
+    I_e : ArrayLike, optional
+        Constant external injected current :math:`I_e` in pA; scalar or array
+        broadcastable to ``self.varshape``. Default is ``0. * u.pA``.
+    rho : ArrayLike, optional
+        Escape-noise base firing intensity :math:`\rho` in ``1/s``;
+        broadcastable and nonnegative. Used only in stochastic mode
+        (``delta > 0``). Default is ``0.01 / u.second``.
+    delta : ArrayLike, optional
+        Escape-noise soft-threshold width :math:`\delta` in mV; broadcastable
+        and nonnegative. ``delta == 0`` reproduces deterministic thresholding.
+        Default is ``0. * u.mV``.
+    V_initializer : Callable, optional
+        Initializer for membrane state ``V`` used by :meth:`init_state`.
+        Default is ``braintools.init.Constant(-70. * u.mV)``.
+    spk_fun : Callable, optional
+        Surrogate spike nonlinearity used by :meth:`get_spike`. Default is
+        ``braintools.surrogate.ReluGrad()``.
+    spk_reset : str, optional
+        Reset policy inherited from :class:`~brainpy_state._base.Neuron`.
+        ``'hard'`` matches NEST reset behavior. Default is ``'hard'``.
+    ref_var : bool, optional
+        If ``True``, allocates ``self.refractory`` (boolean array) for
+        external inspection of the refractory state. Default is ``False``.
+    name : str or None, optional
+        Optional node name passed to the parent module. Default is ``None``.
 
-    ==================== ================== =============================== ======================================================
-    **Parameter**        **Default**        **Math equivalent**             **Description**
-    ==================== ================== =============================== ======================================================
-    ``in_size``          (required)                                         Population shape
-    ``E_L``              -70 mV             :math:`E_L`                     Resting membrane potential
-    ``C_m``              250 pF             :math:`C_m`                     Membrane capacitance
-    ``tau_m``            10 ms              :math:`\tau_m`                  Membrane time constant
-    ``t_ref``            2 ms               :math:`t_{ref}`                 Absolute refractory period
-    ``V_th``             -55 mV             :math:`V_{th}`                  Spike threshold
-    ``V_reset``          -70 mV             :math:`V_{reset}`               Reset potential
-    ``tau_syn_ex``       2 ms               :math:`\tau_{\mathrm{syn,ex}}`  Excitatory synaptic time constant
-    ``tau_syn_in``       2 ms               :math:`\tau_{\mathrm{syn,in}}`  Inhibitory synaptic time constant
-    ``I_e``              0 pA               :math:`I_e`                     Constant external current
-    ``rho``              0.01 1/s           :math:`\rho`                    Escape-noise base rate at threshold
-    ``delta``            0 mV               :math:`\delta`                  Escape-noise width; 0 gives deterministic threshold
-    ``V_initializer``    Constant(-70 mV)                                   Membrane initializer
-    ``spk_fun``          ReluGrad()                                         Surrogate spike function
-    ``spk_reset``        ``'hard'``                                         Reset mode (hard reset matches NEST)
-    ``ref_var``          ``False``                                          If True, expose boolean refractory state
-    ==================== ================== =============================== ======================================================
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 16 28 14 16 36
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar/tuple
+         - required
+         - --
+         - Defines neuron population shape ``self.varshape``.
+       * - ``E_L``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``-70. * u.mV``
+         - :math:`E_L`
+         - Resting membrane potential.
+       * - ``C_m``
+         - ArrayLike, broadcastable (pF), ``> 0``
+         - ``250. * u.pF``
+         - :math:`C_m`
+         - Membrane capacitance in voltage integration.
+       * - ``tau_m``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``10. * u.ms``
+         - :math:`\tau_m`
+         - Membrane leak time constant.
+       * - ``t_ref``
+         - ArrayLike, broadcastable (ms), ``>= 0``
+         - ``2. * u.ms``
+         - :math:`t_{ref}`
+         - Absolute refractory duration.
+       * - ``V_th`` and ``V_reset``
+         - ArrayLike, broadcastable (mV), with ``V_reset < V_th``
+         - ``-55. * u.mV``, ``-70. * u.mV``
+         - :math:`V_{th}`, :math:`V_{reset}`
+         - Threshold and post-spike reset voltages.
+       * - ``tau_syn_ex`` and ``tau_syn_in``
+         - ArrayLike, broadcastable (ms), each ``> 0``
+         - ``2. * u.ms``
+         - :math:`\tau_{\mathrm{syn,ex}}`, :math:`\tau_{\mathrm{syn,in}}`
+         - Exponential PSC decay constants.
+       * - ``I_e``
+         - ArrayLike, broadcastable (pA)
+         - ``0. * u.pA``
+         - :math:`I_e`
+         - Constant current injected every step.
+       * - ``rho`` and ``delta``
+         - ArrayLike, broadcastable; ``rho`` in ``1/s``, ``delta`` in mV,
+           both ``>= 0``
+         - ``0.01 / u.second``, ``0. * u.mV``
+         - :math:`\rho`, :math:`\delta`
+         - Escape-noise hazard parameters.
+       * - ``V_initializer``
+         - Callable
+         - ``Constant(-70. * u.mV)``
+         - --
+         - Initializer for membrane state ``V``.
+       * - ``spk_fun``
+         - Callable
+         - ``ReluGrad()``
+         - --
+         - Surrogate function used for output spikes.
+       * - ``spk_reset``
+         - ``str`` (typically ``'hard'``)
+         - ``'hard'``
+         - --
+         - Reset behavior selection in base class.
+       * - ``ref_var``
+         - ``bool``
+         - ``False``
+         - --
+         - Enables explicit boolean refractory state variable.
+       * - ``name``
+         - ``str`` or ``None``
+         - ``None``
+         - --
+         - Optional instance name.
+
+    Returns
+    -------
+    out : Any
+        Configured neuron node. Each :meth:`update` call returns surrogate
+        spike output with shape ``self.V.value.shape``.
+
+    Raises
+    ------
+    ValueError
+        Raised at construction when any validated constraint is violated:
+        ``V_reset >= V_th``, nonpositive ``C_m``/``tau_m``/synaptic time
+        constants, negative ``t_ref``, negative ``rho``, or negative
+        ``delta``.
+
+    Attributes
+    ----------
+    V : brainstate.HiddenState
+        Membrane potential in mV; shape ``self.varshape`` (or
+        ``(batch_size,) + self.varshape`` when batched).
+    i_syn_ex : brainstate.ShortTermState
+        Excitatory synaptic current in pA.
+    i_syn_in : brainstate.ShortTermState
+        Inhibitory synaptic current in pA.
+    i_0 : brainstate.ShortTermState
+        Buffered receptor-0 current (pA) applied on the next simulation step.
+    i_1 : brainstate.ShortTermState
+        Buffered receptor-1 current (pA) filtered through the excitatory
+        exponential kernel on the next simulation step.
+    refractory_step_count : brainstate.ShortTermState
+        Integer countdown of remaining refractory steps (``jnp.int32``).
+    last_spike_time : brainstate.ShortTermState
+        Simulation time of the most recent spike (ms).
+    refractory : brainstate.ShortTermState
+        Boolean refractory mask; only present when ``ref_var=True``.
+
+    Notes
+    -----
+    - This implementation uses exact (analytical) integration of the linear
+      subthreshold ODE via pre-computed propagator coefficients, matching
+      NEST's update precision for fixed-step simulation.
+    - Continuous current input ``x`` is combined with ``I_e`` and any
+      additional current sources registered via :meth:`sum_current_inputs`;
+      the combined value is buffered one step (NEST ring-buffer semantics).
+    - Delta spike inputs from :meth:`sum_delta_inputs` are split by sign:
+      positive weights increment ``i_syn_ex``; negative weights increment
+      ``i_syn_in``.
+    - The stochastic escape-noise mode (``delta > 0``) uses
+      ``numpy.random.random`` and is therefore **not** JIT-compilable via
+      JAX. Use ``delta=0`` for fully differentiable, JIT-compatible runs.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> from brainpy_state._nest.iaf_psc_exp import iaf_psc_exp
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = iaf_psc_exp(in_size=(3,), I_e=250. * u.pA, delta=0. * u.mV)
+       ...     neu.init_state()
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         out = neu.update(x=0. * u.pA, x_filtered=0. * u.pA)
+       ...     _ = out.shape
+
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> from brainpy_state._nest.iaf_psc_exp import iaf_psc_exp
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = iaf_psc_exp(
+       ...         in_size=10,
+       ...         tau_syn_ex=2.0 * u.ms,
+       ...         tau_syn_in=5.0 * u.ms,
+       ...         ref_var=True,
+       ...     )
+       ...     neu.init_state(batch_size=4)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         spk = neu.update(x=300.0 * u.pA)
+       ...     _ = spk.shape
+
+    References
+    ----------
+    .. [1] Rotter S, Diesmann M (1999). Exact simulation of time-invariant
+           linear systems with applications to neuronal modeling. Biological
+           Cybernetics 81:381-402. DOI: https://doi.org/10.1007/s004220050570
+    .. [2] Diesmann M, Gewaltig M-O, Rotter S, & Aertsen A (2001). State
+           space analysis of synchronous spiking in cortical neural networks.
+           Neurocomputing 38-40:565-571.
+           DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
+    .. [3] Brette R, Rudolph M, Carnevale T, et al. (2007). Simulation of
+           networks of spiking neurons: a review of tools and strategies.
+           Journal of Computational Neuroscience 23:349-398.
+           DOI: https://doi.org/10.1007/s10827-007-0038-6
+
+    See Also
+    --------
+    iaf_psc_delta : LIF neuron with delta-function PSCs (voltage-jump synapses)
+    iaf_cond_exp : LIF neuron with exponential conductance synapses
+    LIF : Leaky integrate-and-fire (brainpy parameterization)
+    LIFRef : Leaky integrate-and-fire with explicit refractory tracking
     """
 
     __module__ = 'brainpy.state'
@@ -178,6 +453,33 @@ class iaf_psc_exp(Neuron):
             raise ValueError('Threshold width delta must not be negative.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize membrane potential and all synaptic/refractory states.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Optional leading batch dimension. If ``None``, states have shape
+            ``self.varshape``; otherwise ``(batch_size,) + self.varshape``.
+        **kwargs : Any
+            Unused compatibility arguments.
+
+        Returns
+        -------
+        out : None
+            The method mutates the object in-place, creating:
+            ``V``, ``i_syn_ex``, ``i_syn_in``, ``i_0``, ``i_1``,
+            ``refractory_step_count``, ``last_spike_time``, and optionally
+            ``refractory`` (when ``ref_var=True``).
+
+        Raises
+        ------
+        ValueError
+            If ``V_initializer`` output cannot be broadcast to the target
+            state shape.
+        TypeError
+            If initializer values are incompatible with required
+            numeric/unit conversions.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
@@ -195,15 +497,104 @@ class iaf_psc_exp(Neuron):
             self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Evaluate surrogate spike activation for a voltage tensor.
+
+        Scales the voltage relative to threshold and reset to compute a
+        dimensionless argument passed to the surrogate nonlinearity
+        ``self.spk_fun``:
+
+        .. math::
+
+           \text{out} = \mathrm{spk\_fun}\!\left(
+               \frac{V - V_{th}}{V_{th} - V_{reset}}
+           \right).
+
+        Parameters
+        ----------
+        V : ArrayLike or None, optional
+            Membrane voltage in mV, broadcast-compatible with
+            ``self.varshape``. If ``None``, ``self.V.value`` is used.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output from ``self.spk_fun`` with the same shape
+            as ``V`` (or ``self.V.value`` when ``V`` is ``None``).
+
+        Raises
+        ------
+        TypeError
+            If ``V`` cannot participate in arithmetic with membrane
+            parameters due to incompatible dtype or unit.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
+        r"""Convert refractory duration to integer simulation-step counts.
+
+        Computes :math:`\lceil t_{ref} / dt \rceil` using the current
+        simulation step size from the environment context, matching NEST's
+        grid-step rounding convention.
+
+        Returns
+        -------
+        out : jnp.ndarray
+            Integer array (``jnp.int32``) broadcast-compatible with
+            ``self.varshape``; value is ``ceil(self.t_ref / dt)``.
+
+        Raises
+        ------
+        KeyError
+            If simulation context does not provide ``dt``.
+        TypeError
+            If ``t_ref`` and ``dt`` are not unit-compatible for division.
+        """
         dt = brainstate.environ.get_dt()
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA, x_filtered=0. * u.pA):
+        r"""Advance the neuron state by one simulation step.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            Current input in pA for receptor-0 (standard current port). Scalar
+            or array broadcastable to ``self.varshape``. The value is buffered
+            (stored in ``self.i_0``) and applied in the **next** step, matching
+            NEST ring-buffer semantics. Default is ``0. * u.pA``.
+        x_filtered : ArrayLike, optional
+            Current input in pA for receptor-1. Buffered in ``self.i_1`` and
+            injected through excitatory exponential filtering at the next
+            update step via ``(1 - P_{11,\mathrm{ex}}) \times i_1``. Scalar
+            or array broadcastable to ``self.varshape``.
+            Default is ``0. * u.pA``.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output from :meth:`get_spike` with shape
+            ``self.V.value.shape``. For neurons that fire this step, the
+            voltage argument to :meth:`get_spike` is nudged
+            :math:`\theta + E_L + 10^{-12}\,\text{mV}` (above threshold) to
+            ensure a positive surrogate activation is returned even after the
+            hard voltage reset.
+
+        Raises
+        ------
+        KeyError
+            If the simulation environment context does not supply ``t`` or
+            ``dt``.
+        AttributeError
+            If state variables are missing because :meth:`init_state` has not
+            been called before ``update``.
+        TypeError
+            If input/state values are not unit-compatible with expected pA/mV
+            arithmetic.
+        ValueError
+            If provided inputs cannot be broadcast to the internal state shape.
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt_q / u.ms))
@@ -286,6 +677,54 @@ class iaf_psc_exp(Neuron):
 
     @staticmethod
     def _propagator_exp(tau_syn: np.ndarray, tau_m: np.ndarray, c_m: np.ndarray, h_ms: float):
+        r"""Compute the off-diagonal propagator :math:`P_{21}` numerically stably.
+
+        For a linear two-compartment system coupling a synaptic current
+        :math:`I_{\mathrm{syn}}` (decaying with time constant
+        :math:`\tau_{\mathrm{syn}}`) to the membrane voltage
+        :math:`V_{\mathrm{rel}}` (decaying with :math:`\tau_m`), the exact
+        one-step propagator is
+
+        .. math::
+
+           P_{21}(\tau_{\mathrm{syn}}) =
+           \frac{\tau_{\mathrm{syn}} \tau_m}{C_m (\tau_m - \tau_{\mathrm{syn}})}
+           \left(e^{-h/\tau_m} - e^{-h/\tau_{\mathrm{syn}}}\right).
+
+        This expression is ill-conditioned when
+        :math:`\tau_{\mathrm{syn}} \approx \tau_m` because the numerator and
+        denominator both approach zero. The fallback singular approximation
+        is :math:`(h / C_m)\,e^{-h/\tau_m}`, which is the first-order
+        Taylor expansion of :math:`P_{21}` around
+        :math:`\tau_{\mathrm{syn}} = \tau_m`.
+
+        Parameters
+        ----------
+        tau_syn : np.ndarray
+            Synaptic time constant in ms; shape broadcast-compatible with the
+            neuron population.
+        tau_m : np.ndarray
+            Membrane time constant in ms; same shape constraint as
+            ``tau_syn``.
+        c_m : np.ndarray
+            Membrane capacitance in pF; same shape constraint.
+        h_ms : float
+            Simulation step size in ms (scalar).
+
+        Returns
+        -------
+        out : np.ndarray
+            Propagator coefficient :math:`P_{21}` in ms/pF, same shape as
+            input arrays. Entries where the regular formula is not finite,
+            not positive, or below the ``float64`` minimum normal are
+            replaced with the singular fallback value.
+
+        Notes
+        -----
+        All computations are in ``float64`` using NumPy. Floating-point
+        warnings (divide, invalid, overflow, underflow) are suppressed
+        internally via ``np.errstate``.
+        """
         with np.errstate(divide='ignore', invalid='ignore', over='ignore', under='ignore'):
             beta = tau_syn * tau_m / (tau_m - tau_syn)
             gamma = beta / c_m

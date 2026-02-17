@@ -286,7 +286,7 @@ class lin_rate_ipn(_lin_rate_base):
         Population shape.
     tau : Quantity[ms], optional
         Time constant of rate dynamics. Default ``10 ms``.
-    lambda_ : float, optional
+    lambda\_ : float, optional
         Passive decay rate :math:`\lambda`. Default ``1.0``.
     sigma : float, optional
         Input noise scale. Default ``1.0``.

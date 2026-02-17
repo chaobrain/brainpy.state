@@ -20,7 +20,7 @@ import brainstate
 
 
 class AlignPost(brainstate.mixin.Mixin):
-    """
+    r"""
     Mixin for aligning post-synaptic inputs.
 
     This mixin provides an interface for components that need to receive and
@@ -75,7 +75,7 @@ class AlignPost(brainstate.mixin.Mixin):
     """
 
     def align_post_input_add(self, *args, **kwargs):
-        """
+        r"""
         Add external inputs to the post-synaptic component.
 
         Parameters
@@ -94,7 +94,7 @@ class AlignPost(brainstate.mixin.Mixin):
 
 
 class BindCondData(brainstate.mixin.Mixin):
-    """
+    r"""
     Mixin for binding temporary conductance data.
 
     This mixin provides an interface for temporarily storing conductance data,
@@ -160,7 +160,7 @@ class BindCondData(brainstate.mixin.Mixin):
     _conductance: Optional
 
     def bind_cond(self, conductance):
-        """
+        r"""
         Bind conductance data temporarily.
 
         Parameters
@@ -171,7 +171,7 @@ class BindCondData(brainstate.mixin.Mixin):
         self._conductance = conductance
 
     def unbind_cond(self):
-        """
+        r"""
         Unbind (clear) the conductance data.
         """
         self._conductance = None

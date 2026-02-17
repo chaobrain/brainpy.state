@@ -38,9 +38,6 @@ class gif_cond_exp_multisynapse(Neuron):
     r"""Conductance-based generalized integrate-and-fire neuron (GIF) model
     with multiple synaptic time constants.
 
-    Description
-    -----------
-
     ``gif_cond_exp_multisynapse`` is the generalized integrate-and-fire neuron
     according to Mensi et al. (2012) [1]_ and Pozzorini et al. (2015) [2]_, with
     postsynaptic conductances in the form of truncated exponentials and an
@@ -65,8 +62,7 @@ class gif_cond_exp_multisynapse(Neuron):
     time constant :math:`\tau_{\mathrm{syn},k}`, and each :math:`\eta_i` is a
     spike-triggered current (stc).
 
-    Synaptic conductances
-    .....................
+    **1. Synaptic conductances**
 
     Each synaptic conductance decays exponentially:
 
@@ -80,8 +76,7 @@ class gif_cond_exp_multisynapse(Neuron):
     by the length of the ``tau_syn`` and ``E_rev`` lists, which must have
     equal length.
 
-    Spike-triggered currents
-    ........................
+    **2. Spike-triggered currents**
 
     Dynamic of each :math:`\eta_i` is described by:
 
@@ -95,8 +90,7 @@ class gif_cond_exp_multisynapse(Neuron):
 
        \eta_i = \eta_i + q_{\eta_i} \quad \text{(on spike emission)}
 
-    Spike-frequency adaptation
-    ..........................
+    **3. Spike-frequency adaptation**
 
     The neuron produces spikes stochastically according to a point process with
     the firing intensity:
@@ -124,8 +118,7 @@ class gif_cond_exp_multisynapse(Neuron):
 
        \gamma_i = \gamma_i + q_{\gamma_i} \quad \text{(on spike emission)}
 
-    Stochastic spiking
-    ..................
+    **4. Stochastic spiking**
 
     The probability of firing within a time step :math:`dt` is computed using
     the hazard function:
@@ -137,8 +130,7 @@ class gif_cond_exp_multisynapse(Neuron):
     A random number is drawn each (non-refractory) time step and compared to
     this probability to determine whether a spike occurs.
 
-    Refractory mechanism
-    ....................
+    **5. Refractory mechanism**
 
     After a spike, the neuron enters an absolute refractory period of duration
     :math:`t_\mathrm{ref}`. During this period:
@@ -148,8 +140,7 @@ class gif_cond_exp_multisynapse(Neuron):
     * conductances continue to decay,
     * refractory counter decrements each step.
 
-    Numerical integration and update order
-    ......................................
+    **6. Numerical integration and update order**
 
     NEST integrates this model with adaptive RKF45. This implementation mirrors
     that behavior with an RKF45(4,5) integrator and persistent internal step size.
@@ -167,8 +158,7 @@ class gif_cond_exp_multisynapse(Neuron):
        If refractory: decrement counter, clamp V to V_reset.
     5. Store external current input as :math:`I_\mathrm{stim}` for the next step.
 
-    Multisynapse differences from gif_cond_exp
-    ..........................................
+    **7. Multisynapse differences from gif_cond_exp**
 
     Unlike ``gif_cond_exp`` which has exactly two fixed synaptic channels
     (excitatory and inhibitory with separate parameters ``tau_syn_ex``,
@@ -199,60 +189,129 @@ class gif_cond_exp_multisynapse(Neuron):
 
     Parameters
     ----------
+    in_size : int, sequence of int
+        Population shape (e.g., 100 or (10, 10)). Required.
+    g_L : ArrayLike, default: 4.0 nS
+        Leak conductance. Must be strictly positive. Shape: scalar or broadcastable to ``in_size``.
+    E_L : ArrayLike, default: -70.0 mV
+        Leak reversal potential (resting potential). Shape: scalar or broadcastable to ``in_size``.
+    C_m : ArrayLike, default: 80.0 pF
+        Membrane capacitance. Must be strictly positive. Shape: scalar or broadcastable to ``in_size``.
+    V_reset : ArrayLike, default: -55.0 mV
+        Reset potential after spike. Shape: scalar or broadcastable to ``in_size``.
+    Delta_V : ArrayLike, default: 0.5 mV
+        Stochasticity level for exponential firing intensity. Must be strictly positive.
+        Shape: scalar or broadcastable to ``in_size``.
+    V_T_star : ArrayLike, default: -35.0 mV
+        Base (non-adapting) firing threshold. Shape: scalar or broadcastable to ``in_size``.
+    lambda_0 : float, default: 1.0
+        Stochastic intensity at threshold (in 1/s). Must be non-negative. Internally converted to 1/ms.
+    t_ref : ArrayLike, default: 4.0 ms
+        Absolute refractory period duration. Must be non-negative. Shape: scalar or broadcastable to ``in_size``.
+    tau_syn : Sequence[float], default: (2.0,)
+        Synaptic conductance time constants for each receptor port (in ms). Each element must be
+        strictly positive. Must have same length as ``E_rev``. At least one element required.
+    E_rev : Sequence[float], default: (0.0,)
+        Reversal potentials for each receptor port (in mV). Must have same length as ``tau_syn``.
+        At least one element required.
+    I_e : ArrayLike, default: 0.0 pA
+        Constant external current. Shape: scalar or broadcastable to ``in_size``.
+    tau_sfa : Sequence[float], default: ()
+        Time constants for spike-frequency adaptation (SFA) threshold elements (in ms).
+        Each element must be strictly positive. Must have same length as ``q_sfa``.
+    q_sfa : Sequence[float], default: ()
+        Jump values for SFA threshold elements (in mV). Must have same length as ``tau_sfa``.
+    tau_stc : Sequence[float], default: ()
+        Time constants for spike-triggered current (STC) elements (in ms).
+        Each element must be strictly positive. Must have same length as ``q_stc``.
+    q_stc : Sequence[float], default: ()
+        Jump values for STC elements (in nA). Must have same length as ``tau_stc``.
+    rng_key : jax.Array, optional
+        JAX PRNG key for stochastic spiking. If None, defaults to ``jax.random.PRNGKey(0)``.
+    V_initializer : Callable, default: Constant(-70.0 mV)
+        Initializer for membrane potential. Must return values compatible with ``in_size``.
+    spk_fun : Callable, default: ReluGrad()
+        Surrogate gradient function for spike generation. Used in gradient-based learning.
+    spk_reset : str, default: 'hard'
+        Spike reset mode. 'hard' (stop gradient, matches NEST) or 'soft' (subtract threshold).
+    name : str, optional
+        Module name. If None, auto-generated.
 
-    ==================== =================== =================================== =====================================================
+    Parameter Mapping
+    -----------------
+    Maps brainpy.state parameter names to NEST equivalents for cross-framework compatibility:
+
+    ==================== =================== =================================== ============================================================
     **Parameter**        **Default**         **Math equivalent**                 **Description**
-    ==================== =================== =================================== =====================================================
+    ==================== =================== =================================== ============================================================
     ``in_size``          (required)                                              Population shape
-    ``g_L``              4.0 nS              :math:`g_\mathrm{L}`               Leak conductance
-    ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`               Leak reversal potential
-    ``C_m``              80.0 pF             :math:`C_\mathrm{m}`               Membrane capacitance
-    ``V_reset``          -55.0 mV            :math:`V_\mathrm{reset}`           Reset potential
-    ``Delta_V``          0.5 mV              :math:`\Delta_V`                   Stochasticity level
-    ``V_T_star``         -35.0 mV            :math:`V_{T^*}`                    Base firing threshold
-    ``lambda_0``         1.0 /s              :math:`\lambda_0`                  Stochastic intensity at threshold
-    ``t_ref``            4.0 ms              :math:`t_\mathrm{ref}`             Absolute refractory period
-    ``tau_syn``          (2.0,) ms           :math:`\tau_{\mathrm{syn},k}`      Synaptic conductance time constants (list)
-    ``E_rev``            (0.0,) mV           :math:`E_{\mathrm{rev},k}`         Reversal potentials (list, same size as tau_syn)
-    ``I_e``              0.0 pA              :math:`I_\mathrm{e}`               Constant external current
-    ``tau_sfa``          () ms               :math:`\tau_{\gamma_i}`            SFA time constants (tuple/list)
-    ``q_sfa``            () mV               :math:`q_{\gamma_i}`              SFA jump values (tuple/list)
-    ``tau_stc``          () ms               :math:`\tau_{\eta_i}`              STC time constants (tuple/list)
-    ``q_stc``            () nA               :math:`q_{\eta_i}`                STC jump values (tuple/list)
+    ``g_L``              4.0 nS              :math:`g_\mathrm{L}`                Leak conductance
+    ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`                Leak reversal potential
+    ``C_m``              80.0 pF             :math:`C_\mathrm{m}`                Membrane capacitance
+    ``V_reset``          -55.0 mV            :math:`V_\mathrm{reset}`            Reset potential
+    ``Delta_V``          0.5 mV              :math:`\Delta_V`                    Stochasticity level
+    ``V_T_star``         -35.0 mV            :math:`V_{T^*}`                     Base firing threshold
+    ``lambda_0``         1.0 /s              :math:`\lambda_0`                   Stochastic intensity at threshold
+    ``t_ref``            4.0 ms              :math:`t_\mathrm{ref}`              Absolute refractory period
+    ``tau_syn``          (2.0,) ms           :math:`\tau_{\mathrm{syn},k}`       Synaptic conductance time constants (list)
+    ``E_rev``            (0.0,) mV           :math:`E_{\mathrm{rev},k}`          Reversal potentials (list, same size as tau_syn)
+    ``I_e``              0.0 pA              :math:`I_\mathrm{e}`                Constant external current
+    ``tau_sfa``          () ms               :math:`\tau_{\gamma_i}`             SFA time constants (tuple/list)
+    ``q_sfa``            () mV               :math:`q_{\gamma_i}`                SFA jump values (tuple/list)
+    ``tau_stc``          () ms               :math:`\tau_{\eta_i}`               STC time constants (tuple/list)
+    ``q_stc``            () nA               :math:`q_{\eta_i}`                  STC jump values (tuple/list)
     ``rng_key``          None                                                    JAX PRNG key for stochastic spiking
     ``V_initializer``    Constant(-70 mV)                                        Initializer for membrane potential
     ``spk_fun``          ReluGrad()                                              Surrogate spike function
     ``spk_reset``        ``'hard'``                                              Reset mode; hard reset matches NEST
-    ==================== =================== =================================== =====================================================
+    ==================== =================== =================================== ============================================================
 
     State Variables
     ---------------
+    After ``init_state()``, the following state variables are available:
 
-    ========================== ===========================================
-    **State variable**         **Description**
-    ========================== ===========================================
-    ``V``                      Membrane potential :math:`V_\mathrm{m}`
-    ``g``                      List of synaptic conductances :math:`g_k`
-    ``stc``                    Total spike-triggered current
-    ``sfa``                    Adaptive threshold :math:`V_T(t)`
-    ``stc_elems``              Individual stc adaptation elements
-    ``sfa_elems``              Individual sfa adaptation elements
-    ``refractory_step_count``  Remaining refractory grid steps
-    ``integration_step``       Internal RKF45 step-size state
-    ``I_stim``                 Buffered current applied in next step
-    ``last_spike_time``        Last spike time
-    ========================== ===========================================
+    ========================== ==================== ==============================================================
+    **State variable**         **Type**             **Description**
+    ========================== ==================== ==============================================================
+    ``V``                      HiddenState          Membrane potential :math:`V_\mathrm{m}` (mV)
+    ``g``                      List[HiddenState]    List of synaptic conductances :math:`g_k` (nS), one per receptor
+    ``refractory_step_count``  ShortTermState       Remaining refractory grid steps (int32)
+    ``integration_step``       ShortTermState       Internal RKF45 step-size state (ms)
+    ``I_stim``                 ShortTermState       Buffered current applied in next step (pA)
+    ``last_spike_time``        ShortTermState       Last spike time (ms)
+    ========================== ==================== ==============================================================
+
+    Additionally, the following NumPy arrays are maintained internally:
+
+    - ``_stc_elems`` -- shape ``(len(tau_stc), *in_size)`` -- individual stc elements (nA)
+    - ``_sfa_elems`` -- shape ``(len(tau_sfa), *in_size)`` -- individual sfa elements (mV)
+    - ``_stc_val`` -- shape ``in_size`` -- total spike-triggered current (nA)
+    - ``_sfa_val`` -- shape ``in_size`` -- adaptive threshold :math:`V_T(t)` (mV)
+
+    Raises
+    ------
+    ValueError
+        If ``C_m <= 0``, ``g_L <= 0``, ``Delta_V <= 0``, ``t_ref < 0``, ``lambda_0 < 0``,
+        any ``tau_syn <= 0``, any ``tau_sfa <= 0``, any ``tau_stc <= 0``,
+        ``len(tau_syn) != len(E_rev)``, ``len(tau_syn) == 0``,
+        ``len(tau_sfa) != len(q_sfa)``, or ``len(tau_stc) != len(q_stc)``.
 
     Notes
     -----
-
     - Defaults follow NEST C++ source for ``gif_cond_exp_multisynapse``.
     - ``lambda_0`` is specified in 1/s (as in NEST's Python interface) and is
       internally converted to 1/ms for computation.
     - All synaptic spike weights must be non-negative (conductance-based model).
     - Delta inputs for synaptic conductances are indexed by receptor port
       (0-based). Use ``add_delta_input(f'receptor_{port}', weight * u.nS)``
-      to add a conductance jump to a specific receptor port.
+      to add a conductance jump to a specific receptor port. If no receptor
+      port is specified in the key, the input defaults to receptor 0.
+    - RKF45 integration with adaptive step size ensures numerical stability for stiff systems,
+      matching NEST's GSL-based integrator behavior.
+    - The stochastic spiking mechanism uses JAX PRNG, which is split each time step to ensure
+      reproducible randomness under JIT compilation.
+    - The model supports an arbitrary number of receptor ports, making it suitable for
+      modeling neurons with multiple synaptic receptor types (e.g., AMPA, NMDA, GABA_A, GABA_B).
 
     References
     ----------
@@ -272,8 +331,35 @@ class gif_cond_exp_multisynapse(Neuron):
 
     See Also
     --------
-    gif_cond_exp
-    iaf_cond_exp
+    gif_cond_exp : Two-channel GIF model with fixed excitatory/inhibitory receptors
+    iaf_cond_exp : Conductance-based leaky integrate-and-fire
+    gif_psc_exp_multisynapse : Current-based GIF with multiple synaptic time constants
+
+    Examples
+    --------
+    Create a GIF neuron with three receptor ports (e.g., AMPA, NMDA, GABA_A):
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bst
+        >>> import brainunit as u
+        >>> # AMPA: fast excitatory, NMDA: slow excitatory, GABA_A: fast inhibitory
+        >>> neuron = bst.gif_cond_exp_multisynapse(
+        ...     in_size=100,
+        ...     tau_syn=(2.0, 20.0, 5.0),  # ms
+        ...     E_rev=(0.0, 0.0, -85.0),   # mV
+        ...     tau_sfa=(100.0,),           # ms
+        ...     q_sfa=(5.0,),               # mV
+        ...     tau_stc=(50.0,),            # ms
+        ...     q_stc=(10.0,)               # nA
+        ... )
+        >>> neuron.init_all_states()
+        >>> # Add AMPA input to receptor 0
+        >>> neuron.add_delta_input('receptor_0', 0.5 * u.nS)
+        >>> # Add NMDA input to receptor 1
+        >>> neuron.add_delta_input('receptor_1', 0.3 * u.nS)
+        >>> # Add GABA_A input to receptor 2
+        >>> neuron.add_delta_input('receptor_2', 0.8 * u.nS)
     """
     __module__ = 'brainpy.state'
 
@@ -362,7 +448,13 @@ class gif_cond_exp_multisynapse(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of synaptic receptor ports."""
+        r"""Number of synaptic receptor ports.
+
+        Returns
+        -------
+        int
+            Number of receptor ports, equal to ``len(tau_syn)`` and ``len(E_rev)``.
+        """
         return self._n_receptors
 
     @staticmethod
@@ -401,6 +493,31 @@ class gif_cond_exp_multisynapse(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables.
+
+        Creates JAX/NumPy arrays for membrane potential, conductances, adaptation elements,
+        refractory state, and RNG state.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of batches for parallel simulation. If None, no batching.
+        **kwargs
+            Additional keyword arguments (unused, for API compatibility).
+
+        Notes
+        -----
+        This method initializes:
+        - ``V``: membrane potential to ``V_initializer`` values
+        - ``g``: list of ``n_receptors`` conductance states, all initialized to 0 nS
+        - ``last_spike_time``: initialized to -1e7 ms (far past)
+        - ``refractory_step_count``: initialized to 0
+        - ``integration_step``: initialized to current dt
+        - ``I_stim``: initialized to 0 pA
+        - ``_stc_elems``, ``_sfa_elems``: NumPy arrays for adaptation elements, all zeros
+        - ``_stc_val``, ``_sfa_val``: computed totals
+        - ``_rng_state``: JAX PRNG state
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.V = brainstate.HiddenState(V)
 
@@ -444,6 +561,22 @@ class gif_cond_exp_multisynapse(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        r"""Reset all state variables to initial values.
+
+        Re-initializes state to the same values as ``init_state()``, clearing simulation history.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of batches for parallel simulation. If None, no batching.
+        **kwargs
+            Additional keyword arguments (unused, for API compatibility).
+
+        Notes
+        -----
+        All state variables are reset to their initialization values, including
+        adaptation elements, refractory state, and RNG state.
+        """
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         for i in range(self._n_receptors):
             self.g[i].value = braintools.init.param(
@@ -476,6 +609,28 @@ class gif_cond_exp_multisynapse(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Compute spike output using surrogate gradient function.
+
+        This method is used for gradient-based learning. The actual spike emission
+        during simulation is stochastic and handled in ``update()``.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential. If None, uses ``self.V.value``. Shape: ``(*batch_size, *in_size)`` with unit mV.
+
+        Returns
+        -------
+        ArrayLike
+            Spike values in [0, 1] range. Shape matches input ``V``. Dimensionless.
+            Uses ``spk_fun`` to compute differentiable spike output from scaled voltage.
+
+        Notes
+        -----
+        The spike output is computed as ``spk_fun((V - V_reset) / Delta_V)``, providing
+        a differentiable approximation for gradient-based learning. This is separate from
+        the stochastic spike mechanism used in ``update()``.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_reset) / (self.Delta_V)
         return self.spk_fun(v_scaled)
@@ -485,14 +640,24 @@ class gif_cond_exp_multisynapse(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _collect_receptor_delta_inputs(self):
-        """Collect delta inputs per receptor port.
+        r"""Collect delta inputs per receptor port.
 
-        Delta inputs for receptor port k should be registered with key
-        containing 'receptor_<k>' (0-based). Any input not matching a specific
-        receptor pattern is ignored (use add_current_input for non-synaptic
-        currents).
+        Parses ``delta_inputs`` dictionary to extract conductance jumps for each receptor port.
+        Keys containing 'receptor_<k>' are routed to receptor port k (0-based indexing).
+        Inputs without a receptor specification default to receptor 0.
 
-        Returns a list of arrays, one per receptor, in nS (numpy float64).
+        Returns
+        -------
+        list of np.ndarray
+            List of length ``n_receptors``, where each element is a NumPy array of shape
+            matching ``V.value.shape``, containing conductance jumps in nS (float64).
+            Inputs not matching any receptor pattern are added to receptor 0.
+
+        Notes
+        -----
+        This method consumes callable delta inputs by invoking them and removing them
+        from ``delta_inputs``. Non-callable inputs are removed after first use.
+        For non-synaptic currents, use ``add_current_input()`` instead.
         """
         v_shape = self.V.value.shape
         dg = [np.zeros(v_shape, dtype=np.float64) for _ in range(self._n_receptors)]
@@ -533,10 +698,36 @@ class gif_cond_exp_multisynapse(Neuron):
         return dg
 
     def _dynamics_scalar(self, v, g_vals, is_refractory, i_stim, stc, p):
-        """Compute derivatives for the ODE system [V_m, g_0, g_1, ..., g_{n-1}].
+        r"""Compute derivatives for the ODE system [V_m, g_0, g_1, ..., g_{n-1}].
 
-        This matches the NEST gif_cond_exp_multisynapse_dynamics() function exactly.
+        Matches the NEST ``gif_cond_exp_multisynapse_dynamics()`` function exactly.
         During refractory period, V is clamped to V_reset and dV/dt=0.
+
+        Parameters
+        ----------
+        v : float
+            Current membrane potential (mV).
+        g_vals : list of float
+            Current conductance values for all receptors (nS), length ``n_receptors``.
+        is_refractory : bool
+            True if neuron is in refractory period.
+        i_stim : float
+            External stimulus current (pA).
+        stc : float
+            Total spike-triggered current (nA).
+        p : dict
+            Parameter dictionary with keys: 'V_reset', 'E_L', 'C_m', 'g_L', 'I_e' (all in SI-derived units).
+
+        Returns
+        -------
+        tuple of float
+            Derivatives (dV/dt, dg_0/dt, dg_1/dt, ..., dg_{n-1}/dt).
+            dV/dt in mV/ms, dg_k/dt in nS/ms.
+
+        Notes
+        -----
+        If ``is_refractory`` is True, V is clamped to ``V_reset`` and dV/dt = 0.
+        Conductances always decay regardless of refractory state.
         """
         V = p['V_reset'] if is_refractory else v
 
@@ -556,9 +747,45 @@ class gif_cond_exp_multisynapse(Neuron):
         return (dv,) + tuple(dg)
 
     def _rkf45_integrate_scalar(self, v0, g0_vals, is_refractory, i_stim, stc, h0, dt, p):
-        """Adaptive RKF45 integration matching GSL gsl_odeiv_evolve_apply behavior.
+        r"""Adaptive RKF45 integration matching GSL gsl_odeiv_evolve_apply behavior.
 
-        State vector: [v, g_0, g_1, ..., g_{n-1}]
+        Integrates the ODE system [V, g_0, g_1, ..., g_{n-1}] over time interval [0, dt]
+        using Runge-Kutta-Fehlberg 4(5) with adaptive step size control.
+
+        Parameters
+        ----------
+        v0 : float
+            Initial membrane potential (mV).
+        g0_vals : list of float
+            Initial conductance values for all receptors (nS), length ``n_receptors``.
+        is_refractory : bool
+            True if neuron is in refractory period.
+        i_stim : float
+            External stimulus current (pA).
+        stc : float
+            Total spike-triggered current (nA).
+        h0 : float
+            Initial step size (ms). Must be >= ``_MIN_H``.
+        dt : float
+            Total integration interval (ms).
+        p : dict
+            Parameter dictionary passed to ``_dynamics_scalar()``.
+
+        Returns
+        -------
+        v_final : float
+            Final membrane potential (mV).
+        g_final : list of float
+            Final conductance values (nS), length ``n_receptors``.
+        h_final : float
+            Final step size for next integration (ms).
+
+        Notes
+        -----
+        Uses RKF45(4,5) embedded pair with local error tolerance ``_ATOL``.
+        Step size is adapted using the 0.2-th power rule for 4th-order methods.
+        Maximum iterations: ``_MAX_ITERS``. Minimum step size: ``_MIN_H``.
+        This mirrors NEST's GSL integrator behavior for exact numerical compatibility.
         """
         n = 1 + self._n_receptors  # total state dimension
         t = 0.0
@@ -621,6 +848,42 @@ class gif_cond_exp_multisynapse(Neuron):
         return y[0], y[1:], h
 
     def update(self, x=0.0 * u.pA):
+        r"""Update neuron state for one time step.
+
+        Performs the following operations in order:
+        1. Decay adaptation elements (stc, sfa) and compute totals
+        2. Integrate membrane and conductance dynamics using RKF45
+        3. Add synaptic conductance jumps from spike inputs
+        4. Stochastic spike check (if not refractory) or refractory countdown
+        5. Store external current for next step
+
+        Parameters
+        ----------
+        x : ArrayLike, default: 0.0 pA
+            External current input for this time step. Shape: scalar or broadcastable to ``in_size``.
+            Unit: pA. This is stored as ``I_stim`` for use in the **next** time step.
+
+        Returns
+        -------
+        jnp.ndarray
+            Binary spike output (0 or 1) for this time step. Shape: ``(*batch_size, *in_size)``.
+            dtype: float32. Value 1 indicates spike emission.
+
+        Notes
+        -----
+        The update implements NEST's exact algorithm:
+
+        - Adaptation elements decay exponentially by factor ``exp(-dt/tau)``
+        - RKF45 integration uses adaptive step size (stored in ``integration_step`` state)
+        - Spike probability computed as ``1 - exp(-lambda * dt)`` where
+          ``lambda = lambda_0 * exp((V - V_T) / Delta_V)``
+        - Random number generation uses JAX PRNG with automatic state splitting
+        - Refractory neurons have V clamped to V_reset and cannot spike
+        - All computations performed element-wise in NumPy for each neuron
+
+        The current input ``x`` is buffered (not used in current step) to match NEST's
+        one-step delay convention.
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

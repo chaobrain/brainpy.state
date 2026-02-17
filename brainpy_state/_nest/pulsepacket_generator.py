@@ -40,20 +40,35 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
 
     Description
     -----------
-
     ``pulsepacket_generator`` re-implements NEST's stimulation device with the
-    same name. Each configured pulse center ``t_c`` produces exactly
-    ``activity`` spike-time samples
+    same name and emits integer per-step spike multiplicities.
+
+    **1. Pulse model and grid projection**
+
+    For each configured pulse center :math:`t_c` (ms), this model generates
+    exactly ``activity`` sampled spike times per output generator:
 
     .. math::
 
-       x \sim \mathcal{N}(t_c, \mathrm{sdev}^2),
+       x_{i,j} \sim \mathcal{N}(t_c, \mathrm{sdev}^2),
+       \quad i=1,\dots,N,\ j=1,\dots,\mathrm{activity},
 
-    and each sampled time is discretized to the simulation grid and emitted as
-    spike multiplicity in the corresponding step.
+    where :math:`N=\prod \mathrm{varshape}` is the number of independent
+    generators. For ``sdev == 0``, the Gaussian draw degenerates to the
+    deterministic value :math:`x_{i,j}=t_c`.
 
-    NEST update ordering (source-equivalent)
-    ----------------------------------------
+    Sampled times are converted to NEST-like integer tics and delivery steps:
+
+    .. math::
+
+       \tau = \left\lfloor x \cdot 1000 + 0.5 \right\rfloor,\qquad
+       k = \left\lceil \tau / \Delta\tau \right\rceil,
+
+    where :math:`\Delta\tau` is the resolution in tics per simulation step.
+    Samples with ``tau < tau_now`` are discarded; the remaining samples are
+    queued and emitted as multiplicity counts at their delivery steps.
+
+    **2. NEST update ordering (source-equivalent)**
 
     This implementation mirrors ``models/pulsepacket_generator.cpp``:
 
@@ -71,8 +86,7 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
     As in NEST, ``tolerance = sdev * 10`` for ``sdev > 0`` and
     ``tolerance = 1.0 ms`` otherwise.
 
-    Timing semantics
-    ----------------
+    **3. Timing semantics (CURRENT_GENERATOR shift)**
 
     NEST classifies this model as ``CURRENT_GENERATOR`` in
     ``get_type()``. Therefore activity is evaluated with the
@@ -88,43 +102,196 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
     This differs from regular spike generators and is intentionally preserved
     for behavioral parity.
 
+    **4. Assumptions, constraints, and computational implications**
+
+    Enforced constraints:
+
+    - ``activity`` is an integer scalar with ``activity >= 0``.
+    - ``sdev`` is a scalar in ms with ``sdev >= 0``.
+    - ``stop >= start`` after scalar conversion.
+    - ``sdev_tolerance > 0``.
+
+    Runtime constraints:
+
+    - If ``dt`` is available, finite ``origin``, ``start``, and ``stop`` must
+      be exact grid multiples (absolute tolerance ``1e-12`` in ``time / dt``).
+    - ``pulse_times`` are flattened to 1-D and sorted ascending before use.
+
+    Computational implications:
+
+    - Let ``C_new`` be newly entered pulse centers in one step. New pulse
+      generation costs
+      :math:`O(C_{\mathrm{new}} \cdot N \cdot \mathrm{activity})` sampling
+      plus per-queue sort when new events are appended.
+    - Emission costs :math:`O(N + M_{\mathrm{pop}})` where
+      :math:`M_{\mathrm{pop}}` is number of emitted queued spikes in the step.
+    - Memory is proportional to the total number of queued future spikes
+      across all output generators.
+
     Parameters
     ----------
     in_size : Size, optional
-        Number/shape of generator instances. Default: ``1``.
-    pulse_times : sequence, optional
-        Pulse center times in ms. Values are sorted internally.
-        Default: ``None`` (empty).
+        Output size specification consumed by
+        :class:`brainstate.nn.Dynamics`. ``self.varshape`` derived from this
+        value is the exact shape returned by :meth:`update`. Each element is
+        one independent output generator. Default is ``1``.
+    pulse_times : Sequence[ArrayLike] or ArrayLike or None, optional
+        Pulse center times in ms. Accepted inputs are any array-like values
+        flattenable to shape ``(K,)`` after conversion, or a
+        :class:`brainunit.Quantity` convertible to ``u.ms``.
+        ``None`` creates an empty schedule. Values are sorted internally in
+        ascending order. Default is ``None``.
     activity : ArrayLike, optional
-        Number of spikes generated per pulse center (integer, ``>= 0``).
-        Default: ``0``.
+        Scalar integer count per pulse center, shape ``()`` after conversion.
+        Parsed through nearest-integer check with absolute tolerance
+        ``1e-12`` and must satisfy ``activity >= 0``. Default is ``0``.
     sdev : ArrayLike, optional
-        Standard deviation of Gaussian pulse jitter in ms (``>= 0``).
-        Default: ``0.0 * u.ms``.
+        Scalar standard deviation in ms, shape ``()`` after conversion.
+        Accepts unitful time convertible to ``u.ms`` or scalar numeric.
+        Must satisfy ``sdev >= 0``. Default is ``0.0 * u.ms``.
     start : ArrayLike, optional
-        Activation start time relative to ``origin`` in ms.
-        Default: ``0.0 * u.ms``.
+        Scalar relative start time in ms, shape ``()`` after conversion.
+        Effective lower bound is ``origin + start`` under current-generator
+        semantics and must be grid-representable when ``dt`` is available.
+        Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Deactivation stop time relative to ``origin`` in ms.
-        ``None`` means infinity. Default: ``None``.
+        Scalar relative stop time in ms, shape ``()`` after conversion.
+        ``None`` maps to ``+inf``. When finite, must satisfy ``stop >= start``
+        and be grid-representable when ``dt`` is available.
+        Default is ``None``.
     origin : ArrayLike, optional
-        Time origin for ``start`` and ``stop`` in ms.
-        Default: ``0.0 * u.ms``.
+        Scalar origin offset in ms, shape ``()`` after conversion.
+        Added to ``start`` and ``stop`` to form absolute activity bounds.
+        Must be grid-representable when finite and ``dt`` is available.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Seed for Gaussian sampling. Default: ``0``.
+        Seed used to initialize ``numpy.random.default_rng`` in
+        :meth:`init_state`. Default is ``0``.
     sdev_tolerance : float, optional
-        Multiplicative factor used in tolerance window
-        (NEST default ``10.0``).
+        Positive multiplicative factor used to compute tolerance window
+        ``sdev * sdev_tolerance`` when ``sdev > 0``. NEST default is ``10.0``.
     name : str, optional
-        Object name.
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 20 18 24 38
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``pulse_times``
+         - ``None``
+         - :math:`t_c`
+         - Pulse-center schedule in ms (internally sorted ascending).
+       * - ``activity``
+         - ``0``
+         - :math:`n_{\mathrm{spk}}`
+         - Number of sampled spikes generated per center and output train.
+       * - ``sdev``
+         - ``0.0 * u.ms``
+         - :math:`\sigma_t`
+         - Temporal jitter standard deviation in ms.
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative lower activity bound (with CURRENT_GENERATOR shift).
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative upper activity bound; ``None`` maps to ``+\infty``.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global offset added to ``start`` and ``stop``.
+       * - ``sdev_tolerance``
+         - ``10.0``
+         - :math:`\kappa`
+         - Tolerance factor for center-window inclusion, ``\kappa \sigma_t``.
+       * - ``in_size``
+         - ``1``
+         - -
+         - Defines ``self.varshape`` / number of independent generators.
+       * - ``rng_seed``
+         - ``0``
+         - -
+         - Seed for NumPy RNG used for Gaussian pulse sampling.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node instance. Each :meth:`update` call returns a JAX array
+        with dtype ``int64`` and shape ``self.varshape`` containing spike
+        multiplicities emitted at the current simulation step.
+
+    Raises
+    ------
+    ValueError
+        If ``activity`` is negative or non-integral; if ``sdev`` is negative;
+        if ``stop < start``; if ``sdev_tolerance <= 0``; if scalar conversion
+        fails due to non-scalar input shape; if backend data has fewer than
+        three values; if finite ``origin``/``start``/``stop`` are not grid
+        multiples when ``dt`` is available; or if simulation resolution is
+        non-positive.
+    TypeError
+        If time-valued arguments cannot be converted to ``u.ms``-compatible
+        values or numeric arrays.
+    KeyError
+        At runtime, if required simulation context entries (for example
+        ``dt`` from ``brainstate.environ.get_dt()``) are unavailable.
 
     Notes
     -----
     - ``set(activity=...)`` and ``set(sdev=...)`` trigger pulse
       re-generation behavior by clearing queued spikes, matching NEST.
-    - Stimulation-backend update order in NEST is
-      ``[activity, sdev, pulse_times...]`` and is exposed via
+    - Stimulation-backend parameter order in NEST is
+      ``[activity, sdev_ms, pulse_time_0_ms, ...]`` and is exposed via
       :meth:`set_data_from_stimulation_backend`.
+    - Pulse times that are too far in the past (``sample_time < t``) are
+      silently discarded during generation; no error is raised.
+    - Outputs are integer multiplicities ``0, 1, 2, ...`` per step,
+      matching NEST ``SpikeEvent`` multiplicity semantics rather than
+      binary spike flags.
+
+    See Also
+    --------
+    poisson_generator : Independent Poisson spike trains at fixed rate.
+    mip_generator : Correlated spike trains via Multiple Interaction Process.
+    inhomogeneous_poisson_generator : Poisson generator with time-varying rate.
+    gamma_sup_generator : Superposition of stationary gamma-process trains.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.pulsepacket_generator(
+       ...         in_size=(2, 3),
+       ...         pulse_times=[10.0 * u.ms, 20.0 * u.ms],
+       ...         activity=5,
+       ...         sdev=1.5 * u.ms,
+       ...         start=0.0 * u.ms,
+       ...         stop=40.0 * u.ms,
+       ...         rng_seed=7,
+       ...     )
+       ...     with brainstate.environ.context(t=10.0 * u.ms):
+       ...         counts = gen.update()
+       ...     _ = counts.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> gen = brainpy.state.pulsepacket_generator(activity=3, sdev=0.5 * u.ms)
+       >>> gen.set_data_from_stimulation_backend([4.0, 0.8, 5.0, 15.0, 25.0])
+       >>> params = gen.get()
+       >>> _ = params['activity'], params['pulse_times']
 
     References
     ----------
@@ -325,6 +492,36 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
             self._stop_center_idx += 1
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize runtime state for stochastic pulse generation.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Unused by this implementation. Present to match the base-class
+            interface. Default is ``None``.
+        **kwargs
+            Additional unused keyword arguments accepted for interface
+            compatibility.
+
+        Returns
+        -------
+        out : Any
+            ``None``. The method mutates internal runtime state in place by
+            creating the NumPy RNG, spike queues, and center-window indices.
+
+        Raises
+        ------
+        ValueError
+            If ``dt`` is available and finite timing parameters are not grid
+            multiples, or if computed simulation resolution is non-positive.
+        TypeError
+            If environment times cannot be converted to scalar milliseconds.
+
+        Notes
+        -----
+        Re-initialization resets queues and deterministic random state from
+        ``rng_seed``; pending queued spikes are discarded.
+        """
         del batch_size, kwargs
 
         dt_ms = self._maybe_dt_ms()
@@ -348,7 +545,53 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        r"""Set public parameters with NEST-compatible update semantics.
+
+        Parameters
+        ----------
+        pulse_times : Sequence[ArrayLike] or ArrayLike or object, optional
+            New pulse-center schedule in ms. Any provided value is converted to
+            a flattened ``float64`` array and sorted ascending. Pass ``_UNSET``
+            (default) to keep current pulse times.
+        activity : ArrayLike or object, optional
+            New scalar integer spikes-per-center value, shape ``()`` after
+            conversion, with ``activity >= 0``. Pass ``_UNSET`` to keep the
+            current value.
+        sdev : ArrayLike or object, optional
+            New scalar temporal jitter standard deviation in ms, shape ``()``
+            after conversion, with ``sdev >= 0``. Pass ``_UNSET`` to keep the
+            current value.
+        start : ArrayLike or object, optional
+            New scalar relative start time in ms, shape ``()`` after
+            conversion. Pass ``_UNSET`` to keep the current value.
+        stop : ArrayLike or None or object, optional
+            New scalar relative stop time in ms, shape ``()`` after conversion.
+            ``None`` maps to ``+inf``. Pass ``_UNSET`` to keep the current
+            value.
+        origin : ArrayLike or object, optional
+            New scalar origin offset in ms, shape ``()`` after conversion.
+            Pass ``_UNSET`` to keep the current value.
+
+        Returns
+        -------
+        out : Any
+            ``None``. Parameters and runtime caches are updated in place.
+
+        Raises
+        ------
+        ValueError
+            If integer/scalar validation fails, if ``activity < 0``,
+            ``sdev < 0``, ``stop < start``, or if finite time bounds are not
+            aligned to the simulation grid when ``dt`` is available.
+        TypeError
+            If provided values cannot be converted to expected numeric/time
+            forms.
+
+        Notes
+        -----
+        Matching NEST behavior, changing either ``activity`` or ``sdev``
+        triggers pulse re-generation state reset by clearing queued spikes.
+        """
         new_activity = (
             self.activity
             if activity is _UNSET
@@ -395,7 +638,16 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
             self._refresh_runtime_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters."""
+        r"""Return current public parameter values.
+
+        Returns
+        -------
+        out : Any
+            ``dict`` with keys ``pulse_times``, ``activity``, ``sdev``,
+            ``start``, ``stop``, and ``origin``. Time values are returned in
+            milliseconds as Python ``float`` values, and ``pulse_times`` is a
+            Python ``list[float]``.
+        """
         return {
             'pulse_times': self._pulse_times_ms.tolist(),
             'activity': int(self.activity),
@@ -406,7 +658,25 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
         }
 
     def set_data_from_stimulation_backend(self, input_param: Sequence[float] | np.ndarray):
-        """Update from NEST backend order: [activity, sdev, pulse_times...]."""
+        r"""Update parameters from stimulation-backend payload.
+
+        Parameters
+        ----------
+        input_param : Sequence[float] or numpy.ndarray
+            One-dimensional backend payload with shape ``(M,)`` and
+            ``M >= 3`` in NEST order:
+            ``[activity, sdev_ms, pulse_time_0_ms, ...]``. Entries are parsed
+            as ``float64``. ``sdev`` and ``pulse_times`` are interpreted in ms.
+
+        Raises
+        ------
+        ValueError
+            If payload length is between 1 and 2 (inclusive), since at least
+            ``activity``, ``sdev``, and one pulse time are required by this
+            backend contract.
+        TypeError
+            If payload cannot be cast to numeric ``float64`` values.
+        """
         data = np.asarray(input_param, dtype=np.float64).reshape(-1)
         if data.size == 0:
             return
@@ -460,6 +730,32 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
                     self._spike_queues[i] = deque(sorted(q))
 
     def update(self):
+        r"""Advance one simulation step and emit spike multiplicities.
+
+        Returns
+        -------
+        out : Any
+            JAX array of dtype ``int64`` and shape ``self.varshape``.
+            Each element is the number of spikes emitted by one output
+            generator in the current step. Returns all zeros when inactive or
+            when no spikes are due.
+
+        Raises
+        ------
+        ValueError
+            If runtime ``dt`` is non-positive, if finite activity bounds are
+            not grid multiples, or if cached time-step conversion becomes
+            invalid.
+        TypeError
+            If runtime time values cannot be converted to scalar milliseconds.
+        KeyError
+            If required simulation context entries are missing.
+
+        Notes
+        -----
+        If state has not been initialized explicitly, :meth:`update` performs
+        lazy initialization by calling :meth:`init_state`.
+        """
         if not hasattr(self, '_rng'):
             self.init_state()
 

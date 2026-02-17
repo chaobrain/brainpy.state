@@ -228,7 +228,8 @@ class DualExpon(Synapse, AlignPost):
         A = braintools.init.param(A, sizes=self.varshape, allow_none=True)
         if A is None:
             A = (
-                self.tau_decay / (self.tau_decay - self.tau_rise) *
+                self.tau_decay /
+                (self.tau_decay - self.tau_rise) *
                 u.math.float_power(self.tau_rise / self.tau_decay,
                                    self.tau_rise / (self.tau_rise - self.tau_decay))
             )

@@ -35,7 +35,7 @@ __all__ = [
 
 
 class SpikeTime(brainstate.nn.Dynamics):
-    """The input neuron group characterized by spikes emitting at given times.
+    r"""The input neuron group characterized by spikes emitting at given times.
 
     Internally builds a ``brainevent.CSR`` matrix of shape
     ``[n_max_time_step, n_neuron]`` so that ``update()`` reduces to a

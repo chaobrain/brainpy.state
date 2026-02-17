@@ -43,40 +43,40 @@ class HH(Neuron):
 
     Mathematically, the model is given by,
 
-    $$
-    C \frac {dV} {dt} = -(\bar{g}_{Na} m^3 h (V-E_{Na})
-    + \bar{g}_K n^4 (V-E_K) + g_{leak} (V - E_{leak})) + I(t)
-    $$
+    .. math::
 
-    $$
-    \frac {dx} {dt} = \alpha_x (1-x) - \beta_x, \quad x\in {\rm{\{m, h, n\}}}
-    $$
+       C \frac{dV}{dt} = -(\bar{g}_{Na} m^3 h (V-E_{Na})
+       + \bar{g}_K n^4 (V-E_K) + g_{leak} (V - E_{leak})) + I(t)
+
+    .. math::
+
+       \frac{dx}{dt} = \alpha_x (1-x) - \beta_x, \quad x\in \{m, h, n\}
 
     where
 
-    $$
-    \alpha_m(V) = \frac {0.1(V+40)}{1-\exp(\frac{-(V + 40)} {10})}
-    $$
+    .. math::
 
-    $$
-    \beta_m(V) = 4.0 \exp(\frac{-(V + 65)} {18})
-    $$
+       \alpha_m(V) = \frac{0.1(V+40)}{1-\exp\!\left(\frac{-(V + 40)}{10}\right)}
 
-    $$
-    \alpha_h(V) = 0.07 \exp(\frac{-(V+65)}{20})
-    $$
+    .. math::
 
-    $$
-    \beta_h(V) = \frac 1 {1 + \exp(\frac{-(V + 35)} {10})}
-    $$
+       \beta_m(V) = 4.0 \exp\!\left(\frac{-(V + 65)}{18}\right)
 
-    $$
-    \alpha_n(V) = \frac {0.01(V+55)}{1-\exp(-(V+55)/10)}
-    $$
+    .. math::
 
-    $$
-    \beta_n(V) = 0.125 \exp(\frac{-(V + 65)} {80})
-    $$
+       \alpha_h(V) = 0.07 \exp\!\left(\frac{-(V+65)}{20}\right)
+
+    .. math::
+
+       \beta_h(V) = \frac{1}{1 + \exp\!\left(\frac{-(V + 35)}{10}\right)}
+
+    .. math::
+
+       \alpha_n(V) = \frac{0.01(V+55)}{1-\exp(-(V+55)/10)}
+
+    .. math::
+
+       \beta_n(V) = 0.125 \exp\!\left(\frac{-(V + 65)}{80}\right)
 
     Parameters
     ----------
@@ -307,13 +307,13 @@ class MorrisLecar(Neuron):
     responding voltage-sensitive Ca2+ conductance for excitation and a delayed
     voltage-dependent K+ conductance for recovery. The equations of the model are:
 
-    $$
-    \begin{aligned}
-    C\frac{dV}{dt} =& - g_{Ca} M_{\infty} (V - V_{Ca})- g_{K} W(V - V_{K}) -
-                      g_{Leak} (V - V_{Leak}) + I_{ext} \\
-    \frac{dW}{dt} =& \frac{W_{\infty}(V) - W}{ \tau_W(V)}
-    \end{aligned}
-    $$
+    .. math::
+
+       \begin{aligned}
+       C\frac{dV}{dt} =& - g_{Ca} M_{\infty} (V - V_{Ca}) - g_{K} W(V - V_{K})
+                        - g_{Leak} (V - V_{Leak}) + I_{ext} \\
+       \frac{dW}{dt} =& \frac{W_{\infty}(V) - W}{\tau_W(V)}
+       \end{aligned}
 
     Here, :math:`V` is the membrane potential, :math:`W` is the "recovery variable",
     which is almost invariably the normalized :math:`K^+`-ion conductance, and
@@ -490,9 +490,9 @@ class WangBuzsakiHH(Neuron):
 
     Each model is described by a single compartment and obeys the current balance equation:
 
-    $$
-    C_{m} \frac{d V}{d t}=-I_{\mathrm{Na}}-I_{\mathrm{K}}-I_{\mathrm{L}}+I_{\mathrm{app}}
-    $$
+    .. math::
+
+        C_{m} \frac{d V}{d t}=-I_{\mathrm{Na}}-I_{\mathrm{K}}-I_{\mathrm{L}}+I_{\mathrm{app}}
 
     where :math:`C_{m}=1 \mu \mathrm{F} / \mathrm{cm}^{2}` and :math:`I_{\mathrm{app}}` is the
     injected current (in :math:`\mu \mathrm{A} / \mathrm{cm}^{2}` ). The leak current
@@ -508,9 +508,9 @@ class WangBuzsakiHH(Neuron):
 
     The inactivation variable :math:`h` obeys:
 
-    $$
-    \frac{d h}{d t}=\phi\left(\alpha_{h}(1-h)-\beta_{h} h\right)
-    $$
+    .. math::
+
+        \frac{d h}{d t}=\phi\left(\alpha_{h}(1-h)-\beta_{h} h\right)
 
     where :math:`\alpha_{h}(V)=0.07 \exp (-(V+58) / 20)` and
     :math:`\beta_{h}(V)=1 /(\exp (-0.1(V+28)) +1)`.
@@ -518,9 +518,9 @@ class WangBuzsakiHH(Neuron):
     The delayed rectifier :math:`I_{\mathrm{K}}=g_{\mathrm{K}} n^{4}\left(V-E_{\mathrm{K}}\right)`,
     where the activation variable :math:`n` obeys:
 
-    $$
-    \frac{d n}{d t}=\phi\left(\alpha_{n}(1-n)-\beta_{n} n\right)
-    $$
+    .. math::
+
+        \frac{d n}{d t}=\phi\left(\alpha_{n}(1-n)-\beta_{n} n\right)
 
     with :math:`\alpha_{n}(V)=-0.01(V+34) /(\exp (-0.1(V+34))-1)` and
     :math:`\beta_{n}(V)=0.125\exp (-(V+44) / 80)`.

@@ -38,78 +38,262 @@ class _StepCalibration:
 class spin_detector(brainstate.nn.Dynamics):
     r"""NEST-compatible detector for binary state decoding from spikes.
 
-    Short Description
-    -----------------
-    ``spin_detector`` decodes binary states from incoming spikes and records
-    ``senders``, ``times``, and ``state`` events.
+    ``spin_detector`` decodes binary activity (``state`` :math:`\in \{0, 1\}`)
+    from spike-event multiplicities and stores a chronological event log
+    containing ``senders``, ``times``, and decoded ``state`` for every
+    emitted event.  The decode logic mirrors NEST
+    ``models/spin_detector.{h,cpp}`` with explicit per-event buffering:
+    a single provisional event is held in a one-slot buffer and revised
+    from state ``0`` to ``1`` before being written whenever a same-sender,
+    same-stamp event with multiplicity ``1`` arrives, while multiplicity
+    ``2`` events bypass the buffer and are written immediately as state ``1``.
 
-    Description
-    -----------
-    This class re-implements core behavior of NEST ``spin_detector``
-    (``models/spin_detector.{h,cpp}`` and ``nestkernel/recording_device.*``):
+    **1. Event Decoding on a Sender-Time Lattice**
 
-    - Decoding rule follows NEST exactly:
+    Let incoming normalized events be
+    :math:`e_j=(i_j, s_j, \delta_j, m_j)` with sender :math:`i_j \in \mathbb{N}`,
+    step stamp :math:`s_j \in \mathbb{Z}`, offset :math:`\delta_j` (ms), and
+    multiplicity :math:`m_j \ge 0`. The detector maintains one buffered tuple
+    :math:`b=(i_b, s_b, \delta_b, x_b)` where :math:`x_b \in \{0,1\}` is the
+    provisional decoded state.
 
-      - one spike (multiplicity ``1``) decodes state ``0``,
-      - two spikes at the same sender and timestamp decode state ``1``.
+    For each accepted event in order:
 
-    - Decoder order and write ordering match ``spin_detector::handle``:
+    - If :math:`m_j = 1` and :math:`(i_j, s_j) = (i_b, s_b)`, revise
+      :math:`x_b \leftarrow 1` before writing.
+    - If a buffer exists, write :math:`b` to output.
+    - If :math:`m_j = 2`, write current event immediately with state ``1``
+      and clear the buffer.
+    - Otherwise, set buffer to current event with provisional state ``0``
+      when the buffer is empty; if the buffer is not empty, clear it instead.
 
-      - potential 0->1 revision is applied before writing buffered state,
-      - buffered state is written before processing the current event body,
-      - multiplicity ``2`` writes state ``1`` immediately.
+    This ordering ensures that a possible ``0 -> 1`` revision is applied
+    before the buffered-write emission, exactly as in the NEST C++ reference.
 
-    - Recording window is
-      :math:`(\mathrm{origin}+\mathrm{start},\;\mathrm{origin}+\mathrm{stop}]`
-      in simulation steps (start exclusive, stop inclusive).
-    - ``n_events`` can only be set to ``0`` to clear memory.
+    **2. Time Model and Activity Window**
 
-    Update Semantics
-    ----------------
-    In NEST, ``handle(SpikeEvent&)`` performs decoding and ``update(...)``
-    finalizes any buffered event for that cycle. This implementation mirrors
-    that sequence inside :meth:`update`: it decodes all provided events in
-    order, then finalizes a remaining buffered event.
-
-    The detector expects events at simulation time ``t`` to carry stamp
-    ``t + dt`` by default. For precise times, provide ``offsets`` (ms) so that
+    With simulation resolution :math:`dt > 0` (ms), current simulation time
+    :math:`t`, and step index :math:`n = \mathrm{round}(t/dt)`, the default
+    event stamp for events received at step :math:`n` is
 
     .. math::
 
-       t_{event} = t_{stamp} - \delta.
+       s = n + 1.
+
+    The physical event time in milliseconds is reconstructed as
+
+    .. math::
+
+       t_{\mathrm{event}} = s \cdot dt - \delta.
+
+    Recording is gated on stamps by the half-open interval
+    :math:`(s_{\min},\, s_{\max}]` where
+
+    .. math::
+
+       s_{\min} = \frac{\mathrm{origin} + \mathrm{start}}{dt}, \qquad
+       s_{\max} = \frac{\mathrm{origin} + \mathrm{stop}}{dt}
+       \quad (\text{or } +\infty \text{ when stop is None}),
+
+    so an event is accepted iff :math:`s > s_{\min} \land s \le s_{\max}`.
+    The ``start`` bound is exclusive and ``stop`` is inclusive.
+
+    **3. Input Normalization and Multiplicity Inference**
+
+    Runtime ``update`` arrays are flattened to one-dimensional vectors of
+    length :math:`N`. Scalars for ``senders``, ``offsets``, and
+    ``stamp_steps`` are broadcast to :math:`(N,)`.
+
+    Let :math:`a_j = \mathrm{spikes}[j]`. Per-item event multiplicity
+    :math:`c_j` is determined as follows:
+
+    - If ``multiplicities is None`` and all :math:`a_j` are integer-like
+      (within ``1e-12`` tolerance):
+      :math:`c_j = \max(\mathrm{round}(a_j),\, 0)`.
+    - If ``multiplicities is None`` and any :math:`a_j` is non-integer:
+      :math:`c_j = \mathbf{1}[a_j > 0]` (binary threshold).
+    - If ``multiplicities`` is provided with non-negative integers
+      :math:`m_j`: :math:`c_j = m_j \,\mathbf{1}[a_j > 0]`.
+
+    Each event item contributes **at most one decode step** because
+    :math:`c_j` is passed as the multiplicity to :meth:`_handle_event`
+    rather than used for repeated writes.
+
+    **4. Assumptions, Constraints, and Computational Implications**
+
+    ``dt``, ``t``, ``start``, ``stop`` (when finite), and ``origin`` must be
+    scalar-convertible and aligned to the simulation lattice. Alignment is
+    verified by round-trip integer checks with ``1e-12`` tolerance.  Per
+    :meth:`update` call, normalization is :math:`O(N)` and decoding is
+    :math:`O(N)`, with persistent storage cost linear in the total number of
+    emitted events :math:`E`.
 
     Parameters
     ----------
-    in_size : int, optional
-        Device batch size. Defaults to ``1``.
-    start : Quantity[ms], optional
-        Recording window start relative to ``origin``. Defaults to
+    in_size : Size, optional
+        Shape/size metadata consumed by :class:`brainstate.nn.Dynamics`.
+        The detector is event-driven and does not return dense tensors, so
+        ``in_size`` is retained for API compatibility only. Default is ``1``.
+    start : brainunit.Quantity or float, optional
+        Scalar relative exclusive lower bound of the recording window,
+        convertible to ms. Must be finite and an integer multiple of ``dt``.
+        The effective gate is ``stamp_step > (origin + start) / dt``.
+        Default is ``0.0 * u.ms``.
+    stop : brainunit.Quantity, float, or None, optional
+        Scalar relative inclusive upper bound of the recording window,
+        convertible to ms. Must be ``None`` or finite and aligned to ``dt``.
+        Must satisfy ``stop >= start`` when not ``None``. The effective gate
+        is ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper
+        bound (:math:`s_{\max} = +\infty`). Default is ``None``.
+    origin : brainunit.Quantity or float, optional
+        Scalar global time-origin shift added to both ``start`` and ``stop``
+        when constructing the active window, convertible to ms. Shifting the
+        origin displaces the entire recording window without changing its
+        duration. Must be finite and aligned to ``dt``. Default is
         ``0.0 * u.ms``.
-    stop : Quantity[ms] or None, optional
-        Recording window stop relative to ``origin``. ``None`` means +infinity.
-        Defaults to ``None``.
-    origin : Quantity[ms], optional
-        Recording window origin shift. Defaults to ``0.0 * u.ms``.
     time_in_steps : bool, optional
-        If ``False`` (default), ``events['times']`` are float ms.
-        If ``True``, ``events['times']`` are integer step stamps and
-        ``events['offsets']`` are included.
+        Controls the time representation in ``events``. If ``False``,
+        ``events['times']`` stores ``float64`` milliseconds computed as
+        :math:`s \cdot dt - \delta_j`. If ``True``, ``events['times']``
+        stores integer step stamps (``int64``) and ``events['offsets']``
+        stores the corresponding ``float64`` offsets in ms. Becomes immutable
+        after the first :meth:`update` call. Default is ``False``.
     frozen : bool, optional
-        Kept for NEST API compatibility. ``True`` is rejected.
-    name : str, optional
-        Module name.
+        NEST-compatibility flag. ``True`` is unconditionally rejected because
+        this device cannot be frozen. Default is ``False``.
+    name : str or None, optional
+        Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
+        Default is ``None``.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Mapping of constructor parameters to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower bound of the recording window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound of the recording window.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global shift applied to both window boundaries.
+       * - ``time_in_steps``
+         - ``False``
+         - :math:`\mathrm{repr}_t`
+         - Output-time representation: ms float or integer ``(step, offset)`` pair.
+
+    Returns
+    -------
+    events : dict[str, np.ndarray]
+        Returned by :meth:`update`, :meth:`flush`, and the ``events``
+        property. All arrays are one-dimensional with length :math:`E`
+        equal to the total number of stored events accumulated so far:
+
+        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for
+          each recorded event, defaulting to ``1`` when not supplied.
+        - ``'state'`` — ``int64``, shape ``(E,)``: decoded binary state
+          (:math:`0` or :math:`1`) for each event.
+        - ``'times'`` — shape ``(E,)``: timestamp of each event.
+          ``float64`` in ms (:math:`s \cdot dt - \delta_j`) when
+          ``time_in_steps=False``; ``int64`` step stamp :math:`s` when
+          ``time_in_steps=True``.
+        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
+          ``time_in_steps=True``): per-event sub-step offset :math:`\delta_j`
+          in ms.
+
+    Raises
+    ------
+    ValueError
+        If ``frozen=True``; if ``dt`` is non-positive; if time parameters are
+        non-scalar, non-finite where finite values are required, misaligned to
+        the simulation step, or violate ``stop >= start``; if ``t`` is not on
+        the simulation grid; if ``time_in_steps`` is modified after simulation
+        begins; if ``n_events`` is set to any value other than ``0``; if
+        provided arrays have inconsistent sizes; if ``spikes``/``offsets``
+        contain non-finite values; or if explicit ``multiplicities`` contain
+        negative entries.
+    TypeError
+        If unit conversion or numeric coercion of scalar/array inputs fails.
+    KeyError
+        If :meth:`get` is called with an unsupported key, or if required
+        simulation context values (``'t'`` or ``dt``) are unavailable via
+        ``brainstate.environ``.
 
     Notes
     -----
-    - Input events are processed in the order supplied to :meth:`update`,
-      matching the sequential decode behavior in NEST ``handle``.
-    - Connection weight and delay are not part of decoding, consistent with
-      NEST ``spin_detector``.
+    - Input events are processed strictly in the order supplied, and one
+      buffered event is finalized at the end of every :meth:`update` call.
+    - Connection weight and delay do not participate in decode logic.
+    - ``time_in_steps`` becomes immutable after the first :meth:`update`
+      call that accesses simulation context, matching NEST backend constraints.
+    - NEST semantics are defined for multiplicities ``1`` and ``2``. This
+      implementation also accepts other non-negative values, which follow the
+      ``m != 2`` branch in :meth:`_handle_event`.
+    - ``spikes=None`` is a no-op that flushes the buffer and returns the
+      current ``events`` without writing any new events.
+    - :meth:`init_state` clears all accumulated events and the one-slot
+      buffer; it can be used to reset the detector between simulation
+      segments without reconstructing the object.
 
     References
     ----------
     .. [1] NEST Simulator, ``spin_detector`` device.
            https://nest-simulator.readthedocs.io/en/stable/models/spin_detector.html
+
+    Examples
+    --------
+    Detect binary state for two same-sender, same-stamp events — the second
+    event (multiplicity 1, matching sender and stamp) upgrades the state to
+    ``1`` before the buffered event is written:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> import numpy as np
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     det = brainpy.state.spin_detector(start=0.0 * u.ms, stop=1.0 * u.ms)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = det.update(
+       ...             spikes=np.array([1.0, 1.0], dtype=np.float64),
+       ...             senders=np.array([7, 7], dtype=np.int64),
+       ...             stamp_steps=np.array([1, 1], dtype=np.int64),
+       ...         )
+       ...     ev = det.flush()
+       ...     _ = (ev['senders'][0], ev['state'][0])
+
+    Record a multiplicity-2 event with a sub-step offset using
+    ``time_in_steps=True``, which splits the timestamp into an integer step
+    index and a float offset — multiplicity ``2`` events are written
+    immediately with state ``1``:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> import numpy as np
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     det = brainpy.state.spin_detector(time_in_steps=True)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = det.update(
+       ...             spikes=np.array([2.0], dtype=np.float64),
+       ...             senders=np.array([3], dtype=np.int64),
+       ...             offsets=np.array([0.02], dtype=np.float64) * u.ms,
+       ...         )
+       ...     ev = det.events
+       ...     _ = (ev['times'][0], ev['offsets'][0], ev['state'][0])
     """
 
     __module__ = 'brainpy.state'
@@ -208,6 +392,93 @@ class spin_detector(brainstate.nn.Dynamics):
         multiplicities: ArrayLike = None,
         stamp_steps: ArrayLike = None,
     ):
+        r"""Decode binary states from spike events for the current simulation step.
+
+        Reads the current simulation time ``t`` and resolution ``dt`` from
+        ``brainstate.environ``, derives the default stamp step
+        :math:`s = \mathrm{round}(t/dt) + 1`, normalizes the input arrays,
+        applies the activity-window gate, and passes each accepted event through
+        the one-slot decode buffer via :meth:`_handle_event`. After all items
+        are processed, :meth:`_flush_last_event` finalizes any remaining
+        buffered event.
+
+        Parameters
+        ----------
+        spikes : ArrayLike or None, optional
+            Input spike payload, flattened to shape ``(N,)``. Accepted dtypes
+            include boolean, integer, and floating-point values.
+
+            - ``None``: no new events are processed; the buffer is flushed
+              and the current ``events`` dict is returned immediately.
+            - Integer-like values (all within ``1e-12`` of an integer) with
+              ``multiplicities is None``: each element :math:`j` contributes
+              multiplicity :math:`c_j = \max(\mathrm{round}(a_j),\, 0)`.
+            - Non-integer floating values with ``multiplicities is None``:
+              each element contributes :math:`c_j = \mathbf{1}[a_j > 0]`
+              (binary threshold).
+        senders : ArrayLike or None, optional
+            Sender node IDs cast to ``int64``, shape ``(N,)`` or scalar
+            broadcastable to ``(N,)``. Default sender ID is ``1`` for all
+            entries when ``None``.
+        offsets : ArrayLike or None, optional
+            Per-event sub-step timing offsets :math:`\delta_j` in ms, shape
+            ``(N,)`` or scalar broadcastable to ``(N,)``. Values may carry a
+            ``brainunit`` time unit and are converted to ms. Must contain only
+            finite values. Default is ``0.0 * u.ms`` for all entries.
+        multiplicities : ArrayLike or None, optional
+            Explicit non-negative integer event multiplicities cast to
+            ``int64``, shape ``(N,)`` or scalar broadcastable to ``(N,)``.
+            When provided, the integer-like inference path from ``spikes`` is
+            disabled; the count rule becomes
+            :math:`c_j = m_j \,\mathbf{1}[a_j > 0]`. Negative values raise
+            ``ValueError``. Default is ``None``.
+        stamp_steps : ArrayLike or None, optional
+            Explicit integer step stamps :math:`s_j` for each event, cast to
+            ``int64``, shape ``(N,)`` or scalar broadcastable to ``(N,)``.
+            When ``None``, all events are stamped at :math:`s = n + 1` where
+            :math:`n = \mathrm{round}(t/dt)`. Providing custom stamps allows
+            events generated at different simulation steps to be injected in
+            a single call. Default is ``None``.
+
+        Returns
+        -------
+        events : dict[str, np.ndarray]
+            Current accumulated events dictionary after processing this step.
+            All arrays are one-dimensional with length :math:`E` equal to
+            the total number of stored events:
+
+            - ``'senders'`` — ``int64``, shape ``(E,)``.
+            - ``'state'`` — ``int64``, shape ``(E,)``: decoded binary state
+              (:math:`0` or :math:`1`).
+            - ``'times'`` — ``float64`` ms when ``time_in_steps=False``;
+              ``int64`` step stamps when ``time_in_steps=True``.
+            - ``'offsets'`` — ``float64`` ms, shape ``(E,)`` (only present
+              when ``time_in_steps=True``).
+
+        Raises
+        ------
+        ValueError
+            If ``t`` is not grid-aligned to ``dt``; if ``start``, ``stop``,
+            or ``origin`` are invalid with respect to ``dt``; if ``dt <= 0``;
+            if provided payload array sizes are incompatible with the ``N``
+            inferred from ``spikes``; if ``offsets`` contain non-finite
+            values; or if explicit ``multiplicities`` contain negative entries.
+        TypeError
+            If numeric or unit conversion of any payload or time parameter
+            fails.
+        KeyError
+            If required simulation context entries (``'t'`` or ``dt``) are
+            not available via ``brainstate.environ``.
+
+        Notes
+        -----
+        Events are stamped at :math:`s = \mathrm{round}(t/dt) + 1` by
+        default and then gated by the active window
+        :math:`(s_{\min},\, s_{\max}]` in step space. Events outside the
+        window are discarded before reaching :meth:`_handle_event`. The
+        one-slot buffer is always flushed at the end of each call regardless
+        of how many new events were processed.
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
         calib = self._get_step_calibration(dt)

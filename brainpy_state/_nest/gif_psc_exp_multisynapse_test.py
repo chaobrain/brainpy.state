@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for gif_psc_exp_multisynapse neuron model.
 
 These tests verify that the brainpy.state implementation of
@@ -58,7 +58,7 @@ from brainpy_state._nest.gif_psc_exp_multisynapse import gif_psc_exp_multisynaps
 # ---------------------------------------------------------------------------
 
 def _propagator_exp(tau_syn, tau_m, c_m, h):
-    """Reference implementation of IAFPropagatorExp::evaluate().
+    r"""Reference implementation of IAFPropagatorExp::evaluate().
 
     Computes the propagator coefficient P21 for exact integration of the
     synaptic current contribution to the membrane potential.
@@ -78,7 +78,7 @@ def _propagator_exp(tau_syn, tau_m, c_m, h):
 
 def _run_nest_ref(n_steps, dt, p, tau_syn, i_stim_seq, w_seq, rand_seq,
                   tau_stc, q_stc, tau_sfa, q_sfa, lambda_0, Delta_V, V_T_star):
-    """Full reference implementation of gif_psc_exp_multisynapse update loop.
+    r"""Full reference implementation of gif_psc_exp_multisynapse update loop.
 
     Matches NEST update order exactly:
     1. Compute stc/sfa totals, decay elements
@@ -214,7 +214,7 @@ def _run_nest_ref(n_steps, dt, p, tau_syn, i_stim_seq, w_seq, rand_seq,
 # ---------------------------------------------------------------------------
 
 class TestDefaultParameters(unittest.TestCase):
-    """Test that default parameters match NEST C++ source code values."""
+    r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
         neuron = gif_psc_exp_multisynapse(1)
@@ -236,7 +236,7 @@ class TestDefaultParameters(unittest.TestCase):
         self.assertEqual(neuron.n_receptors, 1)
 
     def test_initial_state_matches_nest(self):
-        """V should be initialized to E_L, synaptic currents to 0."""
+        r"""V should be initialized to E_L, synaptic currents to 0."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = gif_psc_exp_multisynapse(1, tau_syn=(2.0, 5.0))
             neuron.init_state()
@@ -246,14 +246,14 @@ class TestDefaultParameters(unittest.TestCase):
             self.assertEqual(neuron.n_receptors, 2)
 
     def test_multiple_receptor_ports(self):
-        """tau_syn with multiple elements should create multiple receptor ports."""
+        r"""tau_syn with multiple elements should create multiple receptor ports."""
         neuron = gif_psc_exp_multisynapse(1, tau_syn=(2.0, 4.0, 8.0))
         self.assertEqual(neuron.n_receptors, 3)
         np.testing.assert_array_equal(neuron.tau_syn, np.array([2.0, 4.0, 8.0]))
 
 
 class TestParameterValidation(unittest.TestCase):
-    """Test that invalid parameters raise appropriate errors."""
+    r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_sfa_q_sfa_raises(self):
         with self.assertRaises(ValueError):
@@ -296,7 +296,7 @@ class TestParameterValidation(unittest.TestCase):
             gif_psc_exp_multisynapse(1, tau_syn=())
 
     def test_invalid_receptor_type_raises(self):
-        """Out-of-range receptor type should raise ValueError."""
+        r"""Out-of-range receptor type should raise ValueError."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = gif_psc_exp_multisynapse(1, tau_syn=(2.0,), lambda_0=0.0)
             neuron.init_state()
@@ -306,7 +306,7 @@ class TestParameterValidation(unittest.TestCase):
 
 
 class TestSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold membrane dynamics without spiking."""
+    r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -318,7 +318,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_current_input_has_one_step_delay(self):
-        """External current should be stored for use in the NEXT step."""
+        r"""External current should be stored for use in the NEXT step."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -343,7 +343,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(v1 > 0.0, f"V should increase from current, got {v1}")
 
     def test_synaptic_current_per_receptor(self):
-        """Spike events targeted at different receptors should be independent."""
+        r"""Spike events targeted at different receptors should be independent."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -367,7 +367,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(i_syn[0, 1], -3.0, places=8)
 
     def test_synaptic_current_exponential_decay(self):
-        """Synaptic currents per receptor should decay with their own time constant."""
+        r"""Synaptic currents per receptor should decay with their own time constant."""
         with brainstate.environ.context(dt=self.dt):
             tau_syn = (2.0, 5.0)
             neuron = gif_psc_exp_multisynapse(
@@ -397,7 +397,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(i_syn[0, 1], expected_1, places=5)
 
     def test_delta_input_mapped_to_receptor_1(self):
-        """Default delta inputs should be mapped to receptor 1."""
+        r"""Default delta inputs should be mapped to receptor 1."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -417,7 +417,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(i_syn[0, 1], 0.0, places=8)
 
     def test_exact_integration_propagator(self):
-        """Test exact integration with single receptor matches analytic solution."""
+        r"""Test exact integration with single receptor matches analytic solution."""
         dt = 0.1  # ms
         C_m = 80.0
         g_L = 4.0
@@ -452,7 +452,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
                                        f"analytic={V_analytic}")
 
     def test_three_receptors_depolarization(self):
-        """Three receptors with positive weights should all depolarize the neuron."""
+        r"""Three receptors with positive weights should all depolarize the neuron."""
         with brainstate.environ.context(dt=self.dt):
             base = gif_psc_exp_multisynapse(
                 1, tau_syn=(2.0, 4.0, 8.0), lambda_0=0.0, V_T_star=1000.0 * u.mV,
@@ -482,7 +482,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
 
 
 class TestRefractoryBehavior(unittest.TestCase):
-    """Test refractory period mechanics."""
+    r"""Test refractory period mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -492,7 +492,7 @@ class TestRefractoryBehavior(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_refractory_clamps_voltage_to_V_reset(self):
-        """During refractory period, V should stay at V_reset."""
+        r"""During refractory period, V should stay at V_reset."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -518,7 +518,7 @@ class TestRefractoryBehavior(unittest.TestCase):
                                        msg=f"V should be V_reset during refractory at step {k}")
 
     def test_refractory_count_matches_t_ref(self):
-        """Refractory counter should match ceil(t_ref / dt) as in NEST."""
+        r"""Refractory counter should match ceil(t_ref / dt) as in NEST."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -537,7 +537,7 @@ class TestRefractoryBehavior(unittest.TestCase):
             self.assertEqual(ref_count, expected)
 
     def test_synaptic_currents_evolve_during_refractory(self):
-        """Synaptic currents should continue decaying during refractory period."""
+        r"""Synaptic currents should continue decaying during refractory period."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -569,7 +569,7 @@ class TestRefractoryBehavior(unittest.TestCase):
 
 
 class TestAdaptation(unittest.TestCase):
-    """Test stc and sfa adaptation mechanics."""
+    r"""Test stc and sfa adaptation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -579,7 +579,7 @@ class TestAdaptation(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_stc_elements_decay_exponentially(self):
-        """STC elements should decay by exp(-dt/tau) each step."""
+        r"""STC elements should decay by exp(-dt/tau) each step."""
         tau_stc = [10.0, 20.0]
         q_stc = [5.0, -2.0]
 
@@ -614,7 +614,7 @@ class TestAdaptation(unittest.TestCase):
                                        msg=f"STC element {i} decay mismatch")
 
     def test_sfa_elements_decay_exponentially(self):
-        """SFA elements should decay by exp(-dt/tau) each step."""
+        r"""SFA elements should decay by exp(-dt/tau) each step."""
         tau_sfa = [100.0, 50.0]
         q_sfa = [10.0, 5.0]
 
@@ -645,7 +645,7 @@ class TestAdaptation(unittest.TestCase):
                                        msg=f"SFA element {i} decay mismatch")
 
     def test_adaptation_increases_threshold(self):
-        """After a spike, sfa should raise the effective threshold."""
+        r"""After a spike, sfa should raise the effective threshold."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -670,7 +670,7 @@ class TestAdaptation(unittest.TestCase):
             self.assertAlmostEqual(neuron._sfa_val[0], -25.0, places=3)
 
     def test_stc_current_opposes_depolarization(self):
-        """Positive stc should hyperpolarize the neuron."""
+        r"""Positive stc should hyperpolarize the neuron."""
         with brainstate.environ.context(dt=self.dt):
             no_stc = gif_psc_exp_multisynapse(
                 1, lambda_0=0.0, I_e=200.0 * u.pA,
@@ -695,7 +695,7 @@ class TestAdaptation(unittest.TestCase):
 
 
 class TestStochasticSpiking(unittest.TestCase):
-    """Test stochastic spike generation mechanics."""
+    r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -705,7 +705,7 @@ class TestStochasticSpiking(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_no_spikes_with_zero_lambda(self):
-        """With lambda_0=0, no spikes should ever occur."""
+        r"""With lambda_0=0, no spikes should ever occur."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -722,7 +722,7 @@ class TestStochasticSpiking(unittest.TestCase):
                                  f"No spike expected with lambda_0=0 at step {k}")
 
     def test_high_lambda_produces_spikes(self):
-        """With very high lambda_0, spikes should occur readily."""
+        r"""With very high lambda_0, spikes should occur readily."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -745,7 +745,7 @@ class TestStochasticSpiking(unittest.TestCase):
                             f"Expected many spikes with high lambda, got {spike_count}")
 
     def test_deterministic_with_fixed_rng_key(self):
-        """Two neurons with same RNG key and parameters should spike identically."""
+        r"""Two neurons with same RNG key and parameters should spike identically."""
         with brainstate.environ.context(dt=self.dt):
             key = jax.random.PRNGKey(12345)
             n1 = gif_psc_exp_multisynapse(
@@ -765,7 +765,7 @@ class TestStochasticSpiking(unittest.TestCase):
 
 
 class TestReferenceTrace(unittest.TestCase):
-    """Compare full simulation traces against standalone reference implementation."""
+    r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
         self.dt_val = 0.1
@@ -778,7 +778,7 @@ class TestReferenceTrace(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_subthreshold_single_receptor(self):
-        """Single-receptor subthreshold trace should match reference."""
+        r"""Single-receptor subthreshold trace should match reference."""
         p = {
             'E_L': -70.0, 'C_m': 80.0, 'g_L': 4.0,
             'V_reset': -55.0, 'I_e': 50.0, 't_ref': 4.0,
@@ -840,7 +840,7 @@ class TestReferenceTrace(unittest.TestCase):
                                    msg=f"I_syn mismatch at step {k}")
 
     def test_multi_receptor_subthreshold(self):
-        """Multi-receptor subthreshold trace should match reference."""
+        r"""Multi-receptor subthreshold trace should match reference."""
         p = {
             'E_L': -70.0, 'C_m': 80.0, 'g_L': 4.0,
             'V_reset': -55.0, 'I_e': 50.0, 't_ref': 4.0,
@@ -903,7 +903,7 @@ class TestReferenceTrace(unittest.TestCase):
                                    msg=f"I_syn[1] mismatch at step {k}")
 
     def test_full_trace_with_adaptation_and_spiking(self):
-        """Full trace with adaptation and controlled spiking matches reference."""
+        r"""Full trace with adaptation and controlled spiking matches reference."""
         p = {
             'E_L': -70.0, 'C_m': 80.0, 'g_L': 4.0,
             'V_reset': -55.0, 'I_e': 0.0, 't_ref': 4.0,
@@ -969,7 +969,7 @@ class TestReferenceTrace(unittest.TestCase):
                                        f"model={v_model[k]}, ref={v_ref[k]}")
 
     def test_dc_driven_with_multi_receptor_spikes(self):
-        """DC + multi-receptor spikes with adaptation, comparing against reference."""
+        r"""DC + multi-receptor spikes with adaptation, comparing against reference."""
         p = {
             'E_L': -70.0, 'C_m': 40.0, 'g_L': 4.0,
             'V_reset': -55.0, 'I_e': 170.0, 't_ref': 4.0,
@@ -1051,7 +1051,7 @@ class TestReferenceTrace(unittest.TestCase):
 
 
 class TestUpdateOrder(unittest.TestCase):
-    """Test that the update order matches NEST exactly."""
+    r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -1061,7 +1061,7 @@ class TestUpdateOrder(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_stc_computed_before_membrane_update(self):
-        """STC should be computed BEFORE membrane update, matching NEST."""
+        r"""STC should be computed BEFORE membrane update, matching NEST."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -1087,7 +1087,7 @@ class TestUpdateOrder(unittest.TestCase):
                                    msg="STC should be 100 nA on step after spike")
 
     def test_synaptic_contribution_before_decay(self):
-        """Synaptic contribution to V should use pre-decay current value.
+        r"""Synaptic contribution to V should use pre-decay current value.
 
         NEST computes sum_syn_pot = P21_syn[k] * i_syn[k] BEFORE decaying
         i_syn[k], then decays, then adds new spikes.
@@ -1134,7 +1134,7 @@ class TestUpdateOrder(unittest.TestCase):
             self.assertTrue(expected_syn_contribution > 0)
 
     def test_synaptic_decay_before_weight_addition(self):
-        """Synaptic current should be decayed BEFORE spike weight jumps are added."""
+        r"""Synaptic current should be decayed BEFORE spike weight jumps are added."""
         with brainstate.environ.context(dt=self.dt):
             tau_syn_val = 2.0
             neuron = gif_psc_exp_multisynapse(
@@ -1158,7 +1158,7 @@ class TestUpdateOrder(unittest.TestCase):
             self.assertAlmostEqual(isyn1, expected, places=6)
 
     def test_propagator_singularity_handling(self):
-        """When tau_m == tau_syn, the singular propagator should be used."""
+        r"""When tau_m == tau_syn, the singular propagator should be used."""
         # tau_m = C_m / g_L = 80 / 4 = 20 ms
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
@@ -1182,7 +1182,7 @@ class TestUpdateOrder(unittest.TestCase):
 
 
 class TestMultisynapseSpecific(unittest.TestCase):
-    """Tests specific to the multisynapse functionality."""
+    r"""Tests specific to the multisynapse functionality."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -1192,7 +1192,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_receptor_isolation(self):
-        """Input to one receptor should not affect other receptors' currents."""
+        r"""Input to one receptor should not affect other receptors' currents."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1,
@@ -1215,7 +1215,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
                                    msg="Receptor 3 should have zero current")
 
     def test_independent_decay_rates(self):
-        """Each receptor should decay with its own time constant."""
+        r"""Each receptor should decay with its own time constant."""
         tau_syn = (2.0, 10.0, 50.0)
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
@@ -1248,7 +1248,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
                             "Faster time constant should give more decay")
 
     def test_spike_event_dict_format(self):
-        """Spike events should work with dict format as well as tuple."""
+        r"""Spike events should work with dict format as well as tuple."""
         with brainstate.environ.context(dt=self.dt):
             n_tuple = gif_psc_exp_multisynapse(
                 1, tau_syn=(2.0, 5.0), lambda_0=0.0, V_T_star=1000.0 * u.mV,
@@ -1274,7 +1274,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
             np.testing.assert_allclose(i_tuple, i_dict, atol=1e-12)
 
     def test_multiple_spikes_same_receptor(self):
-        """Multiple spike events to the same receptor should accumulate."""
+        r"""Multiple spike events to the same receptor should accumulate."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp_multisynapse(
                 1, tau_syn=(2.0,), lambda_0=0.0, V_T_star=1000.0 * u.mV,
@@ -1290,7 +1290,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
                                    msg="Multiple spikes should accumulate")
 
     def test_equivalence_with_single_receptor_gif_psc_exp(self):
-        """With one receptor, gif_psc_exp_multisynapse should match gif_psc_exp
+        r"""With one receptor, gif_psc_exp_multisynapse should match gif_psc_exp
         for positive-weight-only inputs (both map to excitatory channel)."""
         p = {
             'E_L': -70.0, 'C_m': 80.0, 'g_L': 4.0,

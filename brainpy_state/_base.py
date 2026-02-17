@@ -54,7 +54,7 @@ class Dynamics(brainstate.nn.Dynamics):
 
     @property
     def current_inputs(self):
-        """
+        r"""
         Get the dictionary of current inputs registered with this dynamics model.
 
         Current inputs represent direct input currents that flow into the model.
@@ -75,7 +75,7 @@ class Dynamics(brainstate.nn.Dynamics):
 
     @property
     def delta_inputs(self):
-        """
+        r"""
         Get the dictionary of delta inputs registered with this dynamics model.
 
         Delta inputs represent instantaneous changes to state variables (dX/dt).
@@ -100,7 +100,7 @@ class Dynamics(brainstate.nn.Dynamics):
         inp: Union[Callable, ArrayLike],
         label: Optional[str] = None
     ):
-        """
+        r"""
         Add a current input function or array to the dynamics model.
 
         Current inputs represent direct input currents that can be accessed during
@@ -150,7 +150,7 @@ class Dynamics(brainstate.nn.Dynamics):
         inp: Union[Callable, ArrayLike],
         label: Optional[str] = None
     ):
-        """
+        r"""
         Add a delta input function or array to the dynamics model.
 
         Delta inputs represent instantaneous changes to the model state (i.e., dX/dt contributions).
@@ -196,7 +196,7 @@ class Dynamics(brainstate.nn.Dynamics):
         self._delta_inputs[key] = inp
 
     def get_input(self, key: str):
-        """
+        r"""
         Get a registered input function by its key.
 
         Retrieves either a current input or a delta input function that was previously
@@ -245,7 +245,7 @@ class Dynamics(brainstate.nn.Dynamics):
         label: Optional[str] = None,
         **kwargs
     ):
-        """
+        r"""
         Summarize all current inputs by applying and summing all registered current input functions.
 
         This method iterates through all registered current input functions (from `.current_inputs`)
@@ -313,7 +313,7 @@ class Dynamics(brainstate.nn.Dynamics):
         label: Optional[str] = None,
         **kwargs
     ):
-        """
+        r"""
         Summarize all delta inputs by applying and summing all registered delta input functions.
 
         This method iterates through all registered delta input functions (from `.delta_inputs`)
@@ -375,7 +375,7 @@ class Dynamics(brainstate.nn.Dynamics):
         return init
 
     def align_pre(self, dyn: Union[ParamDescriber[T], T]) -> T:
-        """
+        r"""
         Registers a dynamics module to execute after this module.
 
         This method establishes a sequential execution relationship where the specified
@@ -611,7 +611,7 @@ class Neuron(Dynamics):
         self.spk_fun = spk_fun
 
     def get_spike(self, *args, **kwargs):
-        """
+        r"""
         Generate spikes based on neuron state variables.
 
         This abstract method must be implemented by subclasses to define the

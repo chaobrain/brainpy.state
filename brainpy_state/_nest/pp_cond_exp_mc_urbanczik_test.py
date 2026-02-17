@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for pp_cond_exp_mc_urbanczik neuron model.
 
 These tests verify that the brainpy.state implementation of
@@ -62,7 +62,7 @@ from brainpy_state._nest.pp_cond_exp_mc_urbanczik import (
 
 
 def _get_scalar(x):
-    """Extract scalar from array-like."""
+    r"""Extract scalar from array-like."""
     x = np.asarray(x)
     if x.ndim > 0:
         return float(x.flat[0])
@@ -70,37 +70,37 @@ def _get_scalar(x):
 
 
 def _V_s_mV(neuron):
-    """Get somatic V_m in mV as float."""
+    r"""Get somatic V_m in mV as float."""
     return _get_scalar(u.math.asarray(neuron.V_s.value / u.mV))
 
 
 def _V_d_mV(neuron):
-    """Get dendritic V_m in mV as float."""
+    r"""Get dendritic V_m in mV as float."""
     return _get_scalar(u.math.asarray(neuron.V_d.value / u.mV))
 
 
 def _g_ex_s_nS(neuron):
-    """Get somatic excitatory conductance in nS as float."""
+    r"""Get somatic excitatory conductance in nS as float."""
     return _get_scalar(u.math.asarray(neuron.g_ex_s.value / u.nS))
 
 
 def _g_in_s_nS(neuron):
-    """Get somatic inhibitory conductance in nS as float."""
+    r"""Get somatic inhibitory conductance in nS as float."""
     return _get_scalar(u.math.asarray(neuron.g_in_s.value / u.nS))
 
 
 def _I_ex_d_pA(neuron):
-    """Get dendritic excitatory current in pA as float."""
+    r"""Get dendritic excitatory current in pA as float."""
     return _get_scalar(u.math.asarray(neuron.I_ex_d.value / u.pA))
 
 
 def _I_in_d_pA(neuron):
-    """Get dendritic inhibitory current in pA as float."""
+    r"""Get dendritic inhibitory current in pA as float."""
     return _get_scalar(u.math.asarray(neuron.I_in_d.value / u.pA))
 
 
 def _run_ref_dynamics(y0, dt, p):
-    """Run one step of the reference ODE integration.
+    r"""Run one step of the reference ODE integration.
 
     Uses solve_ivp with RK45 matching the model implementation.
 
@@ -158,7 +158,7 @@ def _run_ref_dynamics(y0, dt, p):
 
 
 class TestDefaultParameters(unittest.TestCase):
-    """Test that default parameters match NEST C++ source."""
+    r"""Test that default parameters match NEST C++ source."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -249,7 +249,7 @@ class TestDefaultParameters(unittest.TestCase):
 
 
 class TestParameterValidation(unittest.TestCase):
-    """Test parameter validation matches NEST checks."""
+    r"""Test parameter validation matches NEST checks."""
 
     def test_negative_rate_slope(self):
         with self.assertRaises(ValueError):
@@ -289,7 +289,7 @@ class TestParameterValidation(unittest.TestCase):
 
 
 class TestStateInitialization(unittest.TestCase):
-    """Test initial state variable values."""
+    r"""Test initial state variable values."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -327,39 +327,39 @@ class TestStateInitialization(unittest.TestCase):
 
 
 class TestRateFunctions(unittest.TestCase):
-    """Test the phi and h rate functions."""
+    r"""Test the phi and h rate functions."""
 
     def test_phi_at_theta(self):
-        """At V_m = theta, phi should be phi_max / (1 + k)."""
+        r"""At V_m = theta, phi should be phi_max / (1 + k)."""
         result = _phi(-55.0, 0.15, 0.5, 1.0 / 3.0, -55.0)
         expected = 0.15 / (1.0 + 0.5)
         self.assertAlmostEqual(result, expected, places=10)
 
     def test_phi_far_above_theta(self):
-        """For V_m >> theta, phi -> phi_max."""
+        r"""For V_m >> theta, phi -> phi_max."""
         result = _phi(0.0, 0.15, 0.5, 1.0 / 3.0, -55.0)
         self.assertAlmostEqual(result, 0.15, places=5)
 
     def test_phi_far_below_theta(self):
-        """For V_m << theta, phi -> 0."""
+        r"""For V_m << theta, phi -> 0."""
         result = _phi(-200.0, 0.15, 0.5, 1.0 / 3.0, -55.0)
         self.assertAlmostEqual(result, 0.0, places=5)
 
     def test_h_at_theta(self):
-        """At V_m = theta, h should be 15*beta / (1 + 1/k)."""
+        r"""At V_m = theta, h should be 15*beta / (1 + 1/k)."""
         result = _h_func(-55.0, 0.5, 1.0 / 3.0, -55.0)
         expected = 15.0 * (1.0 / 3.0) / (1.0 + 1.0 / 0.5)
         self.assertAlmostEqual(result, expected, places=10)
 
     def test_h_positive(self):
-        """h(u) should be positive for all u."""
+        r"""h(u) should be positive for all u."""
         h_vals = [_h_func(v, 0.5, 1.0 / 3.0, -55.0) for v in [-100, -70, -55, -40, -20, 0]]
         for hv in h_vals:
             self.assertGreater(hv, 0.0)
 
 
 class TestSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold dynamics match standalone reference ODE integration."""
+    r"""Test subthreshold dynamics match standalone reference ODE integration."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -367,7 +367,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA,
               soma_exc=None, soma_inh=None, dend_exc=None, dend_inh=None):
-        """Run one step with optional synaptic inputs."""
+        r"""Run one step with optional synaptic inputs."""
         if soma_exc is not None:
             neuron.add_delta_input(f'soma_exc_{step_idx}', soma_exc)
         if soma_inh is not None:
@@ -380,7 +380,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_resting_state(self):
-        """At rest (all at E_L, no input), neuron should stay at rest."""
+        r"""At rest (all at E_L, no input), neuron should stay at rest."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -393,7 +393,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(_V_d_mV(neuron), -70.0, places=4)
 
     def test_soma_excitatory_conductance_decay(self):
-        """Somatic excitatory conductance should decay exponentially."""
+        r"""Somatic excitatory conductance should decay exponentially."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -416,7 +416,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(actual, expected, places=2)
 
     def test_dend_excitatory_current_decay(self):
-        """Dendritic excitatory current should decay exponentially."""
+        r"""Dendritic excitatory current should decay exponentially."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -438,7 +438,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(actual, expected, places=1)
 
     def test_dend_inhibitory_sign_convention(self):
-        """Dendritic inhibitory current is subtracted (NEST convention)."""
+        r"""Dendritic inhibitory current is subtracted (NEST convention)."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -450,7 +450,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(_I_in_d_pA(neuron), -50.0, places=1)
 
     def test_soma_dendrite_coupling(self):
-        """Soma-dendrite coupling should equilibrate potentials."""
+        r"""Soma-dendrite coupling should equilibrate potentials."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             # Set different E_L values to create a potential difference
             neuron = pp_cond_exp_mc_urbanczik(
@@ -477,7 +477,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertLessEqual(v_d, -60.0)
 
     def test_one_step_reference_match(self):
-        """One step of model should match standalone reference ODE."""
+        r"""One step of model should match standalone reference ODE."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -515,7 +515,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(_g_ex_s_nS(neuron), yf[_idx(SOMA, _G_EXC)], places=6)
 
     def test_multi_step_reference_match(self):
-        """Multiple steps should match reference integration."""
+        r"""Multiple steps should match reference integration."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -564,27 +564,27 @@ class TestSubthresholdDynamics(unittest.TestCase):
 
 
 class TestSpikeGeneration(unittest.TestCase):
-    """Test stochastic spike generation."""
+    r"""Test stochastic spike generation."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_low_rate_at_rest(self):
-        """At rest (V_m = E_L = -70 mV), rate should be low but nonzero."""
+        r"""At rest (V_m = E_L = -70 mV), rate should be low but nonzero."""
         rate = 1000.0 * _phi(-70.0, 0.15, 0.5, 1.0 / 3.0, -55.0)
         # Rate should be positive but much less than maximum (150 Hz)
         self.assertGreater(rate, 0.0)
         self.assertLess(rate, 10.0)  # Low rate at rest
 
     def test_high_rate_at_depolarized(self):
-        """At depolarized potential, rate should be high."""
+        r"""At depolarized potential, rate should be high."""
         rate = 1000.0 * _phi(-40.0, 0.15, 0.5, 1.0 / 3.0, -55.0)
         # Rate should be close to 1000*phi_max = 150 Hz
         self.assertGreater(rate, 100.0)
 
     def test_no_v_reset_after_spike(self):
-        """Verify there is no membrane potential reset after spiking."""
+        r"""Verify there is no membrane potential reset after spiking."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             # Create a neuron at very high potential to force a spike
             neuron = pp_cond_exp_mc_urbanczik(
@@ -619,14 +619,14 @@ class TestSpikeGeneration(unittest.TestCase):
 
 
 class TestRefractoryPeriod(unittest.TestCase):
-    """Test refractory period mechanics."""
+    r"""Test refractory period mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_refractory_counter_decrement(self):
-        """Refractory counter should decrement each step."""
+        r"""Refractory counter should decrement each step."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1, t_ref=3.0 * u.ms)
             neuron.init_state()
@@ -643,7 +643,7 @@ class TestRefractoryPeriod(unittest.TestCase):
             )
 
     def test_no_spike_during_refractory(self):
-        """No spikes should be emitted during refractory period."""
+        r"""No spikes should be emitted during refractory period."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(
                 1,
@@ -664,14 +664,14 @@ class TestRefractoryPeriod(unittest.TestCase):
 
 
 class TestUrbanczikHistory(unittest.TestCase):
-    """Test Urbanczik learning signal history computation."""
+    r"""Test Urbanczik learning signal history computation."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_history_populated(self):
-        """History should be populated after each step."""
+        r"""History should be populated after each step."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -684,7 +684,7 @@ class TestUrbanczikHistory(unittest.TestCase):
             self.assertEqual(len(history), 10)
 
     def test_dPI_at_rest(self):
-        """At rest, dPI should reflect that n_spikes=0 and rate is very small."""
+        r"""At rest, dPI should reflect that n_spikes=0 and rate is very small."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -705,7 +705,7 @@ class TestUrbanczikHistory(unittest.TestCase):
             self.assertAlmostEqual(dPI, 0.0, places=2)
 
     def test_dPI_formula(self):
-        """Verify dPI formula against manual computation."""
+        r"""Verify dPI formula against manual computation."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -729,14 +729,14 @@ class TestUrbanczikHistory(unittest.TestCase):
 
 
 class TestCurrentInput(unittest.TestCase):
-    """Test external current input handling."""
+    r"""Test external current input handling."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_soma_current_input_delayed(self):
-        """External current should be delayed by one step (NEST ring buffer)."""
+        r"""External current should be delayed by one step (NEST ring buffer)."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
@@ -760,14 +760,14 @@ class TestCurrentInput(unittest.TestCase):
 
 
 class TestPopulation(unittest.TestCase):
-    """Test that the model works with in_size > 1."""
+    r"""Test that the model works with in_size > 1."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_identical_neurons_match(self):
-        """Two identical neurons with same RNG should produce same output."""
+        r"""Two identical neurons with same RNG should produce same output."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             n1 = pp_cond_exp_mc_urbanczik(1, rng_key=jax.random.PRNGKey(42))
             n1.init_state()
@@ -784,7 +784,7 @@ class TestPopulation(unittest.TestCase):
                 self.assertAlmostEqual(_V_d_mV(n1), _V_d_mV(n2), places=10)
 
     def test_population_shape(self):
-        """Model should work with in_size > 1."""
+        r"""Model should work with in_size > 1."""
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             neuron = pp_cond_exp_mc_urbanczik(3)
             neuron.init_state()
@@ -798,14 +798,14 @@ class TestPopulation(unittest.TestCase):
 
 
 class TestFullReferenceTrace(unittest.TestCase):
-    """Compare full simulation trace against standalone reference implementation."""
+    r"""Compare full simulation trace against standalone reference implementation."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_subthreshold_with_somatic_excitation(self):
-        """Compare trace with somatic excitatory conductance input."""
+        r"""Compare trace with somatic excitatory conductance input."""
         dt_val = 0.1
         n_steps = 100
 
@@ -873,7 +873,7 @@ class TestFullReferenceTrace(unittest.TestCase):
             )
 
     def test_subthreshold_with_dendritic_excitation(self):
-        """Compare trace with dendritic current input."""
+        r"""Compare trace with dendritic current input."""
         dt_val = 0.1
         n_steps = 100
 
@@ -935,14 +935,14 @@ class TestFullReferenceTrace(unittest.TestCase):
 
 
 class TestUrbanczikLearningSignal(unittest.TestCase):
-    """Test the Urbanczik-Senn learning signal (dPI) computation."""
+    r"""Test the Urbanczik-Senn learning signal (dPI) computation."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
     def test_V_W_star_computation(self):
-        """Verify V_W_star dendritic prediction formula."""
+        r"""Verify V_W_star dendritic prediction formula."""
         g_D = 600.0  # g_sp
         g_L = 30.0
         E_L = -70.0
@@ -956,7 +956,7 @@ class TestUrbanczikLearningSignal(unittest.TestCase):
         self.assertAlmostEqual(V_W_star, expected, places=10)
 
     def test_dPI_without_spike(self):
-        """Without spikes, dPI = (-phi(V_W_star) * dt) * h(V_W_star)."""
+        r"""Without spikes, dPI = (-phi(V_W_star) * dt) * h(V_W_star)."""
         phi_max = 0.15
         rate_slope = 0.5
         beta = 1.0 / 3.0

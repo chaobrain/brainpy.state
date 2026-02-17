@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the ignore_and_fire neuron model.
 
 These tests verify that the brainpy_state implementation matches the NEST
@@ -43,7 +43,7 @@ from brainpy_state._nest.ignore_and_fire import ignore_and_fire
 
 
 def _collect_spike_times(neuron, n_steps, dt):
-    """Run neuron for n_steps and return spike times (in ms) using NEST convention.
+    r"""Run neuron for n_steps and return spike times (in ms) using NEST convention.
 
     NEST records spike time as the delivery time t + dt.
     """
@@ -58,7 +58,7 @@ def _collect_spike_times(neuron, n_steps, dt):
 
 
 def _collect_spike_steps(neuron, n_steps, dt):
-    """Run neuron for n_steps and return step indices where spikes occur."""
+    r"""Run neuron for n_steps and return step indices where spikes occur."""
     spike_steps = []
     for step_idx in range(n_steps):
         t = step_idx * dt
@@ -70,7 +70,7 @@ def _collect_spike_steps(neuron, n_steps, dt):
 
 
 class TestIgnoreAndFireDefaults(unittest.TestCase):
-    """Verify NEST-compatible default parameter values."""
+    r"""Verify NEST-compatible default parameter values."""
 
     def test_default_phase(self):
         neuron = ignore_and_fire(1)
@@ -96,14 +96,14 @@ class TestIgnoreAndFireDefaults(unittest.TestCase):
 
 
 class TestIgnoreAndFireSpikeTimes(unittest.TestCase):
-    """Check that spike times match the NEST reference test.
+    r"""Check that spike times match the NEST reference test.
 
     This reproduces the test from NEST's
     ``testsuite/pytests/test_ignore_and_fire_neuron.py``.
     """
 
     def test_spike_times_match_nest_reference(self):
-        """Spike times must match the analytical prediction from NEST test."""
+        r"""Spike times must match the analytical prediction from NEST test."""
         rate = 5.0  # Hz
         phase = 0.4
         dt_val = 2 ** -3  # ms (= 0.125 ms)
@@ -129,7 +129,7 @@ class TestIgnoreAndFireSpikeTimes(unittest.TestCase):
             )
 
     def test_spike_times_default_rate_and_phase(self):
-        """Default parameters: rate=10 Hz, phase=1.0, dt=0.1 ms."""
+        r"""Default parameters: rate=10 Hz, phase=1.0, dt=0.1 ms."""
         rate = 10.0
         phase = 1.0
         dt_val = 0.1
@@ -154,10 +154,10 @@ class TestIgnoreAndFireSpikeTimes(unittest.TestCase):
 
 
 class TestIgnoreAndFireInputIgnored(unittest.TestCase):
-    """Verify that all inputs are truly ignored."""
+    r"""Verify that all inputs are truly ignored."""
 
     def test_spike_times_unaffected_by_current_input(self):
-        """Passing current input should not change spike times."""
+        r"""Passing current input should not change spike times."""
         dt_val = 0.1
         dt = dt_val * u.ms
         T = 200.0
@@ -185,7 +185,7 @@ class TestIgnoreAndFireInputIgnored(unittest.TestCase):
                 )
 
     def test_spike_times_unaffected_by_delta_input(self):
-        """Delta (spike) inputs should not change spike times."""
+        r"""Delta (spike) inputs should not change spike times."""
         dt_val = 0.1
         dt = dt_val * u.ms
         T = 200.0
@@ -214,10 +214,10 @@ class TestIgnoreAndFireInputIgnored(unittest.TestCase):
 
 
 class TestIgnoreAndFirePhaseSteps(unittest.TestCase):
-    """Verify internal phase step counter behavior."""
+    r"""Verify internal phase step counter behavior."""
 
     def test_phase_steps_countdown(self):
-        """phase_steps should decrement by 1 each step until 0, then reset."""
+        r"""phase_steps should decrement by 1 each step until 0, then reset."""
         dt_val = 0.1
         dt = dt_val * u.ms
         rate = 10.0  # Hz => period = 100 ms => 1000 steps at dt=0.1
@@ -242,7 +242,7 @@ class TestIgnoreAndFirePhaseSteps(unittest.TestCase):
             self.assertEqual(int(neuron.phase_steps.value), initial_phase_steps - 1)
 
     def test_first_spike_timing(self):
-        """First spike occurs after phase_steps countdown reaches 0."""
+        r"""First spike occurs after phase_steps countdown reaches 0."""
         dt_val = 1.0
         dt = dt_val * u.ms
         rate = 10.0  # Hz => period = 100 ms => 100 steps
@@ -267,10 +267,10 @@ class TestIgnoreAndFirePhaseSteps(unittest.TestCase):
 
 
 class TestIgnoreAndFireBatch(unittest.TestCase):
-    """Verify batch dimension handling."""
+    r"""Verify batch dimension handling."""
 
     def test_batch_dimension(self):
-        """Neurons should maintain independent phase counters in batch mode."""
+        r"""Neurons should maintain independent phase counters in batch mode."""
         dt = 0.1 * u.ms
 
         with brainstate.environ.context(dt=dt):
@@ -285,7 +285,7 @@ class TestIgnoreAndFireBatch(unittest.TestCase):
             self.assertEqual(spike.shape, (2, 3))
 
     def test_multiple_neurons_different_phases(self):
-        """Multiple neurons with different phases fire at different times."""
+        r"""Multiple neurons with different phases fire at different times."""
         dt_val = 1.0
         dt = dt_val * u.ms
         rate = 10.0  # 100 ms period
@@ -320,10 +320,10 @@ class TestIgnoreAndFireBatch(unittest.TestCase):
 
 
 class TestIgnoreAndFireInterSpikeInterval(unittest.TestCase):
-    """Verify constant inter-spike interval."""
+    r"""Verify constant inter-spike interval."""
 
     def test_constant_isi(self):
-        """Inter-spike interval should be exactly firing_period_steps."""
+        r"""Inter-spike interval should be exactly firing_period_steps."""
         dt_val = 0.5
         dt = dt_val * u.ms
         rate = 50.0  # Hz => period = 20 ms => 40 steps at dt=0.5
@@ -347,7 +347,7 @@ class TestIgnoreAndFireInterSpikeInterval(unittest.TestCase):
 
 
 class TestIgnoreAndFireVsNEST(unittest.TestCase):
-    """Compare against NEST simulator outputs when NEST is available."""
+    r"""Compare against NEST simulator outputs when NEST is available."""
 
     @classmethod
     def setUpClass(cls):
@@ -358,7 +358,7 @@ class TestIgnoreAndFireVsNEST(unittest.TestCase):
             cls.nest_available = False
 
     def test_spike_times_vs_nest(self):
-        """Compare spike times directly with NEST simulation."""
+        r"""Compare spike times directly with NEST simulation."""
         if not self.nest_available:
             self.skipTest("NEST not installed")
 
@@ -395,7 +395,7 @@ class TestIgnoreAndFireVsNEST(unittest.TestCase):
         )
 
     def test_spike_times_vs_nest_various_params(self):
-        """Compare spike times for several parameter combinations."""
+        r"""Compare spike times for several parameter combinations."""
         if not self.nest_available:
             self.skipTest("NEST not installed")
 

@@ -45,7 +45,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        """Default parameters must match NEST: tau_m=10ms, theta=0mV."""
+        r"""Default parameters must match NEST: tau_m=10ms, theta=0mV."""
         neuron = mcculloch_pitts_neuron(1)
         self.assertEqual(neuron.tau_m, 10. * u.ms)
         self.assertEqual(neuron.theta, 0. * u.mV)
@@ -56,7 +56,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_initial_state_defaults(self):
-        """y should start at 0.0 and h at 0.0 mV by default."""
+        r"""y should start at 0.0 and h at 0.0 mV by default."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1)
             neuron.init_state()
@@ -64,7 +64,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.h.value, 0.0 * u.mV))
 
     def test_shape_without_batch(self):
-        """State shapes should match in_size when no batch."""
+        r"""State shapes should match in_size when no batch."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(4)
             neuron.init_state()
@@ -72,7 +72,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(neuron.h.value.shape, (4,))
 
     def test_shape_with_batch(self):
-        """State shapes should be (batch_size, in_size) with batch."""
+        r"""State shapes should be (batch_size, in_size) with batch."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(4)
             neuron.init_state(batch_size=3)
@@ -84,7 +84,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_heaviside_above_threshold(self):
-        """Input above theta -> output 1."""
+        r"""Input above theta -> output 1."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -92,7 +92,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 1.0)
 
     def test_heaviside_below_threshold(self):
-        """Input below theta -> output 0."""
+        r"""Input below theta -> output 0."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -100,7 +100,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 0.0)
 
     def test_heaviside_at_threshold(self):
-        """Input exactly at theta -> output 0 (strict inequality h > theta in NEST)."""
+        r"""Input exactly at theta -> output 0 (strict inequality h > theta in NEST)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -108,7 +108,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 0.0)
 
     def test_heaviside_negative_theta(self):
-        """With theta < 0, zero input should produce output 1."""
+        r"""With theta < 0, zero input should produce output 1."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=-10.0 * u.mV)
             neuron.init_state()
@@ -120,7 +120,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_delta_input_accumulates_in_h(self):
-        """Delta inputs should accumulate in h across steps."""
+        r"""Delta inputs should accumulate in h across steps."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=1.5 * u.mV)
             neuron.init_state()
@@ -136,7 +136,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.h.value, 2.0 * u.mV))
 
     def test_delta_input_negative_brings_below_threshold(self):
-        """Negative delta input (down-transition) should reduce h."""
+        r"""Negative delta input (down-transition) should reduce h."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -155,7 +155,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_current_input_adds_to_h_at_update(self):
-        """Current input x is added to h at the update point."""
+        r"""Current input x is added to h at the update point."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -165,7 +165,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 1.0)
 
     def test_current_input_does_not_persist_in_h(self):
-        """Current input should not accumulate in h across steps (only delta does)."""
+        r"""Current input should not accumulate in h across steps (only delta does)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -184,7 +184,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_up_transition(self):
-        """Neuron transitions from 0 to 1 when input exceeds threshold."""
+        r"""Neuron transitions from 0 to 1 when input exceeds threshold."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.0 * u.mV)
             neuron.init_state()
@@ -198,7 +198,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 1.0)
 
     def test_down_transition(self):
-        """Neuron transitions from 1 to 0 when input drops below threshold."""
+        r"""Neuron transitions from 1 to 0 when input drops below threshold."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -212,7 +212,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 0.0)
 
     def test_state_persists_without_input_change(self):
-        """State should remain stable when h doesn't change."""
+        r"""State should remain stable when h doesn't change."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
             neuron.init_state()
@@ -231,7 +231,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_multi_neuron_independent(self):
-        """Multiple neurons should update independently."""
+        r"""Multiple neurons should update independently."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(3, theta=0.5 * u.mV)
             neuron.init_state()
@@ -253,7 +253,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_matches_nest_binary_communication_pattern(self):
-        """Reproduce the NEST test_binary.py expected h trace.
+        r"""Reproduce the NEST test_binary.py expected h trace.
 
         In NEST's test, a spike_generator sends spikes at t=10.0 and t=10.0
         (double spike = up-transition, weight +1) and t=15.0 (single spike =
@@ -298,7 +298,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
                                        msg=f"h mismatch at step {i}: got {got}, expected {exp}")
 
     def test_matches_nest_state_change_with_negative_theta(self):
-        """Reproduce NEST test_binary_neuron_state_change.
+        r"""Reproduce NEST test_binary_neuron_state_change.
 
         With theta=-10.0 and tau_m=1.0 (deterministic mode), the neuron
         should transition to state 1 immediately since h=0 > theta=-10.
@@ -325,7 +325,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_custom_y_initializer(self):
-        """y_initializer should set the initial binary state."""
+        r"""y_initializer should set the initial binary state."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(
                 1,
@@ -339,7 +339,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_zero_theta_zero_input(self):
-        """With theta=0 and h=0, output should be 0 (strict inequality)."""
+        r"""With theta=0 and h=0, output should be 0 (strict inequality)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.0 * u.mV)
             neuron.init_state()
@@ -347,7 +347,7 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 0.0)
 
     def test_zero_theta_positive_input(self):
-        """With theta=0 and h>0, output should be 1."""
+        r"""With theta=0 and h>0, output should be 1."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mcculloch_pitts_neuron(1, theta=0.0 * u.mV)
             neuron.init_state()

@@ -29,98 +29,205 @@ __all__ = [
 
 
 class step_current_generator(brainstate.nn.Dynamics):
-    r"""Piecewise constant DC current generator -- NEST-compatible stimulation device.
+    r"""Piecewise-constant current generator -- NEST-compatible stimulation device.
 
-    Description
-    -----------
+    Generate a deterministic piecewise-constant current trace and gate it with
+    a half-open activity window using NEST-compatible time semantics.
 
-    ``step_current_generator`` provides a piecewise constant DC input to the
-    connected neuron(s). The amplitude of the current changes at the specified
-    times. The unit of the current is pA.
+    **1. Model equations**
 
-    This is a brainpy.state re-implementation of the NEST simulator device of
-    the same name, using NEST-standard parameterization.
-
-    Current output
-    ..............
-
-    The device provides a current that is piecewise constant over time:
+    Let :math:`\{(t_k, a_k)\}_{k=1}^{K}` be the configured change-time/current
+    pairs, where :math:`t_k` are times (ms) and :math:`a_k` are currents (pA).
+    Define the scheduled amplitude
 
     .. math::
 
-        I(t) = \begin{cases}
-            0                          & \text{if } t < t_1 \\
-            a_k                        & \text{if } t_k \le t < t_{k+1}, \; k = 1, \dots, N-1 \\
-            a_N                        & \text{if } t \ge t_N
+        A(t) =
+        \begin{cases}
+            0, & t < t_1, \\
+            a_k, & t_k \le t < t_{k+1},\ k=1,\dots,K-1, \\
+            a_K, & t \ge t_K.
         \end{cases}
 
-    where :math:`t_k` are the amplitude change times and :math:`a_k` are the
-    corresponding amplitude values.
+    The output is gated by
 
-    Timing convention
-    .................
+    .. math::
 
-    In NEST, the amplitude change is applied one simulation step ahead so that
-    the new amplitude takes effect at the specified time. This re-implementation
-    follows the same convention: the amplitude at time ``t`` is the most recent
-    amplitude value whose corresponding time is ``<= t``.
+        g(t) = \mathbf{1}\!\left[t \ge t_0+t_{\mathrm{start,rel}}\right]
+        \cdot
+        \mathbf{1}\!\left[t < t_0+t_{\mathrm{stop,rel}}\right],
 
-    The active window ``[origin + start, origin + stop)`` gates the output:
-    outside this window, the output is zero regardless of the amplitude schedule.
+    with the second indicator omitted when ``stop is None``. Final output:
 
-    .. note::
+    .. math::
 
-       ``amplitude_times`` must be strictly increasing and positive (> 0).
-       ``amplitude_times`` and ``amplitude_values`` must have the same length.
+        I(t) = g(t)\,A(t).
+
+    **2. Timing semantics, assumptions, and constraints**
+
+    NEST timing is matched by selecting, at time ``t``, the most recent change
+    point with ``t_k <= t``. In discrete simulation with step ``dt``, this
+    corresponds to applying a change exactly from the step whose environment
+    time equals the configured change time.
+
+    Enforced constraints in this implementation:
+
+    - ``len(amplitude_times) == len(amplitude_values)``.
+    - ``amplitude_times`` are strictly increasing after conversion to float ms.
+
+    Inputs accepted but not explicitly constrained:
+
+    - Unitless ``amplitude_times`` are interpreted as ms.
+    - Unitless ``amplitude_values`` are interpreted as pA.
+    - Positive-time-only schedules are recommended by NEST, but positivity is
+      not explicitly validated here.
+
+    **3. Computational implications**
+
+    Each :meth:`update` call scans ``amplitude_times`` linearly to find the
+    active plateau, then broadcasts one scalar current over ``self.varshape``
+    and applies one boolean mask. Per-call complexity is
+    :math:`O(K + \prod \mathrm{varshape})`, with :math:`K` schedule entries.
 
     Parameters
     ----------
+    in_size : Size, optional
+        Output size/shape specification consumed by
+        :class:`brainstate.nn.Dynamics`. The emitted current has shape
+        ``self.varshape`` derived from ``in_size``. Default is ``1``.
+    amplitude_times : Sequence, optional
+        Ordered sequence of change times with length ``K``. Entries may be
+        unitful times (typically ms) or unitless numerics interpreted as ms.
+        Internally, each entry is converted to ``float(t / u.ms)`` (or
+        ``float(t)`` when unitless). Must be strictly increasing. Default is
+        ``()``.
+    amplitude_values : Sequence, optional
+        Sequence of current plateaus with length ``K`` matching
+        ``amplitude_times`` elementwise. Entries may be unitful currents
+        (typically pA) or unitless numerics interpreted as pA. Internally
+        converted to plain floats in pA. Default is ``()``.
+    start : ArrayLike, optional
+        Relative start time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        broadcast to ``self.varshape`` via :func:`braintools.init.param`.
+        Effective lower bound is ``origin + start`` (inclusive).
+        Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative stop time :math:`t_{\mathrm{stop,rel}}` (typically ms),
+        broadcast to ``self.varshape`` when provided. Effective upper bound is
+        ``origin + stop`` (exclusive). ``None`` means no upper bound.
+        Default is ``None``.
+    origin : ArrayLike, optional
+        Time origin :math:`t_0` (typically ms) added to ``start`` and ``stop``,
+        broadcast to ``self.varshape``. Default is ``0. * u.ms``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set. Default values match the NEST simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
 
-    ======================= ================== ============================================
-    **Parameter**           **Default**        **Description**
-    ======================= ================== ============================================
-    ``in_size``             1                  Output size of the generator
-    ``amplitude_times``     ``[]``             Times at which current changes (list of ms)
-    ``amplitude_values``    ``[]``             Amplitudes of step current (list of pA)
-    ``start``               0 ms               Activation time relative to ``origin``
-    ``stop``                ``None`` (inf)     Deactivation time relative to ``origin``
-    ``origin``              0 ms               Global time offset
-    ======================= ================== ============================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``amplitude_times``
+         - ``()``
+         - :math:`t_k`
+         - Change times (ms) for piecewise-constant plateaus.
+       * - ``amplitude_values``
+         - ``()``
+         - :math:`a_k`
+         - Plateau currents (pA) selected at and after corresponding ``t_k``.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative inclusive lower bound of activity window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative exclusive upper bound of activity window.
+       * - ``origin``
+         - ``0. * u.ms``
+         - :math:`t_0`
+         - Global offset added to ``start`` and ``stop``.
 
-    Examples
-    --------
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a current-like array with
+        shape ``self.varshape`` and current units (typically pA), equal to the
+        scheduled plateau while active and zero otherwise.
 
-    Basic usage:
+    Raises
+    ------
+    ValueError
+        If ``amplitude_times`` and ``amplitude_values`` lengths differ, or if
+        ``amplitude_times`` is not strictly increasing after conversion to ms.
+    TypeError
+        If unitful/unitless arithmetic is invalid during conversion,
+        broadcasting, or time-window comparisons.
+    KeyError
+        At update time, if simulation time ``'t'`` is missing from
+        ``brainstate.environ``.
 
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     scg = brainpy.state.step_current_generator(
-    ...         amplitude_times=[10. * u.ms, 50. * u.ms, 80. * u.ms],
-    ...         amplitude_values=[200. * u.pA, -100. * u.pA, 500. * u.pA],
-    ...     )
-    ...     neuron = brainpy.state.iaf_psc_delta(1)
-    ...     neuron.init_state()
-    ...
-    ...     for step in range(1000):
-    ...         with brainstate.environ.context(t=step * 0.1 * u.ms):
-    ...             current = scg.update()
-    ...             spk = neuron.update(x=current)
-
-    References
-    ----------
-    .. [1] NEST Simulator, ``step_current_generator`` device.
-           https://nest-simulator.readthedocs.io/en/stable/models/step_current_generator.html
+    Notes
+    -----
+    NEST recommends specifying ``amplitude_times`` on a grid of simulation
+    resolution ``dt``.  Using off-grid change times is allowed but may shift
+    the effective change by up to one ``dt`` step depending on floating-point
+    rounding when comparing ``t_ms >= amp_time_ms``.  Use ``dc_generator``
+    when only a single constant plateau is needed; ``step_current_generator``
+    is the preferred device when the current must take different values at
+    different intervals within a single simulation run.
 
     See Also
     --------
-    dc_generator : Constant current generator
-    ac_generator : Sinusoidal current generator
-    noise_generator : Gaussian white noise current generator
+    dc_generator : Constant current stimulation device.
+    ac_generator : Sinusoidal current stimulation device.
+    noise_generator : Gaussian white-noise current stimulation device.
+
+    References
+    ----------
+    .. [1] NEST Simulator documentation for ``step_current_generator``:
+           https://nest-simulator.readthedocs.io/en/stable/models/step_current_generator.html
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     stim = brainpy.state.step_current_generator(
+       ...         in_size=1,
+       ...         amplitude_times=[10.0 * u.ms, 50.0 * u.ms, 80.0 * u.ms],
+       ...         amplitude_values=[200.0 * u.pA, -100.0 * u.pA, 500.0 * u.pA],
+       ...         start=5.0 * u.ms,
+       ...         stop=120.0 * u.ms,
+       ...     )
+       ...     with brainstate.environ.context(t=60.0 * u.ms):
+       ...         current = stim.update()
+       ...     _ = current.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> stim1 = brainpy.state.step_current_generator(
+       ...     amplitude_times=[0.0 * u.ms, 100.0 * u.ms, 200.0 * u.ms],
+       ...     amplitude_values=[300.0 * u.pA, 0.0 * u.pA, -150.0 * u.pA],
+       ... )
+       >>> stim2 = brainpy.state.step_current_generator(
+       ...     in_size=10,
+       ...     amplitude_times=[50.0 * u.ms, 150.0 * u.ms],
+       ...     amplitude_values=[400.0 * u.pA, 100.0 * u.pA],
+       ...     start=40.0 * u.ms,
+       ...     stop=180.0 * u.ms,
+       ...     origin=10.0 * u.ms,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -175,16 +282,57 @@ class step_current_generator(brainstate.nn.Dynamics):
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
-        """Return the current amplitude at the current simulation time.
-
-        The output is the most recent amplitude value whose corresponding time
-        is ``<= t``. If ``t`` is before all amplitude times, the output is zero.
-        The output is gated by the active window ``[origin+start, origin+stop)``.
+        r"""Compute scheduled current at environment time ``t``.
 
         Returns
         -------
-        current : Quantity[pA]
-            The output current, shaped ``(in_size,)``.
+        out : Any
+            Current-like quantity with shape ``self.varshape``. For each output
+            channel, value equals the latest scheduled plateau whose change time
+            is ``<= t``; channels outside the active window
+            ``[origin + start, origin + stop)`` are set to zero (or
+            ``t >= origin + start`` when ``stop is None``).
+
+        Raises
+        ------
+        KeyError
+            If ``brainstate.environ`` has no ``'t'`` entry.
+        TypeError
+            If provided time values cannot be compared because of incompatible
+            units or dtypes.
+        ValueError
+            If conversion of schedule entries to floating-point ms/pA fails.
+
+        Notes
+        -----
+        The schedule lookup is linear in ``len(amplitude_times)``. This is
+        efficient for short schedules and preserves straightforward NEST-like
+        semantics without interpolation.  Start is inclusive and stop is
+        exclusive, matching NEST semantics.  If ``stop <= start`` (after
+        adding ``origin``), the active set is empty and the output is
+        identically zero for all ``t``.
+
+        See Also
+        --------
+        step_current_generator : Class-level parameter definitions and model equations.
+        dc_generator.update : Windowed constant-current update rule.
+        ac_generator.update : Windowed sinusoidal-current update rule.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import step_current_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = step_current_generator(
+           ...         amplitude_times=[2.0 * u.ms, 4.0 * u.ms],
+           ...         amplitude_values=[150.0 * u.pA, -50.0 * u.pA],
+           ...     )
+           ...     with brainstate.environ.context(t=3.0 * u.ms):
+           ...         current = gen.update()
+           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
 

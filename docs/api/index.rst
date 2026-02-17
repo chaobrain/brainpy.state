@@ -48,7 +48,7 @@ Organization
       Convert conductances to currents (COBA, CUBA, MgBlock)
 
    .. grid-item-card:: :material-regular:`psychology_alt;2em` Short-Term Plasticity
-      :link: brainpy-stp.html
+      :link: brainpy-plasticity.html
 
       Short-term synaptic plasticity (STP, STD)
 
@@ -97,13 +97,13 @@ Organization
    :maxdepth: 2
    :caption: BrainPy-style Models
 
-   brainpy-neurons
-   brainpy-synapses
-   brainpy-projections
-   brainpy-synouts
-   brainpy-stp
-   brainpy-readouts
-   brainpy-inputs
+   brainpy-neurons.rst
+   brainpy-synapses.rst
+   brainpy-projections.rst
+   brainpy-synouts.rst
+   brainpy-plasticity.rst
+   brainpy-readouts.rst
+   brainpy-inputs.rst
 
 .. toctree::
    :hidden:

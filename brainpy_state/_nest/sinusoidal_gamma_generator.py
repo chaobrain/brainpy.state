@@ -39,120 +39,322 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
 
     Description
     -----------
-
     ``sinusoidal_gamma_generator`` re-implements NEST's stimulation device of
-    the same name. The instantaneous rate (spikes/ms) is
+    the same name. It emits binary spikes from an inhomogeneous gamma renewal
+    process whose instantaneous rate is sinusoidally modulated.
+
+    **1. Instantaneous-rate model**
+
+    The internal rate in spikes/ms is
 
     .. math::
 
        \lambda(t) = r + a \sin(\omega t + \phi),
 
-    where:
+    with parameter-to-symbol conversion:
 
     - :math:`r = \mathrm{rate}/1000`,
     - :math:`a = \mathrm{amplitude}/1000`,
-    - :math:`\omega = 2\pi \cdot \mathrm{frequency}/1000`,
-    - :math:`\phi = \mathrm{phase} \cdot \pi/180`.
+    - :math:`\omega = 2\pi \cdot \mathrm{frequency}/1000` (rad/ms),
+    - :math:`\phi = \mathrm{phase}\cdot\pi/180` (rad).
 
-    Spikes are generated from an inhomogeneous gamma renewal process with
-    order ``order >= 1``. Let ``t0`` be the most recent spike time (or latest
-    parameter-change integration boundary). Define
+    The validated constraint ``0 <= amplitude <= rate`` guarantees
+    :math:`\lambda(t) \ge 0` for all :math:`t`.
 
-    .. math::
+    **2. Renewal integral, closed-form increment, and hazard**
 
-       \Lambda(t) = \mathrm{order} \int_{t_0}^{t} \lambda(s)\,ds.
-
-    The per-step spike hazard (already multiplied by ``dt``) follows NEST:
+    For gamma order :math:`k = \mathrm{order}` and train-specific renewal
+    origin :math:`t_0`, define the scaled integrated hazard as
 
     .. math::
 
-       h(t) = dt \cdot \frac{
-         \mathrm{order}\,\lambda(t)\,\Lambda(t)^{\mathrm{order}-1} e^{-\Lambda(t)}
-       }{
-         \Gamma(\mathrm{order}, \Lambda(t))
-       }.
+       \Lambda(t) = k \int_{t_0}^{t} \lambda(s)\,ds.
 
-    Update Ordering (NEST source order)
-    -----------------------------------
+    The implementation keeps ``t0_ms`` and ``Lambda_t0`` as per-train state
+    variables and advances :math:`\Lambda` each step via the closed-form
+    increment computed in :meth:`_delta_lambda`:
 
-    The implementation mirrors ``models/sinusoidal_gamma_generator.cpp``:
+    .. math::
 
-    1. Compute the evaluation time at the right edge of the step ``t + dt``.
-    2. Compute instantaneous sinusoidal rate at ``t + dt``.
-    3. If active and rate is positive, sample spike hazard:
-       - ``individual_spike_trains=True``: one hazard draw per output train.
-       - ``individual_spike_trains=False``: one shared hazard draw broadcast to
-         all outputs.
-    4. For each emitted train, reset its renewal state ``t0`` and
-       ``Lambda_t0``.
-    5. Store recorded rate (spikes/s) corresponding to step-end rate.
+       \Delta\Lambda = k r (t_b - t_a)
+       - \frac{k a}{\omega}\Bigl[
+         \cos(\omega t_b + \phi) - \cos(\omega t_a + \phi)
+       \Bigr].
 
-    Timing Semantics
-    ----------------
+    When ``amplitude == 0`` or ``frequency == 0`` (i.e. :math:`\omega = 0`),
+    the cosine term is omitted and :math:`\Delta\Lambda = k r (t_b - t_a)`,
+    which avoids division by zero and recovers the homogeneous Poisson limit
+    (:math:`k = 1`) or homogeneous gamma limit (:math:`k > 1`).
 
-    NEST classifies this model as a spike generator
-    (``StimulationDevice::Type::SPIKE_GENERATOR``). Activity is therefore
-    checked on the current step index ``n`` with
+    The per-step hazard (already multiplied by ``dt``) evaluated at time
+    :math:`t` is
+
+    .. math::
+
+       h(t) = \Delta t \cdot
+       \frac{k\,\lambda(t)\,\Lambda(t)^{k-1}\,e^{-\Lambda(t)}}
+            {\Gamma(k,\,\Lambda(t))},
+
+    where :math:`\Gamma(k, \Lambda)` is the upper incomplete gamma function
+    evaluated via ``jax.lax.igammac`` and ``math.gamma``.  The ratio
+    :math:`h(t)` approximates :math:`\Pr(\text{spike in } [t, t+\Delta t))`
+    under the gamma renewal model.
+
+    **3. Update ordering and activity-window semantics**
+
+    Each call to :meth:`update` mirrors the ordering in NEST
+    ``models/sinusoidal_gamma_generator.cpp``:
+
+    1. Evaluate time at the right edge of the current step:
+       ``t_eval = (step + 1) * dt``.
+    2. Compute :math:`\lambda(t_{\mathrm{eval}})` and cache the value as the
+       step-end instantaneous rate in spikes/s (accessible via
+       :meth:`get_recorded_rate`).
+    3. If the generator is active and :math:`\lambda(t_{\mathrm{eval}}) > 0`,
+       compute the per-train hazard and sample Bernoulli decisions.
+    4. Reset ``t0_ms`` and ``Lambda_t0`` to ``t_eval`` / ``0`` for any train
+       that fired.
+    5. Return binary spike outputs as ``int64`` with shape ``self.varshape``.
+
+    NEST spike-generator activity semantics use the half-open-right window
 
     .. math::
 
        t_{\min} < n \le t_{\max},
 
-    where ``t_min = origin + start`` and ``t_max = origin + stop`` in steps.
+    where :math:`n` is the current integer step index,
+    ``t_min = round((origin + start) / dt)``, and
+    ``t_max = round((origin + stop) / dt)`` after projection to grid steps.
 
-    Piecewise Integral Semantics on Parameter Changes
-    -------------------------------------------------
+    **4. Piecewise-integral semantics on parameter changes**
 
-    NEST keeps renewal history consistent when parameters are changed between
-    simulation runs by accumulating the old-parameter contribution up to the
-    change time. This implementation applies the same piecewise integral
-    semantics when :meth:`set` is called after initialization:
+    When :meth:`set` is called after initialization, the existing per-train
+    renewal state is first advanced to the change time :math:`t_c` using the
+    *previous* process parameters, then future increments use the *new*
+    parameters:
 
     .. math::
 
-       \Lambda(t) =
-       \Lambda_{\mathrm{old}}(t_c) +
-       \mathrm{order}_{new}\int_{t_c}^{t}\lambda_{new}(s)\,ds.
+       \Lambda(t) = \Lambda_{\mathrm{old}}(t_c)
+       + k_{\mathrm{new}} \int_{t_c}^{t} \lambda_{\mathrm{new}}(s)\,ds.
+
+    This preserves renewal history across parameter updates, matching NEST
+    ``SetStatus`` behavior.
+
+    **5. Assumptions, constraints, and computational implications**
+
+    - Public parameters are scalarized to ``float64`` (or ``int`` for
+      ``rng_seed``); non-scalar inputs raise :class:`ValueError`.
+    - Enforced constraints: ``order >= 1``, ``0 <= amplitude <= rate``,
+      and ``stop >= start``.
+    - When ``dt`` is available at construction time, finite
+      ``origin`` / ``start`` / ``stop`` must be representable on the
+      simulation grid (absolute tolerance ``1e-12`` in ``time / dt`` ratio).
+    - ``individual_spike_trains=True`` allocates one independent renewal
+      state per element of ``self.varshape`` and draws independent Bernoulli
+      samples; ``individual_spike_trains=False`` maintains one shared renewal
+      state and broadcasts the single Bernoulli draw to all outputs.
+    - Per-step runtime is :math:`O(n_{\mathrm{trains}})` for hazard
+      evaluation and sampling, with memory
+      :math:`O(n_{\mathrm{trains}})` for ``t0_ms`` and ``Lambda_t0``.
+    - At most one spike per train can be emitted per step because spike
+      decisions are independent Bernoulli trials against the per-step hazard.
 
     Parameters
     ----------
     in_size : Size, optional
-        Number/shape of output spike trains. Default: ``1``.
+        Output size specification for :class:`brainstate.nn.Dynamics`.
+        ``self.varshape`` derived from ``in_size`` is the exact output shape
+        of :meth:`update`; each element corresponds to one emitted train.
+        Default is ``1``.
     rate : ArrayLike, optional
-        Mean firing rate in spikes/s. Default: ``0.0 * u.Hz``.
+        Scalar mean firing rate in spikes/s (Hz), shape ``()`` after
+        conversion. Accepted as a scalar ``ArrayLike`` or a
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        Must satisfy ``0 <= amplitude <= rate``.
+        Default is ``0.0 * u.Hz``.
     amplitude : ArrayLike, optional
-        Firing-rate modulation amplitude in spikes/s. Must satisfy
-        ``0 <= amplitude <= rate``. Default: ``0.0 * u.Hz``.
+        Scalar sinusoidal modulation amplitude in spikes/s (Hz), shape ``()``
+        after conversion. Must satisfy ``0 <= amplitude <= rate`` after
+        conversion; the constraint ensures :math:`\lambda(t) \ge 0`.
+        Default is ``0.0 * u.Hz``.
     frequency : ArrayLike, optional
-        Modulation frequency in Hz. Default: ``0.0 * u.Hz``.
+        Scalar modulation frequency in Hz, shape ``()`` after conversion.
+        Internally mapped to angular frequency
+        :math:`\omega = 2\pi f / 1000` (rad/ms).
+        Default is ``0.0 * u.Hz``.
     phase : ArrayLike, optional
-        Modulation phase in degrees. Default: ``0.0``.
+        Scalar initial phase in degrees, shape ``()`` after conversion;
+        internally converted to radians as :math:`\phi = \phi_{\deg} \pi / 180`.
+        Default is ``0.0``.
     order : ArrayLike, optional
-        Gamma order. Must satisfy ``order >= 1``. Default: ``1.0``.
+        Scalar gamma renewal order :math:`k`, shape ``()`` after conversion.
+        Must satisfy ``order >= 1``; order ``1`` recovers an inhomogeneous
+        Poisson process.
+        Default is ``1.0``.
     individual_spike_trains : bool, optional
-        If ``True`` (default), independent train per output.
-        If ``False``, one shared train is broadcast to all outputs.
+        Spike-generation mode selector.
+        If ``True``, each output index in ``self.varshape`` maintains
+        independent renewal state ``(t0_ms, Lambda_t0)`` and receives
+        independent Bernoulli draws.
+        If ``False``, one shared renewal process is maintained and the same
+        binary spike decision is broadcast to all outputs.
+        Default is ``True``.
     start : ArrayLike, optional
-        Activation start time (ms), relative to ``origin``.
-        Default: ``0.0 * u.ms``.
+        Scalar relative activation start time in ms, shape ``()`` after
+        conversion. Effective lower activity bound is ``origin + start``;
+        the bound is exclusive in step space (``t_min_step < curr_step``).
+        Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Deactivation stop time (ms), relative to ``origin``.
-        ``None`` means infinity. Default: ``None``.
+        Scalar relative deactivation stop time in ms, shape ``()`` after
+        conversion. ``None`` maps to ``+inf``. Effective upper activity bound
+        is ``origin + stop``; the bound is inclusive in step space
+        (``curr_step <= t_max_step``). Must satisfy ``stop >= start`` after
+        conversion.
+        Default is ``None``.
     origin : ArrayLike, optional
-        Time origin (ms) for ``start``/``stop``. Default: ``0.0 * u.ms``.
+        Scalar origin offset in ms, shape ``()`` after conversion. Added to
+        ``start`` and ``stop`` to obtain the absolute activity bounds
+        ``t_min`` and ``t_max``.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Seed for hazard sampling. Default: ``0``.
-    name : str, optional
-        Object name.
+        Seed used to initialize ``jax.random.PRNGKey`` during
+        :meth:`init_state` and lazy initialization in :meth:`update`.
+        Default is ``0``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
+        Default is ``None``.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 20 40
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``rate``
+         - ``0.0 * u.Hz``
+         - :math:`r`
+         - Baseline firing-rate term in spikes/ms after division by ``1000``.
+       * - ``amplitude``
+         - ``0.0 * u.Hz``
+         - :math:`a`
+         - Sinusoidal modulation amplitude in spikes/ms after division by ``1000``.
+       * - ``frequency``
+         - ``0.0 * u.Hz``
+         - :math:`f`
+         - Frequency in Hz mapped to :math:`\omega = 2\pi f/1000` (rad/ms).
+       * - ``phase``
+         - ``0.0``
+         - :math:`\phi`
+         - Phase in degrees mapped to radians as :math:`\phi_{\deg}\pi/180`.
+       * - ``order``
+         - ``1.0``
+         - :math:`k`
+         - Gamma renewal order; ``1`` = inhomogeneous Poisson.
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower bound of activity window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound; ``None`` maps to :math:`+\infty`.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{origin}}`
+         - Global time offset added to ``start`` and ``stop``.
+       * - ``in_size``
+         - ``1``
+         - —
+         - Defines ``self.varshape`` and the total output train count.
+       * - ``individual_spike_trains``
+         - ``True``
+         - —
+         - Independent per-output renewal states vs. shared broadcast process.
+       * - ``rng_seed``
+         - ``0``
+         - —
+         - Seed for JAX random key initialization and splitting.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node instance. Each :meth:`update` call returns an ``int64``
+        JAX array with shape ``self.varshape`` containing binary spike events
+        (``0`` or ``1``) for the current simulation step.
+
+    Raises
+    ------
+    ValueError
+        If scalar-conversion fails due to non-scalar inputs; if
+        ``0 <= amplitude <= rate`` is violated; if ``order < 1``; if
+        ``stop < start``; or if finite ``origin`` / ``start`` / ``stop`` are
+        not multiples of the simulation resolution when ``dt`` is available.
+    TypeError
+        If provided values cannot be converted to numeric values or to the
+        required units (e.g. a non-convertible ``u.Hz`` or ``u.ms`` quantity).
+    KeyError
+        At runtime in :meth:`update`, if required simulation-context entries
+        (notably ``dt``) are unavailable from ``brainstate.environ``.
 
     Notes
     -----
-    - This model emits at most one spike per train per simulation step, in
-      line with NEST's per-step hazard-threshold implementation.
-    - The generator state is revalidated against the simulation grid whenever
-      ``dt`` changes.
-    - The latest instantaneous rate can be queried with
-      :meth:`get_recorded_rate`, matching NEST's ``rate`` recordable.
+    - Hazard values are computed in ``float64``; tiny negative
+      :math:`\Lambda` values arising from floating-point roundoff are clamped
+      to zero before hazard evaluation.
+    - The value returned by :meth:`get_recorded_rate` is the step-end
+      instantaneous rate in spikes/s, matching NEST's ``rate`` recordable.
+    - Renewal state is revalidated against the timing grid whenever ``dt``
+      changes between :meth:`update` calls.
+
+    Examples
+    --------
+    Simulate a 2×3 array of independent sinusoidally modulated gamma trains:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.sinusoidal_gamma_generator(
+       ...         in_size=(2, 3),
+       ...         rate=50.0 * u.Hz,
+       ...         amplitude=20.0 * u.Hz,
+       ...         frequency=8.0 * u.Hz,
+       ...         phase=30.0,
+       ...         order=3.0,
+       ...         start=5.0 * u.ms,
+       ...         stop=80.0 * u.ms,
+       ...         rng_seed=9,
+       ...     )
+       ...     with brainstate.environ.context(t=12.0 * u.ms):
+       ...         spikes = gen.update()
+       ...     _ = spikes.shape
+
+    Use ``individual_spike_trains=False`` and update parameters at runtime:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.sinusoidal_gamma_generator(
+       ...         individual_spike_trains=False
+       ...     )
+       ...     gen.set(rate=40.0 * u.Hz, amplitude=10.0 * u.Hz, order=2.0)
+       ...     params = gen.get()
+       ...     _ = params['rate'], params['order']
+
+    See Also
+    --------
+    sinusoidal_poisson_generator : Sinusoidally modulated Poisson generator.
+    gamma_sup_generator : Superposition of independent gamma-renewal processes.
 
     References
     ----------
@@ -371,6 +573,35 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         )
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize random key and per-train renewal state.
+
+        Allocates three :class:`brainstate.ShortTermState` variables:
+
+        - ``rng_key``: a JAX ``PRNGKey`` seeded from ``self.rng_seed``.
+        - ``t0_ms``: per-train renewal origin, initialized to the current
+          simulation time (``float64`` array of length ``self._num_trains``).
+        - ``Lambda_t0``: per-train accumulated scaled hazard at ``t0_ms``,
+          initialized to zero (``float64`` array of length ``self._num_trains``).
+        - ``_recorded_rate_hz``: cached step-end instantaneous rate in
+          spikes/s, initialized to ``0.0``.
+
+        The timing cache (``_t_min_step``, ``_t_max_step``) is also refreshed
+        if ``dt`` is available in the current ``brainstate.environ`` context.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Unused placeholder kept for :class:`brainstate.nn.Dynamics`
+            signature compatibility. Default is ``None``.
+        **kwargs
+            Unused extra keyword arguments; silently ignored.
+
+        Raises
+        ------
+        ValueError
+            If finite ``origin`` / ``start`` / ``stop`` do not lie on the
+            simulation grid when ``dt`` is available.
+        """
         del batch_size, kwargs
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
 
@@ -401,7 +632,58 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        r"""Update public parameters and refresh the process and timing caches.
+
+        Any parameter left at its sentinel value ``_UNSET`` retains its
+        current value. When called after :meth:`init_state`, the internal
+        renewal state is first advanced to the current simulation time using
+        the *previous* process parameters before switching to the new ones,
+        preserving the piecewise-integral semantics described in the class
+        docstring. If ``individual_spike_trains`` changes in a way that alters
+        the required number of trains, ``t0_ms`` and ``Lambda_t0`` are
+        grown (new trains start fresh) or truncated accordingly.
+
+        Parameters
+        ----------
+        rate : ArrayLike or None, optional
+            New scalar mean rate in spikes/s (Hz), shape ``()`` after
+            conversion. ``_UNSET`` retains the current value.
+        amplitude : ArrayLike or None, optional
+            New scalar modulation amplitude in spikes/s (Hz), shape ``()``
+            after conversion. ``_UNSET`` retains the current value.
+        frequency : ArrayLike or None, optional
+            New scalar modulation frequency in Hz, shape ``()`` after
+            conversion. ``_UNSET`` retains the current value.
+        phase : ArrayLike or None, optional
+            New scalar modulation phase in degrees, shape ``()`` after
+            conversion. ``_UNSET`` retains the current value.
+        order : ArrayLike or None, optional
+            New scalar gamma order :math:`k`, shape ``()`` after conversion.
+            ``_UNSET`` retains the current value.
+        individual_spike_trains : bool or None, optional
+            New spike-generation mode. ``_UNSET`` retains the current value.
+        start : ArrayLike or None, optional
+            New scalar relative activation start time in ms, shape ``()``
+            after conversion. ``_UNSET`` retains the current value.
+        stop : ArrayLike, None, or sentinel, optional
+            New scalar relative stop time in ms, shape ``()`` after
+            conversion; explicit ``None`` maps to ``+inf``. ``_UNSET``
+            retains the current value.
+        origin : ArrayLike or None, optional
+            New scalar origin offset in ms, shape ``()`` after conversion.
+            ``_UNSET`` retains the current value.
+
+        Raises
+        ------
+        ValueError
+            If scalar conversion fails due to non-scalar inputs; if the
+            constraints ``order >= 1``, ``0 <= amplitude <= rate``, or
+            ``stop >= start`` are violated after resolving new values; or if
+            finite timing parameters do not lie on the simulation grid when
+            ``dt`` is available.
+        TypeError
+            If numeric or unit conversion fails for any supplied input.
+        """
         now_ms = self._current_time_ms() if hasattr(self, 't0_ms') else 0.0
         if hasattr(self, 't0_ms'):
             self._accumulate_lambda_to_time(now_ms)
@@ -460,7 +742,27 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
             self._refresh_timing_cache(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters."""
+        r"""Return current public parameters as plain Python scalars.
+
+        Returns
+        -------
+        out : dict
+            Mapping of parameter names to their current values. Keys and
+            value types are:
+
+            - ``'rate'`` : ``float`` — mean firing rate in spikes/s.
+            - ``'amplitude'`` : ``float`` — sinusoidal modulation amplitude
+              in spikes/s.
+            - ``'frequency'`` : ``float`` — modulation frequency in Hz.
+            - ``'phase'`` : ``float`` — modulation phase in degrees.
+            - ``'order'`` : ``float`` — gamma renewal order :math:`k`.
+            - ``'individual_spike_trains'`` : ``bool`` — spike-generation
+              mode flag.
+            - ``'start'`` : ``float`` — relative activation start in ms.
+            - ``'stop'`` : ``float`` — relative deactivation stop in ms
+              (``float('inf')`` when no stop was set).
+            - ``'origin'`` : ``float`` — time-origin offset in ms.
+        """
         return {
             'rate': float(self.rate),
             'frequency': float(self.frequency),
@@ -474,7 +776,21 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         }
 
     def get_recorded_rate(self) -> float:
-        """Return the latest step-end instantaneous rate in spikes/s."""
+        r"""Return the latest step-end instantaneous rate in spikes/s.
+
+        The value is updated by :meth:`update` at each simulation step to
+        :math:`\lambda(t_{\mathrm{eval}}) \times 1000` spikes/s, where
+        :math:`t_{\mathrm{eval}} = (\mathrm{step} + 1) \times dt` is the
+        right edge of the current step. This matches NEST's ``rate``
+        recordable quantity.
+
+        Returns
+        -------
+        out : float
+            Most recently cached instantaneous rate in spikes/s (``float64``
+            scalar). Returns ``0.0`` if :meth:`init_state` has not been
+            called yet.
+        """
         if not hasattr(self, '_recorded_rate_hz'):
             return 0.0
         return float(np.asarray(self._recorded_rate_hz.value, dtype=np.float64).reshape(()))
@@ -523,6 +839,35 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         return hazard
 
     def update(self):
+        r"""Advance one simulation step and emit binary spike events.
+
+        Reads the current time ``t`` and resolution ``dt`` from
+        ``brainstate.environ``, lazily calls :meth:`init_state` if state has
+        not been allocated, and refreshes the timing cache if ``dt`` has
+        changed since the last call. The step-end time
+        ``t_eval = (step + 1) * dt`` is used for rate evaluation and
+        :math:`\Lambda` accumulation. Trains outside the active window or
+        with :math:`\lambda(t_{\mathrm{eval}}) \le 0` receive zero spikes
+        without consuming random draws.
+
+        Returns
+        -------
+        out : jax.Array
+            ``int64`` JAX array with shape ``self.varshape``. Each element is
+            ``0`` or ``1``, giving the binary spike decision for the
+            corresponding output train in the current step. When
+            ``individual_spike_trains=False``, all elements share the same
+            value.
+
+        Raises
+        ------
+        KeyError
+            If ``dt`` is not available in the current ``brainstate.environ``
+            context.
+        ValueError
+            If timing-parameter grid validation fails after the simulation
+            resolution changes between calls.
+        """
         if not hasattr(self, 'rng_key'):
             self.init_state()
 

@@ -45,7 +45,7 @@ class TestErfcNeuron(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_default_parameters(self):
-        """Defaults should match NEST erfc_neuron."""
+        r"""Defaults should match NEST erfc_neuron."""
         neuron = erfc_neuron(1)
         self.assertTrue(u.math.allclose(neuron.tau_m, 10.0 * u.ms))
         self.assertTrue(u.math.allclose(neuron.theta, 0.0 * u.mV))
@@ -53,7 +53,7 @@ class TestErfcNeuron(unittest.TestCase):
         self.assertTrue(neuron.stochastic_update)
 
     def test_gain_formula_matches_nest_equation(self):
-        """g(h)=0.5*erfc(-(h-theta)/(sqrt(2)*sigma))."""
+        r"""g(h)=0.5*erfc(-(h-theta)/(sqrt(2)*sigma))."""
         with brainstate.environ.context(dt=self.dt):
             neuron = erfc_neuron(
                 1,
@@ -69,7 +69,7 @@ class TestErfcNeuron(unittest.TestCase):
             self.assertAlmostEqual(float(got[0]), expected, places=12)
 
     def test_matches_nest_binary_communication_h_trace(self):
-        """Replicate NEST test_binary.py expected h trace for binary encoding."""
+        r"""Replicate NEST test_binary.py expected h trace for binary encoding."""
         dt = 1.0 * u.ms
         with brainstate.environ.context(dt=dt):
             neuron = erfc_neuron(
@@ -96,7 +96,7 @@ class TestErfcNeuron(unittest.TestCase):
             np.testing.assert_allclose(h_trace, expected, atol=1e-12, rtol=0.0)
 
     def test_strict_time_inequality_matches_nest(self):
-        """Update happens only when t+dt > t_next (strict >, not >=)."""
+        r"""Update happens only when t+dt > t_next (strict >, not >=)."""
         dt = 0.125 * u.ms
         with brainstate.environ.context(dt=dt):
             neuron = erfc_neuron(
@@ -120,7 +120,7 @@ class TestErfcNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 1.0)
 
     def test_reference_step_trace_with_controlled_rng(self):
-        """Reference regression for NEST update ordering and timing."""
+        r"""Reference regression for NEST update ordering and timing."""
         dt = 0.1 * u.ms
         with brainstate.environ.context(dt=dt):
             neuron = erfc_neuron(
@@ -169,7 +169,7 @@ class TestErfcNeuron(unittest.TestCase):
             self.assertAlmostEqual(float((neuron.t_next.value / u.ms)[0]), t_next, places=12)
 
     def test_activity_matches_erfc_theory(self):
-        """Long-run mean activity at h=0 follows NEST theory."""
+        r"""Long-run mean activity at h=0 follows NEST theory."""
         dt = 0.1 * u.ms
         with brainstate.environ.context(dt=dt):
             sigma_vals = np.logspace(-1.0, 1.0, 3, dtype=np.float64)

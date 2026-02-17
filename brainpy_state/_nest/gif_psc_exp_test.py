@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for gif_psc_exp neuron model.
 
 These tests verify that the brainpy.state implementation of gif_psc_exp
@@ -52,7 +52,7 @@ from brainpy.state import gif_psc_exp
 
 
 def _propagator_exp(tau_syn, tau_m, c_m, h):
-    """Reference implementation of IAFPropagatorExp::evaluate().
+    r"""Reference implementation of IAFPropagatorExp::evaluate().
 
     Computes the propagator coefficient P21 for exact integration of the
     synaptic current contribution to the membrane potential.
@@ -72,7 +72,7 @@ def _propagator_exp(tau_syn, tau_m, c_m, h):
 
 def _run_nest_ref(n_steps, dt, p, i_stim_seq, w_seq, rand_seq,
                   tau_stc, q_stc, tau_sfa, q_sfa, lambda_0, Delta_V, V_T_star):
-    """Full reference implementation of gif_psc_exp update loop.
+    r"""Full reference implementation of gif_psc_exp update loop.
 
     Matches NEST update order exactly:
     1. Compute stc/sfa totals, decay elements
@@ -174,7 +174,7 @@ def _run_nest_ref(n_steps, dt, p, i_stim_seq, w_seq, rand_seq,
 
 
 class TestGIFPscExpDefaultParams(unittest.TestCase):
-    """Test that default parameters match NEST C++ source code values."""
+    r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
         neuron = gif_psc_exp(1)
@@ -195,7 +195,7 @@ class TestGIFPscExpDefaultParams(unittest.TestCase):
         self.assertEqual(neuron.q_stc, ())
 
     def test_initial_state_matches_nest(self):
-        """V_m should be initialized to E_L, synaptic currents to 0."""
+        r"""V_m should be initialized to E_L, synaptic currents to 0."""
         with brainstate.environ.context(dt=0.1 * u.ms):
             neuron = gif_psc_exp(1)
             neuron.init_state()
@@ -205,7 +205,7 @@ class TestGIFPscExpDefaultParams(unittest.TestCase):
 
 
 class TestGIFPscExpParameterValidation(unittest.TestCase):
-    """Test that invalid parameters raise appropriate errors."""
+    r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_sfa_q_sfa_raises(self):
         with self.assertRaises(ValueError):
@@ -245,7 +245,7 @@ class TestGIFPscExpParameterValidation(unittest.TestCase):
 
 
 class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold membrane dynamics without spiking."""
+    r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -258,7 +258,7 @@ class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_current_input_has_one_step_delay(self):
-        """External current should be stored for use in the NEXT step (NEST ring buffer)."""
+        r"""External current should be stored for use in the NEXT step (NEST ring buffer)."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -283,7 +283,7 @@ class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(v1 > 0.0, f"V should increase from current, got {v1}")
 
     def test_synaptic_weight_routing(self):
-        """Positive weights should add to I_syn_ex, negative to I_syn_in."""
+        r"""Positive weights should add to I_syn_ex, negative to I_syn_in."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -301,7 +301,7 @@ class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(isyn_in, -3.0, places=8)
 
     def test_synaptic_current_exponential_decay(self):
-        """Synaptic currents should decay exponentially with their time constants."""
+        r"""Synaptic currents should decay exponentially with their time constants."""
         with brainstate.environ.context(dt=self.dt):
             tau_ex = 2.0  # ms
             tau_in = 5.0  # ms
@@ -332,7 +332,7 @@ class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
             self.assertAlmostEqual(isyn_in, expected_in, places=5)
 
     def test_excitatory_depolarizes_inhibitory_hyperpolarizes(self):
-        """Excitatory synaptic current should depolarize, inhibitory should hyperpolarize."""
+        r"""Excitatory synaptic current should depolarize, inhibitory should hyperpolarize."""
         with brainstate.environ.context(dt=self.dt):
             base = gif_psc_exp(1, lambda_0=0.0, V_T_star=1000.0 * u.mV,
                                V_initializer=braintools.init.Constant(-70.0 * u.mV))
@@ -364,7 +364,7 @@ class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(v_inh < v_base, f"Inh {v_inh} should be < base {v_base}")
 
     def test_exact_integration_propagator(self):
-        """Test that exact integration matches analytic solution for a single step."""
+        r"""Test that exact integration matches analytic solution for a single step."""
         dt = 0.1  # ms
         C_m = 80.0
         g_L = 4.0
@@ -402,7 +402,7 @@ class TestGIFPscExpSubthresholdDynamics(unittest.TestCase):
 
 
 class TestGIFPscExpRefractoryBehavior(unittest.TestCase):
-    """Test refractory period mechanics."""
+    r"""Test refractory period mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -415,7 +415,7 @@ class TestGIFPscExpRefractoryBehavior(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_refractory_clamps_voltage_to_V_reset(self):
-        """During refractory period, V should stay at V_reset."""
+        r"""During refractory period, V should stay at V_reset."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -441,7 +441,7 @@ class TestGIFPscExpRefractoryBehavior(unittest.TestCase):
                                        msg=f"V should be V_reset during refractory at step {k}")
 
     def test_refractory_count_matches_t_ref(self):
-        """Refractory counter should match floor(t_ref / dt) as in NEST."""
+        r"""Refractory counter should match floor(t_ref / dt) as in NEST."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -460,7 +460,7 @@ class TestGIFPscExpRefractoryBehavior(unittest.TestCase):
             self.assertEqual(ref_count, expected)
 
     def test_synaptic_currents_still_evolve_during_refractory(self):
-        """Synaptic currents should continue decaying during refractory period."""
+        r"""Synaptic currents should continue decaying during refractory period."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -492,7 +492,7 @@ class TestGIFPscExpRefractoryBehavior(unittest.TestCase):
 
 
 class TestGIFPscExpAdaptation(unittest.TestCase):
-    """Test stc and sfa adaptation mechanics."""
+    r"""Test stc and sfa adaptation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -505,7 +505,7 @@ class TestGIFPscExpAdaptation(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_stc_elements_decay_exponentially(self):
-        """STC elements should decay by exp(-dt/tau) each step."""
+        r"""STC elements should decay by exp(-dt/tau) each step."""
         tau_stc = [10.0, 20.0]
         q_stc = [5.0, -2.0]
 
@@ -540,7 +540,7 @@ class TestGIFPscExpAdaptation(unittest.TestCase):
                                        msg=f"STC element {i} decay mismatch")
 
     def test_sfa_elements_decay_exponentially(self):
-        """SFA elements should decay by exp(-dt/tau) each step."""
+        r"""SFA elements should decay by exp(-dt/tau) each step."""
         tau_sfa = [100.0, 50.0]
         q_sfa = [10.0, 5.0]
 
@@ -572,7 +572,7 @@ class TestGIFPscExpAdaptation(unittest.TestCase):
                                        msg=f"SFA element {i} decay mismatch")
 
     def test_adaptation_increases_threshold(self):
-        """After a spike, sfa should raise the effective threshold."""
+        r"""After a spike, sfa should raise the effective threshold."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -599,7 +599,7 @@ class TestGIFPscExpAdaptation(unittest.TestCase):
             self.assertAlmostEqual(neuron._sfa_val[0], -25.0, places=3)
 
     def test_stc_current_opposes_depolarization(self):
-        """Positive stc should hyperpolarize the neuron (it's subtracted in the ODE)."""
+        r"""Positive stc should hyperpolarize the neuron (it's subtracted in the ODE)."""
         with brainstate.environ.context(dt=self.dt):
             # No stc
             no_stc = gif_psc_exp(
@@ -637,7 +637,7 @@ class TestGIFPscExpAdaptation(unittest.TestCase):
 
 
 class TestGIFPscExpStochasticSpiking(unittest.TestCase):
-    """Test stochastic spike generation mechanics."""
+    r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -650,7 +650,7 @@ class TestGIFPscExpStochasticSpiking(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_no_spikes_with_zero_lambda(self):
-        """With lambda_0=0, no spikes should ever occur."""
+        r"""With lambda_0=0, no spikes should ever occur."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -667,7 +667,7 @@ class TestGIFPscExpStochasticSpiking(unittest.TestCase):
                                  f"No spike expected with lambda_0=0 at step {k}")
 
     def test_high_lambda_produces_spikes(self):
-        """With very high lambda_0, spikes should occur readily."""
+        r"""With very high lambda_0, spikes should occur readily."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -690,7 +690,7 @@ class TestGIFPscExpStochasticSpiking(unittest.TestCase):
                             f"Expected many spikes with high lambda, got {spike_count}")
 
     def test_deterministic_with_fixed_rng_key(self):
-        """Two neurons with the same RNG key and parameters should spike identically."""
+        r"""Two neurons with the same RNG key and parameters should spike identically."""
         with brainstate.environ.context(dt=self.dt):
             key = jax.random.PRNGKey(12345)
             n1 = gif_psc_exp(1, lambda_0=100.0, rng_key=key,
@@ -708,7 +708,7 @@ class TestGIFPscExpStochasticSpiking(unittest.TestCase):
 
 
 class TestGIFPscExpReferenceTrace(unittest.TestCase):
-    """Compare full simulation traces against standalone reference implementation."""
+    r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
         self.dt_val = 0.1
@@ -722,7 +722,7 @@ class TestGIFPscExpReferenceTrace(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_subthreshold_trace_matches_reference(self):
-        """Multi-step subthreshold trace should match reference implementation."""
+        r"""Multi-step subthreshold trace should match reference implementation."""
         p = {
             'E_L': -70.0, 'C_m': 80.0, 'g_L': 4.0,
             'V_reset': -55.0, 'tau_syn_ex': 2.0, 'tau_syn_in': 2.0,
@@ -783,7 +783,7 @@ class TestGIFPscExpReferenceTrace(unittest.TestCase):
                                    msg=f"I_syn_in mismatch at step {k}")
 
     def test_full_trace_with_adaptation_and_spiking(self):
-        """Full trace with adaptation and controlled stochastic spiking matches reference."""
+        r"""Full trace with adaptation and controlled stochastic spiking matches reference."""
         p = {
             'E_L': -70.0, 'C_m': 80.0, 'g_L': 4.0,
             'V_reset': -55.0, 'tau_syn_ex': 2.0, 'tau_syn_in': 2.0,
@@ -851,7 +851,7 @@ class TestGIFPscExpReferenceTrace(unittest.TestCase):
                                    msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_dc_driven_trace_with_synaptic_input(self):
-        """Trace driven by DC + synaptic spikes, comparing against reference."""
+        r"""Trace driven by DC + synaptic spikes, comparing against reference."""
         p = {
             'E_L': -70.0, 'C_m': 40.0, 'g_L': 4.0,
             'V_reset': -55.0, 'tau_syn_ex': 8.0, 'tau_syn_in': 2.0,
@@ -929,7 +929,7 @@ class TestGIFPscExpReferenceTrace(unittest.TestCase):
 
 
 class TestGIFPscExpUpdateOrder(unittest.TestCase):
-    """Test that the update order matches NEST exactly."""
+    r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
@@ -942,7 +942,7 @@ class TestGIFPscExpUpdateOrder(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_stc_computed_before_membrane_update(self):
-        """STC current should be computed BEFORE membrane update, matching NEST order."""
+        r"""STC current should be computed BEFORE membrane update, matching NEST order."""
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_psc_exp(
                 1,
@@ -968,7 +968,7 @@ class TestGIFPscExpUpdateOrder(unittest.TestCase):
                                    msg="STC should be 100 nA on step after spike")
 
     def test_synaptic_decay_before_weight_addition(self):
-        """Synaptic currents should be decayed BEFORE spike weight jumps are added."""
+        r"""Synaptic currents should be decayed BEFORE spike weight jumps are added."""
         with brainstate.environ.context(dt=self.dt):
             tau_ex = 2.0  # ms
             neuron = gif_psc_exp(
@@ -994,7 +994,7 @@ class TestGIFPscExpUpdateOrder(unittest.TestCase):
             self.assertAlmostEqual(isyn1, expected, places=7)
 
     def test_propagator_singularity_handling(self):
-        """When tau_m == tau_syn, the singular propagator should be used."""
+        r"""When tau_m == tau_syn, the singular propagator should be used."""
         # tau_m = C_m / g_L = 80 / 4 = 20 ms
         # Set tau_syn_ex = 20 ms to hit the singularity
         with brainstate.environ.context(dt=self.dt):

@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 NEST-compatible models for brainpy.state.
 
 This subpackage provides implementations of neuron, synapse, and device models

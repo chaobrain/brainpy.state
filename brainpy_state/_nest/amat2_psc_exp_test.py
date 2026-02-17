@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for amat2_psc_exp neuron model.
 
 These tests verify that the implementation produces the same dynamics as NEST's
@@ -48,7 +48,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 
 def _compute_propagators(h, taum, tauE, tauI, tauV, c, beta, tau_1, tau_2):
-    """Compute all propagator coefficients matching NEST pre_run_hook()."""
+    r"""Compute all propagator coefficients matching NEST pre_run_hook()."""
     eE = math.exp(-h / tauE)
     eI = math.exp(-h / tauI)
     em = math.exp(-h / taum)
@@ -100,7 +100,7 @@ def _compute_propagators(h, taum, tauE, tauI, tauV, c, beta, tau_1, tau_2):
 
 
 def _nest_reference_step(state, p, P, w_ex=0.0, w_in=0.0, x0_new=0.0):
-    """Execute one NEST update step for amat2_psc_exp.
+    r"""Execute one NEST update step for amat2_psc_exp.
 
     Returns: (state, spiked)
     state is a dict with keys: V_rel, V_th_1, V_th_2, V_th_v, V_th_dv,
@@ -180,7 +180,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 1: Default parameters match NEST
     # ------------------------------------------------------------------
     def test_nest_default_parameters(self):
-        """Verify that all default parameter values match NEST's amat2_psc_exp C++ defaults."""
+        r"""Verify that all default parameter values match NEST's amat2_psc_exp C++ defaults."""
         neuron = amat2_psc_exp(1)
         self.assertEqual(neuron.E_L, -70. * u.mV)
         self.assertEqual(neuron.C_m, 200. * u.pF)
@@ -203,7 +203,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 2: Parameter validation
     # ------------------------------------------------------------------
     def test_parameter_validation(self):
-        """Test that invalid parameters raise ValueError."""
+        r"""Test that invalid parameters raise ValueError."""
         with self.assertRaises(ValueError):
             amat2_psc_exp(1, C_m=0.0 * u.pF)
         with self.assertRaises(ValueError):
@@ -239,7 +239,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 3: State initialization
     # ------------------------------------------------------------------
     def test_state_initialization(self):
-        """Verify that all state variables are initialized correctly."""
+        r"""Verify that all state variables are initialized correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = amat2_psc_exp(
                 1,
@@ -261,7 +261,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 4: NEST reference spike times (beta=0, matching mat2_psc_exp)
     # ------------------------------------------------------------------
     def test_nest_reference_spike_times_beta0(self):
-        """
+        r"""
         Reproduce the NEST test_amat2_psc_exp.py simulation.
 
         With beta=0 and mat2_psc_exp defaults, amat2_psc_exp should produce
@@ -310,7 +310,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 5: NEST reference V_m and V_th traces (beta=0)
     # ------------------------------------------------------------------
     def test_nest_reference_potentials_beta0(self):
-        """
+        r"""
         Verify V_m and V_th traces match the NEST reference data from
         test_amat2_psc_exp.py for the first 21 time steps (beta=0 case).
         """
@@ -397,7 +397,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 6: NEST reference voltage-dependent threshold (beta > 0)
     # ------------------------------------------------------------------
     def test_voltage_dependent_threshold_beta_positive(self):
-        """
+        r"""
         Compare simulation with beta > 0 to NEST reference data obtained
         with Mathematica (from NEST test_amat2_psc_exp.py).
 
@@ -462,7 +462,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 7: No voltage reset on spike
     # ------------------------------------------------------------------
     def test_no_voltage_reset_on_spike(self):
-        """
+        r"""
         Verify that the membrane potential is NOT reset after a spike.
         """
         with brainstate.environ.context(dt=self.dt):
@@ -498,7 +498,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 8: Adaptive threshold jumps on spike
     # ------------------------------------------------------------------
     def test_threshold_jump_on_spike(self):
-        """
+        r"""
         Verify that V_th_1 and V_th_2 jump by alpha_1 and alpha_2 on spike.
         """
         mat2_defaults = dict(
@@ -553,7 +553,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 9: Refractory period prevents spiking
     # ------------------------------------------------------------------
     def test_refractory_period(self):
-        """
+        r"""
         Verify that the neuron cannot fire during the refractory period.
         """
         with brainstate.environ.context(dt=self.dt):
@@ -585,7 +585,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 10: Synaptic current response
     # ------------------------------------------------------------------
     def test_synaptic_current_response(self):
-        """
+        r"""
         Verify that excitatory and inhibitory synaptic currents follow
         exponential decay after spike input.
         """
@@ -634,7 +634,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 11: Full step-by-step equation match (beta=0)
     # ------------------------------------------------------------------
     def test_step_equations_match_reference_beta0(self):
-        """
+        r"""
         Verify internal state variables step-by-step against the exact
         NEST update equations with beta=0.
         """
@@ -729,7 +729,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 12: Full step-by-step equation match (beta > 0)
     # ------------------------------------------------------------------
     def test_step_equations_match_reference_beta_positive(self):
-        """
+        r"""
         Verify internal state variables step-by-step against the exact
         NEST update equations with beta > 0.
         """
@@ -803,7 +803,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 13: Threshold decay without spikes
     # ------------------------------------------------------------------
     def test_threshold_decay_without_spikes(self):
-        """
+        r"""
         Verify that V_th_1 and V_th_2 decay exponentially when no spikes
         occur.
         """
@@ -846,7 +846,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 14: V_th_v and V_th_dv remain zero when beta=0
     # ------------------------------------------------------------------
     def test_voltage_dependent_threshold_zero_when_beta0(self):
-        """
+        r"""
         When beta=0, V_th_v and V_th_dv should remain exactly zero.
         """
         with brainstate.environ.context(dt=self.dt):
@@ -874,7 +874,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 15: Subthreshold dynamics (exact integration, beta=0)
     # ------------------------------------------------------------------
     def test_subthreshold_dynamics_beta0(self):
-        """
+        r"""
         Verify subthreshold membrane dynamics match the exact integration
         equations when no spikes occur (beta=0).
         """
@@ -935,7 +935,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 16: Current input one-step delay
     # ------------------------------------------------------------------
     def test_current_input_one_step_delay(self):
-        """
+        r"""
         Verify that external current input has one-step delay (ring buffer).
         """
         with brainstate.environ.context(dt=self.dt):
@@ -969,7 +969,7 @@ class TestAmat2PscExp(unittest.TestCase):
     # Test 17: Spike routing (positive/negative weights)
     # ------------------------------------------------------------------
     def test_spike_weight_routing(self):
-        """
+        r"""
         Positive spike weights go to excitatory; negative to inhibitory.
         """
         with brainstate.environ.context(dt=self.dt):

@@ -37,14 +37,18 @@ __all__ = [
 def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     r"""Compute exact integration propagator elements P31, P32 for alpha-PSC.
 
-    This mirrors NEST's ``IAFPropagatorAlpha::evaluate()`` with singularity
-    handling for the case :math:`\tau_m \approx \tau_{syn}`.
-
+    This function mirrors NEST's ``IAFPropagatorAlpha::evaluate()`` with
+    singularity handling for the case :math:`\tau_m \approx \tau_{syn}`.
     The propagator maps the synaptic current state variables
-    :math:`(y_1, y_2)` to the membrane voltage update.
+    :math:`(y_1, y_2)` to the membrane voltage update during exact integration
+    of the linear subthreshold dynamics.
 
-    **Regular case** (when :math:`\tau_m` and :math:`\tau_{syn}` are
-    sufficiently different):
+    Mathematical Formulation
+    ------------------------
+
+    **1. Regular Case** (:math:`\tau_m` and :math:`\tau_{syn}` sufficiently different)
+
+    Intermediate quantities:
 
     .. math::
 
@@ -53,6 +57,8 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     .. math::
 
         \gamma = \frac{\beta}{C_m}
+
+    Propagator elements:
 
     .. math::
 
@@ -64,7 +70,10 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
         P_{31} = \gamma \cdot e^{-h/\tau_{syn}} \cdot
                  \left( \beta \cdot \left( e^{h / \beta} - 1 \right) - h \right)
 
-    **Singular case** (when :math:`\tau_m \approx \tau_{syn}`):
+    **2. Singular Case** (:math:`\tau_m \approx \tau_{syn}`)
+
+    When the time constants are nearly equal, the regular formulas become
+    numerically unstable. The singular case uses asymptotic expansions:
 
     .. math::
 
@@ -74,25 +83,65 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
 
         P_{31,\text{singular}} = \frac{h^2}{2 \, C_m} \cdot e^{-h/\tau_m}
 
+    **3. Singularity Detection**
+
+    The function tests whether :math:`P_{32}` computed via the regular formula
+    is positive, finite, and non-zero. If not, it falls back to the singular
+    formula. For :math:`P_{31}`, a threshold test based on
+    :math:`h_\mathrm{min} = 10^{-7} \cdot \tau_m^2 / |\tau_m - \tau_{syn}|`
+    determines which formula to use.
+
+    **Computational Stability**
+
+    - Uses ``math.expm1(x)`` to compute :math:`e^x - 1` with high precision
+      for small :math:`x`.
+    - Handles exact equality :math:`\tau_m = \tau_{syn}` explicitly to avoid
+      division by zero.
+    - Matches NEST's numerical stability approach with
+      ``NUMERICAL_STABILITY_FACTOR = 1e-7``.
+
     Parameters
     ----------
     tau_syn : float
-        Synaptic time constant in ms.
+        Synaptic time constant in ms. Must be positive.
     tau_m : float
-        Membrane time constant in ms.
+        Membrane time constant in ms. Must be positive.
     c_m : float
-        Membrane capacitance in pF.
+        Membrane capacitance in pF. Must be positive.
     h : float
-        Time step in ms.
+        Time step in ms. Must be positive.
 
     Returns
     -------
     P31 : float
         Propagator element mapping :math:`y_1` (derivative of synaptic
-        current) to membrane voltage.
+        current state) to membrane voltage increment. Units: mV·ms/pA.
     P32 : float
-        Propagator element mapping :math:`y_2` (synaptic current) to
-        membrane voltage.
+        Propagator element mapping :math:`y_2` (synaptic current state)
+        to membrane voltage increment. Units: mV/pA.
+
+    Raises
+    ------
+    None
+        Function assumes valid positive inputs. Invalid inputs may produce
+        inf or nan results.
+
+    Notes
+    -----
+    - This function is called during the ``glif_psc`` pre-run hook to
+      pre-compute propagator matrix elements for all receptor ports.
+    - The singularity handling ensures that simulations remain stable even
+      when :math:`\tau_m` and :math:`\tau_{syn}` are very close.
+    - See NEST documentation: ``IAF_Integration_Singularity.ipynb`` for
+      detailed derivation and validation.
+
+    References
+    ----------
+    .. [1] NEST Simulator ``iaf_psc_alpha.h`` and ``iaf_propagator_alpha.h``
+           implementation.
+    .. [2] Rotter S, Diesmann M (1999). Exact digital simulation of time-
+           invariant linear systems with applications to neuronal modeling.
+           Biol Cybern 81:381-402.
     """
     NUMERICAL_STABILITY_FACTOR = 1e-7
     inv_tau_syn = 1.0 / tau_syn
@@ -147,19 +196,14 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
 class glif_psc(Neuron):
     r"""Current-based generalized leaky integrate-and-fire (GLIF) neuron model.
 
-    Description
-    -----------
+    The ``glif_psc`` model implements the five-level GLIF model hierarchy
+    from the Allen Institute [1]_, featuring alpha-function shaped synaptic
+    currents, after-spike currents (ASC), spike-dependent threshold adaptation,
+    and voltage-dependent threshold modulation. Exact integration via
+    propagator matrices ensures numerical stability and matches NEST's
+    implementation.
 
-    ``glif_psc`` provides five generalized leaky integrate-and-fire (GLIF)
-    models [1]_ with alpha-function shaped synaptic currents. Incoming spike
-    events induce a postsynaptic change of current modeled by an alpha
-    function [2]_. The alpha function is normalized such that an event of
-    weight 1.0 results in a peak current of 1 pA at
-    :math:`t = \tau_\mathrm{syn}`. By default, ``glif_psc`` has a single
-    synapse that is accessible through ``receptor_port`` 1. An arbitrary
-    number of synapses with different time constants can be configured by
-    setting the desired time constants as ``tau_syn`` array. The resulting
-    synapses are addressed through ``receptor_port`` 1, 2, 3, ....
+    **Model Hierarchy**
 
     The five GLIF models are:
 
@@ -187,8 +231,10 @@ class glif_psc(Neuron):
     | GLIF5  | True                      | True                 | True               |
     +--------+---------------------------+----------------------+--------------------+
 
-    Membrane dynamics
-    .................
+    Mathematical Formulation
+    ------------------------
+
+    **1. Membrane Dynamics**
 
     The membrane potential :math:`U` (stored relative to :math:`E_L`) evolves
     according to exact integration (linear dynamics):
@@ -210,8 +256,7 @@ class glif_psc(Neuron):
     ``IAFPropagatorAlpha`` algorithm that handles the singularity when
     :math:`\tau_m \approx \tau_{\mathrm{syn},k}`.
 
-    Synaptic currents (alpha function)
-    ...................................
+    **2. Synaptic Currents (Alpha Function)**
 
     Each receptor port has a current modeled by an alpha function with two
     state variables :math:`y_{1,k}` and :math:`y_{2,k}`:
@@ -237,8 +282,10 @@ class glif_psc(Neuron):
 
        y_{1,k} \leftarrow y_{1,k} + w \cdot \frac{e}{\tau_{\mathrm{syn},k}}
 
-    After-spike currents (GLIF3/4/5)
-    .................................
+    The alpha function is normalized such that an event of weight 1.0 results
+    in a peak current of 1 pA at :math:`t = \tau_\mathrm{syn}`.
+
+    **3. After-Spike Currents (GLIF3/4/5)**
 
     After-spike currents (ASC) are modeled as exponentially decaying currents
     with exact integration. Each ASC component :math:`I_j` decays with rate
@@ -260,8 +307,7 @@ class glif_psc(Neuron):
 
        I_j \leftarrow \Delta I_j + I_j \cdot r_j \cdot \exp(-k_j \cdot t_\mathrm{ref})
 
-    Spike-dependent threshold (GLIF2/4/5)
-    ......................................
+    **4. Spike-Dependent Threshold (GLIF2/4/5)**
 
     The spike component of the threshold decays exponentially:
 
@@ -282,8 +328,7 @@ class glif_psc(Neuron):
 
        U \leftarrow f_v \cdot U_\mathrm{old} + V_\mathrm{add}
 
-    Voltage-dependent threshold (GLIF5)
-    ....................................
+    **5. Voltage-Dependent Threshold (GLIF5)**
 
     The voltage component of the threshold evolves according to:
 
@@ -312,8 +357,7 @@ class glif_psc(Neuron):
 
        U > \theta
 
-    Numerical integration and update order
-    .......................................
+    **6. Numerical Integration and Update Order**
 
     NEST uses exact integration for the linear subthreshold dynamics (via
     propagator matrices). The discrete-time update order per simulation step
@@ -339,6 +383,63 @@ class glif_psc(Neuron):
 
     Parameters
     ----------
+    in_size : Size
+        Shape of the neuron population. Can be tuple of ints or single int.
+    g : ArrayLike, optional
+        Membrane (leak) conductance. Default: 9.43 nS.
+    E_L : ArrayLike, optional
+        Resting membrane potential. Default: -78.85 mV.
+    V_th : ArrayLike, optional
+        Instantaneous threshold voltage (absolute). Default: -51.68 mV.
+    C_m : ArrayLike, optional
+        Membrane capacitance. Default: 58.72 pF.
+    t_ref : ArrayLike, optional
+        Absolute refractory period. Default: 3.75 ms.
+    V_reset : ArrayLike, optional
+        Reset potential (absolute; used for GLIF1/3). Default: -78.85 mV.
+    th_spike_add : float, optional
+        Threshold additive constant after spike (mV). Default: 0.37.
+    th_spike_decay : float, optional
+        Spike threshold decay rate (/ms). Default: 0.009.
+    voltage_reset_fraction : float, optional
+        Voltage fraction coefficient after spike. Default: 0.20.
+    voltage_reset_add : float, optional
+        Voltage additive constant after spike (mV). Default: 18.51.
+    th_voltage_index : float, optional
+        Voltage-dependent threshold leak rate (/ms). Default: 0.005.
+    th_voltage_decay : float, optional
+        Voltage-dependent threshold decay rate (/ms). Default: 0.09.
+    asc_init : Sequence[float], optional
+        Initial values of after-spike currents (pA). Default: (0.0, 0.0).
+    asc_decay : Sequence[float], optional
+        ASC decay rates (/ms). Default: (0.003, 0.1).
+    asc_amps : Sequence[float], optional
+        ASC amplitudes added on spike (pA). Default: (-9.18, -198.94).
+    asc_r : Sequence[float], optional
+        ASC fraction coefficients (dimensionless). Default: (1.0, 1.0).
+    tau_syn : Sequence[float], optional
+        Synaptic alpha-function time constants (ms), one per receptor port.
+        Default: (2.0,).
+    spike_dependent_threshold : bool, optional
+        Enable biologically defined reset rules (GLIF2/4/5). Default: False.
+    after_spike_currents : bool, optional
+        Enable after-spike currents (GLIF3/4/5). Default: False.
+    adapting_threshold : bool, optional
+        Enable voltage-dependent threshold (GLIF5). Default: False.
+    I_e : ArrayLike, optional
+        Constant external current. Default: 0.0 pA.
+    V_initializer : Callable, optional
+        Membrane potential initializer. Default: Constant(E_L).
+    spk_fun : Callable, optional
+        Surrogate gradient function for spike generation. Default: ReluGrad().
+    spk_reset : str, optional
+        Spike reset mode: 'hard' or 'soft'. Default: 'hard'.
+    name : str, optional
+        Name of the neuron group.
+
+
+    Parameter Mapping
+    -----------------
 
     =============================== =================== ========================================== =====================================================
     **Parameter**                   **Default**         **Math equivalent**                        **Description**
@@ -370,46 +471,119 @@ class glif_psc(Neuron):
     ``spk_reset``                   ``'hard'``                                                     Reset mode
     =============================== =================== ========================================== =====================================================
 
-    State Variables
-    ---------------
+    Attributes
+    ----------
+    V : HiddenState
+        Membrane potential :math:`V_\mathrm{m}` (absolute). Shape: (batch,
+        \*in_size).
+    y1 : list of HiddenState
+        Synaptic current derivative states (pA), one per receptor port.
+        Shape: (batch, \*in_size).
+    y2 : list of HiddenState
+        Synaptic current states (pA), one per receptor port. Shape: (batch,
+        \*in_size).
+    last_spike_time : ShortTermState
+        Last spike time for each neuron (ms). Shape: (batch, \*in_size).
+    refractory_step_count : ShortTermState
+        Remaining refractory grid steps (int32). Shape: (batch, \*in_size).
+    I_stim : ShortTermState
+        Buffered external current for next step (pA). Shape: (batch, \*in_size).
+    _ASCurrents : numpy.ndarray
+        After-spike current values (pA). Shape: (n_asc, batch, \*in_size).
+    _ASCurrents_sum : numpy.ndarray
+        Sum of after-spike currents (pA). Shape: (batch, \*in_size).
+    _threshold : numpy.ndarray
+        Total threshold (relative to E_L, in mV). Shape: (batch, \*in_size).
+    _threshold_spike : numpy.ndarray
+        Spike component of threshold (mV). Shape: (batch, \*in_size).
+    _threshold_voltage : numpy.ndarray
+        Voltage component of threshold (mV). Shape: (batch, \*in_size).
+    Returns
+    -------
+    spike : jax.numpy.ndarray
+        Spike output (float32) via surrogate gradient function. Shape: (batch,
+        \*in_size). Values in [0, 1] during forward pass; gradient computed via
+        surrogate function.
 
-    ============================ ===========================================
-    **State variable**           **Description**
-    ============================ ===========================================
-    ``V``                        Membrane potential :math:`V_\mathrm{m}`
-    ``y1``                       Synaptic current derivative state (list per receptor)
-    ``y2``                       Synaptic current state (list per receptor)
-    ``threshold``                Total threshold (relative to :math:`E_L`)
-    ``threshold_spike``          Spike component of threshold
-    ``threshold_voltage``        Voltage component of threshold
-    ``ASCurrents``               After-spike current values (numpy array)
-    ``ASCurrents_sum``           Sum of after-spike currents
-    ``refractory_step_count``    Remaining refractory grid steps
-    ``I_stim``                   Buffered external current
-    ``last_spike_time``          Last spike time
-    ============================ ===========================================
+    Raises
+    ------
+    ValueError
+        If invalid model mechanism combination is specified.
+    ValueError
+        If V_reset >= V_th (reset must be below threshold).
+    ValueError
+        If capacitance, conductance, or time constants are not positive.
+    ValueError
+        If voltage_reset_fraction not in [0, 1].
+    ValueError
+        If asc_r values not in [0, 1].
+    ValueError
+        If ASC parameter arrays have mismatched lengths.
 
     Notes
     -----
-
     - Default parameter values are from GLIF Model 5 of Cell 490626718 from the
       `Allen Cell Type Database <https://celltypes.brain-map.org>`_.
-    - Parameters ``V_th`` and ``V_reset`` are specified in absolute mV. Internally,
-      membrane potential is tracked relative to ``E_L``, matching NEST's convention.
-    - For models with spike-dependent threshold (GLIF2/4/5), the reset condition
-      should satisfy:
+    - Parameters ``V_th`` and ``V_reset`` are specified in absolute mV.
+      Internally, membrane potential is tracked relative to ``E_L``, matching
+      NEST's convention.
+    - For models with spike-dependent threshold (GLIF2/4/5), the reset
+      condition should satisfy:
 
       .. math::
 
           E_L + f_v \cdot (V_{th} - E_L) + V_{add} < V_{th} + \Delta\theta_s
 
       Otherwise the neuron may spike continuously.
-    - Unlike ``glif_cond`` which uses an RKF45 ODE integrator, ``glif_psc`` uses
-      exact integration via propagator matrices for the linear subthreshold
-      dynamics, matching NEST's implementation.
-    - If ``tau_m`` is very close to ``tau_syn``, the model numerically behaves as
-      if they are equal, to avoid numerical instabilities (see NEST
+    - Unlike ``glif_cond`` which uses an RKF45 ODE integrator, ``glif_psc``
+      uses exact integration via propagator matrices for the linear
+      subthreshold dynamics, matching NEST's implementation.
+    - If ``tau_m`` is very close to ``tau_syn``, the model numerically behaves
+      as if they are equal, to avoid numerical instabilities (see NEST
       IAF_Integration_Singularity notebook).
+    - Synaptic inputs are delivered to receptor ports starting from port 0.
+      Register inputs with keys like 'receptor_0', 'receptor_1', etc., via
+      the ``add_delta_input`` method. Inputs without a receptor label default
+      to receptor port 0.
+
+    Examples
+    --------
+    **GLIF Model 1 (Basic LIF)**:
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> with u.context(dt=0.1 * u.ms):
+        ...     model = bp.glif_psc(100, spike_dependent_threshold=False,
+        ...                         after_spike_currents=False, adapting_threshold=False)
+        ...     model.init_all_states()
+        ...     output = model(350 * u.pA)
+
+    **GLIF Model 5 (Full Model with Adaptation)**:
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> with u.context(dt=0.1 * u.ms):
+        ...     model = bp.glif_psc(100, spike_dependent_threshold=True,
+        ...                         after_spike_currents=True, adapting_threshold=True)
+        ...     model.init_all_states()
+        ...     output = model(200 * u.pA)
+
+    **Multi-Receptor Configuration**:
+
+    .. code-block:: python
+
+        >>> import brainpy.state as bp
+        >>> import brainunit as u
+        >>> with u.context(dt=0.1 * u.ms):
+        ...     model = bp.glif_psc(100, tau_syn=(2.0, 5.0, 10.0))
+        ...     model.init_all_states()
+        ...     # Register inputs to different receptor ports
+        ...     model.add_delta_input('exc_receptor_0', lambda: 10 * u.pA)
+        ...     model.add_delta_input('inh_receptor_1', lambda: -5 * u.pA)
 
     References
     ----------
@@ -425,8 +599,8 @@ class glif_psc(Neuron):
 
     See Also
     --------
-    glif_cond
-    gif_psc_exp_multisynapse
+    glif_cond : Conductance-based GLIF model with RKF45 integration.
+    gif_psc_exp_multisynapse : Generalized IF with exponential synapses.
     """
     __module__ = 'brainpy.state'
 
@@ -505,7 +679,15 @@ class glif_psc(Neuron):
 
     @property
     def n_receptors(self):
-        """Number of synaptic receptor ports."""
+        r"""Number of synaptic receptor ports.
+
+        Returns
+        -------
+        int
+            Number of independent receptor ports, determined by the length
+            of the ``tau_syn`` parameter. Each receptor port has its own
+            synaptic time constant and independent alpha-function dynamics.
+        """
         return self._n_receptors
 
     @staticmethod
@@ -662,6 +844,32 @@ class glif_psc(Neuron):
         self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Generate spike output via surrogate gradient function.
+
+        Applies the surrogate gradient function to a normalized voltage signal.
+        The voltage is linearly scaled such that ``V_th`` maps to 1 and
+        ``V_reset`` maps to 0, providing a normalized input for the surrogate
+        function.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential (with units). If None, uses current ``self.V.value``.
+
+        Returns
+        -------
+        spike : jax.numpy.ndarray
+            Spike output (float32). Shape matches the neuron population.
+            Forward pass produces values in [0, 1]; backward pass uses the
+            surrogate gradient specified by ``spk_fun``.
+
+        Notes
+        -----
+        - This method is called internally by the base ``Neuron`` class and
+          is typically not invoked directly by users.
+        - The surrogate function enables gradient-based learning by providing
+          a differentiable approximation to the Heaviside step function.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
@@ -671,13 +879,30 @@ class glif_psc(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _collect_receptor_delta_inputs(self):
-        """Collect delta inputs per receptor port.
+        r"""Collect delta inputs per receptor port.
 
-        Delta inputs for receptor port k should be registered with key
-        containing 'receptor_<k>' (0-based). Any input not matching a specific
-        receptor pattern is added to receptor 0 as default.
+        Scans the ``delta_inputs`` dictionary for input currents registered
+        with receptor-specific keys. Input keys containing 'receptor_<k>'
+        (0-based indexing) are directed to the corresponding receptor port.
+        Any input not matching a specific receptor pattern is added to
+        receptor 0 as default.
 
-        Returns a list of arrays, one per receptor, in pA (numpy float64).
+        Returns
+        -------
+        list of numpy.ndarray
+            List of length ``n_receptors``, where each element is a float64
+            array of shape matching the neuron population. Each array contains
+            the total delta input current (pA) for that receptor port during
+            this time step.
+
+        Notes
+        -----
+        - Callable inputs are evaluated once and then removed from the
+          dictionary.
+        - Input values are converted to pA and broadcast to the neuron
+          population shape.
+        - This method is called during the ``update`` step before synaptic
+          state propagation.
         """
         v_shape = self.V.value.shape
         dy = [np.zeros(v_shape, dtype=np.float64) for _ in range(self._n_receptors)]
@@ -713,17 +938,47 @@ class glif_psc(Neuron):
         return dy
 
     def update(self, x=0.0 * u.pA):
-        """Perform a single simulation step.
+        r"""Perform a single simulation step.
+
+        Executes the complete GLIF update sequence: threshold adaptation,
+        after-spike current decay, exact membrane potential integration,
+        spike detection with reset, synaptic current propagation, and input
+        buffering. Follows NEST's discrete-time update order exactly.
+
+        The external current input ``x`` is buffered and applied in the *next*
+        time step (one-step delay), matching NEST's convention. Delta inputs
+        (e.g., from synaptic projections) are applied immediately to the
+        synaptic current state variables.
 
         Parameters
         ----------
-        x : ArrayLike
-            External current input (pA). Applied with one-step delay (buffered).
+        x : ArrayLike, optional
+            External current input (pA). Applied with one-step delay
+            (buffered). Shape must broadcast to the neuron population shape.
+            Default: 0.0 pA.
 
         Returns
         -------
-        spike : array
-            Spike output via surrogate gradient function.
+        spike : jax.numpy.ndarray
+            Spike output (float32) via surrogate gradient function. Shape:
+            (batch, \*in_size). Values in [0, 1] during forward pass;
+            backward gradient computed via the surrogate function specified
+            by ``spk_fun``.
+
+        Notes
+        -----
+        - The update follows NEST's exact discrete-time integration order:
+          (1) record old voltage, (2) update threshold and ASC, (3) integrate
+          voltage, (4) check spike and reset, (5) propagate synaptic states,
+          (6) add spike inputs, (7) buffer external current.
+        - Propagator matrix elements are pre-computed once per step for all
+          neurons, ensuring computational efficiency.
+        - Refractory neurons have their voltage clamped to the previous value
+          and do not update threshold or ASC.
+        - The singularity-safe IAFPropagatorAlpha algorithm ensures numerical
+          stability when :math:`\tau_m \approx \tau_{syn}`.
+        - ASC state is stored as NumPy arrays for efficiency and mutated
+          in-place during the update.
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

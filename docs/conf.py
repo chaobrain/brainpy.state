@@ -56,6 +56,53 @@ extensions = [
     'sphinx_math_dollar',
     # 'sphinx-mathjax-offline',
 ]
+
+# Prefer NumPy-style docstrings across the API docs.
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = True
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = False
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+napoleon_preprocess_types = True
+napoleon_attr_annotations = True
+napoleon_custom_sections = [
+    'Additional State Variables',
+    'Attributes (State Variables)',
+    'Attributes Set',
+    'Comparison with tsodyks_synapse',
+    'Computational Complexity',
+    'Computational Complexity and Performance',
+    'Computational Properties',
+    'Computational considerations',
+    'Description',
+    'Event timing semantics',
+    'Failure Modes',
+    'Implementation Notes',
+    'Mathematical Description',
+    'Mathematical Formulation',
+    'Mathematical Interpretation',
+    'Mathematical Model',
+    'Mathematical formulation',
+    'Mathematical model',
+    'Numerical Considerations',
+    'Parameter Mapping',
+    'Receptor Types',
+    'Recordables',
+    'Short description',
+    'Short Description',
+    'Side Effects',
+    'State variables',
+    'State Variables',
+    'Summary',
+    'Update Procedure',
+    'Warnings',
+]
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
@@ -76,7 +123,7 @@ nitpick_ignore = [
     ("py:class", "docutils.nodes.document"),
     ("py:class", "docutils.parsers.rst.directives.body.Sidebar"),
 ]
-suppress_warnings = ["myst.domains", "ref.ref"]
+suppress_warnings = ["myst.domains", "ref.ref", "ref.footnote"]
 numfig = True
 myst_enable_extensions = ["dollarmath", "amsmath", "deflist", "colon_fence"]
 # List of patterns, relative to source directory, that match files and

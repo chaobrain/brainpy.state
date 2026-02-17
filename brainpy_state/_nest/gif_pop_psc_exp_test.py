@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for gif_pop_psc_exp population neuron model.
 
 These tests verify that the brainpy.state implementation of gif_pop_psc_exp
@@ -52,7 +52,7 @@ from brainpy_state._nest.gif_pop_psc_exp import gif_pop_psc_exp
 # ============================================================================
 
 def _nest_ref_adaptation_kernel(k, h, tau_sfa, q_sfa):
-    """Compute adaptation kernel value at lag k time steps (NEST adaptation_kernel)."""
+    r"""Compute adaptation kernel value at lag k time steps (NEST adaptation_kernel)."""
     theta_tmp = 0.0
     for j in range(len(tau_sfa)):
         theta_tmp += q_sfa[j] * math.exp(-k * h / tau_sfa[j])
@@ -60,7 +60,7 @@ def _nest_ref_adaptation_kernel(k, h, tau_sfa, q_sfa):
 
 
 def _nest_ref_get_history_size(h, tau_m, Delta_V, t_ref, tau_sfa, q_sfa):
-    """Compute automatic history size (NEST get_history_size)."""
+    r"""Compute automatic history size (NEST get_history_size)."""
     tmax = 20000.0
     k = int(tmax / h)
     kmin = int(5 * tau_m / h)
@@ -72,12 +72,12 @@ def _nest_ref_get_history_size(h, tau_m, Delta_V, t_ref, tau_sfa, q_sfa):
 
 
 def _nest_ref_escrate(x, lambda_0, Delta_V):
-    """Escape rate (NEST escrate)."""
+    r"""Escape rate (NEST escrate)."""
     return lambda_0 * math.exp(x / Delta_V)
 
 
 def _nest_ref_draw_binomial(n_expect, N, rng):
-    """Draw binomial (NEST draw_binomial)."""
+    r"""Draw binomial (NEST draw_binomial)."""
     p_bino = n_expect / N
     if p_bino >= 1.0:
         return N
@@ -88,7 +88,7 @@ def _nest_ref_draw_binomial(n_expect, N, rng):
 
 
 def _nest_ref_draw_poisson(n_expect, N, rng):
-    """Draw Poisson (NEST draw_poisson)."""
+    r"""Draw Poisson (NEST draw_poisson)."""
     min_double = np.finfo(np.float64).tiny
     if n_expect > N:
         return N
@@ -108,7 +108,7 @@ def run_nest_ref(
     len_kernel=-1, BinoRand=True, rng_seed=0,
     ex_spikes=None, in_spikes=None, currents=None,
 ):
-    """Full reference implementation of NEST gif_pop_psc_exp update loop.
+    r"""Full reference implementation of NEST gif_pop_psc_exp update loop.
 
     Returns arrays of V_m, I_syn_ex, I_syn_in, n_spikes, n_expect, theta_hat
     for each step, matching NEST's update order exactly.
@@ -296,10 +296,10 @@ def run_nest_ref(
 # ============================================================================
 
 class TestGIFPopPscExpDefaultParams(unittest.TestCase):
-    """Test that default parameters match NEST C++ source code values."""
+    r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
-        """Parameters should match NEST gif_pop_psc_exp.cpp defaults."""
+        r"""Parameters should match NEST gif_pop_psc_exp.cpp defaults."""
         neuron = gif_pop_psc_exp(1)
         self.assertEqual(neuron.N, 100)
         self.assertEqual(neuron.tau_m, 20.0)
@@ -319,7 +319,7 @@ class TestGIFPopPscExpDefaultParams(unittest.TestCase):
         self.assertEqual(neuron.len_kernel, -1)
 
     def test_initial_state_matches_nest(self):
-        """State should be initialized to zero (V_m=0, I_syn=0, etc.)."""
+        r"""State should be initialized to zero (V_m=0, I_syn=0, etc.)."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1)
             neuron.init_state()
@@ -332,7 +332,7 @@ class TestGIFPopPscExpDefaultParams(unittest.TestCase):
 
 
 class TestGIFPopPscExpParameterValidation(unittest.TestCase):
-    """Test that invalid parameters raise appropriate errors."""
+    r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_sfa_q_sfa_raises(self):
         with self.assertRaises(ValueError):
@@ -372,10 +372,10 @@ class TestGIFPopPscExpParameterValidation(unittest.TestCase):
 
 
 class TestGIFPopPscExpAdaptationKernel(unittest.TestCase):
-    """Test adaptation kernel computation."""
+    r"""Test adaptation kernel computation."""
 
     def test_adaptation_kernel_values(self):
-        """Adaptation kernel at lag k should match sum of exponentials."""
+        r"""Adaptation kernel at lag k should match sum of exponentials."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, tau_sfa=(300.0, 100.0), q_sfa=(0.5, 1.0))
             neuron.init_state()
@@ -387,7 +387,7 @@ class TestGIFPopPscExpAdaptationKernel(unittest.TestCase):
                 self.assertAlmostEqual(actual, expected, places=12)
 
     def test_history_size_auto_determination(self):
-        """Auto-determined history size should be reasonable."""
+        r"""Auto-determined history size should be reasonable."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1)
             neuron.init_state()
@@ -397,7 +397,7 @@ class TestGIFPopPscExpAdaptationKernel(unittest.TestCase):
             self.assertGreater(neuron._len_kernel * 0.5, neuron.t_ref)
 
     def test_theta_initialization(self):
-        """Theta buffer should be correctly initialized."""
+        r"""Theta buffer should be correctly initialized."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, tau_sfa=(300.0,), q_sfa=(0.5,))
             neuron.init_state()
@@ -410,10 +410,10 @@ class TestGIFPopPscExpAdaptationKernel(unittest.TestCase):
 
 
 class TestGIFPopPscExpIntegrationConstants(unittest.TestCase):
-    """Test pre-computed integration constants."""
+    r"""Test pre-computed integration constants."""
 
     def test_membrane_constants(self):
-        """P22 and P20 should match exact integration constants."""
+        r"""P22 and P20 should match exact integration constants."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, tau_m=20.0, C_m=250.0)
             neuron.init_state()
@@ -426,7 +426,7 @@ class TestGIFPopPscExpIntegrationConstants(unittest.TestCase):
             self.assertAlmostEqual(neuron._P20, expected_P20, places=15)
 
     def test_synaptic_constants(self):
-        """P11_ex and P11_in should match exponential decay constants."""
+        r"""P11_ex and P11_in should match exponential decay constants."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, tau_syn_ex=3.0, tau_syn_in=6.0)
             neuron.init_state()
@@ -440,7 +440,7 @@ class TestGIFPopPscExpIntegrationConstants(unittest.TestCase):
 
 
 class TestGIFPopPscExpSubthresholdDynamics(unittest.TestCase):
-    """Test subthreshold membrane dynamics without spiking."""
+    r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
         self.dt = 0.5  # ms
@@ -459,7 +459,7 @@ class TestGIFPopPscExpSubthresholdDynamics(unittest.TestCase):
         return neuron
 
     def test_dc_current_drives_membrane(self):
-        """Constant I_e should drive membrane potential toward steady state."""
+        r"""Constant I_e should drive membrane potential toward steady state."""
         with brainstate.environ.context(dt=self.dt_q):
             neuron = self._make_neuron(I_e=500.0)
             neuron.init_state()
@@ -472,7 +472,7 @@ class TestGIFPopPscExpSubthresholdDynamics(unittest.TestCase):
             self.assertTrue(neuron.V_m > 0.0, f"V_m should be driven positive by I_e, got {neuron.V_m}")
 
     def test_membrane_decay_without_input(self):
-        """Without input, V_m should decay to E_L."""
+        r"""Without input, V_m should decay to E_L."""
         with brainstate.environ.context(dt=self.dt_q):
             neuron = self._make_neuron(I_e=0.0)
             neuron.init_state()
@@ -487,14 +487,14 @@ class TestGIFPopPscExpSubthresholdDynamics(unittest.TestCase):
 
 
 class TestGIFPopPscExpSynapticDynamics(unittest.TestCase):
-    """Test synaptic current dynamics."""
+    r"""Test synaptic current dynamics."""
 
     def setUp(self):
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
     def test_excitatory_spike_input(self):
-        """Positive delta input should increase I_syn_ex."""
+        r"""Positive delta input should increase I_syn_ex."""
         with brainstate.environ.context(dt=self.dt_q):
             neuron = gif_pop_psc_exp(1, lambda_0=0.0)
             neuron.init_state()
@@ -507,7 +507,7 @@ class TestGIFPopPscExpSynapticDynamics(unittest.TestCase):
                             f"I_syn_ex should be positive after exc spike, got {neuron.I_syn_ex}")
 
     def test_inhibitory_spike_input(self):
-        """Negative delta input should affect I_syn_in."""
+        r"""Negative delta input should affect I_syn_in."""
         with brainstate.environ.context(dt=self.dt_q):
             neuron = gif_pop_psc_exp(1, lambda_0=0.0)
             neuron.init_state()
@@ -520,7 +520,7 @@ class TestGIFPopPscExpSynapticDynamics(unittest.TestCase):
                             f"I_syn_in should be negative after inh spike, got {neuron.I_syn_in}")
 
     def test_synaptic_current_decay(self):
-        """Synaptic currents should decay after spike input.
+        r"""Synaptic currents should decay after spike input.
 
         In the population model, I_syn is integrated via exact propagators
         coupled with the membrane dynamics. The effective decay follows
@@ -553,14 +553,14 @@ class TestGIFPopPscExpSynapticDynamics(unittest.TestCase):
 
 
 class TestGIFPopPscExpPopulationDynamics(unittest.TestCase):
-    """Test population-level dynamics and spike generation."""
+    r"""Test population-level dynamics and spike generation."""
 
     def setUp(self):
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
     def test_population_generates_spikes_with_drive(self):
-        """With I_e drive, population should generate spikes."""
+        r"""With I_e drive, population should generate spikes."""
         with brainstate.environ.context(dt=self.dt_q):
             neuron = gif_pop_psc_exp(
                 1, N=100, I_e=500.0, lambda_0=10.0,
@@ -577,7 +577,7 @@ class TestGIFPopPscExpPopulationDynamics(unittest.TestCase):
                                "Population should generate spikes with I_e drive")
 
     def test_no_spikes_without_drive(self):
-        """Without drive, population should generate very few or no spikes."""
+        r"""Without drive, population should generate very few or no spikes."""
         with brainstate.environ.context(dt=self.dt_q):
             neuron = gif_pop_psc_exp(
                 1, N=100, I_e=0.0, lambda_0=10.0,
@@ -597,7 +597,7 @@ class TestGIFPopPscExpPopulationDynamics(unittest.TestCase):
                              "No spikes expected with very high threshold")
 
     def test_binomial_vs_poisson_modes(self):
-        """Both BinoRand modes should produce spike counts in [0, N]."""
+        r"""Both BinoRand modes should produce spike counts in [0, N]."""
         for bino in [True, False]:
             with brainstate.environ.context(dt=self.dt_q):
                 neuron = gif_pop_psc_exp(
@@ -614,10 +614,10 @@ class TestGIFPopPscExpPopulationDynamics(unittest.TestCase):
 
 
 class TestGIFPopPscExpHistoryBuffers(unittest.TestCase):
-    """Test history buffer initialization and rotation."""
+    r"""Test history buffer initialization and rotation."""
 
     def test_initial_buffers(self):
-        """Initial buffers: n[L-1]=N, m[L-1]=N, rest zeros."""
+        r"""Initial buffers: n[L-1]=N, m[L-1]=N, rest zeros."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, N=100)
             neuron.init_state()
@@ -635,7 +635,7 @@ class TestGIFPopPscExpHistoryBuffers(unittest.TestCase):
                 self.assertEqual(neuron._lambda_buf[k], 0.0)
 
     def test_rotating_index_wraps(self):
-        """Rotating index k0 should wrap around correctly."""
+        r"""Rotating index k0 should wrap around correctly."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, N=10, lambda_0=0.0)
             neuron.init_state()
@@ -649,14 +649,14 @@ class TestGIFPopPscExpHistoryBuffers(unittest.TestCase):
 
 
 class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
-    """Compare full simulation traces against standalone reference implementation."""
+    r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
     def test_trace_no_input(self):
-        """Trace with no external input should match reference exactly."""
+        r"""Trace with no external input should match reference exactly."""
         params = dict(
             N=100, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -702,7 +702,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
                 )
 
     def test_trace_with_dc_current(self):
-        """Trace with constant I_e should match reference."""
+        r"""Trace with constant I_e should match reference."""
         params = dict(
             N=100, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -730,7 +730,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
                 )
 
     def test_trace_with_excitatory_spikes(self):
-        """Trace with excitatory spike inputs should match reference."""
+        r"""Trace with excitatory spike inputs should match reference."""
         params = dict(
             N=50, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -773,7 +773,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
                 )
 
     def test_trace_with_inhibitory_spikes(self):
-        """Trace with inhibitory spike inputs should match reference."""
+        r"""Trace with inhibitory spike inputs should match reference."""
         params = dict(
             N=50, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -812,7 +812,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
                 )
 
     def test_trace_with_current_input(self):
-        """Trace with external current inputs (one-step delay) should match reference."""
+        r"""Trace with external current inputs (one-step delay) should match reference."""
         params = dict(
             N=50, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -849,7 +849,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
                 )
 
     def test_trace_poisson_mode(self):
-        """Trace with Poisson spike generation should match reference."""
+        r"""Trace with Poisson spike generation should match reference."""
         params = dict(
             N=100, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -877,7 +877,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
                 )
 
     def test_trace_multi_adaptation(self):
-        """Trace with multiple adaptation timescales should match reference."""
+        r"""Trace with multiple adaptation timescales should match reference."""
         params = dict(
             N=100, tau_m=20.0, C_m=250.0, t_ref=4.0,
             lambda_0=10.0, Delta_V=2.0, E_L=0.0, V_reset=0.0,
@@ -911,10 +911,10 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
 
 
 class TestGIFPopPscExpLongSimulation(unittest.TestCase):
-    """Test long-running simulation for statistical properties."""
+    r"""Test long-running simulation for statistical properties."""
 
     def test_steady_state_rate_with_inhibitory_feedback(self):
-        """Match the NEST test: inhibitory population with self-connection.
+        r"""Match the NEST test: inhibitory population with self-connection.
 
         This test mirrors test_gif_pop_psc_exp.py in NEST:
         - Population size: 500
@@ -983,10 +983,10 @@ class TestGIFPopPscExpLongSimulation(unittest.TestCase):
 
 
 class TestGIFPopPscExpResetState(unittest.TestCase):
-    """Test that reset_state properly reinitializes."""
+    r"""Test that reset_state properly reinitializes."""
 
     def test_reset_returns_to_initial_conditions(self):
-        """After reset, all state should match fresh init."""
+        r"""After reset, all state should match fresh init."""
         with brainstate.environ.context(dt=0.5 * u.ms):
             neuron = gif_pop_psc_exp(1, N=100, I_e=500.0, rng_seed=0)
             neuron.init_state()
@@ -1009,10 +1009,10 @@ class TestGIFPopPscExpResetState(unittest.TestCase):
 
 
 class TestGIFPopPscExpDeterminism(unittest.TestCase):
-    """Test that same seed produces identical results."""
+    r"""Test that same seed produces identical results."""
 
     def test_same_seed_same_output(self):
-        """Two runs with same seed should produce identical spike trains."""
+        r"""Two runs with same seed should produce identical spike trains."""
         params = dict(
             N=100, I_e=500.0, V_T_star=10.0,
             lambda_0=10.0, Delta_V=2.0, rng_seed=123,
@@ -1033,7 +1033,7 @@ class TestGIFPopPscExpDeterminism(unittest.TestCase):
         self.assertEqual(spikes1, spikes2)
 
     def test_different_seed_different_output(self):
-        """Two runs with different seeds should (likely) differ."""
+        r"""Two runs with different seeds should (likely) differ."""
         n_steps = 100
 
         def run_with_seed(seed):

@@ -35,195 +35,409 @@ __all__ = [
 
 
 class aeif_psc_delta_clopath(Neuron):
-    r"""NEST-compatible ``aeif_psc_delta_clopath`` neuron model.
+    r"""Adaptive exponential integrate-and-fire neuron with delta-shaped synaptic input and Clopath voltage traces.
 
-    Short description
-    -----------------
+    This model extends the standard adaptive exponential integrate-and-fire (AdEx) neuron with additional
+    state variables required for voltage-based Clopath plasticity. It implements delta-function postsynaptic
+    currents (instantaneous voltage jumps), spike afterpotential dynamics, adaptive threshold, post-spike
+    voltage clamping, and three low-pass filtered voltage traces (``u_bar_plus``, ``u_bar_minus``, ``u_bar_bar``)
+    used by the Clopath learning rule.
 
-    Adaptive exponential integrate-and-fire neuron with delta-shaped
-    synaptic input and Clopath low-pass voltage traces.
+    **1. Membrane and Adaptation Dynamics**
 
-    Description
-    -----------
-
-    ``aeif_psc_delta_clopath`` follows NEST
-    ``models/aeif_psc_delta_clopath.{h,cpp}`` and extends
-    ``aeif_psc_delta`` with:
-
-    - spike afterpotential current ``z``,
-    - adaptive threshold ``V_th`` with post-spike jump,
-    - post-spike voltage clamping (``t_clamp``, ``V_clamp``),
-    - Clopath trace variables ``u_bar_plus``, ``u_bar_minus``,
-      ``u_bar_bar``.
-
-    The model is intended for compatibility with voltage-based Clopath
-    plasticity workflows.
-
-    Membrane and adaptation dynamics
-    .................................
-
-    Let :math:`V` be membrane voltage, :math:`w` adaptation current,
-    :math:`z` depolarizing spike afterpotential current,
-    :math:`V_{th}` adaptive threshold.
+    The subthreshold membrane potential evolves according to:
 
     .. math::
 
-       C_m \frac{dV}{dt}
-       =
-       -g_L (V - E_L)
-       + g_L \Delta_T \exp\!\left(\frac{V - V_{th}}{\Delta_T}\right)
-       - w + z + I_e + I_{stim}.
+       C_m \frac{dV}{dt} = -g_L (V - E_L) + g_L \Delta_T \exp\!\left(\frac{V - V_{th}}{\Delta_T}\right)
+                           - w + z + I_e + I_{stim},
+
+    where :math:`V` is the membrane potential, :math:`w` is the adaptation current, :math:`z` is the spike
+    afterpotential current, :math:`V_{th}` is the adaptive threshold, :math:`I_e` is constant external current,
+    and :math:`I_{stim}` is the one-step delayed synaptic input. The exponential term provides the spike
+    upstroke when :math:`\Delta_T > 0`.
+
+    Three auxiliary currents evolve as:
 
     .. math::
 
-       \tau_w \frac{dw}{dt} = a (V - E_L) - w,
-       \qquad
-       \tau_z \frac{dz}{dt} = -z,
-       \qquad
-       \tau_{V_{th}} \frac{dV_{th}}{dt} = -(V_{th} - V_{th,rest}).
+       \tau_w \frac{dw}{dt} &= a (V - E_L) - w, \\
+       \tau_z \frac{dz}{dt} &= -z, \\
+       \tau_{V_{th}} \frac{dV_{th}}{dt} &= -(V_{th} - V_{th,rest}).
 
-    Clopath low-pass states
-    ........................
+    The adaptation current :math:`w` provides subthreshold coupling and spike-frequency adaptation.
+    The afterpotential :math:`z` creates a depolarizing transient following each spike.
+    The adaptive threshold :math:`V_{th}` relaxes toward :math:`V_{th,rest}` between spikes and jumps
+    to :math:`V_{th,max}` upon spike emission.
 
-    .. math::
+    **2. Clopath Low-Pass Voltage Traces**
 
-       \tau_{u+} \frac{du_{bar+}}{dt} = -u_{bar+} + V,
-
-    .. math::
-
-       \tau_{u-} \frac{du_{bar-}}{dt} = -u_{bar-} + V,
+    Three filtered voltage variables are maintained for plasticity:
 
     .. math::
 
-       \tau_{u\bar{}} \frac{du_{bar\bar{}}}{dt} = -u_{bar\bar{}} + u_{bar-}.
+       \tau_{u+} \frac{du_{bar+}}{dt} &= -u_{bar+} + V, \\
+       \tau_{u-} \frac{du_{bar-}}{dt} &= -u_{bar-} + V, \\
+       \tau_{u\bar{}} \frac{du_{bar\bar{}}}{dt} &= -u_{bar\bar{}} + u_{bar-}.
 
-    Incoming delta spikes are voltage jumps (mV):
+    These traces are first-order low-pass filters of the membrane voltage with different time constants.
+    ``u_bar_plus`` and ``u_bar_minus`` filter :math:`V` directly; ``u_bar_bar`` is a second-order filter
+    (filters ``u_bar_minus``). Delayed versions (delayed by ``delay_u_bars``) are stored in ring buffers
+    for use by Clopath synaptic plasticity rules.
+
+    **3. Delta-Function Synaptic Input**
+
+    Incoming synaptic spikes cause instantaneous voltage jumps:
 
     .. math::
 
-       V \leftarrow V + J \sum_k \delta(t - t_k).
+       V \leftarrow V + \sum_k J_k \delta(t - t_k^{\mathrm{spike}}),
 
-    Refractory and clamping semantics (NEST order)
-    ...............................................
+    where :math:`J_k` is the synaptic weight from presynaptic neuron :math:`k`. Delta inputs are summed
+    from the ``delta_inputs`` dictionary and applied at the beginning of each accepted RKF45 substep
+    (but only when the neuron is neither refractory nor clamped).
 
-    During integration, effective membrane voltage is:
+    **4. Spike Detection and Reset**
 
-    - ``V_clamp`` while ``clamp_step_count > 0``,
-    - ``V_reset`` while ``refractory_step_count > 0``,
-    - otherwise ``min(V, V_peak)``.
+    Spike detection threshold depends on :math:`\Delta_T`:
 
-    Spike handling is performed inside every accepted RKF45 substep:
+    - If :math:`\Delta_T > 0`: threshold is ``V_peak`` (exponential blowup detector).
+    - If :math:`\Delta_T = 0`: threshold is the dynamic ``V_th`` (standard IF threshold).
 
-    1. Apply current-step delta jump only if neither refractory nor clamped.
-    2. Detect threshold crossing:
-       - if ``Delta_T > 0``, threshold is ``V_peak``;
-       - if ``Delta_T == 0``, threshold is dynamic ``V_th``.
-    3. On spike:
-       - set ``V <- V_clamp``,
-       - ``w <- w + b``,
-       - ``z <- I_sp``,
-       - ``V_th <- V_th_max``,
-       - initialize clamping counter ``clamp_counts + 1``.
-    4. When clamping counter reaches 1 inside substep loop:
-       - set ``V <- V_reset``,
-       - clear clamp counter,
-       - initialize refractory counter ``refractory_counts + 1``.
+    Upon threshold crossing, the following spike-triggered updates occur:
 
-    After finishing full ``dt`` integration:
+    .. math::
 
-    1. write Clopath delayed-buffer bookkeeping,
-    2. decrement clamp counter,
-    3. decrement refractory counter,
-    4. store one-step delayed current ``I_stim <- x``.
+       V &\leftarrow V_{\mathrm{clamp}}, \\
+       w &\leftarrow w + b, \\
+       z &\leftarrow I_{sp}, \\
+       V_{th} &\leftarrow V_{th,max}, \\
+       \text{clamp\_step\_count} &\leftarrow \lceil t_{\mathrm{clamp}} / dt \rceil + 1.
 
-    This ordering reproduces NEST implementation details, including
-    in-loop multiple spikes when parameters allow them.
+    **5. Post-Spike Clamping and Refractory Period**
+
+    The model implements a two-stage reset:
+
+    1. **Clamping stage** (duration ``t_clamp``): voltage is held at ``V_clamp``, and adaptation dynamics
+       are frozen (``dw/dt = 0``). At the end of clamping (when ``clamp_step_count`` reaches 1 during
+       substep integration), voltage is reset to ``V_reset`` and the refractory period begins.
+
+    2. **Refractory stage** (duration ``t_ref``): voltage is clamped to ``V_reset``, but adaptation
+       dynamics continue (``dw/dt != 0``). Spike detection is disabled during both clamping and refractory.
+
+    This two-stage mechanism reproduces NEST's spike handling order and allows modeling of realistic
+    action potential waveforms with controlled overshoot.
+
+    **6. Numerical Integration**
+
+    The continuous-time dynamics are integrated using an adaptive Runge-Kutta-Fehlberg 4(5) solver (RKF45)
+    with local error control. The integrator maintains a persistent step size (``integration_step``) that
+    adapts based on local truncation error estimates. During refractory or clamping, the effective voltage
+    used in the right-hand side is replaced with ``V_reset`` or ``V_clamp``, but state integration continues.
 
     Parameters
     ----------
+    in_size : int or tuple of int
+        Population shape. Scalar for 1D populations, tuple for multi-dimensional arrays.
+    V_peak : ArrayLike, default: 33.0 * u.mV
+        Spike detection threshold when ``Delta_T > 0``. Must satisfy ``V_peak > V_th_rest``.
+        Shape: scalar or broadcastable to ``in_size``.
+    V_reset : ArrayLike, default: -60.0 * u.mV
+        Reset potential after clamping ends. Must satisfy ``V_reset < V_peak``.
+        Shape: scalar or broadcastable to ``in_size``.
+    t_ref : ArrayLike, default: 0.0 * u.ms
+        Absolute refractory period duration (non-negative). Default of 0 ms matches NEST defaults.
+        Shape: scalar or broadcastable to ``in_size``.
+    g_L : ArrayLike, default: 30.0 * u.nS
+        Leak conductance (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    C_m : ArrayLike, default: 281.0 * u.pF
+        Membrane capacitance (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    E_L : ArrayLike, default: -70.6 * u.mV
+        Leak reversal potential. Shape: scalar or broadcastable to ``in_size``.
+    Delta_T : ArrayLike, default: 2.0 * u.mV
+        Exponential slope factor (non-negative). Set to 0 for non-exponential IF model.
+        Shape: scalar or broadcastable to ``in_size``.
+    tau_w : ArrayLike, default: 144.0 * u.ms
+        Adaptation current time constant (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    tau_z : ArrayLike, default: 40.0 * u.ms
+        Spike afterpotential time constant (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    tau_V_th : ArrayLike, default: 50.0 * u.ms
+        Adaptive threshold time constant (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    V_th_max : ArrayLike, default: 30.4 * u.mV
+        Threshold value immediately after spike. Must satisfy ``V_th_max >= V_th_rest``.
+        Shape: scalar or broadcastable to ``in_size``.
+    V_th_rest : ArrayLike, default: -50.4 * u.mV
+        Resting threshold value (asymptotic value between spikes). Must satisfy ``V_th_rest <= V_peak``.
+        Shape: scalar or broadcastable to ``in_size``.
+    tau_u_bar_plus : ArrayLike, default: 7.0 * u.ms
+        Time constant for ``u_bar_plus`` trace (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    tau_u_bar_minus : ArrayLike, default: 10.0 * u.ms
+        Time constant for ``u_bar_minus`` trace (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    tau_u_bar_bar : ArrayLike, default: 500.0 * u.ms
+        Time constant for ``u_bar_bar`` trace (must be positive). Shape: scalar or broadcastable to ``in_size``.
+    a : ArrayLike, default: 4.0 * u.nS
+        Subthreshold adaptation coupling strength. Shape: scalar or broadcastable to ``in_size``.
+    b : ArrayLike, default: 80.5 * u.pA
+        Spike-triggered adaptation increment. Shape: scalar or broadcastable to ``in_size``.
+    I_sp : ArrayLike, default: 400.0 * u.pA
+        Spike afterpotential current reset value (sets ``z`` on spike). Shape: scalar or broadcastable to ``in_size``.
+    I_e : ArrayLike, default: 0.0 * u.pA
+        Constant external current. Shape: scalar or broadcastable to ``in_size``.
+    A_LTD : ArrayLike, default: 1.4e-4
+        Clopath depression amplitude (dimensionless). Used in delayed-buffer bookkeeping for compatibility.
+        Shape: scalar or broadcastable to ``in_size``.
+    A_LTP : ArrayLike, default: 8.0e-5
+        Clopath potentiation amplitude (dimensionless). Used in delayed-buffer bookkeeping for compatibility.
+        Shape: scalar or broadcastable to ``in_size``.
+    theta_plus : ArrayLike, default: -45.3 * u.mV
+        Clopath potentiation voltage threshold. Shape: scalar or broadcastable to ``in_size``.
+    theta_minus : ArrayLike, default: -70.6 * u.mV
+        Clopath depression voltage threshold. Shape: scalar or broadcastable to ``in_size``.
+    A_LTD_const : bool, default: True
+        If True, LTD amplitude is constant. If False, LTD scales with ``u_bar_bar**2 / u_ref_squared`` (homeostatic).
+    delay_u_bars : ArrayLike, default: 5.0 * u.ms
+        Delay for Clopath u-bar traces (ring buffer delay). Rounded to nearest integer multiple of ``dt``.
+        Shape: scalar or broadcastable to ``in_size``.
+    u_ref_squared : ArrayLike, default: 60.0
+        Clopath LTD homeostatic reference (dimensionless, must be positive). Only used when ``A_LTD_const=False``.
+        Shape: scalar or broadcastable to ``in_size``.
+    gsl_error_tol : ArrayLike, default: 1e-6
+        RKF45 local error tolerance (must be positive). Smaller values increase accuracy and decrease step size.
+        Shape: scalar or broadcastable to ``in_size``.
+    t_clamp : ArrayLike, default: 2.0 * u.ms
+        Spike clamping duration (non-negative). Shape: scalar or broadcastable to ``in_size``.
+    V_clamp : ArrayLike, default: 33.0 * u.mV
+        Clamped voltage immediately after spike. Shape: scalar or broadcastable to ``in_size``.
+    V_initializer : Callable, default: braintools.init.Constant(-70.6 * u.mV)
+        Initializer for membrane potential. Must return values with voltage units.
+    w_initializer : Callable, default: braintools.init.Constant(0.0 * u.pA)
+        Initializer for adaptation current. Must return values with current units.
+    z_initializer : Callable, default: braintools.init.Constant(0.0 * u.pA)
+        Initializer for spike afterpotential current. Must return values with current units.
+    V_th_initializer : Callable, default: braintools.init.Constant(-50.4 * u.mV)
+        Initializer for adaptive threshold. Must return values with voltage units.
+    u_bar_plus_initializer : Callable, default: braintools.init.Constant(-70.6 * u.mV)
+        Initializer for ``u_bar_plus`` trace. Must return values with voltage units.
+    u_bar_minus_initializer : Callable, default: braintools.init.Constant(-70.6 * u.mV)
+        Initializer for ``u_bar_minus`` trace. Must return values with voltage units.
+    u_bar_bar_initializer : Callable, default: braintools.init.Constant(-70.6 * u.mV)
+        Initializer for ``u_bar_bar`` trace. Must return values with voltage units.
+    spk_fun : Callable, default: braintools.surrogate.ReluGrad()
+        Surrogate gradient function for differentiable spike generation during training.
+    spk_reset : str, default: 'hard'
+        Spike reset mode. 'hard' (stop_gradient) matches NEST behavior; 'soft' (V -= V_th) preserves gradients.
+    ref_var : bool, default: False
+        If True, expose ``refractory`` state variable indicating whether neuron is refractory or clamped.
+    name : str, optional
+        Name for this neuron instance.
 
-    ==================== ================== ====================================== ================================================================
-    **Parameter**        **Default**        **Math equivalent**                    **Description**
-    ==================== ================== ====================================== ================================================================
-    ``in_size``          (required)                                                Population shape
-    ``V_peak``           33 mV              :math:`V_\mathrm{peak}`               Spike detection threshold for ``Delta_T > 0``
-    ``V_reset``          -60 mV             :math:`V_\mathrm{reset}`              Reset potential
-    ``t_ref``            0 ms               :math:`t_\mathrm{ref}`                Absolute refractory duration
-    ``g_L``              30 nS              :math:`g_\mathrm{L}`                  Leak conductance
-    ``C_m``              281 pF             :math:`C_\mathrm{m}`                  Membrane capacitance
-    ``E_L``              -70.6 mV           :math:`E_\mathrm{L}`                  Leak reversal potential
-    ``Delta_T``          2 mV               :math:`\Delta_T`                      Exponential slope factor
-    ``tau_w``            144 ms             :math:`\tau_w`                        Adaptation time constant
-    ``tau_z``            40 ms              :math:`\tau_z`                        Spike afterpotential time constant
-    ``tau_V_th``         50 ms              :math:`\tau_{V_{th}}`                 Adaptive threshold time constant
-    ``V_th_max``         30.4 mV            :math:`V_{th,max}`                     Threshold value immediately after spike
-    ``V_th_rest``        -50.4 mV           :math:`V_{th,rest}`                    Resting threshold value
-    ``tau_u_bar_plus``   7 ms               :math:`\tau_{u+}`                     Time constant of ``u_bar_plus``
-    ``tau_u_bar_minus``  10 ms              :math:`\tau_{u-}`                     Time constant of ``u_bar_minus``
-    ``tau_u_bar_bar``    500 ms             :math:`\tau_{u\bar{}}`               Time constant of ``u_bar_bar``
-    ``a``                4 nS               :math:`a`                              Subthreshold adaptation strength
-    ``b``                80.5 pA            :math:`b`                              Spike-triggered adaptation increment
-    ``I_sp``             400 pA             :math:`I_{sp}`                         Spike afterpotential current reset value
-    ``I_e``              0 pA               :math:`I_\mathrm{e}`                  Constant external current
-    ``A_LTD``            1.4e-4             :math:`A_\mathrm{LTD}`                Clopath depression amplitude
-    ``A_LTP``            8.0e-5             :math:`A_\mathrm{LTP}`                Clopath facilitation amplitude
-    ``theta_plus``       -45.3 mV           :math:`\theta_+`                      Clopath potentiation threshold
-    ``theta_minus``      -70.6 mV           :math:`\theta_-`                      Clopath depression threshold
-    ``A_LTD_const``      ``True``                                                   If False, LTD scales with ``u_bar_bar**2 / u_ref_squared``
-    ``delay_u_bars``     5 ms               (delay)                                Delay used by Clopath u-bar buffer bookkeeping
-    ``u_ref_squared``    60                 :math:`u_\mathrm{ref}^2`              Clopath LTD homeostatic reference
-    ``gsl_error_tol``    1e-6               (solver tolerance)                     RKF45 local error tolerance
-    ``t_clamp``          2 ms               :math:`t_\mathrm{clamp}`              Spike clamping duration
-    ``V_clamp``          33 mV              :math:`V_\mathrm{clamp}`              Clamped voltage after spike
-    ``V_initializer``    Constant(E_L)                                              Membrane initializer
-    ``w_initializer``    Constant(0 pA)                                             Adaptation initializer
-    ``z_initializer``    Constant(0 pA)                                             Spike-current initializer
-    ``V_th_initializer`` Constant(-50.4 mV)                                         Adaptive-threshold initializer
-    ``u_bar_plus_initializer``  Constant(-70.6 mV)                                  ``u_bar_plus`` initializer
-    ``u_bar_minus_initializer`` Constant(-70.6 mV)                                  ``u_bar_minus`` initializer
-    ``u_bar_bar_initializer``   Constant(-70.6 mV)                                  ``u_bar_bar`` initializer
-    ``spk_fun``          ReluGrad()                                                 Surrogate spike function
-    ``spk_reset``        ``'hard'``                                                 Reset mode; hard reset matches NEST behavior
-    ``ref_var``          ``False``                                                  If True, expose refractory/clamped indicator
-    ==================== ================== ====================================== ================================================================
+    Parameter Mapping
+    -----------------
+    The table below maps BrainPy parameters to their mathematical symbols and NEST equivalents:
 
-    State variables
-    ---------------
+    ========================== ================== ================================ ================================================================
+    **Parameter**              **Default**        **Math Symbol**                  **Description**
+    ========================== ================== ================================ ================================================================
+    ``in_size``                (required)         —                                Population shape
+    ``V_peak``                 33 mV              :math:`V_\mathrm{peak}`          Spike detection threshold for :math:`\Delta_T > 0`
+    ``V_reset``                -60 mV             :math:`V_\mathrm{reset}`         Reset potential
+    ``t_ref``                  0 ms               :math:`t_\mathrm{ref}`           Absolute refractory duration
+    ``g_L``                    30 nS              :math:`g_\mathrm{L}`             Leak conductance
+    ``C_m``                    281 pF             :math:`C_\mathrm{m}`             Membrane capacitance
+    ``E_L``                    -70.6 mV           :math:`E_\mathrm{L}`             Leak reversal potential
+    ``Delta_T``                2 mV               :math:`\Delta_T`                 Exponential slope factor
+    ``tau_w``                  144 ms             :math:`\tau_w`                   Adaptation time constant
+    ``tau_z``                  40 ms              :math:`\tau_z`                   Spike afterpotential time constant
+    ``tau_V_th``               50 ms              :math:`\tau_{V_{th}}`            Adaptive threshold time constant
+    ``V_th_max``               30.4 mV            :math:`V_{th,\mathrm{max}}`      Threshold value immediately after spike
+    ``V_th_rest``              -50.4 mV           :math:`V_{th,\mathrm{rest}}`     Resting threshold value
+    ``tau_u_bar_plus``         7 ms               :math:`\tau_{u+}`                Time constant of ``u_bar_plus``
+    ``tau_u_bar_minus``        10 ms              :math:`\tau_{u-}`                Time constant of ``u_bar_minus``
+    ``tau_u_bar_bar``          500 ms             :math:`\tau_{u\bar{}}`           Time constant of ``u_bar_bar``
+    ``a``                      4 nS               :math:`a`                        Subthreshold adaptation strength
+    ``b``                      80.5 pA            :math:`b`                        Spike-triggered adaptation increment
+    ``I_sp``                   400 pA             :math:`I_{sp}`                   Spike afterpotential current reset value
+    ``I_e``                    0 pA               :math:`I_\mathrm{e}`             Constant external current
+    ``A_LTD``                  1.4e-4             :math:`A_\mathrm{LTD}`           Clopath depression amplitude
+    ``A_LTP``                  8.0e-5             :math:`A_\mathrm{LTP}`           Clopath potentiation amplitude
+    ``theta_plus``             -45.3 mV           :math:`\theta_+`                 Clopath potentiation threshold
+    ``theta_minus``            -70.6 mV           :math:`\theta_-`                 Clopath depression threshold
+    ``A_LTD_const``            ``True``           —                                If False, homeostatic LTD scaling
+    ``delay_u_bars``           5 ms               —                                Delay for Clopath u-bar buffers
+    ``u_ref_squared``          60                 :math:`u_\mathrm{ref}^2`         Clopath LTD homeostatic reference
+    ``gsl_error_tol``          1e-6               —                                RKF45 local error tolerance
+    ``t_clamp``                2 ms               :math:`t_\mathrm{clamp}`         Spike clamping duration
+    ``V_clamp``                33 mV              :math:`V_\mathrm{clamp}`         Clamped voltage after spike
+    ``V_initializer``          Constant(E_L)      —                                Membrane voltage initializer
+    ``w_initializer``          Constant(0 pA)     —                                Adaptation current initializer
+    ``z_initializer``          Constant(0 pA)     —                                Spike afterpotential initializer
+    ``V_th_initializer``       Constant(-50.4 mV) —                                Adaptive threshold initializer
+    ``u_bar_plus_initializer`` Constant(-70.6 mV) —                                ``u_bar_plus`` initializer
+    `u_bar_minus_initializer`  Constant(-70.6 mV) —                                ``u_bar_minus`` initializer
+    ``u_bar_bar_initializer``  Constant(-70.6 mV) —                                ``u_bar_bar`` initializer
+    ``spk_fun``                ReluGrad()         —                                Surrogate spike function
+    ``spk_reset``              ``'hard'``         —                                Reset mode (``'hard'`` or ``'soft'``)
+    ``ref_var``                ``False``          —                                If True, expose refractory indicator
+    ========================== ================== ================================ ================================================================
 
-    - ``V``: membrane potential :math:`V_m`.
-    - ``w``: adaptation current.
-    - ``z``: spike afterpotential current.
-    - ``V_th``: adaptive threshold.
-    - ``u_bar_plus``, ``u_bar_minus``, ``u_bar_bar``: Clopath low-pass traces.
-    - ``refractory_step_count``: remaining refractory grid steps.
-    - ``clamp_step_count``: remaining clamp grid steps.
-    - ``integration_step``: persistent RKF45 internal step size.
-    - ``I_stim``: one-step delayed current buffer.
-    - ``delayed_u_bar_plus_buffer`` / ``delayed_u_bar_minus_buffer``:
-      delay buffers used in Clopath bookkeeping.
-    - ``delayed_u_bars_idx``: delay-buffer pointer index.
-    - ``last_spike_time``: last emitted spike time (:math:`t+dt` on spike).
+    Attributes
+    ----------
+    V : brainstate.HiddenState
+        Membrane potential (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    w : brainstate.HiddenState
+        Adaptation current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    z : brainstate.HiddenState
+        Spike afterpotential current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    V_th : brainstate.HiddenState
+        Adaptive threshold (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    u_bar_plus : brainstate.HiddenState
+        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    u_bar_minus : brainstate.HiddenState
+        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    u_bar_bar : brainstate.HiddenState
+        Clopath second-order filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    refractory_step_count : brainstate.ShortTermState
+        Remaining refractory time steps (int32). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    clamp_step_count : brainstate.ShortTermState
+        Remaining clamping time steps (int32). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    integration_step : brainstate.ShortTermState
+        Current RKF45 adaptive step size (ms). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    I_stim : brainstate.ShortTermState
+        One-step delayed synaptic current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    delayed_u_bar_plus_buffer : brainstate.ShortTermState
+        Ring buffer for delayed ``u_bar_plus`` (mV). Shape: ``(delay_steps, *in_size)`` or ``(delay_steps, *in_size, batch_size)``.
+    delayed_u_bar_minus_buffer : brainstate.ShortTermState
+        Ring buffer for delayed ``u_bar_minus`` (mV). Shape: ``(delay_steps, *in_size)`` or ``(delay_steps, *in_size, batch_size)``.
+    delayed_u_bars_idx : brainstate.ShortTermState
+        Current ring buffer write index (int32). Scalar.
+    delayed_u_bars_steps : brainstate.ShortTermState
+        Total ring buffer size (int32). Scalar.
+    last_spike_time : brainstate.ShortTermState
+        Last spike time (ms). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+    refractory : brainstate.ShortTermState, optional
+        Boolean indicator: True if neuron is refractory or clamped. Only present if ``ref_var=True``.
+        Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+
+    Raises
+    ------
+    ValueError
+        - If ``V_reset >= V_peak``.
+        - If ``Delta_T < 0``.
+        - If ``V_th_max < V_th_rest`` or ``V_peak < V_th_rest``.
+        - If ``C_m <= 0``, ``t_ref < 0``, ``t_clamp < 0``, or any time constant <= 0.
+        - If ``u_ref_squared <= 0`` or ``gsl_error_tol <= 0``.
+        - If ``(V_peak - V_th_rest) / Delta_T`` exceeds overflow limit (when ``Delta_T > 0``).
+        - If ``delay_u_bars`` maps to fewer than 1 delay buffer entry.
+        - If ``delay_u_bars`` is spatially heterogeneous (delay steps must be uniform).
+        - If numerical instability is detected during integration (voltage or adaptation out of bounds).
 
     Notes
     -----
+    **Implementation Details:**
 
-    - Default ``t_ref=0`` matches NEST model defaults.
-    - This implementation keeps Clopath delayed u-bar bookkeeping state,
-      matching NEST update ordering even without a dedicated Clopath synapse
-      implementation in this repository.
+    - **RKF45 integration:** Uses adaptive-step Runge-Kutta-Fehlberg 4(5) with error control. Step size
+      is persisted across time steps to improve stability. Minimum step size is 1e-8 ms; maximum iteration
+      count is 100000 per ``dt`` to prevent infinite loops.
+
+    - **Refractory/clamping precedence:** During integration, if ``clamp_step_count > 0``, voltage is clamped
+      to ``V_clamp`` and adaptation dynamics freeze. If ``refractory_step_count > 0`` (and not clamped),
+      voltage is clamped to ``V_reset`` but adaptation continues. Both conditions disable spike detection.
+
+    - **Delta input timing:** Delta voltage jumps are applied at the start of each accepted substep, but
+      only when the neuron is neither refractory nor clamped. This matches NEST's per-substep spike delivery.
+
+    - **Spike timing convention:** ``last_spike_time`` is set to ``t + dt`` upon spike emission (end of
+      current time step), matching NEST's convention.
+
+    - **Clopath buffer bookkeeping:** This implementation maintains delayed ``u_bar_plus`` and ``u_bar_minus``
+      buffers even without a dedicated Clopath synapse model, ensuring state-level compatibility with NEST
+      for future plasticity extensions. The delayed traces are updated at the end of each ``update()`` call.
+
+    - **Overflow protection:** The exponential term is guarded against overflow when ``Delta_T > 0``. If
+      ``(V_peak - V_th_rest) / Delta_T`` would cause ``exp(...)`` to exceed ``max(float64) / 1e20``, an
+      error is raised during initialization.
+
+    - **Batch support:** All state variables support an optional batch dimension (via ``batch_size`` in
+      ``init_state``/``reset_state``). Batched states have shape ``(*in_size, batch_size)``.
+
+    **Usage:**
+
+    This model is designed for voltage-based plasticity studies and detailed spike waveform modeling.
+    Use ``Delta_T > 0`` for exponential IF dynamics (rapid spike upstroke) or ``Delta_T = 0`` for standard
+    IF with dynamic threshold. The ``t_clamp`` and ``V_clamp`` parameters control the spike overshoot and
+    allow modeling realistic action potential shapes. For basic AdEx simulations without Clopath plasticity,
+    consider using the simpler ``aeif_psc_delta`` or ``aeif_psc_exp`` models (if available).
+
+    See Also
+    --------
+    aeif_psc_delta : Simplified AdEx without Clopath traces or clamping.
+    aeif_psc_exp : AdEx with exponential postsynaptic currents.
+    clopath_synapse : Voltage-based STDP synapse (NEST reference).
 
     References
     ----------
-    .. [1] Clopath C, Busing L, Vasilaki E, Gerstner W (2010).
-           Connectivity reflects coding: a model of voltage-based STDP with
-           homeostasis. Nature Neuroscience, 13(3):344-352.
+    .. [1] Clopath C, Büsing L, Vasilaki E, Gerstner W (2010). Connectivity reflects coding: a model of
+           voltage-based STDP with homeostasis. *Nature Neuroscience*, 13(3):344-352.
            DOI: https://doi.org/10.1038/nn.2479
-    .. [2] Brette R, Gerstner W (2005). Adaptive exponential integrate-and-fire
-           model as an effective description of neuronal activity.
-           Journal of Neurophysiology, 94:3637-3642.
+    .. [2] Brette R, Gerstner W (2005). Adaptive exponential integrate-and-fire model as an effective
+           description of neuronal activity. *Journal of Neurophysiology*, 94:3637-3642.
            DOI: https://doi.org/10.1152/jn.00686.2005
-    .. [3] NEST source: ``models/aeif_psc_delta_clopath.h`` and
-           ``models/aeif_psc_delta_clopath.cpp``.
+    .. [3] NEST Simulator documentation: ``aeif_psc_delta_clopath`` model.
+           https://nest-simulator.readthedocs.io/
+    .. [4] NEST source code: ``models/aeif_psc_delta_clopath.h`` and ``models/aeif_psc_delta_clopath.cpp``.
+
+    Examples
+    --------
+    Simulate a single neuron with step current input:
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainstate as bs
+       >>> import brainunit as u
+       >>> import matplotlib.pyplot as plt
+       >>>
+       >>> # Create neuron population
+       >>> neuron = bst.aeif_psc_delta_clopath(in_size=1, I_e=300*u.pA)
+       >>>
+       >>> # Simulate for 100 ms
+       >>> with bs.environ.context(dt=0.1*u.ms):
+       ...     neuron.init_state()
+       ...     times, voltages = [], []
+       ...     for t in range(1000):
+       ...         spike = neuron.update()
+       ...         times.append(t * 0.1)
+       ...         voltages.append(float(neuron.V.value / u.mV))
+       >>>
+       >>> # Plot membrane potential
+       >>> plt.plot(times, voltages)
+       >>> plt.xlabel('Time (ms)')
+       >>> plt.ylabel('Voltage (mV)')
+       >>> plt.show()
+
+    Network simulation with delta-function synaptic connections:
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainstate as bs
+       >>> import brainunit as u
+       >>>
+       >>> # Create excitatory and inhibitory populations
+       >>> exc = bst.aeif_psc_delta_clopath(in_size=100, I_e=200*u.pA)
+       >>> inh = bst.aeif_psc_delta_clopath(in_size=25, I_e=150*u.pA)
+       >>>
+       >>> # Create delta-function projection (instantaneous voltage jump)
+       >>> # Note: Requires appropriate projection class that adds delta inputs
+       >>> # exc_to_inh = bst.DeltaProj(exc, inh, weight=0.5*u.mV, prob=0.1)
+       >>>
+       >>> # Simulate network
+       >>> with bs.environ.context(dt=0.1*u.ms):
+       ...     exc.init_state()
+       ...     inh.init_state()
+       ...     for t in range(10000):  # 1 second
+       ...         exc_spikes = exc.update()
+       ...         inh_spikes = inh.update()
     """
 
     __module__ = 'brainpy.state'
@@ -429,6 +643,32 @@ class aeif_psc_delta_clopath(Neuron):
         self.delayed_u_bar_minus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=np.float64))
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables.
+
+        Allocates and initializes all neuron state variables using the configured initializers. This includes
+        membrane dynamics states (V, w, z, V_th), Clopath voltage traces (u_bar_plus, u_bar_minus, u_bar_bar),
+        refractory/clamping counters, RKF45 integration state, and delayed-buffer bookkeeping for Clopath plasticity.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size. If provided, all states will have shape ``(*in_size, batch_size)``.
+            If None, states have shape ``(*in_size,)``. Default: None.
+        **kwargs
+            Reserved for future extensions. Currently unused.
+
+        Notes
+        -----
+        - ``last_spike_time`` is initialized to -1e7 ms (far in the past) to indicate no prior spike.
+        - ``refractory_step_count`` and ``clamp_step_count`` are initialized to 0 (not refractory/clamped).
+        - ``integration_step`` is initialized to the current simulation time step (``dt``).
+        - Clopath delay buffers are allocated with size ``ceil(delay_u_bars / dt) + 1``.
+        - If ``ref_var=True``, an additional ``refractory`` boolean state is created.
+
+        See Also
+        --------
+        reset_state : Reset existing states to initial values.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         w = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         z = braintools.init.param(self.z_initializer, self.varshape, batch_size)
@@ -469,6 +709,31 @@ class aeif_psc_delta_clopath(Neuron):
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
+        r"""Reset all state variables to initial values.
+
+        Resets all existing state variables to their initial values using the configured initializers.
+        This is useful for running multiple trials or resetting network state during training.
+        Clopath delay buffers are reallocated and cleared.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Batch dimension size. If provided, all states will be reset with shape ``(*in_size, batch_size)``.
+            If None, states will have shape ``(*in_size,)``. Default: None.
+        **kwargs
+            Reserved for future extensions. Currently unused.
+
+        Notes
+        -----
+        - All dynamic states (V, w, z, V_th, u_bar_*, counters, buffers) are reset.
+        - Clopath delay buffers are reallocated, clearing all history.
+        - Integration step size is reset to the current simulation ``dt``.
+        - If batch size changes from initialization, state shapes will be updated accordingly.
+
+        See Also
+        --------
+        init_state : Initial state allocation.
+        """
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         self.z.value = braintools.init.param(self.z_initializer, self.varshape, batch_size)
@@ -501,6 +766,35 @@ class aeif_psc_delta_clopath(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Compute differentiable spike output using surrogate gradient function.
+
+        Applies the surrogate gradient function to a scaled voltage relative to the dynamic threshold.
+        This produces a continuous approximation of discrete spikes, enabling gradient-based learning.
+        The scaling factor ``(v_th - V_reset)`` normalizes the voltage range for the surrogate function.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Membrane potential (mV). If None, uses current ``self.V.value``. Shape: ``(*in_size,)``
+            or ``(*in_size, batch_size)``.
+
+        Returns
+        -------
+        spike : ArrayLike
+            Differentiable spike signal (dimensionless, approximately in [0, 1] for most surrogate functions).
+            Shape matches input ``V``.
+
+        Notes
+        -----
+        - This method is primarily used during training with surrogate gradient descent.
+        - During inference with ``update()``, spikes are detected via hard threshold crossing (not this function).
+        - The threshold used is the dynamic ``V_th`` (if available) or the resting ``V_th_rest`` otherwise.
+        - The surrogate function is configured via the ``spk_fun`` parameter (default: ``ReluGrad``).
+
+        See Also
+        --------
+        update : Hard spike detection and state integration.
+        """
         V = self.V.value if V is None else V
         if hasattr(self, 'V_th'):
             v_th = self.V_th.value
@@ -591,6 +885,83 @@ class aeif_psc_delta_clopath(Neuron):
         self.delayed_u_bars_idx.value = np.asarray(idx, dtype=np.int32)
 
     def update(self, x=0.0 * u.pA):
+        r"""Advance neuron state by one time step using adaptive RKF45 integration.
+
+        Integrates the neuron dynamics over the current simulation time step ``dt`` using an adaptive
+        Runge-Kutta-Fehlberg 4(5) solver with local error control. Handles spike detection, post-spike
+        reset, refractory period, voltage clamping, delta-function synaptic inputs, and Clopath trace
+        updates. Returns binary spike output for the current time step.
+
+        Parameters
+        ----------
+        x : ArrayLike, default: 0.0 * u.pA
+            External input current for the current time step (pA). This is combined with synaptic currents
+            from ``current_inputs`` dictionary. Shape: scalar or broadcastable to ``(*in_size,)`` or
+            ``(*in_size, batch_size)``.
+
+        Returns
+        -------
+        spike : ArrayLike
+            Binary spike indicator (1.0 if neuron spiked during this time step, 0.0 otherwise).
+            Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+
+        Raises
+        ------
+        ValueError
+            If numerical instability is detected (voltage < -1000 mV or abs(adaptation) > 1e6 pA).
+
+        Notes
+        -----
+        **Integration algorithm:**
+
+        - Uses Runge-Kutta-Fehlberg 4(5) with adaptive step size control.
+        - Each time step ``dt`` is subdivided into substeps with sizes determined by local error estimates.
+        - Step size is adjusted based on error ratio: ``h_new = h * min(5, max(0.2, 0.9 * (tol/err)^(1/5)))``.
+        - Minimum substep size: 1e-8 ms. Maximum iterations per ``dt``: 100000.
+        - Step size is persisted across time steps (``integration_step``) for stability.
+
+        **Update order within each accepted substep:**
+
+        1. Apply delta voltage jumps (from ``delta_inputs``) if not refractory/clamped.
+        2. Integrate ODEs using RKF45.
+        3. Check for threshold crossing (``V >= V_peak`` or ``V >= V_th``).
+        4. On spike: apply spike-triggered updates (V, w, z, V_th, clamp counter).
+        5. On clamp expiry: transition to refractory (set V to V_reset, start refractory counter).
+        6. During refractory: clamp voltage to V_reset.
+
+        **Update order at the end of full ``dt``:**
+
+        1. Write Clopath delayed-buffer bookkeeping (update ring buffers with current u_bar traces).
+        2. Decrement clamp counter (if > 0).
+        3. Decrement refractory counter (if > 0).
+        4. Store new input current in delayed buffer (``I_stim``), to be used in next time step.
+        5. Update ``last_spike_time`` for neurons that spiked.
+        6. If ``ref_var=True``, update ``refractory`` indicator.
+
+        **Input handling:**
+
+        - Current-based inputs: summed from ``current_inputs`` dictionary and added to external ``x``.
+        - Delta-based inputs: summed from ``delta_inputs`` dictionary as instantaneous voltage jumps.
+        - The combined current input is delayed by one time step (``I_stim``), matching NEST's behavior.
+
+        **Spike timing:**
+
+        - Spikes are detected when voltage crosses threshold within a substep.
+        - ``last_spike_time`` is set to ``t + dt`` (end of current time step), not the exact crossing time.
+        - Multiple spikes within a single ``dt`` are possible if parameters allow (e.g., very short ``t_clamp``).
+
+        **Computational cost:**
+
+        - Integration is performed element-wise using Python loops over ``np.ndindex(in_size)``.
+        - For large populations, this implementation may be slow (O(N) Python-level iterations).
+        - Batch dimension does NOT increase cost (iteration is over spatial dimensions only).
+
+        See Also
+        --------
+        init_state : Initialize state variables before first update.
+        reset_state : Reset states between trials.
+        get_spike : Differentiable spike output for training.
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

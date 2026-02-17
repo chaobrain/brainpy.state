@@ -38,79 +38,243 @@ class _StepCalibration:
 class spike_recorder(brainstate.nn.Dynamics):
     r"""NEST-compatible spike recording device.
 
-    Short Description
-    -----------------
-    ``spike_recorder`` collects spike events and stores them in an in-memory
-    ``events`` dictionary, matching NEST recorder semantics.
+    ``spike_recorder`` accumulates spike events into an in-memory ``events``
+    dictionary, with timestamping and activity-window semantics matching NEST
+    ``spike_recorder``.  The NEST recording-device timing model is reproduced
+    while exposing a Python batch API:
 
-    Description
-    -----------
-    This class re-implements core behavior of NEST ``spike_recorder``
-    (``models/spike_recorder.{h,cpp}`` and ``nestkernel/recording_device.*``):
+    - Incoming spike arrays are timestamped at step :math:`n + 1` where
+      :math:`n = \mathrm{round}(t / dt)` is the current simulation step.
+    - Recording is gated by a window
+      :math:`(\mathrm{origin} + \mathrm{start},\;\mathrm{origin} + \mathrm{stop}]`
+      (start exclusive, stop inclusive) evaluated in simulation steps.
+    - Event writes are immediate — there is no one-step delivery lag,
+      unlike the request/reply mechanism of ``multimeter``.
 
-    - Spike events are written immediately when :meth:`update` is called
-      (no one-step delivery lag).
-    - Recorder activity window is
-      :math:`(\mathrm{origin}+\mathrm{start},\;\mathrm{origin}+\mathrm{stop}]`
-      in simulation steps (start exclusive, stop inclusive).
-    - ``n_events`` reports the number of stored events and can only be set to
-      ``0`` to clear memory.
-    - ``time_in_steps=False`` stores floating-point times in ms.
-    - ``time_in_steps=True`` stores integer step stamps in ``events['times']``
-      and within-step offsets in ``events['offsets']``.
+    **1. Step-Stamp and Physical-Time Model**
 
-    Update Semantics
-    ----------------
-    The recorder assumes that spikes supplied at simulation time ``t`` were
-    emitted in the current step and are stamped at ``t + dt``. This follows the
-    standard NEST convention for neuron spikes generated during
-    :math:`(t, t + dt]`.
-
-    If an event offset ``delta`` (ms) is provided, the recorded physical time is
+    Let :math:`dt > 0` be the simulation resolution (ms), and let
+    :math:`n = \mathrm{round}(t / dt)` be the current step index when
+    :meth:`update` is called at simulation time :math:`t`. Incoming events are
+    stamped at
 
     .. math::
 
-       t_{event} = t_{stamp} - \delta,
+       s = n + 1,
 
-    where :math:`t_{stamp} = t + dt`.
+    i.e., spikes are interpreted as generated during :math:`(t,\, t + dt]`. If
+    per-event offsets :math:`\delta_j` (ms) are provided, the stored physical
+    event time for item :math:`j` is
+
+    .. math::
+
+       t_j = s \cdot dt - \delta_j.
+
+    With ``time_in_steps=True``, storage is split into integer stamps
+    ``events['times']`` (step index :math:`s`) and continuous offsets
+    ``events['offsets']`` (:math:`\delta_j`, ms), preserving sub-step timing.
+
+    **2. Activity-Window Gate on the Step Lattice**
+
+    Define step bounds
+
+    .. math::
+
+       s_{\min} = \frac{\mathrm{origin} + \mathrm{start}}{dt}, \qquad
+       s_{\max} = \frac{\mathrm{origin} + \mathrm{stop}}{dt}
+       \quad (\text{or } +\infty \text{ if stop is None}).
+
+    The recorder is active for stamp step :math:`s` iff
+
+    .. math::
+
+       s > s_{\min} \;\land\; s \le s_{\max}.
+
+    Therefore, ``start`` is exclusive and ``stop`` is inclusive, exactly as in
+    NEST recording devices.
+
+    **3. Multiplicity Inference and Payload Normalization**
+
+    Incoming arrays are flattened to one-dimensional vectors of length
+    :math:`N`. Scalars are broadcast to :math:`(N,)` for ``senders`` and
+    ``offsets``. Let :math:`x_j` denote ``spikes[j]``:
+
+    - If ``multiplicities is None`` and all ``spikes`` are integer-like
+      (within ``1e-12`` tolerance), event counts are
+      :math:`c_j = \max(\mathrm{round}(x_j),\, 0)`.
+    - If ``multiplicities is None`` and ``spikes`` contains non-integer values,
+      :math:`c_j = \mathbf{1}[x_j > 0]`.
+    - If ``multiplicities`` is provided with non-negative integers :math:`m_j`,
+      then :math:`c_j = m_j \,\mathbf{1}[x_j > 0]`.
+
+    Each item contributes exactly :math:`c_j` stored events by repetition.
+
+    **4. Constraints and Computational Implications**
+
+    ``start``, ``stop`` (when not ``None``), ``origin``, current ``t``, and
+    ``dt`` must be scalar-convertible and aligned to the simulation grid.
+    Alignment is enforced by round-trip integer checks with ``1e-12``
+    tolerance. Per :meth:`update` call, normalization is :math:`O(N)` and event
+    expansion is :math:`O(E_{\mathrm{new}})` where
+    :math:`E_{\mathrm{new}} = \sum_j c_j`. Persistent memory usage is linear in
+    the total number of stored events.
 
     Parameters
     ----------
-    in_size : int, optional
-        Device batch size. Defaults to 1.
-    start : Quantity[ms], optional
-        Recording window start relative to ``origin``. Defaults to
+    in_size : Size, optional
+        Shape/size argument consumed by :class:`brainstate.nn.Dynamics`. The
+        recorder returns event dictionaries rather than dense tensors;
+        ``in_size`` is retained for API compatibility only. Default is ``1``.
+    start : brainunit.Quantity or float, optional
+        Scalar relative exclusive lower bound of the recording window,
+        convertible to ms. Must be finite and an integer multiple of ``dt``.
+        The effective gate is ``stamp_step > (origin + start) / dt``.
+        Default is ``0.0 * u.ms``.
+    stop : brainunit.Quantity, float, or None, optional
+        Scalar relative inclusive upper bound of the recording window,
+        convertible to ms. Must be ``None`` or finite and aligned to ``dt``.
+        Must satisfy ``stop >= start`` when not ``None``. The effective gate
+        is ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper
+        bound (:math:`s_{\max} = +\infty`). Default is ``None``.
+    origin : brainunit.Quantity or float, optional
+        Scalar global time-origin shift added to both ``start`` and ``stop``
+        when constructing the active window, convertible to ms. Shifting the
+        origin displaces the entire recording window without changing its
+        duration. Must be finite and aligned to ``dt``. Default is
         ``0.0 * u.ms``.
-    stop : Quantity[ms] or None, optional
-        Recording window stop relative to ``origin``. ``None`` means +infinity.
-        Defaults to ``None``.
-    origin : Quantity[ms], optional
-        Recording window origin shift. Defaults to ``0.0 * u.ms``.
     time_in_steps : bool, optional
-        Whether to store times as integer step stamps plus offsets instead of
-        floating-point ms. Defaults to ``False``.
+        Controls the time representation in ``events``. If ``False``,
+        ``events['times']`` stores ``float64`` milliseconds computed as
+        :math:`s \cdot dt - \delta_j`. If ``True``, ``events['times']``
+        stores integer step stamps (``int64``) and ``events['offsets']``
+        stores the corresponding ``float64`` offsets in ms. Becomes immutable
+        after the first :meth:`update` call. Default is ``False``.
     frozen : bool, optional
-        Kept for NEST API compatibility. ``True`` is rejected.
-    name : str, optional
-        Module name.
+        NEST-compatibility flag. ``True`` is unconditionally rejected because
+        this recorder cannot be frozen. Default is ``False``.
+    name : str or None, optional
+        Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
+        Default is ``None``.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Mapping of constructor parameters to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative exclusive lower bound of the active window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative inclusive upper bound of the active window.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global origin shift applied before window gating.
+       * - ``time_in_steps``
+         - ``False``
+         - :math:`\mathrm{repr}_t`
+         - Time storage mode: physical ms or integer ``(step, offset)`` pair.
+
+    Returns
+    -------
+    events : dict[str, np.ndarray]
+        Returned by :meth:`update`, :meth:`flush`, and the ``events``
+        property.  All arrays are one-dimensional with length :math:`E`
+        equal to the total number of stored events accumulated so far:
+
+        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for
+          each recorded event, defaulting to ``1`` when not supplied.
+        - ``'times'`` — shape ``(E,)``: timestamp of each event. ``float64``
+          in ms (:math:`s \cdot dt - \delta_j`) when ``time_in_steps=False``;
+          ``int64`` step stamp :math:`s` when ``time_in_steps=True``.
+        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
+          ``time_in_steps=True``): per-event sub-step offset :math:`\delta_j`
+          in ms.
+
+    Raises
+    ------
+    ValueError
+        If ``frozen=True``; if any time parameter (``start``, ``stop``,
+        ``origin``, ``dt``, or current ``t``) is non-scalar, non-finite when
+        required, not aligned to ``dt``, or violates ``stop >= start``; if
+        ``time_in_steps`` is modified after :meth:`update` has been called;
+        if ``n_events`` is assigned a value other than ``0``; if payload
+        array sizes are incompatible with ``spikes`` length; or if explicit
+        ``multiplicities`` contain negative entries.
+    TypeError
+        If unit conversion or numeric casting of any payload or time
+        parameter fails.
+    KeyError
+        If :meth:`get` is called with an unsupported key, or if required
+        simulation context entries (``'t'`` or ``dt``) are not available via
+        ``brainstate.environ``.
 
     Notes
     -----
-    - ``time_in_steps`` cannot be changed after simulation has started,
-      matching NEST memory backend behavior.
-    - ``spikes`` passed to :meth:`update` may be boolean, integer, or floating
-      arrays. Without ``multiplicities``:
-
-      - integer-like values are interpreted as event multiplicities,
-      - non-integer values generate one event when ``value > 0``.
-
-    - Optional explicit ``multiplicities`` mirrors NEST's ``SpikeEvent``
-      multiplicity by repeating writes per sender.
+    - Event writes are immediate (no one-step delivery lag), unlike
+      the request/reply mechanism of ``multimeter``.
+    - ``time_in_steps`` becomes immutable after the first :meth:`update`
+      call that accesses simulation context, matching NEST backend
+      constraints.
+    - ``spikes=None`` is treated as a no-op update that returns the
+      current ``events`` without writing any new events.
+    - :meth:`init_state` clears all accumulated events; it can be used to
+      reset the recorder between simulation segments without reconstructing
+      the object.
 
     References
     ----------
     .. [1] NEST Simulator, ``spike_recorder`` device.
            https://nest-simulator.readthedocs.io/en/stable/models/spike_recorder.html
+
+    Examples
+    --------
+    Record spikes from a three-neuron population over a 1 ms window at
+    0.1 ms resolution, using integer-like spike counts:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> import numpy as np
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     sr = brainpy.state.spike_recorder(start=0.0 * u.ms, stop=1.0 * u.ms)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = sr.update(
+       ...             spikes=np.array([1.0, 0.0, 2.0], dtype=np.float64),
+       ...             senders=np.array([3, 4, 5], dtype=np.int64),
+       ...         )
+       ...     ev = sr.flush()
+       ...     _ = ev['times'].shape
+
+    Record a single spike with a sub-step offset using ``time_in_steps=True``,
+    which splits the timestamp into an integer step index and a float offset:
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> import numpy as np
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     sr = brainpy.state.spike_recorder(time_in_steps=True)
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = sr.update(
+       ...             spikes=np.array([1.0], dtype=np.float64),
+       ...             senders=np.array([9], dtype=np.int64),
+       ...             offsets=np.array([0.03], dtype=np.float64) * u.ms,
+       ...         )
+       ...     ev = sr.events
+       ...     _ = (ev['times'][0], ev['offsets'][0])
     """
 
     __module__ = 'brainpy.state'
@@ -205,6 +369,82 @@ class spike_recorder(brainstate.nn.Dynamics):
         offsets: ArrayLike = None,
         multiplicities: ArrayLike = None,
     ):
+        r"""Record spike events for the current simulation step.
+
+        Reads the current simulation time ``t`` and resolution ``dt`` from
+        ``brainstate.environ``, computes the stamp step :math:`s = n + 1`
+        where :math:`n = \mathrm{round}(t / dt)`, applies the activity-window
+        gate, expands the spike payload into individual events, and appends
+        them to the internal buffers.
+
+        Parameters
+        ----------
+        spikes : ArrayLike or None, optional
+            Input spike payload, flattened to shape ``(N,)``. Accepted dtypes
+            include boolean, integer, and floating-point values.
+
+            - ``None``: no new events are written; current ``events`` dict is
+              returned immediately.
+            - Integer-like values (all within ``1e-12`` of an integer) with
+              ``multiplicities is None``: each element :math:`j` contributes
+              :math:`c_j = \max(\mathrm{round}(x_j),\, 0)` events.
+            - Non-integer floating values with ``multiplicities is None``:
+              each element contributes :math:`c_j = \mathbf{1}[x_j > 0]`
+              events (binary threshold).
+        senders : ArrayLike or None, optional
+            Sender node IDs cast to ``int64``, shape ``(N,)`` or scalar
+            broadcastable to ``(N,)``. Default sender ID is ``1`` for all
+            entries when ``None``.
+        offsets : ArrayLike or None, optional
+            Per-event sub-step timing offsets :math:`\delta_j` in ms, shape
+            ``(N,)`` or scalar broadcastable to ``(N,)``. Values may carry a
+            ``brainunit`` time unit and are converted to ms. Must contain only
+            finite values. Default is ``0.0 * u.ms`` for all entries.
+        multiplicities : ArrayLike or None, optional
+            Explicit non-negative integer event multiplicities cast to
+            ``int64``, shape ``(N,)`` or scalar broadcastable to ``(N,)``.
+            When provided, the integer-like inference path from ``spikes`` is
+            disabled; the count rule becomes
+            :math:`c_j = m_j \,\mathbf{1}[x_j > 0]`. Negative values raise
+            ``ValueError``. Default is ``None``.
+
+        Returns
+        -------
+        events : dict[str, np.ndarray]
+            Current accumulated events dictionary after processing this step.
+            All arrays are one-dimensional with length :math:`E` equal to
+            the total number of stored events:
+
+            - ``'senders'`` — ``int64``, shape ``(E,)``.
+            - ``'times'`` — ``float64`` ms when ``time_in_steps=False``;
+              ``int64`` step stamps when ``time_in_steps=True``.
+            - ``'offsets'`` — ``float64`` ms, shape ``(E,)`` (only present
+              when ``time_in_steps=True``).
+
+        Raises
+        ------
+        ValueError
+            If ``t`` is not grid-aligned to ``dt``; if ``start``, ``stop``,
+            or ``origin`` are invalid with respect to ``dt``; if ``dt <= 0``;
+            if provided payload array sizes are incompatible with the ``N``
+            inferred from ``spikes``; if ``offsets`` contain non-finite
+            values; or if explicit ``multiplicities`` contain negative
+            entries.
+        TypeError
+            If numeric or unit conversion of any payload or time parameter
+            fails.
+        KeyError
+            If required simulation context entries (``'t'`` or ``dt``) are
+            not available via ``brainstate.environ``.
+
+        Notes
+        -----
+        Events are written at stamp step :math:`s = \mathrm{round}(t / dt) + 1`
+        and then gated by the active window
+        :math:`(s_{\min},\, s_{\max}]` in step space. If the current stamp
+        step falls outside the window, the method returns the unchanged
+        ``events`` dict without writing any new data.
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
         calib = self._get_step_calibration(dt)

@@ -35,45 +35,368 @@ __all__ = [
 
 
 class iaf_psc_exp_multisynapse(Neuron):
-    r"""NEST-compatible ``iaf_psc_exp_multisynapse``.
+    r"""NEST-compatible ``iaf_psc_exp_multisynapse`` neuron model.
 
-    Leaky integrate-and-fire neuron with exponential PSCs and an arbitrary
-    number of receptor ports. This is the multisynapse extension of
-    :class:`iaf_psc_exp`, equivalent to NEST ``iaf_psc_exp_multisynapse``.
+    Current-based leaky integrate-and-fire neuron with an arbitrary number of
+    receptor-indexed exponential postsynaptic current channels.
 
-    **State equations**
+    Description
+    -----------
+    ``iaf_psc_exp_multisynapse`` mirrors NEST
+    ``models/iaf_psc_exp_multisynapse.{h,cpp}`` and generalizes
+    :class:`iaf_psc_exp` from two fixed excitatory/inhibitory channels to
+    ``n_receptors`` independently parameterized current ports, each with its
+    own exponential decay time constant.
 
-    For each receptor :math:`k`, synaptic current follows
+    Each receptor ``k`` (1-based, NEST convention) carries its own decay
+    constant ``tau_syn[k-1]``. Synaptic weights are signed currents in pA;
+    positive values are depolarizing and negative values are hyperpolarizing.
+
+    1. Continuous-Time Dynamics and Receptor States
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Define :math:`V_{\mathrm{rel}} = V_m - E_L`. For receptor :math:`k`, the
+    synaptic current decays exponentially:
 
     .. math::
 
        \frac{dI_k}{dt} = -\frac{I_k}{\tau_{\mathrm{syn},k}}.
 
-    The membrane equation is
+    The membrane equation couples all receptor currents additively:
 
     .. math::
 
-       \frac{dV_m}{dt} = -\frac{V_m - E_L}{\tau_m}
+       \frac{dV_{\mathrm{rel}}}{dt}
+       = -\frac{V_{\mathrm{rel}}}{\tau_m}
        + \frac{\sum_k I_k + I_e + I_0}{C_m},
 
-    with hard reset and a fixed refractory period.
+    where :math:`I_0` is the one-step delayed continuous-current buffer (NEST
+    ring-buffer semantics). Assumptions match NEST's current-based model:
+    additive receptor currents, constant parameters within one simulation step,
+    and fixed ``dt`` for exact propagator coefficients.
 
-    **NEST event semantics**
+    2. Exact Discrete Propagator, Derivation Constraints, and Stability
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    For step size :math:`h = dt` (ms), receptor currents are integrated
+    exactly:
 
-    - ``tau_syn`` defines receptor count and time constants.
-    - ``spike_events`` are passed as ``(receptor_type, weight)`` with
-      1-based receptor indexing (same as NEST).
-    - Default delta-input stream is mapped to receptor 1.
-    - ``update(x=...)`` uses one-step delayed current buffering, matching
-      NEST current-event ordering.
+    .. math::
 
-    **Per-step update order**
+       I_{k,n+1} = P_{11,k}\, I_{k,n} + w_{k,n},
+       \qquad P_{11,k} = e^{-h/\tau_{\mathrm{syn},k}},
 
-    1. Propagate membrane (if not refractory) using exact exponential kernels.
-    2. Decay receptor currents.
-    3. Add incoming receptor-weighted spikes.
-    4. Test threshold, apply reset/refractory, store spike time.
-    5. Buffer continuous current input for the next step.
+    where :math:`w_{k,n}` is the total weight arriving at receptor :math:`k`
+    during step :math:`n`.
+
+    The membrane update uses the exact propagator:
+
+    .. math::
+
+       V_{\mathrm{rel},n+1}
+       = P_{22}\, V_{\mathrm{rel},n}
+       + P_{20}(I_e + I_{0,n})
+       + \sum_k P_{21,k}\, I_{k,n},
+
+    with propagator coefficients
+
+    .. math::
+
+       P_{22} = e^{-h/\tau_m}, \qquad
+       P_{20} = \frac{\tau_m}{C_m}(1 - P_{22}),
+
+    .. math::
+
+       P_{21,k}
+       = \frac{\tau_{\mathrm{syn},k}\,\tau_m}
+         {C_m\,(\tau_m - \tau_{\mathrm{syn},k})}
+         \left(e^{-h/\tau_m} - e^{-h/\tau_{\mathrm{syn},k}}\right).
+
+    :meth:`iaf_psc_exp._propagator_exp` evaluates :math:`P_{21,k}` with a
+    singular-limit fallback :math:`(h / C_m)\,e^{-h/\tau_m}` when
+    :math:`\tau_{\mathrm{syn},k} \approx \tau_m`, preventing catastrophic
+    cancellation in the denominator :math:`(\tau_m - \tau_{\mathrm{syn},k})`.
+    Construction additionally rejects ``np.isclose(tau_syn, tau_m)`` to
+    preserve robust conditioning and avoid near-degenerate parameterizations.
+
+    3. Update Order per Simulation Step (NEST Semantics)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Per-step execution order:
+
+    1. Integrate membrane with exact propagator for neurons not refractory
+       (:math:`r = 0`).
+    2. Decrement refractory counters for refractory neurons (:math:`r > 0`).
+    3. Decay all receptor currents :math:`I_k` by :math:`P_{11,k}`.
+    4. Inject receptor-specific spike weights :math:`w_{k,n}`, including
+       default delta input mapped to receptor 1 when ``n_receptors > 0``.
+    5. Apply threshold test, hard reset, refractory assignment, record
+       spike time, and store buffered continuous current ``x`` for step
+       :math:`n+1`.
+
+    4. Assumptions, Constraints, and Computational Implications
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    - ``C_m > 0``, ``tau_m > 0``, all ``tau_syn > 0``,
+      ``not isclose(tau_syn, tau_m)``, ``t_ref >= 0``, and
+      ``V_reset < V_th`` are enforced at construction.
+    - ``update(x=...)`` uses one-step delayed current buffering: current
+      provided at step ``n`` contributes through ``i_const`` at step ``n+1``,
+      matching NEST ring-buffer event semantics.
+    - The update path is fully vectorized over ``self.varshape`` and scales
+      as :math:`O(\prod \mathrm{varshape} \times n\_receptors)` per call.
+    - Internal propagator arithmetic is performed in NumPy ``float64`` before
+      writing back to BrainUnit-typed states.
+    - When ``n_receptors == 0``, all spike event inputs are silently ignored.
+
+    Parameters
+    ----------
+    in_size : Size
+        Population shape specification. Per-neuron parameters and state
+        variables are broadcast/initialized over ``self.varshape`` derived
+        from ``in_size``.
+    E_L : ArrayLike, optional
+        Resting potential :math:`E_L` in mV; scalar or array broadcastable to
+        ``self.varshape``. Default is ``-70. * u.mV``.
+    C_m : ArrayLike, optional
+        Membrane capacitance :math:`C_m` in pF; broadcastable to
+        ``self.varshape`` and strictly positive. Default is ``250. * u.pF``.
+    tau_m : ArrayLike, optional
+        Membrane time constant :math:`\tau_m` in ms; broadcastable and
+        strictly positive. Default is ``10. * u.ms``.
+    t_ref : ArrayLike, optional
+        Absolute refractory period :math:`t_\mathrm{ref}` in ms; broadcastable
+        and nonnegative. Converted to integer grid steps via
+        ``ceil(t_ref / dt)``. Default is ``2. * u.ms``.
+    V_th : ArrayLike, optional
+        Spike threshold :math:`V_\mathrm{th}` in mV; broadcastable to
+        ``self.varshape``. Default is ``-55. * u.mV``.
+    V_reset : ArrayLike, optional
+        Post-spike reset potential :math:`V_\mathrm{reset}` in mV;
+        broadcastable and constrained by ``V_reset < V_th`` elementwise.
+        Default is ``-70. * u.mV``.
+    tau_syn : ArrayLike, optional
+        Synaptic decay constants in ms for all receptor ports. Converted to a
+        1-D ``float64`` array of shape ``(n_receptors,)`` via
+        ``np.asarray(...).reshape(-1)``. Every entry must be strictly
+        positive and must not be numerically equal to ``tau_m`` under
+        ``np.isclose``. The number of entries defines ``n_receptors``.
+        Default is ``(2.0,) * u.ms`` (one receptor).
+    I_e : ArrayLike, optional
+        Constant injected current :math:`I_e` in pA; scalar or array
+        broadcastable to ``self.varshape``. Default is ``0. * u.pA``.
+    V_initializer : Callable, optional
+        Initializer for membrane state ``V`` used by :meth:`init_state`.
+        Default is ``braintools.init.Constant(-70. * u.mV)``.
+    spk_fun : Callable, optional
+        Surrogate spike function used by :meth:`get_spike` and returned by
+        :meth:`update`. Default is ``braintools.surrogate.ReluGrad()``.
+    spk_reset : str, optional
+        Reset policy inherited from :class:`~brainpy_state._base.Neuron`.
+        ``'hard'`` reproduces NEST hard reset behavior. Default is ``'hard'``.
+    ref_var : bool, optional
+        If ``True``, allocates optional boolean state ``self.refractory`` for
+        external refractory inspection. Default is ``False``.
+    name : str or None, optional
+        Optional node name passed to the parent module. Default is ``None``.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 17 25 15 20 43
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar or tuple
+         - required
+         - --
+         - Defines population/state shape ``self.varshape``.
+       * - ``E_L``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``-70. * u.mV``
+         - :math:`E_L`
+         - Leak reversal (resting) potential.
+       * - ``C_m``
+         - ArrayLike, broadcastable (pF), ``> 0``
+         - ``250. * u.pF``
+         - :math:`C_m`
+         - Membrane capacitance in subthreshold integration.
+       * - ``tau_m``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``10. * u.ms``
+         - :math:`\tau_m`
+         - Membrane leak time constant.
+       * - ``t_ref``
+         - ArrayLike, broadcastable (ms), ``>= 0``
+         - ``2. * u.ms``
+         - :math:`t_\mathrm{ref}`
+         - Absolute refractory duration in physical time.
+       * - ``V_th`` and ``V_reset``
+         - ArrayLike, broadcastable (mV), with ``V_reset < V_th``
+         - ``-55. * u.mV``, ``-70. * u.mV``
+         - :math:`V_\mathrm{th}`, :math:`V_\mathrm{reset}`
+         - Threshold and post-spike reset levels.
+       * - ``tau_syn``
+         - ArrayLike, flattened to ``(n_receptors,)`` (ms), each ``> 0`` and
+           not ``isclose`` to ``tau_m``
+         - ``(2.0,) * u.ms``
+         - :math:`\tau_{\mathrm{syn},k}`
+         - Receptor-specific exponential PSC decay constants; number of
+           entries defines ``n_receptors``.
+       * - ``I_e``
+         - ArrayLike, broadcastable (pA)
+         - ``0. * u.pA``
+         - :math:`I_e`
+         - Constant current added each update step.
+       * - ``V_initializer``
+         - Callable
+         - ``Constant(-70. * u.mV)``
+         - --
+         - Initializer for membrane state ``V``.
+       * - ``spk_fun``
+         - Callable
+         - ``ReluGrad()``
+         - --
+         - Surrogate nonlinearity used for spike output.
+       * - ``spk_reset``
+         - str
+         - ``'hard'``
+         - --
+         - Reset mode from :class:`~brainpy_state._base.Neuron`.
+       * - ``ref_var``
+         - bool
+         - ``False``
+         - --
+         - If ``True``, exposes boolean state ``self.refractory``.
+       * - ``name``
+         - str | None
+         - ``None``
+         - --
+         - Optional node name.
+
+    Returns
+    -------
+    out : Any
+        Configured neuron node. Each :meth:`update` call returns surrogate
+        spike output with shape ``self.V.value.shape`` computed from membrane
+        voltage relative to ``V_th`` and ``V_reset``.
+
+    Raises
+    ------
+    ValueError
+        Raised at initialization or update time if any of the following holds:
+
+        - ``V_reset >= V_th``.
+        - ``C_m <= 0``, ``tau_m <= 0``, any ``tau_syn <= 0``, or ``t_ref < 0``.
+        - Any ``tau_syn`` is numerically equal to ``tau_m`` under
+          ``np.isclose``.
+        - A spike event receptor index is outside ``[1, n_receptors]``.
+    TypeError
+        If parameters or inputs are not unit-compatible with expected
+        conversions (mV, ms, pF, pA).
+    KeyError
+        If simulation context entries (for example ``t`` or ``dt``) are
+        missing when :meth:`update` is called.
+    AttributeError
+        If :meth:`update` is called before :meth:`init_state` creates required
+        state holders.
+
+    Attributes
+    ----------
+    V : brainstate.HiddenState
+        Membrane potential in mV; shape ``self.varshape`` (or
+        ``(batch_size,) + self.varshape`` when batched).
+    i_syn : brainstate.ShortTermState
+        Per-receptor synaptic currents in pA; shape
+        ``self.varshape + (n_receptors,)``.
+    i_const : brainstate.ShortTermState
+        Buffered continuous current (pA) applied on the next simulation step.
+        Shape ``self.varshape``.
+    refractory_step_count : brainstate.ShortTermState
+        Integer countdown of remaining refractory steps (``jnp.int32``).
+        Shape ``self.varshape``.
+    last_spike_time : brainstate.ShortTermState
+        Simulation time of the most recent spike (ms). Shape
+        ``self.varshape``.
+    refractory : brainstate.ShortTermState
+        Boolean refractory mask; only present when ``ref_var=True``.
+
+    Notes
+    -----
+    - This implementation uses exact (analytical) integration of the linear
+      subthreshold ODE via pre-computed propagator coefficients, matching
+      NEST's update precision for fixed-step simulation.
+    - Continuous current input ``x`` is combined with ``I_e`` and any
+      additional current sources registered via :meth:`sum_current_inputs`;
+      the combined value is buffered one step (NEST ring-buffer semantics).
+    - Spike weights from ``spike_events`` and ``sum_delta_inputs`` are signed
+      currents in pA: positive for depolarizing, negative for hyperpolarizing
+      receptors.
+    - Default delta input from ``sum_delta_inputs`` is routed to receptor 1
+      when ``n_receptors > 0``, replicating NEST default port behavior.
+    - If ``n_receptors == 0``, all spike event inputs are silently ignored and
+      ``sum_delta_inputs`` is discarded.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> from brainpy_state._nest.iaf_psc_exp_multisynapse import (
+       ...     iaf_psc_exp_multisynapse,
+       ... )
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = iaf_psc_exp_multisynapse(
+       ...         in_size=2,
+       ...         tau_syn=(2.0, 8.0) * u.ms,
+       ...         I_e=180.0 * u.pA,
+       ...     )
+       ...     neu.init_state()
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         spk = neu.update(
+       ...             spike_events=[{'receptor_type': 2, 'weight': 35.0 * u.pA}]
+       ...         )
+       ...     _ = spk.shape
+
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> from brainpy_state._nest.iaf_psc_exp_multisynapse import (
+       ...     iaf_psc_exp_multisynapse,
+       ... )
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     neu = iaf_psc_exp_multisynapse(in_size=1, tau_syn=(2.0,) * u.ms)
+       ...     neu.init_state()
+       ...     with brainstate.environ.context(t=0.0 * u.ms):
+       ...         _ = neu.update(x=250.0 * u.pA)
+       ...     with brainstate.environ.context(t=0.1 * u.ms):
+       ...         spk_next = neu.update()
+       ...     _ = spk_next
+
+    References
+    ----------
+    .. [1] Rotter S, Diesmann M (1999). Exact simulation of time-invariant
+           linear systems with applications to neuronal modeling. Biological
+           Cybernetics 81:381-402.
+           DOI: https://doi.org/10.1007/s004220050570
+    .. [2] Diesmann M, Gewaltig M-O, Rotter S, Aertsen A (2001). State space
+           analysis of synchronous spiking in cortical neural networks.
+           Neurocomputing 38-40:565-571.
+           DOI: https://doi.org/10.1016/S0925-2312(01)00409-X
+    .. [3] Morrison A, Straube S, Plesser HE, Diesmann M (2007). Exact
+           subthreshold integration with continuous spike times in discrete
+           time neural network simulations. Neural Computation 19(1):47-79.
+           DOI: https://doi.org/10.1162/neco.2007.19.1.47
+
+    See Also
+    --------
+    iaf_psc_exp : LIF with two fixed exponential PSC channels (exc/inh)
+    iaf_psc_alpha_multisynapse : Multisynapse variant with alpha-shaped PSCs
+    iaf_psc_delta : LIF neuron with delta-function PSCs (voltage-jump synapses)
+    LIF : Leaky integrate-and-fire (brainpy parameterization)
     """
 
     __module__ = 'brainpy.state'
@@ -112,17 +435,81 @@ class iaf_psc_exp_multisynapse(Neuron):
 
     @property
     def n_receptors(self):
+        r"""Number of independent synaptic receptor ports.
+
+        Returns
+        -------
+        out : int
+            Length of ``self.tau_syn``; equals ``len(tau_syn)`` as supplied
+            at construction.
+        """
         return int(self.tau_syn.size)
 
     @staticmethod
     def _to_numpy(x, unit):
+        r"""Strip a BrainUnit quantity and return a ``float64`` NumPy array.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Input value with units compatible with ``unit``.
+        unit : brainunit.Unit
+            Physical unit to divide out (e.g. ``u.mV``, ``u.ms``, ``u.pA``).
+
+        Returns
+        -------
+        out : np.ndarray
+            Dimensionless ``float64`` array with the same shape as ``x``.
+
+        Raises
+        ------
+        TypeError
+            If ``x`` is not unit-compatible with ``unit``.
+        """
         return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
+        r"""Broadcast a NumPy array to the neuron state shape.
+
+        Parameters
+        ----------
+        x_np : np.ndarray
+            Array to broadcast; must be compatible with ``shape``.
+        shape : tuple of int
+            Target shape (typically ``self.V.value.shape``).
+
+        Returns
+        -------
+        out : np.ndarray
+            View of ``x_np`` broadcast to ``shape`` without copying data.
+
+        Raises
+        ------
+        ValueError
+            If ``x_np`` cannot be broadcast to ``shape`` following NumPy
+            broadcasting rules.
+        """
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
+        r"""Check parameter constraints and raise ``ValueError`` on violation.
+
+        Validates the following conditions (all checked at construction time):
+
+        - ``V_reset < V_th`` elementwise.
+        - ``C_m > 0`` elementwise.
+        - ``tau_m > 0`` elementwise.
+        - All entries in ``tau_syn > 0``.
+        - No entry in ``tau_syn`` is numerically equal to ``tau_m`` under
+          ``np.isclose`` (prevents near-singular propagator evaluation).
+        - ``t_ref >= 0`` elementwise.
+
+        Raises
+        ------
+        ValueError
+            On the first violated constraint, with a descriptive message.
+        """
         if np.any(self._to_numpy(self.V_reset, u.mV) >= self._to_numpy(self.V_th, u.mV)):
             raise ValueError('Reset potential must be smaller than threshold.')
         if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
@@ -137,6 +524,43 @@ class iaf_psc_exp_multisynapse(Neuron):
             raise ValueError('Refractory time must not be negative.')
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize membrane potential and all synaptic/refractory states.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Optional leading batch dimension. If ``None``, states have shape
+            ``self.varshape``; otherwise ``(batch_size,) + self.varshape``.
+        **kwargs : Any
+            Unused compatibility arguments; accepted for interface consistency
+            with other nodes.
+
+        Returns
+        -------
+        out : None
+            Mutates the instance in-place, creating:
+
+            - ``V`` (:class:`brainstate.HiddenState`) — membrane potential.
+            - ``i_syn`` (:class:`brainstate.ShortTermState`) — per-receptor
+              synaptic currents of shape ``V.shape + (n_receptors,)``.
+            - ``i_const`` (:class:`brainstate.ShortTermState`) — buffered
+              continuous current applied on the next step.
+            - ``refractory_step_count`` (:class:`brainstate.ShortTermState`)
+              — integer refractory countdown (``jnp.int32``).
+            - ``last_spike_time`` (:class:`brainstate.ShortTermState`) —
+              spike time in ms, initialized to ``-1e7 * u.ms``.
+            - ``refractory`` (:class:`brainstate.ShortTermState`, optional)
+              — boolean refractory mask; only when ``ref_var=True``.
+
+        Raises
+        ------
+        ValueError
+            If ``V_initializer`` output cannot be broadcast to the target
+            state shape.
+        TypeError
+            If initializer values are incompatible with required
+            numeric/unit conversions.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         zeros = np.zeros(V.shape + (self.n_receptors,), dtype=np.float64)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
@@ -152,15 +576,101 @@ class iaf_psc_exp_multisynapse(Neuron):
             self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Evaluate surrogate spike activation for a voltage tensor.
+
+        Scales the voltage relative to threshold and reset to compute a
+        dimensionless argument passed to the surrogate nonlinearity
+        ``self.spk_fun``:
+
+        .. math::
+
+           \text{out} = \mathrm{spk\_fun}\!\left(
+               \frac{V - V_\mathrm{th}}{V_\mathrm{th} - V_\mathrm{reset}}
+           \right).
+
+        Parameters
+        ----------
+        V : ArrayLike or None, optional
+            Membrane voltage in mV, broadcast-compatible with
+            ``self.varshape``. If ``None``, ``self.V.value`` is used.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output from ``self.spk_fun`` with the same shape
+            as ``V`` (or ``self.V.value`` when ``V is None``). Positive values
+            indicate a spike; the argument to ``spk_fun`` is positive when
+            :math:`V > V_\mathrm{th}`.
+
+        Raises
+        ------
+        TypeError
+            If ``V`` cannot participate in arithmetic with membrane
+            parameters due to incompatible dtype or unit.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
+        r"""Convert refractory duration to integer simulation-step counts.
+
+        Computes :math:`\lceil t_\mathrm{ref} / dt \rceil` using the current
+        simulation step size from the environment context, matching NEST's
+        grid-step rounding convention.
+
+        Returns
+        -------
+        out : jnp.ndarray
+            Integer array (``jnp.int32``) broadcast-compatible with
+            ``self.varshape``; value is ``ceil(self.t_ref / dt)``.
+
+        Raises
+        ------
+        KeyError
+            If simulation context does not provide ``dt``.
+        TypeError
+            If ``t_ref`` and ``dt`` are not unit-compatible for division.
+        """
         dt = brainstate.environ.get_dt()
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
+        r"""Parse spike event descriptors into a per-receptor weight array.
+
+        Converts a heterogeneous iterable of spike events into a contiguous
+        ``float64`` NumPy array that can be added directly to ``i_syn``.
+
+        Parameters
+        ----------
+        spike_events : iterable or None
+            Events to parse. Each entry must be one of:
+
+            - A ``(receptor_type, weight)`` tuple where ``receptor_type`` is
+              a 1-based integer in ``[1, n_receptors]`` and ``weight`` is a
+              scalar or array in pA broadcastable to ``v_shape``.
+            - A ``dict`` with keys ``'receptor_type'`` (or ``'receptor'``)
+              and ``'weight'``.
+
+            Multiple events for the same receptor are accumulated additively.
+            ``None`` is treated as an empty sequence.
+        v_shape : tuple of int
+            Shape of the neuron population state (``self.V.value.shape``).
+
+        Returns
+        -------
+        out : np.ndarray
+            Array of shape ``v_shape + (n_receptors,)`` with dtype
+            ``float64``. Entry ``[..., k]`` is the total weight (in pA)
+            arriving at receptor ``k+1`` this step.
+
+        Raises
+        ------
+        ValueError
+            If any ``receptor_type`` is outside ``[1, n_receptors]``.
+        TypeError
+            If a weight value is not unit-compatible with pA.
+        """
         out = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
         if spike_events is None:
             return out
@@ -178,6 +688,63 @@ class iaf_psc_exp_multisynapse(Neuron):
         return out
 
     def update(self, x=0. * u.pA, spike_events=None):
+        r"""Advance the neuron state by one simulation step.
+
+        Executes the full NEST-compatible per-step update: exact membrane
+        propagation for non-refractory neurons, receptor current decay and
+        spike injection, threshold/reset/refractory logic, and buffered
+        current storage.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            Continuous current input in pA for this step. ``x`` is accumulated
+            through :meth:`sum_current_inputs` (which also adds any registered
+            projection currents) and stored in ``i_const`` for use on the
+            **next** step, matching NEST ring-buffer semantics. Scalar or
+            array broadcastable to ``self.varshape``. Default is
+            ``0. * u.pA``.
+        spike_events : iterable or None, optional
+            Receptor-indexed spike weight events to inject this step. Each
+            entry must be either:
+
+            - A ``(receptor_type, weight)`` tuple where ``receptor_type`` is
+              a 1-based integer in ``[1, n_receptors]`` and ``weight`` is a
+              scalar or array in pA broadcastable to ``self.varshape``.
+            - A ``dict`` with keys ``'receptor_type'`` (or ``'receptor'``)
+              and ``'weight'``.
+
+            Multiple events for the same receptor are accumulated additively.
+            ``None`` injects no receptor spike events. Default is ``None``.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output from :meth:`get_spike` with shape
+            ``self.V.value.shape``. For neurons that fire this step, the
+            voltage argument to :meth:`get_spike` is nudged
+            :math:`\theta + E_L + 10^{-12}` mV (above threshold) to ensure a
+            positive surrogate activation is returned even after the hard
+            voltage reset.
+
+        Raises
+        ------
+        ValueError
+            If any receptor index in ``spike_events`` is outside
+            ``[1, n_receptors]``.
+        KeyError
+            If the simulation environment context does not supply ``t`` or
+            ``dt``.
+        AttributeError
+            If state variables are missing because :meth:`init_state` has not
+            been called before ``update``.
+        TypeError
+            If ``x`` or stored states are not unit-compatible with expected
+            pA / mV arithmetic.
+        ValueError
+            If provided inputs cannot be broadcast to the internal state
+            shape.
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt_q / u.ms))

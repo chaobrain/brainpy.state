@@ -29,7 +29,7 @@ from brainpy.state import iaf_psc_alpha
 
 
 def _alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h):
-    """Match NEST `IAFPropagatorAlpha::evaluate` including singular fallback."""
+    r"""Match NEST `IAFPropagatorAlpha::evaluate` including singular fallback."""
     beta = tau_syn * tau_m / (tau_m - tau_syn)
     gamma = beta / c_m
     inv_beta = (tau_m - tau_syn) / (tau_syn * tau_m)
@@ -56,7 +56,7 @@ def _alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h):
 
 
 def _reference_step(state, params, x_next, w_step, dt):
-    """Single-step NEST-ordered reference update for scalar iaf_psc_alpha."""
+    r"""Single-step NEST-ordered reference update for scalar iaf_psc_alpha."""
     y0 = state['y0']
     dI_ex = state['dI_ex']
     I_ex = state['I_ex']

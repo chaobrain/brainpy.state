@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Tests for glif_psc_double_alpha neuron model.
+r"""Tests for glif_psc_double_alpha neuron model.
 
 Tests verify that the glif_psc_double_alpha implementation matches NEST
 simulator dynamics for all five GLIF model variants. The model uses double
@@ -63,7 +63,7 @@ from brainpy_state._nest.glif_psc_double_alpha import glif_psc_double_alpha, _ia
 
 def _compute_propagators_double(tau_syn_fast_list, tau_syn_slow_list, amp_slow_list,
                                 tau_m, c_m, dt):
-    """Pre-compute all propagator matrix elements for double alpha function."""
+    r"""Pre-compute all propagator matrix elements for double alpha function."""
     n_rec = len(tau_syn_fast_list)
     P33 = math.exp(-dt / tau_m)
     P30 = (1.0 / c_m) * (1.0 - P33) * tau_m
@@ -117,7 +117,7 @@ def _compute_propagators_double(tau_syn_fast_list, tau_syn_slow_list, amp_slow_l
 
 
 def _ref_glif_psc_double_alpha_step(state, params, dt, spike_weights=None):
-    """Execute one reference NEST glif_psc_double_alpha update step.
+    r"""Execute one reference NEST glif_psc_double_alpha update step.
 
     state: dict with keys V_rel, y1_fast, y2_fast, y1_slow, y2_slow, r, i_stim,
            v_old, threshold_spike, threshold_voltage, ASCurrents, ASCurrents_sum,
@@ -260,7 +260,7 @@ def _make_ref_params_double(G=9.43, E_L=-78.85, th_inf_abs=-51.68, C_m=58.72,
                             tau_syn_fast=(2.0,), tau_syn_slow=(6.0,), amp_slow=(0.3,),
                             has_theta_spike=False, has_asc=False,
                             has_theta_voltage=False, dt=0.01):
-    """Build reference parameter dict with pre-computed decay rates."""
+    r"""Build reference parameter dict with pre-computed decay rates."""
     th_inf = th_inf_abs - E_L
     V_reset_rel = V_reset_abs - E_L
     Tau = C_m / G  # membrane time constant
@@ -319,7 +319,7 @@ def _make_ref_params_double(G=9.43, E_L=-78.85, th_inf_abs=-51.68, C_m=58.72,
 
 
 def _make_ref_state_double(params, V_abs=None, asc_init=(0.0, 0.0)):
-    """Create initial reference state dict for double alpha."""
+    r"""Create initial reference state dict for double alpha."""
     E_L = params['E_L']
     if V_abs is None:
         V_abs = E_L
@@ -360,7 +360,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         self.dt = 0.01 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dy_inputs=None):
-        """Execute one simulation step with optional per-receptor spike inputs.
+        r"""Execute one simulation step with optional per-receptor spike inputs.
 
         dy_inputs: list of (receptor_index, weight_pA) tuples
         """
@@ -377,7 +377,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        """Verify default parameters match NEST C++ source."""
+        r"""Verify default parameters match NEST C++ source."""
         neuron = glif_psc_double_alpha(1)
         self.assertEqual(neuron.g_m, 9.43 * u.nS)
         self.assertEqual(neuron.E_L, -78.85 * u.mV)
@@ -407,7 +407,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_invalid_model_combination(self):
-        """Invalid mechanism combinations should raise."""
+        r"""Invalid mechanism combinations should raise."""
         with self.assertRaises(ValueError):
             glif_psc_double_alpha(1, adapting_threshold=True, spike_dependent_threshold=False)
 
@@ -446,7 +446,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             glif_psc_double_alpha(1, amp_slow=(0.0,))
 
     def test_tau_syn_size_mismatch(self):
-        """tau_syn_fast, tau_syn_slow, amp_slow must have same length."""
+        r"""tau_syn_fast, tau_syn_slow, amp_slow must have same length."""
         with self.assertRaises(ValueError):
             glif_psc_double_alpha(1, tau_syn_fast=(2.0, 3.0), tau_syn_slow=(6.0,))
         with self.assertRaises(ValueError):
@@ -457,7 +457,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_propagator_alpha_regular(self):
-        """IAFPropagatorAlpha regular case (tau_m != tau_syn)."""
+        r"""IAFPropagatorAlpha regular case (tau_m != tau_syn)."""
         tau_syn = 2.0
         tau_m = 6.226  # = 58.72 / 9.43
         c_m = 58.72
@@ -470,7 +470,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         self.assertGreater(P32, 0)
 
     def test_propagator_alpha_singular(self):
-        """IAFPropagatorAlpha singular case (tau_m ≈ tau_syn)."""
+        r"""IAFPropagatorAlpha singular case (tau_m ≈ tau_syn)."""
         tau_syn = 6.226
         tau_m = 6.226
         c_m = 58.72
@@ -488,7 +488,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif1_subthreshold_dynamics_match_reference(self):
-        """GLIF1: subthreshold membrane potential matches reference."""
+        r"""GLIF1: subthreshold membrane potential matches reference."""
         dt_val = 0.01
         n_steps = 200
 
@@ -531,7 +531,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
                                        msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_glif1_spike_and_refractory(self):
-        """GLIF1: spike generation and refractory period."""
+        r"""GLIF1: spike generation and refractory period."""
         dt_val = 0.01
         n_steps = 1500
 
@@ -574,7 +574,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif2_spike_dependent_threshold(self):
-        """GLIF2: biologically defined reset with spike-dependent threshold."""
+        r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -616,7 +616,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif3_after_spike_currents(self):
-        """GLIF3: after-spike currents match reference."""
+        r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -658,7 +658,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif4_combined_reset_and_asc(self):
-        """GLIF4: spike-dependent threshold + after-spike currents."""
+        r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -700,7 +700,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif5_full_model(self):
-        """GLIF5: all mechanisms enabled — voltage trace matches reference."""
+        r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -752,7 +752,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_double_alpha_psc_current_response(self):
-        """Verify double alpha-function PSC produces correct current waveform.
+        r"""Verify double alpha-function PSC produces correct current waveform.
 
         A spike of weight 1.0 should produce:
         - Fast component: peak current of 1 pA at t = tau_syn_fast
@@ -811,7 +811,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
                                    msg=f"Slow peak I={y2_slow_trace[slow_peak_idx]} pA, expected ~{amp_slow_val} pA")
 
     def test_double_alpha_same_tau_doubles_amplitude(self):
-        """When tau_syn_fast == tau_syn_slow and amp_slow == 1.0, amplitude doubles.
+        r"""When tau_syn_fast == tau_syn_slow and amp_slow == 1.0, amplitude doubles.
 
         This matches the NEST test: when both components are identical, the total
         peak should be 2x the single component peak.
@@ -851,7 +851,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
                                    msg=f"Peak I_syn={peak_I_syn} pA, expected ~2.0 pA")
 
     def test_double_alpha_different_amp_slow(self):
-        """When amp_slow = 0.5, total peak is 1.5x the fast component peak."""
+        r"""When amp_slow = 0.5, total peak is 1.5x the fast component peak."""
         dt_val = 0.1
         n_steps = 500
         tau_syn_val = 2.0
@@ -887,7 +887,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
                                    msg=f"Peak I_syn={peak_I_syn} pA, expected ~1.5 pA")
 
     def test_double_alpha_different_tau_shifts_peak(self):
-        """When tau_syn_slow > tau_syn_fast, the combined peak shifts right."""
+        r"""When tau_syn_slow > tau_syn_fast, the combined peak shifts right."""
         dt_val = 0.1
         n_steps = 500
         tau_syn_fast_val = 2.0
@@ -933,7 +933,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_refractory_period_holds_voltage(self):
-        """During refractory period, voltage should be held at reset value."""
+        r"""During refractory period, voltage should be held at reset value."""
         dt_val = 0.01
 
         with brainstate.environ.context(dt=self.dt):
@@ -977,7 +977,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_three_receptors(self):
-        """Model with three receptor ports initializes and runs correctly."""
+        r"""Model with three receptor ports initializes and runs correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
                 1,
@@ -1011,7 +1011,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_initial_v_m(self):
-        """Initial V_m should match the initializer."""
+        r"""Initial V_m should match the initializer."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
                 1,
@@ -1026,7 +1026,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif5_threshold_trace_matches_reference(self):
-        """GLIF5: threshold components (spike + voltage) match reference trace."""
+        r"""GLIF5: threshold components (spike + voltage) match reference trace."""
         dt_val = 0.01
         n_steps = 1000
 
@@ -1072,7 +1072,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_synaptic_y1_y2_traces_match_reference(self):
-        """Verify y1_fast/y2_fast and y1_slow/y2_slow traces match reference."""
+        r"""Verify y1_fast/y2_fast and y1_slow/y2_slow traces match reference."""
         dt_val = 0.01
         n_steps = 300
         tau_syn_fast_val = 2.0
@@ -1152,7 +1152,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_multi_receptor_voltage_trace(self):
-        """Two receptors with different tau_syn and inputs match reference."""
+        r"""Two receptors with different tau_syn and inputs match reference."""
         dt_val = 0.01
         n_steps = 500
 
@@ -1211,7 +1211,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif1_voltage_trace_with_constant_current(self):
-        """GLIF1 with constant current: full voltage trace matches reference."""
+        r"""GLIF1 with constant current: full voltage trace matches reference."""
         dt_val = 0.01
         n_steps = 3000
 
@@ -1262,7 +1262,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_get_I_syn_methods(self):
-        """Test get_I_syn, get_I_syn_fast, get_I_syn_slow methods."""
+        r"""Test get_I_syn, get_I_syn_fast, get_I_syn_slow methods."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
                 1,
@@ -1303,7 +1303,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_synaptic_current_depolarizes(self):
-        """Positive synaptic current input should depolarize membrane."""
+        r"""Positive synaptic current input should depolarize membrane."""
         dt_val = 0.01
 
         with brainstate.environ.context(dt=self.dt):

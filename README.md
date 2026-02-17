@@ -20,8 +20,13 @@ The library ships **167+ models** organized in three tiers:
 - **Base classes** — `Dynamics`, `Neuron`, `Synapse` — the abstract foundation every model inherits from.
 - **BrainPy-style models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
 - **NEST-compatible models (119+)** — faithful JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neuron, synapse, plasticity (STDP, STP), and device models.
+- All parameters carry physical units via [brainunit](https://github.com/chaobrain/brainunit), and every neuron supports surrogate-gradient-based training out of the box.
 
-All parameters carry physical units via [brainunit](https://github.com/chaobrain/brainunit), and every neuron supports surrogate-gradient-based training out of the box.
+Different from `brainpy.dyn`, `brainpy.state` has the following characteristics:
+
+- **Programming model**: `brainpy.state` is built on [brainstate](https://github.com/chaobrain/brainstate) with explicit state objects; `brainpy.dyn` follows the older dynamics-module style in `brainpy`.
+- **Model scope**: `brainpy.state` implements much more models including BrainPy-style models plus a large NEST-compatible model set.
+- **Scientific ergonomics**: `brainpy.state` uses physical units via `brainunit` by default and is designed for surrogate-gradient training.
 
 
 ## Features
@@ -45,23 +50,6 @@ import brainunit as u
 E = brainpy.state.LIF(3200, V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
 I = brainpy.state.LIF(800,  V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
 
-# Connect them with projections
-E2E = brainpy.state.DeltaProj(
-    comm=brainstate.nn.EventFixedProb(3200, 3200, prob=0.02, weight=0.6*u.mV),
-    post=E,
-)
-E2I = brainpy.state.DeltaProj(
-    comm=brainstate.nn.EventFixedProb(3200, 800, prob=0.02, weight=0.6*u.mV),
-    post=I,
-)
-I2E = brainpy.state.DeltaProj(
-    comm=brainstate.nn.EventFixedProb(800, 3200, prob=0.02, weight=-6.7*u.mV),
-    post=E,
-)
-I2I = brainpy.state.DeltaProj(
-    comm=brainstate.nn.EventFixedProb(800, 800, prob=0.02, weight=-6.7*u.mV),
-    post=I,
-)
 ```
 
 
@@ -99,7 +87,7 @@ pip install BrainX -U
 
 ## Ecosystem
 
-`brainpy.state` is part of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/):
+`brainpy.state` is one part of the [BrainPy project](https://brainpy.readthedocs.io/) and the [BrainX ecosystem](https://brainmodeling.readthedocs.io/):
 
 | Package | Description |
 |---------|-------------|

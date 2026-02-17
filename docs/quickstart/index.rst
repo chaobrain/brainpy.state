@@ -25,7 +25,7 @@ If you're new to ``brainpy.state``, we recommend following these steps:
 
 1. Start with :doc:`installation` to set up your environment
 2. Follow the :doc:`5min-tutorial` to build your first model
-3. Review :doc:`core-concepts/index` to understand the underlying principles
+3. Review :doc:`../core-concepts/index` to understand the underlying principles
 
 For experienced users, you can jump directly to the concepts overview or explore the tutorials and examples sections.
 

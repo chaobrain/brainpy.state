@@ -36,83 +36,313 @@ __all__ = [
 class rate_transformer_node(Dynamics):
     r"""NEST-compatible ``rate_transformer_node`` template model.
 
-    Short description
-    -----------------
+    A stateless rate-based processing node that aggregates weighted incoming rate signals
+    and applies a configurable input nonlinearity. Serves as an intermediary transformation
+    stage in rate-based neural networks, mimicking NEST's ``rate_transformer_node<TNonlinearities>``
+    template.
 
-    Rate transformer node that sums incoming rates and applies an input
-    nonlinearity.
+    **1. Mathematical Model**
 
-    Description
-    -----------
-
-    ``rate_transformer_node`` reproduces NEST's template model
-    ``rate_transformer_node<TNonlinearities>``:
+    The model implements the transformation:
 
     .. math::
 
        X_i(t) = \phi\!\left(\sum_j w_{ij}\,\psi\!\left(X_j(t-d_{ij})\right)\right)
 
-    The model has no intrinsic rate dynamics and no noise term.
-    It only transforms incoming rate events and forwards the transformed result.
+    where:
 
-    The boolean parameter ``linear_summation`` follows NEST semantics:
+    - :math:`X_i(t)` is the output rate of node :math:`i` at time :math:`t`
+    - :math:`X_j(t-d_{ij})` are incoming rates from presynaptic nodes :math:`j` with delay :math:`d_{ij}`
+    - :math:`w_{ij}` are connection weights
+    - :math:`\phi` is the input nonlinearity (applied to summed input)
+    - :math:`\psi` is the output nonlinearity (applied per-event before summation)
 
-    - ``linear_summation=True`` (default): event handlers store weighted rates,
-      and the nonlinearity is applied to the summed input during update
-      (``input`` behaves as :math:`\phi`).
-    - ``linear_summation=False``: event handlers apply the nonlinearity per event
-      before summation (``input`` behaves as :math:`\psi`).
+    The model has **no intrinsic dynamics**: no differential equations, no noise, no membrane
+    time constant. It acts purely as a feedforward transformation stage.
 
-    This is the same split as implemented in NEST
-    ``rate_transformer_node_impl.h`` event handlers.
+    **2. Nonlinearity Application Modes**
 
-    Update ordering (matching NEST ``rate_transformer_node_impl.h``)
-    ................................................................
+    The ``linear_summation`` parameter controls where the nonlinearity is applied, matching
+    NEST's event handler semantics:
 
-    For each simulation step:
+    **Mode A: ``linear_summation=True`` (default, recommended)**
+      - Event handlers store weighted rates **without** applying nonlinearity
+      - Nonlinearity :math:`\phi` is applied **once** to the summed input during ``update()``
+      - Efficient when many inputs converge to one node
+      - Math: :math:`X_i = \phi\!\left(\sum_j w_{ij} X_j(t-d_{ij})\right)`
 
-    1. Store outgoing delayed value as previous ``rate``.
-    2. Reset the internal accumulator to zero.
-    3. Read delayed and instantaneous event buffers.
-    4. Compute new rate:
-       - ``linear_summation=True``:
-         ``rate <- input(delayed + instant)``
-       - ``linear_summation=False``:
-         ``rate <- delayed + instant``
-         (events were already transformed in handlers).
-    5. Store outgoing instantaneous value as updated ``rate``.
+    **Mode B: ``linear_summation=False``**
+      - Nonlinearity :math:`\psi` is applied **per-event** before summation
+      - Event handlers pre-transform each incoming rate
+      - Useful for models where nonlinearity operates on individual inputs
+      - Math: :math:`X_i = \sum_j w_{ij}\,\psi\!\left(X_j(t-d_{ij})\right)`
+
+    **3. Default Nonlinearity**
+
+    If no custom ``input_nonlinearity`` is provided, the model uses a simple gain function:
+
+    .. math::
+
+       \phi(h) = g \cdot h
+
+    where :math:`g` is the ``g`` parameter (default 1.0).
+
+    **4. Update Algorithm**
+
+    The update sequence (matching NEST's ``rate_transformer_node_impl.h``) is:
+
+    1. **Store delayed output**: Copy current ``rate`` → ``delayed_rate`` for outgoing delayed connections
+    2. **Drain delayed queue**: Retrieve events scheduled for current timestep
+    3. **Process delayed events**: Handle ``delayed_rate_events`` with explicit delay specifications
+    4. **Process instant events**: Handle ``instant_rate_events`` (zero-delay)
+    5. **Sum contributions**: Aggregate all weighted inputs into a single value
+    6. **Apply nonlinearity** (if ``linear_summation=True``): Transform summed input
+    7. **Update state**: Store new ``rate`` and ``instant_rate``
+    8. **Increment step counter**: Advance internal timestep
+
+    **5. Event Handling**
+
+    The model accepts two types of runtime events in ``update()``:
+
+    **Instant events (``instant_rate_events``)**:
+      - Applied in the **current** timestep (zero delay)
+      - Must not specify non-zero ``delay_steps`` (raises ``ValueError``)
+      - Typical use: direct feedforward connections
+
+    **Delayed events (``delayed_rate_events``)**:
+      - Stored in internal queue and applied after ``delay_steps`` timesteps
+      - Default delay is 1 step if not specified
+      - Negative delays raise ``ValueError``
+
+    **Event format** (flexible tuple/dict):
+      - 2-tuple: ``(rate, weight)`` → uses default delay
+      - 3-tuple: ``(rate, weight, delay_steps)``
+      - 4-tuple: ``(rate, weight, delay_steps, multiplicity)``
+      - dict: ``{'rate': ..., 'weight': ..., 'delay_steps': ..., 'multiplicity': ...}``
+      - Scalar: interpreted as ``rate`` with ``weight=1.0, delay=default, multiplicity=1.0``
+
+    **6. Latency Considerations**
+
+    As in NEST, inserting a transformer node introduces **one simulation step of latency**
+    compared to direct instantaneous connections. This is because:
+
+    - Output ``instant_rate`` is updated at the **end** of the current timestep
+    - Downstream nodes read this value in the **next** timestep
+    - Even "instantaneous" connections have this inherent discrete-time delay
+
+    **7. Computational Complexity**
+
+    - **Time complexity**: :math:`O(E)` per timestep, where :math:`E` is the number of events
+    - **Space complexity**: :math:`O(D \times N)` for delayed queue, where :math:`D` is max delay and :math:`N` is population size
+    - **Nonlinearity cost**: :math:`O(N)` per call (applied once if ``linear_summation=True``, or :math:`E` times otherwise)
 
     Parameters
     ----------
-    in_size : Size
-        Population shape.
+    in_size : int, tuple of int, or Size
+        Shape of the node population. Can be a scalar (1D population), tuple (multi-dimensional),
+        or ``brainstate.Size`` object. Determines the shape of ``rate`` state variable.
     linear_summation : bool, optional
-        Switch controlling where the nonlinearity is applied.
-        Default ``True``.
-    g : float, optional
-        Gain used by the default linear nonlinearity
-        ``input(h) = g * h``. Default ``1.0``.
-    input_nonlinearity : Callable, optional
-        Custom input nonlinearity replacing template ``input``.
-        Callable signature can be ``f(h)`` or ``f(model, h)``.
-    rate_initializer : Callable, optional
-        Initializer for ``rate``. Default ``Constant(0.0)``.
+        Controls where the input nonlinearity is applied:
+
+        - ``True`` (default): Apply nonlinearity **once** to summed input (efficient, recommended)
+        - ``False``: Apply nonlinearity **per-event** before summation (mathematically different)
+
+        See "Nonlinearity Application Modes" above for detailed semantics.
+    g : float, array_like, optional
+        Gain parameter for the default linear nonlinearity :math:`\phi(h) = g \cdot h`.
+        Can be a scalar (shared across population) or array with shape matching ``in_size``.
+        Ignored if custom ``input_nonlinearity`` is provided. Default: ``1.0`` (identity transform).
+    input_nonlinearity : callable, optional
+        Custom input nonlinearity function replacing the default :math:`g \cdot h`. Must accept:
+
+        - Signature 1: ``f(h)`` where ``h`` is ndarray of summed inputs (shape ``in_size``)
+        - Signature 2: ``f(model, h)`` where ``model`` is ``self`` (for accessing parameters)
+
+        The function is automatically inspected to determine which signature to use.
+        If ``None`` (default), uses ``g * h``. Return value must broadcast to ``in_size``.
+    rate_initializer : callable, optional
+        Initializer for the ``rate`` state variable. Must be a callable accepting ``(shape, batch_size)``
+        and returning an array. Common choices:
+
+        - ``braintools.init.Constant(0.0)`` (default): Initialize to zero
+        - ``braintools.init.Normal(0.0, 0.1)``: Gaussian initialization
+        - ``braintools.init.Uniform(0.0, 1.0)``: Uniform random
+
+        Default: ``Constant(0.0)`` (all rates start at zero).
     name : str, optional
-        Module name.
+        Unique identifier for this module instance. Used for logging, debugging, and visualization.
+        If ``None``, an auto-generated name is assigned. Default: ``None``.
+
+    Parameter Mapping
+    -----------------
+
+    This table maps brainpy.state parameters to NEST's template instantiation:
+
+    ================================  ================================  ================================
+    brainpy.state parameter           NEST equivalent                   Notes
+    ================================  ================================  ================================
+    ``in_size``                       (implicit in node creation)       Population size
+    ``linear_summation=True``         ``linear_summation=true``         Default mode in NEST
+    ``linear_summation=False``        ``linear_summation=false``        Per-event nonlinearity
+    ``g``                             (template parameter)              Gain in default nonlinearity
+    ``input_nonlinearity``            ``TNonlinearities::input``        Custom :math:`\phi` or :math:`\psi`
+    ``rate_initializer``              (no direct equiv)                 NEST defaults to 0.0
+    ================================  ================================  ================================
+
+    State Variables
+    ---------------
+    rate : ndarray, shape (in_size,)
+        **Primary output rate** of the node. Updated at the end of each timestep after applying
+        nonlinearity. This is the value read by downstream connections in the **next** timestep.
+        Type: ``ShortTermState`` (persists between timesteps but not saved in checkpoints).
+    instant_rate : ndarray, shape (in_size,)
+        **Instantaneous output rate**, identical to ``rate`` after update. Provided for clarity
+        in models that distinguish between instant and delayed outputs. Equals ``rate`` at the
+        end of each timestep.
+    delayed_rate : ndarray, shape (in_size,)
+        **Previous timestep's output rate**, used for delayed outgoing connections. Equals
+        ``rate`` from the **previous** timestep. Allows modeling connection delays explicitly.
+    _step_count : int64 scalar
+        Internal timestep counter used for delayed event scheduling. Increments by 1 each update.
+        Not intended for external access.
+
+    Receptor Types
+    --------------
+    The model exposes a single receptor type:
+
+    - ``'RATE': 0`` — accepts rate-valued inputs (both instant and delayed)
+
+    Use this in connection specifications to route rate signals to the transformer node.
+
+    Recordables
+    -----------
+    The following state variables can be monitored during simulation:
+
+    - ``'rate'`` — primary output rate (most commonly recorded)
 
     Notes
     -----
-    Runtime events:
+    **Comparison with NEST:**
+      - Fully replicates NEST's ``rate_transformer_node_impl.h`` event handling logic
+      - Supports all NEST template instantiations via custom ``input_nonlinearity``
+      - Uses NumPy-based event queue instead of NEST's C++ ring buffer (functionally identical)
+      - Batch processing is supported via ``init_state(batch_size=...)``
 
-    - ``instant_rate_events`` are applied in the current step.
-    - ``delayed_rate_events`` use integer ``delay_steps``.
-    - Event format supports dict or tuple:
-      ``(rate, weight)``, ``(rate, weight, delay_steps)``,
-      ``(rate, weight, delay_steps, multiplicity)``.
+    **When to use this model:**
+      - **Layered rate networks**: Inserting nonlinear transformations between rate-neuron populations
+      - **Gain modulation**: Implementing attention or gating via spatially varying ``g``
+      - **Modular architectures**: Separating rate dynamics (in rate neurons) from transformations (in transformer nodes)
 
-    Connection delays are honored on both incoming and outgoing events.
-    As in NEST, inserting a transformer between two neurons introduces an
-    extra simulation-step latency compared with direct instantaneous coupling.
+    **Failure modes:**
+      - Passing non-zero ``delay_steps`` in ``instant_rate_events`` raises ``ValueError``
+      - Negative ``delay_steps`` in ``delayed_rate_events`` raises ``ValueError``
+      - Custom ``input_nonlinearity`` returning wrong shape causes broadcasting errors
+
+    **Performance tips:**
+      - Use ``linear_summation=True`` (default) for better efficiency when many inputs converge
+      - Avoid unnecessary delayed events if connections are instantaneous
+      - For very long delays, consider pruning old queue entries manually if memory is constrained
+
+    References
+    ----------
+    .. [1] Hahne, J., Dahmen, D., Schuecker, J., Frommer, A., Bolten, M., Helias, M.,
+           & Diesmann, M. (2017). Integration of continuous-time dynamics in a spiking
+           neural network simulator. *Frontiers in Neuroinformatics*, 11, 34.
+           https://doi.org/10.3389/fninf.2017.00034
+
+    .. [2] NEST Simulator. ``rate_transformer_node`` documentation.
+           https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html
+
+    .. [3] NEST source code: ``rate_transformer_node_impl.h``
+           https://github.com/nest/nest-simulator
+
+    Examples
+    --------
+    **Example 1: Basic usage with default linear gain**
+
+    .. code-block:: python
+
+        >>> import brainpy_state as bst
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> # Create a transformer node with 10 units
+        >>> transformer = bst.rate_transformer_node(in_size=10, g=2.0)
+        >>> # Initialize state
+        >>> transformer.init_state()
+        >>> # Send instant rate events (rate=0.5, weight=1.0)
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     output = transformer.update(instant_rate_events=(0.5, 1.0))
+        >>> print(output)  # doctest: +SKIP
+        [1.0, 1.0, ..., 1.0]  # g * rate * weight = 2.0 * 0.5 * 1.0
+
+    **Example 2: Custom sigmoid nonlinearity**
+
+    .. code-block:: python
+
+        >>> import numpy as np
+        >>> import brainpy_state as bst
+        >>> # Define sigmoid activation
+        >>> def sigmoid(h):
+        ...     return 1.0 / (1.0 + np.exp(-h))
+        >>> transformer = bst.rate_transformer_node(
+        ...     in_size=5,
+        ...     linear_summation=True,
+        ...     input_nonlinearity=sigmoid
+        ... )
+        >>> transformer.init_state()
+        >>> # High input drives to saturation
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     output = transformer.update(instant_rate_events=(10.0, 1.0))
+        >>> print(output)  # doctest: +SKIP
+        [0.9999..., 0.9999..., ...]  # sigmoid(10) ≈ 1.0
+
+    **Example 3: Delayed event scheduling**
+
+    .. code-block:: python
+
+        >>> import brainpy_state as bst
+        >>> import brainunit as u
+        >>> import brainstate
+        >>> transformer = bst.rate_transformer_node(in_size=3)
+        >>> transformer.init_state()
+        >>> # Send delayed event (rate=1.0, weight=0.5, delay=2 steps)
+        >>> with brainstate.environ.context(dt=1.0 * u.ms):
+        ...     out_t0 = transformer.update(delayed_rate_events=(1.0, 0.5, 2))
+        ...     out_t1 = transformer.update()  # Delayed event still in queue
+        ...     out_t2 = transformer.update()  # Delayed event arrives now
+        >>> print(out_t0, out_t1, out_t2)  # doctest: +SKIP
+        [0., 0., 0.] [0., 0., 0.] [0.5, 0.5, 0.5]  # Event arrives at t+2
+
+    **Example 4: Per-event nonlinearity (linear_summation=False)**
+
+    .. code-block:: python
+
+        >>> import brainpy_state as bst
+        >>> import numpy as np
+        >>> # ReLU applied per-event before summation
+        >>> relu = lambda h: np.maximum(0, h)
+        >>> transformer = bst.rate_transformer_node(
+        ...     in_size=1,
+        ...     linear_summation=False,
+        ...     input_nonlinearity=relu
+        ... )
+        >>> transformer.init_state()
+        >>> # Two events: one positive, one negative
+        >>> events = [
+        ...     (2.0, 1.0),   # ReLU(2.0) * 1.0 = 2.0
+        ...     (-1.0, 1.0)   # ReLU(-1.0) * 1.0 = 0.0
+        ... ]
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     output = transformer.update(instant_rate_events=events)
+        >>> print(output)  # doctest: +SKIP
+        [2.0]  # Sum of per-event transformed values
+
+    See Also
+    --------
+    rate_neuron_ipn : Rate neuron with intrinsic dynamics and input nonlinearity
+    rate_neuron_opn : Rate neuron with output nonlinearity
+    lin_rate : Linear rate neuron with dynamics
+    sigmoid_rate : Sigmoid rate neuron
     """
 
     __module__ = 'brainpy.state'
@@ -281,6 +511,29 @@ class rate_transformer_node(Dynamics):
         return total_now
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables and reset the delayed event queue.
+
+        Allocates ``rate``, ``instant_rate``, ``delayed_rate``, and internal timestep counter.
+        Clears any pre-existing delayed events from the internal queue. Must be called before
+        the first ``update()`` invocation.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of parallel simulation batches. If provided, state variables will have shape
+            ``(batch_size, *in_size)``. If ``None`` (default), shape is ``in_size``.
+        **kwargs
+            Additional keyword arguments (ignored, present for API consistency).
+
+        Notes
+        -----
+        All state variables are initialized using the ``rate_initializer`` provided during
+        construction. The delayed event queue (``_delayed_queue``) is reset to an empty dict,
+        discarding any events scheduled in previous simulations.
+
+        This method is typically called automatically by ``brainstate`` infrastructure, but can
+        be invoked manually to reset the model to initial conditions.
+        """
         rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
         rate_np = self._to_numpy(rate)
 
@@ -292,6 +545,163 @@ class rate_transformer_node(Dynamics):
         self._delayed_queue = {}
 
     def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None):
+        r"""Execute one timestep of the rate transformation algorithm.
+
+        Processes incoming rate events (both instant and delayed), applies the configured
+        nonlinearity, and updates the output ``rate`` state variable. Implements the NEST
+        ``rate_transformer_node_impl.h`` update sequence.
+
+        Parameters
+        ----------
+        x : float, array_like, optional
+            External input current (ignored). Present for API compatibility with ``Dynamics``
+            base class, but rate transformers have no intrinsic current-driven dynamics.
+            Default: ``0.0``.
+        instant_rate_events : None, tuple, list of tuples, or dict, optional
+            **Zero-delay rate events** applied in the current timestep. Event format:
+
+            - **2-tuple**: ``(rate, weight)`` — uses ``delay_steps=0`` (enforced)
+            - **3-tuple**: ``(rate, weight, delay_steps)`` — ``delay_steps`` **must** be 0
+            - **4-tuple**: ``(rate, weight, delay_steps, multiplicity)`` — ``delay_steps`` **must** be 0
+            - **dict**: ``{'rate': r, 'weight': w, 'delay_steps': d, 'multiplicity': m}`` — ``d`` **must** be 0
+            - **list/tuple of above**: multiple events processed sequentially
+            - **None** (default): no instant events
+
+            Raises ``ValueError`` if any event specifies non-zero ``delay_steps``.
+        delayed_rate_events : None, tuple, list of tuples, or dict, optional
+            **Delayed rate events** stored in internal queue and applied after specified delay.
+            Event format:
+
+            - **2-tuple**: ``(rate, weight)`` — uses default ``delay_steps=1``
+            - **3-tuple**: ``(rate, weight, delay_steps)`` — custom delay
+            - **4-tuple**: ``(rate, weight, delay_steps, multiplicity)``
+            - **dict**: ``{'rate': r, 'weight': w, 'delay_steps': d, 'multiplicity': m}``
+            - **list/tuple of above**: multiple events
+            - **None** (default): no delayed events
+
+            - ``delay_steps=0``: event applied immediately (equivalent to instant event)
+            - ``delay_steps=d > 0``: event applied after ``d`` timesteps
+            - Negative ``delay_steps`` raises ``ValueError``
+
+        Returns
+        -------
+        rate_new : ndarray, shape ``(in_size,)`` or ``(batch_size, *in_size)``
+            **Updated output rate** after applying nonlinearity to aggregated inputs. This
+            is the new value of the ``rate`` state variable. Shape matches ``in_size``
+            (or ``(batch_size, *in_size)`` if batch mode was used in ``init_state()``).
+
+        Raises
+        ------
+        ValueError
+            If ``instant_rate_events`` contains any event with non-zero ``delay_steps``.
+        ValueError
+            If ``delayed_rate_events`` contains any event with negative ``delay_steps``.
+        ValueError
+            If event tuples have invalid length (must be 2, 3, or 4).
+        ValueError
+            If ``delay_steps`` is not a scalar value.
+
+        Notes
+        -----
+        **Update algorithm (step-by-step)**:
+          1. Store current ``rate`` → ``delayed_rate`` (for outgoing delayed connections)
+          2. Increment internal ``_step_count``
+          3. Drain events scheduled for current timestep from ``_delayed_queue``
+          4. Process new ``delayed_rate_events``:
+
+             - Events with ``delay_steps=0`` are applied immediately
+             - Events with ``delay_steps>0`` are added to ``_delayed_queue``
+
+          5. Process ``instant_rate_events`` (all applied immediately)
+          6. Sum all contributions:
+
+             - If ``linear_summation=True``: sum weighted rates, then apply nonlinearity once
+             - If ``linear_summation=False``: apply nonlinearity per-event, then sum
+
+          7. Update ``rate`` and ``instant_rate`` with the new value
+
+        **Event semantics**:
+          - **rate**: Input rate value (can be scalar or array matching ``in_size``)
+          - **weight**: Connection weight (scalar or array matching ``in_size``)
+          - **delay_steps**: Integer delay in timesteps (0 = immediate, >0 = delayed)
+          - **multiplicity**: Event count multiplier (default 1.0, rarely used)
+          - Effective contribution: ``rate * weight * multiplicity`` (before nonlinearity)
+
+        **Broadcasting rules**:
+          - All event fields (``rate``, ``weight``, ``multiplicity``) broadcast to ``in_size``
+          - Scalars are replicated across all nodes
+          - Arrays must have compatible shapes (standard NumPy broadcasting)
+
+        **Memory management**:
+          - Delayed events are stored in ``_delayed_queue`` until their scheduled timestep
+          - Queue entries are automatically removed after retrieval (no memory leak)
+          - Queue persists across ``update()`` calls but is cleared by ``init_state()``
+
+        Examples
+        --------
+        **Example 1: Single instant event**
+
+        .. code-block:: python
+
+            >>> import brainpy_state as bst
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> transformer = bst.rate_transformer_node(in_size=2, g=2.0)
+            >>> transformer.init_state()
+            >>> with brainstate.environ.context(dt=0.1 * u.ms):
+            ...     output = transformer.update(instant_rate_events=(0.5, 1.0))
+            >>> print(output)  # doctest: +SKIP
+            [1.0, 1.0]  # g * rate * weight = 2.0 * 0.5 * 1.0
+
+        **Example 2: Multiple instant events**
+
+        .. code-block:: python
+
+            >>> import brainpy_state as bst
+            >>> transformer = bst.rate_transformer_node(in_size=1)
+            >>> transformer.init_state()
+            >>> events = [(0.3, 1.0), (0.2, 2.0), (0.1, 3.0)]
+            >>> with brainstate.environ.context(dt=0.1 * u.ms):
+            ...     output = transformer.update(instant_rate_events=events)
+            >>> print(output)  # doctest: +SKIP
+            [1.0]  # 0.3*1.0 + 0.2*2.0 + 0.1*3.0 = 1.0
+
+        **Example 3: Delayed event processing**
+
+        .. code-block:: python
+
+            >>> import brainpy_state as bst
+            >>> import brainunit as u
+            >>> import brainstate
+            >>> transformer = bst.rate_transformer_node(in_size=1)
+            >>> transformer.init_state()
+            >>> with brainstate.environ.context(dt=1.0 * u.ms):
+            ...     # Schedule event for t+3
+            ...     out_t0 = transformer.update(delayed_rate_events=(1.0, 1.0, 3))
+            ...     out_t1 = transformer.update()  # t=1, still in queue
+            ...     out_t2 = transformer.update()  # t=2, still in queue
+            ...     out_t3 = transformer.update()  # t=3, event arrives
+            >>> print(out_t0, out_t1, out_t2, out_t3)  # doctest: +SKIP
+            [0.] [0.] [0.] [1.]  # Event delivered at t+3
+
+        **Example 4: Dict event format**
+
+        .. code-block:: python
+
+            >>> import brainpy_state as bst
+            >>> transformer = bst.rate_transformer_node(in_size=1)
+            >>> transformer.init_state()
+            >>> event = {
+            ...     'rate': 0.5,
+            ...     'weight': 2.0,
+            ...     'delay_steps': 0,
+            ...     'multiplicity': 3.0
+            ... }
+            >>> with brainstate.environ.context(dt=0.1 * u.ms):
+            ...     output = transformer.update(instant_rate_events=event)
+            >>> print(output)  # doctest: +SKIP
+            [3.0]  # 0.5 * 2.0 * 3.0 = 3.0
+        """
         del x  # NEST rate transformer has no intrinsic current input.
 
         state_shape = self.rate.value.shape

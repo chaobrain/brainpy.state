@@ -234,7 +234,7 @@ class TestSynapse(unittest.TestCase):
             self.assertTrue(jnp.any(outputs[-1][0, 0] >= 0 * u.mS))  # Should have developed some conductance
 
     def test_bionmda_two_state_dynamics(self):
-        """Test that BioNMDA properly implements second-order kinetics with two state variables"""
+        r"""Test that BioNMDA properly implements second-order kinetics with two state variables"""
         synapse = BioNMDA(self.in_size)
         synapse.init_state(self.batch_size)
         call = brainstate.transform.jit(synapse)

@@ -27,112 +27,177 @@ __all__ = [
 
 
 class dc_generator(brainstate.nn.Dynamics):
-    r"""DC current generator — NEST-compatible stimulation device.
+    r"""DC current generator -- NEST-compatible stimulation device.
 
-    Description
-    -----------
+    Generate a constant current pulse and gate it with a half-open activity
+    window using NEST-compatible parameter semantics.
 
-    ``dc_generator`` produces a constant direct current (DC) which is sent to
-    all connected neurons. The current is activated at time ``start`` and
-    deactivated at time ``stop``, both relative to ``origin``.
+    **1. Model equations**
 
-    This is a brainpy.state re-implementation of the NEST simulator device of
-    the same name, using NEST-standard parameterization.
-
-    Current output
-    ..............
-
-    The device produces a current
+    For each output channel, the generated current is
 
     .. math::
 
         I(t) = \begin{cases}
-            \text{amplitude} & \text{if } t_{\text{start}} \leq t < t_{\text{stop}} \\
-            0 & \text{otherwise}
+            A & \text{if } t_{\mathrm{start}} \le t < t_{\mathrm{stop}}, \\
+            0 & \text{otherwise},
         \end{cases}
 
-    where :math:`t_{\text{start}} = \text{origin} + \text{start}` and
-    :math:`t_{\text{stop}} = \text{origin} + \text{stop}`.
+    where :math:`A` is ``amplitude`` and
 
-    The current is constant throughout the active window and is identical for
-    all connected post-synaptic neurons. The current directly enters the
-    neuron's input current equation, equivalent to the ``I_e`` parameter in
-    NEST neuron models.
+    .. math::
 
-    Timing convention
-    .................
+        t_{\mathrm{start}} = t_0 + t_{\mathrm{start,rel}}, \qquad
+        t_{\mathrm{stop}}  = t_0 + t_{\mathrm{stop,rel}}.
 
-    The active window is the half-open interval
-    :math:`[t_{\text{start}},\; t_{\text{stop}})` in terms of the simulation
-    time ``t`` (the start of each integration step). Because a step beginning
-    at time ``t`` advances the membrane state to ``t + dt``, the first
-    observable effect of the current on the neuron's membrane potential appears
-    at time :math:`t_{\text{start}} + dt`, and the last effect appears at time
-    :math:`t_{\text{stop}}`. This matches the observable behavior of the NEST
-    ``dc_generator`` device.
+    If ``stop is None``, then :math:`t_{\mathrm{stop}} = +\infty` and the
+    generator runs indefinitely from :math:`t_{\mathrm{start}}` onward.
 
-    .. note::
+    **2. Timing semantics, assumptions, and constraints**
 
-       NEST's ``dc_generator`` documentation notes that it is more efficient
-       to use a neuron's built-in ``I_e`` parameter when a constant bias
-       current is needed for the entire simulation. The ``dc_generator`` is
-       most useful when the current needs to be switched on or off at specific
-       times.
+    The active interval is the half-open set
+    :math:`[t_{\mathrm{start}},\, t_{\mathrm{stop}})`.  Since neuron states are
+    advanced from ``t`` to ``t + dt`` in each step, a current enabled at
+    :math:`t_{\mathrm{start}}` first affects the membrane trajectory after that
+    update (observable at :math:`t_{\mathrm{start}} + dt`); the last active
+    update starts at :math:`t_{\mathrm{stop}} - dt`.
+
+    This implementation is stateless: :meth:`update` recomputes a boolean mask
+    at each call using the environment time, then applies :func:`u.math.where`.
+    Assumptions and constraints:
+
+    - If ``stop <= start`` (after adding ``origin``), the active set is empty
+      and the output is identically zero for all ``t``.
+    - ``amplitude``, ``start``, ``stop``, and ``origin`` must each be
+      broadcastable to ``self.varshape``; the shape check is performed by
+      :func:`braintools.init.param` during :meth:`__init__`.
+    - Unitless numerics in ``start``, ``stop``, and ``origin`` are treated as
+      milliseconds; unitless numerics in ``amplitude`` are treated as pA.
+
+    **3. Computational implications**
+
+    Per-call complexity is :math:`O(\prod \mathrm{varshape})`, dominated by one
+    broadcast allocation ``amplitude * ones(varshape)`` and one masked
+    selection. No recurrent state is maintained, so the model is fully
+    replayable given the same environment time sequence.
 
     Parameters
     ----------
+    in_size : Size, optional
+        Output size/shape specification understood by
+        :class:`brainstate.nn.Dynamics`. The emitted current shape is
+        ``self.varshape`` derived from ``in_size``. Default is ``1``.
+    amplitude : ArrayLike, optional
+        Constant current amplitude :math:`A` (typically pA). Scalars or arrays
+        are accepted and broadcast to ``self.varshape`` via
+        :func:`braintools.init.param`. Default is ``0. * u.pA``.
+    start : ArrayLike, optional
+        Relative start time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        broadcast to ``self.varshape``. Effective start is
+        ``origin + start`` (inclusive). Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative stop time :math:`t_{\mathrm{stop,rel}}` (typically ms),
+        broadcast to ``self.varshape`` when provided. Effective stop is
+        ``origin + stop`` (exclusive). ``None`` means the pulse never
+        deactivates. Default is ``None``.
+    origin : ArrayLike, optional
+        Time origin :math:`t_0` (typically ms) added to ``start`` and ``stop``,
+        broadcast to ``self.varshape``. Default is ``0. * u.ms``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set. Default values match the NEST simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 18 17 22 43
 
-    =============== ================== =============================== ============================================
-    **Parameter**   **Default**        **Math equivalent**             **Description**
-    =============== ================== =============================== ============================================
-    ``in_size``     1                                                  Output size of the generator
-    ``amplitude``   0 pA               :math:`I`                       Amplitude of the generated current
-    ``start``       0 ms               :math:`t_{\text{start,rel}}`    Activation time relative to ``origin``
-    ``stop``        ``None`` (∞)       :math:`t_{\text{stop,rel}}`     Deactivation time relative to ``origin``
-    ``origin``      0 ms               :math:`t_0`                     Global time offset
-    =============== ================== =============================== ============================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``amplitude``
+         - ``0. * u.pA``
+         - :math:`A`
+         - Constant current value emitted during the active window.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative start time; effective inclusive lower bound is ``origin + start``.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative stop time; effective exclusive upper bound is ``origin + stop``.
+       * - ``origin``
+         - ``0. * u.ms``
+         - :math:`t_0`
+         - Global offset applied to both window boundaries.
 
-    Examples
-    --------
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a current-like quantity
+        with shape ``self.varshape`` and units inherited from ``amplitude``:
+        ``amplitude`` for channels in the active window and zeros elsewhere.
 
-    Basic usage with an iaf_psc_delta neuron:
+    Raises
+    ------
+    ValueError
+        If ``in_size`` is invalid or if any array-like parameter cannot be
+        broadcast to ``self.varshape`` by :func:`braintools.init.param`.
+    TypeError
+        If invalid unitful/unitless arithmetic is provided (for example, values
+        with incompatible units in current or time comparisons).
 
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     dc = brainpy.state.dc_generator(amplitude=500. * u.pA,
-    ...                           start=10. * u.ms,
-    ...                           stop=50. * u.ms)
-    ...     neuron = brainpy.state.iaf_psc_delta(1)
-    ...     neuron.init_state()
-    ...
-    ...     # In simulation loop:
-    ...     for step in range(1000):
-    ...         with brainstate.environ.context(t=step * 0.1 * u.ms):
-    ...             current = dc.update()
-    ...             spk = neuron.update(x=current)
-
-    Multiple generators with different time windows:
-
-    >>> dc1 = brainpy.state.dc_generator(amplitude=300. * u.pA,
-    ...                        start=0. * u.ms, stop=100. * u.ms)
-    >>> dc2 = brainpy.state.dc_generator(amplitude=-200. * u.pA,
-    ...                        start=50. * u.ms, stop=150. * u.ms)
-
-    References
-    ----------
-    .. [1] NEST Simulator, ``dc_generator`` device.
-           https://nest-simulator.readthedocs.io/en/stable/models/dc_generator.html
+    Notes
+    -----
+    NEST recommends using neuron parameter ``I_e`` when a constant bias current
+    is needed throughout the full simulation. Use ``dc_generator`` when the
+    current must be switched on/off at specific simulation times.
 
     See Also
     --------
-    iaf_psc_delta : Leaky integrate-and-fire neuron with delta-shaped PSCs
-    SpikeTime : Input neuron group with pre-specified spike times
-    PoissonSpike : Poisson spike generator
+    ac_generator : Sinusoidal current stimulation device.
+    step_current_generator : Piecewise-constant current stimulation.
+    noise_generator : Gaussian white-noise current stimulation.
+
+    References
+    ----------
+    .. [1] NEST Simulator documentation for ``dc_generator``:
+           https://nest-simulator.readthedocs.io/en/stable/models/dc_generator.html
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.dc_generator(
+       ...         in_size=1,
+       ...         amplitude=500.0 * u.pA,
+       ...         start=10.0 * u.ms,
+       ...         stop=50.0 * u.ms,
+       ...     )
+       ...     with brainstate.environ.context(t=10.0 * u.ms):
+       ...         current = gen.update()
+       ...     _ = current.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> dc1 = brainpy.state.dc_generator(
+       ...     amplitude=300.0 * u.pA,
+       ...     start=0.0 * u.ms,
+       ...     stop=100.0 * u.ms,
+       ... )
+       >>> dc2 = brainpy.state.dc_generator(
+       ...     amplitude=-200.0 * u.pA,
+       ...     start=50.0 * u.ms,
+       ...     stop=150.0 * u.ms,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -157,16 +222,50 @@ class dc_generator(brainstate.nn.Dynamics):
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
-        """Return the current amplitude if the device is active, else zero.
-
-        The device is active when ``origin + start <= t < origin + stop``,
-        where ``t`` is the current simulation time read from
-        ``brainstate.environ``.
+        r"""Compute the window-gated constant current at environment time ``t``.
 
         Returns
         -------
-        current : Quantity[pA]
-            The output current, shaped ``(in_size,)``.
+        current : Any
+            Current-like quantity with shape ``self.varshape`` and units
+            inherited from ``amplitude``. Values equal ``amplitude`` on channels
+            where ``origin + start <= t < origin + stop`` (or
+            ``t >= origin + start`` when ``stop is None``), and zero elsewhere.
+
+        Raises
+        ------
+        KeyError
+            If the environment time key ``'t'`` is not available in
+            ``brainstate.environ``.
+        TypeError
+            If ``t``, ``start``, ``stop``, or ``origin`` cannot be compared due
+            to incompatible units/dtypes.
+
+        Notes
+        -----
+        Start is inclusive and stop is exclusive, matching NEST semantics.
+        If ``stop <= start`` (after adding ``origin``), the active set is empty
+        and the output is identically zero for all ``t``. The model carries no
+        internal state, so repeated calls with the same environment time produce
+        identical results.
+
+        See Also
+        --------
+        dc_generator : Class-level parameter definitions and model equations.
+        ac_generator.update : Windowed sinusoidal-current update rule.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import dc_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = dc_generator(amplitude=250.0 * u.pA, start=2.0 * u.ms, stop=4.0 * u.ms)
+           ...     with brainstate.environ.context(t=3.0 * u.ms):
+           ...         current = gen.update()
+           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
         t_start = self.origin + self.start

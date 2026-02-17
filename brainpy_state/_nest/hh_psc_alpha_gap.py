@@ -36,22 +36,106 @@ __all__ = [
 
 
 def _hh_psc_alpha_gap_equilibrium(V):
-    """Compute HH gating variable equilibrium values at voltage V (mV).
+    r"""Compute equilibrium gating variables for hh_psc_alpha_gap at given voltage.
 
-    Uses the rate functions from NEST ``hh_psc_alpha_gap`` which differ from
-    the classic ``hh_psc_alpha`` model.  Returns ``(m_inf, h_inf, n_inf,
-    p_inf)`` -- the equilibrium values for the four gating variables at the
-    given membrane potential.
+    This function computes steady-state values of all four gating variables
+    (m, h, n, p) using the voltage-dependent rate functions specific to the
+    ``hh_psc_alpha_gap`` model. These rate functions differ from the classic
+    Hodgkin-Huxley formulation and are based on the kinetics described in
+    Mancilla et al. (2007) for modeling gap-junction-coupled interneurons.
+
+    The equilibrium values are computed as:
+
+    .. math::
+
+       x_\infty = \frac{\alpha_x(V)}{\alpha_x(V) + \beta_x(V)}
+
+    for each gating variable :math:`x \in \{m, h, n, p\}`.
+
+    **Mathematical Details:**
+
+    The rate functions (with voltage V in mV, rates in 1/ms) are:
+
+    .. math::
+
+       \alpha_m &= \frac{40(V - 75.5)}{1 - e^{-(V - 75.5)/13.5}}, \quad
+       \beta_m  = \frac{1.2262}{e^{V/42.248}} \\
+       \alpha_h &= \frac{0.0035}{e^{V/24.186}}, \quad
+       \beta_h  = \frac{0.017(51.25 + V)}{1 - e^{-(51.25 + V)/5.2}} \\
+       \alpha_n &= \frac{0.014(V + 44)}{1 - e^{-(V + 44)/2.3}}, \quad
+       \beta_n  = \frac{0.0043}{e^{(V + 44)/34}} \\
+       \alpha_p &= \frac{V - 95}{1 - e^{-(V - 95)/11.8}}, \quad
+       \beta_p  = \frac{0.025}{e^{V/22.222}}
+
+    Numerical Considerations
+    ------------------------
+
+    - The rate functions contain exponential terms that may produce division
+      by zero or overflow at specific voltages. NumPy's exp function handles
+      overflow by returning inf, which propagates correctly through the
+      equilibrium calculation.
+    - At voltages where the denominator :math:`1 - e^{-x}` approaches zero
+      (e.g., when :math:`x \approx 0`), numerical instability may occur.
+      However, for typical physiological voltage ranges (-100 to +50 mV),
+      these expressions are well-behaved.
+
+    **Usage:**
+
+    This function is primarily used during state initialization to set gating
+    variables to their equilibrium values at the initial membrane potential,
+    avoiding transient artifacts from arbitrary initial conditions.
 
     Parameters
     ----------
     V : float
-        Membrane potential in mV.
+        Membrane potential in millivolts (mV). Typically in the range
+        [-100, +50] mV for physiological conditions.
 
     Returns
     -------
-    tuple of float
-        ``(m_inf, h_inf, n_inf, p_inf)``
+    m_inf : float
+        Equilibrium sodium activation (range [0, 1]).
+    h_inf : float
+        Equilibrium sodium inactivation (range [0, 1]).
+    n_inf : float
+        Equilibrium potassium Kv1 activation (range [0, 1]).
+    p_inf : float
+        Equilibrium potassium Kv3 activation (range [0, 1]).
+
+    Notes
+    -----
+    - This function uses NumPy for computation and is not JIT-compiled. It is
+      intended for use during initialization only, not during simulation loops.
+    - The returned values are unitless (dimensionless gating variables).
+    - For V = -69.604 mV (the NEST default initial voltage), the equilibrium
+      values place the neuron near its resting state.
+
+    References
+    ----------
+    .. [1] Mancilla JG, Lewis TG, Pinto DJ, Rinzel J, Connors BW (2007).
+           Synchronization of electrically coupled pairs of inhibitory
+           interneurons in neocortex. Journal of Neuroscience, 27:2058-2073.
+           DOI: https://doi.org/10.1523/JNEUROSCI.2715-06.2007
+
+    Examples
+    --------
+    Compute equilibrium values at resting potential:
+
+    .. code-block:: python
+
+       >>> V_rest = -69.604  # mV
+       >>> m_inf, h_inf, n_inf, p_inf = _hh_psc_alpha_gap_equilibrium(V_rest)
+       >>> print(f"m={m_inf:.4f}, h={h_inf:.4f}, n={n_inf:.4f}, p={p_inf:.4f}")
+       m=0.0703, h=0.9541, n=0.1042, p=0.0000
+
+    Compare equilibrium at depolarized voltage:
+
+    .. code-block:: python
+
+       >>> V_depol = -50.0  # mV
+       >>> m_inf, h_inf, n_inf, p_inf = _hh_psc_alpha_gap_equilibrium(V_depol)
+       >>> print(f"Sodium activation increased: m={m_inf:.4f}")
+       Sodium activation increased: m=0.1523
     """
     alpha_m = 40.0 * (V - 75.5) / (1.0 - np.exp(-(V - 75.5) / 13.5))
     beta_m = 1.2262 / np.exp(V / 42.248)
@@ -70,41 +154,42 @@ def _hh_psc_alpha_gap_equilibrium(V):
 
 
 class hh_psc_alpha_gap(Neuron):
-    r"""NEST-compatible ``hh_psc_alpha_gap`` neuron model.
+    r"""NEST-compatible Hodgkin-Huxley neuron with alpha PSCs and gap junctions.
 
-    Short description
+    Short Description
     -----------------
 
-    Hodgkin-Huxley neuron model with alpha-shaped postsynaptic currents and
-    gap-junction support.
+    Conductance-based spiking neuron model implementing Hodgkin-Huxley
+    dynamics with alpha-function postsynaptic currents and support for
+    gap-junction coupling. Uses modified ion-channel kinetics from Mancilla
+    et al. (2007) with two distinct potassium conductances (Kv1, Kv3) for
+    modeling gap-junction-coupled inhibitory interneurons.
 
-    Description
-    -----------
+    **Model Overview**
 
-    ``hh_psc_alpha_gap`` is a spiking neuron using the Hodgkin-Huxley
-    formalism.  In contrast to ``hh_psc_alpha``, this implementation
-    additionally supports gap junctions and uses different ion-channel
-    kinetics based on Mancilla et al. (2007):
+    ``hh_psc_alpha_gap`` extends the classic Hodgkin-Huxley formalism with:
 
-    - sodium (Na) conductance with gates :math:`m` (activation) and
-      :math:`h` (inactivation),
-    - two potassium conductances -- fast Kv3 (:math:`p` gate) and slow
-      Kv1 (:math:`n` gate),
-    - leak conductance,
-    - alpha-function shaped postsynaptic currents (PSCs),
-    - combined threshold-and-local-maximum spike detection,
-    - explicit refractory period (suppresses spike emission only; dynamics
-      evolve freely during refractoriness),
-    - gap-junction current :math:`I_{gap}`.
+    - **Sodium (Na) conductance:** Activation gate :math:`m`, inactivation
+      gate :math:`h`
+    - **Two potassium conductances:** Fast Kv3 with :math:`p` gate, slow Kv1
+      with :math:`n` gate
+    - **Leak conductance:** Passive membrane current
+    - **Alpha-function PSCs:** Second-order synaptic current dynamics for
+      excitatory and inhibitory inputs
+    - **Gap-junction support:** External resistive coupling current
+      :math:`I_{gap}`
+    - **Hybrid spike detection:** Combines voltage threshold (0 mV) with
+      local maximum detection
+    - **Explicit refractoriness:** Suppresses spike emission during
+      refractory period; subthreshold dynamics continue evolving
 
-    This implementation mirrors the NEST ``models/hh_psc_alpha_gap.{h,cpp}``
-    update ordering and parameterization, using an adaptive Runge-Kutta
-    integrator (RK45, Dormand-Prince) to match NEST's GSL RKF45.
+    This implementation replicates NEST's ``hh_psc_alpha_gap`` model
+    (``models/hh_psc_alpha_gap.{h,cpp}``), using adaptive Runge-Kutta
+    integration (RK45/Dormand-Prince) to match NEST's GSL RKF45 solver.
 
-    Membrane and ionic current dynamics
-    ....................................
+    **1. Membrane Potential Dynamics**
 
-    The membrane potential evolves as
+    The membrane voltage evolves according to:
 
     .. math::
 
@@ -113,7 +198,7 @@ class hh_psc_alpha_gap(Neuron):
                               + I_{syn,ex} + I_{syn,in}
                               + I_{gap}
 
-    where
+    where the ionic currents are:
 
     .. math::
 
@@ -121,14 +206,21 @@ class hh_psc_alpha_gap(Neuron):
        I_K    &= (g_{Kv1}\, n^4 + g_{Kv3}\, p^2)\, (V_m - E_K)  \\
        I_L    &= g_L\, (V_m - E_L)
 
-    Gating variables :math:`m`, :math:`h`, :math:`n`, :math:`p` obey
+    The potassium current combines contributions from slow Kv1 channels
+    (:math:`n^4` gating) and fast Kv3 channels (:math:`p^2` gating), which
+    is the key difference from standard HH models.
+
+    **2. Gating Variable Dynamics**
+
+    All four gating variables :math:`x \in \{m, h, n, p\}` follow first-order
+    kinetics:
 
     .. math::
 
        \frac{dx}{dt} = \alpha_x(V)(1 - x) - \beta_x(V)\,x
 
-    with voltage-dependent rate functions (voltage :math:`V` in mV, rates in
-    1/ms):
+    The voltage-dependent rate functions (voltage :math:`V` in mV, rates in
+    1/ms) are:
 
     .. math::
 
@@ -141,62 +233,175 @@ class hh_psc_alpha_gap(Neuron):
        \alpha_p &= \frac{V - 95}{1 - e^{-(V - 95)/11.8}}, \quad
        \beta_p  = \frac{0.025}{e^{V/22.222}}
 
-    Gap-junction current
-    ....................
+    These kinetics differ from the classic Hodgkin-Huxley equations and are
+    based on experimental measurements from neocortical interneurons.
 
-    Gap junctions are modelled as resistive couplings:
+    **3. Gap-Junction Current**
+
+    Gap junctions provide resistive electrical coupling:
 
     .. math::
 
        I_{gap} = \sum_j g_{ij}\,(V_j - V_i)
 
-    In this single-neuron implementation, the gap-junction current is
-    provided externally via the ``I_gap`` parameter or input mechanism.
+    where :math:`g_{ij}` is the gap-junction conductance between neuron *i*
+    and neuron *j*, and :math:`V_j` is the membrane potential of the coupled
+    neuron. In this single-neuron model, :math:`I_{gap}` must be computed
+    externally and provided as input via the ``x`` parameter to ``update()``
+    or through ``add_current_input()``.
 
-    Alpha-function synaptic currents
-    .................................
+    **4. Alpha-Function Synaptic Currents**
 
-    Each synapse type (excitatory / inhibitory) is modelled as a
-    second-order system producing an alpha-shaped postsynaptic current:
+    Each synapse type (excitatory/inhibitory) uses a second-order system to
+    generate alpha-shaped postsynaptic currents:
 
     .. math::
 
        \frac{dI_{syn}}{dt}  &= dI_{syn} - \frac{I_{syn}}{\tau_{syn}} \\
        \frac{d(dI_{syn})}{dt} &= -\frac{dI_{syn}}{\tau_{syn}}
 
-    A spike arriving with weight :math:`w` adds
-    :math:`w \cdot e / \tau_{syn}` to :math:`dI_{syn}`, normalizing the
-    peak current to :math:`w` pA for :math:`w = 1`.
+    An incoming spike with weight :math:`w` (in pA) increments
+    :math:`dI_{syn}` by :math:`w \cdot e / \tau_{syn}`, ensuring the peak
+    current reaches :math:`w` pA. The factor :math:`e = \exp(1)` normalizes
+    the alpha function.
 
-    Spike detection
-    ...............
+    **5. Spike Detection Mechanism**
 
-    A spike is detected when the membrane potential crosses 0 mV from
-    below **and** a local maximum is detected (i.e. the potential starts
-    decreasing).  Formally, a spike is emitted when:
+    Spikes are detected using a combined threshold-and-local-maximum criterion:
 
-    1. ``r == 0`` (not in refractory period), **and**
-    2. ``V_m >= 0 mV``, **and**
-    3. ``V_old > V_m`` (local maximum, the potential is now falling).
+    1. **Not in refractory period:** ``r == 0``
+    2. **Threshold crossing:** :math:`V_m \geq 0` mV
+    3. **Local maximum:** :math:`V_{old} > V_m` (voltage is decreasing)
 
-    Unlike integrate-and-fire models, no voltage reset occurs -- the
-    potassium currents naturally repolarize the membrane.
+    All three conditions must be satisfied simultaneously. This prevents
+    multiple spike detections during the rising and falling phases of the
+    action potential. Unlike integrate-and-fire models, **no voltage reset**
+    occurs—repolarization happens naturally through activation of potassium
+    currents.
 
-    Numerical integration
-    .....................
+    **6. Refractory Period**
 
-    NEST uses GSL RKF45 (Runge-Kutta-Fehlberg 4/5) with adaptive step-size
-    control (absolute tolerance 1e-6, relative tolerance 0).  This
+    During the refractory period (duration :math:`t_{ref}`), spike emission
+    is suppressed, but the neuron's subthreshold dynamics continue to evolve
+    according to the differential equations. This differs from models that
+    clamp the membrane potential during refractoriness.
+
+    **7. Numerical Integration**
+
+    NEST uses GSL's RKF45 (Runge-Kutta-Fehlberg 4th/5th order) adaptive
+    integrator with absolute tolerance 1e-6 and relative tolerance 0. This
     implementation uses ``scipy.integrate.solve_ivp`` with method ``'RK45'``
-    (Dormand-Prince) at matching tolerances for comparable numerical results.
+    (Dormand-Prince 5th order) at matching tolerances. The 9-dimensional ODE
+    system (V, m, h, n, p, dI_ex, I_ex, dI_in, I_in) is integrated
+    independently for each neuron over each time step.
+
+    Computational Complexity
+    ------------------------
+
+    - **Per neuron, per time step:** One adaptive ODE integration (~10-50
+      function evaluations depending on step size control)
+    - **Scaling:** Linear in population size (each neuron integrated
+      independently)
+    - **Memory:** O(population_size) for state storage
+    - **Non-JIT-compiled:** Uses SciPy's Python-level solver; slower than
+      fixed-step integrators but provides high numerical accuracy
 
     Parameters
     ----------
+    in_size : int or tuple of int
+        Population shape. Can be an integer (1D population) or tuple of
+        integers (multidimensional population). Defines the number of neurons
+        in the group.
+    E_L : ArrayLike, optional
+        Leak reversal potential (resting potential). Scalar or array with
+        shape broadcastable to ``in_size``. Unit: mV. Default: -70.0 mV.
+    C_m : ArrayLike, optional
+        Membrane capacitance. Must be strictly positive. Scalar or array with
+        shape broadcastable to ``in_size``. Unit: pF. Default: 40.0 pF.
+    g_Na : ArrayLike, optional
+        Sodium peak conductance. Must be non-negative. Scalar or array with
+        shape broadcastable to ``in_size``. Unit: nS. Default: 4500.0 nS.
+    g_Kv1 : ArrayLike, optional
+        Potassium Kv1 (slow) peak conductance. Must be non-negative. Scalar
+        or array with shape broadcastable to ``in_size``. Unit: nS.
+        Default: 9.0 nS.
+    g_Kv3 : ArrayLike, optional
+        Potassium Kv3 (fast) peak conductance. Must be non-negative. Scalar
+        or array with shape broadcastable to ``in_size``. Unit: nS.
+        Default: 9000.0 nS.
+    g_L : ArrayLike, optional
+        Leak conductance. Must be non-negative. Scalar or array with shape
+        broadcastable to ``in_size``. Unit: nS. Default: 10.0 nS.
+    E_Na : ArrayLike, optional
+        Sodium reversal potential. Scalar or array with shape broadcastable
+        to ``in_size``. Unit: mV. Default: 74.0 mV.
+    E_K : ArrayLike, optional
+        Potassium reversal potential. Scalar or array with shape
+        broadcastable to ``in_size``. Unit: mV. Default: -90.0 mV.
+    t_ref : ArrayLike, optional
+        Duration of refractory period. Must be non-negative. During this
+        period, spike emission is suppressed but dynamics continue evolving.
+        Scalar or array with shape broadcastable to ``in_size``. Unit: ms.
+        Default: 2.0 ms.
+    tau_syn_ex : ArrayLike, optional
+        Excitatory synaptic time constant (alpha-function rise time). Must be
+        strictly positive. Scalar or array with shape broadcastable to
+        ``in_size``. Unit: ms. Default: 0.2 ms.
+    tau_syn_in : ArrayLike, optional
+        Inhibitory synaptic time constant (alpha-function rise time). Must be
+        strictly positive. Scalar or array with shape broadcastable to
+        ``in_size``. Unit: ms. Default: 2.0 ms.
+    I_e : ArrayLike, optional
+        Constant external input current. Positive values are depolarizing.
+        Scalar or array with shape broadcastable to ``in_size``. Unit: pA.
+        Default: 0.0 pA.
+    V_m_init : ArrayLike or None, optional
+        Initial membrane potential. If None, uses NEST's default value of
+        -69.604012 mV. Scalar or array with shape broadcastable to
+        ``in_size``. Unit: mV. Default: None.
+    Act_m_init : ArrayLike or None, optional
+        Initial sodium activation gating variable. Must be in [0, 1]. If
+        None, computed from equilibrium at ``V_m_init``. Scalar or array with
+        shape broadcastable to ``in_size``. Unitless. Default: None.
+    Inact_h_init : ArrayLike or None, optional
+        Initial sodium inactivation gating variable. Must be in [0, 1]. If
+        None, computed from equilibrium at ``V_m_init``. Scalar or array with
+        shape broadcastable to ``in_size``. Unitless. Default: None.
+    Act_n_init : ArrayLike or None, optional
+        Initial Kv1 activation gating variable. Must be in [0, 1]. If None,
+        computed from equilibrium at ``V_m_init``. Scalar or array with shape
+        broadcastable to ``in_size``. Unitless. Default: None.
+    Inact_p_init : ArrayLike or None, optional
+        Initial Kv3 activation gating variable. Must be in [0, 1]. If None,
+        computed from equilibrium at ``V_m_init``. Scalar or array with shape
+        broadcastable to ``in_size``. Unitless. Default: None.
+    spk_fun : Callable, optional
+        Surrogate gradient function for differentiable spike generation.
+        Should be a callable from ``braintools.surrogate`` with signature
+        ``(ArrayLike) -> ArrayLike``. Used for gradient-based learning.
+        Default: ``braintools.surrogate.ReluGrad()``.
+    spk_reset : {'hard', 'soft'}, optional
+        Spike reset mode. For HH models, this affects surrogate gradient
+        computation only (no actual voltage reset occurs). 'hard': stop
+        gradient propagation; 'soft': allow gradient flow. Default: 'hard'.
+    rtol : float, optional
+        Relative tolerance for ODE solver. Controls step-size adaptation.
+        Must be positive. Default: 1e-6 (matching NEST).
+    atol : float, optional
+        Absolute tolerance for ODE solver. Controls step-size adaptation for
+        small-magnitude variables. Must be positive. Default: 1e-12.
+    name : str or None, optional
+        Name of the neuron population for identification. If None, an
+        automatic name is generated. Default: None.
+
+
+    Parameter Mapping
+    -----------------
 
     ==================== ================== =============================== ====================================================
-    **Parameter**        **Default**        **Math equivalent**             **Description**
+    **Parameter**        **Default**        **Math Symbol**                 **Description**
     ==================== ================== =============================== ====================================================
-    ``in_size``          (required)                                         Population shape
+    ``in_size``          (required)         —                               Population shape
     ``E_L``              -70.0 mV           :math:`E_L`                     Leak reversal potential (resting potential)
     ``C_m``              40.0 pF            :math:`C_m`                     Membrane capacitance
     ``g_Na``             4500.0 nS          :math:`g_{Na}`                  Sodium peak conductance
@@ -209,69 +414,172 @@ class hh_psc_alpha_gap(Neuron):
     ``tau_syn_ex``       0.2 ms             :math:`\tau_{syn,ex}`           Excitatory synaptic time constant
     ``tau_syn_in``       2.0 ms             :math:`\tau_{syn,in}`           Inhibitory synaptic time constant
     ``I_e``              0.0 pA             :math:`I_e`                     Constant external input current
-    ``V_m_init``         -69.60401… mV                                      Initial membrane potential (NEST default)
-    ``Act_m_init``       None                                               Initial Na activation (None -> equilibrium)
-    ``Inact_h_init``     None                                               Initial Na inactivation (None -> equilibrium)
-    ``Act_n_init``       None                                               Initial Kv1 activation (None -> equilibrium)
-    ``Inact_p_init``     None                                               Initial Kv3 activation (None -> equilibrium)
-    ``spk_fun``          ReluGrad()                                         Surrogate spike function
-    ``spk_reset``        ``'hard'``                                         Reset mode
-    ``rtol``             1e-6                                               Relative tolerance for ODE solver
-    ``atol``             1e-12                                              Absolute tolerance for ODE solver
+    ``V_m_init``         -69.60401 mV       —                               Initial membrane potential (NEST default)
+    ``Act_m_init``       None               —                               Initial Na activation (None → equilibrium)
+    ``Inact_h_init``     None               —                               Initial Na inactivation (None → equilibrium)
+    ``Act_n_init``       None               —                               Initial Kv1 activation (None → equilibrium)
+    ``Inact_p_init``     None               —                               Initial Kv3 activation (None → equilibrium)
+    ``spk_fun``          ReluGrad()         —                               Surrogate spike function
+    ``spk_reset``        'hard'             —                               Reset mode for gradient computation
+    ``rtol``             1e-6               —                               Relative tolerance for ODE solver
+    ``atol``             1e-12              —                               Absolute tolerance for ODE solver
     ==================== ================== =============================== ====================================================
 
-    State variables
-    ---------------
+    Attributes
+    ----------
+    V : brainstate.HiddenState
+        Membrane potential :math:`V_m`. Shape: ``(batch_size, *in_size)``.
+        Unit: mV.
+    m : brainstate.HiddenState
+        Sodium activation gating variable. Shape: ``(batch_size, *in_size)``.
+        Range: [0, 1]. Unitless.
+    h : brainstate.HiddenState
+        Sodium inactivation gating variable. Shape: ``(batch_size, *in_size)``.
+        Range: [0, 1]. Unitless.
+    n : brainstate.HiddenState
+        Potassium Kv1 activation gating variable. Shape:
+        ``(batch_size, *in_size)``. Range: [0, 1]. Unitless.
+    p : brainstate.HiddenState
+        Potassium Kv3 activation gating variable. Shape:
+        ``(batch_size, *in_size)``. Range: [0, 1]. Unitless.
+    I_syn_ex : brainstate.ShortTermState
+        Excitatory postsynaptic current. Shape: ``(batch_size, *in_size)``.
+        Unit: pA.
+    I_syn_in : brainstate.ShortTermState
+        Inhibitory postsynaptic current. Shape: ``(batch_size, *in_size)``.
+        Unit: pA.
+    dI_syn_ex : brainstate.ShortTermState
+        Excitatory alpha-kernel derivative state (time derivative of
+        ``I_syn_ex``). Shape: ``(batch_size, *in_size)``. Unit: pA/ms.
+    dI_syn_in : brainstate.ShortTermState
+        Inhibitory alpha-kernel derivative state (time derivative of
+        ``I_syn_in``). Shape: ``(batch_size, *in_size)``. Unit: pA/ms.
+    I_stim : brainstate.ShortTermState
+        Stimulation current buffer for next time step. Shape:
+        ``(batch_size, *in_size)``. Unit: pA.
+    refractory_step_count : brainstate.ShortTermState
+        Refractory countdown in discrete time steps. Counts down from
+        ``ceil(t_ref / dt)`` to 0. Shape: ``(batch_size, *in_size)``.
+        Unit: steps (integer).
+    last_spike_time : brainstate.ShortTermState
+        Time of most recent spike. Shape: ``(batch_size, *in_size)``.
+        Unit: ms.
 
-    - ``V``:  membrane potential :math:`V_m` (mV).
-    - ``m``:  Na activation gating variable.
-    - ``h``:  Na inactivation gating variable.
-    - ``n``:  Kv1 activation gating variable.
-    - ``p``:  Kv3 activation gating variable.
-    - ``I_syn_ex``:  excitatory postsynaptic current (pA).
-    - ``I_syn_in``:  inhibitory postsynaptic current (pA).
-    - ``dI_syn_ex``:  excitatory alpha-kernel derivative state.
-    - ``dI_syn_in``:  inhibitory alpha-kernel derivative state.
-    - ``I_stim``:  stimulation current buffer (pA).
-    - ``refractory_step_count``:  refractory countdown in grid steps.
-    - ``last_spike_time``:  time of most recent spike.
+    Raises
+    ------
+    ValueError
+        If ``C_m <= 0`` (capacitance must be strictly positive).
+    ValueError
+        If ``t_ref < 0`` (refractory time cannot be negative).
+    ValueError
+        If ``tau_syn_ex <= 0`` or ``tau_syn_in <= 0`` (time constants must be
+        strictly positive).
+    ValueError
+        If any conductance (``g_Na``, ``g_Kv1``, ``g_Kv3``, ``g_L``) is
+        negative.
 
     Notes
     -----
+    **Differences from ``hh_psc_alpha``:**
 
-    - Unlike IAF models, the HH model does **not** reset the membrane
-      potential after a spike.  Repolarization occurs naturally through
-      the potassium currents.
-    - During the refractory period, the neuron's subthreshold dynamics
-      continue to evolve freely; only spike emission is suppressed.
-    - Spike weights are interpreted as current amplitudes (pA).
-      Positive weights are excitatory; negative weights are inhibitory.
-    - Gap-junction current can be supplied via the ``x`` parameter of
-      :meth:`update` or via ``add_current_input``.  In a network
-      simulation, the gap current for neuron *i* is typically computed as
-      :math:`\sum_j g_{ij}(V_j - V_i)`.
+    - Adds gap-junction current :math:`I_{gap}` to membrane equation
+    - Uses modified ion-channel kinetics (Mancilla et al. 2007) with two
+      potassium channel types (Kv1, Kv3)
+    - Different default conductance values optimized for interneuron models
+
+    **Spike Weights and Input Interpretation:**
+
+    - Positive spike weights → excitatory input (added to ``dI_syn_ex``)
+    - Negative spike weights → inhibitory input (added to ``dI_syn_in``)
+    - Weight magnitude in pA determines peak current amplitude
+    - Gap-junction current should be provided via ``x`` parameter to
+      ``update()`` or registered via ``add_current_input()``
+
+    **Integration Accuracy:**
+
+    - Adaptive step-size control ensures high accuracy but variable
+      computational cost per step
+    - For stiff systems or tight error tolerances, reduce ``rtol``/``atol``
+    - Default tolerances match NEST for comparable numerical behavior
+
+    **Gradient-Based Learning:**
+
+    - Surrogate gradients enable backpropagation through spike generation
+    - The ``spk_fun`` parameter controls the shape of the surrogate gradient
+    - No actual voltage reset occurs, so gradients flow through natural
+      action potential dynamics
 
     References
     ----------
-    .. [1] Gerstner W, Kistler W (2002). Spiking neuron models: Single
-           neurons, populations, plasticity. Cambridge University Press.
+    .. [1] Hodgkin AL, Huxley AF (1952). A quantitative description of
+           membrane current and its application to conduction and excitation
+           in nerve. The Journal of Physiology 117:500-544.
+           DOI: https://doi.org/10.1113/jphysiol.1952.sp004764
     .. [2] Mancilla JG, Lewis TG, Pinto DJ, Rinzel J, Connors BW (2007).
            Synchronization of electrically coupled pairs of inhibitory
            interneurons in neocortex. Journal of Neuroscience, 27:2058-2073.
            DOI: https://doi.org/10.1523/JNEUROSCI.2715-06.2007
-    .. [3] Hodgkin AL, Huxley AF (1952). A quantitative description of
-           membrane current and its application to conduction and excitation
-           in nerve. The Journal of Physiology 117:500-544.
-           DOI: https://doi.org/10.1113/jphysiol.1952.sp004764
+    .. [3] Gerstner W, Kistler W (2002). Spiking neuron models: Single
+           neurons, populations, plasticity. Cambridge University Press.
     .. [4] Hahne J, Helias M, Kunkel S, Igarashi J, Bolten M, Frommer A,
            Diesmann M (2015). A unified framework for spiking and gap-junction
            interactions in distributed neuronal network simulations. Frontiers
            in Neuroinformatics, 9:22.
            DOI: https://doi.org/10.3389/fninf.2015.00022
 
-    See also
+    See Also
     --------
     hh_psc_alpha : Hodgkin-Huxley neuron without gap-junction support.
+    hh_cond_exp_traub : Alternative HH implementation with exponential PSCs.
+    iaf_cond_exp : Simpler integrate-and-fire model with conductance-based
+        synapses.
+
+    Examples
+    --------
+    Create a single gap-junction-coupled HH neuron:
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bs
+       >>> import brainunit as u
+       >>> neuron = bs.hh_psc_alpha_gap(in_size=1, E_L=-70*u.mV, C_m=40*u.pF)
+       >>> neuron.init_all_states()
+
+    Simulate with constant input current:
+
+    .. code-block:: python
+
+       >>> import brainstate as bst
+       >>> with bst.environ.context(dt=0.1*u.ms):
+       ...     neuron.init_all_states()
+       ...     spikes = []
+       ...     for i in range(1000):
+       ...         spk = neuron.update(x=500*u.pA)  # 500 pA input
+       ...         spikes.append(spk.item())
+
+    Create a population with heterogeneous capacitance:
+
+    .. code-block:: python
+
+       >>> import jax.numpy as jnp
+       >>> C_m_values = jnp.linspace(30, 50, 10) * u.pF
+       >>> neurons = bs.hh_psc_alpha_gap(in_size=10, C_m=C_m_values)
+       >>> neurons.init_all_states()
+
+    Add gap-junction coupling between two neurons:
+
+    .. code-block:: python
+
+       >>> neuron1 = bs.hh_psc_alpha_gap(in_size=1)
+       >>> neuron2 = bs.hh_psc_alpha_gap(in_size=1)
+       >>> neuron1.init_all_states()
+       >>> neuron2.init_all_states()
+       >>> g_gap = 0.5 * u.nS  # gap-junction conductance
+       >>> # In update loop:
+       >>> I_gap_1 = g_gap * (neuron2.V.value - neuron1.V.value)
+       >>> I_gap_2 = g_gap * (neuron1.V.value - neuron2.V.value)
+       >>> spk1 = neuron1.update(x=I_gap_1)
+       >>> spk2 = neuron2.update(x=I_gap_2)
     """
 
     __module__ = 'brainpy.state'
@@ -362,6 +670,153 @@ class hh_psc_alpha_gap(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all state variables for the neuron population.
+
+        Sets up membrane potential, gating variables, synaptic currents, and
+        internal state tracking. Gating variables are initialized to their
+        equilibrium values at the initial membrane potential unless explicitly
+        specified, ensuring the neuron starts in a consistent resting state
+        without transient artifacts.
+
+        **Initialization Strategy:**
+
+        1. **Membrane potential:** Set to ``V_m_init`` (default: NEST's
+           -69.604012 mV equilibrium value)
+        2. **Gating variables:** If ``Act_m_init``, ``Inact_h_init``,
+           ``Act_n_init``, or ``Inact_p_init`` are None, compute equilibrium
+           values at ``V_m_init`` using ``_hh_psc_alpha_gap_equilibrium()``
+        3. **Synaptic currents:** Initialize ``I_syn_ex``, ``I_syn_in`` and
+           their derivatives to zero
+        4. **Refractory state:** Set refractory counter to 0 (not refractory)
+        5. **Spike timing:** Set ``last_spike_time`` to large negative value
+           (-1e7 ms)
+
+        **Batch Dimension Handling:**
+
+        If ``batch_size`` is provided, all state variables gain an additional
+        leading batch dimension. This enables parallel simulation of multiple
+        trials or training examples. State shape becomes:
+        ``(batch_size, *in_size)`` instead of ``in_size``.
+
+        **Equilibrium Initialization Rationale:**
+
+        Starting gating variables at their equilibrium values for the given
+        initial voltage prevents spurious transient currents during the first
+        few time steps. Without this, arbitrary initial values would cause
+        artificial spikes or oscillations as the system relaxes to equilibrium.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Number of parallel simulation batches. If None, no batch dimension
+            is added (shape = ``in_size``). If provided, state shape becomes
+            ``(batch_size, *in_size)``. Useful for training with multiple
+            input examples simultaneously. Default: None.
+        **kwargs
+            Additional keyword arguments (currently unused, reserved for
+            future extensions).
+
+        Attributes Set
+        --------------
+        This method initializes the following instance attributes:
+
+        V : brainstate.HiddenState
+            Membrane potential. Initial value: ``V_m_init``. Unit: mV.
+        m : brainstate.HiddenState
+            Sodium activation gating variable. Initial value: ``Act_m_init``
+            if provided, otherwise equilibrium at ``V_m_init``. Range: [0, 1].
+        h : brainstate.HiddenState
+            Sodium inactivation gating variable. Initial value:
+            ``Inact_h_init`` if provided, otherwise equilibrium at
+            ``V_m_init``. Range: [0, 1].
+        n : brainstate.HiddenState
+            Kv1 activation gating variable. Initial value: ``Act_n_init`` if
+            provided, otherwise equilibrium at ``V_m_init``. Range: [0, 1].
+        p : brainstate.HiddenState
+            Kv3 activation gating variable. Initial value: ``Inact_p_init``
+            if provided, otherwise equilibrium at ``V_m_init``. Range: [0, 1].
+        I_syn_ex : brainstate.ShortTermState
+            Excitatory synaptic current. Initial value: 0. Unit: pA.
+        I_syn_in : brainstate.ShortTermState
+            Inhibitory synaptic current. Initial value: 0. Unit: pA.
+        dI_syn_ex : brainstate.ShortTermState
+            Time derivative of excitatory current (alpha kernel state).
+            Initial value: 0. Unit: pA/ms (stored as dimensionless float64).
+        dI_syn_in : brainstate.ShortTermState
+            Time derivative of inhibitory current (alpha kernel state).
+            Initial value: 0. Unit: pA/ms (stored as dimensionless float64).
+        I_stim : brainstate.ShortTermState
+            Stimulation current buffer. Initial value: 0. Unit: pA.
+        refractory_step_count : brainstate.ShortTermState
+            Refractory countdown in time steps. Initial value: 0 (not
+            refractory). Unit: steps (int32).
+        last_spike_time : brainstate.ShortTermState
+            Time of last spike. Initial value: -1e7 ms (far in the past).
+            Unit: ms.
+
+        Notes
+        -----
+        - Must be called before ``update()`` to ensure state variables exist
+        - Can be called multiple times to reinitialize (e.g., between trials)
+        - For heterogeneous populations with per-neuron initial conditions,
+          pass arrays to ``V_m_init``, ``Act_m_init``, etc. during construction
+        - The NEST default initial voltage (-69.604012 mV) places the neuron
+          near its resting state with minimal initial transients
+
+        **State Variable Types:**
+
+        - ``HiddenState``: For slow variables (V, gating variables) that
+          persist across time steps and require gradient tracking
+        - ``ShortTermState``: For fast variables (currents, counters) that
+          are recomputed each step or have short-term dynamics
+
+        See Also
+        --------
+        _hh_psc_alpha_gap_equilibrium : Computes equilibrium gating values.
+        update : Main simulation step that uses these state variables.
+
+        Examples
+        --------
+        Basic initialization:
+
+        .. code-block:: python
+
+           >>> neuron = bs.hh_psc_alpha_gap(in_size=10)
+           >>> neuron.init_state()
+           >>> print(neuron.V.value.shape)
+           (10,)
+
+        With batch dimension for parallel trials:
+
+        .. code-block:: python
+
+           >>> neuron = bs.hh_psc_alpha_gap(in_size=10)
+           >>> neuron.init_state(batch_size=32)
+           >>> print(neuron.V.value.shape)
+           (32, 10)
+
+        Custom initial conditions:
+
+        .. code-block:: python
+
+           >>> import jax.numpy as jnp
+           >>> V_init = jnp.linspace(-75, -65, 10) * u.mV
+           >>> neuron = bs.hh_psc_alpha_gap(in_size=10, V_m_init=V_init)
+           >>> neuron.init_state()
+           >>> print(neuron.V.value)  # voltage varies across population
+
+        Initialize with custom gating variables:
+
+        .. code-block:: python
+
+           >>> neuron = bs.hh_psc_alpha_gap(
+           ...     in_size=1,
+           ...     Act_m_init=0.1,  # specific sodium activation
+           ...     Inact_h_init=0.9  # specific sodium inactivation
+           ... )
+           >>> neuron.init_state()
+           >>> print(f"m={neuron.m.value}, h={neuron.h.value}")
+        """
         V_init_mV = self._to_numpy(self.V_m_init, u.mV)
         V_init_scalar = float(V_init_mV.flat[0]) if V_init_mV.ndim > 0 else float(V_init_mV)
 
@@ -412,34 +867,267 @@ class hh_psc_alpha_gap(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Compute differentiable spike output from membrane potential.
+
+        Applies the surrogate gradient function (``spk_fun``) to generate a
+        continuous, differentiable spike signal from the membrane potential.
+        This enables gradient-based learning through the spiking dynamics.
+
+        For the HH model with combined threshold-and-local-maximum spike
+        detection, this method is typically called with a specially crafted
+        voltage signal (positive for spiking, negative otherwise) rather than
+        the raw membrane potential.
+
+        Parameters
+        ----------
+        V : ArrayLike or None, optional
+            Membrane potential or voltage-derived signal. If None, uses the
+            current value of ``self.V.value``. Shape: ``(batch_size, *in_size)``.
+            Unit: mV. Default: None.
+
+        Returns
+        -------
+        spike_signal : ArrayLike
+            Differentiable spike output with shape ``(batch_size, *in_size)``.
+            The surrogate function maps the scaled voltage to a continuous
+            output (typically in range [0, 1] or [-1, 1] depending on
+            ``spk_fun``). Gradients flow through this function during
+            backpropagation.
+
+        Notes
+        -----
+        - The voltage is normalized by dividing by 1 mV before applying
+          ``spk_fun`` to ensure dimensionless input
+        - For binary spike detection, threshold the returned value at 0
+        - The choice of ``spk_fun`` affects gradient magnitudes and learning
+          dynamics (e.g., ``ReluGrad``, ``SigmoidGrad``, ``SuperSpike``)
+
+        See Also
+        --------
+        update : Main simulation step that calls this method.
+        braintools.surrogate : Module containing surrogate gradient functions.
+
+        Examples
+        --------
+        Direct spike computation:
+
+        .. code-block:: python
+
+           >>> neuron = bs.hh_psc_alpha_gap(in_size=1)
+           >>> neuron.init_all_states()
+           >>> neuron.V.value = 10 * u.mV  # depolarized
+           >>> spk = neuron.get_spike()
+           >>> print(f"Spike signal: {spk}")
+
+        Using custom voltage signal:
+
+        .. code-block:: python
+
+           >>> V_custom = jnp.array([1e-12, -1.0]) * u.mV  # spike/no-spike
+           >>> spk = neuron.get_spike(V=V_custom)
+        """
         V = self.V.value if V is None else V
         v_scaled = V / (1.0 * u.mV)
         return self.spk_fun(v_scaled)
 
     def update(self, x=0.0 * u.pA):
-        r"""Update neuron state for one simulation step.
+        r"""Advance neuron state by one simulation time step.
 
-        The update follows the NEST ``hh_psc_alpha_gap`` update order:
+        Executes the full update cycle following NEST's ``hh_psc_alpha_gap``
+        implementation order. This includes integrating the 9-dimensional ODE
+        system (membrane potential, gating variables, and synaptic currents),
+        processing incoming spikes, detecting output spikes, and managing the
+        refractory state.
 
-        1. Record pre-integration membrane potential (``V_old``).
-        2. Integrate the full 9-dimensional ODE system over one time step
-           using an adaptive RK45 solver.
-        3. Add arriving synaptic spike inputs to ``dI_syn_ex`` / ``dI_syn_in``.
-        4. Check spike condition: ``V_m >= 0 and V_old > V_m`` (threshold +
-           local maximum).
-        5. Update refractory counter and record spike time.
-        6. Store buffered stimulation current for the next step.
+        **Update Sequence (Matching NEST Order):**
+
+        1. **Record pre-integration voltage:** Save ``V_old`` for spike detection
+        2. **Integrate ODEs:** Solve the 9D system over ``[t, t+dt]`` using
+           adaptive RK45 (Dormand-Prince)
+        3. **Process arriving spikes:** Add weighted spike inputs to
+           ``dI_syn_ex`` / ``dI_syn_in`` derivative states
+        4. **Detect spikes:** Check three-part condition (not refractory,
+           threshold crossed, local maximum)
+        5. **Update refractory counter:** Reset to ``t_ref/dt`` steps if
+           spiking, otherwise decrement
+        6. **Store stimulation buffer:** Save ``I_stim`` for next time step
+        7. **Return spike output:** Compute surrogate spike signal
+
+        **The 9-Dimensional ODE System:**
+
+        The ODE integrator solves for state vector
+        :math:`\mathbf{y} = [V_m, m, h, n, p, dI_{ex}, I_{ex}, dI_{in}, I_{in}]`
+        using the dynamics described in the class docstring. Each neuron in
+        the population is integrated independently.
+
+        **Spike Input Processing:**
+
+        - Spike inputs arrive via ``sum_delta_inputs()`` (collects all
+          registered delta-function inputs)
+        - Positive weights → excitatory: added to ``dI_syn_ex``
+        - Negative weights → inhibitory: added to ``dI_syn_in``
+        - Normalization factor :math:`e/\tau_{syn}` ensures peak current
+          equals weight magnitude
+
+        **Current Input Processing:**
+
+        - Continuous current inputs via ``sum_current_inputs()`` (collects
+          parameter ``x`` and all registered current inputs)
+        - Gap-junction current typically provided through ``x`` parameter
+        - Also includes constant bias current ``I_e``
+
+        **Spike Detection Logic:**
+
+        .. code-block:: python
+
+           spike = (r == 0) & (V_m >= 0.0) & (V_old > V_m)
+
+        This ensures only one spike per action potential by requiring:
+        (1) not refractory, (2) above threshold, (3) voltage decreasing
+        (local maximum has passed).
+
+        Numerical Considerations
+        ------------------------
+
+        - Each neuron's ODE is integrated independently with its own
+          parameter set (supports heterogeneous populations)
+        - Adaptive step-size control may use 10-50 function evaluations per
+          neuron per time step depending on dynamics and error tolerances
+        - Non-JIT-compiled: uses SciPy's Python-level solver for maximum
+          accuracy at the cost of computational speed
+        - For populations >100 neurons, consider using fixed-step integrators
+          or pre-compiled models for better performance
+
+        **Integration Tolerances:**
+
+        The ODE solver uses ``rtol`` (relative tolerance) and ``atol``
+        (absolute tolerance) to control step-size adaptation. Smaller values
+        increase accuracy but require more function evaluations. Default
+        values (rtol=1e-6, atol=1e-12) match NEST's GSL settings.
 
         Parameters
         ----------
-        x : ArrayLike, default 0 pA
-            External stimulation current input (in addition to ``I_e``).
-            This can include gap-junction current computed externally.
+        x : ArrayLike, optional
+            External input current. Can be scalar or array broadcastable to
+            population shape. Typically includes gap-junction current computed
+            as :math:`\sum_j g_{ij}(V_j - V_i)` for coupled networks. Also
+            accepts stimulation currents from external devices. Unit: pA.
+            Default: 0.0 pA.
 
         Returns
         -------
-        ArrayLike
-            Spike output with shape ``(batch_size, *in_size)``.
+        spike_output : ArrayLike
+            Differentiable spike signal with shape ``(batch_size, *in_size)``.
+            Computed by applying surrogate gradient function ``spk_fun`` to a
+            voltage-derived signal: positive when spiking (``V_out = 1e-12``),
+            negative otherwise (``V_out = -1.0``). For binary spike detection,
+            threshold at 0. For gradient-based learning, use the returned
+            analog values with ``spk_fun``'s surrogate gradient.
+
+        Notes
+        -----
+        **State Update Side Effects:**
+
+        This method modifies the following instance attributes:
+
+        - ``V.value``: Updated membrane potential
+        - ``m.value, h.value, n.value, p.value``: Updated gating variables
+        - ``I_syn_ex.value, I_syn_in.value``: Updated synaptic currents
+        - ``dI_syn_ex.value, dI_syn_in.value``: Updated synaptic derivatives
+        - ``I_stim.value``: Buffered stimulation for next step
+        - ``refractory_step_count.value``: Updated refractory countdown
+        - ``last_spike_time.value``: Spike time when spiking occurs
+
+        **Performance Characteristics:**
+
+        - **Time complexity:** O(N × F) where N = population size, F = number
+          of function evaluations per integration (typically 10-50)
+        - **Memory:** O(N) temporary arrays for state vectors
+        - **Bottleneck:** Loop over neurons with Python-level SciPy solver
+          calls (not vectorized/JIT-compiled)
+
+        **Gap-Junction Usage Example:**
+
+        For a network with gap-junction coupling matrix G and voltage vector V:
+
+        .. code-block:: python
+
+           >>> G = [[0, 0.5], [0.5, 0]] * u.nS  # coupling conductances
+           >>> V1, V2 = neuron1.V.value, neuron2.V.value
+           >>> I_gap1 = G[0,1] * (V2 - V1)
+           >>> I_gap2 = G[1,0] * (V1 - V2)
+           >>> spk1 = neuron1.update(x=I_gap1)
+           >>> spk2 = neuron2.update(x=I_gap2)
+
+        **Alternative Input Mechanism:**
+
+        Instead of passing gap-junction current via ``x``, you can register it
+        as a named current input:
+
+        .. code-block:: python
+
+           >>> neuron.add_current_input('gap', lambda: I_gap)
+           >>> spk = neuron.update()  # gap current applied automatically
+
+        Warnings
+        --------
+        - Do not call ``update()`` before ``init_state()`` or
+          ``init_all_states()``—state variables must be initialized first
+        - For large populations (>1000 neurons), this implementation may be
+          slow due to non-vectorized ODE integration
+        - Ensure time step ``dt`` is sufficiently small (typically ≤0.1 ms)
+          for accurate spike detection and alpha-function dynamics
+
+        See Also
+        --------
+        init_state : Initialize neuron state variables.
+        get_spike : Compute spike output from membrane potential.
+        sum_delta_inputs : Collect all registered delta-function inputs.
+        sum_current_inputs : Collect all registered current inputs.
+
+        Examples
+        --------
+        Basic usage with constant current:
+
+        .. code-block:: python
+
+           >>> import brainstate as bst
+           >>> import brainunit as u
+           >>> neuron = bs.hh_psc_alpha_gap(in_size=1)
+           >>> with bst.environ.context(dt=0.1*u.ms):
+           ...     neuron.init_all_states()
+           ...     for t in range(100):
+           ...         spk = neuron.update(x=300*u.pA)
+           ...         if spk > 0:
+           ...             print(f"Spike at step {t}")
+
+        Population with gap-junction coupling:
+
+        .. code-block:: python
+
+           >>> N = 10
+           >>> neurons = bs.hh_psc_alpha_gap(in_size=N)
+           >>> g_gap = 0.5 * u.nS
+           >>> neurons.init_all_states()
+           >>> # Coupling: each neuron coupled to next (ring topology)
+           >>> V = neurons.V.value
+           >>> I_gap = jnp.zeros(N) * u.pA
+           >>> I_gap = I_gap.at[:-1].add(g_gap * (V[1:] - V[:-1]))
+           >>> I_gap = I_gap.at[1:].add(g_gap * (V[:-1] - V[1:]))
+           >>> spikes = neurons.update(x=I_gap)
+
+        With synaptic inputs from projection:
+
+        .. code-block:: python
+
+           >>> pre = bs.LIF(in_size=100)
+           >>> post = bs.hh_psc_alpha_gap(in_size=10)
+           >>> proj = bs.DeltaProj(pre, post, weight=jnp.ones((100,10))*0.1*u.nA)
+           >>> pre.init_all_states()
+           >>> post.init_all_states()
+           >>> # Projection automatically registers delta input
+           >>> spk_pre = pre.update()
+           >>> spk_post = post.update()  # receives input from projection
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

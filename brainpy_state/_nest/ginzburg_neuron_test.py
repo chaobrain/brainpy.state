@@ -44,7 +44,7 @@ class TestGinzburgNeuron(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_default_parameters(self):
-        """Defaults should match NEST ginzburg_neuron."""
+        r"""Defaults should match NEST ginzburg_neuron."""
         neuron = ginzburg_neuron(1)
         self.assertTrue(u.math.allclose(neuron.tau_m, 10.0 * u.ms))
         self.assertTrue(u.math.allclose(neuron.theta, 0.0 * u.mV))
@@ -54,7 +54,7 @@ class TestGinzburgNeuron(unittest.TestCase):
         self.assertTrue(neuron.stochastic_update)
 
     def test_gain_formula_matches_nest_equation(self):
-        """g(h)=c1*h + c2*(1+tanh(c3*(h-theta)))/2."""
+        r"""g(h)=c1*h + c2*(1+tanh(c3*(h-theta)))/2."""
         with brainstate.environ.context(dt=self.dt):
             neuron = ginzburg_neuron(
                 1,
@@ -74,7 +74,7 @@ class TestGinzburgNeuron(unittest.TestCase):
             self.assertTrue(u.math.allclose(got, expected))
 
     def test_probability_outside_unit_interval_behaves_like_nest(self):
-        """Comparing U in [0,1) against p implements effective clipping."""
+        r"""Comparing U in [0,1) against p implements effective clipping."""
         with brainstate.environ.context(dt=self.dt):
             neuron = ginzburg_neuron(
                 1,
@@ -95,7 +95,7 @@ class TestGinzburgNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 0.0)
 
     def test_matches_nest_binary_communication_h_trace(self):
-        """Replicate NEST test_binary.py expected h trace for binary encoding."""
+        r"""Replicate NEST test_binary.py expected h trace for binary encoding."""
         dt = 1.0 * u.ms
         with brainstate.environ.context(dt=dt):
             neuron = ginzburg_neuron(
@@ -123,7 +123,7 @@ class TestGinzburgNeuron(unittest.TestCase):
             np.testing.assert_allclose(h_trace, expected, atol=1e-12, rtol=0.0)
 
     def test_strict_time_inequality_matches_nest(self):
-        """Update happens only when t+dt > t_next (strict >, not >=)."""
+        r"""Update happens only when t+dt > t_next (strict >, not >=)."""
         dt = 0.125 * u.ms
         with brainstate.environ.context(dt=dt):
             neuron = ginzburg_neuron(
@@ -151,7 +151,7 @@ class TestGinzburgNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 1.0)
 
     def test_reference_step_trace_with_controlled_rng(self):
-        """Reference regression for NEST update order with deterministic RNG."""
+        r"""Reference regression for NEST update order with deterministic RNG."""
         dt = 0.1 * u.ms
         with brainstate.environ.context(dt=dt):
             neuron = ginzburg_neuron(

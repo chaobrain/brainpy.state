@@ -37,162 +37,403 @@ __all__ = [
 class iaf_tum_2000(Neuron):
     r"""NEST-compatible ``iaf_tum_2000`` neuron model.
 
-    Short description
-    -----------------
-
-    Leaky integrate-and-fire neuron with exponential PSCs and integrated
-    Tsodyks-Markram short-term synaptic plasticity on spike emission.
-
     Description
     -----------
 
-    ``iaf_tum_2000`` extends :class:`iaf_psc_exp` by carrying presynaptic
-    short-term plasticity states ``x``, ``y``, and ``u`` and by emitting a
-    per-spike ``spike_offset`` that corresponds to the jump in ``y`` at spike
-    time.
+    ``iaf_tum_2000`` is a leaky integrate-and-fire neuron with exponential
+    postsynaptic currents and integrated Tsodyks-Markram short-term synaptic
+    plasticity. The model extends :class:`iaf_psc_exp` by maintaining
+    presynaptic resource states ``x`` (readily-releasable pool), ``y``
+    (cleft/active fraction), and ``u`` (release probability), and emitting a
+    per-spike ``spike_offset`` signal that encodes the jump in ``y`` at each
+    spike event. This signal is used for receptor-1 coupling between
+    ``iaf_tum_2000`` neurons, enabling dynamic synaptic efficacy.
 
     The implementation follows NEST ``models/iaf_tum_2000.{h,cpp}`` update
-    ordering and event semantics:
+    ordering and event semantics exactly, including NEST-style buffered input
+    handling and receptor-type routing.
 
-    1. Propagate membrane potential when not refractory.
-    2. Decay synaptic currents.
-    3. Add receptor-1 filtered current contribution to ``I_syn_ex``.
-    4. Add arriving spike inputs (excitatory or inhibitory by sign).
-    5. Perform threshold test and reset/refractory assignment.
-    6. On emitted spike, update Tsodyks states exactly in NEST order and set
-       ``spike_offset``.
-    7. Buffer current inputs ``i_0`` and ``i_1`` for the next step.
+    **1. Membrane and synaptic dynamics**
 
-    Membrane and synaptic dynamics
-    ..............................
-
-    Subthreshold dynamics:
+    Subthreshold voltage evolution follows the same equation as
+    :class:`iaf_psc_exp`:
 
     .. math::
 
        \frac{dV_m}{dt} =
        -\frac{V_m - E_L}{\tau_m} +
-       \frac{I_{syn,ex} + I_{syn,in} + I_e + I_0}{C_m},
+       \frac{I_{\mathrm{syn,ex}} + I_{\mathrm{syn,in}} + I_e + I_0}{C_m},
+
+    where ``I_0`` is the buffered current from the previous time step. Synaptic
+    currents decay exponentially:
 
     .. math::
 
-       \frac{dI_{syn,ex}}{dt} = -\frac{I_{syn,ex}}{\tau_{syn,ex}},
-       \quad
-       \frac{dI_{syn,in}}{dt} = -\frac{I_{syn,in}}{\tau_{syn,in}}.
+       \frac{dI_{\mathrm{syn,ex}}}{dt} = -\frac{I_{\mathrm{syn,ex}}}{\tau_{\mathrm{syn,ex}}},
+       \qquad
+       \frac{dI_{\mathrm{syn,in}}}{dt} = -\frac{I_{\mathrm{syn,in}}}{\tau_{\mathrm{syn,in}}}.
 
     Receptor-1 current input ``I_1`` is filtered through the excitatory kernel:
 
     .. math::
 
-       I_{syn,ex} \leftarrow I_{syn,ex} + (1 - e^{-h/\tau_{syn,ex}}) I_1.
+       I_{\mathrm{syn,ex}} \leftarrow I_{\mathrm{syn,ex}} + (1 - e^{-h/\tau_{\mathrm{syn,ex}}}) I_1,
 
-    Tsodyks short-term dynamics on spike
-    ....................................
+    where ``h = dt`` is the simulation time step.
 
-    Let ``t_last`` be the previous spike time (with NEST-compatible first-spike
-    convention ``t_last = 0`` if internal state is negative), ``t_spike`` the
-    current spike time, and ``h_ts = t_spike - t_last``.
+    **2. Tsodyks-Markram short-term plasticity on spike**
 
-    Define:
+    When a neuron emits a spike at time ``t_spike``, the Tsodyks states are
+    updated. Let ``t_last`` be the previous spike time (with NEST-compatible
+    first-spike convention: ``t_last = 0`` if the internal last-spike time is
+    negative, indicating no prior spike), and ``h_ts = t_spike - t_last``.
+
+    Define propagators:
 
     .. math::
 
        P_{uu} = \begin{cases}
-       0, & \tau_{fac}=0 \\
-       e^{-h_{ts}/\tau_{fac}}, & \text{otherwise}
+       0, & \tau_{\mathrm{fac}}=0 \\
+       e^{-h_{ts}/\tau_{\mathrm{fac}}}, & \text{otherwise}
        \end{cases},
        \quad
-       P_{yy} = e^{-h_{ts}/\tau_{psc}},
+       P_{yy} = e^{-h_{ts}/\tau_{\mathrm{psc}}},
 
     .. math::
 
-       P_{zz} = \exp_m1(-h_{ts}/\tau_{rec}),
-       \quad
+       P_{zz} = \mathrm{expm1}(-h_{ts}/\tau_{\mathrm{rec}}) = e^{-h_{ts}/\tau_{\mathrm{rec}}} - 1,
+
+    .. math::
+
        P_{xy} =
-       \frac{P_{zz}\tau_{rec} - (P_{yy}-1)\tau_{psc}}{\tau_{psc}-\tau_{rec}}.
+       \frac{P_{zz}\tau_{\mathrm{rec}} - (P_{yy}-1)\tau_{\mathrm{psc}}}{\tau_{\mathrm{psc}}-\tau_{\mathrm{rec}}}.
 
-    With :math:`z = 1 - x - y`, NEST order is:
-
-    .. math::
-
-       u \leftarrow u P_{uu},
-       \quad
-       x \leftarrow x + P_{xy}y - P_{zz}z,
-       \quad
-       y \leftarrow y P_{yy},
+    With :math:`z = 1 - x - y` (inactive/recovered fraction), NEST performs
+    state propagation in this exact order:
 
     .. math::
 
-       u \leftarrow u + U(1-u),
-       \quad
-       \Delta y = u x,
-       \quad
-       x \leftarrow x - \Delta y,
-       \quad
-       y \leftarrow y + \Delta y.
+       u &\leftarrow u P_{uu}, \\
+       x &\leftarrow x + P_{xy}y - P_{zz}z, \\
+       y &\leftarrow y P_{yy},
 
-    ``spike_offset`` is set to :math:`\Delta y` on spike, else zero.
+    followed by utilization jump and resource transfer:
 
-    Event semantics
-    ...............
+    .. math::
 
-    ``spike_events`` items accepted by :meth:`update`:
+       u &\leftarrow u + U(1-u), \\
+       \Delta y &= u x, \\
+       x &\leftarrow x - \Delta y, \\
+       y &\leftarrow y + \Delta y.
+
+    ``spike_offset`` is set to :math:`\Delta y` on spike steps, zero otherwise.
+
+    **3. NEST update ordering**
+
+    Per time step, the model follows this precise sequence:
+
+    1. Update membrane potential if not refractory (exact exponential propagator).
+    2. Decay synaptic currents :math:`I_{\mathrm{syn,ex}}` and :math:`I_{\mathrm{syn,in}}`.
+    3. Add filtered receptor-1 current to :math:`I_{\mathrm{syn,ex}}`.
+    4. Add arriving spike inputs (positive weights to excitatory, non-positive to inhibitory).
+    5. Perform threshold test (deterministic or escape-noise), assign refractory and reset.
+    6. On emitted spike, update Tsodyks states (using the order above) and set ``spike_offset``.
+    7. Buffer current inputs ``i_0`` and ``i_1`` for the next step.
+
+    **4. Escape-noise threshold dynamics**
+
+    Spike generation uses deterministic thresholding when :math:`\delta < 10^{-10}`:
+    :math:`V_{\mathrm{rel}} \ge \theta`, where :math:`\theta = V_{th} - E_L`.
+
+    For :math:`\delta > 0`, the model uses exponential hazard:
+
+    .. math::
+
+       \phi(V) = \rho \exp\left(\frac{V_{\mathrm{rel}} - \theta}{\delta}\right),
+
+    with step spike probability :math:`p=\phi(V)\,h\,10^{-3}` (``h`` in ms,
+    :math:`\phi` in ``1/s``). Stochastic decisions use ``numpy.random.random``.
+
+    **5. Event semantics and receptor routing**
+
+    The :meth:`update` method accepts ``spike_events`` as an iterable of event
+    descriptors in one of these formats:
 
     - ``(receptor_type, weight)``
     - ``(receptor_type, weight, offset)``
     - ``(receptor_type, weight, offset, multiplicity)``
     - ``(receptor_type, weight, offset, multiplicity, sender_model)``
-    - dict with keys ``receptor_type``/``receptor``, ``weight``,
-      ``offset``, ``multiplicity``, ``sender_model``.
+    - ``dict`` with keys ``receptor_type``/``receptor``, ``weight``, ``offset``,
+      ``multiplicity``, ``sender_model``
 
     Receptors:
 
-    - ``0``: regular spike input, effective weight ``weight * multiplicity``
-    - ``1``: Tsodyks-coupled input, effective weight
-      ``weight * multiplicity * offset``
+    - **Receptor 0** (DEFAULT): regular spike input, effective weight is
+      ``weight * multiplicity``.
+    - **Receptor 1** (TSODYKS): Tsodyks-coupled input, effective weight is
+      ``weight * multiplicity * offset``, where ``offset`` is typically the
+      ``spike_offset`` from the presynaptic ``iaf_tum_2000`` neuron.
 
-    For receptor ``1``, ``sender_model`` must be ``"iaf_tum_2000"``;
-    otherwise a ``ValueError`` is raised (mirrors NEST illegal-connection
-    constraints).
+    For receptor 1, the ``sender_model`` field must be ``"iaf_tum_2000"``
+    (default assumption if not provided); otherwise a ``ValueError`` is raised,
+    mirroring NEST's connection constraints.
 
-    Positive effective weights are routed to excitatory channel, non-positive
-    to inhibitory channel, matching NEST buffer routing.
+    Effective weights are routed by sign: positive to excitatory channel,
+    non-positive to inhibitory channel.
+
+    **6. Stability constraints and computational implications**
+
+    - Construction validates: ``V_reset < V_th``, ``C_m > 0``, ``tau_m > 0``,
+      ``tau_syn_ex > 0``, ``tau_syn_in > 0``, ``tau_psc > 0``, ``tau_rec > 0``,
+      ``tau_fac >= 0``, ``t_ref >= 0``, ``rho >= 0``, ``delta >= 0``,
+      ``x + y <= 1``, ``u ∈ [0,1]``.
+    - Tsodyks state propagation uses the same singularity-free logic as NEST to
+      handle ``tau_psc == tau_rec`` or ``tau_fac == 0`` cases gracefully.
+    - Per-call cost is :math:`O(\prod \mathrm{varshape})` with vectorized
+      NumPy operations in ``float64`` for coefficient evaluation.
+    - Buffered current semantics match NEST ring-buffer timing: ``x`` and
+      ``x_filtered`` supplied at step ``n`` are stored and consumed at step ``n+1``.
 
     Parameters
     ----------
+    in_size : Size
+        Population shape specification. All per-neuron parameters are broadcast
+        to ``self.varshape``.
+    E_L : ArrayLike, optional
+        Resting potential :math:`E_L` in mV; scalar or array broadcastable to
+        ``self.varshape``. Default is ``-70. * bu.mV``.
+    C_m : ArrayLike, optional
+        Membrane capacitance :math:`C_m` in pF; broadcastable and strictly
+        positive. Default is ``250. * bu.pF``.
+    tau_m : ArrayLike, optional
+        Membrane time constant :math:`\tau_m` in ms; broadcastable and
+        strictly positive. Default is ``10. * bu.ms``.
+    t_ref : ArrayLike, optional
+        Absolute refractory period :math:`t_{\mathrm{ref}}` in ms;
+        broadcastable and nonnegative. Converted to integer steps by
+        ``ceil(t_ref / dt)``. Default is ``2. * bu.ms``.
+    V_th : ArrayLike, optional
+        Spike threshold :math:`V_{th}` in mV; broadcastable to
+        ``self.varshape``. Default is ``-55. * bu.mV``.
+    V_reset : ArrayLike, optional
+        Post-spike reset potential :math:`V_{\mathrm{reset}}` in mV;
+        broadcastable and must satisfy ``V_reset < V_th`` elementwise. Default
+        is ``-70. * bu.mV``.
+    tau_syn_ex : ArrayLike, optional
+        Excitatory synaptic decay constant :math:`\tau_{\mathrm{syn,ex}}` in
+        ms; broadcastable and strictly positive. Default is ``2. * bu.ms``.
+    tau_syn_in : ArrayLike, optional
+        Inhibitory synaptic decay constant :math:`\tau_{\mathrm{syn,in}}` in
+        ms; broadcastable and strictly positive. Default is ``2. * bu.ms``.
+    I_e : ArrayLike, optional
+        Constant external injected current :math:`I_e` in pA; scalar or array
+        broadcastable to ``self.varshape``. Default is ``0. * bu.pA``.
+    rho : ArrayLike, optional
+        Escape-noise base firing intensity :math:`\rho` in ``1/s``;
+        broadcastable and nonnegative. Used only in stochastic mode
+        (``delta > 0``). Default is ``0.01 / bu.second``.
+    delta : ArrayLike, optional
+        Escape-noise soft-threshold width :math:`\delta` in mV; broadcastable
+        and nonnegative. ``delta == 0`` reproduces deterministic thresholding.
+        Default is ``0. * bu.mV``.
+    tau_fac : ArrayLike, optional
+        Facilitation time constant :math:`\tau_{\mathrm{fac}}` in ms;
+        broadcastable and nonnegative. ``tau_fac == 0`` disables facilitation
+        (:math:`P_{uu}=0`). Default is ``1000. * bu.ms``.
+    tau_psc : ArrayLike, optional
+        Tsodyks postsynaptic current time constant :math:`\tau_{\mathrm{psc}}`
+        in ms; broadcastable and strictly positive. Used in state propagators.
+        Default is ``2. * bu.ms``.
+    tau_rec : ArrayLike, optional
+        Resource recovery time constant :math:`\tau_{\mathrm{rec}}` in ms;
+        broadcastable and strictly positive. Default is ``400. * bu.ms``.
+    U : ArrayLike, optional
+        Utilization increment factor :math:`U` (dimensionless); broadcastable
+        and must lie in ``[0, 1]``. Represents the per-spike increase in
+        release probability. Default is ``0.5``.
+    x : ArrayLike, optional
+        Initial readily-releasable resource fraction (dimensionless);
+        broadcastable. Must satisfy ``x + y <= 1`` and ``x >= 0``. Default is
+        ``0.0``.
+    y : ArrayLike, optional
+        Initial cleft/active fraction (dimensionless); broadcastable. Must
+        satisfy ``x + y <= 1`` and ``y >= 0``. Default is ``0.0``.
+    u : ArrayLike, optional
+        Initial release probability (dimensionless); broadcastable and must lie
+        in ``[0, 1]``. Default is ``0.0``.
+    V_initializer : Callable, optional
+        Initializer for membrane state ``V`` used by :meth:`init_state`.
+        Default is ``braintools.init.Constant(-70. * bu.mV)``.
+    spk_fun : Callable, optional
+        Surrogate spike nonlinearity used by :meth:`get_spike`. Default is
+        ``braintools.surrogate.ReluGrad()``.
+    spk_reset : str, optional
+        Reset policy inherited from :class:`~brainpy_state._base.Neuron`.
+        ``'hard'`` matches NEST reset behavior. Default is ``'hard'``.
+    ref_var : bool, optional
+        If ``True``, allocates ``self.refractory`` (boolean) for external
+        inspection of refractory state. Default is ``False``.
+    name : str or None, optional
+        Optional node name.
 
-    ==================== ================== ==========================================================
-    **Parameter**        **Default**        **Description**
-    ==================== ================== ==========================================================
-    ``E_L``              -70 mV             Resting potential
-    ``C_m``              250 pF             Membrane capacitance
-    ``tau_m``            10 ms              Membrane time constant
-    ``t_ref``            2 ms               Absolute refractory duration
-    ``V_th``             -55 mV             Spike threshold
-    ``V_reset``          -70 mV             Reset potential
-    ``tau_syn_ex``       2 ms               Excitatory synaptic time constant
-    ``tau_syn_in``       2 ms               Inhibitory synaptic time constant
-    ``I_e``              0 pA               Constant external current
-    ``rho``              0.01 1/s           Escape-noise base rate at threshold
-    ``delta``            0 mV               Escape-noise width (0 => deterministic threshold)
-    ``tau_fac``          1000 ms            Facilitation decay time constant
-    ``tau_psc``          2 ms               Synaptic current time constant for Tsodyks update
-    ``tau_rec``          400 ms             Recovery time constant
-    ``U``                0.5                Utilization increment factor
-    ``x``                0.0                Initial readily-releasable fraction
-    ``y``                0.0                Initial cleft fraction
-    ``u``                0.0                Initial release probability
-    ``V_initializer``    Constant(-70 mV)   Initial membrane potential
-    ``ref_var``          ``False``          If True, expose boolean refractory flag
-    ==================== ================== ==========================================================
+    Parameter Mapping
+    -----------------
+    .. list-table::
+       :header-rows: 1
+       :widths: 14 26 14 16 30
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar/tuple
+         - required
+         - --
+         - Defines neuron population shape ``self.varshape``.
+       * - ``E_L``
+         - ArrayLike, broadcastable (mV)
+         - ``-70. * bu.mV``
+         - :math:`E_L`
+         - Resting membrane potential.
+       * - ``C_m``
+         - ArrayLike, broadcastable (pF), ``> 0``
+         - ``250. * bu.pF``
+         - :math:`C_m`
+         - Membrane capacitance in voltage integration.
+       * - ``tau_m``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``10. * bu.ms``
+         - :math:`\tau_m`
+         - Membrane leak time constant.
+       * - ``t_ref``
+         - ArrayLike, broadcastable (ms), ``>= 0``
+         - ``2. * bu.ms``
+         - :math:`t_{\mathrm{ref}}`
+         - Absolute refractory duration.
+       * - ``V_th`` and ``V_reset``
+         - ArrayLike, broadcastable (mV), with ``V_reset < V_th``
+         - ``-55. * bu.mV``, ``-70. * bu.mV``
+         - :math:`V_{th}`, :math:`V_{\mathrm{reset}}`
+         - Threshold and post-spike reset voltages.
+       * - ``tau_syn_ex`` and ``tau_syn_in``
+         - ArrayLike, broadcastable (ms), each ``> 0``
+         - ``2. * bu.ms``
+         - :math:`\tau_{\mathrm{syn,ex}}`, :math:`\tau_{\mathrm{syn,in}}`
+         - Exponential PSC decay constants.
+       * - ``I_e``
+         - ArrayLike, broadcastable (pA)
+         - ``0. * bu.pA``
+         - :math:`I_e`
+         - Constant current injected every step.
+       * - ``rho`` and ``delta``
+         - ArrayLike, broadcastable; ``rho`` in ``1/s`` and ``delta`` in mV,
+           both ``>= 0``
+         - ``0.01 / bu.second``, ``0. * bu.mV``
+         - :math:`\rho`, :math:`\delta`
+         - Escape-noise hazard parameters.
+       * - ``tau_fac``
+         - ArrayLike, broadcastable (ms), ``>= 0``
+         - ``1000. * bu.ms``
+         - :math:`\tau_{\mathrm{fac}}`
+         - Facilitation decay time constant; ``0`` disables.
+       * - ``tau_psc``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``2. * bu.ms``
+         - :math:`\tau_{\mathrm{psc}}`
+         - Tsodyks PSC time constant.
+       * - ``tau_rec``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``400. * bu.ms``
+         - :math:`\tau_{\mathrm{rec}}`
+         - Resource recovery time constant.
+       * - ``U``
+         - ArrayLike, broadcastable (dimensionless), ``∈ [0,1]``
+         - ``0.5``
+         - :math:`U`
+         - Utilization increment per spike.
+       * - ``x``
+         - ArrayLike, broadcastable (dimensionless), ``x+y <= 1``
+         - ``0.0``
+         - :math:`x`
+         - Initial readily-releasable fraction.
+       * - ``y``
+         - ArrayLike, broadcastable (dimensionless), ``x+y <= 1``
+         - ``0.0``
+         - :math:`y`
+         - Initial cleft/active fraction.
+       * - ``u``
+         - ArrayLike, broadcastable (dimensionless), ``∈ [0,1]``
+         - ``0.0``
+         - :math:`u`
+         - Initial release probability.
+       * - ``V_initializer``
+         - Callable
+         - ``Constant(-70. * bu.mV)``
+         - --
+         - Initializer for membrane state ``V``.
+       * - ``spk_fun``
+         - Callable
+         - ``ReluGrad()``
+         - --
+         - Surrogate function for output spikes.
+       * - ``spk_reset``
+         - ``str`` (typically ``'hard'``)
+         - ``'hard'``
+         - --
+         - Reset behavior selection in base class.
+       * - ``ref_var``
+         - ``bool``
+         - ``False``
+         - --
+         - Enables explicit boolean refractory state variable.
+       * - ``name``
+         - ``str`` or ``None``
+         - ``None``
+         - --
+         - Optional instance name.
+
+    Raises
+    ------
+    ValueError
+        Raised at construction when any validated constraint is violated:
+        ``V_reset >= V_th``, nonpositive ``C_m``/``tau_m``/synaptic time
+        constants/Tsodyks time constants, negative ``tau_fac``/``t_ref``/``rho``/``delta``,
+        ``U`` not in ``[0,1]``, ``u`` not in ``[0,1]``, or ``x + y > 1``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as bu
+       >>> from brainpy_state._nest.iaf_tum_2000 import iaf_tum_2000
+       >>> brainstate.environ.set(dt=0.1 * bu.ms, t=0.0 * bu.ms)
+       >>> neu = iaf_tum_2000(
+       ...     in_size=(2,),
+       ...     I_e=250. * bu.pA,
+       ...     tau_fac=500. * bu.ms,
+       ...     tau_rec=400. * bu.ms,
+       ...     U=0.3
+       ... )
+       >>> neu.init_state()
+       >>> out = neu.update(x=0. * bu.pA, x_filtered=0. * bu.pA)
+       >>> out.shape
+       (2,)
 
     Notes
     -----
-
-    - Uses the same exact exponential propagator implementation as
-      :class:`iaf_psc_exp`.
-    - ``x`` and ``y`` must satisfy ``x + y <= 1`` and ``u`` must be in ``[0,1]``.
-    - The model is grid-based and follows NEST-style one-step input buffering.
+    - Shares the exact exponential propagator implementation with
+      :class:`iaf_psc_exp` (via :meth:`iaf_psc_exp._propagator_exp`).
+    - The Tsodyks update order matches NEST ``iaf_tum_2000.cpp`` exactly to
+      ensure identical dynamics in network simulations.
+    - Receptor-1 connections require both presynaptic and postsynaptic neurons
+      to be ``iaf_tum_2000`` models, enforced via runtime validation.
+    - ``spike_offset`` can be recorded and monitored for debugging or analysis
+      of dynamic synaptic efficacy.
+    - The model is grid-based with one-step input buffering matching NEST's
+      ring-buffer semantics.
     """
 
     __module__ = 'brainpy.state'
@@ -268,14 +509,54 @@ class iaf_tum_2000(Neuron):
 
     @property
     def receptor_types(self):
+        r"""Return a dictionary of available receptor type labels.
+
+        Returns
+        -------
+        dict
+            Mapping from receptor name (str) to receptor ID (int):
+            ``{'DEFAULT': 0, 'TSODYKS': 1}``.
+        """
         return dict(self.RECEPTOR_TYPES)
 
     @property
     def recordables(self):
+        r"""Return a list of state variable names available for recording.
+
+        Returns
+        -------
+        list of str
+            State variable names: ``['V_m', 'I_syn_ex', 'I_syn_in', 'x', 'y',
+            'u', 'spike_offset']``. Note that the membrane potential is exposed
+            as ``'V_m'`` (matching NEST convention) but stored internally as
+            ``self.V``.
+        """
         return list(self.RECORDABLES)
 
     @staticmethod
     def _to_numpy(x, unit=None):
+        r"""Convert brainunit quantity or array to NumPy float64 array.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Input value, optionally with brainunit units.
+        unit : brainunit quantity or None, optional
+            Expected unit for conversion. If provided, divides ``x`` by ``unit``
+            before conversion. If ``None``, converts ``x`` directly. Default is
+            ``None``.
+
+        Returns
+        -------
+        np.ndarray
+            NumPy array with dtype ``float64``, containing the numeric values of
+            ``x`` (divided by ``unit`` if specified).
+
+        Notes
+        -----
+        Falls back to direct conversion if unit division fails (e.g., if ``x``
+        is already dimensionless).
+        """
         if unit is None:
             return np.asarray(bu.math.asarray(x), dtype=np.float64)
         try:
@@ -285,10 +566,51 @@ class iaf_tum_2000(Neuron):
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
+        r"""Broadcast NumPy array to the specified shape.
+
+        Parameters
+        ----------
+        x_np : np.ndarray
+            Input array to broadcast.
+        shape : tuple of int
+            Target shape.
+
+        Returns
+        -------
+        np.ndarray
+            Broadcasted array with shape ``shape``, sharing memory with ``x_np``
+            if possible.
+        """
         return np.broadcast_to(x_np, shape)
 
     @classmethod
     def _normalize_spike_receptor(cls, receptor):
+        r"""Normalize receptor label to canonical integer ID.
+
+        Converts string labels like ``'DEFAULT'``, ``'TSODYKS'``, ``'R0'``,
+        ``'R1'``, or numeric strings/integers to the standard receptor IDs (0 or 1).
+
+        Parameters
+        ----------
+        receptor : str or int
+            Receptor label. Valid string labels (case-insensitive):
+
+            - Receptor 0: ``'DEFAULT'``, ``'R0'``, ``'RECEPTOR0'``, ``'0'``
+            - Receptor 1: ``'TSODYKS'``, ``'R1'``, ``'RECEPTOR1'``, ``'1'``
+
+            Integer values must be 0 or 1.
+
+        Returns
+        -------
+        int
+            Canonical receptor ID: 0 or 1.
+
+        Raises
+        ------
+        ValueError
+            If ``receptor`` is an unrecognized string label or an integer not in
+            ``{0, 1}``.
+        """
         if isinstance(receptor, str):
             key = receptor.strip().upper()
             if key in ('DEFAULT', 'R0', 'RECEPTOR0', '0'):
@@ -306,6 +628,32 @@ class iaf_tum_2000(Neuron):
         return receptor
 
     def _validate_parameters(self):
+        r"""Validate model parameters at construction time.
+
+        Checks all parameter constraints to ensure physical consistency and
+        numerical stability. Raises ``ValueError`` with a descriptive message if
+        any constraint is violated.
+
+        Raises
+        ------
+        ValueError
+            If any of the following constraints are violated:
+
+            - ``V_reset >= V_th``: Reset must be below threshold.
+            - ``C_m <= 0``: Capacitance must be strictly positive.
+            - ``tau_m <= 0``: Membrane time constant must be strictly positive.
+            - ``tau_syn_ex <= 0`` or ``tau_syn_in <= 0``: Synaptic time constants
+              must be strictly positive.
+            - ``tau_psc <= 0`` or ``tau_rec <= 0``: Tsodyks time constants must be
+              strictly positive.
+            - ``tau_fac < 0``: Facilitation time constant must be nonnegative.
+            - ``t_ref < 0``: Refractory time must be nonnegative.
+            - ``U < 0`` or ``U > 1``: Utilization factor must be in ``[0, 1]``.
+            - ``rho < 0``: Firing intensity must be nonnegative.
+            - ``delta < 0``: Threshold width must be nonnegative.
+            - ``x + y > 1.0``: Resource fractions must sum to at most 1.
+            - ``u < 0`` or ``u > 1``: Initial release probability must be in ``[0, 1]``.
+        """
         if np.any(self._to_numpy(self.V_reset, bu.mV) >= self._to_numpy(self.V_th, bu.mV)):
             raise ValueError('Reset potential must be smaller than threshold.')
         if np.any(self._to_numpy(self.C_m, bu.pF) <= 0.0):
@@ -336,6 +684,51 @@ class iaf_tum_2000(Neuron):
             raise ValueError("'u' must be in [0,1].")
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize all neuron state variables.
+
+        Creates and allocates state variables for membrane potential, synaptic
+        currents, refractory counter, Tsodyks-Markram plasticity states, and
+        buffered inputs. All states are allocated as ``brainstate.HiddenState``
+        or ``brainstate.ShortTermState`` with shape ``self.varshape`` (or
+        ``(batch_size,) + self.varshape`` if ``batch_size`` is provided).
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            If provided, prepends an additional batch dimension to all states.
+            Default is ``None`` (no batch dimension).
+        **kwargs
+            Reserved for future extensions; currently unused.
+
+        Notes
+        -----
+        State variables created:
+
+        - ``V`` : :class:`~brainstate.HiddenState` (mV)
+            Membrane potential, initialized via ``self.V_initializer``.
+        - ``i_syn_ex`` : :class:`~brainstate.ShortTermState` (pA)
+            Excitatory synaptic current, initialized to zero.
+        - ``i_syn_in`` : :class:`~brainstate.ShortTermState` (pA)
+            Inhibitory synaptic current, initialized to zero.
+        - ``i_0`` : :class:`~brainstate.ShortTermState` (pA)
+            Buffered receptor-0 current input, initialized to zero.
+        - ``i_1`` : :class:`~brainstate.ShortTermState` (pA)
+            Buffered receptor-1 current input, initialized to zero.
+        - ``refractory_step_count`` : :class:`~brainstate.ShortTermState` (int32)
+            Remaining refractory steps, initialized to zero.
+        - ``last_spike_time`` : :class:`~brainstate.ShortTermState` (ms)
+            Time of last emitted spike, initialized to ``-1e7 * bu.ms`` (no prior spike).
+        - ``x`` : :class:`~brainstate.ShortTermState` (dimensionless)
+            Readily-releasable resource fraction, initialized to ``self.x_init``.
+        - ``y`` : :class:`~brainstate.ShortTermState` (dimensionless)
+            Cleft/active fraction, initialized to ``self.y_init``.
+        - ``u`` : :class:`~brainstate.ShortTermState` (dimensionless)
+            Release probability, initialized to ``self.u_init``.
+        - ``spike_offset`` : :class:`~brainstate.ShortTermState` (dimensionless)
+            Per-spike :math:`\Delta y` signal for receptor-1 coupling, initialized to zero.
+        - ``refractory`` : :class:`~brainstate.ShortTermState` (bool), optional
+            Boolean refractory flag, allocated only if ``ref_var=True``.
+        """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         state_shape = V.shape
         zeros = np.zeros(state_shape, dtype=np.float64)
@@ -363,15 +756,95 @@ class iaf_tum_2000(Neuron):
             self.refractory = brainstate.ShortTermState(bu.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Compute surrogate spike output given membrane potential.
+
+        Applies the surrogate spike function (``self.spk_fun``) to a normalized
+        voltage that ranges from 0 (at reset) to 1 (at threshold). This enables
+        differentiable spike computation for gradient-based learning.
+
+        Parameters
+        ----------
+        V : ArrayLike or None, optional
+            Membrane potential in mV; broadcastable to ``self.varshape``. If
+            ``None``, uses ``self.V.value``. Default is ``None``.
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike activation, shape matching the input ``V`` (or
+            ``self.V.value``). The output is typically in ``[0, 1]`` for
+            sub-threshold voltages and close to 1 for supra-threshold voltages,
+            depending on the surrogate function used.
+
+        Notes
+        -----
+        Voltage normalization:
+
+        .. math::
+
+           v_{\mathrm{scaled}} = \frac{V - V_{th}}{V_{th} - V_{\mathrm{reset}}}.
+
+        The surrogate function ``self.spk_fun`` (default
+        ``braintools.surrogate.ReluGrad()``) is then applied to
+        ``v_scaled``, providing a differentiable approximation of the Heaviside
+        step function.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
+        r"""Compute refractory period duration in integer simulation steps.
+
+        Converts the continuous-time refractory duration ``self.t_ref`` into the
+        number of discrete simulation steps via ``ceil(t_ref / dt)``.
+
+        Returns
+        -------
+        jnp.ndarray
+            Integer array (dtype ``int32``) with shape matching ``self.varshape``,
+            containing the number of refractory steps for each neuron.
+        """
         dt = brainstate.environ.get_dt()
         return bu.math.asarray(bu.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def _parse_spike_events(self, spike_events: Iterable, state_shape):
+        r"""Parse external spike events into excitatory and inhibitory weights.
+
+        Processes each event descriptor in ``spike_events``, validates receptor
+        types and sender models, computes effective weights including
+        multiplicity and offset factors, and routes them by sign to excitatory
+        or inhibitory channels.
+
+        Parameters
+        ----------
+        spike_events : Iterable or None
+            Collection of event descriptors (see :meth:`update` for format).
+        state_shape : tuple of int
+            Target shape for broadcasting weight arrays.
+
+        Returns
+        -------
+        w_ex : np.ndarray
+            Excitatory weights in pA, shape ``state_shape``, dtype ``float64``.
+        w_in : np.ndarray
+            Inhibitory weights in pA, shape ``state_shape``, dtype ``float64``.
+
+        Raises
+        ------
+        ValueError
+            If receptor-1 events have ``sender_model != "iaf_tum_2000"``, or if
+            event format is invalid.
+
+        Notes
+        -----
+        Effective weights are computed as:
+
+        - Receptor 0: ``weight * multiplicity``
+        - Receptor 1: ``weight * multiplicity * offset``
+
+        Positive weights route to ``w_ex``, non-positive to ``w_in``.
+        """
         w_ex = np.zeros(state_shape, dtype=np.float64)
         w_in = np.zeros(state_shape, dtype=np.float64)
 
@@ -418,6 +891,35 @@ class iaf_tum_2000(Neuron):
         return w_ex, w_in
 
     def _parse_registered_spike_inputs(self, state_shape):
+        r"""Parse registered delta inputs into excitatory and inhibitory weights.
+
+        Processes inputs previously registered via :meth:`add_delta_input`
+        (inherited from :class:`~brainpy_state._base.Dynamics`), extracts
+        receptor labels from keys, and routes by sign to excitatory or
+        inhibitory channels.
+
+        Parameters
+        ----------
+        state_shape : tuple of int
+            Target shape for broadcasting weight arrays.
+
+        Returns
+        -------
+        w_ex : np.ndarray
+            Excitatory weights in pA, shape ``state_shape``, dtype ``float64``.
+        w_in : np.ndarray
+            Inhibitory weights in pA, shape ``state_shape``, dtype ``float64``.
+
+        Notes
+        -----
+        Keys in ``self.delta_inputs`` may optionally include a receptor label
+        prefix (e.g., ``'TSODYKS // proj_0'``). If present, the label is
+        extracted and normalized via :meth:`_normalize_spike_receptor`;
+        otherwise defaults to receptor 0.
+
+        Values are either callables (invoked and then removed) or direct
+        ArrayLike values.
+        """
         w_ex = np.zeros(state_shape, dtype=np.float64)
         w_in = np.zeros(state_shape, dtype=np.float64)
 
@@ -447,6 +949,124 @@ class iaf_tum_2000(Neuron):
         return w_ex, w_in
 
     def update(self, x=0. * bu.pA, x_filtered=0. * bu.pA, spike_events=None):
+        r"""Advance the neuron state by one simulation step.
+
+        Performs a complete integration step following NEST ``iaf_tum_2000``
+        update order: membrane propagation (if not refractory), synaptic current
+        decay, filtered-current injection, spike input addition, threshold test,
+        Tsodyks state update on spike emission, and input buffering for the next
+        step.
+
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            Current input in pA for receptor-0 (standard current port). Scalar
+            or array broadcastable to ``self.varshape``. The value is buffered
+            and applied in the next step (NEST ring-buffer semantics). Default
+            is ``0. * bu.pA``.
+        x_filtered : ArrayLike, optional
+            Current input in pA for receptor-1. It is buffered to ``self.i_1``
+            and injected through excitatory exponential filtering at the next
+            update step via ``(1 - P11_ex) * i_1``. Scalar or array
+            broadcastable to ``self.varshape``. Default is ``0. * bu.pA``.
+        spike_events : Iterable or None, optional
+            Collection of spike event descriptors for direct spike input. Each
+            event can be:
+
+            - ``(receptor_type, weight)``
+            - ``(receptor_type, weight, offset)``
+            - ``(receptor_type, weight, offset, multiplicity)``
+            - ``(receptor_type, weight, offset, multiplicity, sender_model)``
+            - ``dict`` with keys ``receptor_type``/``receptor`` (int or str),
+              ``weight`` (ArrayLike in pA), ``offset`` (float, default ``1.0``),
+              ``multiplicity`` (float, default ``1.0``), ``sender_model`` (str,
+              default ``"iaf_tum_2000"``).
+
+            **Receptor types:**
+
+            - ``0`` (or ``'DEFAULT'``): regular spike input, effective weight
+              is ``weight * multiplicity``.
+            - ``1`` (or ``'TSODYKS'``): Tsodyks-coupled input, effective weight
+              is ``weight * multiplicity * offset``, where ``offset`` is
+              typically the ``spike_offset`` from the presynaptic neuron.
+
+            For receptor ``1``, ``sender_model`` must be ``"iaf_tum_2000"``;
+            otherwise a ``ValueError`` is raised.
+
+            Positive effective weights route to excitatory channel, non-positive
+            to inhibitory channel. Default is ``None`` (no events).
+
+        Returns
+        -------
+        out : Any
+            Surrogate spike output returned by :meth:`get_spike`. The output is
+            elementwise over the neuron state shape (and batch axis, if
+            initialized). For emitted spikes, the voltage argument to
+            :meth:`get_spike` is nudged above threshold by ``1e-12`` mV to
+            preserve positive spike activation under hard reset.
+
+        Raises
+        ------
+        ValueError
+            If provided inputs cannot be broadcast to the internal state shape,
+            or if receptor-1 events have ``sender_model != "iaf_tum_2000"``.
+
+        Notes
+        -----
+        **Update order (following NEST ``iaf_tum_2000.cpp``):**
+
+        1. **Membrane propagation**: If not refractory, update
+           :math:`V_{\mathrm{rel}}` using exact exponential propagators (same as
+           :class:`iaf_psc_exp`).
+        2. **Synaptic decay**: Exponentially decay ``i_syn_ex`` and ``i_syn_in``.
+        3. **Filtered current injection**: Add ``(1 - exp(-h/tau_syn_ex)) * i_1``
+           to ``i_syn_ex``.
+        4. **Spike input addition**: Add arriving spike inputs (from
+           ``spike_events`` and registered delta inputs) to ``i_syn_ex`` and
+           ``i_syn_in`` by sign.
+        5. **Threshold test**: Determine spike condition (deterministic or
+           escape-noise), assign refractory counter, and reset voltage.
+        6. **Tsodyks update**: On emitted spike, update ``(u, x, y)`` states in
+           NEST order, compute :math:`\Delta y`, and set ``spike_offset``.
+        7. **Buffer inputs**: Store ``x`` and ``x_filtered`` for next step.
+
+        **Tsodyks state update on spike:**
+
+        When a spike is emitted, inter-spike interval ``h_ts = t_spike - t_last``
+        is computed (with ``t_last = 0`` if ``last_spike_time < 0``). Propagators
+        are:
+
+        .. math::
+
+           P_{uu} = \begin{cases}
+           0, & \tau_{\mathrm{fac}}=0 \\
+           e^{-h_{ts}/\tau_{\mathrm{fac}}}, & \text{otherwise}
+           \end{cases}, \quad
+           P_{yy} = e^{-h_{ts}/\tau_{\mathrm{psc}}}, \quad
+           P_{zz} = e^{-h_{ts}/\tau_{\mathrm{rec}}} - 1,
+
+        .. math::
+
+           P_{xy} = \frac{P_{zz}\tau_{\mathrm{rec}} - (P_{yy}-1)\tau_{\mathrm{psc}}}{\tau_{\mathrm{psc}}-\tau_{\mathrm{rec}}}.
+
+        Then states update as:
+
+        .. math::
+
+           u \leftarrow u P_{uu}, \quad
+           x \leftarrow x + P_{xy}y - P_{zz}(1-x-y), \quad
+           y \leftarrow y P_{yy}, \\
+           u \leftarrow u + U(1-u), \quad
+           \Delta y = u x, \quad
+           x \leftarrow x - \Delta y, \quad
+           y \leftarrow y + \Delta y.
+
+        ``spike_offset`` is set to :math:`\Delta y` on spike, zero otherwise.
+
+        **Performance:** Per-step computational cost is
+        :math:`O(\prod \mathrm{varshape})` with vectorized NumPy operations in
+        ``float64`` for coefficient computation and state updates.
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         h = float(bu.math.asarray(dt_q / bu.ms))

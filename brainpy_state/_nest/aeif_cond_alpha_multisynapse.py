@@ -37,11 +37,205 @@ __all__ = [
 class aeif_cond_alpha_multisynapse(Neuron):
     r"""NEST-compatible ``aeif_cond_alpha_multisynapse`` neuron model.
 
-    Short description
-    -----------------
-
     Conductance-based adaptive exponential integrate-and-fire neuron with
     alpha-shaped synapses and an arbitrary number of receptor ports.
+
+    Parameters
+    ----------
+    in_size : Size
+        Population shape. All per-neuron states use ``self.varshape`` derived
+        from ``in_size``.
+    V_peak : ArrayLike
+        Spike detection voltage in mV, broadcastable to ``self.varshape``.
+        Used as detection threshold only when ``Delta_T > 0``.
+    V_reset : ArrayLike
+        Reset and refractory clamp voltage in mV, broadcastable to
+        ``self.varshape``.
+    t_ref : ArrayLike
+        Absolute refractory duration in ms, broadcastable to ``self.varshape``.
+        Converted to integer grid counts by ``ceil(t_ref / dt)``.
+    g_L : ArrayLike
+        Leak conductance in nS, broadcastable to ``self.varshape``.
+    C_m : ArrayLike
+        Membrane capacitance in pF, broadcastable to ``self.varshape``.
+    E_L : ArrayLike
+        Leak reversal potential in mV, broadcastable to ``self.varshape``.
+    Delta_T : ArrayLike
+        Exponential slope factor in mV, broadcastable to ``self.varshape``.
+        ``Delta_T == 0`` disables the exponential current and switches
+        detection to ``V_th``.
+    tau_w : ArrayLike
+        Adaptation time constant in ms, broadcastable to ``self.varshape``.
+    a : ArrayLike
+        Subthreshold adaptation conductance in nS, broadcastable to
+        ``self.varshape``.
+    b : ArrayLike
+        Spike-triggered adaptation jump in pA, broadcastable to
+        ``self.varshape``.
+    V_th : ArrayLike
+        Exponential soft-threshold voltage in mV, broadcastable to
+        ``self.varshape``.
+    tau_syn : ArrayLike
+        Receptor time constants in ms. Values are flattened to shape
+        ``(n_receptors,)``; each entry must be strictly positive.
+    E_rev : ArrayLike
+        Receptor reversal potentials in mV. Values are flattened to shape
+        ``(n_receptors,)`` and must have the same length as ``tau_syn``.
+    I_e : ArrayLike
+        Constant external current in pA, broadcastable to ``self.varshape``.
+    gsl_error_tol : ArrayLike
+        Unitless local absolute tolerance for RKF45, broadcastable to
+        ``self.varshape`` and strictly positive.
+    V_initializer : Callable
+        Initializer for membrane voltage ``V`` (mV domain). Must support shape
+        ``self.varshape`` (and optional batch axis via framework init helpers).
+    g_initializer : Callable
+        Initializer for conductance state ``g`` (nS domain). Must support
+        shape ``self.varshape + (n_receptors,)``.
+    w_initializer : Callable
+        Initializer for adaptation current ``w`` (pA domain), shape
+        ``self.varshape``.
+    spk_fun : Callable
+        Surrogate spike function used by :meth:`get_spike`.
+    spk_reset : str
+        Reset policy from :class:`~brainpy_state._base.Neuron`; ``'hard'``
+        matches NEST semantics.
+    ref_var : bool
+        If ``True``, allocates a boolean refractory state variable
+        ``self.refractory``.
+    name : str | None
+        Optional node name.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 17 25 15 20 43
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar or tuple
+         - required
+         - --
+         - Population shape defining ``self.varshape``.
+       * - ``V_peak``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``0.0 * u.mV``
+         - :math:`V_\mathrm{peak}`
+         - Spike detection threshold when ``Delta_T > 0`` and membrane RHS
+           clamp bound via :math:`\min(V, V_{\mathrm{peak}})`.
+       * - ``V_reset``
+         - ArrayLike, broadcastable (mV)
+         - ``-60.0 * u.mV``
+         - :math:`V_\mathrm{reset}`
+         - Reset value and refractory clamp voltage.
+       * - ``t_ref``
+         - ArrayLike, broadcastable (ms)
+         - ``0.0 * u.ms``
+         - :math:`t_\mathrm{ref}`
+         - Absolute refractory duration converted to integer step counts.
+       * - ``g_L`` and ``C_m``
+         - ArrayLike, broadcastable (nS, pF)
+         - ``30.0 * u.nS``, ``281.0 * u.pF``
+         - :math:`g_L`, :math:`C_m`
+         - Leak conductance and membrane capacitance in AdEx membrane
+           dynamics.
+       * - ``E_L``, ``Delta_T``, and ``V_th``
+         - ArrayLike, broadcastable (mV)
+         - ``-70.6 * u.mV``, ``2.0 * u.mV``, ``-50.4 * u.mV``
+         - :math:`E_L`, :math:`\Delta_T`, :math:`V_\mathrm{th}`
+         - Leak reversal, exponential slope, and soft threshold.
+       * - ``tau_w``, ``a``, and ``b``
+         - ArrayLike, broadcastable (ms, nS, pA)
+         - ``144.0 * u.ms``, ``4.0 * u.nS``, ``80.5 * u.pA``
+         - :math:`\tau_w`, :math:`a`, :math:`b`
+         - Adaptation time scale, coupling, and spike-triggered jump.
+       * - ``tau_syn``
+         - ArrayLike, flattened to ``(n_receptors,)`` (ms)
+         - ``(2.0,) * u.ms``
+         - :math:`\tau_{\mathrm{syn},k}`
+         - Receptor-specific alpha time constants; each ``> 0``.
+       * - ``E_rev``
+         - ArrayLike, flattened to ``(n_receptors,)`` (mV)
+         - ``(0.0,) * u.mV``
+         - :math:`E_{\mathrm{rev},k}`
+         - Receptor-specific reversal potentials, same length as ``tau_syn``.
+       * - ``I_e``
+         - ArrayLike, broadcastable (pA)
+         - ``0.0 * u.pA``
+         - :math:`I_e`
+         - Constant current added every RKF45 substep.
+       * - ``gsl_error_tol``
+         - ArrayLike, broadcastable, unitless, ``> 0``
+         - ``1e-6``
+         - --
+         - Embedded RKF45 local error tolerance.
+       * - ``V_initializer``
+         - Callable
+         - ``Constant(-70.6 * u.mV)``
+         - --
+         - Initializer for ``V``.
+       * - ``g_initializer``
+         - Callable
+         - ``Constant(0.0 * u.nS)``
+         - --
+         - Initializer for ``g`` with shape ``[..., n_receptors]``.
+       * - ``w_initializer``
+         - Callable
+         - ``Constant(0.0 * u.pA)``
+         - --
+         - Initializer for adaptation current ``w``.
+       * - ``spk_fun``
+         - Callable
+         - ``ReluGrad()``
+         - --
+         - Surrogate nonlinearity used by :meth:`get_spike`.
+       * - ``spk_reset``
+         - str
+         - ``'hard'``
+         - --
+         - Reset mode inherited from :class:`~brainpy_state._base.Neuron`.
+       * - ``ref_var``
+         - bool
+         - ``False``
+         - --
+         - If ``True``, exposes boolean ``self.refractory``.
+       * - ``name``
+         - str | None
+         - ``None``
+         - --
+         - Optional node name.
+
+    Returns
+    -------
+    out : Any
+        Configured neuron node. Each :meth:`update` call returns a binary spike
+        tensor (dtype ``float64``) with shape ``self.V.value.shape``; values are
+        ``1.0`` for spiking elements and ``0.0`` otherwise.
+
+    Raises
+    ------
+    ValueError
+        Raised at initialization or update time if any of the following holds:
+
+        - ``E_rev`` and ``tau_syn`` lengths differ.
+        - Any ``tau_syn <= 0``, ``tau_w <= 0``, ``C_m <= 0``,
+          ``gsl_error_tol <= 0``, or ``t_ref < 0``.
+        - Any ``V_peak < V_th`` or ``V_reset >= V_peak``.
+        - Any ``Delta_T < 0`` or overflow guard on
+          ``(V_peak - V_th) / Delta_T`` is violated for ``Delta_T > 0``.
+        - Incoming spike event receptor index is outside
+          ``[1, n_receptors]``.
+        - Incoming conductance weights are negative (both explicit
+          ``spike_events`` and default ``add_delta_input`` path).
+        - Nonzero default delta-conductance input is provided when
+          ``n_receptors == 0``.
+        - Runtime instability guard is triggered during integration
+          (``V < -1e3`` mV or ``w`` outside ``[-1e6, 1e6]`` pA).
 
     Description
     -----------
@@ -59,8 +253,7 @@ class aeif_cond_alpha_multisynapse(Neuron):
 
     Receptor ports are 1-based (NEST convention): ``1..n_receptors``.
 
-    Continuous dynamics
-    ...................
+    **1. Continuous dynamics**
 
     Let :math:`V` be membrane voltage, :math:`w` adaptation current, and
     :math:`g_k` receptor conductances.
@@ -94,8 +287,18 @@ class aeif_cond_alpha_multisynapse(Neuron):
 
        dg_k \leftarrow dg_k + \frac{e}{\tau_{\mathrm{syn},k}} w_k.
 
-    Spike and refractory semantics
-    ..............................
+    The :math:`e/\tau_{\mathrm{syn},k}` factor is the alpha-kernel
+    normalization from NEST. For a single spike with weight :math:`w_k`,
+    the resulting conductance is:
+
+    .. math::
+
+       g_k(t) = w_k \frac{t}{\tau_{\mathrm{syn},k}}
+       \exp\!\left(1 - \frac{t}{\tau_{\mathrm{syn},k}}\right), \quad t \ge 0,
+
+    which peaks at :math:`t=\tau_{\mathrm{syn},k}` with peak value :math:`w_k`.
+
+    **2. Spike and refractory semantics**
 
     - During refractory integration, effective voltage is clamped to
       ``V_reset`` and :math:`dV/dt = 0`.
@@ -108,8 +311,7 @@ class aeif_cond_alpha_multisynapse(Neuron):
       - ``w <- w + b``
       - refractory counter ``r <- refractory_counts + 1`` if refractory is enabled.
 
-    Update order per simulation step (NEST semantics)
-    ..................................................
+    **3. Update order per simulation step (NEST semantics)**
 
     1. Integrate ODEs on :math:`(t, t+dt]` using adaptive RKF45.
     2. Inside integration loop: refractory clamp and spike/reset/adaptation.
@@ -117,8 +319,7 @@ class aeif_cond_alpha_multisynapse(Neuron):
     4. Apply incoming receptor-specific spike events to ``dg``.
     5. Store continuous current input ``x`` into one-step delayed ``I_stim``.
 
-    Event semantics
-    ...............
+    **4. Event semantics**
 
     ``spike_events`` passed to :meth:`update` must be an iterable of
     ``(receptor_type, weight)`` or dictionaries with keys
@@ -129,36 +330,6 @@ class aeif_cond_alpha_multisynapse(Neuron):
       conductance multisynapse constraints.
     - ``add_delta_input`` stream is mapped to receptor 1 by default; those
       values must also be non-negative.
-
-    Parameters
-    ----------
-
-    ==================== =================== ============================================== =====================================================
-    **Parameter**        **Default**         **Math equivalent**                             **Description**
-    ==================== =================== ============================================== =====================================================
-    ``in_size``          (required)                                                         Population shape
-    ``V_peak``           0 mV                :math:`V_\mathrm{peak}`                         Spike detection threshold (if ``Delta_T > 0``)
-    ``V_reset``          -60 mV              :math:`V_\mathrm{reset}`                        Reset potential
-    ``t_ref``            0 ms                :math:`t_\mathrm{ref}`                          Absolute refractory duration
-    ``g_L``              30 nS               :math:`g_\mathrm{L}`                            Leak conductance
-    ``C_m``              281 pF              :math:`C_\mathrm{m}`                            Membrane capacitance
-    ``E_L``              -70.6 mV            :math:`E_\mathrm{L}`                            Leak reversal potential
-    ``Delta_T``          2 mV                :math:`\Delta_T`                                Exponential slope factor
-    ``tau_w``            144 ms              :math:`\tau_w`                                  Adaptation time constant
-    ``a``                4 nS                :math:`a`                                       Subthreshold adaptation
-    ``b``                80.5 pA             :math:`b`                                       Spike-triggered adaptation increment
-    ``V_th``             -50.4 mV            :math:`V_\mathrm{th}`                           Spike initiation threshold (exponential term)
-    ``tau_syn``          ``[2.0]`` ms        :math:`\tau_{\mathrm{syn},k}`                   Synaptic time constants per receptor
-    ``E_rev``            ``[0.0]`` mV        :math:`E_{\mathrm{rev},k}`                      Reversal potentials per receptor
-    ``I_e``              0 pA                :math:`I_\mathrm{e}`                            Constant external current
-    ``gsl_error_tol``    1e-6                (solver tolerance)                              RKF45 local error tolerance
-    ``V_initializer``    Constant(-70.6 mV)                                                  Membrane initializer
-    ``g_initializer``    Constant(0 nS)                                                      Conductance initializer ``[..., n_receptors]``
-    ``w_initializer``    Constant(0 pA)                                                      Adaptation current initializer
-    ``spk_fun``          ReluGrad()                                                          Surrogate spike function
-    ``spk_reset``        ``'hard'``                                                          Reset mode; hard reset matches NEST behavior
-    ``ref_var``          ``False``                                                           If True, expose boolean refractory indicator
-    ==================== =================== ============================================== =====================================================
 
     State variables
     ---------------
@@ -189,6 +360,32 @@ class aeif_cond_alpha_multisynapse(Neuron):
       one simulation step.
     - This implementation targets source-level parity with NEST update ordering
       rather than high-performance vectorization.
+    - Computational cost scales with
+      ``prod(self.V.value.shape) * n_receptors`` and is dominated by
+      scalar RKF45 substepping in Python loops.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> from brainpy_state._nest.aeif_cond_alpha_multisynapse import (
+       ...     aeif_cond_alpha_multisynapse,
+       ... )
+       >>> _ = brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms)
+       >>> neu = aeif_cond_alpha_multisynapse(
+       ...     in_size=4,
+       ...     tau_syn=(0.5, 2.0) * u.ms,
+       ...     E_rev=(0.0, -75.0) * u.mV,
+       ... )
+       >>> neu.init_state()
+       >>> spikes = neu.update(
+       ...     x=120.0 * u.pA,
+       ...     spike_events=[{'receptor_type': 1, 'weight': 0.8 * u.nS}],
+       ... )
+       >>> spikes.shape
+       (4,)
 
     References
     ----------

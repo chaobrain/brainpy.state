@@ -31,96 +31,215 @@ __all__ = [
 class spike_generator(brainstate.nn.Dynamics):
     r"""Spike generator -- NEST-compatible stimulation device.
 
-    Description
-    -----------
+    Emit deterministic spike-like outputs at prescribed times with optional
+    per-event amplitudes, while respecting a half-open activity window.
 
-    ``spike_generator`` generates spikes at specified times. It can be used to
-    provide precisely timed spike input to connected neurons.
+    **1. Model equations**
 
-    This is a brainpy.state re-implementation of the NEST simulator device of
-    the same name, using NEST-standard parameterization.
+    Let :math:`\{t_i\}_{i=1}^{K}` be configured spike times in ms
+    (non-descending after conversion), and :math:`\{w_i\}_{i=1}^{K}` optional
+    spike weights. At simulation time :math:`t` with step :math:`\Delta t`
+    (both in ms), define the matching indicator
 
-    Spike generation
-    ................
+    .. math::
 
-    Spikes are emitted at the times specified in ``spike_times``. The spike
-    times array must be sorted in non-descending order (earliest spike first).
+        m_i(t) = \mathbf{1}\!\left[|t - t_i| < \frac{\Delta t}{2}\right].
 
-    At each simulation step, the generator checks whether any spike times fall
-    within the current time step's interval. If so, a spike (output value of 1)
-    is produced; otherwise, the output is 0.
+    The active-window gate is
 
-    Multiple occurrences of the same time indicate that more than one event is
-    to be generated at that time (the output will still be 1 in this
-    implementation, as spikes are binary in the brainpy.state framework).
+    .. math::
 
-    Optionally, ``spike_weights`` can be set. This is an array of the same
-    length as ``spike_times``, containing one weight per spike. When set, the
-    output at spike times is the corresponding weight instead of 1.
+        g(t) = \mathbf{1}\!\left[t \ge t_0 + t_{\mathrm{start,rel}}\right]
+        \cdot
+        \mathbf{1}\!\left[t < t_0 + t_{\mathrm{stop,rel}}\right],
 
-    Timing convention
-    .................
+    where the second indicator is omitted when ``stop is None``.
 
-    A spike at time :math:`t_s` is emitted during the simulation step where
-    the simulation time ``t`` satisfies :math:`t_s - dt < t \le t_s` (i.e.,
-    the spike is delivered at the end of the step). In practice, for
-    grid-aligned spike times, the spike is emitted at step
-    :math:`t_s / dt`.
+    This implementation computes a scalar amplitude :math:`a(t)` as follows:
 
-    The active window ``[origin + start, origin + stop)`` gates the output:
-    spikes outside this window are suppressed.
+    - no ``spike_weights``: :math:`a(t)=1` if any :math:`m_i(t)=1`, else
+      :math:`a(t)=0`;
+    - with ``spike_weights``: :math:`a(t)` equals the weight associated with
+      the *last* matching index (iteration order through ``spike_times``).
+
+    The returned output is broadcast to ``self.varshape``:
+
+    .. math::
+
+        y(t) = g(t)\,a(t)\,\mathbf{1}_{\mathrm{varshape}}.
+
+    **2. Timing semantics, assumptions, and constraints**
+
+    A configured spike at :math:`t_s` is intended for the step satisfying
+    :math:`t_s-\Delta t < t \le t_s` under grid-aligned simulation. The
+    implementation uses :math:`|t-t_s| < \Delta t/2` for robust floating-point
+    matching.
+
+    Enforced constraints:
+
+    - ``spike_times`` must be sorted in non-descending order after conversion
+      to float ms.
+    - ``spike_weights`` must be empty or have exactly
+      ``len(spike_times)`` elements.
+
+    Practical constraints from the current implementation:
+
+    - ``start``, ``stop`` (if provided), and ``origin`` are converted to scalar
+      ms inside :meth:`update`; non-scalar/broadcasted arrays are not supported
+      by this conversion path.
+    - Duplicate spike times are allowed. Without weights, duplicates remain
+      binary output. With weights, the last duplicate's weight is used.
+
+    **3. Computational implications**
+
+    Per :meth:`update` call, complexity is
+    :math:`O(K + \prod\mathrm{varshape})`, where :math:`K` is the number of
+    configured spike times. The linear scan preserves deterministic ordering
+    semantics for duplicate times and weight override behavior.
 
     Parameters
     ----------
+    in_size : Size, optional
+        Output size/shape specification consumed by
+        :class:`brainstate.nn.Dynamics`. The emitted array has shape
+        ``self.varshape`` derived from ``in_size``. Default is ``1``.
+    spike_times : Sequence, optional
+        Sequence of spike times with length ``K``. Entries may be unitful
+        times (typically ms) or unitless numerics interpreted as ms. Internally
+        converted to ``float`` milliseconds and required to be non-descending.
+        Default is ``()``.
+    spike_weights : Sequence, optional
+        Optional sequence of per-spike amplitudes with length ``K`` matching
+        ``spike_times`` exactly, or empty to use binary spikes. Entries are
+        converted to ``float`` without unit conversion. Default is ``()``.
+    start : ArrayLike, optional
+        Relative activation time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        initialized through :func:`braintools.init.param`. Effective lower
+        bound is ``origin + start`` (inclusive). Must be scalar-convertible at
+        update time. Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative deactivation time :math:`t_{\mathrm{stop,rel}}` (typically
+        ms), initialized through :func:`braintools.init.param` when provided.
+        Effective upper bound is ``origin + stop`` (exclusive). ``None`` means
+        no upper bound. Must be scalar-convertible when not ``None``. Default
+        is ``None``.
+    origin : ArrayLike, optional
+        Global time origin :math:`t_0` (typically ms) added to ``start`` and
+        ``stop``. Must be scalar-convertible at update time. Default is
+        ``0. * u.ms``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set. Default values match the NEST simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 22 18 22 38
 
-    ======================= ================== ============================================
-    **Parameter**           **Default**        **Description**
-    ======================= ================== ============================================
-    ``in_size``             1                  Output size (number of independent generators)
-    ``spike_times``         ``[]``             Spike times in ms (list, sorted)
-    ``spike_weights``       ``[]``             Spike weights (list, same length as spike_times)
-    ``start``               0 ms               Activation time relative to ``origin``
-    ``stop``                ``None`` (inf)     Deactivation time relative to ``origin``
-    ``origin``              0 ms               Global time offset
-    ======================= ================== ============================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``spike_times``
+         - ``()``
+         - :math:`t_i`
+         - Scheduled spike times in ms, checked by ``|t - t_i| < dt/2``.
+       * - ``spike_weights``
+         - ``()``
+         - :math:`w_i`
+         - Per-spike amplitude; when multiple indices match, the last wins.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative inclusive lower bound of active window.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative exclusive upper bound of active window.
+       * - ``origin``
+         - ``0. * u.ms``
+         - :math:`t_0`
+         - Global offset applied to ``start`` and ``stop``.
 
-    Examples
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a float-valued JAX array
+        with shape ``self.varshape``, equal to ``0`` when inactive or when no
+        spike matches the current step.
+
+    Raises
+    ------
+    ValueError
+        If ``spike_times`` is not non-descending, or if
+        ``len(spike_weights)`` is non-zero and differs from
+        ``len(spike_times)``.
+    TypeError
+        If a time/weight entry cannot be converted to float, or if
+        ``start``/``stop``/``origin`` are not scalar-convertible during update.
+    KeyError
+        At update time, if simulation context lacks required time information
+        (for example ``'t'`` or ``dt``), depending on environment behavior.
+
+    Notes
+    -----
+    Unlike current generators (``dc_generator``, ``step_current_generator``),
+    ``spike_generator`` emits dimensionless impulses (or weighted real values)
+    rather than physical current quantities. The output is intended to be
+    consumed directly as pre-synaptic spike events or injected into a synapse
+    model that scales by connection weight.
+
+    NEST's ``spike_generator`` uses multiplicity to allow multiple spikes per
+    time step; this implementation preserves that semantics by scanning all
+    ``spike_times`` and keeping the last matching weight (the last duplicate
+    effectively replaces earlier ones). If accumulation of duplicate weights is
+    needed instead, multiple ``spike_generator`` instances can be chained.
+
+    Spike times should ideally be aligned to the simulation grid (multiples of
+    ``dt``) to avoid off-by-one steps due to floating-point comparison. The
+    half-open tolerance ``dt/2`` generally covers one-ULP rounding errors for
+    grid-aligned times.
+
+    See Also
     --------
-
-    Basic usage with a neuron:
-
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     sg = brainpy.state.spike_generator(
-    ...         spike_times=[5. * u.ms, 10. * u.ms, 15. * u.ms],
-    ...     )
-    ...
-    ...     for step in range(200):
-    ...         with brainstate.environ.context(t=step * 0.1 * u.ms):
-    ...             spk = sg.update()
-
-    With spike weights:
-
-    >>> sg = brainpy.state.spike_generator(
-    ...     spike_times=[5. * u.ms, 10. * u.ms],
-    ...     spike_weights=[2.0, 0.5],
-    ... )
+    dc_generator : Constant-current stimulation device.
+    ac_generator : Sinusoidal current stimulation device.
+    step_current_generator : Piecewise-constant current stimulation device.
+    spike_train_injector : Inject pre-recorded spike trains into the network.
 
     References
     ----------
     .. [1] NEST Simulator, ``spike_generator`` device.
            https://nest-simulator.readthedocs.io/en/stable/models/spike_generator.html
 
-    See Also
+    Examples
     --------
-    dc_generator : Constant current generator
-    ac_generator : Sinusoidal current generator
-    step_current_generator : Piecewise constant current generator
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     sg = brainpy.state.spike_generator(
+       ...         spike_times=[5.0 * u.ms, 10.0 * u.ms, 15.0 * u.ms],
+       ...     )
+       ...     with brainstate.environ.context(t=10.0 * u.ms):
+       ...         spk = sg.update()
+       ...     _ = spk.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     sg = brainpy.state.spike_generator(
+       ...         spike_times=[5.0 * u.ms, 5.0 * u.ms, 10.0 * u.ms],
+       ...         spike_weights=[0.25, 0.5, 2.0],
+       ...     )
+       ...     with brainstate.environ.context(t=5.0 * u.ms):
+       ...         spk = sg.update()
+       ...     _ = spk.shape
     """
     __module__ = 'brainpy.state'
 
@@ -169,20 +288,61 @@ class spike_generator(brainstate.nn.Dynamics):
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
-        """Return spike output at the current simulation time.
-
-        Checks if any spike times match the current simulation time. If so,
-        returns the spike weight (or 1.0 if no weights are set). Otherwise
-        returns 0.0.
-
-        The spike time matching uses a tolerance of ``dt/2`` to handle
-        floating-point alignment to the simulation grid.
+        r"""Compute spike output for the current simulation step.
 
         Returns
         -------
-        spike : array
-            Spike output, shaped ``(in_size,)``. 1.0 (or weight) at spike
-            times, 0.0 otherwise.
+        out : jax.Array
+            Float-valued JAX array with shape ``self.varshape``.
+            Output semantics:
+
+            - ``0`` when outside ``[origin + start, origin + stop)`` (or
+              ``[origin + start, +inf)`` if ``stop is None``),
+            - ``0`` when active but no configured spike matches
+              ``|t - t_i| < dt/2``,
+            - ``1`` at a matching spike time without weights,
+            - last matching weight when ``spike_weights`` is configured.
+
+        Raises
+        ------
+        KeyError
+            If required simulation context values are missing from
+            ``brainstate.environ`` (e.g. ``'t'`` or ``dt``).
+        TypeError
+            If scalar conversion of time parameters fails due to incompatible
+            shapes, dtypes, or units.
+        ValueError
+            If downstream unit conversion raises an invalid-value error.
+
+        Notes
+        -----
+        The matching tolerance is ``dt/2`` in ms. When multiple entries in
+        ``spike_times`` match the same step, this implementation intentionally
+        keeps only the last matching weight/value, consistent with NEST's
+        last-event-wins multiplicity semantics.
+
+        The activity-window check is applied before the spike-matching scan;
+        steps outside ``[origin + start, origin + stop)`` short-circuit to a
+        zero array without iterating over ``spike_times``.
+
+        See Also
+        --------
+        spike_generator : Class-level parameter definitions and model equations.
+        dc_generator.update : Windowed constant-current update rule.
+        step_current_generator.update : Windowed piecewise-constant update rule.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import spike_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = spike_generator(spike_times=[1.0 * u.ms, 2.0 * u.ms])
+           ...     with brainstate.environ.context(t=2.0 * u.ms):
+           ...         out = gen.update()
+           ...     _ = out.shape
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Tests for glif_cond neuron model.
+r"""Tests for glif_cond neuron model.
 
 Tests verify that the glif_cond implementation matches NEST simulator dynamics
 for all five GLIF model variants. Test strategy:
@@ -56,7 +56,7 @@ from brainpy_state._nest.glif_cond import glif_cond
 
 def _glif_cond_dynamics(v_rel, dg_vals, g_vals, is_refractory,
                         i_stim, asc_sum, p):
-    """Reference ODE right-hand side matching NEST glif_cond_dynamics."""
+    r"""Reference ODE right-hand side matching NEST glif_cond_dynamics."""
     V = p['V_reset_rel'] if is_refractory else v_rel
 
     # Synaptic current
@@ -77,7 +77,7 @@ def _glif_cond_dynamics(v_rel, dg_vals, g_vals, is_refractory,
 
 def _rkf45_ref_step(v_rel, dg_vals, g_vals, is_refractory,
                     i_stim, asc_sum, dt, h0, p, atol=1e-3):
-    """Reference RKF45 integrator."""
+    r"""Reference RKF45 integrator."""
     min_h = 1e-8
     n_rec = len(g_vals)
     n = 1 + 2 * n_rec
@@ -138,7 +138,7 @@ def _rkf45_ref_step(v_rel, dg_vals, g_vals, is_refractory,
 # ---------------------------------------------------------------------------
 
 def _ref_glif_step(state, params, dt, spike_weights=None):
-    """Execute one reference NEST glif_cond update step.
+    r"""Execute one reference NEST glif_cond update step.
 
     state: dict with keys V_rel, dg, g, r, i_stim, h, v_old,
            threshold_spike, threshold_voltage, ASCurrents, ASCurrents_sum,
@@ -265,7 +265,7 @@ def _make_ref_params(G=9.43, E_L=-78.85, th_inf_abs=-51.68, C_m=58.72,
                      tau_syn=(0.2, 2.0), E_rev=(0.0, -85.0),
                      has_theta_spike=False, has_asc=False,
                      has_theta_voltage=False, dt=0.01):
-    """Build reference parameter dict with pre-computed decay rates."""
+    r"""Build reference parameter dict with pre-computed decay rates."""
     th_inf = th_inf_abs - E_L
     V_reset_rel = V_reset_abs - E_L
 
@@ -317,7 +317,7 @@ def _make_ref_params(G=9.43, E_L=-78.85, th_inf_abs=-51.68, C_m=58.72,
 
 
 def _make_ref_state(params, V_abs=None, asc_init=(0.0, 0.0)):
-    """Create initial reference state dict."""
+    r"""Create initial reference state dict."""
     E_L = params['E_L']
     if V_abs is None:
         V_abs = E_L
@@ -354,7 +354,7 @@ class TestGlifCond(unittest.TestCase):
         self.dt = 0.01 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_inputs=None):
-        """Execute one simulation step with optional per-receptor spike inputs.
+        r"""Execute one simulation step with optional per-receptor spike inputs.
 
         dg_inputs: list of (receptor_index, weight_nS) tuples
         """
@@ -371,7 +371,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        """Verify default parameters match NEST C++ source."""
+        r"""Verify default parameters match NEST C++ source."""
         neuron = glif_cond(1)
         self.assertEqual(neuron.g_m, 9.43 * u.nS)
         self.assertEqual(neuron.E_L, -78.85 * u.mV)
@@ -400,7 +400,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_invalid_model_combination(self):
-        """Invalid mechanism combinations should raise."""
+        r"""Invalid mechanism combinations should raise."""
         with self.assertRaises(ValueError):
             glif_cond(1, adapting_threshold=True, spike_dependent_threshold=False)
 
@@ -435,7 +435,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif1_subthreshold_dynamics_match_reference(self):
-        """GLIF1: subthreshold membrane potential matches reference."""
+        r"""GLIF1: subthreshold membrane potential matches reference."""
         dt_val = 0.01
         n_steps = 200
 
@@ -482,7 +482,7 @@ class TestGlifCond(unittest.TestCase):
                                        msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_glif1_spike_and_refractory(self):
-        """GLIF1: spike generation and refractory period."""
+        r"""GLIF1: spike generation and refractory period."""
         dt_val = 0.01
         n_steps = 1500
 
@@ -526,7 +526,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif2_spike_dependent_threshold(self):
-        """GLIF2: biologically defined reset with spike-dependent threshold."""
+        r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -575,7 +575,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif3_after_spike_currents(self):
-        """GLIF3: after-spike currents match reference."""
+        r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -618,7 +618,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif4_combined_reset_and_asc(self):
-        """GLIF4: spike-dependent threshold + after-spike currents."""
+        r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -661,7 +661,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif5_full_model(self):
-        """GLIF5: all mechanisms enabled — voltage trace matches reference."""
+        r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
         n_steps = 2000
 
@@ -715,7 +715,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_alpha_synapse_conductance_response(self):
-        """Verify alpha-function synapse produces correct conductance waveform."""
+        r"""Verify alpha-function synapse produces correct conductance waveform."""
         dt_val = 0.01
         n_steps = 500
 
@@ -754,7 +754,7 @@ class TestGlifCond(unittest.TestCase):
                                    msg=f"Peak g={g_trace[peak_idx]} nS, expected ~1.0 nS")
 
     def test_synaptic_input_affects_voltage(self):
-        """Excitatory input should depolarize, inhibitory should hyperpolarize."""
+        r"""Excitatory input should depolarize, inhibitory should hyperpolarize."""
         dt_val = 0.01
 
         with brainstate.environ.context(dt=self.dt):
@@ -819,7 +819,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_refractory_period_holds_voltage(self):
-        """During refractory period, voltage should be held at pre-spike value."""
+        r"""During refractory period, voltage should be held at pre-spike value."""
         dt_val = 0.01
 
         with brainstate.environ.context(dt=self.dt):
@@ -866,7 +866,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_three_receptors(self):
-        """Model with three receptor ports initializes and runs correctly."""
+        r"""Model with three receptor ports initializes and runs correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
                 1,
@@ -896,7 +896,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_initial_v_m(self):
-        """Initial V_m should match the initializer."""
+        r"""Initial V_m should match the initializer."""
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
                 1,
@@ -911,7 +911,7 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_glif5_threshold_trace_matches_reference(self):
-        """GLIF5: threshold components (spike + voltage) match reference trace."""
+        r"""GLIF5: threshold components (spike + voltage) match reference trace."""
         dt_val = 0.01
         n_steps = 1000
 

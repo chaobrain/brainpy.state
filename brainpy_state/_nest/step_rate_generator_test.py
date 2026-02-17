@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the step_rate_generator stimulation device.
 
 Validates the brainpy.state ``step_rate_generator`` against:
@@ -40,13 +40,13 @@ from brainpy.state import step_rate_generator
 
 
 class TestStepRateGeneratorBasic(unittest.TestCase):
-    """Unit tests for step_rate_generator output values and timing."""
+    r"""Unit tests for step_rate_generator output values and timing."""
 
     def setUp(self):
         self.dt = 0.1 * u.ms
 
     def test_empty_schedule(self):
-        """With no amplitude schedule, output is always zero."""
+        r"""With no amplitude schedule, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
             srg = step_rate_generator()
             for t_val in [0., 5., 50., 100.]:
@@ -56,7 +56,7 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
                                     err_msg=f"Should be 0 at t={t_val} ms")
 
     def test_single_step(self):
-        """Single step change: zero before, rate after."""
+        r"""Single step change: zero before, rate after."""
         with brainstate.environ.context(dt=self.dt):
             srg = step_rate_generator(
                 amplitude_times=[10. * u.ms],
@@ -75,7 +75,7 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
             npt.assert_allclose(out, 400.0, atol=1e-15)
 
     def test_multiple_steps(self):
-        """Multiple step changes produce correct piecewise constant output."""
+        r"""Multiple step changes produce correct piecewise constant output."""
         with brainstate.environ.context(dt=self.dt):
             srg = step_rate_generator(
                 amplitude_times=[10. * u.ms, 110. * u.ms, 210. * u.ms],
@@ -98,7 +98,7 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
                 npt.assert_allclose(srg.update(), 200.0, atol=1e-15)
 
     def test_start_stop_gating(self):
-        """Active window gates the output."""
+        r"""Active window gates the output."""
         with brainstate.environ.context(dt=self.dt):
             srg = step_rate_generator(
                 amplitude_times=[5. * u.ms],
@@ -116,7 +116,7 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
                 npt.assert_allclose(srg.update(), 0.0, atol=1e-15)
 
     def test_output_shape(self):
-        """Output shape matches in_size."""
+        r"""Output shape matches in_size."""
         with brainstate.environ.context(dt=self.dt):
             srg = step_rate_generator(
                 in_size=5,
@@ -128,7 +128,7 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
             self.assertEqual(out.shape, (5,))
 
     def test_full_simulation_trace(self):
-        """Run a full simulation and verify rate at sampled points."""
+        r"""Run a full simulation and verify rate at sampled points."""
         dt_ms = 0.1
         rates = [400.0, 1000.0, 200.0]
         amp_times = [10.0, 110.0, 210.0]
@@ -156,10 +156,10 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
 
 
 class TestStepRateGeneratorValidation(unittest.TestCase):
-    """Test parameter validation."""
+    r"""Test parameter validation."""
 
     def test_mismatched_lengths_raises(self):
-        """Different sized amplitude_times and amplitude_values raises error."""
+        r"""Different sized amplitude_times and amplitude_values raises error."""
         with self.assertRaises(ValueError):
             step_rate_generator(
                 amplitude_times=[1. * u.ms, 2. * u.ms],
@@ -167,7 +167,7 @@ class TestStepRateGeneratorValidation(unittest.TestCase):
             )
 
     def test_non_increasing_times_raises(self):
-        """Non-strictly increasing times raises error."""
+        r"""Non-strictly increasing times raises error."""
         with self.assertRaises(ValueError):
             step_rate_generator(
                 amplitude_times=[1. * u.ms, 2. * u.ms, 2. * u.ms],
@@ -176,7 +176,7 @@ class TestStepRateGeneratorValidation(unittest.TestCase):
 
 
 class TestStepRateGeneratorVsNEST(unittest.TestCase):
-    """Compare against NEST simulator."""
+    r"""Compare against NEST simulator."""
 
     @staticmethod
     def _is_nest_available():
@@ -187,7 +187,7 @@ class TestStepRateGeneratorVsNEST(unittest.TestCase):
             return False
 
     def test_step_rate_vs_nest(self):
-        """Compare step rate output against NEST step_rate_generator.
+        r"""Compare step rate output against NEST step_rate_generator.
 
         Reproduces NEST's test_step_rate_generator.py logic.
         """

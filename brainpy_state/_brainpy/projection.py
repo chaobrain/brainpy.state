@@ -38,7 +38,7 @@ __all__ = [
 
 
 class Projection(brainstate.nn.Module):
-    """
+    r"""
     Base class for synaptic projection modules.
 
     A projection connects pre-synaptic and post-synaptic neural populations,
@@ -152,7 +152,7 @@ class _AlignPost(brainstate.nn.Module):
 
 
 class AlignPostProj(Projection):
-    """
+    r"""
     Post-synaptic alignment projection.
 
     In this projection pattern, the synapse dynamics and synaptic output
@@ -324,7 +324,7 @@ class AlignPostProj(Projection):
 
 
 class DeltaProj(Projection):
-    """
+    r"""
     Delta-input projection.
 
     Applies pre-synaptic signals directly as delta (voltage) inputs to the
@@ -430,7 +430,7 @@ class DeltaProj(Projection):
 
 
 class CurrentProj(Projection):
-    """
+    r"""
     Current-based projection.
 
     Delivers current input to post-synaptic neurons by passing the
@@ -544,7 +544,7 @@ class CurrentProj(Projection):
 
 
 class align_pre_projection(Projection):
-    """
+    r"""
     Pre-synaptic alignment projection with spike generation.
 
     A convenience wrapper that combines spike generation, optional
@@ -652,7 +652,7 @@ class align_pre_projection(Projection):
 
 
 class align_post_projection(Projection):
-    """
+    r"""
     Post-synaptic alignment projection with spike generation.
 
     A convenience wrapper that combines spike generation, optional

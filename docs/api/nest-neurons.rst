@@ -135,7 +135,7 @@ Izhikevich Neuron
 -----------------
 
 .. autosummary::
-   :toctree: generated/
+   :toctree: generated/nest/
    :nosignatures:
    :template: classtemplate.rst
 

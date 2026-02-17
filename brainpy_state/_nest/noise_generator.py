@@ -28,103 +28,243 @@ __all__ = [
 
 
 class noise_generator(brainstate.nn.Dynamics):
-    r"""Gaussian white noise current generator -- NEST-compatible stimulation device.
+    r"""Gaussian white-noise current generator compatible with NEST.
 
-    Description
-    -----------
+    Generate a piecewise-constant Gaussian current with optional sinusoidal
+    modulation of the noise standard deviation and a NEST-style activity window.
 
-    ``noise_generator`` produces a piecewise-constant Gaussian "white" noise
-    current. The current changes at a user-defined interval :math:`\delta` and
-    is given by
+    **1. Stochastic process and update rule**
 
-    .. math::
-
-        I(t) = \mu + N_j \sigma \quad \text{for } t_0 + j\delta < t \le t_0 + (j+1)\delta
-
-    where :math:`N_j` are Gaussian random numbers with unit standard deviation,
-    :math:`\mu` is the mean current, :math:`\sigma` is the standard deviation,
-    and :math:`t_0` is the device onset time.
-
-    Additionally, a sinusoidally modulated term can be added to the standard
-    deviation of the noise:
+    Let :math:`\delta` be the configured noise update period. For each channel
+    and noise interval index :math:`j`, this implementation samples
 
     .. math::
 
-        I(t) = \mu + N_j \sqrt{\sigma^2 + \sigma_{\text{mod}}^2 \sin(\omega t + \phi)}
+        A_j = \mu + \xi_j \sigma_{\mathrm{eff}}(t_j), \qquad
+        \xi_j \sim \mathcal{N}(0, 1),
 
-    The effect of the noise current on a leaky integrate-and-fire neuron with
-    time constant :math:`\tau_m` and capacitance :math:`C_m` produces a membrane
-    potential variance of
+    then emits :math:`I(t)=A_j` for :math:`t_j \le t < t_j + \delta` while the
+    generator is active. The effective standard deviation is
 
     .. math::
 
-        \Sigma^2 = \frac{\delta \tau_m \sigma^2}{2 C_m^2}
+        \sigma_{\mathrm{eff}}(t)
+        = \sqrt{\max\!\left(\sigma^2 + \sigma_{\mathrm{mod}}^2
+          \sin(\omega t + \phi),\, 0\right)},
+        \qquad \omega = \frac{2\pi f}{1000}.
 
-    for :math:`\delta \ll \tau_m`.
+    The non-negativity clamp follows the implementation exactly:
+    ``maximum(., 0)`` is applied before ``sqrt`` so modulation never yields
+    invalid real values.
 
-    This is a brainpy.state re-implementation of the NEST simulator device of
-    the same name.
+    **2. Variance approximation and assumptions**
 
-    .. note::
+    For an LIF membrane receiving the unmodulated process
+    (:math:`\sigma_{\mathrm{mod}}=0`) with :math:`\delta \ll \tau_m`, the
+    asymptotic membrane potential variance is approximated by
 
-       Unlike NEST, where each target neuron receives a different random current,
-       this implementation generates a single random current per call to
-       ``update()``. To provide independent noise to multiple neurons, create
-       separate ``noise_generator`` instances.
+    .. math::
+
+        \Sigma^2 = \frac{\delta \tau_m \sigma^2}{2 C_m^2}.
+
+    This approximation assumes linear subthreshold dynamics, stationary
+    statistics, and sufficiently small update period relative to membrane time
+    constant. Increasing :math:`\delta` increases drive variance linearly and
+    shifts the spectrum away from ideal white-noise behavior.
+
+    **3. Timing semantics and computational implications**
+
+    The activity window is half-open:
+    :math:`[t_0 + t_{\mathrm{start,rel}},\ t_0 + t_{\mathrm{stop,rel}})`.
+    Therefore, ``start`` is inclusive and ``stop`` is exclusive.
+
+    Noise amplitudes are refreshed when
+    ``step_counter % round(noise_dt / dt) == 0``. If ``noise_dt is None``, then
+    ``noise_dt = dt`` and updates occur every simulation step.
+
+    This implementation is vectorized over ``self.varshape`` and performs one
+    PRNG split and one Gaussian draw per :meth:`update` call, followed by a
+    mask that either accepts the new sample or retains the previous amplitude.
+    Work per call is :math:`O(\prod \mathrm{varshape})`.
 
     Parameters
     ----------
+    in_size : Size, optional
+        Output size/shape specification for :class:`brainstate.nn.Dynamics`.
+        The generated current shape is ``self.varshape`` derived from
+        ``in_size``. Default is ``1``.
+    mean : ArrayLike, optional
+        Mean current :math:`\mu` (typically pA). Scalars or arrays are accepted
+        and broadcast to ``self.varshape`` by :func:`braintools.init.param`.
+        Default is ``0. * u.pA``.
+    std : ArrayLike, optional
+        Baseline standard deviation :math:`\sigma` (typically pA), broadcast to
+        ``self.varshape``. Default is ``0. * u.pA``.
+    noise_dt : ArrayLike or None, optional
+        Noise refresh interval :math:`\delta` (typically ms). ``None`` means
+        use simulation ``dt`` at runtime. Values are converted to integer steps
+        by ``round(noise_dt / dt)``; valid execution requires this rounded
+        value to be at least ``1`` for every channel. Default is ``None``.
+    std_mod : ArrayLike, optional
+        Modulation amplitude :math:`\sigma_{\mathrm{mod}}` (typically pA) for
+        the sinusoidal term in :math:`\sigma_{\mathrm{eff}}`. Broadcast to
+        ``self.varshape``. Default is ``0. * u.pA``.
+    frequency : ArrayLike, optional
+        Modulation frequency :math:`f` in Hz (or unitless values interpreted as
+        Hz), broadcast to ``self.varshape``. Converted internally to rad/ms
+        using :math:`\omega = 2\pi f/1000`. Default is ``0. * u.Hz``.
+    phase : ArrayLike, optional
+        Modulation phase in degrees, broadcast to ``self.varshape``.
+        Converted internally as
+        :math:`\phi = \mathrm{phase}\cdot 2\pi/360`. Default is ``0.``.
+    start : ArrayLike, optional
+        Relative activation time :math:`t_{\mathrm{start,rel}}` (typically ms),
+        broadcast to ``self.varshape``. Effective lower bound is
+        ``origin + start``. Default is ``0. * u.ms``.
+    stop : ArrayLike or None, optional
+        Relative deactivation time :math:`t_{\mathrm{stop,rel}}` (typically ms),
+        broadcast to ``self.varshape`` when provided. Effective upper bound is
+        ``origin + stop`` and is exclusive. ``None`` means no upper bound.
+        Default is ``None``.
+    origin : ArrayLike, optional
+        Time origin :math:`t_0` (typically ms), broadcast to ``self.varshape``
+        and added to ``start``/``stop``. Default is ``0. * u.ms``.
+    seed : int or None, optional
+        PRNG seed used by :func:`jax.random.PRNGKey` in :meth:`init_state`.
+        ``None`` selects deterministic fallback seed ``0``. Default is
+        ``None``.
+    name : str or None, optional
+        Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
-    The following parameters can be set. Default values match the NEST simulator.
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 18 17 22 43
 
-    =============== ================== =============================== ============================================
-    **Parameter**   **Default**        **Math equivalent**             **Description**
-    =============== ================== =============================== ============================================
-    ``in_size``     1                                                  Output size of the generator
-    ``mean``        0 pA               :math:`\mu`                     Mean current
-    ``std``         0 pA               :math:`\sigma`                  Standard deviation of current
-    ``noise_dt``    ``None``                                           Interval between noise updates (ms).
-                                                                       Defaults to simulation dt.
-    ``std_mod``     0 pA               :math:`\sigma_{\text{mod}}`     Modulation amplitude of std
-    ``frequency``   0 Hz               :math:`f`                       Frequency of sine modulation
-    ``phase``       0 deg              :math:`\phi_{\text{deg}}`       Phase of sine modulation (0--360 deg)
-    ``start``       0 ms               :math:`t_{\text{start,rel}}`    Activation time relative to ``origin``
-    ``stop``        ``None`` (inf)     :math:`t_{\text{stop,rel}}`     Deactivation time relative to ``origin``
-    ``origin``      0 ms               :math:`t_0`                     Global time offset
-    ``seed``        ``None``                                           Random seed for reproducibility
-    =============== ================== =============================== ============================================
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``mean``
+         - ``0. * u.pA``
+         - :math:`\mu`
+         - Mean of the Gaussian current samples.
+       * - ``std``
+         - ``0. * u.pA``
+         - :math:`\sigma`
+         - Baseline standard deviation of the noise process.
+       * - ``noise_dt``
+         - ``None``
+         - :math:`\delta`
+         - Interval between sample refreshes; defaults to simulation ``dt``.
+       * - ``std_mod``
+         - ``0. * u.pA``
+         - :math:`\sigma_{\mathrm{mod}}`
+         - Amplitude of sinusoidal modulation in variance term.
+       * - ``frequency``
+         - ``0. * u.Hz``
+         - :math:`f`
+         - Modulation frequency converted to :math:`\omega=2\pi f/1000`.
+       * - ``phase``
+         - ``0.``
+         - :math:`\phi_{\mathrm{deg}}`
+         - Modulation phase in degrees, converted to radians in update.
+       * - ``start``
+         - ``0. * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative lower activity bound added to ``origin``.
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative upper activity bound added to ``origin``.
+       * - ``origin``
+         - ``0. * u.ms``
+         - :math:`t_0`
+         - Global time offset for both activity boundaries.
 
-    Examples
-    --------
+    Returns
+    -------
+    out : Any
+        Dynamics node. Calling :meth:`update` returns a current-like quantity
+        with shape ``self.varshape``: sampled Gaussian drive while active and
+        zeros while inactive.
 
-    Basic usage:
+    Raises
+    ------
+    ValueError
+        If ``in_size`` is invalid or if array-like parameters cannot be
+        broadcast to ``self.varshape`` by :func:`braintools.init.param`.
+    KeyError
+        If runtime environment keys such as ``'t'`` or ``'dt'`` are missing
+        when :meth:`update` is called.
+    TypeError
+        If unitful/unitless arithmetic is incompatible (for example invalid
+        combinations among time, frequency, and current parameters).
+    ZeroDivisionError
+        If ``round(noise_dt / dt)`` evaluates to ``0`` so modulo scheduling in
+        :meth:`update` attempts division by zero.
 
-    >>> import brainpy
-    >>> import brainstate
-    >>> import brainunit as u
-    >>>
-    >>> with brainstate.environ.context(dt=0.1 * u.ms):
-    ...     ng = brainpy.state.noise_generator(mean=0. * u.pA,
-    ...                              std=100. * u.pA,
-    ...                              seed=42)
-    ...     neuron = brainpy.state.iaf_psc_delta(1)
-    ...     neuron.init_state()
-    ...
-    ...     for step in range(1000):
-    ...         with brainstate.environ.context(t=step * 0.1 * u.ms):
-    ...             current = ng.update()
-    ...             spk = neuron.update(x=current)
-
-    References
-    ----------
-    .. [1] NEST Simulator, ``noise_generator`` device.
-           https://nest-simulator.readthedocs.io/en/stable/models/noise_generator.html
+    Notes
+    -----
+    NEST describes independent random currents per target neuron. In this
+    implementation, one generator instance emits one current vector per call;
+    downstream targets reading the same channel receive the same value for that
+    step. Use separate generator instances to guarantee independent streams.
 
     See Also
     --------
-    dc_generator : Constant current generator
-    ac_generator : Sinusoidal current generator
-    step_current_generator : Piecewise constant current generator
+    dc_generator : Constant current stimulation device.
+    ac_generator : Sinusoidal current stimulation device.
+    step_current_generator : Piecewise-constant current stimulation device.
+
+    References
+    ----------
+    .. [1] NEST Simulator documentation for ``noise_generator``:
+           https://nest-simulator.readthedocs.io/en/stable/models/noise_generator.html
+
+    Examples
+    --------
+    Basic usage: unmodulated white-noise drive injected into a single neuron.
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     stim = brainpy.state.noise_generator(
+       ...         in_size=1,
+       ...         mean=0.0 * u.pA,
+       ...         std=100.0 * u.pA,
+       ...         noise_dt=0.2 * u.ms,
+       ...         seed=42,
+       ...     )
+       ...     neuron = brainpy.state.iaf_psc_delta(1)
+       ...     neuron.init_state()
+       ...     with brainstate.environ.context(t=1.0 * u.ms):
+       ...         current = stim.update()
+       ...         _ = neuron.update(x=current)
+
+    Sinusoidally modulated noise: variance oscillates at gamma frequency (40 Hz)
+    within a restricted activity window.
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainunit as u
+       >>> gen = brainpy.state.noise_generator(
+       ...     in_size=4,
+       ...     mean=50.0 * u.pA,
+       ...     std=80.0 * u.pA,
+       ...     noise_dt=1.0 * u.ms,
+       ...     std_mod=40.0 * u.pA,
+       ...     frequency=40.0 * u.Hz,
+       ...     phase=0.0,
+       ...     start=10.0 * u.ms,
+       ...     stop=110.0 * u.ms,
+       ...     seed=0,
+       ... )
     """
     __module__ = 'brainpy.state'
 
@@ -161,7 +301,67 @@ class noise_generator(brainstate.nn.Dynamics):
         self.seed = seed
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize the RNG key and current amplitude state."""
+        r"""Initialize RNG and internal state buffers for piecewise noise updates.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Optional batch dimension forwarded to :func:`braintools.init.param`
+            when allocating ``current_amp``. ``None`` keeps unbatched state.
+            Default is ``None``.
+        **kwargs : Any
+            Extra keyword arguments accepted for API compatibility with
+            :class:`brainstate.nn.Dynamics`. They are currently unused.
+
+        Returns
+        -------
+        out : None
+            The method mutates internal state by creating three attributes:
+
+            - ``_rng_key`` -- JAX PRNG key derived from ``seed`` (or ``0`` when
+              ``seed is None``).
+            - ``current_amp`` -- :class:`brainstate.ShortTermState` holding the
+              piecewise-constant current amplitude, initialized to
+              ``0. * u.pA`` broadcast to ``self.varshape``.
+            - ``_step_counter`` -- :class:`brainstate.ShortTermState` holding a
+              scalar ``int32`` step counter, initialized to ``0``.
+
+        Raises
+        ------
+        TypeError
+            If ``seed`` cannot be interpreted by :func:`jax.random.PRNGKey`.
+        ValueError
+            If ``batch_size`` or shape metadata is incompatible with
+            :func:`braintools.init.param`.
+
+        Notes
+        -----
+        The PRNG key is stored as a plain Python/JAX attribute rather than a
+        :class:`brainstate.ShortTermState`, meaning it is **not** managed by
+        the brainstate state-management system and will not be checkpointed
+        automatically. Reproducible runs therefore require re-calling
+        ``init_state`` with the same ``seed`` before each simulation.
+
+        See Also
+        --------
+        noise_generator.update : Uses ``_rng_key``, ``current_amp``, and
+            ``_step_counter`` populated by this method.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import noise_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = noise_generator(
+           ...         in_size=2,
+           ...         std=50.0 * u.pA,
+           ...         seed=7,
+           ...     )
+           ...     gen.init_state()
+        """
         if self.seed is not None:
             self._rng_key = jax.random.PRNGKey(self.seed)
         else:
@@ -177,16 +377,82 @@ class noise_generator(brainstate.nn.Dynamics):
         self._step_counter = brainstate.ShortTermState(jnp.array(0, dtype=jnp.int32))
 
     def update(self):
-        """Return the noise current at the current simulation time.
-
-        The noise current is piecewise constant, changing at intervals of
-        ``noise_dt`` (defaults to simulation ``dt``). At each change point, a
-        new Gaussian random number is drawn.
+        r"""Advance the generator one simulation step and return current output.
 
         Returns
         -------
-        current : Quantity[pA]
-            The output noise current, shaped ``(in_size,)``.
+        out : Any
+            Current-like quantity with shape ``self.varshape``. If active,
+            values equal the cached piecewise-constant amplitude sampled from
+            ``mean + N(0,1) * effective_std``; otherwise values are zero.
+
+        Raises
+        ------
+        KeyError
+            If environment keys ``'t'`` or ``'dt'`` are missing.
+        TypeError
+            If unit conversions/comparisons are invalid (for example
+            incompatible units in ``noise_dt``, ``dt``, or time bounds).
+        ZeroDivisionError
+            If ``round(noise_dt / dt)`` is ``0`` and modulo scheduling is
+            evaluated with zero divisor.
+
+        Notes
+        -----
+        The update proceeds in four phases each call:
+
+        1. **Step scheduling** -- ``noise_dt`` is resolved to a whole number of
+           simulation steps ``dt_steps = round(noise_dt / dt)``.  A boolean
+           flag ``need_update = (step_counter % dt_steps) == 0`` gates whether
+           a new amplitude is drawn.
+        2. **Effective standard deviation** -- computed as
+
+           .. math::
+
+               \sigma_{\mathrm{eff}} =
+               \sqrt{\max\!\left(\sigma^2 +
+               \sigma_{\mathrm{mod}}^2 \sin(\omega t + \phi),\, 0\right)}
+
+           using :func:`u.math.maximum` before :func:`u.math.sqrt` so the
+           radicand is always non-negative.
+
+        3. **Sample draw** -- ``noise = jax.random.normal(subkey, varshape)``;
+           the PRNG key is advanced every call regardless of ``need_update``.
+        4. **Masked update** -- ``current_amp`` retains its previous value on
+           steps where ``need_update`` is ``False``, avoiding redundant draws
+           while keeping the sample schedule deterministic.
+
+        The activity window is ``origin + start <= t < origin + stop``
+        (lower-bounded only when ``stop is None``). While inactive the output
+        is exactly zero regardless of ``current_amp``.
+
+        See Also
+        --------
+        noise_generator.init_state : Must be called before the first update.
+        noise_generator : Class-level parameter definitions and model equations.
+        ac_generator.update : Windowed sinusoidal-current update rule.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> from brainpy.state import noise_generator
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     gen = noise_generator(
+           ...         in_size=3,
+           ...         mean=0.0 * u.pA,
+           ...         std=120.0 * u.pA,
+           ...         noise_dt=1.0 * u.ms,
+           ...         start=0.0 * u.ms,
+           ...         stop=10.0 * u.ms,
+           ...         seed=1,
+           ...     )
+           ...     gen.init_state()
+           ...     with brainstate.environ.context(t=5.0 * u.ms):
+           ...         current = gen.update()
+           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

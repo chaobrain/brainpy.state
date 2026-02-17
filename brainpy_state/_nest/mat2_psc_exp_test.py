@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for mat2_psc_exp neuron model.
 
 These tests verify that the implementation produces the same dynamics as NEST's
@@ -63,7 +63,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 1: Default parameters match NEST
     # ------------------------------------------------------------------
     def test_nest_default_parameters(self):
-        """Verify that all default parameter values match NEST's mat2_psc_exp."""
+        r"""Verify that all default parameter values match NEST's mat2_psc_exp."""
         neuron = mat2_psc_exp(1)
         self.assertEqual(neuron.E_L, -70. * u.mV)
         self.assertEqual(neuron.C_m, 100. * u.pF)
@@ -83,7 +83,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 2: Parameter validation
     # ------------------------------------------------------------------
     def test_parameter_validation(self):
-        """Test that invalid parameters raise ValueError."""
+        r"""Test that invalid parameters raise ValueError."""
         with self.assertRaises(ValueError):
             mat2_psc_exp(1, C_m=0.0 * u.pF)
         with self.assertRaises(ValueError):
@@ -110,7 +110,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 3: NEST reference spike times
     # ------------------------------------------------------------------
     def test_nest_reference_spike_times(self):
-        """
+        r"""
         Reproduce the NEST test_mat2_psc_exp.py simulation exactly.
 
         A DC current of 2400 pA is injected via a dc_generator connected
@@ -146,7 +146,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 4: NEST reference V_m and V_th traces
     # ------------------------------------------------------------------
     def test_nest_reference_potentials(self):
-        """
+        r"""
         Verify V_m and V_th traces match the NEST reference data from
         test_mat2_psc_exp.py for the first 21 time steps.
         """
@@ -218,7 +218,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 5: Subthreshold dynamics match exact integration
     # ------------------------------------------------------------------
     def test_subthreshold_dynamics(self):
-        """
+        r"""
         Verify subthreshold membrane dynamics match the exact integration
         equations when no spikes occur.
         """
@@ -285,7 +285,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 6: No voltage reset on spike
     # ------------------------------------------------------------------
     def test_no_voltage_reset_on_spike(self):
-        """
+        r"""
         Verify that the membrane potential is NOT reset after a spike.
         This is the key difference from standard LIF models.
         """
@@ -321,7 +321,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 7: Adaptive threshold jumps on spike
     # ------------------------------------------------------------------
     def test_threshold_jump_on_spike(self):
-        """
+        r"""
         Verify that V_th_1 and V_th_2 jump by alpha_1 and alpha_2 on spike.
         """
         with brainstate.environ.context(dt=self.dt):
@@ -363,7 +363,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 8: Refractory period prevents spiking
     # ------------------------------------------------------------------
     def test_refractory_period(self):
-        """
+        r"""
         Verify that the neuron cannot fire during the refractory period.
         With t_ref=2ms and dt=0.1ms, refractory lasts 20 steps.
         """
@@ -395,7 +395,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 9: Synaptic current response
     # ------------------------------------------------------------------
     def test_synaptic_current_response(self):
-        """
+        r"""
         Verify that excitatory and inhibitory synaptic currents follow
         exponential decay after spike input.
         """
@@ -447,7 +447,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 10: Full step-by-step equation match
     # ------------------------------------------------------------------
     def test_step_equations_match_reference(self):
-        """
+        r"""
         Verify internal state variables step-by-step against the exact
         NEST update equations for mat2_psc_exp, including spike input,
         threshold adaptation, and refractory period.
@@ -579,7 +579,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 11: Threshold decay without spikes
     # ------------------------------------------------------------------
     def test_threshold_decay_without_spikes(self):
-        """
+        r"""
         Verify that V_th_1 and V_th_2 decay exponentially when no spikes
         occur (e.g., after manually setting them).
         """
@@ -623,7 +623,7 @@ class TestMat2PscExp(unittest.TestCase):
     # Test 12: State initialization
     # ------------------------------------------------------------------
     def test_state_initialization(self):
-        """Verify that all state variables are initialized correctly."""
+        r"""Verify that all state variables are initialized correctly."""
         with brainstate.environ.context(dt=self.dt):
             neuron = mat2_psc_exp(
                 1,

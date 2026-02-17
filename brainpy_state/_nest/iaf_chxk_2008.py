@@ -35,34 +35,27 @@ __all__ = [
 
 
 class iaf_chxk_2008(Neuron):
-    r"""NEST-compatible ``iaf_chxk_2008`` neuron model.
-
-    Short description
-    -----------------
-
-    Conductance-based leaky integrate-and-fire model with alpha synapses and
-    spike-triggered after-hyperpolarization (AHP), used in Casti et al. (2008).
+    r"""NEST-compatible ``iaf_chxk_2008`` with alpha synapses and precise AHP timing.
 
     Description
     -----------
 
-    This implementation mirrors NEST ``models/iaf_chxk_2008.{h,cpp}``,
-    including update order and precise output-spike timing semantics.
+    ``iaf_chxk_2008`` is a conductance-based leaky integrate-and-fire neuron
+    with alpha-function excitatory/inhibitory synaptic conductances and a
+    spike-triggered after-hyperpolarization (AHP) conductance, developed for
+    modeling retina-LGN transmission (Casti et al., 2008). The implementation
+    follows NEST ``models/iaf_chxk_2008.{h,cpp}`` semantics: adaptive RKF45
+    integration, threshold crossing from below, precise in-step spike timing via
+    linear interpolation, spike-triggered AHP kicks with exact sub-step decay,
+    and optional ``ahp_bug`` mode that reproduces the historical single-AHP
+    behavior from the original Fortran code.
 
-    Core model characteristics:
+    **1. Membrane and conductance dynamics**
 
-    - conductance-based membrane equation,
-    - alpha-shaped excitatory and inhibitory synaptic conductances,
-    - alpha-shaped AHP conductance triggered on spikes,
-    - threshold crossing detection from below (no explicit reset, no refractory),
-    - one-step delayed current-event buffering for external current input,
-    - optional ``ahp_bug`` mode that reproduces the historical Fortran behavior
-      from Casti et al. (2008), where only the most recent AHP is retained.
-
-    Membrane and conductance dynamics
-    .................................
-
-    With membrane voltage :math:`V_m`, subthreshold dynamics are:
+    Let :math:`V_m` be membrane potential (mV), :math:`g_\mathrm{ex}`,
+    :math:`g_\mathrm{in}`, :math:`g_\mathrm{ahp,state}` be conductance states
+    (nS), and :math:`I_\mathrm{stim}` be the one-step buffered external current
+    (pA). Subthreshold dynamics are
 
     .. math::
 
@@ -77,14 +70,15 @@ class iaf_chxk_2008(Neuron):
        I_\mathrm{leak} = g_L (V_m - E_L),
        \quad
        I_{\mathrm{syn,ex}} = g_\mathrm{ex}(V_m - E_\mathrm{ex}),
-       \quad
-       I_{\mathrm{syn,in}} = g_\mathrm{in}(V_m - E_\mathrm{in}),
 
     .. math::
 
+       I_{\mathrm{syn,in}} = g_\mathrm{in}(V_m - E_\mathrm{in}),
+       \quad
        I_\mathrm{ahp} = g_\mathrm{ahp,state}(V_m - E_\mathrm{ahp}).
 
-    Excitatory, inhibitory, and AHP channels follow alpha-function state pairs:
+    Each conductance channel (excitatory, inhibitory, AHP) evolves as an
+    alpha-function state pair :math:`(dg, g_\mathrm{state})`:
 
     .. math::
 
@@ -92,10 +86,9 @@ class iaf_chxk_2008(Neuron):
        \qquad
        \frac{dg_\mathrm{state}}{dt} = dg - \frac{g_\mathrm{state}}{\tau}.
 
-    Signed incoming spike weights are interpreted in nS:
-    positive weights drive the excitatory channel and negative weights drive the
-    inhibitory channel (absolute value). Jumps are applied to ``dg`` with NEST
-    normalization:
+    Incoming spike weights (nS) are interpreted with sign convention: positive
+    weights drive excitatory channel, negative weights (absolute value) drive
+    inhibitory channel. Jumps are applied to :math:`dg` with NEST normalization:
 
     .. math::
 
@@ -103,8 +96,7 @@ class iaf_chxk_2008(Neuron):
        \qquad
        dg_\mathrm{in} \leftarrow dg_\mathrm{in} + \frac{e}{\tau_\mathrm{in}} |w_-|.
 
-    Precise output spike timing
-    ...........................
+    **2. Precise output spike timing and AHP kick**
 
     A spike is emitted only on threshold crossing from below:
 
@@ -112,77 +104,346 @@ class iaf_chxk_2008(Neuron):
 
        V_m(t_k^-) < V_{th} \;\wedge\; V_m(t_k^+) \ge V_{th}.
 
-    Crossing time is linearly interpolated inside the step. If ``dt_spike`` is
-    the time from spike to the end of the current step:
+    When a crossing is detected, the precise in-step spike time is computed by
+    linear interpolation. Let :math:`dt_\mathrm{spike}` be the duration from
+    spike time to step end:
 
     .. math::
 
        dt_\mathrm{spike}
        = h \frac{V_m(t_k^+) - V_{th}}{V_m(t_k^+) - V_m(t_k^-)},
 
-    the new AHP alpha is started at spike time and decayed to step end:
+    where :math:`h` is the step size. The AHP alpha is initialized at spike
+    time and decayed forward to step end:
 
     .. math::
 
        \Delta dg_\mathrm{ahp}
        = \frac{g_\mathrm{ahp} e}{\tau_\mathrm{ahp}}
          \exp\!\left(-\frac{dt_\mathrm{spike}}{\tau_\mathrm{ahp}}\right),
-       \qquad
+
+    .. math::
+
        \Delta g_\mathrm{ahp,state}
        = \Delta dg_\mathrm{ahp}\, dt_\mathrm{spike}.
 
-    If ``ahp_bug=True``, these values replace previous AHP state; otherwise
-    they are added.
+    If ``ahp_bug=True``, these values **replace** the current AHP state (single
+    AHP mode); otherwise they are **added** (multiple AHP accumulation).
 
-    Update order (NEST semantics)
-    .............................
+    **3. Numerical integration via RKF45**
 
-    Per simulation step:
+    The seven coupled ODEs (:math:`V_m`, three :math:`dg` states, three
+    :math:`g_\mathrm{state}` variables) are integrated using Runge-Kutta-Fehlberg
+    4(5) with adaptive step size control. Local truncation error is estimated
+    by comparing 4th and 5th order solutions and step size is adjusted to keep
+    error below ``_ATOL = 1e-3``. Minimum step size is ``_MIN_H = 1e-8`` ms and
+    iteration limit is ``_MAX_ITERS = 10000`` per global step.
 
-    1. Integrate ODE states on :math:`(t, t+dt]` via adaptive RKF45.
-    2. Check threshold crossing from below and, if crossed:
-       - compute precise in-step spike time by linear interpolation,
-       - apply AHP kick at that spike time (with optional ``ahp_bug`` mode),
-       - emit a spike for the current step.
-    3. Apply arriving signed spike weights to ``dg_ex`` and ``dg_in``.
-    4. Store external current input into one-step delayed ``I_stim``.
+    **4. Update order matching NEST semantics**
+
+    Each simulation step follows NEST ordering:
+
+    1. Integrate all ODE states over :math:`[t, t+dt]` via RKF45.
+    2. Check threshold crossing from below; if crossed, compute precise spike
+       time and apply AHP kick at that time (with ``ahp_bug`` mode if enabled).
+    3. Apply arriving signed spike weights to :math:`dg_\mathrm{ex}` and
+       :math:`dg_\mathrm{in}` after integration completes.
+    4. Store incoming continuous current ``x`` into buffered ``I_stim`` for
+       next step (NEST current-event timing convention).
+
+    **5. Assumptions, constraints, and failure modes**
+
+    - Parameters are scalar or broadcastable to ``self.varshape``.
+    - Construction-time constraints enforce ``C_m > 0``, ``tau_syn_ex > 0``,
+      ``tau_syn_in > 0``, ``tau_ahp > 0``.
+    - No explicit reset or refractory period: neuron can spike repeatedly if
+      voltage remains above threshold.
+    - Adaptive integration can fail if ``_MAX_ITERS`` is exceeded; in practice
+      this is rare with reasonable parameter values.
+    - Continuous input ``x`` passed to :meth:`update` affects the **next** step
+      due to one-step buffering.
+    - Per-step complexity is :math:`O(|\mathrm{state}| \cdot K_\mathrm{iter})`
+      where :math:`K_\mathrm{iter}` is the number of RKF45 substeps (typically
+      1-5 per global step).
 
     Parameters
     ----------
+    in_size : Size
+        Population shape specification. Model parameters and states are
+        broadcast to ``self.varshape`` derived from ``in_size``.
+    V_th : ArrayLike, optional
+        Spike threshold voltage :math:`V_{th}` in mV, broadcastable to
+        ``self.varshape``. Default is ``-45. * u.mV``.
+    g_L : ArrayLike, optional
+        Leak conductance :math:`g_L` in nS, broadcastable to ``self.varshape``.
+        Default is ``100. * u.nS``.
+    C_m : ArrayLike, optional
+        Membrane capacitance :math:`C_m` in pF, broadcastable to
+        ``self.varshape``. Must be strictly positive elementwise.
+        Default is ``1000. * u.pF``.
+    E_ex : ArrayLike, optional
+        Excitatory reversal potential :math:`E_\mathrm{ex}` in mV,
+        broadcastable to ``self.varshape``. Default is ``20. * u.mV``.
+    E_in : ArrayLike, optional
+        Inhibitory reversal potential :math:`E_\mathrm{in}` in mV,
+        broadcastable to ``self.varshape``. Default is ``-90. * u.mV``.
+    E_L : ArrayLike, optional
+        Resting potential :math:`E_L` in mV, broadcastable to
+        ``self.varshape``. Default is ``-60. * u.mV``.
+    tau_syn_ex : ArrayLike, optional
+        Excitatory alpha time constant :math:`\tau_\mathrm{ex}` in ms,
+        broadcastable to ``self.varshape``. Must be strictly positive
+        elementwise. Default is ``1. * u.ms``.
+    tau_syn_in : ArrayLike, optional
+        Inhibitory alpha time constant :math:`\tau_\mathrm{in}` in ms,
+        broadcastable to ``self.varshape``. Must be strictly positive
+        elementwise. Default is ``1. * u.ms``.
+    I_e : ArrayLike, optional
+        Constant external current :math:`I_e` in pA, broadcastable to
+        ``self.varshape``. Added in each integration substep.
+        Default is ``0. * u.pA``.
+    tau_ahp : ArrayLike, optional
+        AHP alpha time constant :math:`\tau_\mathrm{ahp}` in ms,
+        broadcastable to ``self.varshape``. Must be strictly positive
+        elementwise. Default is ``0.5 * u.ms``.
+    E_ahp : ArrayLike, optional
+        AHP reversal potential :math:`E_\mathrm{ahp}` in mV, broadcastable to
+        ``self.varshape``. Default is ``-95. * u.mV``.
+    g_ahp : ArrayLike, optional
+        AHP kick conductance scale :math:`g_\mathrm{ahp}` in nS,
+        broadcastable to ``self.varshape``. Controls magnitude of AHP alpha
+        initialized at each spike. Default is ``443.8 * u.nS``.
+    ahp_bug : ArrayLike, optional
+        Boolean flag (broadcastable to ``self.varshape``) enabling historical
+        single-AHP bug mode. If ``True``, each spike replaces existing AHP
+        state with new AHP kick. If ``False``, AHP kicks accumulate.
+        Default is ``False``.
+    V_initializer : Callable, optional
+        Initializer used by :meth:`init_state` for membrane potential ``V``.
+        Must return mV-compatible values with shape compatible with
+        ``self.varshape`` (and optional batch prefix).
+        Default is ``braintools.init.Constant(-60. * u.mV)``.
+    g_ex_initializer : Callable, optional
+        Initializer for excitatory conductance state ``g_ex`` (nS).
+        Default is ``braintools.init.Constant(0. * u.nS)``.
+    g_in_initializer : Callable, optional
+        Initializer for inhibitory conductance state ``g_in`` (nS).
+        Default is ``braintools.init.Constant(0. * u.nS)``.
+    g_ahp_initializer : Callable, optional
+        Initializer for AHP conductance state ``g_ahp_state`` (nS).
+        Default is ``braintools.init.Constant(0. * u.nS)``.
+    spk_fun : Callable, optional
+        Surrogate spike function used by :meth:`get_spike` and
+        :meth:`update`. Receives normalized threshold distance tensor.
+        Default is ``braintools.surrogate.ReluGrad()``.
+    spk_reset : str, optional
+        Reset policy forwarded to :class:`~brainpy_state._base.Neuron`.
+        ``'hard'`` matches NEST behavior. Default is ``'hard'``.
+    name : str or None, optional
+        Optional node name.
 
-    ==================== ================== ==============================================
-    **Parameter**        **Default**        **Description**
-    ==================== ================== ==============================================
-    ``in_size``          (required)         Population shape
-    ``V_th``             -45.0 mV           Spike threshold
-    ``g_L``              100.0 nS           Leak conductance
-    ``C_m``              1000.0 pF          Membrane capacitance
-    ``E_ex``             20.0 mV            Excitatory reversal potential
-    ``E_in``             -90.0 mV           Inhibitory reversal potential
-    ``E_L``              -60.0 mV           Leak reversal potential
-    ``tau_syn_ex``       1.0 ms             Excitatory alpha time constant
-    ``tau_syn_in``       1.0 ms             Inhibitory alpha time constant
-    ``I_e``              0.0 pA             Constant external current
-    ``tau_ahp``          0.5 ms             AHP alpha time constant
-    ``E_ahp``            -95.0 mV           AHP reversal potential
-    ``g_ahp``            443.8 nS           AHP kick conductance scale
-    ``ahp_bug``          ``False``          Reproduce historical single-AHP bug
-    ``V_initializer``    Constant(E_L)      Membrane initializer
-    ``g_ex_initializer`` Constant(0 nS)     Excitatory conductance initializer
-    ``g_in_initializer`` Constant(0 nS)     Inhibitory conductance initializer
-    ``g_ahp_initializer``Constant(0 nS)     AHP conductance-state initializer
-    ``spk_fun``          ReluGrad()         Surrogate spike function
-    ``spk_reset``        ``'hard'``         Reset mode for surrogate output
-    ==================== ================== ==============================================
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 18 28 14 15 35
+
+       * - Parameter
+         - Type / shape / unit
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``in_size``
+         - :class:`~brainstate.typing.Size`; scalar/tuple
+         - required
+         - --
+         - Defines ``self.varshape`` for parameter/state broadcasting.
+       * - ``V_th``
+         - ArrayLike, broadcastable to ``self.varshape`` (mV)
+         - ``-45. * u.mV``
+         - :math:`V_{th}`
+         - Spike threshold voltage.
+       * - ``g_L``
+         - ArrayLike, broadcastable (nS)
+         - ``100. * u.nS``
+         - :math:`g_L`
+         - Leak conductance.
+       * - ``C_m``
+         - ArrayLike, broadcastable (pF), ``> 0``
+         - ``1000. * u.pF``
+         - :math:`C_m`
+         - Membrane capacitance.
+       * - ``E_ex``
+         - ArrayLike, broadcastable (mV)
+         - ``20. * u.mV``
+         - :math:`E_\mathrm{ex}`
+         - Excitatory reversal potential.
+       * - ``E_in``
+         - ArrayLike, broadcastable (mV)
+         - ``-90. * u.mV``
+         - :math:`E_\mathrm{in}`
+         - Inhibitory reversal potential.
+       * - ``E_L``
+         - ArrayLike, broadcastable (mV)
+         - ``-60. * u.mV``
+         - :math:`E_L`
+         - Resting potential.
+       * - ``tau_syn_ex``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``1. * u.ms``
+         - :math:`\tau_\mathrm{ex}`
+         - Excitatory alpha time constant.
+       * - ``tau_syn_in``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``1. * u.ms``
+         - :math:`\tau_\mathrm{in}`
+         - Inhibitory alpha time constant.
+       * - ``I_e``
+         - ArrayLike, broadcastable (pA)
+         - ``0. * u.pA``
+         - :math:`I_e`
+         - Constant external current.
+       * - ``tau_ahp``
+         - ArrayLike, broadcastable (ms), ``> 0``
+         - ``0.5 * u.ms``
+         - :math:`\tau_\mathrm{ahp}`
+         - AHP alpha time constant.
+       * - ``E_ahp``
+         - ArrayLike, broadcastable (mV)
+         - ``-95. * u.mV``
+         - :math:`E_\mathrm{ahp}`
+         - AHP reversal potential.
+       * - ``g_ahp``
+         - ArrayLike, broadcastable (nS)
+         - ``443.8 * u.nS``
+         - :math:`g_\mathrm{ahp}`
+         - AHP kick conductance scale.
+       * - ``ahp_bug``
+         - ArrayLike broadcastable bool
+         - ``False``
+         - --
+         - Enable single-AHP historical bug mode.
+       * - ``V_initializer``
+         - Callable returning mV-compatible values
+         - ``Constant(-60. * u.mV)``
+         - --
+         - Initializes membrane state ``V``.
+       * - ``g_ex_initializer``
+         - Callable returning nS-compatible values
+         - ``Constant(0. * u.nS)``
+         - --
+         - Initializes excitatory conductance.
+       * - ``g_in_initializer``
+         - Callable returning nS-compatible values
+         - ``Constant(0. * u.nS)``
+         - --
+         - Initializes inhibitory conductance.
+       * - ``g_ahp_initializer``
+         - Callable returning nS-compatible values
+         - ``Constant(0. * u.nS)``
+         - --
+         - Initializes AHP conductance state.
+       * - ``spk_fun``
+         - Callable
+         - ``ReluGrad()``
+         - --
+         - Surrogate spike output nonlinearity.
+       * - ``spk_reset``
+         - str
+         - ``'hard'``
+         - --
+         - Reset mode inherited from base ``Neuron``.
+       * - ``name``
+         - str | None
+         - ``None``
+         - --
+         - Optional node name.
+
+    Returns
+    -------
+    out : Any
+        Configured neuron node. Each :meth:`update` call returns surrogate
+        spike output with shape ``self.V.value.shape``.
+
+    Raises
+    ------
+    ValueError
+        If validated constraints fail (non-positive capacitance, non-positive
+        time constants).
+    TypeError
+        If provided arguments are incompatible with expected units/callables
+        (mV, pA, pF, ms, nS).
+    KeyError
+        If simulation context values ``t`` and/or ``dt`` are missing when
+        :meth:`update` is called.
+    AttributeError
+        If :meth:`update` is called before :meth:`init_state` creates required
+        runtime states.
+
+    Attributes
+    ----------
+    V : HiddenState
+        Membrane potential state in mV.
+    dg_ex : ShortTermState
+        Excitatory conductance rate-of-change state (dimensionless).
+    g_ex : HiddenState
+        Excitatory conductance state in nS.
+    dg_in : ShortTermState
+        Inhibitory conductance rate-of-change state (dimensionless).
+    g_in : HiddenState
+        Inhibitory conductance state in nS.
+    dg_ahp : ShortTermState
+        AHP conductance rate-of-change state (dimensionless).
+    g_ahp_state : HiddenState
+        AHP conductance state in nS.
+    I_syn_ex : ShortTermState
+        Excitatory synaptic current in pA.
+    I_syn_in : ShortTermState
+        Inhibitory synaptic current in pA.
+    I_ahp : ShortTermState
+        AHP current in pA.
+    I_stim : ShortTermState
+        One-step buffered external current in pA.
+    integration_step : ShortTermState
+        Adaptive RKF45 step size hint in ms.
+    last_spike_time : ShortTermState
+        Absolute precise spike time in ms.
+    last_spike_offset : ShortTermState
+        Precise offset (ms) from right step boundary for latest spike.
 
     Notes
     -----
+    - The model has no explicit membrane reset or refractory state: after
+      crossing threshold, voltage continues to evolve and can spike again.
+    - Continuous input ``x`` passed to :meth:`update` is **buffered** and
+      affects the **next** step (NEST current-event timing).
+    - Like NEST, this model provides precise output spike timing via linear
+      interpolation but does not process off-grid spike-input offsets.
+    - RKF45 integration is performed in float64 for numerical stability and
+      written back into BrainUnit states at step end.
+    - ``ahp_bug=True`` reproduces the original Fortran behavior where only one
+      AHP is tracked; this is primarily for validation against legacy code.
 
-    - The model has no explicit reset or refractory state in NEST.
-    - ``x`` passed to :meth:`update` is buffered and affects the next step
-      (NEST current-event timing).
-    - Like NEST, this model provides precise output spike timing but does not
-      process off-grid spike-input offsets.
+    Examples
+    --------
+    Create a single neuron with default parameters and simulate:
+
+    .. code-block:: python
+
+        >>> import brainstate as bs
+        >>> import brainunit as u
+        >>> import brainpy.state as bps
+        >>> neuron = bps.iaf_chxk_2008(1)
+        >>> with bs.environ.context(dt=0.1 * u.ms):
+        ...     neuron.init_state()
+        ...     spike = neuron.update(100. * u.pA)  # buffered to next step
+
+    Inspect AHP kick behavior after spike:
+
+    .. code-block:: python
+
+        >>> neuron.V.value  # check membrane potential
+        >>> neuron.g_ahp_state.value  # check AHP conductance state
 
     Recordables
     -----------

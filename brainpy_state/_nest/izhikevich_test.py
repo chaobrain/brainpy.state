@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for the NEST-compatible Izhikevich neuron model.
 
 Run with:
@@ -36,7 +36,7 @@ from brainpy_state._nest.izhikevich import izhikevich
 
 def _nest_reference_step(v, um, I, I_e, a, b, c, d, V_th, V_min, h, spike_in,
                          consistent_integration=True):
-    """Pure-Python reference implementing the NEST izhikevich::update loop.
+    r"""Pure-Python reference implementing the NEST izhikevich::update loop.
 
     This mirrors lines 196-243 of izhikevich.cpp exactly.
 
@@ -91,7 +91,7 @@ def _nest_reference_step(v, um, I, I_e, a, b, c, d, V_th, V_min, h, spike_in,
 
 
 class TestIzhikevich(unittest.TestCase):
-    """Test suite for the NEST-compatible Izhikevich neuron model."""
+    r"""Test suite for the NEST-compatible Izhikevich neuron model."""
 
     @classmethod
     def setUpClass(cls):
@@ -106,7 +106,7 @@ class TestIzhikevich(unittest.TestCase):
         return bool(u.math.all(spk > 0.0))
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA, delta=None):
-        """Run one simulation step with optional delta input."""
+        r"""Run one simulation step with optional delta input."""
         if delta is not None:
             neuron.add_delta_input(f'delta_{step_idx}', delta)
         with brainstate.environ.context(t=step_idx * self.dt):
@@ -117,7 +117,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        """Verify all parameter defaults match NEST C++ source."""
+        r"""Verify all parameter defaults match NEST C++ source."""
         neuron = izhikevich(1)
         self.assertEqual(float(neuron.a), 0.02)
         self.assertEqual(float(neuron.b), 0.2)
@@ -130,7 +130,7 @@ class TestIzhikevich(unittest.TestCase):
         self.assertEqual(neuron.spk_reset, 'hard')
 
     def test_default_state_initialization(self):
-        """NEST default: v = -65, u = b * v = 0.2 * -65 = -13."""
+        r"""NEST default: v = -65, u = b * v = 0.2 * -65 = -13."""
         with brainstate.environ.context(dt=self.dt):
             neuron = izhikevich(1)
             neuron.init_state()
@@ -138,7 +138,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.U.value, 0.2 * -65. * u.mV))
 
     def test_custom_u_initializer(self):
-        """Allow explicit U_initializer to override the b*V default."""
+        r"""Allow explicit U_initializer to override the b*V default."""
         with brainstate.environ.context(dt=self.dt):
             neuron = izhikevich(
                 1,
@@ -152,7 +152,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_subthreshold_consistent_euler_no_input(self):
-        """Test subthreshold dynamics with consistent Euler, no external input."""
+        r"""Test subthreshold dynamics with consistent Euler, no external input."""
         h = 1.0  # ms
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -191,7 +191,7 @@ class TestIzhikevich(unittest.TestCase):
                                        msg=f"U mismatch at step {step}")
 
     def test_subthreshold_with_constant_current(self):
-        """Test subthreshold dynamics with I_e constant current."""
+        r"""Test subthreshold dynamics with I_e constant current."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -227,7 +227,7 @@ class TestIzhikevich(unittest.TestCase):
                                        msg=f"U mismatch at step {step}")
 
     def test_subthreshold_inconsistent_numerics(self):
-        """Test the published (inconsistent) Izhikevich numerics."""
+        r"""Test the published (inconsistent) Izhikevich numerics."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -263,7 +263,7 @@ class TestIzhikevich(unittest.TestCase):
                                        msg=f"U mismatch at step {step}")
 
     def test_subthreshold_fine_dt(self):
-        """Test subthreshold dynamics with dt=0.1ms (fine time step)."""
+        r"""Test subthreshold dynamics with dt=0.1ms (fine time step)."""
         h = 0.1
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -303,7 +303,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_spike_generation_and_reset(self):
-        """Neuron should spike when V >= V_th and reset V to c, U += d."""
+        r"""Neuron should spike when V >= V_th and reset V to c, U += d."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             # Start near threshold with strong current
@@ -347,7 +347,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertGreater(len(spike_steps), 0, "No spikes generated")
 
     def test_spike_exact_threshold(self):
-        """A neuron at exactly V_th should spike."""
+        r"""A neuron at exactly V_th should spike."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -372,7 +372,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_v_min_clamp(self):
-        """V_min should clamp the membrane potential from below."""
+        r"""V_min should clamp the membrane potential from below."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -392,7 +392,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertAlmostEqual(v_model, -80.0, places=10)
 
     def test_v_min_none_allows_unbounded(self):
-        """When V_min is None, V_m can go arbitrarily low."""
+        r"""When V_min is None, V_m can go arbitrarily low."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -414,7 +414,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_current_input_one_step_delayed(self):
-        """External current x is buffered and applied one step later (NEST ring buffer)."""
+        r"""External current x is buffered and applied one step later (NEST ring buffer)."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -455,7 +455,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_delta_input_added_to_v(self):
-        """Delta inputs should be added directly to V_m at the integration step."""
+        r"""Delta inputs should be added directly to V_m at the integration step."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -479,7 +479,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertAlmostEqual(v_model, v_ref, places=10)
 
     def test_delta_input_triggers_spike(self):
-        """A large delta input should push V over threshold and cause a spike."""
+        r"""A large delta input should push V over threshold and cause a spike."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -504,7 +504,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_full_trace_regular_spiking(self):
-        """Compare full spike trace (Regular Spiking neuron) against reference."""
+        r"""Compare full spike trace (Regular Spiking neuron) against reference."""
         h = 1.0
         n_steps = 500
         I_ext = 14.0  # pA, applied as I_e
@@ -556,7 +556,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertGreater(len(model_spikes), 0, "No spikes generated")
 
     def test_full_trace_chattering(self):
-        """Chattering neuron (c=-50, d=2) should produce spike bursts."""
+        r"""Chattering neuron (c=-50, d=2) should produce spike bursts."""
         h = 1.0
         n_steps = 500
 
@@ -594,7 +594,7 @@ class TestIzhikevich(unittest.TestCase):
                                        msg=f"U mismatch at step {step}")
 
     def test_full_trace_fast_spiking(self):
-        """Fast spiking neuron (a=0.1, b=0.2, c=-65, d=2)."""
+        r"""Fast spiking neuron (a=0.1, b=0.2, c=-65, d=2)."""
         h = 1.0
         n_steps = 500
 
@@ -632,7 +632,7 @@ class TestIzhikevich(unittest.TestCase):
                                        msg=f"U mismatch at step {step}")
 
     def test_full_trace_inconsistent_with_spikes(self):
-        """Test the inconsistent (published) integration with spike generation."""
+        r"""Test the inconsistent (published) integration with spike generation."""
         h = 1.0
         n_steps = 300
 
@@ -685,7 +685,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_synaptic_current_response(self):
-        """Apply a pulse of external current and verify one-step delay."""
+        r"""Apply a pulse of external current and verify one-step delay."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -723,7 +723,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_shape_single_neuron(self):
-        """State shapes for a single neuron without batch."""
+        r"""State shapes for a single neuron without batch."""
         with brainstate.environ.context(dt=self.dt):
             neuron = izhikevich(1)
             neuron.init_state()
@@ -732,7 +732,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertEqual(neuron.I.value.shape, (1,))
 
     def test_shape_with_batch(self):
-        """State shapes with batch dimension."""
+        r"""State shapes with batch dimension."""
         with brainstate.environ.context(dt=self.dt):
             neuron = izhikevich(4)
             neuron.init_state(batch_size=3)
@@ -741,7 +741,7 @@ class TestIzhikevich(unittest.TestCase):
             self.assertEqual(neuron.I.value.shape, (3, 4))
 
     def test_multi_neuron_independent(self):
-        """Multiple neurons should evolve independently."""
+        r"""Multiple neurons should evolve independently."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -765,7 +765,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_intrinsically_bursting_pattern(self):
-        """Intrinsically bursting (IB): a=0.02, b=0.2, c=-55, d=4."""
+        r"""Intrinsically bursting (IB): a=0.02, b=0.2, c=-55, d=4."""
         h = 1.0
         n_steps = 500
 
@@ -803,7 +803,7 @@ class TestIzhikevich(unittest.TestCase):
                                        msg=f"U mismatch at step {step}")
 
     def test_low_threshold_spiking_pattern(self):
-        """Low-threshold spiking (LTS): a=0.02, b=0.25, c=-65, d=2."""
+        r"""Low-threshold spiking (LTS): a=0.02, b=0.25, c=-65, d=2."""
         h = 1.0
         n_steps = 500
 
@@ -845,7 +845,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_mixed_delta_and_current_input(self):
-        """Test combining delta (spike) input and current input."""
+        r"""Test combining delta (spike) input and current input."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             neuron = izhikevich(
@@ -884,7 +884,7 @@ class TestIzhikevich(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_no_refractory_period(self):
-        """Izhikevich model has NO refractory period — can spike on consecutive steps."""
+        r"""Izhikevich model has NO refractory period — can spike on consecutive steps."""
         h = 1.0
         with brainstate.environ.context(dt=h * u.ms):
             # Use parameters that can produce very rapid spiking

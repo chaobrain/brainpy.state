@@ -38,124 +38,353 @@ _STDP_EPS = 1.0e-6
 class stdp_synapse(static_synapse):
     r"""NEST-compatible ``stdp_synapse`` connection model.
 
-    Short description
-    -----------------
+    ``stdp_synapse`` implements pair-based spike-timing dependent plasticity (STDP)
+    following Guetig et al. (2003) and the NEST reference implementation from
+    ``models/stdp_synapse.h``. The model supports asymmetric Hebbian learning with
+    configurable weight-dependent potentiation and depression exponents.
 
-    Synapse type for spike-timing dependent plasticity.
+    The synapse maintains three dynamic state variables per connection:
 
-    Description
-    -----------
+    - ``weight``: current synaptic efficacy (plastic, updated on each presynaptic spike)
+    - ``Kplus``: presynaptic eligibility trace (exponentially decays with time constant ``tau_plus``)
+    - ``t_lastspike``: timestamp of the most recent presynaptic spike
 
-    ``stdp_synapse`` mirrors NEST ``models/stdp_synapse.h`` and implements the
-    pair-based STDP rule from Guetig et al. (2003), with separate exponents for
-    potentiation and depression.
+    Postsynaptic spike history is stored internally with time constant ``tau_minus``.
+    In NEST, ``tau_minus`` is a postsynaptic neuron parameter (``ArchivingNode``);
+    here it is stored on the synapse for standalone compatibility, enabling STDP
+    simulation without requiring postsynaptic neurons to implement archiving APIs.
 
-    This class stores per-connection state:
+    **1. Mathematical Model**
 
-    - ``weight``: synaptic efficacy,
-    - ``Kplus``: presynaptic eligibility trace,
-    - ``t_lastspike``: timestamp of the previous presynaptic spike.
+    State Variables
+    ---------------
 
-    In NEST, ``tau_minus`` belongs to the postsynaptic archiving neuron
-    (``ArchivingNode``). In this backend, equivalent behavior is implemented via
-    an internal post-spike history buffer parameterized by ``tau_minus``.
+    - ``w``: Synaptic weight (plastic, bounded to :math:`[0, W_{\max}]` or :math:`[W_{\max}, 0]`)
+    - ``K^+``: Presynaptic eligibility trace (decays with :math:`\tau_+`)
+    - ``K^-``: Postsynaptic eligibility trace (decays with :math:`\tau_-`)
 
-    Update order (NEST source equivalent)
-    -------------------------------------
-
-    For a presynaptic spike at stamp :math:`t_{pre}` with dendritic delay
-    :math:`d`, NEST ``stdp_synapse::send`` performs:
-
-    1. Read postsynaptic history in
-       :math:`(t_{\mathrm{last}}-d,\, t_{pre}-d]`.
-    2. For each retrieved postsynaptic spike :math:`t_{post}`, apply
-       potentiation with
-       :math:`Kplus \exp((t_{\mathrm{last}}-(t_{post}+d))/\tau_+)`.
-    3. Compute depression using postsynaptic trace
-       :math:`K^{-}(t_{pre}-d)`.
-    4. Send event with updated ``weight``.
-    5. Update presynaptic trace:
-       :math:`Kplus \leftarrow Kplus \exp((t_{\mathrm{last}}-t_{pre})/\tau_+) + 1`.
-    6. Set ``t_lastspike = t_pre``.
-
-    This implementation preserves the same ordering.
-
-    Potentiation/depression functions
-    ---------------------------------
-
-    With normalized weight :math:`\hat w = w/W_{max}`:
+    **Continuous-time dynamics (between spikes):**
 
     .. math::
-       \hat w \leftarrow \hat w
-       + \lambda (1-\hat w)^{\mu_+} k_+
+
+       \frac{dK^+}{dt} = -\frac{K^+}{\tau_+}
+
+       \frac{dK^-}{dt} = -\frac{dK^-}{\tau_-}
+
+    **Upon presynaptic spike at time** :math:`t_{\text{pre}}`:
+
+    Let :math:`d` denote the dendritic (synaptic) delay. The NEST ``stdp_synapse::send``
+    method performs the following sequence:
+
+    **Step 1: Facilitation (potentiation) from past postsynaptic spikes**
+
+    For each postsynaptic spike :math:`t_{\text{post}}` in the window
+    :math:`(t_{\text{last}} - d,\, t_{\text{pre}} - d]`, where
+    :math:`t_{\text{last}}` is the timestamp of the previous presynaptic spike:
 
     .. math::
-       \hat w \leftarrow \hat w
-       - \alpha \lambda \hat w^{\mu_-} k_-
 
-    with clipping to ``[0, Wmax]`` in normalized coordinates, as in NEST.
+       \Delta t = (t_{\text{post}} + d) - t_{\text{last}}
 
-    Event timing semantics
-    ----------------------
+       K^+_{\text{eff}} = K^+ \cdot e^{(t_{\text{last}} - (t_{\text{post}} + d)) / \tau_+}
 
-    As in NEST, this model uses on-grid spike stamps and ignores precise
-    sub-step offsets. At simulation time ``t`` and step size ``dt``, presynaptic
-    and postsynaptic spikes processed in this step are stamped at ``t + dt``.
+       \hat{w} \leftarrow \hat{w} + \lambda (1 - \hat{w})^{\mu_+} K^+_{\text{eff}}
+
+    where :math:`\hat{w} = w / W_{\max}` is the normalized weight.
+
+    **Step 2: Depression from current presynaptic spike**
+
+    Retrieve postsynaptic trace :math:`K^-` at time :math:`t_{\text{pre}} - d`:
+
+    .. math::
+
+       K^-_{\text{eff}} = K^-(t_{\text{pre}} - d)
+
+       \hat{w} \leftarrow \hat{w} - \alpha \lambda \hat{w}^{\mu_-} K^-_{\text{eff}}
+
+    **Step 3: Deliver spike event**
+
+    Send event with updated weight ``w`` to the postsynaptic receiver.
+
+    **Step 4: Update presynaptic trace**
+
+    .. math::
+
+       K^+ \leftarrow K^+ \cdot e^{(t_{\text{last}} - t_{\text{pre}}) / \tau_+} + 1
+
+       t_{\text{last}} \leftarrow t_{\text{pre}}
+
+    **Upon postsynaptic spike at time** :math:`t_{\text{post}}`:
+
+    .. math::
+
+       K^- \\leftarrow K^- \\cdot e^{(t_{\\text{last\\_post}} - t_{\\text{post}}) / \\tau_-} + 1
+
+       t_{\\text{last\\_post}} \\leftarrow t_{\\text{post}}
+
+    **Weight Update Functions:**
+
+    Potentiation (post-before-pre, :math:`\Delta t > 0`):
+
+    .. math::
+
+       \hat{w} \leftarrow \hat{w} + \lambda (1 - \hat{w})^{\mu_+} K^+
+
+    Depression (pre-before-post, :math:`\Delta t < 0`):
+
+    .. math::
+
+       \hat{w} \leftarrow \hat{w} - \alpha \lambda \hat{w}^{\mu_-} K^-
+
+    Final weight is clipped to :math:`[0, W_{\max}]` for positive weights, or
+    :math:`[W_{\max}, 0]` for negative weights (inhibitory synapses).
+
+    **2. Update Ordering and NEST Compatibility**
+
+    This implementation replicates the exact update sequence from NEST
+    ``models/stdp_synapse.h::send()``:
+
+    1. Query postsynaptic spike history in window :math:`(t_{\text{last}} - d,\, t_{\text{pre}} - d]`
+    2. Apply facilitation for each retrieved postsynaptic spike
+    3. Compute postsynaptic trace :math:`K^-` at :math:`t_{\text{pre}} - d`
+    4. Apply depression based on :math:`K^-`
+    5. Schedule weighted spike event for delivery after delay :math:`d`
+    6. Update presynaptic trace :math:`K^+` and timestamp :math:`t_{\text{last}}`
+
+    **3. Event Timing Semantics**
+
+    As in NEST, this model uses **on-grid spike timestamps** and ignores precise
+    sub-step offsets. Spike times are discretized to simulation time steps:
+
+    - Presynaptic spike detected at step ``n`` → stamped at :math:`t_{\text{spike}} = t + dt`
+    - Postsynaptic spike recorded at step ``n`` → stamped at :math:`t_{\text{spike}} = t + dt`
+    - Inter-spike intervals computed from discrete timestamps
+
+    This differs from continuous-time STDP but matches NEST's default behavior.
+
+    **4. Stability Constraints and Computational Implications**
+
+    **Parameter Constraints:**
+
+    - :math:`\tau_+ > 0`, :math:`\tau_- > 0` (time constants must be positive)
+    - :math:`\lambda > 0` (learning rate; negative values would invert plasticity)
+    - :math:`\alpha \geq 0` (depression scaling; typically 1.0)
+    - :math:`\mu_+ \geq 0`, :math:`\mu_- \geq 0` (exponents; 1.0 for linear, 0.0 for additive)
+    - :math:`W_{\max} \neq 0` and :math:`\text{sign}(w) = \text{sign}(W_{\max})`
+    - :math:`K^+ \geq 0` (trace must be non-negative)
+
+    Numerical Considerations
+    ------------------------
+
+    - All state variables stored as Python ``float`` (``float64`` precision)
+    - Exponential decays computed using ``math.exp()`` for numerical stability
+    - Power functions use ``math.pow()`` (may degrade for large exponents)
+    - Per-spike cost: :math:`O(N_{\text{post}})` where :math:`N_{\text{post}}` is
+      the number of postsynaptic spikes in the facilitation window
+
+    **Behavioral Regimes:**
+
+    - **Symmetric STDP** (:math:`\alpha = 1`, :math:`\mu_+ = \mu_- = 1`):
+      Classical pair-based rule (Song et al., 2000)
+    - **Additive STDP** (:math:`\mu_+ = \mu_- = 0`):
+      Weight-independent updates (van Rossum et al., 2000)
+    - **Multiplicative STDP** (:math:`\mu_+ = \mu_- = 1`):
+      Soft bounds stabilize weight distributions (Guetig et al., 2003)
+    - **Asymmetric depression** (:math:`\alpha > 1`):
+      Stronger depression relative to potentiation
+
+    Failure Modes
+    -------------
+
+    - ``weight`` and ``Wmax`` must have the same sign; otherwise ``ValueError`` on init or set
+    - ``Kplus`` must be non-negative; otherwise ``ValueError`` on init or set
+    - Postsynaptic spike history grows unbounded if not cleared; use
+      ``clear_post_history()`` periodically for long simulations
 
     Parameters
     ----------
-    weight : ArrayLike, optional
-        Initial synaptic weight. Default: ``1.0``.
-    delay : ArrayLike, optional
-        Synaptic delay in ms. Default: ``1.0 * u.ms``.
+    weight : float, array-like, or Quantity, optional
+        Initial synaptic weight :math:`w`. Scalar float, dimensionless or with
+        receiver-specific units (e.g., pA, nS). Must have the same sign as ``Wmax``.
+        Default: ``1.0`` (dimensionless).
+    delay : float, array-like, or Quantity, optional
+        Synaptic transmission delay :math:`d` in milliseconds. Must be ``> 0``.
+        Quantized to integer time steps per :class:`static_synapse` conventions.
+        Default: ``1.0 * u.ms``.
     receptor_type : int, optional
-        Receiver port/receptor id. Default: ``0``.
-    tau_plus : ArrayLike, optional
-        Potentiation time constant ``tau_plus`` in ms. Default: ``20.0 * u.ms``.
-    tau_minus : ArrayLike, optional
-        Depression trace time constant ``tau_minus`` in ms.
-        In NEST this is a postsynaptic-neuron parameter; here it is stored on
-        the synapse for standalone compatibility. Default: ``20.0 * u.ms``.
-    lambda_ : ArrayLike, optional
-        Learning-rate parameter ``lambda``. Default: ``0.01``.
-    alpha : ArrayLike, optional
-        Depression scaling parameter. Default: ``1.0``.
-    mu_plus : ArrayLike, optional
-        Potentiation exponent. Default: ``1.0``.
-    mu_minus : ArrayLike, optional
-        Depression exponent. Default: ``1.0``.
-    Wmax : ArrayLike, optional
-        Maximum weight bound. Must have same sign as ``weight``.
-        Default: ``100.0``.
-    Kplus : ArrayLike, optional
-        Initial presynaptic trace value. Must be non-negative.
+        Receptor port identifier on the postsynaptic neuron. Non-negative integer
+        specifying which input channel receives the event. Default: ``0``.
+    tau_plus : float, array-like, or Quantity, optional
+        Presynaptic trace time constant :math:`\tau_+` in milliseconds. Must be ``> 0``.
+        Controls the width of the potentiation (post-before-pre) window.
+        Default: ``20.0 * u.ms``.
+    tau_minus : float, array-like, or Quantity, optional
+        Postsynaptic trace time constant :math:`\tau_-` in milliseconds. Must be ``> 0``.
+        In NEST, this is a postsynaptic neuron parameter; here it is stored on the
+        synapse for standalone compatibility. Controls the width of the depression
+        (pre-before-post) window. Default: ``20.0 * u.ms``.
+    lambda_ : float, array-like, or Quantity, optional
+        Learning rate parameter :math:`\lambda` (dimensionless). Scales both
+        potentiation and depression updates. Typical values: 0.001–0.1.
+        Default: ``0.01``.
+    alpha : float, array-like, or Quantity, optional
+        Asymmetry parameter :math:`\alpha` (dimensionless). Scales depression
+        relative to potentiation. :math:`\alpha = 1.0` yields symmetric STDP;
+        :math:`\alpha > 1.0` strengthens depression. Default: ``1.0``.
+    mu_plus : float, array-like, or Quantity, optional
+        Potentiation exponent :math:`\mu_+` (dimensionless). Controls weight
+        dependence of potentiation. :math:`\mu_+ = 0`: additive; :math:`\mu_+ = 1`:
+        multiplicative (soft upper bound). Default: ``1.0``.
+    mu_minus : float, array-like, or Quantity, optional
+        Depression exponent :math:`\mu_-` (dimensionless). Controls weight
+        dependence of depression. :math:`\mu_- = 0`: additive; :math:`\mu_- = 1`:
+        multiplicative (soft lower bound). Default: ``1.0``.
+    Wmax : float, array-like, or Quantity, optional
+        Maximum weight bound :math:`W_{\max}` (same units as ``weight``). Weights are
+        clipped to :math:`[0, W_{\max}]` for excitatory synapses or :math:`[W_{\max}, 0]`
+        for inhibitory synapses. Must have the same sign as ``weight``.
+        Default: ``100.0`` (dimensionless).
+    Kplus : float, array-like, or Quantity, optional
+        Initial presynaptic trace value :math:`K^+` (dimensionless). Must be
+        non-negative. Typically initialized to ``0.0`` (no presynaptic history).
         Default: ``0.0``.
-    post : object, optional
-        Default receiver object.
+    post : Dynamics, optional
+        Default postsynaptic receiver object. If provided, :meth:`send` and
+        :meth:`update` will target this receiver unless overridden. Must implement
+        either ``add_delta_input`` or ``add_current_input`` methods.
+        Default: ``None`` (must provide receiver explicitly in method calls).
     name : str, optional
-        Object name.
+        Unique identifier for this synapse instance. Default: auto-generated.
+
+    Parameter Mapping
+
+    NEST ``stdp_synapse`` parameters map to this implementation as follows:
+
+    ==================  ====================  ========================================
+    NEST Parameter      brainpy.state Param   Notes
+    ==================  ====================  ========================================
+    ``weight``          ``weight``            Plastic, updated on each pre-spike
+    ``delay``           ``delay``             Converted to ms, discretized to steps
+    ``receptor_type``   ``receptor_type``     Integer ≥ 0
+    ``tau_plus``        ``tau_plus``          Pre-synaptic trace decay (ms)
+    ``tau_minus``       (neuron param)        Here: synapse param ``tau_minus`` (ms)
+    ``lambda``          ``lambda_``           Learning rate (underscore to avoid keyword)
+    ``alpha``           ``alpha``             Depression asymmetry factor
+    ``mu_plus``         ``mu_plus``           Potentiation exponent
+    ``mu_minus``        ``mu_minus``          Depression exponent
+    ``Wmax``            ``Wmax``              Weight upper bound (or lower for inhib.)
+    ``Kplus``           ``Kplus``             Pre-synaptic trace state variable
+    ==================  ====================  ========================================
+
+    Attributes
+    ----------
+    weight : float
+        Current synaptic weight (plastic, updated during simulation).
+    Kplus : float
+        Current presynaptic trace value.
+    t_lastspike : float
+        Timestamp (ms) of the most recent presynaptic spike.
+    tau_plus : float
+        Presynaptic trace time constant (ms).
+    tau_minus : float
+        Postsynaptic trace time constant (ms).
+    lambda_ : float
+        Learning rate.
+    alpha : float
+        Depression asymmetry factor.
+    mu_plus : float
+        Potentiation exponent.
+    mu_minus : float
+        Depression exponent.
+    Wmax : float
+        Maximum weight bound.
+
+    See Also
+    --------
+    static_synapse : Base class for non-plastic synapses
+    tsodyks_synapse : Short-term plasticity (depression/facilitation)
+    stdp_synapse_hom : Homogeneous-weight variant with shared weight across connections
 
     Notes
     -----
-    - The model transmits spike-like events only.
-    - ``update(pre_spike=..., post_spike=...)`` accepts both pre- and post-
-      synaptic spike multiplicities for standalone STDP simulation.
-    - ``record_post_spike(...)`` can be used to manually feed postsynaptic
-      spikes when the postsynaptic model does not expose NEST archiver APIs.
+    - The model transmits spike-like events only (``event_type='spike'``).
+    - ``update(pre_spike=..., post_spike=...)`` accepts both presynaptic and
+      postsynaptic spike multiplicities for standalone STDP simulation.
+    - ``record_post_spike(...)`` can be used to manually feed postsynaptic spikes
+      when the postsynaptic model does not expose NEST archiving APIs.
+    - Postsynaptic spike history grows unbounded; call ``clear_post_history()``
+      periodically in long simulations to prevent memory issues.
 
     References
     ----------
-    .. [1] NEST source: ``models/stdp_synapse.h`` and
-           ``models/stdp_synapse.cpp``.
+    .. [1] NEST source code: ``models/stdp_synapse.h`` and ``models/stdp_synapse.cpp``.
+           https://github.com/nest/nest-simulator
     .. [2] Guetig R, Aharonov R, Rotter S, Sompolinsky H (2003).
            Learning input correlations through nonlinear temporally asymmetric
-           Hebbian plasticity. Journal of Neuroscience, 23(9):3697-3714.
+           Hebbian plasticity. *Journal of Neuroscience*, 23(9):3697-3714.
+           DOI: `10.1523/JNEUROSCI.23-09-03697.2003 <https://doi.org/10.1523/JNEUROSCI.23-09-03697.2003>`_
     .. [3] Song S, Miller KD, Abbott LF (2000). Competitive Hebbian learning
            through spike-timing-dependent synaptic plasticity.
-           Nature Neuroscience, 3(9):919-926.
-    .. [4] van Rossum MCW, Bi G-Q, Turrigiano GG (2000). Stable Hebbian
-           learning from spike timing-dependent plasticity.
-           Journal of Neuroscience, 20(23):8812-8821.
+           *Nature Neuroscience*, 3(9):919-926.
+           DOI: `10.1038/78829 <https://doi.org/10.1038/78829>`_
+    .. [4] van Rossum MCW, Bi G-Q, Turrigiano GG (2000). Stable Hebbian learning
+           from spike timing-dependent plasticity.
+           *Journal of Neuroscience*, 20(23):8812-8821.
+           DOI: `10.1523/JNEUROSCI.20-23-08812.2000 <https://doi.org/10.1523/JNEUROSCI.20-23-08812.2000>`_
+
+    Examples
+    --------
+    **Basic STDP synapse with default parameters:**
+
+    .. code-block:: python
+
+       >>> import brainpy.state as bst
+       >>> import brainunit as u
+       >>> syn = bst.stdp_synapse(weight=0.5, delay=1.0 * u.ms)
+       >>> syn.get()
+       {'weight': 0.5, 'delay': 1.0, 'receptor_type': 0, 'tau_plus': 20.0,
+        'tau_minus': 20.0, 'lambda': 0.01, 'alpha': 1.0, 'mu_plus': 1.0,
+        'mu_minus': 1.0, 'Wmax': 100.0, 'Kplus': 0.0, 'synapse_model': 'stdp_synapse'}
+
+    **Asymmetric STDP (stronger depression):**
+
+    .. code-block:: python
+
+       >>> syn = bst.stdp_synapse(
+       ...     weight=1.0,
+       ...     tau_plus=16.8 * u.ms,
+       ...     tau_minus=33.7 * u.ms,
+       ...     lambda_=0.005,
+       ...     alpha=1.05,  # 5% stronger depression
+       ...     Wmax=2.0,
+       ... )
+
+    **Additive STDP (weight-independent updates):**
+
+    .. code-block:: python
+
+       >>> syn = bst.stdp_synapse(
+       ...     weight=0.5,
+       ...     mu_plus=0.0,  # additive potentiation
+       ...     mu_minus=0.0,  # additive depression
+       ...     lambda_=0.001,
+       ...     Wmax=1.0,
+       ... )
+
+    **Manual postsynaptic spike recording:**
+
+    .. code-block:: python
+
+       >>> import brainstate
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     syn = bst.stdp_synapse(weight=1.0)
+       ...     syn.init_state()
+       ...     # Simulate postsynaptic spike at t=5.0 ms
+       ...     syn.record_post_spike(multiplicity=1, t_spike_ms=5.0)
+       ...     # Simulate presynaptic spike at t=10.0 ms (after post-spike)
+       ...     # This should potentiate the weight
+       ...     syn.send(multiplicity=1)  # uses on-grid stamp t + dt
+       ...     print(f"Updated weight: {syn.weight:.6f}")  # > 1.0 (potentiated)
     """
 
     __module__ = 'brainpy.state'
@@ -261,7 +490,23 @@ class stdp_synapse(static_synapse):
         return norm_w * self.Wmax if norm_w > 0.0 else 0.0
 
     def clear_post_history(self):
-        """Clear internal postsynaptic STDP history state."""
+        r"""Clear internal postsynaptic spike history and reset trace state.
+
+        Resets all postsynaptic STDP state to initial conditions:
+
+        - Clears spike history buffer (timestamps and trace values)
+        - Resets postsynaptic trace ``K^-`` to zero
+        - Resets last postsynaptic spike timestamp to ``-1.0``
+
+        This method should be called periodically in long simulations to prevent
+        unbounded growth of the spike history buffer. Typical usage: clear history
+        at the start of each trial or after weight convergence phases.
+
+        See Also
+        --------
+        init_state : Reinitialize all synapse state including weights and traces
+        record_post_spike : Record postsynaptic spikes into the history buffer
+        """
         self._post_kminus = 0.0
         self._last_post_spike = -1.0
         self._post_hist_t = []
@@ -281,21 +526,82 @@ class stdp_synapse(static_synapse):
         *,
         t_spike_ms: ArrayLike | None = None,
     ) -> int:
-        """Record postsynaptic spikes into the internal STDP history.
+        r"""Record postsynaptic spikes into the internal STDP history buffer.
+
+        This method updates the postsynaptic eligibility trace :math:`K^-` and stores
+        the spike timestamp for later use by :meth:`send` when processing presynaptic
+        spikes. Each recorded spike increments :math:`K^-` by 1.0 after exponential
+        decay from the previous postsynaptic spike.
+
+        The trace update follows:
+
+        .. math::
+
+           K^- \\leftarrow K^- \\cdot e^{(t_{\\text{last\\_post}} - t_{\\text{spike}}) / \\tau_-} + 1
+
+        where :math:`t_{\\text{last\\_post}}` is the timestamp of the previous postsynaptic
+        spike and :math:`\\tau_-` is the postsynaptic trace time constant.
+
+        Multiple spikes can be recorded by setting ``multiplicity > 1``. This is
+        equivalent to calling the method ``multiplicity`` times at the same timestamp.
 
         Parameters
         ----------
-        multiplicity : ArrayLike, optional
-            Number of postsynaptic spikes to record. Must be a non-negative
-            integer-valued scalar. Default: ``1``.
-        t_spike_ms : ArrayLike, optional
-            Spike timestamp in ms. If omitted, uses current on-grid spike stamp
-            ``t + dt``.
+        multiplicity : float, array-like, or Quantity, optional
+            Number of postsynaptic spikes to record at this timestamp. Must be a
+            non-negative integer-valued scalar (fractional values will be rejected).
+            Use ``multiplicity=0`` to skip recording (returns immediately).
+            Default: ``1`` (single spike).
+        t_spike_ms : float, array-like, or Quantity, optional
+            Spike timestamp in milliseconds. Must be a scalar float with or without
+            time units. If ``None``, uses the current on-grid spike stamp
+            :math:`t + dt` where :math:`t` is the current simulation time and
+            :math:`dt` is the simulation time step. Default: ``None`` (on-grid).
 
         Returns
         -------
         int
-            Number of recorded spikes.
+            Number of spikes successfully recorded (equal to ``multiplicity``).
+
+        Raises
+        ------
+        ValueError
+            - If ``multiplicity`` is negative or not integer-valued.
+            - If ``t_spike_ms`` is not a finite scalar.
+
+        See Also
+        --------
+        clear_post_history : Clear all postsynaptic spike history
+        send : Process presynaptic spike and apply STDP weight updates
+
+        Examples
+        --------
+        **Record single postsynaptic spike at current time:**
+
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     syn = bst.stdp_synapse(weight=1.0)
+           ...     syn.init_state()
+           ...     count = syn.record_post_spike()  # uses t + dt
+           ...     print(count)
+           1
+
+        **Record postsynaptic spike at explicit timestamp:**
+
+        .. code-block:: python
+
+           >>> syn.record_post_spike(multiplicity=1, t_spike_ms=5.0)
+           1
+
+        **Record burst of 3 postsynaptic spikes:**
+
+        .. code-block:: python
+
+           >>> syn.record_post_spike(multiplicity=3)
+           3
         """
         count = self._to_non_negative_int_count(multiplicity, name='post_spike')
         if count == 0:
@@ -329,6 +635,29 @@ class stdp_synapse(static_synapse):
         return 0.0
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize synapse state for simulation.
+
+        Resets all dynamic state variables to their initial values:
+
+        - ``Kplus``: presynaptic trace → initial value (default ``0.0``)
+        - ``t_lastspike``: last presynaptic spike time → ``0.0`` ms
+        - Postsynaptic spike history and trace → cleared
+
+        This method should be called before starting a new simulation or trial.
+        Inherits delay queue initialization from :class:`static_synapse`.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Ignored (provided for API compatibility with batched models).
+        **kwargs
+            Ignored (provided for API compatibility).
+
+        See Also
+        --------
+        clear_post_history : Clear only postsynaptic history without resetting other state
+        set : Update parameters without reinitializing state
+        """
         del batch_size, kwargs
         super().init_state()
         self.Kplus = float(self._Kplus0)
@@ -336,7 +665,49 @@ class stdp_synapse(static_synapse):
         self.clear_post_history()
 
     def get(self) -> dict:
-        """Return current public parameters and mutable state."""
+        r"""Return current public parameters and mutable state.
+
+        Retrieves all NEST-compatible parameters and dynamic state variables in a
+        dictionary format suitable for inspection, logging, or serialization. Includes
+        both inherited parameters from :class:`static_synapse` (``weight``, ``delay``,
+        ``receptor_type``) and STDP-specific parameters.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+
+            - ``'weight'`` : float – Current synaptic weight (plastic)
+            - ``'delay'`` : float – Transmission delay (ms)
+            - ``'receptor_type'`` : int – Postsynaptic receptor port
+            - ``'tau_plus'`` : float – Presynaptic trace time constant (ms)
+            - ``'tau_minus'`` : float – Postsynaptic trace time constant (ms)
+            - ``'lambda'`` : float – Learning rate (key name without underscore)
+            - ``'alpha'`` : float – Depression asymmetry factor
+            - ``'mu_plus'`` : float – Potentiation exponent
+            - ``'mu_minus'`` : float – Depression exponent
+            - ``'Wmax'`` : float – Maximum weight bound
+            - ``'Kplus'`` : float – Current presynaptic trace value
+            - ``'synapse_model'`` : str – Always ``'stdp_synapse'`` (NEST identifier)
+
+        See Also
+        --------
+        set : Update parameters and state
+        init_state : Reinitialize state to defaults
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> syn = bst.stdp_synapse(weight=0.5, lambda_=0.01)
+           >>> params = syn.get()
+           >>> params['weight']
+           0.5
+           >>> params['lambda']
+           0.01
+           >>> params['synapse_model']
+           'stdp_synapse'
+        """
         params = super().get()
         params['tau_plus'] = float(self.tau_plus)
         params['tau_minus'] = float(self.tau_minus)
@@ -365,7 +736,93 @@ class stdp_synapse(static_synapse):
         Kplus: ArrayLike | object = _UNSET,
         post: object = _UNSET,
     ):
-        """Set NEST-style public parameters and mutable state."""
+        r"""Set NEST-style public parameters and mutable state.
+
+        Updates one or more synapse parameters and state variables without reinitializing
+        the full simulation state. Mimics NEST's ``SetStatus`` API. All parameters are
+        validated before assignment to ensure consistency (e.g., ``weight`` and ``Wmax``
+        must have the same sign).
+
+        Only specified parameters are updated; unspecified parameters retain their
+        current values. To reset all state to initial conditions, use :meth:`init_state`
+        instead.
+
+        Parameters
+        ----------
+        weight : float, array-like, or Quantity, optional
+            New synaptic weight. Must have the same sign as ``Wmax`` (or new ``Wmax``
+            if both are specified). Validated before assignment. Default: unchanged.
+        delay : float, array-like, or Quantity, optional
+            New transmission delay (ms). Must be positive. Will be discretized to
+            integer time steps on next usage. Default: unchanged.
+        receptor_type : int, optional
+            New receptor port identifier. Must be non-negative. Default: unchanged.
+        tau_plus : float, array-like, or Quantity, optional
+            New presynaptic trace time constant (ms). Must be positive.
+            Default: unchanged.
+        tau_minus : float, array-like, or Quantity, optional
+            New postsynaptic trace time constant (ms). Must be positive.
+            Default: unchanged.
+        lambda_ : float, array-like, or Quantity, optional
+            New learning rate. Typically positive. Default: unchanged.
+        alpha : float, array-like, or Quantity, optional
+            New depression asymmetry factor. Typically non-negative. Default: unchanged.
+        mu_plus : float, array-like, or Quantity, optional
+            New potentiation exponent. Must be non-negative. Default: unchanged.
+        mu_minus : float, array-like, or Quantity, optional
+            New depression exponent. Must be non-negative. Default: unchanged.
+        Wmax : float, array-like, or Quantity, optional
+            New maximum weight bound. Must have the same sign as ``weight`` (or new
+            ``weight`` if both are specified). Default: unchanged.
+        Kplus : float, array-like, or Quantity, optional
+            New presynaptic trace value. Must be non-negative. Typically used to
+            restore saved state rather than manipulate during simulation.
+            Default: unchanged.
+        post : Dynamics, optional
+            New default postsynaptic receiver. Default: unchanged.
+
+        Raises
+        ------
+        ValueError
+            - If ``weight`` and ``Wmax`` have different signs.
+            - If ``Kplus`` is negative.
+            - If any parameter has non-finite values or incorrect shape.
+
+        See Also
+        --------
+        get : Retrieve current parameters and state
+        init_state : Reinitialize all state to defaults
+
+        Examples
+        --------
+        **Update learning rate during simulation:**
+
+        .. code-block:: python
+
+           >>> syn = bst.stdp_synapse(weight=1.0, lambda_=0.01)
+           >>> syn.set(lambda_=0.001)  # reduce learning rate
+           >>> syn.get()['lambda']
+           0.001
+
+        **Update multiple parameters atomically:**
+
+        .. code-block:: python
+
+           >>> syn.set(
+           ...     weight=0.5,
+           ...     Wmax=2.0,
+           ...     alpha=1.1,
+           ... )
+
+        **Restore saved state:**
+
+        .. code-block:: python
+
+           >>> saved_params = syn.get()
+           >>> # ... simulation ...
+           >>> syn.set(**{k: v for k, v in saved_params.items()
+           ...            if k != 'synapse_model'})  # restore all except model name
+        """
         new_weight = self.weight if weight is _UNSET else self._to_scalar_float(weight, name='weight')
         new_tau_plus = (
             self.tau_plus
@@ -429,7 +886,97 @@ class stdp_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``stdp_synapse`` dynamics."""
+        r"""Schedule one outgoing event with NEST ``stdp_synapse`` dynamics.
+
+        Processes a presynaptic spike, applies STDP weight updates (facilitation from
+        past postsynaptic spikes and depression from current spike), then schedules
+        the event for delayed delivery to the postsynaptic receiver. This method
+        replicates the exact update sequence from NEST ``models/stdp_synapse.h::send()``.
+
+        **Update sequence:**
+
+        1. Compute inter-spike interval :math:`h = t_{\text{spike}} - t_{\text{last}}`
+        2. Retrieve postsynaptic spikes in window :math:`(t_{\\text{last}} - d,\\, t_{\\text{spike}} - d]`
+        3. Apply facilitation for each retrieved postsynaptic spike (post-before-pre)
+        4. Compute postsynaptic trace :math:`K^-` at :math:`t_{\text{spike}} - d`
+        5. Apply depression based on :math:`K^-` (pre-before-post)
+        6. Schedule weighted event for delivery at :math:`t_{\text{spike}} + \text{delay}`
+        7. Update presynaptic trace: :math:`K^+ \\leftarrow K^+ \\cdot e^{-h/\\tau_+} + 1`
+        8. Update last spike timestamp: :math:`t_{\\text{last}} \\leftarrow t_{\\text{spike}}`
+
+        The final delivered weight is :math:`w_{\\text{eff}} = w \\cdot \\text{multiplicity}`
+        where :math:`w` is the plasticity-updated weight.
+
+        Parameters
+        ----------
+        multiplicity : float, array-like, or Quantity, optional
+            Presynaptic spike multiplicity (event magnitude). Scalar value, typically
+            ``1.0`` for a single spike or ``0.0`` to skip transmission. The delivered
+            payload is scaled by this factor. Default: ``1.0``.
+        post : Dynamics, optional
+            Postsynaptic receiver object for this event. If ``None``, uses the default
+            receiver specified during initialization. Must implement ``add_delta_input``
+            or handle spike events. Default: ``None`` (use default receiver).
+        receptor_type : int, optional
+            Receptor port override for this event. If ``None``, uses the synapse's
+            default ``receptor_type``. Default: ``None`` (use default receptor).
+
+        Returns
+        -------
+        bool
+            ``True`` if an event was scheduled (``multiplicity != 0``), ``False`` otherwise.
+
+        Raises
+        ------
+        ValueError
+            - If ``multiplicity`` is not a finite scalar.
+            - If ``receptor_type`` is negative or not an integer.
+            - If no postsynaptic receiver is available (neither ``post`` argument nor
+              default receiver specified).
+
+        See Also
+        --------
+        update : High-level method combining event delivery, post-spike recording, and sending
+        record_post_spike : Manually record postsynaptic spikes for STDP
+
+        Notes
+        -----
+        - Spike timestamp uses on-grid time :math:`t + dt` (NEST convention).
+        - Dendritic delay :math:`d` shifts the STDP causality window backward in time.
+        - Postsynaptic spike history is never cleared by this method; call
+          :meth:`clear_post_history` periodically to prevent memory growth.
+
+        Examples
+        --------
+        **Send single presynaptic spike:**
+
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     post_neuron = bst.LIF(1)
+           ...     syn = bst.stdp_synapse(weight=1.0, post=post_neuron)
+           ...     syn.init_state()
+           ...     post_neuron.init_state()
+           ...     success = syn.send(multiplicity=1.0)
+           ...     print(success)
+           True
+
+        **Send presynaptic spike with receptor override:**
+
+        .. code-block:: python
+
+           >>> syn.send(multiplicity=1.0, receptor_type=1)  # target receptor port 1
+           True
+
+        **Skip transmission (zero multiplicity):**
+
+        .. code-block:: python
+
+           >>> syn.send(multiplicity=0.0)
+           False
+        """
         if not self._is_nonzero(multiplicity):
             return False
 
@@ -473,13 +1020,118 @@ class stdp_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events, update post history, then process pre spikes.
+        r"""Deliver due events, update post history, then process pre spikes.
 
-        This step order is:
+        High-level update method combining all STDP synapse operations for a single
+        simulation time step. This method is typically called once per time step in
+        network simulations and handles:
 
-        1. Deliver due delayed events.
-        2. Record postsynaptic spikes for current stamp ``t + dt``.
-        3. Aggregate presynaptic multiplicity and run STDP ``send`` if non-zero.
+        1. Delivery of delayed events from previous time steps
+        2. Recording of postsynaptic spikes into the STDP history buffer
+        3. Aggregation of presynaptic inputs (from ``current_inputs`` and ``delta_inputs``)
+        4. STDP weight update and event scheduling via :meth:`send`
+
+        The update order ensures correct causality: delayed events are delivered before
+        processing new spikes, and postsynaptic spikes are recorded before presynaptic
+        spikes are processed (allowing immediate STDP updates if delay is minimal).
+
+        **Update sequence:**
+
+        **Step 1: Deliver due events**
+            Check the internal delay queue and deliver all events scheduled for the
+            current simulation step to their target receivers.
+
+        **Step 2: Record postsynaptic spikes**
+            If ``post_spike > 0``, record ``post_spike`` postsynaptic spikes at
+            timestamp :math:`t + dt` into the STDP history buffer. This updates the
+            postsynaptic trace :math:`K^-`.
+
+        **Step 3: Aggregate presynaptic inputs**
+            Sum inputs from:
+            - ``pre_spike`` argument (explicit input)
+            - ``current_inputs`` dict (accumulated continuous inputs)
+            - ``delta_inputs`` dict (accumulated spike inputs)
+
+        **Step 4: Process presynaptic spike**
+            If aggregated input is non-zero, call :meth:`send` to apply STDP weight
+            updates and schedule a new delayed event.
+
+        Parameters
+        ----------
+        pre_spike : float, array-like, or Quantity, optional
+            Presynaptic spike multiplicity (explicit input). Added to accumulated
+            inputs from ``current_inputs`` and ``delta_inputs``. Typically ``0.0``
+            (no explicit input) or ``1.0`` (single spike). Default: ``0.0``.
+        post_spike : float, array-like, or Quantity, optional
+            Postsynaptic spike multiplicity to record. Must be a non-negative
+            integer-valued scalar. If ``> 0``, records the specified number of
+            postsynaptic spikes at the current on-grid timestamp :math:`t + dt`.
+            Default: ``0.0`` (no postsynaptic spikes).
+        post : Dynamics, optional
+            Postsynaptic receiver object for event delivery. If ``None``, uses the
+            default receiver specified during initialization. Default: ``None``.
+        receptor_type : int, optional
+            Receptor port override for event delivery. If ``None``, uses the synapse's
+            default ``receptor_type``. Default: ``None``.
+
+        Returns
+        -------
+        int
+            Number of events delivered during this time step (from the delay queue).
+            Does **not** include the newly scheduled event from this time step's
+            presynaptic spike (that event will be counted in a future time step).
+
+        Raises
+        ------
+        ValueError
+            - If ``post_spike`` is negative or not integer-valued.
+            - If ``pre_spike`` or aggregated inputs are not finite scalars.
+
+        See Also
+        --------
+        send : Low-level method for processing a single presynaptic spike
+        record_post_spike : Record postsynaptic spikes without other update operations
+
+        Notes
+        -----
+        - This method modifies synapse state (``weight``, ``Kplus``, ``t_lastspike``,
+          postsynaptic history) and should be called exactly once per time step.
+        - The returned delivery count reflects past events, not the current time step's
+          transmission.
+        - For standalone STDP testing without a network, manually call :meth:`record_post_spike`
+          and :meth:`send` instead of relying on :meth:`update`.
+
+        Examples
+        --------
+        **Typical usage in network simulation loop:**
+
+        .. code-block:: python
+
+           >>> import brainstate
+           >>> import brainunit as u
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     pre = bst.LIF(1)
+           ...     post = bst.LIF(1)
+           ...     syn = bst.stdp_synapse(weight=1.0, post=post)
+           ...     pre.init_state()
+           ...     post.init_state()
+           ...     syn.init_state()
+           ...     # Simulation step: presynaptic spike, no postsynaptic spike
+           ...     delivered = syn.update(pre_spike=1.0, post_spike=0.0)
+           ...     # Simulation step: no presynaptic spike, postsynaptic spike
+           ...     delivered = syn.update(pre_spike=0.0, post_spike=1.0)
+
+        **Standalone STDP test with explicit spike times:**
+
+        .. code-block:: python
+
+           >>> with brainstate.environ.context(dt=0.1 * u.ms):
+           ...     syn = bst.stdp_synapse(weight=1.0, tau_plus=20.0*u.ms, tau_minus=20.0*u.ms)
+           ...     syn.init_state()
+           ...     # Post-before-pre: potentiation expected
+           ...     syn.record_post_spike(multiplicity=1, t_spike_ms=5.0)
+           ...     syn.send(multiplicity=1)  # pre-spike at t + dt (uses on-grid time)
+           ...     print(f"Weight after potentiation: {syn.weight:.6f}")  # > 1.0
         """
         dt_ms = self._refresh_delay_if_needed()
         step = self._curr_step(dt_ms)

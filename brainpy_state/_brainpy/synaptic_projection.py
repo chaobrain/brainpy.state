@@ -48,7 +48,7 @@ def get_gap_junction_pre_key(i: int):
 
 
 class SymmetryGapJunction(Projection):
-    """
+    r"""
     Implements a symmetric electrical coupling (gap junction) between neuron populations.
 
     This class represents electrical synapses where the conductance is identical in both
@@ -169,7 +169,7 @@ def symmetry_gap_junction_projection(
     post_ids: ArrayLike,
     weight: ArrayLike,
 ):
-    """
+    r"""
     Calculate symmetrical electrical coupling through gap junctions between neurons.
 
     This function implements bidirectional gap junction coupling where the same weight is
@@ -246,7 +246,7 @@ def symmetry_gap_junction_projection(
 
 
 class AsymmetryGapJunction(Projection):
-    """
+    r"""
     Implements an asymmetric electrical coupling (gap junction) between neuron populations.
 
     This class represents electrical synapses where the conductance in one direction can differ
@@ -372,7 +372,7 @@ def asymmetry_gap_junction_projection(
     post_ids: ArrayLike,
     weight: ArrayLike,
 ):
-    """
+    r"""
     Calculate asymmetrical electrical coupling through gap junctions between neurons.
 
     This function implements bidirectional gap junction coupling where different weights

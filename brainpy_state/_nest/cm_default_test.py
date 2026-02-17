@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""
+r"""
 Tests for cm_default compartmental neuron model.
 
 Test coverage:
@@ -48,7 +48,7 @@ from brainpy_state._nest.cm_default import (
 
 
 class TestCmDefaultConstruction(unittest.TestCase):
-    """Test model construction, compartment and receptor addition."""
+    r"""Test model construction, compartment and receptor addition."""
 
     def test_default_V_th(self):
         model = cm_default()
@@ -156,13 +156,13 @@ class TestCmDefaultConstruction(unittest.TestCase):
 
 
 class TestPassiveSingleCompartment(unittest.TestCase):
-    """Test passive (no ion channels) single compartment dynamics."""
+    r"""Test passive (no ion channels) single compartment dynamics."""
 
     def setUp(self):
         self.dt = 0.1  # ms
 
     def test_resting_potential_stable(self):
-        """At rest, voltage should remain at e_L."""
+        r"""At rest, voltage should remain at e_L."""
         model = cm_default()
         model.add_compartment(-1, {'e_L': -70.0, 'v_comp': -70.0})
         model.pre_run_hook(self.dt)
@@ -173,7 +173,7 @@ class TestPassiveSingleCompartment(unittest.TestCase):
         self.assertAlmostEqual(model.get_voltage(0), -70.0, places=10)
 
     def test_passive_decay_to_rest(self):
-        """Voltage above rest should decay exponentially toward e_L."""
+        r"""Voltage above rest should decay exponentially toward e_L."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -50.0,
@@ -203,7 +203,7 @@ class TestPassiveSingleCompartment(unittest.TestCase):
         self.assertAlmostEqual(model2.get_voltage(0), v_new, places=10)
 
     def test_dc_current_injection(self):
-        """Constant current should drive voltage to steady state."""
+        r"""Constant current should drive voltage to steady state."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -70.0,
@@ -222,13 +222,13 @@ class TestPassiveSingleCompartment(unittest.TestCase):
 
 
 class TestPassiveMultiCompartment(unittest.TestCase):
-    """Test passive multi-compartment dynamics and coupling."""
+    r"""Test passive multi-compartment dynamics and coupling."""
 
     def setUp(self):
         self.dt = 0.1  # ms
 
     def test_two_compartments_voltage_coupling(self):
-        """Two coupled compartments should equilibrate."""
+        r"""Two coupled compartments should equilibrate."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -50.0,
@@ -249,7 +249,7 @@ class TestPassiveMultiCompartment(unittest.TestCase):
         self.assertAlmostEqual(v1, -70.0, places=3)
 
     def test_two_compartments_reference_step(self):
-        """Verify first few steps match manual Crank-Nicolson computation."""
+        r"""Verify first few steps match manual Crank-Nicolson computation."""
         C_m0 = 1.0
         g_L0 = 0.1
         e_L0 = -70.0
@@ -326,7 +326,7 @@ class TestPassiveMultiCompartment(unittest.TestCase):
         self.assertAlmostEqual(model.get_voltage(1), v1, places=10)
 
     def test_three_compartments_branching(self):
-        """Root with two children should solve correctly."""
+        r"""Root with two children should solve correctly."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -50.0,
@@ -351,24 +351,24 @@ class TestPassiveMultiCompartment(unittest.TestCase):
 
 
 class TestIonChannels(unittest.TestCase):
-    """Test Na and K ion channel dynamics."""
+    r"""Test Na and K ion channel dynamics."""
 
     def test_na_channel_default_inactive(self):
-        """Na channel with gbar=0 should return zero contribution."""
+        r"""Na channel with gbar=0 should return zero contribution."""
         na = _NaChannel(-70.0, gbar_Na=0.0)
         g, i = na.f_numstep(-70.0, 0.1)
         self.assertEqual(g, 0.0)
         self.assertEqual(i, 0.0)
 
     def test_k_channel_default_inactive(self):
-        """K channel with gbar=0 should return zero contribution."""
+        r"""K channel with gbar=0 should return zero contribution."""
         k = _KChannel(-70.0, gbar_K=0.0)
         g, i = k.f_numstep(-70.0, 0.1)
         self.assertEqual(g, 0.0)
         self.assertEqual(i, 0.0)
 
     def test_na_channel_steady_state_init(self):
-        """Na channel state variables should be at steady state initially."""
+        r"""Na channel state variables should be at steady state initially."""
         v = -70.0
         na = _NaChannel(v, gbar_Na=10.0)
         m_inf, _ = na._compute_statevar_m(v)
@@ -377,42 +377,42 @@ class TestIonChannels(unittest.TestCase):
         self.assertAlmostEqual(na.h_Na, h_inf, places=12)
 
     def test_k_channel_steady_state_init(self):
-        """K channel state variable should be at steady state initially."""
+        r"""K channel state variable should be at steady state initially."""
         v = -70.0
         k = _KChannel(v, gbar_K=10.0)
         n_inf, _ = k._compute_statevar_n(v)
         self.assertAlmostEqual(k.n_K, n_inf, places=12)
 
     def test_na_m_inf_increases_with_depolarization(self):
-        """Na m_inf should increase as voltage increases."""
+        r"""Na m_inf should increase as voltage increases."""
         na = _NaChannel(-70.0)
         m_low, _ = na._compute_statevar_m(-70.0)
         m_high, _ = na._compute_statevar_m(-30.0)
         self.assertGreater(m_high, m_low)
 
     def test_na_h_inf_decreases_with_depolarization(self):
-        """Na h_inf should decrease as voltage increases."""
+        r"""Na h_inf should decrease as voltage increases."""
         na = _NaChannel(-70.0)
         h_low, _ = na._compute_statevar_h(-70.0)
         h_high, _ = na._compute_statevar_h(-30.0)
         self.assertLess(h_high, h_low)
 
     def test_na_channel_returns_conductance_and_current(self):
-        """Active Na channel should produce non-zero g_val, i_val."""
+        r"""Active Na channel should produce non-zero g_val, i_val."""
         na = _NaChannel(-40.0, gbar_Na=100.0)
         g, i = na.f_numstep(-40.0, 0.1)
         self.assertGreater(g, 0.0)
         self.assertNotEqual(i, 0.0)
 
     def test_k_channel_returns_conductance_and_current(self):
-        """Active K channel should produce non-zero g_val, i_val."""
+        r"""Active K channel should produce non-zero g_val, i_val."""
         k = _KChannel(-40.0, gbar_K=100.0)
         g, i = k.f_numstep(-40.0, 0.1)
         self.assertGreater(g, 0.0)
         self.assertNotEqual(i, 0.0)
 
     def test_na_singularity_at_minus_35_013(self):
-        """Na m gate should handle singularity at V = -35.013."""
+        r"""Na m gate should handle singularity at V = -35.013."""
         na = _NaChannel(-35.013)
         m_inf, tau = na._compute_statevar_m(-35.013)
         self.assertTrue(math.isfinite(m_inf))
@@ -420,7 +420,7 @@ class TestIonChannels(unittest.TestCase):
         self.assertGreater(tau, 0.0)
 
     def test_na_singularity_at_minus_50_013(self):
-        """Na h gate should handle singularity near V = -50.013."""
+        r"""Na h gate should handle singularity near V = -50.013."""
         na = _NaChannel(-50.013)
         h_inf, tau = na._compute_statevar_h(-50.013)
         self.assertTrue(math.isfinite(h_inf))
@@ -428,7 +428,7 @@ class TestIonChannels(unittest.TestCase):
         self.assertGreater(tau, 0.0)
 
     def test_k_singularity_at_25(self):
-        """K n gate should handle singularity at V = 25."""
+        r"""K n gate should handle singularity at V = 25."""
         k = _KChannel(25.0)
         n_inf, tau = k._compute_statevar_n(25.0)
         self.assertTrue(math.isfinite(n_inf))
@@ -436,7 +436,7 @@ class TestIonChannels(unittest.TestCase):
         self.assertGreater(tau, 0.0)
 
     def test_active_compartment_produces_spike(self):
-        """Compartment with active Na/K should produce action potential."""
+        r"""Compartment with active Na/K should produce action potential."""
         model = cm_default(V_th=-55.0)
         model.add_compartment(-1, {
             'C_m': 1.0,
@@ -462,17 +462,17 @@ class TestIonChannels(unittest.TestCase):
 
 
 class TestSynapticReceptors(unittest.TestCase):
-    """Test synaptic receptor dynamics."""
+    r"""Test synaptic receptor dynamics."""
 
     def test_g_norm_computation(self):
-        """Normalization constant should give unit peak conductance."""
+        r"""Normalization constant should give unit peak conductance."""
         tau_r, tau_d = 0.2, 3.0
         g_norm = _compute_g_norm(tau_r, tau_d)
         self.assertGreater(g_norm, 0.0)
         self.assertTrue(math.isfinite(g_norm))
 
     def test_ampa_spike_response(self):
-        """AMPA receptor should produce transient conductance after spike."""
+        r"""AMPA receptor should produce transient conductance after spike."""
         dt = 0.1
         rec = _AMPAReceptor(e_AMPA=0.0, tau_r_AMPA=0.2, tau_d_AMPA=3.0)
         rec.pre_run_hook(dt)
@@ -492,7 +492,7 @@ class TestSynapticReceptors(unittest.TestCase):
         self.assertGreater(g_total, 0.0)
 
     def test_gaba_reversal(self):
-        """GABA receptor should produce inhibitory current at rest."""
+        r"""GABA receptor should produce inhibitory current at rest."""
         dt = 0.1
         rec = _GABAReceptor(e_GABA=-80.0)
         rec.pre_run_hook(dt)
@@ -508,7 +508,7 @@ class TestSynapticReceptors(unittest.TestCase):
         self.assertGreater(g, 0.0)
 
     def test_nmda_sigmoid(self):
-        """NMDA Mg2+ block should be near 1 at depolarized potentials."""
+        r"""NMDA Mg2+ block should be near 1 at depolarized potentials."""
         # At very positive potential, block should be relieved
         B_pos, dB_pos = _nmda_sigmoid(40.0)
         self.assertGreater(B_pos, 0.9)
@@ -522,7 +522,7 @@ class TestSynapticReceptors(unittest.TestCase):
         self.assertGreater(dB_0, 0.0)
 
     def test_nmda_receptor_voltage_dependence(self):
-        """NMDA current should be smaller at negative potentials due to Mg block."""
+        r"""NMDA current should be smaller at negative potentials due to Mg block."""
         dt = 0.1
         # Create two NMDA receptors
         rec_dep = _NMDAReceptor()
@@ -542,7 +542,7 @@ class TestSynapticReceptors(unittest.TestCase):
         self.assertGreater(g_dep, g_hyp)
 
     def test_ampa_nmda_combined_receptor(self):
-        """Combined AMPA_NMDA receptor should produce both components."""
+        r"""Combined AMPA_NMDA receptor should produce both components."""
         dt = 0.1
         rec = _AMPA_NMDAReceptor()
         rec.pre_run_hook(dt)
@@ -559,7 +559,7 @@ class TestSynapticReceptors(unittest.TestCase):
         self.assertGreater(g, 0.0)
 
     def test_receptor_dual_exponential_shape(self):
-        """AMPA conductance should rise then decay (dual exponential shape)."""
+        r"""AMPA conductance should rise then decay (dual exponential shape)."""
         dt = 0.01  # Fine dt for shape test
         rec = _AMPAReceptor(tau_r_AMPA=0.2, tau_d_AMPA=3.0)
         rec.pre_run_hook(dt)
@@ -582,7 +582,7 @@ class TestSynapticReceptors(unittest.TestCase):
         self.assertGreater(conductances[peak_idx], conductances[-1])
 
     def test_receptor_state_access(self):
-        """Model should expose receptor state variables."""
+        r"""Model should expose receptor state variables."""
         model = cm_default()
         model.add_compartment(-1)
         r0 = model.add_receptor(0, 'AMPA')
@@ -606,10 +606,10 @@ class TestSynapticReceptors(unittest.TestCase):
 
 
 class TestSpikeDetection(unittest.TestCase):
-    """Test spike detection at root compartment."""
+    r"""Test spike detection at root compartment."""
 
     def test_no_spike_below_threshold(self):
-        """Voltage below threshold should not produce spike."""
+        r"""Voltage below threshold should not produce spike."""
         model = cm_default(V_th=-55.0)
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -60.0,
@@ -620,7 +620,7 @@ class TestSpikeDetection(unittest.TestCase):
         self.assertFalse(spike)
 
     def test_spike_on_threshold_crossing(self):
-        """Voltage crossing threshold from below should trigger spike."""
+        r"""Voltage crossing threshold from below should trigger spike."""
         model = cm_default(V_th=-55.0)
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -56.0,
@@ -640,7 +640,7 @@ class TestSpikeDetection(unittest.TestCase):
         self.assertTrue(spiked)
 
     def test_no_voltage_reset_after_spike(self):
-        """cm_default should NOT reset voltage after spike (unlike IF models)."""
+        r"""cm_default should NOT reset voltage after spike (unlike IF models)."""
         model = cm_default(V_th=-55.0)
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.01, 'e_L': -70.0, 'v_comp': -56.0,
@@ -658,7 +658,7 @@ class TestSpikeDetection(unittest.TestCase):
                 break
 
     def test_spike_requires_crossing_from_below(self):
-        """Spike requires v_prev < V_th AND v_new >= V_th."""
+        r"""Spike requires v_prev < V_th AND v_new >= V_th."""
         model = cm_default(V_th=-55.0)
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.01, 'e_L': -50.0, 'v_comp': -50.0,
@@ -671,10 +671,10 @@ class TestSpikeDetection(unittest.TestCase):
 
 
 class TestCrankNicolsonAccuracy(unittest.TestCase):
-    """Test that the Crank-Nicolson scheme is correctly implemented."""
+    r"""Test that the Crank-Nicolson scheme is correctly implemented."""
 
     def test_single_compartment_analytic(self):
-        """Single passive compartment: V_new from CN should match formula."""
+        r"""Single passive compartment: V_new from CN should match formula."""
         C_m = 2.0
         g_L = 0.5
         e_L = -65.0
@@ -696,7 +696,7 @@ class TestCrankNicolsonAccuracy(unittest.TestCase):
         self.assertAlmostEqual(model.get_voltage(0), v_analytic, places=12)
 
     def test_cn_stability_large_dt(self):
-        """Crank-Nicolson should be stable even with large dt."""
+        r"""Crank-Nicolson should be stable even with large dt."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': 100.0,
@@ -715,10 +715,10 @@ class TestCrankNicolsonAccuracy(unittest.TestCase):
 
 
 class TestMatrixSolver(unittest.TestCase):
-    """Test the O(n) tree matrix solver."""
+    r"""Test the O(n) tree matrix solver."""
 
     def test_single_compartment_no_leafs(self):
-        """Single compartment (root only) should solve directly."""
+        r"""Single compartment (root only) should solve directly."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -60.0,
@@ -730,7 +730,7 @@ class TestMatrixSolver(unittest.TestCase):
         self.assertTrue(math.isfinite(model.get_voltage(0)))
 
     def test_linear_chain(self):
-        """Linear chain of compartments should solve correctly."""
+        r"""Linear chain of compartments should solve correctly."""
         model = cm_default()
         n_comps = 5
         model.add_compartment(-1, {
@@ -750,7 +750,7 @@ class TestMatrixSolver(unittest.TestCase):
             self.assertAlmostEqual(model.get_voltage(i), -70.0, places=3)
 
     def test_binary_tree(self):
-        """Binary tree should solve correctly."""
+        r"""Binary tree should solve correctly."""
         model = cm_default()
         #       0
         #      / \
@@ -786,10 +786,10 @@ class TestMatrixSolver(unittest.TestCase):
 
 
 class TestNESTComparison(unittest.TestCase):
-    """Compare against NEST simulation outputs."""
+    r"""Compare against NEST simulation outputs."""
 
     def _run_reference_single_passive(self, C_m, g_L, e_L, v_init, dt, n_steps, I_ext=0.0):
-        """Reference Crank-Nicolson for a single passive compartment."""
+        r"""Reference Crank-Nicolson for a single passive compartment."""
         v = v_init
         trace = [v]
         for _ in range(n_steps):
@@ -800,7 +800,7 @@ class TestNESTComparison(unittest.TestCase):
         return trace
 
     def test_single_passive_vs_reference(self):
-        """Single passive compartment should match reference exactly."""
+        r"""Single passive compartment should match reference exactly."""
         dt = 0.1
         C_m, g_L, e_L, v_init = 1.0, 0.1, -70.0, -50.0
         n_steps = 100
@@ -823,7 +823,7 @@ class TestNESTComparison(unittest.TestCase):
                                    msg=f"Mismatch at step {i}")
 
     def test_single_passive_with_current_vs_reference(self):
-        """Single passive compartment with DC current should match reference."""
+        r"""Single passive compartment with DC current should match reference."""
         dt = 0.1
         C_m, g_L, e_L, v_init = 1.0, 0.1, -70.0, -70.0
         I_ext = 0.5  # nA
@@ -850,7 +850,7 @@ class TestNESTComparison(unittest.TestCase):
                                    msg=f"Mismatch at step {i}")
 
     def test_two_compartment_reference_trace(self):
-        """Two-compartment passive system should match manual CN computation."""
+        r"""Two-compartment passive system should match manual CN computation."""
         dt = 0.1
         C_m0, g_L0, e_L0, v0_init = 1.0, 0.1, -70.0, -50.0
         C_m1, g_C1, g_L1, e_L1, v1_init = 0.5, 0.3, 0.05, -70.0, -70.0
@@ -914,7 +914,7 @@ class TestNESTComparison(unittest.TestCase):
                                    msg=f"V1 mismatch at step {i}")
 
     def test_against_nest_passive_two_comp(self):
-        """Compare against NEST cm_default for passive two-compartment model.
+        r"""Compare against NEST cm_default for passive two-compartment model.
 
         Pre-computed NEST reference values for a two-compartment passive model
         with specific parameters over 10 steps at dt=0.1 ms.
@@ -981,7 +981,7 @@ class TestNESTComparison(unittest.TestCase):
             )
 
     def test_against_nest_with_ampa(self):
-        """Compare against NEST with AMPA receptor."""
+        r"""Compare against NEST with AMPA receptor."""
         try:
             import nest
         except ImportError:
@@ -1049,7 +1049,7 @@ class TestNESTComparison(unittest.TestCase):
             )
 
     def test_against_nest_with_na_k(self):
-        """Compare against NEST with active Na/K channels."""
+        r"""Compare against NEST with active Na/K channels."""
         try:
             import nest
         except ImportError:
@@ -1117,7 +1117,7 @@ class TestNESTComparison(unittest.TestCase):
 
 
 class TestEdgeCases(unittest.TestCase):
-    """Test edge cases and error handling."""
+    r"""Test edge cases and error handling."""
 
     def test_pre_run_hook_without_compartments_raises(self):
         model = cm_default()
@@ -1132,7 +1132,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertIsNone(model._get_compartment(5))
 
     def test_large_tree(self):
-        """Stress test with a deep linear chain."""
+        r"""Stress test with a deep linear chain."""
         model = cm_default()
         n_comps = 20
         model.add_compartment(-1, {'e_L': -70.0, 'v_comp': -70.0})
@@ -1151,7 +1151,7 @@ class TestEdgeCases(unittest.TestCase):
             self.assertAlmostEqual(model.get_voltage(i), -70.0, places=5)
 
     def test_multiple_spikes_to_receptor(self):
-        """Multiple spikes to same receptor should accumulate."""
+        r"""Multiple spikes to same receptor should accumulate."""
         model = cm_default()
         model.add_compartment(-1, {
             'C_m': 1.0, 'g_L': 0.1, 'e_L': -70.0, 'v_comp': -70.0,
@@ -1174,7 +1174,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertGreater(v, -70.0)
 
     def test_receptor_custom_params(self):
-        """Custom receptor parameters should be respected."""
+        r"""Custom receptor parameters should be respected."""
         model = cm_default()
         model.add_compartment(-1)
         r_idx = model.add_receptor(0, 'AMPA', {
@@ -1188,7 +1188,7 @@ class TestEdgeCases(unittest.TestCase):
         self.assertAlmostEqual(rec.tau_d, 5.0)
 
     def test_ion_channel_state_access(self):
-        """Should be able to read Na and K channel state variables."""
+        r"""Should be able to read Na and K channel state variables."""
         model = cm_default()
         model.add_compartment(-1, {
             'gbar_Na': 100.0, 'gbar_K': 30.0, 'v_comp': -70.0,

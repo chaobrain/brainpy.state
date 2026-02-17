@@ -39,9 +39,12 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
 
     Description
     -----------
-
     ``sinusoidal_poisson_generator`` re-implements NEST's stimulation device
-    of the same name. The instantaneous rate is
+    of the same name and emits per-step spike multiplicities.
+
+    **1. Stochastic model and discretization**
+
+    The instantaneous firing rate in spikes/s is
 
     .. math::
 
@@ -51,20 +54,58 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
 
     where:
 
-    - ``r`` is ``rate`` (spikes/s),
-    - ``a`` is ``amplitude`` (spikes/s),
-    - ``f_mod`` is ``frequency`` (Hz),
-    - ``phi`` is ``phase`` (deg, internally converted to radians),
-    - ``t`` is simulation time in ms.
+    - :math:`r` is ``rate`` (spikes/s),
+    - :math:`a` is ``amplitude`` (spikes/s),
+    - :math:`f_{\mathrm{mod}}` is ``frequency`` (Hz),
+    - :math:`\phi` is ``phase`` (deg, internally converted to radians),
+    - :math:`t` is simulation time in ms.
 
-    At each simulation step, output multiplicities are sampled from
+    For simulation resolution :math:`\Delta t` in ms, each output train
+    samples a Poisson multiplicity
 
     .. math::
 
-       k_n \sim \mathrm{Poisson}(f_n \Delta t / 1000).
+       K_n \sim \mathrm{Poisson}(\lambda_n), \qquad
+       \lambda_n = f_n \Delta t / 1000,
 
-    Update Ordering (NEST source order)
-    -----------------------------------
+    where the ``1000`` factor converts Hz * ms to a dimensionless mean.
+    ``K_n`` is an integer count ``0, 1, 2, ...`` and may exceed ``1``.
+
+    **2. Oscillator-state recurrence and derivation**
+
+    Following NEST, sinusoidal modulation is stored in a rotated two-component
+    oscillator state:
+
+    .. math::
+
+       y_0(t) = a/1000 \cdot \cos(\omega t + \phi), \qquad
+       y_1(t) = a/1000 \cdot \sin(\omega t + \phi),
+
+    with :math:`\omega = 2\pi f_{\mathrm{mod}}/1000` (rad/ms). One-step
+    propagation by :math:`\Delta t` uses a rotation matrix
+    :math:`R(\omega\Delta t)`:
+
+    .. math::
+
+       \begin{bmatrix}
+       y_0' \\
+       y_1'
+       \end{bmatrix}
+       =
+       \begin{bmatrix}
+       \cos(\omega\Delta t) & -\sin(\omega\Delta t) \\
+       \sin(\omega\Delta t) &  \cos(\omega\Delta t)
+       \end{bmatrix}
+       \begin{bmatrix}
+       y_0 \\
+       y_1
+       \end{bmatrix}.
+
+    The post-rotation ``y_1'`` is then added to ``rate/1000`` and clamped at
+    zero before Poisson sampling. This avoids recomputing trigonometric
+    functions each step and keeps per-step modulation update constant-time.
+
+    **3. Update ordering (NEST source order)**
 
     The internal two-component oscillator state is updated exactly in the
     order used by NEST ``models/sinusoidal_poisson_generator.cpp``:
@@ -79,8 +120,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
     post-rotation rate. This implementation exposes it via
     :meth:`get_recorded_rate`.
 
-    Timing Semantics
-    ----------------
+    **4. Timing semantics**
 
     NEST currently classifies this model as ``CURRENT_GENERATOR`` in
     ``get_type()``. Consequently, activity is evaluated with a two-step shift
@@ -91,38 +131,142 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
        t_{\min} < (n + 2) \le t_{\max},
 
     where ``n`` is current simulation step index and
-    ``t_min = origin + start``, ``t_max = origin + stop`` (in steps).
+    ``t_{\min} = \mathrm{origin} + \mathrm{start}``,
+    ``t_{\max} = \mathrm{origin} + \mathrm{stop}`` (in steps).
 
     This differs from regular spike generators and is intentionally replicated
     here to match NEST behavior.
 
+    **5. Assumptions, constraints, and computational implications**
+
+    - Public parameters are scalar-only; non-scalar values raise
+      :class:`ValueError`.
+    - ``stop`` must satisfy ``stop >= start`` after unit conversion.
+    - When ``dt`` is available, finite ``origin``, ``start``, and ``stop``
+      must be representable on the simulation grid.
+    - If ``dt`` changes, timing caches and oscillator state are recomputed from
+      absolute simulation time to preserve NEST-compatible behavior.
+    - Per-step complexity is :math:`O(\prod \mathrm{varshape})` for Poisson
+      sampling and :math:`O(1)` for oscillator/timing updates.
+
     Parameters
     ----------
     in_size : Size, optional
-        Number/shape of output spike trains. Default: ``1``.
+        Output size specification for :class:`brainstate.nn.Dynamics`.
+        The derived ``self.varshape`` is the shape of values returned by
+        :meth:`update`; each element corresponds to one emitted train.
+        Default is ``1``.
     rate : ArrayLike, optional
-        Mean firing rate in spikes/s. Default: ``0.0 * u.Hz``.
+        Scalar baseline firing rate in spikes/s (Hz), shape ``()`` after
+        conversion. Accepted inputs include scalar ``ArrayLike`` and
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        Default is ``0.0 * u.Hz``.
     amplitude : ArrayLike, optional
-        Sinusoidal modulation amplitude in spikes/s. Default: ``0.0 * u.Hz``.
+        Scalar sinusoidal modulation amplitude in spikes/s (Hz), shape ``()``
+        after conversion. Units and conversion rules match ``rate``.
+        Default is ``0.0 * u.Hz``.
     frequency : ArrayLike, optional
-        Modulation frequency in Hz. Default: ``0.0 * u.Hz``.
+        Scalar modulation frequency in Hz, shape ``()`` after conversion.
+        Internally converted to angular frequency in rad/ms.
+        Default is ``0.0 * u.Hz``.
     phase : ArrayLike, optional
-        Modulation phase in degrees. Default: ``0.0``.
+        Scalar modulation phase in degrees, shape ``()`` after conversion.
+        Internally converted to radians.
+        Default is ``0.0``.
     individual_spike_trains : bool, optional
-        If ``True`` (default), output trains are sampled independently.
+        Sampling mode selector.
+        If ``True``, Poisson sampling is independent for each index of
+        ``self.varshape``.
         If ``False``, one sampled multiplicity is broadcast to all outputs.
+        Default is ``True``.
     start : ArrayLike, optional
-        Activation start time (ms), relative to ``origin``.
-        Default: ``0.0 * u.ms``.
+        Scalar relative activation start time in ms, shape ``()`` after
+        conversion. Activity uses NEST current-generator semantics with a
+        two-step shifted check. Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
-        Deactivation stop time (ms), relative to ``origin``.
-        ``None`` means infinity. Default: ``None``.
+        Scalar relative deactivation stop time in ms, shape ``()`` after
+        conversion. ``None`` maps to ``+inf``.
+        Must satisfy ``stop >= start`` after conversion.
+        Default is ``None``.
     origin : ArrayLike, optional
-        Time origin (ms) for start/stop. Default: ``0.0 * u.ms``.
+        Scalar global time offset in ms, shape ``()`` after conversion.
+        Added to ``start`` and ``stop`` for activity-window bounds.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Seed for Poisson sampling. Default: ``0``.
+        Seed used to initialize ``jax.random.PRNGKey`` in :meth:`init_state`
+        and lazy initialization in :meth:`update`. Default is ``0``.
     name : str, optional
-        Object name.
+        Optional node name.
+
+    Parameter Mapping
+    -----------------
+    .. list-table:: Parameter mapping to model symbols
+       :header-rows: 1
+       :widths: 24 18 20 38
+
+       * - Parameter
+         - Default
+         - Math symbol
+         - Semantics
+       * - ``rate``
+         - ``0.0 * u.Hz``
+         - :math:`r`
+         - Baseline firing rate in spikes/s.
+       * - ``amplitude``
+         - ``0.0 * u.Hz``
+         - :math:`a`
+         - Sinusoidal modulation amplitude in spikes/s.
+       * - ``frequency``
+         - ``0.0 * u.Hz``
+         - :math:`f_{\mathrm{mod}}`
+         - Modulation frequency in Hz.
+       * - ``phase``
+         - ``0.0``
+         - :math:`\phi`
+         - Modulation phase in degrees (internally radians).
+       * - ``start``
+         - ``0.0 * u.ms``
+         - :math:`t_{\mathrm{start,rel}}`
+         - Relative lower activity bound (NEST shifted semantics).
+       * - ``stop``
+         - ``None``
+         - :math:`t_{\mathrm{stop,rel}}`
+         - Relative upper activity bound; ``None`` maps to ``+\infty``.
+       * - ``origin``
+         - ``0.0 * u.ms``
+         - :math:`t_0`
+         - Global time offset applied to start/stop.
+       * - ``in_size``
+         - ``1``
+         - -
+         - Defines output train count/shape via ``self.varshape``.
+       * - ``individual_spike_trains``
+         - ``True``
+         - -
+         - Independent-per-output sampling vs shared broadcast sample.
+       * - ``rng_seed``
+         - ``0``
+         - -
+         - Seed for JAX random key evolution.
+
+    Returns
+    -------
+    out : Any
+        Dynamics node instance. Each :meth:`update` call returns an ``int64``
+        JAX array with shape ``self.varshape`` containing per-step spike
+        multiplicities.
+
+    Raises
+    ------
+    ValueError
+        If any scalar-constrained parameter cannot be reduced to one value; if
+        ``stop < start``; or if finite ``origin``/``start``/``stop`` are not
+        representable on the simulation grid when ``dt`` is available.
+    TypeError
+        If numeric/unit conversion fails for provided rate/time inputs.
+    KeyError
+        At runtime, if required simulation context keys (for example ``dt`` in
+        :meth:`update`) are unavailable through ``brainstate.environ``.
 
     Notes
     -----
@@ -132,6 +276,49 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
     - The oscillator state is re-initialized from absolute simulation time
       whenever the simulation resolution changes, matching NEST pre-run
       calibration behavior.
+    - Recorded rate from :meth:`get_recorded_rate` is the post-rotation,
+      post-clamp value in spikes/s used for current-step sampling logic.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.sinusoidal_poisson_generator(
+       ...         in_size=4,
+       ...         rate=800.0 * u.Hz,
+       ...         amplitude=200.0 * u.Hz,
+       ...         frequency=10.0 * u.Hz,
+       ...         phase=90.0,
+       ...         start=5.0 * u.ms,
+       ...         stop=50.0 * u.ms,
+       ...         rng_seed=123,
+       ...     )
+       ...     with brainstate.environ.context(t=10.0 * u.ms):
+       ...         counts = gen.update()
+       ...     _ = counts.shape
+
+    .. code-block:: python
+
+       >>> import brainpy
+       >>> import brainstate
+       >>> import brainunit as u
+       >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ...     gen = brainpy.state.sinusoidal_poisson_generator(
+       ...         individual_spike_trains=False
+       ...     )
+       ...     gen.set(rate=500.0 * u.Hz, amplitude=300.0 * u.Hz, phase=45.0)
+       ...     params = gen.get()
+       ...     _ = params['rate'], params['amplitude']
+
+    See Also
+    --------
+    poisson_generator : Homogeneous Poisson generator.
+    inhomogeneous_poisson_generator : Piecewise-constant inhomogeneous Poisson generator.
+    sinusoidal_gamma_generator : Sinusoidally modulated gamma-renewal generator.
 
     References
     ----------
@@ -277,6 +464,20 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < shifted_step) and (shifted_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize RNG, oscillator states, and cached recorded rate.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Unused placeholder for :class:`brainstate.nn.Dynamics`
+            compatibility.
+        **kwargs
+            Unused extra keyword arguments.
+
+        Returns
+        -------
+        None
+        """
         del batch_size, kwargs
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
         self.y_0 = brainstate.ShortTermState(jnp.asarray(0.0, dtype=jnp.float64))
@@ -301,7 +502,37 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        """Set NEST-style public parameters."""
+        r"""Set public parameters and refresh dependent cached state.
+
+        Parameters
+        ----------
+        rate : ArrayLike or object, optional
+            Scalar rate in spikes/s (Hz). ``_UNSET`` keeps current value.
+        amplitude : ArrayLike or object, optional
+            Scalar sinusoidal amplitude in spikes/s (Hz). ``_UNSET`` keeps
+            current value.
+        frequency : ArrayLike or object, optional
+            Scalar frequency in Hz. ``_UNSET`` keeps current value.
+        phase : ArrayLike or object, optional
+            Scalar phase in degrees. ``_UNSET`` keeps current value.
+        individual_spike_trains : bool or object, optional
+            Sampling mode flag. ``_UNSET`` keeps current value.
+        start : ArrayLike or object, optional
+            Scalar relative start time in ms. ``_UNSET`` keeps current value.
+        stop : ArrayLike, None, or object, optional
+            Scalar relative stop time in ms, or ``None`` for ``+inf``.
+            ``_UNSET`` keeps current value.
+        origin : ArrayLike or object, optional
+            Scalar origin time in ms. ``_UNSET`` keeps current value.
+
+        Raises
+        ------
+        ValueError
+            If scalar conversion fails, ``stop < start``, or grid-time
+            validation fails when ``dt`` is available.
+        TypeError
+            If unit or numeric conversion fails for supplied inputs.
+        """
         new_rate = self.rate if rate is _UNSET else self._to_scalar_rate_hz(rate)
         new_amplitude = (
             self.amplitude if amplitude is _UNSET else self._to_scalar_rate_hz(amplitude)
@@ -350,7 +581,16 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
                 self._reset_oscillator_state(self._current_time_ms())
 
     def get(self) -> dict:
-        """Return current parameters and oscillator state in public units."""
+        r"""Return current public parameters and oscillator state snapshot.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys ``rate``, ``frequency``, ``phase``,
+            ``amplitude``, ``individual_spike_trains``, ``start``, ``stop``,
+            ``origin``, ``y_0``, and ``y_1``. Rates are in spikes/s, times are
+            in ms, and oscillator states are in spikes/ms.
+        """
         y0 = 0.0
         y1 = 0.0
         if hasattr(self, 'y_0'):
@@ -371,7 +611,14 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         }
 
     def get_recorded_rate(self) -> float:
-        """Return the latest post-update instantaneous rate in spikes/s."""
+        r"""Return latest post-update instantaneous rate in spikes/s.
+
+        Returns
+        -------
+        float
+            Most recent stored value of the post-rotation, post-clamp
+            instantaneous rate. Returns ``0.0`` before state initialization.
+        """
         if not hasattr(self, '_recorded_rate_hz'):
             return 0.0
         return float(np.asarray(self._recorded_rate_hz.value, dtype=np.float64).reshape(()))
@@ -396,6 +643,24 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         return int(np.asarray(sample, dtype=np.int64).reshape(()))
 
     def update(self):
+        r"""Advance generator by one simulation step and emit spike counts.
+
+        Returns
+        -------
+        jax.Array
+            ``int64`` array with shape ``self.varshape``. Values are per-step
+            spike multiplicities sampled from the configured sinusoidal Poisson
+            process, or zeros when inactive/non-positive-rate.
+
+        Raises
+        ------
+        KeyError
+            If required environment entries (for example ``dt``) are not
+            available through ``brainstate.environ`` at runtime.
+        ValueError
+            If cached timing constraints become invalid after environment
+            changes (for example non-grid-aligned finite time bounds).
+        """
         if not hasattr(self, 'rng_key'):
             self.init_state()
 
