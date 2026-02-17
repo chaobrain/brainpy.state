@@ -1184,8 +1184,8 @@ class rate_neuron_opn(_lin_rate_base):
           :math:`h\to 0` limit, but per-step noise variance diverges (reflecting
           white-noise nature).
 
-        Failure Modes
-        -------------
+        **Failure Modes**
+
 
         - **Invalid time constants**: Caught at construction by
           ``_validate_parameters`` (enforces :math:`\tau>0`, :math:`\sigma\ge 0`).

@@ -891,15 +891,15 @@ class hh_cond_exp_traub(Neuron):
         Conductance jumps are applied **after** ODE integration, matching NEST's
         update sequence.
 
-        Computational Complexity
-        ------------------------
+        **Computational Complexity**
+
 
         The method performs per-neuron integration, so runtime scales linearly
         with the total number of neurons (``prod(in_size)``). For large populations,
         consider vectorized implementations if numerical accuracy can be relaxed.
 
-        Failure Modes
-        -------------
+        **Failure Modes**
+
 
         - If ODE solver fails to converge (stiff dynamics), ``solve_ivp`` may
           return partial integration. Check ``sol.success`` if debugging.

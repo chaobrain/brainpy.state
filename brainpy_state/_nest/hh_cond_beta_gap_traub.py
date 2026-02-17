@@ -1142,8 +1142,8 @@ class hh_cond_beta_gap_traub(Neuron):
           populations (>1000 neurons), this is significantly slower than NEST's compiled
           C++ implementation.
 
-        Failure Modes
-        -------------
+        **Failure Modes**
+
 
         - If the ODE solver fails to converge (rare), ``solve_ivp`` will return a partial
           solution. Check ``sol.success`` if you encounter NaN values.

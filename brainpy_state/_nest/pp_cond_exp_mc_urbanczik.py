@@ -86,8 +86,8 @@ def _phi(u_val, phi_max, rate_slope, beta, theta):
 
     Notes
     -----
-    Mathematical Formulation
-    ------------------------
+    **Mathematical Formulation**
+
 
     The rate function is defined as:
 

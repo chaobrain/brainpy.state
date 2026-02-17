@@ -239,8 +239,8 @@ class quantal_stp_synapse(static_synapse):
     - ``tau_rec``: vesicle recycling / replenishment time
     - ``tau_fac``: residual calcium decay time (controls facilitation)
 
-    Comparison with tsodyks_synapse
-    -------------------------------
+    **Comparison with tsodyks_synapse**
+
 
     ``tsodyks_synapse`` uses continuous-valued resource variables and
     deterministic updates. ``quantal_stp_synapse`` uses discrete site counts

@@ -310,8 +310,8 @@ class aeif_psc_alpha(Neuron):
     - Refractory clamping follows NEST semantics: :math:`V_{eff} = V_{reset}` during
       refractory, with :math:`dV/dt = 0`
 
-    Numerical Considerations
-    ------------------------
+    **Numerical Considerations**
+
 
     - Maximum iteration limit: 100,000 substeps per time step (prevents infinite loops)
     - Minimum step size: :math:`h_{min} = 10^{-8}` ms

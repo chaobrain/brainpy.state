@@ -695,8 +695,8 @@ class clopath_synapse:
 
             t_\text{last} \leftarrow t
 
-        Side Effects
-        ------------
+        **Side Effects**
+
 
         This method modifies connection state:
 

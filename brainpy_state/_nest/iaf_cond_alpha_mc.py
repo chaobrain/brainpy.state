@@ -269,8 +269,8 @@ class iaf_cond_alpha_mc(Neuron):
     multi-compartment model. This implementation maintains backward compatibility with legacy
     NEST code and benchmarks.
 
-    Failure Modes
-    -------------
+    **Failure Modes**
+
 
     - Raises ``ValueError`` if ``V_reset >= V_th`` (reset must be below threshold).
     - Raises ``ValueError`` if ``t_ref < 0`` (negative refractory period).
@@ -1062,8 +1062,8 @@ class iaf_cond_alpha_mc(Neuron):
         step size is persistent across time steps and stored in ``integration_step`` state.
         Error tolerance is ``1e-3`` with minimum step size ``1e-8 ms``.
 
-        Failure Modes
-        -------------
+        **Failure Modes**
+
 
         - Raises ``ValueError`` if spike weights are negative (NEST constraint).
         - May fail to converge if integration step size becomes too small (>10000 iterations).

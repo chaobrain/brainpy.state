@@ -238,8 +238,8 @@ class iaf_cond_beta(Neuron):
 
     Notes
     -----
-    State Variables
-    ---------------
+    **State Variables**
+
 
     - ``V`` : brainstate.HiddenState
         Membrane potential :math:`V_m` with shape ``(*in_size, *batch_shape)`` and units mV.
@@ -752,8 +752,8 @@ class iaf_cond_beta(Neuron):
         - ``last_spike_time.value``: Set to :math:`t + dt` where spike occurred.
         - ``refractory.value`` (optional): Boolean refractory indicator if ``ref_var=True``.
 
-        Failure Modes
-        -------------
+        **Failure Modes**
+
 
         - If RKF45 fails to converge within ``_MAX_ITERS`` substeps, the integration stops at
           the current time and returns potentially inaccurate results. This typically indicates

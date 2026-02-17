@@ -480,8 +480,8 @@ class gif_psc_exp_multisynapse(Neuron):
       empty STC/SFA), this model behaves as a simple stochastic LIF neuron
       with exponential synaptic currents.
 
-    Failure Modes
-    -------------
+    **Failure Modes**
+
 
     * If ``Delta_V`` is too small (< 1e-6 mV), numerical overflow may occur
       in the exponential firing intensity computation.
@@ -1008,8 +1008,8 @@ class gif_psc_exp_multisynapse(Neuron):
           accumulated into ``I_stim`` and distributed uniformly (not
           receptor-specific).
 
-        Failure Modes
-        -------------
+        **Failure Modes**
+
 
         - If ``receptor_type`` in ``spike_events`` is out of range [1,
           ``n_receptors``], raises ``ValueError``.

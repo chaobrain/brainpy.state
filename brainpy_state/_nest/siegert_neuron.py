@@ -222,8 +222,8 @@ class siegert_neuron(Dynamics):
 
     Notes
     -----
-    Computational Complexity
-    ------------------------
+    **Computational Complexity**
+
 
     - Siegert evaluation is the primary bottleneck (O(N) per neuron).
     - Without SciPy, custom quadrature adds ~10× overhead.

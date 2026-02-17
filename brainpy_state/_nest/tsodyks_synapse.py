@@ -239,7 +239,7 @@ class tsodyks_synapse(static_synapse):
         Unique identifier for this synapse instance. Used for debugging and logging.
         Default: ``None`` (auto-generated).
 
-    **Parameter Mapping (NEST ↔ brainpy.state):**
+    **Parameter Mapping**
 
     =========================  ===================  =========================================
     NEST Parameter             brainpy.state        Description
