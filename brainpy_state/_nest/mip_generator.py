@@ -36,16 +36,14 @@ _UNSET = object()
 class mip_generator(brainstate.nn.Dynamics):
     r"""Correlated spike trains from a Multiple Interaction Process (MIP).
 
-    Description
-    -----------
     ``mip_generator`` reproduces NEST's ``mip_generator`` device by combining
     one shared parent Poisson process with independent copy operations for
     each child output train.
 
     **1. Parent-child process model and derivation**
 
-    Let ``rate = r`` in spikes/s and simulation step ``dt = \Delta t`` in ms.
-    For each step ``n``:
+    Let :math:`r = \mathrm{rate}` in spikes/s and simulation step
+    :math:`\Delta t` in ms. For each step :math:`n`:
 
     .. math::
 
@@ -55,22 +53,22 @@ class mip_generator(brainstate.nn.Dynamics):
     For each child train :math:`i \in \{1,\dots,M\}` and each parent spike
     :math:`m \in \{1,\dots,N_n\}`, draw
     :math:`B_{i,m} \sim \mathrm{Bernoulli}(p_{\mathrm{copy}})` independently
-    across ``i`` and ``m``. The emitted multiplicity is
+    across :math:`i` and :math:`m`. The emitted multiplicity is
 
     .. math::
 
        K_{i,n} = \sum_{m=1}^{N_n} B_{i,m}.
 
     Marginally, :math:`K_{i,n}` is Poisson with parameter
-    :math:`p_{\mathrm{copy}}\lambda` (Poisson thinning), so each child has mean
-    rate :math:`p_{\mathrm{copy}} r`. Shared parent fluctuations induce
+    :math:`p_{\mathrm{copy}} \lambda` (Poisson thinning), so each child has
+    mean rate :math:`p_{\mathrm{copy}} r`. Shared parent fluctuations induce
     cross-child covariance:
 
     .. math::
 
        \mathrm{Cov}(K_{i,n}, K_{j,n}) = p_{\mathrm{copy}}^2 \lambda,\quad
-       \mathrm{Var}(K_{i,n}) = p_{\mathrm{copy}}\lambda,\quad
-       \rho_{ij} = p_{\mathrm{copy}} \ \ (i \neq j).
+       \mathrm{Var}(K_{i,n}) = p_{\mathrm{copy}} \lambda,\quad
+       \rho_{ij} = p_{\mathrm{copy}} \quad (i \neq j).
 
     **2. Source-equivalent sampling order and computational implications**
 
@@ -82,9 +80,11 @@ class mip_generator(brainstate.nn.Dynamics):
        spike and count copied spikes.
 
     This implementation intentionally preserves NEST's explicit Bernoulli loop
-    (instead of vectorized Binomial sampling). Runtime per active step is
+    (instead of vectorised Binomial sampling). Runtime per active step is
     :math:`O(M N_n)` random comparisons in the general case, with fast paths
-    for ``p_copy <= 0`` and ``p_copy >= 1``.
+    for ``p_copy <= 0`` and ``p_copy >= 1``. RNG sampling uses
+    ``numpy.random.Generator`` (seeded by ``rng_seed``), so draws are CPU
+    NumPy-based rather than JAX-key-based.
 
     **3. Timing semantics and grid constraints**
 
@@ -97,53 +97,57 @@ class mip_generator(brainstate.nn.Dynamics):
        t_{\max} = \mathrm{origin} + \mathrm{stop}.
 
     Therefore ``start`` is exclusive and ``stop`` is inclusive. Internally,
-    finite times are mapped to integer steps with
-    :math:`\mathrm{round}(t / \Delta t)`. Finite ``origin``, ``start``, and
-    ``stop`` must be on the simulation grid (absolute tolerance ``1e-12`` in
-    ``time/dt`` ratio), otherwise :class:`ValueError` is raised.
+    finite times are projected to integer steps with
+    :math:`\mathrm{round}(t / \Delta t)` and checked as
+    ``t_min_step < curr_step <= t_max_step``. Finite ``origin``, ``start``,
+    and ``stop`` must be on the simulation grid (absolute tolerance ``1e-12``
+    in ``time/dt`` ratio), otherwise :class:`ValueError` is raised.
 
     Parameters
     ----------
     in_size : Size, optional
-        Output size specification for :class:`brainstate.nn.Dynamics`.
+        Output size specification consumed by :class:`brainstate.nn.Dynamics`.
         ``self.varshape`` is derived from ``in_size`` and determines the exact
         shape of arrays emitted by :meth:`update`. Each element of
         ``self.varshape`` corresponds to one child process. Default is ``1``.
     rate : ArrayLike, optional
-        Scalar parent rate :math:`r` in spikes/s (Hz). Must be an
-        ``ArrayLike`` with exactly one element, optionally a
+        Scalar parent Poisson rate :math:`r` in spikes/s (Hz), shape ``()``
+        after conversion. Accepts a single-element numeric ``ArrayLike`` or a
         :class:`brainunit.Quantity` convertible to ``u.Hz``.
-        Constraint: ``rate >= 0``. Default is ``0.0 * u.Hz``.
+        Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     p_copy : ArrayLike, optional
-        Scalar copy probability :math:`p_{\mathrm{copy}}` for each parent spike
-        and each child process. Must be scalar-convertible to ``float64`` and
-        satisfy ``0 <= p_copy <= 1``. Default is ``1.0``.
+        Scalar copy probability :math:`p_{\mathrm{copy}}` for each parent
+        spike and each child process, shape ``()`` after conversion. Must be
+        scalar-convertible to ``float64`` and satisfy ``0 <= p_copy <= 1``.
+        Default is ``1.0``.
     start : ArrayLike, optional
         Scalar relative start time in ms (exclusive lower bound after adding
-        ``origin``). Must be scalar-convertible to ``float64`` and, when
-        ``dt`` is available, representable on the simulation grid.
-        Default is ``0.0 * u.ms``.
+        ``origin``), shape ``()`` after conversion. Must be
+        scalar-convertible to ``float64`` and, when ``dt`` is available,
+        representable on the simulation grid. Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
         Scalar relative stop time in ms (inclusive upper bound after adding
-        ``origin``). ``None`` maps to ``+inf``. If finite, must be
-        scalar-convertible and grid-representable when ``dt`` is available.
-        Must satisfy ``stop >= start`` after conversion. Default is ``None``.
+        ``origin``), shape ``()`` after conversion. ``None`` maps to
+        ``+inf``. If finite, must be scalar-convertible and
+        grid-representable when ``dt`` is available. Must satisfy
+        ``stop >= start`` after conversion. Default is ``None``.
     origin : ArrayLike, optional
-        Scalar time offset in ms added to both ``start`` and ``stop``.
-        Must be scalar-convertible and grid-representable when ``dt`` is
-        available. Default is ``0.0 * u.ms``.
+        Scalar time offset in ms added to both ``start`` and ``stop``,
+        shape ``()`` after conversion. Must be scalar-convertible and
+        grid-representable when ``dt`` is available.
+        Default is ``0.0 * u.ms``.
     rng_seed : int, optional
         Seed passed to :class:`numpy.random.SeedSequence` and split into two
         independent RNG streams (parent Poisson and child-copy Bernoulli).
         Default is ``0``.
     name : str or None, optional
-        Optional dynamics node name.
+        Optional dynamics node name passed to :class:`brainstate.nn.Dynamics`.
 
     Parameter Mapping
     -----------------
     .. list-table:: Parameter mapping to model symbols
        :header-rows: 1
-       :widths: 20 20 20 40
+       :widths: 20 18 22 40
 
        * - Parameter
          - Default
@@ -188,10 +192,10 @@ class mip_generator(brainstate.nn.Dynamics):
     Raises
     ------
     ValueError
-        If ``rate < 0``; if ``p_copy`` is outside ``[0, 1]``; if ``stop < start``;
-        if scalar conversion fails due non-scalar inputs; or if finite
-        ``origin``/``start``/``stop`` are not multiples of ``dt`` when
-        simulation resolution is available.
+        If ``rate < 0``; if ``p_copy`` is outside ``[0, 1]``; if
+        ``stop < start``; if scalar conversion fails due to non-scalar
+        inputs; or if finite ``origin``/``start``/``stop`` are not multiples
+        of ``dt`` when simulation resolution is available.
     TypeError
         If conversion of unitful inputs to ``u.Hz`` or ``u.ms`` is invalid.
     KeyError
@@ -201,11 +205,12 @@ class mip_generator(brainstate.nn.Dynamics):
     Notes
     -----
     - Outputs are multiplicities ``0, 1, 2, ...`` per discrete step, matching
-      NEST ``SpikeEvent`` multiplicity semantics rather than binary spike flags.
-    - ``init_state`` creates two independent RNG instances to mirror NEST's
-      separation of parent and child stochastic paths.
-    - ``set`` updates cached timing boundaries immediately when ``dt`` is
-      already available in ``brainstate.environ``.
+      NEST ``SpikeEvent`` multiplicity semantics rather than binary spike
+      flags.
+    - :meth:`init_state` creates two independent RNG instances to mirror
+      NEST's separation of parent and child stochastic paths.
+    - :meth:`set` updates cached timing boundaries immediately when ``dt``
+      is already available in ``brainstate.environ``.
 
     Examples
     --------
@@ -375,19 +380,25 @@ class mip_generator(brainstate.nn.Dynamics):
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize RNG state for parent and child stochastic paths.
 
+        Spawns two independent ``numpy.random.Generator`` instances from
+        ``rng_seed`` via :class:`numpy.random.SeedSequence`, mirroring NEST's
+        separation of parent Poisson draws and per-child Bernoulli draws.
+
         Parameters
         ----------
         batch_size : int or None, optional
             Unused placeholder for :class:`brainstate.nn.Dynamics` API
             compatibility. Ignored by this implementation.
         **kwargs
-            Additional keyword arguments accepted for compatibility and ignored.
+            Additional keyword arguments accepted for API compatibility.
+            Ignored.
 
         Returns
         -------
         out : Any
-            ``None``. The method sets ``self._rng_parent`` and
-            ``self._rng_child`` as ``numpy.random.Generator`` instances.
+            ``None``. Side effects: ``self._rng_parent`` and
+            ``self._rng_child`` are set as independent
+            ``numpy.random.Generator`` instances derived from ``rng_seed``.
 
         Raises
         ------
@@ -412,17 +423,22 @@ class mip_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        r"""Update public generator parameters using NEST-style semantics.
+        r"""Update public generator parameters with NEST-compatible semantics.
+
+        Any parameter left at the internal sentinel ``_UNSET`` retains its
+        current value. All provided values are validated and converted before
+        any attribute is mutated, so the generator state remains consistent on
+        failure. If ``dt`` is currently available in ``brainstate.environ``,
+        the cached step bounds are recomputed immediately after mutation.
 
         Parameters
         ----------
         rate : ArrayLike or object, optional
-            New scalar parent rate in Hz. If omitted (internal sentinel
-            ``_UNSET``), keep current value. Must satisfy ``rate >= 0`` after
-            scalar conversion.
+            New scalar parent Poisson rate in Hz. If omitted, keep current
+            value. Must satisfy ``rate >= 0`` after scalar conversion.
         p_copy : ArrayLike or object, optional
-            New scalar copy probability in ``[0, 1]``. If omitted, keep current
-            value.
+            New scalar copy probability in ``[0, 1]``. If omitted, keep
+            current value.
         start : ArrayLike or object, optional
             New scalar relative start time in ms. If omitted, keep current
             value.
@@ -435,9 +451,7 @@ class mip_generator(brainstate.nn.Dynamics):
         Returns
         -------
         out : Any
-            ``None``. Parameters are updated in place. If ``dt`` is currently
-            available in ``brainstate.environ``, cached step bounds are
-            recomputed immediately.
+            ``None``. Parameters are updated in place.
 
         Raises
         ------
@@ -482,20 +496,16 @@ class mip_generator(brainstate.nn.Dynamics):
             self._refresh_timing_cache(dt_ms)
 
     def get(self) -> dict:
-        r"""Return current public parameters as plain Python floats.
-
-        Parameters
-        ----------
-        None
-            This method has no input parameters.
+        r"""Return current public parameters as plain Python scalars.
 
         Returns
         -------
         out : Any
-            Dictionary with keys ``'rate'``, ``'p_copy'``, ``'start'``,
+            ``dict`` with keys ``'rate'``, ``'p_copy'``, ``'start'``,
             ``'stop'``, and ``'origin'``. Values are Python ``float`` in
-            units Hz for ``rate`` and ms for time fields. ``stop`` is
-            ``math.inf`` if unbounded.
+            public units: Hz for ``rate`` and ms for all time fields.
+            ``'stop'`` is ``math.inf`` if unbounded (i.e., ``stop=None``
+            was supplied at construction or via :meth:`set`).
         """
         return {
             'rate': float(self.rate),
@@ -527,25 +537,21 @@ class mip_generator(brainstate.nn.Dynamics):
     def update(self):
         r"""Advance one simulation step and emit child spike multiplicities.
 
-        The method executes the source-equivalent MIP sampling pipeline:
-        validate/refresh timing cache, gate activity with
-        :math:`t_{\min} < t \le t_{\max}`, draw parent spike multiplicity from
-        :math:`\mathrm{Poisson}(r \Delta t / 1000)`, then copy parent spikes
-        independently into each child with probability ``p_copy``.
-
-        Parameters
-        ----------
-        None
-            The method reads ``dt`` and optionally ``t`` from
-            ``brainstate.environ`` and uses instance parameters.
+        Executes the source-equivalent MIP sampling pipeline: lazily
+        initialises state if needed, refreshes the timing/rate cache when
+        ``dt`` changes, gates activity with
+        :math:`t_{\min} < t \le t_{\max}`, draws parent spike multiplicity
+        from :math:`\mathrm{Poisson}(r \Delta t / 1000)`, then independently
+        copies each parent spike into each child train with probability
+        ``p_copy``.
 
         Returns
         -------
         out : Any
-            NumPy array of dtype ``int64`` with shape ``self.varshape``.
-            Entries are per-step spike multiplicities for each child train.
-            If inactive, if ``rate <= 0``, or if parent multiplicity is zero,
-            all entries are ``0``.
+            NumPy ``int64`` array of shape ``self.varshape``. Entries are
+            per-step spike multiplicities for each child train. Returns all
+            zeros when the generator is inactive, when ``rate <= 0``, or when
+            the parent draw yields zero spikes.
 
         Raises
         ------
@@ -556,8 +562,8 @@ class mip_generator(brainstate.nn.Dynamics):
             If finite timing parameters are not aligned to the simulation grid
             after a ``dt`` change.
         TypeError
-            If simulation-time values in the environment cannot be converted to
-            scalar milliseconds.
+            If simulation-time values in the environment cannot be converted
+            to scalar milliseconds.
         """
         if not hasattr(self, '_rng_parent'):
             self.init_state()

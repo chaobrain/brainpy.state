@@ -198,23 +198,23 @@ class iaf_cond_exp(Neuron):
     State Variables
     ---------------
     V : brainstate.HiddenState
-        Membrane potential :math:`V_\mathrm{m}` in mV, shape ``(\*in_size, \*batch_shape)``.
+        Membrane potential :math:`V_\mathrm{m}` in mV, shape ``(*in_size, *batch_shape)``.
     g_ex : brainstate.HiddenState
         Excitatory synaptic conductance :math:`g_\mathrm{ex}` in nS,
-        shape ``(\*in_size, \*batch_shape)``.
+        shape ``(*in_size, *batch_shape)``.
     g_in : brainstate.HiddenState
         Inhibitory synaptic conductance :math:`g_\mathrm{in}` in nS,
-        shape ``(\*in_size, \*batch_shape)``.
+        shape ``(*in_size, *batch_shape)``.
     last_spike_time : brainstate.ShortTermState
-        Last spike emission time in ms, shape ``(\*in_size, \*batch_shape)``.
+        Last spike emission time in ms, shape ``(*in_size, *batch_shape)``.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory time steps (int32), shape ``(\*in_size, \*batch_shape)``.
+        Remaining refractory time steps (int32), shape ``(*in_size, *batch_shape)``.
     integration_step : brainstate.ShortTermState
-        Internal RKF45 adaptive step size in ms, shape ``(\*in_size, \*batch_shape)``.
+        Internal RKF45 adaptive step size in ms, shape ``(*in_size, *batch_shape)``.
     I_stim : brainstate.ShortTermState
-        Buffered external current (one-step delayed) in pA, shape ``(\*in_size, \*batch_shape)``.
+        Buffered external current (one-step delayed) in pA, shape ``(*in_size, *batch_shape)``.
     refractory : brainstate.ShortTermState, optional
-        Boolean refractory state indicator, shape ``(\*in_size, \*batch_shape)``.
+        Boolean refractory state indicator, shape ``(*in_size, *batch_shape)``.
         Only present if ``ref_var=True``.
 
     Raises
@@ -699,7 +699,7 @@ class iaf_cond_exp(Neuron):
         Returns
         -------
         ArrayLike
-            Differentiable spike output with shape ``(\*in_size, \*batch_shape)``.
+            Differentiable spike output with shape ``(*in_size, *batch_shape)``.
             Values are computed via surrogate gradient function from pre-reset
             membrane potentials. Binary spike detection uses ``V >= V_th`` threshold.
 

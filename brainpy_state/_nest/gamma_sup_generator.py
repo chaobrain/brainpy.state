@@ -126,7 +126,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         element corresponds to one independent output train. Default is ``1``.
     rate : ArrayLike, optional
         Scalar component-process rate in spikes/s (Hz), shape ``()`` after
-        conversion. Accepted as a single-element ``ArrayLike`` or
+        conversion. Accepts a single-element numeric ``ArrayLike`` or a
         :class:`brainunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     gamma_shape : ArrayLike, optional
@@ -135,20 +135,24 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         Must satisfy ``gamma_shape >= 1``. Default is ``1``.
     n_proc : ArrayLike, optional
         Scalar integer number of independent component processes per output
-        train, shape ``()`` after conversion. Must satisfy ``n_proc >= 1``.
+        train, shape ``()`` after conversion. Parsed by nearest-integer check
+        with absolute tolerance ``1e-12``. Must satisfy ``n_proc >= 1``.
         Default is ``1``.
     start : ArrayLike, optional
         Scalar relative activation time in ms, shape ``()`` after conversion.
-        Effective lower bound is ``origin + start`` and is exclusive.
+        Effective lower activity bound is ``origin + start`` and is exclusive.
+        Must be grid-representable when ``dt`` is available.
         Default is ``0.0 * u.ms``.
     stop : ArrayLike or None, optional
         Scalar relative deactivation time in ms, shape ``()`` after
-        conversion. Effective upper bound is ``origin + stop`` and is
+        conversion. Effective upper activity bound is ``origin + stop`` and is
         inclusive. ``None`` maps to ``+inf``. Must satisfy ``stop >= start``
-        after conversion. Default is ``None``.
+        and be grid-representable when finite and ``dt`` is available.
+        Default is ``None``.
     origin : ArrayLike, optional
-        Scalar global time offset in ms, shape ``()`` after conversion, added
-        to ``start`` and ``stop`` to define absolute activity bounds.
+        Scalar time-origin offset in ms, shape ``()`` after conversion, added
+        to ``start`` and ``stop`` to compute absolute active bounds.
+        Must be grid-representable when finite and ``dt`` is available.
         Default is ``0.0 * u.ms``.
     rng_seed : int, optional
         Seed used to initialize ``numpy.random.default_rng`` in
@@ -209,15 +213,16 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
     Raises
     ------
     ValueError
-        If ``rate < 0``; if ``gamma_shape < 1``; if ``n_proc < 1``; if
-        ``stop < start``; if scalar-conversion fails due to non-scalar inputs;
-        or if finite ``origin``/``start``/``stop`` are not multiples of
-        simulation resolution when ``dt`` is available.
+        If scalar conversion fails due to non-scalar inputs; if ``rate < 0``;
+        if ``gamma_shape < 1``; if ``n_proc < 1``; if ``stop < start``; if
+        integer-valued inputs are non-integral beyond tolerance; or if finite
+        ``origin``/``start``/``stop`` are not multiples of simulation
+        resolution when ``dt`` is available.
     TypeError
         If unit conversion to ``u.Hz`` or ``u.ms`` fails for supplied inputs.
     KeyError
-        At runtime, if required simulation-context entries (for example
-        ``dt`` in ``brainstate.environ.get_dt()``) are unavailable.
+        At runtime, if required simulation-context fields (for example ``dt``
+        used by ``brainstate.environ.get_dt()``) are unavailable.
 
     Notes
     -----

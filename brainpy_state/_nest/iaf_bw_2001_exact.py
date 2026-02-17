@@ -251,9 +251,9 @@ class iaf_bw_2001_exact(Neuron):
 
     **Additional State Variables**
 
-    - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[\*in_size, n_ports]``)
-    - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[\*in_size, n_ports]``)
-    - ``nmda_weights`` — Fixed weights for each NMDA port (shape: ``[\*in_size, n_ports]``)
+    - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[*in_size, n_ports]``)
+    - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[*in_size, n_ports]``)
+    - ``nmda_weights`` — Fixed weights for each NMDA port (shape: ``[*in_size, n_ports]``)
     - ``refractory_step_count`` — Remaining refractory steps (int32)
     - ``integration_step`` — Persistent RKF45 step size (ms)
     - ``I_stim`` — One-step delayed external current buffer (pA)

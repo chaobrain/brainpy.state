@@ -533,7 +533,7 @@ class gif_psc_exp(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension size. If None, no batch dimension is added. If provided,
-            state arrays have shape ``(batch_size, \*in_size)``. Default: None.
+            state arrays have shape ``(batch_size, *in_size)``. Default: None.
         **kwargs
             Additional keyword arguments (ignored).
 
@@ -584,7 +584,7 @@ class gif_psc_exp(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension size. If None, no batch dimension is added. If provided,
-            state arrays have shape ``(batch_size, \*in_size)``. Default: None.
+            state arrays have shape ``(batch_size, *in_size)``. Default: None.
         **kwargs
             Additional keyword arguments (ignored).
 

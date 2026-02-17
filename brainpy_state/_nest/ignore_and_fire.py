@@ -348,7 +348,7 @@ class ignore_and_fire(Dynamics):
         ----------
         batch_size : int or None, optional
             Batch dimension size. When provided, state arrays are broadcast to
-            shape ``(batch_size, \*varshape)``. When ``None``, state shape is
+            shape ``(batch_size, *varshape)``. When ``None``, state shape is
             ``varshape``. Default is ``None``.
         **kwargs : dict
             Additional keyword arguments passed to parent
@@ -413,7 +413,7 @@ class ignore_and_fire(Dynamics):
         Returns
         -------
         spike : jnp.ndarray
-            Float array with shape ``varshape`` (or ``(batch_size, \*varshape)``
+            Float array with shape ``varshape`` (or ``(batch_size, *varshape)``
             if initialized with batching). Contains ``1.0`` at positions where
             a spike is emitted this step and ``0.0`` elsewhere. Dtype is
             ``float32`` or the default JAX float dtype.

@@ -521,7 +521,7 @@ class rate_transformer_node(Dynamics):
         ----------
         batch_size : int, optional
             Number of parallel simulation batches. If provided, state variables will have shape
-            ``(batch_size, \*in_size)``. If ``None`` (default), shape is ``in_size``.
+            ``(batch_size, *in_size)``. If ``None`` (default), shape is ``in_size``.
         **kwargs
             Additional keyword arguments (ignored, present for API consistency).
 
@@ -585,10 +585,10 @@ class rate_transformer_node(Dynamics):
 
         Returns
         -------
-        rate_new : ndarray, shape ``(in_size,)`` or ``(batch_size, \*in_size)``
+        rate_new : ndarray, shape ``(in_size,)`` or ``(batch_size, *in_size)``
             **Updated output rate** after applying nonlinearity to aggregated inputs. This
             is the new value of the ``rate`` state variable. Shape matches ``in_size``
-            (or ``(batch_size, \*in_size)`` if batch mode was used in ``init_state()``).
+            (or ``(batch_size, *in_size)`` if batch mode was used in ``init_state()``).
 
         Raises
         ------

@@ -899,7 +899,7 @@ class glif_psc_double_alpha(Neuron):
         batch_size : int, optional
             Batch dimension size for parallel simulations. If ``None`` (default),
             no batch dimension is added. If an integer, state variables are
-            initialized with shape ``(batch_size, \*self.varshape)``.
+            initialized with shape ``(batch_size, *self.varshape)``.
         **kwargs
             Additional keyword arguments (currently unused, reserved for future extensions).
 
@@ -1004,7 +1004,7 @@ class glif_psc_double_alpha(Neuron):
         batch_size : int, optional
             Batch dimension size. If ``None`` (default), uses the current batch
             size (or no batch dimension). If an integer, reshapes all states to
-            ``(batch_size, \*self.varshape)``, allowing changing batch size during
+            ``(batch_size, *self.varshape)``, allowing changing batch size during
             simulation.
         **kwargs
             Additional keyword arguments (currently unused, reserved for future extensions).
@@ -1084,7 +1084,7 @@ class glif_psc_double_alpha(Neuron):
         V : ArrayLike, optional
             Membrane potential (absolute, in mV). If ``None`` (default), uses
             the current state ``self.V.value``. If provided, should have shape
-            compatible with ``self.varshape`` (or ``(batch_size, \*self.varshape)``).
+            compatible with ``self.varshape`` (or ``(batch_size, *self.varshape)``).
             Unit: ``brainunit.mV`` or dimensionless (interpreted as mV).
 
         Returns

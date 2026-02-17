@@ -725,7 +725,7 @@ class pp_psc_delta(Neuron):
         Returns
         -------
         spike : jax.Array
-            Binary spike output array. Shape: ``(batch_size, \*in_size)`` if
+            Binary spike output array. Shape: ``(batch_size, *in_size)`` if
             batched, ``in_size`` otherwise. Values are 1.0 where spikes occurred,
             0.0 otherwise. In Poisson mode (``dead_time = 0``), values can be
             integers > 1 representing multiple spikes per step.

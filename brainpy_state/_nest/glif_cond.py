@@ -339,7 +339,7 @@ class glif_cond(Neuron):
     dg_syn : list[HiddenState]
         Synaptic conductance derivatives :math:`dg_k` in nS, one per receptor port.
     last_spike_time : ShortTermState
-        Time of last spike in ms, shape ``(batch_size, \*in_size)`` if batched.
+        Time of last spike in ms, shape ``(batch_size, *in_size)`` if batched.
     refractory_step_count : ShortTermState
         Remaining refractory steps (int32), decremented each step.
     integration_step : ShortTermState
@@ -356,7 +356,7 @@ class glif_cond(Neuron):
     * **Threshold components**: ``_threshold_spike``, ``_threshold_voltage``, and
       ``_th_inf`` are stored as numpy arrays (not JAX) for exact NEST replication.
     * **After-spike currents**: ``_ASCurrents`` is a numpy array of shape
-      ``(n_asc, batch_size, \*in_size)``.
+      ``(n_asc, batch_size, *in_size)``.
     * **Receptor port routing**: Delta inputs (from projections) with keys containing
       ``'receptor_<k>'`` (0-based) are routed to receptor port ``k``. Inputs without
       a receptor tag default to receptor 0.
@@ -731,7 +731,7 @@ class glif_cond(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential in mV. If None, uses ``self.V.value``.
-            Shape: ``(\*batch_dims, \*in_size)``.
+            Shape: ``(*batch_dims, *in_size)``.
 
         Returns
         -------
@@ -765,7 +765,7 @@ class glif_cond(Neuron):
         -------
         dg : list[np.ndarray]
             List of length ``n_receptors``. Each element is a float64 array of
-            shape ``(\*batch_dims, \*in_size)`` containing conductance jumps in nS
+            shape ``(*batch_dims, *in_size)`` containing conductance jumps in nS
             for that receptor port. Summed across all matching input keys.
 
         Notes
@@ -1037,14 +1037,14 @@ class glif_cond(Neuron):
         Parameters
         ----------
         x : ArrayLike, optional
-            External current input in pA. Shape: scalar, ``(\*in_size,)``, or
-            ``(\*batch_dims, \*in_size)``. Applied with one-step delay (buffered
+            External current input in pA. Shape: scalar, ``(*in_size,)``, or
+            ``(*batch_dims, *in_size)``. Applied with one-step delay (buffered
             to ``I_stim`` and used in next step). Default: 0.0 pA.
 
         Returns
         -------
         spike : jax.Array
-            Binary spike output (float32), shape ``(\*batch_dims, \*in_size)``.
+            Binary spike output (float32), shape ``(*batch_dims, *in_size)``.
             Values are 1.0 for spiking neurons, 0.0 otherwise. This is a discrete
             binary signal, not the surrogate gradient output.
 

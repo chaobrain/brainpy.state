@@ -496,7 +496,7 @@ class aeif_cond_alpha(Neuron):
         ----------
         batch_size : int, optional
             If provided, state tensors are created with leading batch axis
-            ``(batch_size, \*self.varshape)``. Otherwise shapes are
+            ``(batch_size, *self.varshape)``. Otherwise shapes are
             ``self.varshape``.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
@@ -551,7 +551,7 @@ class aeif_cond_alpha(Neuron):
         ----------
         batch_size : int, optional
             Optional batch size used to rebuild values with shape
-            ``(batch_size, \*self.varshape)``. If omitted, keeps non-batched
+            ``(batch_size, *self.varshape)``. If omitted, keeps non-batched
             ``self.varshape`` layout.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.

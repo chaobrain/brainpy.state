@@ -301,6 +301,12 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
        >>> params = gen.get()
        >>> _ = params['dead_time'], params['stop']
 
+    See Also
+    --------
+    gamma_sup_generator : Superposition of gamma-process component trains.
+    sinusoidal_gamma_generator : Inhomogeneous gamma generator with sinusoidal rate modulation.
+    poisson_generator : Independent Poisson trains without dead time.
+
     References
     ----------
     .. [1] NEST source: ``models/ppd_sup_generator.h`` and
@@ -480,6 +486,53 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
+        r"""Initialize occupancy arrays and NumPy RNG for all output trains.
+
+        Allocates three :class:`brainstate.ShortTermState` arrays representing
+        the age-discretized occupation model and seeds the NumPy random
+        generator.  The initial occupancy follows NEST's ``pre_run_hook()``
+        logic: ``floor(rate / 1000 * n_proc * dt)`` processes are placed in
+        each refractory age bin, and the remainder fills ``occ_active``.
+
+        Parameters
+        ----------
+        batch_size : int or None, optional
+            Unused API placeholder for compatibility with the
+            :class:`brainstate.nn.Dynamics` interface. Ignored.
+        **kwargs
+            Additional unused keyword arguments accepted for API compatibility.
+            Ignored.
+
+        Returns
+        -------
+        out : Any
+            ``None``. Side effects:
+
+            - ``self.occ_refractory`` — :class:`brainstate.ShortTermState`
+              of dtype ``int64`` and shape
+              ``(prod(varshape), num_age_bins)`` where
+              ``num_age_bins = floor(dead_time / dt)``.  Each row ``[i]``
+              holds per-bin refractory occupancy for output train ``i``.
+              All bins initialized to ``floor(rate / 1000 * n_proc * dt)``.
+            - ``self.occ_active`` — :class:`brainstate.ShortTermState`
+              of dtype ``int64`` and shape ``(prod(varshape),)``.  Each
+              element is ``n_proc - ini_occ_ref * num_age_bins``.
+            - ``self.activate`` — :class:`brainstate.ShortTermState`
+              of dtype ``int64`` and shape ``(prod(varshape),)``,
+              initialized to zero; stores the rotating bin pointer for each
+              output train.
+            - ``self._rng`` — ``numpy.random.Generator`` seeded by
+              ``rng_seed``.
+
+        Notes
+        -----
+        If ``dt`` is not available in the simulation environment at call time,
+        ``dt_ms`` defaults to ``0.0`` so that ``ini_occ_ref == 0`` and all
+        ``n_proc`` processes start in ``occ_active``.  The refractory array is
+        still allocated with the correct number of age bins computed from any
+        previously cached ``_num_age_bins`` value, which may also be zero if no
+        ``dt`` context was ever set.
+        """
         del batch_size, kwargs
 
         dt_ms = self._maybe_dt_ms()
@@ -518,7 +571,68 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
         stop: ArrayLike | object = _UNSET,
         origin: ArrayLike | object = _UNSET,
     ):
-        r"""Set NEST-style public parameters."""
+        r"""Update public generator parameters with NEST-compatible semantics.
+
+        Any parameter left at the internal sentinel ``_UNSET`` retains its
+        current value.  All supplied values are converted and cross-validated
+        before any attribute is mutated, so the generator state remains
+        self-consistent on failure.  If ``dt`` is currently available in
+        ``brainstate.environ``, the cached hazard step, angular frequency,
+        number of age bins, and timing step bounds are recomputed immediately
+        after mutation.
+
+        Parameters
+        ----------
+        rate : ArrayLike or object, optional
+            New scalar component-process rate in Hz.  If omitted, keep the
+            current value.  Must satisfy ``1000 / rate > dead_time`` for
+            ``rate > 0`` after scalar conversion.
+        dead_time : ArrayLike or object, optional
+            New scalar absolute refractory duration in ms.  If omitted, keep
+            current value.  Must be ``>= 0`` and satisfy
+            ``1000 / rate > dead_time`` for nonzero ``rate``.
+        n_proc : ArrayLike or object, optional
+            New scalar integer number of component processes ``>= 1``.  If
+            omitted, keep current value.
+        frequency : ArrayLike or object, optional
+            New scalar sinusoidal modulation frequency in Hz.  ``0`` disables
+            modulation even when ``relative_amplitude > 0``.  If omitted,
+            keep current value.
+        relative_amplitude : ArrayLike or object, optional
+            New scalar dimensionless modulation amplitude in ``[0, 1]``.  If
+            omitted, keep current value.
+        start : ArrayLike or object, optional
+            New scalar relative start time in ms (exclusive lower bound).  If
+            omitted, keep current value.
+        stop : ArrayLike, None, or object, optional
+            New scalar relative stop time in ms (inclusive upper bound).
+            ``None`` maps to ``+inf`` (unbounded).  If omitted, keep current
+            value.
+        origin : ArrayLike or object, optional
+            New scalar time-origin offset in ms.  If omitted, keep current
+            value.
+
+        Returns
+        -------
+        out : Any
+            ``None``.  Parameters are updated in place.  The internal runtime
+            cache (``_hazard_step``, ``_omega_rad_per_ms``, ``_num_age_bins``,
+            ``_t_min_step``, ``_t_max_step``) is refreshed when ``dt`` is
+            available.
+
+        Raises
+        ------
+        ValueError
+            If any provided value is non-scalar; if ``dead_time < 0``; if
+            ``n_proc < 1``; if ``relative_amplitude`` is outside ``[0, 1]``;
+            if ``stop < start``; if ``1000 / rate <= dead_time`` for nonzero
+            ``rate``; if integer inputs are non-integral beyond tolerance; or
+            if finite timing values are off the simulation grid when ``dt`` is
+            available.
+        TypeError
+            If unit conversion to ``u.Hz`` or ``u.ms`` fails for supplied
+            inputs.
+        """
         new_dead_time = (
             self.dead_time if dead_time is _UNSET else self._to_scalar_time_ms(dead_time)
         )
@@ -566,7 +680,26 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
             self._refresh_runtime_cache(dt_ms)
 
     def get(self) -> dict:
-        r"""Return current public parameters."""
+        r"""Return current public parameters as plain Python scalars.
+
+        Returns
+        -------
+        out : Any
+            ``dict`` with the following keys and value types:
+
+            - ``'rate'`` — ``float``, component-process rate in Hz.
+            - ``'dead_time'`` — ``float``, absolute refractory duration in ms.
+            - ``'n_proc'`` — ``int``, number of component processes.
+            - ``'frequency'`` — ``float``, sinusoidal modulation frequency in Hz.
+            - ``'relative_amplitude'`` — ``float``, modulation depth in
+              ``[0, 1]``.
+            - ``'start'`` — ``float``, relative exclusive lower activity bound
+              in ms.
+            - ``'stop'`` — ``float``, relative inclusive upper activity bound
+              in ms; ``math.inf`` when the generator was constructed or set
+              with ``stop=None``.
+            - ``'origin'`` — ``float``, time-origin offset in ms.
+        """
         return {
             'rate': float(self.rate),
             'dead_time': float(self.dead_time),
@@ -618,6 +751,57 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
         return int(n_spikes), int(occ_active), int(activate_idx)
 
     def update(self):
+        r"""Advance one simulation step and return per-train spike multiplicity.
+
+        Lazily initializes state on the first call, refreshes the runtime
+        cache when ``dt`` changes, applies the active-window test, computes an
+        instantaneous hazard (with optional sinusoidal modulation), and updates
+        each output train's age-discretized occupation model using NEST's
+        branch logic (binomial or Poisson approximation).
+
+        The method mirrors NEST's ``ppd_sup_generator::update`` procedure:
+
+        1. Ensure internal state is initialized; refresh cache if ``dt``
+           changed since the last call.
+        2. Return zeros immediately when ``rate <= 0`` or no output trains
+           exist.
+        3. Evaluate the active-window guard:
+           :math:`t_{\min} < t \le t_{\max}`.
+        4. Compute the per-step hazard:
+
+           .. math::
+
+              h_t = h_{\mathrm{step}}
+              \left(1 + A \sin(2\pi f\, t / 1000)\right),
+
+           skipping the sinusoidal term when ``relative_amplitude == 0`` or
+           ``frequency == 0``.
+
+        5. For each output train, call
+           :meth:`_update_age_distribution_single` which draws
+           ``n_spikes`` from the active pool and rotates the refractory ring
+           buffer.
+
+        Returns
+        -------
+        out : Any
+            JAX array of dtype ``int64`` and shape ``self.varshape``.  Each
+            element is the number of spikes emitted by the corresponding
+            output train during the current step.  Returns all-zeros when
+            inactive, when ``rate <= 0``, or when no targets are defined.
+
+        Raises
+        ------
+        KeyError
+            If required simulation-context fields (for example ``dt`` via
+            ``brainstate.environ.get_dt()``) are unavailable.
+        ValueError
+            If finite timing parameters are not on the simulation grid after a
+            ``dt`` change triggers cache refresh.
+        TypeError
+            If simulation-time values in the environment cannot be converted
+            to scalar milliseconds.
+        """
         if not hasattr(self, 'occ_refractory'):
             self.init_state()
 

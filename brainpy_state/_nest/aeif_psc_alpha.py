@@ -224,7 +224,8 @@ class aeif_psc_alpha(Neuron):
     name : str, optional
         Name of the neuron population.
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     ==================== ================== ========================================== =====================================================
     **Parameter**        **Default**        **Math equivalent**                        **Description**
@@ -257,7 +258,7 @@ class aeif_psc_alpha(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential, shape ``(\*in_size, \*batch_size)`` with unit mV.
+        Membrane potential, shape ``(*in_size, *batch_size)`` with unit mV.
     dI_ex : brainstate.ShortTermState
         Excitatory alpha auxiliary state (derivative of :math:`I_{ex}`), unitless array.
     I_ex : brainstate.HiddenState
@@ -282,7 +283,7 @@ class aeif_psc_alpha(Neuron):
     Returns
     -------
     spike : Array
-        Binary spike indicator array with shape ``(\*in_size, \*batch_size)``, dtype float.
+        Binary spike indicator array with shape ``(*in_size, *batch_size)``, dtype float.
         Value is 1.0 where spikes occurred in the current step, 0.0 otherwise.
 
     Raises
@@ -616,7 +617,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         batch_size : int, optional
             Number of batched simulations. If provided, states have shape
-            ``(\*in_size, batch_size)``. If ``None``, states have shape ``(\*in_size,)``.
+            ``(*in_size, batch_size)``. If ``None``, states have shape ``(*in_size,)``.
         **kwargs : dict
             Additional keyword arguments (unused, for API compatibility).
 
@@ -675,7 +676,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         batch_size : int, optional
             Number of batched simulations. If provided, states are reset to shape
-            ``(\*in_size, batch_size)``. If ``None``, states have shape ``(\*in_size,)``.
+            ``(*in_size, batch_size)``. If ``None``, states have shape ``(*in_size,)``.
         **kwargs : dict
             Additional keyword arguments (unused, for API compatibility).
 
@@ -719,7 +720,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential array with unit mV. If ``None``, uses the current
-            ``self.V.value``. Shape: ``(\*in_size, \*batch_size)``.
+            ``self.V.value``. Shape: ``(*in_size, *batch_size)``.
 
         Returns
         -------
@@ -772,10 +773,10 @@ class aeif_psc_alpha(Neuron):
         -------
         w_ex : Array
             Total excitatory input (sum of positive components), unit pA.
-            Shape: ``(\*in_size, \*batch_size)``.
+            Shape: ``(*in_size, *batch_size)``.
         w_in : Array
             Total inhibitory input (sum of absolute values of negative components), unit pA.
-            Shape: ``(\*in_size, \*batch_size)``.
+            Shape: ``(*in_size, *batch_size)``.
 
         Notes
         -----
@@ -903,7 +904,7 @@ class aeif_psc_alpha(Neuron):
         ----------
         x : ArrayLike, optional
             External current input at the current time step, with unit pA.
-            Shape must be broadcastable to ``(\*in_size, \*batch_size)``.
+            Shape must be broadcastable to ``(*in_size, *batch_size)``.
             Default: ``0.0 * u.pA``.
 
             This input is stored in the one-step-delayed buffer ``I_stim`` and will be
@@ -912,7 +913,7 @@ class aeif_psc_alpha(Neuron):
         Returns
         -------
         spike : Array
-            Binary spike indicator with shape ``(\*in_size, \*batch_size)``, dtype float.
+            Binary spike indicator with shape ``(*in_size, *batch_size)``, dtype float.
             Value is ``1.0`` where at least one spike occurred during the integration
             interval, ``0.0`` otherwise.
 

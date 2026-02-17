@@ -283,40 +283,40 @@ class aeif_psc_delta_clopath(Neuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential (mV). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Membrane potential (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     w : brainstate.HiddenState
-        Adaptation current (pA). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Adaptation current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     z : brainstate.HiddenState
-        Spike afterpotential current (pA). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Spike afterpotential current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     V_th : brainstate.HiddenState
-        Adaptive threshold (mV). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Adaptive threshold (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     u_bar_plus : brainstate.HiddenState
-        Clopath low-pass filtered voltage trace (mV). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     u_bar_minus : brainstate.HiddenState
-        Clopath low-pass filtered voltage trace (mV). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     u_bar_bar : brainstate.HiddenState
-        Clopath second-order filtered voltage trace (mV). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Clopath second-order filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory time steps (int32). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Remaining refractory time steps (int32). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     clamp_step_count : brainstate.ShortTermState
-        Remaining clamping time steps (int32). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Remaining clamping time steps (int32). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     integration_step : brainstate.ShortTermState
-        Current RKF45 adaptive step size (ms). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Current RKF45 adaptive step size (ms). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     I_stim : brainstate.ShortTermState
-        One-step delayed synaptic current (pA). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        One-step delayed synaptic current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     delayed_u_bar_plus_buffer : brainstate.ShortTermState
-        Ring buffer for delayed ``u_bar_plus`` (mV). Shape: ``(delay_steps, \*in_size)`` or ``(delay_steps, \*in_size, batch_size)``.
+        Ring buffer for delayed ``u_bar_plus`` (mV). Shape: ``(delay_steps, *in_size)`` or ``(delay_steps, *in_size, batch_size)``.
     delayed_u_bar_minus_buffer : brainstate.ShortTermState
-        Ring buffer for delayed ``u_bar_minus`` (mV). Shape: ``(delay_steps, \*in_size)`` or ``(delay_steps, \*in_size, batch_size)``.
+        Ring buffer for delayed ``u_bar_minus`` (mV). Shape: ``(delay_steps, *in_size)`` or ``(delay_steps, *in_size, batch_size)``.
     delayed_u_bars_idx : brainstate.ShortTermState
         Current ring buffer write index (int32). Scalar.
     delayed_u_bars_steps : brainstate.ShortTermState
         Total ring buffer size (int32). Scalar.
     last_spike_time : brainstate.ShortTermState
-        Last spike time (ms). Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Last spike time (ms). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
     refractory : brainstate.ShortTermState, optional
         Boolean indicator: True if neuron is refractory or clamped. Only present if ``ref_var=True``.
-        Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+        Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
 
     Raises
     ------
@@ -358,7 +358,7 @@ class aeif_psc_delta_clopath(Neuron):
       error is raised during initialization.
 
     - **Batch support:** All state variables support an optional batch dimension (via ``batch_size`` in
-      ``init_state``/``reset_state``). Batched states have shape ``(\*in_size, batch_size)``.
+      ``init_state``/``reset_state``). Batched states have shape ``(*in_size, batch_size)``.
 
     **Usage:**
 
@@ -652,8 +652,8 @@ class aeif_psc_delta_clopath(Neuron):
         Parameters
         ----------
         batch_size : int, optional
-            Batch dimension size. If provided, all states will have shape ``(\*in_size, batch_size)``.
-            If None, states have shape ``(\*in_size,)``. Default: None.
+            Batch dimension size. If provided, all states will have shape ``(*in_size, batch_size)``.
+            If None, states have shape ``(*in_size,)``. Default: None.
         **kwargs
             Reserved for future extensions. Currently unused.
 
@@ -718,8 +718,8 @@ class aeif_psc_delta_clopath(Neuron):
         Parameters
         ----------
         batch_size : int, optional
-            Batch dimension size. If provided, all states will be reset with shape ``(\*in_size, batch_size)``.
-            If None, states will have shape ``(\*in_size,)``. Default: None.
+            Batch dimension size. If provided, all states will be reset with shape ``(*in_size, batch_size)``.
+            If None, states will have shape ``(*in_size,)``. Default: None.
         **kwargs
             Reserved for future extensions. Currently unused.
 
@@ -775,8 +775,8 @@ class aeif_psc_delta_clopath(Neuron):
         Parameters
         ----------
         V : ArrayLike, optional
-            Membrane potential (mV). If None, uses current ``self.V.value``. Shape: ``(\*in_size,)``
-            or ``(\*in_size, batch_size)``.
+            Membrane potential (mV). If None, uses current ``self.V.value``. Shape: ``(*in_size,)``
+            or ``(*in_size, batch_size)``.
 
         Returns
         -------
@@ -896,14 +896,14 @@ class aeif_psc_delta_clopath(Neuron):
         ----------
         x : ArrayLike, default: 0.0 * u.pA
             External input current for the current time step (pA). This is combined with synaptic currents
-            from ``current_inputs`` dictionary. Shape: scalar or broadcastable to ``(\*in_size,)`` or
-            ``(\*in_size, batch_size)``.
+            from ``current_inputs`` dictionary. Shape: scalar or broadcastable to ``(*in_size,)`` or
+            ``(*in_size, batch_size)``.
 
         Returns
         -------
         spike : ArrayLike
             Binary spike indicator (1.0 if neuron spiked during this time step, 0.0 otherwise).
-            Shape: ``(\*in_size,)`` or ``(\*in_size, batch_size)``.
+            Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
 
         Raises
         ------

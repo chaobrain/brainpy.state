@@ -253,23 +253,23 @@ class aeif_cond_beta_multisynapse(Neuron):
     Attributes
     ----------
     V : HiddenState
-        Membrane potential (mV), shape ``(\*in_size,)``.
+        Membrane potential (mV), shape ``(*in_size,)``.
     w : HiddenState
-        Adaptation current (pA), shape ``(\*in_size,)``.
+        Adaptation current (pA), shape ``(*in_size,)``.
     dg : ShortTermState
-        Beta auxiliary states (unitless), shape ``(\*in_size, n_receptors)``.
+        Beta auxiliary states (unitless), shape ``(*in_size, n_receptors)``.
     g : HiddenState
-        Receptor conductances (nS), shape ``(\*in_size, n_receptors)``.
+        Receptor conductances (nS), shape ``(*in_size, n_receptors)``.
     refractory_step_count : ShortTermState
-        Remaining refractory steps (int32), shape ``(\*in_size,)``.
+        Remaining refractory steps (int32), shape ``(*in_size,)``.
     integration_step : ShortTermState
-        Persistent RKF45 step size (ms), shape ``(\*in_size,)``.
+        Persistent RKF45 step size (ms), shape ``(*in_size,)``.
     I_stim : ShortTermState
-        One-step delayed current buffer (pA), shape ``(\*in_size,)``.
+        One-step delayed current buffer (pA), shape ``(*in_size,)``.
     last_spike_time : ShortTermState
-        Last spike time (ms), shape ``(\*in_size,)``. Initialized to -1e7 ms.
+        Last spike time (ms), shape ``(*in_size,)``. Initialized to -1e7 ms.
     refractory : ShortTermState, optional
-        Boolean refractory indicator, shape ``(\*in_size,)``. Only present if
+        Boolean refractory indicator, shape ``(*in_size,)``. Only present if
         ``ref_var=True``.
     n_receptors : int
         Number of receptor ports, inferred from ``tau_rise.size``.
@@ -528,7 +528,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         np.ndarray
-            Broadcast array with shape ``(\*shape, n_receptors)``.
+            Broadcast array with shape ``(*shape, n_receptors)``.
         """
         return np.broadcast_to(x_np, shape + (n_receptors,))
 
@@ -648,7 +648,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         ----------
         batch_size : int, optional
             Batch dimension prepended to ``in_size``. If None, states have shape
-            ``(\*in_size,)`` or ``(\*in_size, n_receptors)`` for receptor arrays.
+            ``(*in_size,)`` or ``(*in_size, n_receptors)`` for receptor arrays.
         **kwargs
             Additional initialization arguments (unused).
 
@@ -738,7 +738,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         ArrayLike
-            Surrogate spike output in [0, 1], shape ``(\*in_size,)``. Produced by
+            Surrogate spike output in [0, 1], shape ``(*in_size,)``. Produced by
             ``spk_fun`` applied to ``(V - V_th) / (V_th - V_reset)``.
 
         Notes
@@ -757,7 +757,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         ArrayLike
-            Number of timesteps for refractory period, shape ``(\*in_size,)``.
+            Number of timesteps for refractory period, shape ``(*in_size,)``.
             Computed as :math:`\lceil t_{\text{ref}} / dt \rceil` (int32).
 
         Notes
@@ -788,7 +788,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         np.ndarray
-            Weight array (nS, unitless) with shape ``(\*v_shape, n_receptors)``.
+            Weight array (nS, unitless) with shape ``(*v_shape, n_receptors)``.
             Element ``[..., k]`` contains total conductance increment for receptor ``k+1``.
 
         Raises
@@ -892,7 +892,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Parameters
         ----------
         x : ArrayLike, optional
-            Continuous current input (pA), shape broadcastable to ``(\*in_size,)``.
+            Continuous current input (pA), shape broadcastable to ``(*in_size,)``.
             Summed with ``current_inputs`` and ``I_e``, then delayed by one timestep
             (NEST semantics). Default: 0.0 pA.
         spike_events : Iterable or None, optional
@@ -907,7 +907,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         Returns
         -------
         ArrayLike
-            Binary spike indicator (0 or 1), shape ``(\*in_size,)``. Float64 for
+            Binary spike indicator (0 or 1), shape ``(*in_size,)``. Float64 for
             gradient compatibility. Value is 1.0 if spike occurred during
             :math:`(t, t+dt]`, else 0.0.
 

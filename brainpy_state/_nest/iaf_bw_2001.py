@@ -664,7 +664,7 @@ class iaf_bw_2001(Neuron):
         ----------
         V : ArrayLike, optional
             Membrane potential (mV). If None, uses current ``self.V.value``.
-            Shape: ``(\*in_size,)`` or ``(batch_size, \*in_size)``.
+            Shape: ``(*in_size,)`` or ``(batch_size, *in_size)``.
 
         Returns
         -------
@@ -1035,8 +1035,8 @@ class iaf_bw_2001(Neuron):
         Returns
         -------
         jax.numpy.ndarray
-            Spike output (differentiable). Shape: ``(\*in_size,)`` or
-            ``(batch_size, \*in_size)``. Values in [0, 1] for typical surrogate
+            Spike output (differentiable). Shape: ``(*in_size,)`` or
+            ``(batch_size, *in_size)``. Values in [0, 1] for typical surrogate
             functions.
 
         Raises

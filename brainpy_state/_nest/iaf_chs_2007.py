@@ -482,7 +482,7 @@ class iaf_chs_2007(Neuron):
         ----------
         batch_size : int or None, optional
             Optional batch dimension size. If provided, states will have shape
-            ``(batch_size, \*self.varshape)``. If ``None``, states have shape
+            ``(batch_size, *self.varshape)``. If ``None``, states have shape
             ``self.varshape``.
         **kwargs
             Additional keyword arguments (currently unused).
@@ -523,7 +523,7 @@ class iaf_chs_2007(Neuron):
         ----------
         batch_size : int or None, optional
             Optional batch dimension size. If provided, states will have shape
-            ``(batch_size, \*self.varshape)``. If ``None``, states have shape
+            ``(batch_size, *self.varshape)``. If ``None``, states have shape
             ``self.varshape``.
         **kwargs
             Additional keyword arguments (currently unused).

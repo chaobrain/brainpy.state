@@ -274,8 +274,8 @@ class gif_cond_exp(Neuron):
 
     Additionally, the following NumPy arrays are maintained internally:
 
-    - ``_stc_elems`` -- shape ``(len(tau_stc), \*in_size)`` -- individual stc elements (nA)
-    - ``_sfa_elems`` -- shape ``(len(tau_sfa), \*in_size)`` -- individual sfa elements (mV)
+    - ``_stc_elems`` -- shape ``(len(tau_stc), *in_size)`` -- individual stc elements (nA)
+    - ``_sfa_elems`` -- shape ``(len(tau_sfa), *in_size)`` -- individual sfa elements (mV)
     - ``_stc_val`` -- shape ``in_size`` -- total spike-triggered current (nA)
     - ``_sfa_val`` -- shape ``in_size`` -- adaptive threshold :math:`V_T(t)` (mV)
 

@@ -221,7 +221,7 @@ class iaf_cond_beta(Neuron):
     Returns
     -------
     spike : jax.Array
-        Binary spike output for the current time step, with shape ``(\*in_size, \*batch_shape)``
+        Binary spike output for the current time step, with shape ``(*in_size, *batch_shape)``
         and dtype ``float32``. Values are in :math:`[0, 1]` when using surrogate gradients;
         exact values depend on ``spk_fun``.
 
@@ -241,7 +241,7 @@ class iaf_cond_beta(Neuron):
     **State Variables:**
 
     - ``V`` : brainstate.HiddenState
-        Membrane potential :math:`V_m` with shape ``(\*in_size, \*batch_shape)`` and units mV.
+        Membrane potential :math:`V_m` with shape ``(*in_size, *batch_shape)`` and units mV.
     - ``dg_ex`` : brainstate.ShortTermState
         Excitatory beta auxiliary state (dimensionless, dtype ``float64``).
     - ``g_ex`` : brainstate.HiddenState
@@ -467,7 +467,7 @@ class iaf_cond_beta(Neuron):
         batch_size : int, optional
             Batch dimension size for vectorized simulation. If ``None`` (default), creates
             state variables with shape ``in_size`` only. If provided, appends batch dimension
-            to create shape ``(\*in_size, batch_size)``.
+            to create shape ``(*in_size, batch_size)``.
         **kwargs
             Reserved for future extensions. Currently unused.
 
@@ -527,7 +527,7 @@ class iaf_cond_beta(Neuron):
         batch_size : int, optional
             Batch dimension size for vectorized simulation. If ``None`` (default), uses the
             shape from the original initialization. If provided, reshapes states to
-            ``(\*in_size, batch_size)``.
+            ``(*in_size, batch_size)``.
         **kwargs
             Reserved for future extensions. Currently unused.
 
@@ -690,7 +690,7 @@ class iaf_cond_beta(Neuron):
         ----------
         x : ArrayLike, optional
             External current input for the **next** time step (one-step delayed). Default: ``0 pA``.
-            Must have shape compatible with ``(\*in_size, \*batch_shape)`` (broadcast-compatible).
+            Must have shape compatible with ``(*in_size, *batch_shape)`` (broadcast-compatible).
             Units: pA (picoamperes). This current is stored in ``I_stim`` and takes effect at
             time :math:`t + dt`, matching NEST's ring-buffer semantics.
 
@@ -698,7 +698,7 @@ class iaf_cond_beta(Neuron):
         -------
         spike : jax.Array
             Binary spike output for the current time step, computed from the membrane voltage
-            **before** reset. Shape: ``(\*in_size, \*batch_shape)``. Dtype: ``float32``.
+            **before** reset. Shape: ``(*in_size, *batch_shape)``. Dtype: ``float32``.
             Values are typically in :math:`[0, 1]` when using surrogate gradients.
 
         Notes

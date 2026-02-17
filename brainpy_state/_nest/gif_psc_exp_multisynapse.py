@@ -426,18 +426,18 @@ class gif_psc_exp_multisynapse(Neuron):
 
     State Variables
     ---------------
-    V : HiddenState, shape ``(batch_size, \*in_size)``
+    V : HiddenState, shape ``(batch_size, *in_size)``
         Membrane potential :math:`V_m(t)` in millivolts.
-    i_syn : ShortTermState, shape ``(batch_size, \*in_size, n_receptors)``
+    i_syn : ShortTermState, shape ``(batch_size, *in_size, n_receptors)``
         Synaptic currents in picoamperes, one per receptor port.
         :math:`I_{\mathrm{syn},k}(t)` for :math:`k = 0, \ldots, n_{\mathrm{receptors}} - 1`.
-    refractory_step_count : ShortTermState, shape ``(batch_size, \*in_size)``
+    refractory_step_count : ShortTermState, shape ``(batch_size, *in_size)``
         Remaining refractory time steps (int32). Counts down from
         :math:`\lceil t_{\mathrm{ref}} / dt \rceil` to 0 after each spike.
-    I_stim : ShortTermState, shape ``(batch_size, \*in_size)``
+    I_stim : ShortTermState, shape ``(batch_size, *in_size)``
         Buffered external current (picoamperes) applied in the next time
         step. Implements NEST's ring-buffer semantics (one-step delay).
-    last_spike_time : ShortTermState, shape ``(batch_size, \*in_size)``
+    last_spike_time : ShortTermState, shape ``(batch_size, *in_size)``
         Time of the last emitted spike (milliseconds). Initialized to a
         large negative value (-1e7 ms).
 
@@ -710,7 +710,7 @@ class gif_psc_exp_multisynapse(Neuron):
         batch_size : int, optional
             Batch dimension size for vectorized simulation. If ``None``, no
             batch dimension is added. If provided, all state variables will
-            have shape ``(batch_size, \*in_size, ...)``. Default: None.
+            have shape ``(batch_size, *in_size, ...)``. Default: None.
         **kwargs
             Additional keyword arguments (reserved for future extensions,
             currently unused).
@@ -722,7 +722,7 @@ class gif_psc_exp_multisynapse(Neuron):
         - ``V``: Membrane potential initialized using ``V_initializer``
           (default: -70 mV, resting potential).
         - ``i_syn``: Synaptic currents initialized to zero for all
-          receptors. Shape: ``(\*v_shape, n_receptors)``.
+          receptors. Shape: ``(*v_shape, n_receptors)``.
         - ``refractory_step_count``: Refractory counter initialized to 0
           (not refractory).
         - ``I_stim``: Buffered external current initialized to 0 pA.
@@ -982,7 +982,7 @@ class gif_psc_exp_multisynapse(Neuron):
         Returns
         -------
         ndarray
-            Spike output for this time step. Shape: ``(batch_size, \*in_size)``.
+            Spike output for this time step. Shape: ``(batch_size, *in_size)``.
             Data type: float32. Values are in [0, 1] via the surrogate
             gradient function (typically binary in forward pass, continuous
             in backward pass for gradient computation).

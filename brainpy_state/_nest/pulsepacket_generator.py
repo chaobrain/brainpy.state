@@ -247,9 +247,21 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
     -----
     - ``set(activity=...)`` and ``set(sdev=...)`` trigger pulse
       re-generation behavior by clearing queued spikes, matching NEST.
-    - Stimulation-backend update order in NEST is
-      ``[activity, sdev, pulse_times...]`` and is exposed via
+    - Stimulation-backend parameter order in NEST is
+      ``[activity, sdev_ms, pulse_time_0_ms, ...]`` and is exposed via
       :meth:`set_data_from_stimulation_backend`.
+    - Pulse times that are too far in the past (``sample_time < t``) are
+      silently discarded during generation; no error is raised.
+    - Outputs are integer multiplicities ``0, 1, 2, ...`` per step,
+      matching NEST ``SpikeEvent`` multiplicity semantics rather than
+      binary spike flags.
+
+    See Also
+    --------
+    poisson_generator : Independent Poisson spike trains at fixed rate.
+    mip_generator : Correlated spike trains via Multiple Interaction Process.
+    inhomogeneous_poisson_generator : Poisson generator with time-varying rate.
+    gamma_sup_generator : Superposition of stationary gamma-process trains.
 
     Examples
     --------

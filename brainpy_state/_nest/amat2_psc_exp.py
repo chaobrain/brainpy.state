@@ -548,7 +548,7 @@ class amat2_psc_exp(Neuron):
         batch_size : int, optional
             Batch dimension size for vectorized simulation. If None, no batch
             dimension is added (shape is ``in_size`` only). If provided, state
-            shape becomes ``(batch_size, \*in_size)``.
+            shape becomes ``(batch_size, *in_size)``.
         **kwargs
             Additional initialization arguments (unused, for API compatibility).
 
@@ -594,7 +594,7 @@ class amat2_psc_exp(Neuron):
         ----------
         V : Quantity, ndarray, optional
             Membrane potential (absolute voltage). If None, uses current
-            ``self.V.value``. Shape: ``(\*varshape,)`` or ``(batch_size, \*varshape)``.
+            ``self.V.value``. Shape: ``(*varshape,)`` or ``(batch_size, *varshape)``.
         V_th : Quantity, ndarray, optional
             Total spike threshold (absolute voltage). If None, computed as
             ``omega + V_th_1 + V_th_2 + V_th_v``. Shape: same as ``V``.
@@ -630,7 +630,7 @@ class amat2_psc_exp(Neuron):
         -------
         int32 array
             Number of simulation steps corresponding to the refractory period
-            ``t_ref``, computed as ``ceil(t_ref / dt)``. Shape: ``(\*varshape,)``.
+            ``t_ref``, computed as ``ceil(t_ref / dt)``. Shape: ``(*varshape,)``.
 
         Notes
         -----
@@ -668,8 +668,8 @@ class amat2_psc_exp(Neuron):
         x : Quantity, ndarray, optional
             External input current for the current time step. This current is
             buffered and applied in the NEXT time step (one-step delay, following
-            NEST convention). Shape: scalar, ``(\*varshape,)``, or
-            ``(batch_size, \*varshape)``. Default: 0 pA.
+            NEST convention). Shape: scalar, ``(*varshape,)``, or
+            ``(batch_size, *varshape)``. Default: 0 pA.
 
         Returns
         -------

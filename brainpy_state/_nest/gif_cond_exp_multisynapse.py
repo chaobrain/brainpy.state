@@ -283,8 +283,8 @@ class gif_cond_exp_multisynapse(Neuron):
 
     Additionally, the following NumPy arrays are maintained internally:
 
-    - ``_stc_elems`` -- shape ``(len(tau_stc), \*in_size)`` -- individual stc elements (nA)
-    - ``_sfa_elems`` -- shape ``(len(tau_sfa), \*in_size)`` -- individual sfa elements (mV)
+    - ``_stc_elems`` -- shape ``(len(tau_stc), *in_size)`` -- individual stc elements (nA)
+    - ``_sfa_elems`` -- shape ``(len(tau_sfa), *in_size)`` -- individual sfa elements (mV)
     - ``_stc_val`` -- shape ``in_size`` -- total spike-triggered current (nA)
     - ``_sfa_val`` -- shape ``in_size`` -- adaptive threshold :math:`V_T(t)` (mV)
 
@@ -617,7 +617,7 @@ class gif_cond_exp_multisynapse(Neuron):
         Parameters
         ----------
         V : ArrayLike, optional
-            Membrane potential. If None, uses ``self.V.value``. Shape: ``(\*batch_size, \*in_size)`` with unit mV.
+            Membrane potential. If None, uses ``self.V.value``. Shape: ``(*batch_size, *in_size)`` with unit mV.
 
         Returns
         -------
@@ -866,7 +866,7 @@ class gif_cond_exp_multisynapse(Neuron):
         Returns
         -------
         jnp.ndarray
-            Binary spike output (0 or 1) for this time step. Shape: ``(\*batch_size, \*in_size)``.
+            Binary spike output (0 or 1) for this time step. Shape: ``(*batch_size, *in_size)``.
             dtype: float32. Value 1 indicates spike emission.
 
         Notes
