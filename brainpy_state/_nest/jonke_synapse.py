@@ -155,7 +155,8 @@ class jonke_synapse:
     name : str or None, optional
         Instance identifier for debugging and logging.
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     ================================  ================================  =================
     NEST Parameter                    brainpy.state Parameter           Units / Notes

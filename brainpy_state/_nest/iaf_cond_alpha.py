@@ -185,9 +185,8 @@ class iaf_cond_alpha(Neuron):
     name : str, optional
         Name of the neuron group.
 
-    Notes
-    -----
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     ==================== ================== ========================================
     **Parameter**        **Default**        **Math equivalent**
@@ -212,7 +211,8 @@ class iaf_cond_alpha(Neuron):
     ``ref_var``          ``False``          —
     ==================== ================== ========================================
 
-    **State Variables**
+    State Variables
+    ---------------
 
     ========================= ================================================================
     **State variable**        **Description**

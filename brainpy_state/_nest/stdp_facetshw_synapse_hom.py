@@ -244,8 +244,8 @@ class stdp_facetshw_synapse_hom(static_synapse):
     name : str, optional
         Unique identifier for this synapse instance. Used for debugging and logging.
 
-    Parameter Mapping (NEST ↔ brainpy.state)
-    -----------------------------------------
+    Parameter Mapping
+    -----------------
 
     Correspondence between NEST C++ implementation and this Python implementation:
 

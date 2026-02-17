@@ -32,12 +32,14 @@ __all__ = [
 class stdp_nn_restr_synapse(stdp_synapse):
     r"""NEST-compatible ``stdp_nn_restr_synapse`` connection model.
 
-    **Short description**
+    Short description
+    -----------------
 
     Synapse type for spike-timing dependent plasticity with restricted
     symmetric nearest-neighbour spike pairing.
 
-    **Description**
+    Description
+    -----------
 
     ``stdp_nn_restr_synapse`` mirrors NEST
     ``models/stdp_nn_restr_synapse.h`` and implements the restricted
@@ -168,7 +170,8 @@ class stdp_nn_restr_synapse(stdp_synapse):
     name : str, optional
         Object name for identification. Default: ``None``.
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     The following table maps NEST parameter names to their brainpy.state
     equivalents:

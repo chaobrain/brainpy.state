@@ -169,7 +169,8 @@ class clopath_synapse:
     name : str or None, optional
         Optional identifier for this connection instance. Default: ``None``.
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     This table shows the correspondence between brainpy.state and NEST parameter names:
 
@@ -694,7 +695,8 @@ class clopath_synapse:
 
             t_\text{last} \leftarrow t
 
-        **Side Effects:**
+        Side Effects
+        ------------
 
         This method modifies connection state:
 

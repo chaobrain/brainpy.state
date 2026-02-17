@@ -324,7 +324,8 @@ class iaf_chs_2007(Neuron):
     models that compute a continuous leak current; here, the "leak" is
     implicit in the exponential decay of the PSP and AHP kernels.
 
-    **Computational considerations:**
+    Computational considerations
+    ----------------------------
 
     - State propagation uses exact exponential integration with precomputed
       propagators ``P11``, ``P22``, ``P30``, and ``P21``, ensuring

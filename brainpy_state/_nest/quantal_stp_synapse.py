@@ -42,7 +42,8 @@ class quantal_stp_synapse(static_synapse):
     discrete release sites, where each presynaptic spike triggers
     probabilistic release from a finite pool of vesicle docking sites.
 
-    **Mathematical Model**
+    Mathematical Model
+    ------------------
 
     Each synapse maintains four state variables:
 
@@ -182,8 +183,8 @@ class quantal_stp_synapse(static_synapse):
     name : str, optional
         Unique identifier for this synapse instance.
 
-    Parameter Mapping to NEST
-    --------------------------
+    Parameter Mapping
+    -----------------
 
     Direct correspondence with NEST ``quantal_stp_synapse``:
 
@@ -238,7 +239,8 @@ class quantal_stp_synapse(static_synapse):
     - ``tau_rec``: vesicle recycling / replenishment time
     - ``tau_fac``: residual calcium decay time (controls facilitation)
 
-    **Comparison with tsodyks_synapse**
+    Comparison with tsodyks_synapse
+    -------------------------------
 
     ``tsodyks_synapse`` uses continuous-valued resource variables and
     deterministic updates. ``quantal_stp_synapse`` uses discrete site counts

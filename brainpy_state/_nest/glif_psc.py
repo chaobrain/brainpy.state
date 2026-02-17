@@ -43,7 +43,8 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     :math:`(y_1, y_2)` to the membrane voltage update during exact integration
     of the linear subthreshold dynamics.
 
-    **Mathematical Formulation**
+    Mathematical Formulation
+    ------------------------
 
     **1. Regular Case** (:math:`\tau_m` and :math:`\tau_{syn}` sufficiently different)
 
@@ -230,7 +231,8 @@ class glif_psc(Neuron):
     | GLIF5  | True                      | True                 | True               |
     +--------+---------------------------+----------------------+--------------------+
 
-    **Mathematical Formulation**
+    Mathematical Formulation
+    ------------------------
 
     **1. Membrane Dynamics**
 
@@ -436,7 +438,8 @@ class glif_psc(Neuron):
         Name of the neuron group.
 
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     =============================== =================== ========================================== =====================================================
     **Parameter**                   **Default**         **Math equivalent**                        **Description**

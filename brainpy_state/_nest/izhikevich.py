@@ -205,8 +205,8 @@ class izhikevich(Neuron):
     name : str, optional
         Name of the neuron population. Default: None.
 
-    Parameter Mapping (NEST ↔ brainpy.state)
-    -----------------------------------------
+    Parameter Mapping
+    -----------------
 
     ========================== ========================== ============================== =================================================================
     **NEST Parameter**         **brainpy.state**          **Math Equivalent**            **Description**

@@ -65,7 +65,8 @@ class amat2_psc_exp(Neuron):
 
     When ``beta = 0``, this model reduces to ``mat2_psc_exp``.
 
-    **Mathematical Description**
+    Mathematical Description
+    ------------------------
 
     **1. Subthreshold Membrane Dynamics**
 
@@ -180,7 +181,8 @@ class amat2_psc_exp(Neuron):
     6. If refractory, decrement refractory counter
     7. Store buffered external currents for next step
 
-    **Implementation Notes**
+    Implementation Notes
+    --------------------
 
     - All time constants must be strictly positive and pairwise distinct:
       ``tau_m != tau_syn_ex``, ``tau_m != tau_syn_in``, ``tau_m != tau_v``,

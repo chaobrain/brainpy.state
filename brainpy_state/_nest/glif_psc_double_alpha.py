@@ -73,7 +73,8 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     the derivative of the alpha-function current, and :math:`y_2` is the current
     itself.
 
-    **Mathematical Formulation**
+    Mathematical Formulation
+    ------------------------
 
     **1. Regular Case** — When :math:`\tau_m` and :math:`\tau_{syn}` differ
     sufficiently:
@@ -531,7 +532,8 @@ class glif_psc_double_alpha(Neuron):
         Name of this neuron population.
 
 
-    **Parameter Mapping (NEST to brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     =============================== ========================== ========================================== =====================================================
     **Parameter**                   **Default**                **Math equivalent**                        **Description**

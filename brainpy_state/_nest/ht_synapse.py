@@ -122,7 +122,8 @@ class ht_synapse:
     name : str, optional
         Optional instance identifier for debugging and logging. Default: ``None``.
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     ================================  ============================  =================
     **brainpy.state**                 **NEST**                      **Description**

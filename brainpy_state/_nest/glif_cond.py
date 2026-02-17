@@ -70,7 +70,8 @@ class glif_cond(Neuron):
     | GLIF5  | True                      | True                 | True               |
     +--------+---------------------------+----------------------+--------------------+
 
-    **Mathematical Formulation**
+    Mathematical Formulation
+    ------------------------
 
     **1. Membrane Dynamics**
 
@@ -298,7 +299,8 @@ class glif_cond(Neuron):
         Name of the neuron population.
 
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     =============================== =================== ========================================== =====================================================
     **Parameter**                   **Default**         **Math equivalent**                        **Description**
@@ -374,7 +376,8 @@ class glif_cond(Neuron):
     * **Adaptive integration**: RKF45 step size adapts per-neuron and is preserved
       across simulation steps.
 
-    **Failure Modes**
+    Failure Modes
+    -------------
 
     * Raises ``ValueError`` if parameter validation fails (invalid model combination,
       non-positive capacitance/conductance/time constants, mismatched sequence lengths).
@@ -953,7 +956,8 @@ class glif_cond(Neuron):
         - 4th-order solution: ``[25/216, 0, 1408/2565, 2197/4104, -1/5]``
         - 5th-order solution: ``[16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55]``
 
-        **Failure Modes**
+        Failure Modes
+        -------------
 
         If integration does not converge within ``MAX_ITERS``, the method returns
         the current state without error (matching NEST behavior). This can occur
@@ -1111,7 +1115,8 @@ class glif_cond(Neuron):
         compatibility. For large populations, this may be slower than vectorized
         approaches but ensures numerical correctness for benchmarking and validation.
 
-        **Failure Modes**
+        Failure Modes
+        -------------
 
         - If RKF45 integration fails to converge, the method proceeds with the
           current state (no exception raised).

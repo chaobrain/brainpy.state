@@ -553,7 +553,8 @@ class ht_neuron(Neuron):
     name : str or None, default=None
         Name of this neuron population.
 
-    **Parameter Mapping to NEST**
+    Parameter Mapping
+    -----------------
 
     The table below maps brainpy.state parameter names to NEST equivalents:
 

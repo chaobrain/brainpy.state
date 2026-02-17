@@ -67,7 +67,8 @@ def _hh_psc_alpha_gap_equilibrium(V):
        \alpha_p &= \frac{V - 95}{1 - e^{-(V - 95)/11.8}}, \quad
        \beta_p  = \frac{0.025}{e^{V/22.222}}
 
-    **Numerical Considerations:**
+    Numerical Considerations
+    ------------------------
 
     - The rate functions contain exponential terms that may produce division
       by zero or overflow at specific voltages. NumPy's exp function handles
@@ -155,7 +156,8 @@ def _hh_psc_alpha_gap_equilibrium(V):
 class hh_psc_alpha_gap(Neuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with alpha PSCs and gap junctions.
 
-    **Short Description**
+    Short Description
+    -----------------
 
     Conductance-based spiking neuron model implementing Hodgkin-Huxley
     dynamics with alpha-function postsynaptic currents and support for
@@ -293,7 +295,8 @@ class hh_psc_alpha_gap(Neuron):
     system (V, m, h, n, p, dI_ex, I_ex, dI_in, I_in) is integrated
     independently for each neuron over each time step.
 
-    **Computational Complexity:**
+    Computational Complexity
+    ------------------------
 
     - **Per neuron, per time step:** One adaptive ODE integration (~10-50
       function evaluations depending on step size control)
@@ -392,7 +395,8 @@ class hh_psc_alpha_gap(Neuron):
         automatic name is generated. Default: None.
 
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     ==================== ================== =============================== ====================================================
     **Parameter**        **Default**        **Math Symbol**                 **Description**
@@ -982,7 +986,8 @@ class hh_psc_alpha_gap(Neuron):
         (1) not refractory, (2) above threshold, (3) voltage decreasing
         (local maximum has passed).
 
-        **Numerical Considerations:**
+        Numerical Considerations
+        ------------------------
 
         - Each neuron's ODE is integrated independently with its own
           parameter set (supports heterogeneous populations)

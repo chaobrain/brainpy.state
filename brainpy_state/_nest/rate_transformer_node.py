@@ -173,8 +173,8 @@ class rate_transformer_node(Dynamics):
         Unique identifier for this module instance. Used for logging, debugging, and visualization.
         If ``None``, an auto-generated name is assigned. Default: ``None``.
 
-    Parameter Mapping (NEST Correspondence)
-    ---------------------------------------
+    Parameter Mapping
+    -----------------
 
     This table maps brainpy.state parameters to NEST's template instantiation:
 

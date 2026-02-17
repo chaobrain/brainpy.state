@@ -40,7 +40,8 @@ class iaf_cond_exp_sfa_rr(Neuron):
     conductance mechanism. It follows the NEST ``iaf_cond_exp_sfa_rr`` model dynamics and
     update ordering exactly.
 
-    **Mathematical Description**
+    Mathematical Description
+    ------------------------
 
     The model evolves five state variables:
 
@@ -201,7 +202,8 @@ class iaf_cond_exp_sfa_rr(Neuron):
         Name of the neuron group. If None, auto-generated.
 
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     ==================== ================== ==========================================
     **Parameter**        **Default**        **Math equivalent**
@@ -226,7 +228,8 @@ class iaf_cond_exp_sfa_rr(Neuron):
     ``I_e``              0 pA               :math:`I_\mathrm{e}`
     ==================== ================== ==========================================
 
-    **State Variables**
+    State Variables
+    ---------------
 
     * ``V``: ``HiddenState`` (float, shape ``in_size``) — Membrane potential in mV
     * ``g_ex``: ``HiddenState`` (float, shape ``in_size``) — Excitatory conductance in nS

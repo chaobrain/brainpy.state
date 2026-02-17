@@ -49,7 +49,8 @@ class tsodyks_synapse(static_synapse):
 
     **1. Mathematical Model**
 
-    **State Variables:**
+    State Variables
+    ---------------
 
     - ``x``: Fraction of resources in the recovered (available) state
     - ``y``: Fraction of resources in the active (released) state
@@ -171,7 +172,8 @@ class tsodyks_synapse(static_synapse):
     - :math:`x, y, u \in [0, 1]`
     - :math:`x + y \leq 1` (ensures :math:`z \geq 0`)
 
-    **Numerical Considerations:**
+    Numerical Considerations
+    ------------------------
 
     - Propagators :math:`P_{uu}, P_{yy}, P_{zz}` are computed using ``math.exp()``
       and ``math.expm1()`` for numerical stability.

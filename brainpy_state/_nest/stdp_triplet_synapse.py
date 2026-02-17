@@ -56,7 +56,8 @@ class stdp_triplet_synapse(stdp_synapse):
 
     **1. Mathematical Model**
 
-    **State Variables:**
+    State Variables
+    ---------------
 
     - ``w``: Synaptic weight (plastic, bounded to :math:`[0, W_{\max}]` or :math:`[W_{\max}, 0]`)
     - :math:`r_1 = K^+` -- Short presynaptic trace (decays with :math:`\tau_+`)
@@ -203,7 +204,8 @@ class stdp_triplet_synapse(stdp_synapse):
     - :math:`W_{\max} \neq 0` and :math:`\text{sign}(w) = \text{sign}(W_{\max})`
     - :math:`r_1 \geq 0`, :math:`r_2 \geq 0` (traces must be non-negative)
 
-    **Numerical Considerations:**
+    Numerical Considerations
+    ------------------------
 
     - All state variables stored as Python ``float`` (``float64`` precision)
     - Exponential decays computed using ``math.exp()`` for numerical stability
@@ -220,7 +222,8 @@ class stdp_triplet_synapse(stdp_synapse):
     - **Frequency-dependent plasticity**:
       Triplet terms create frequency selectivity absent in pair rules
 
-    **Failure Modes:**
+    Failure Modes
+    -------------
 
     - ``weight`` and ``Wmax`` must have the same sign; otherwise ``ValueError`` on init or set
     - ``Kplus`` and ``Kplus_triplet`` must be non-negative; otherwise ``ValueError`` on init or set

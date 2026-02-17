@@ -86,7 +86,8 @@ def _phi(u_val, phi_max, rate_slope, beta, theta):
 
     Notes
     -----
-    **Mathematical Formulation**
+    Mathematical Formulation
+    ------------------------
 
     The rate function is defined as:
 
@@ -277,8 +278,8 @@ class pp_cond_exp_mc_urbanczik(Neuron):
     name : str, optional
         Module name (default: None). Used for logging and identification.
 
-    Parameter Mapping (NEST ↔ brainpy.state)
-    -----------------------------------------
+    Parameter Mapping
+    -----------------
     This table maps NEST C++ parameter names to brainpy.state constructor arguments:
 
     ================================ =========================== ===============
@@ -992,7 +993,8 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
         Notes
         -----
-        **Update Procedure**
+        Update Procedure
+        ----------------
 
         The method executes the following steps in order (per neuron):
 
@@ -1033,13 +1035,15 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         Collect all current inputs (via ``sum_current_inputs()``) and store for use
         in the next time step's ODE integration.
 
-        **Computational Complexity**
+        Computational Complexity
+        ------------------------
 
         * Time: O(N · S) where N is population size, S is adaptive ODE steps per neuron
         * Space: O(N) for state updates, O(N·T) for history accumulation over T steps
         * **Not vectorized:** Uses Python loop over all neuron indices
 
-        **Side Effects**
+        Side Effects
+        ------------
 
         * Updates all state variables (V_s, V_d, g_ex_s, g_in_s, I_ex_d, I_in_d)
         * Updates refractory counters and last_spike_time
@@ -1047,7 +1051,8 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         * Advances internal PRNG state (``_rng_state``)
         * Consumes and clears delta_inputs from projections
 
-        **Numerical Considerations**
+        Numerical Considerations
+        ------------------------
 
         * The ODE solver is adaptive and may take variable numbers of internal steps
         * For stiff dynamics or large coupling conductances, integration may require

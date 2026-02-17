@@ -127,7 +127,8 @@ class gif_psc_exp_multisynapse(Neuron):
     4. **Stochastic spiking**: Exponential escape-rate firing with
        parameter ``lambda_0`` and threshold noise ``Delta_V``
 
-    **Mathematical Model**
+    Mathematical Model
+    ------------------
 
     **1. Membrane Potential Dynamics**
 
@@ -391,7 +392,8 @@ class gif_psc_exp_multisynapse(Neuron):
         ``None``, an automatic name is generated. Default: None.
 
 
-    **Parameter Mapping to NEST**
+    Parameter Mapping
+    -----------------
 
     Below is the correspondence between brainpy.state and NEST parameter names:
 
@@ -478,7 +480,8 @@ class gif_psc_exp_multisynapse(Neuron):
       empty STC/SFA), this model behaves as a simple stochastic LIF neuron
       with exponential synaptic currents.
 
-    **Failure Modes:**
+    Failure Modes
+    -------------
 
     * If ``Delta_V`` is too small (< 1e-6 mV), numerical overflow may occur
       in the exponential firing intensity computation.
@@ -1005,7 +1008,8 @@ class gif_psc_exp_multisynapse(Neuron):
           accumulated into ``I_stim`` and distributed uniformly (not
           receptor-specific).
 
-        **Failure Modes:**
+        Failure Modes
+        -------------
 
         - If ``receptor_type`` in ``spike_events`` is out of range [1,
           ``n_receptors``], raises ``ValueError``.

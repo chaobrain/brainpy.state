@@ -577,8 +577,8 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
     _step_count : ShortTermState
         Internal step counter (int64 scalar) for delayed event scheduling.
 
-    Parameter Mapping to NEST
-    --------------------------
+    Parameter Mapping
+    -----------------
 
     ===============================  ===============================  =======================
     brainpy.state parameter          NEST parameter                   Notes

@@ -168,7 +168,8 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
     name : str, optional
         Descriptive name for this synapse model instance.
 
-    **Parameter Mapping (NEST → brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     ================  ==========================  ==========  ===========
     NEST Parameter    brainpy.state Parameter     Type        Scope

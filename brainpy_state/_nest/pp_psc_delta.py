@@ -131,10 +131,8 @@ class pp_psc_delta(Neuron):
     iaf_psc_delta : Integrate-and-fire neuron with delta PSCs
     gif_psc_exp : Generalized integrate-and-fire with exponential PSCs
 
-    Notes
-    -----
-
-    **Parameter Mapping (NEST <-> brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     ========================= ====================== ===============================================
     **NEST Parameter**        **brainpy.state**      **Notes**

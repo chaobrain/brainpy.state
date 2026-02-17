@@ -193,7 +193,8 @@ class siegert_neuron(Dynamics):
         Unique identifier for this module. If ``None``, auto-generated. Used for
         logging and debugging.
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     =========================  ==========================  ==================================
     NEST Parameter             brainpy.state Parameter     Description
@@ -221,7 +222,8 @@ class siegert_neuron(Dynamics):
 
     Notes
     -----
-    **Computational Complexity:**
+    Computational Complexity
+    ------------------------
 
     - Siegert evaluation is the primary bottleneck (O(N) per neuron).
     - Without SciPy, custom quadrature adds ~10× overhead.

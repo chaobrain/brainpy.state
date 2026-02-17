@@ -160,8 +160,8 @@ class cont_delay_synapse(static_synapse):
 
     where :math:`m` is the incoming spike count and :math:`w` is the weight.
 
-    Parameter Mapping (NEST Equivalence)
-    -------------------------------------
+    Parameter Mapping
+    -----------------
 
     ================= ================================ ========================
     NEST Parameter    brainpy.state Parameter          Notes

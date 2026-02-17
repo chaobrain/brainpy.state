@@ -110,7 +110,8 @@ class astrocyte_lr_1994(Dynamics):
     name : str, optional
         Instance name for identification.
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     The following table maps constructor parameters to their mathematical symbols
     and NEST equivalents:

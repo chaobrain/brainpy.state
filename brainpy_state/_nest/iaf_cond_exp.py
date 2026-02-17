@@ -171,7 +171,8 @@ class iaf_cond_exp(Neuron):
         Name of the neuron population. If None, an automatic name is generated.
 
 
-    **Parameter Mapping**
+    Parameter Mapping
+    -----------------
 
     ==================== ================== ==========================================
     **Parameter**        **Default**        **Math equivalent**
@@ -729,7 +730,8 @@ class iaf_cond_exp(Neuron):
         * Refractory neurons have clamped voltage but conductances continue decaying
         * Current input delay matches NEST ring-buffer semantics
 
-        **Failure Modes**:
+        Failure Modes
+        -------------
 
         * Integration may degrade to minimum step size (1e-8 ms) for stiff dynamics
         * Iteration limit (10000) may be reached for extreme parameter combinations

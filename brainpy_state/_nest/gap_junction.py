@@ -63,9 +63,8 @@ class gap_junction:
     SUPPORTED_WFR_INTERPOLATION_ORDERS : tuple
         Supported interpolation orders: ``(0, 1, 3)``.
 
-    Notes
-    -----
-    **Parameter Mapping (NEST to brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     .. list-table::
        :header-rows: 1
@@ -80,7 +79,8 @@ class gap_junction:
          - *unsupported*
          - Delay not allowed for gap junctions
 
-    **Mathematical Formulation**
+    Mathematical Formulation
+    ------------------------
 
     *1. Gap Junction Current*
 

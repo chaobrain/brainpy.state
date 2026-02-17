@@ -102,7 +102,8 @@ class tsodyks2_synapse(static_synapse):
     Tsodyks-Markram short-term plasticity mechanism that tracks only two
     key dynamic variables rather than the full resource state model.
 
-    **State variables:**
+    State variables
+    ---------------
 
     - :math:`x(t)` -- scaling factor representing available resources
     - :math:`u(t)` -- utilization (release probability)

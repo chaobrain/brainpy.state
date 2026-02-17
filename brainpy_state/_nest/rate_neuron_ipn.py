@@ -337,7 +337,8 @@ class rate_neuron_ipn(_lin_rate_base):
     scaling behavior. Input noise typically results in stronger fluctuations at
     high rates.
 
-    **Failure Modes**
+    Failure Modes
+    -------------
 
     - No automatic failure handling. Negative time constants, decay rates, or
       noise parameters are caught at construction by ``_validate_parameters``.

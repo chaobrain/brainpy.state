@@ -56,7 +56,8 @@ class stdp_synapse(static_synapse):
 
     **1. Mathematical Model**
 
-    **State Variables:**
+    State Variables
+    ---------------
 
     - ``w``: Synaptic weight (plastic, bounded to :math:`[0, W_{\max}]` or :math:`[W_{\max}, 0]`)
     - ``K^+``: Presynaptic eligibility trace (decays with :math:`\tau_+`)
@@ -172,7 +173,8 @@ class stdp_synapse(static_synapse):
     - :math:`W_{\max} \neq 0` and :math:`\text{sign}(w) = \text{sign}(W_{\max})`
     - :math:`K^+ \geq 0` (trace must be non-negative)
 
-    **Numerical Considerations:**
+    Numerical Considerations
+    ------------------------
 
     - All state variables stored as Python ``float`` (``float64`` precision)
     - Exponential decays computed using ``math.exp()`` for numerical stability
@@ -191,7 +193,8 @@ class stdp_synapse(static_synapse):
     - **Asymmetric depression** (:math:`\alpha > 1`):
       Stronger depression relative to potentiation
 
-    **Failure Modes:**
+    Failure Modes
+    -------------
 
     - ``weight`` and ``Wmax`` must have the same sign; otherwise ``ValueError`` on init or set
     - ``Kplus`` must be non-negative; otherwise ``ValueError`` on init or set

@@ -98,8 +98,8 @@ def _hh_cond_exp_traub_equilibrium(V):
        \alpha_h &= 0.128 \, e^{(17-V)/18} \\
        \beta_h  &= \frac{4}{1 + e^{(40-V)/5}}
 
-    Example
-    -------
+    Examples
+    --------
     .. code-block:: python
 
        >>> from brainpy_state._nest.hh_cond_exp_traub import _hh_cond_exp_traub_equilibrium
@@ -891,13 +891,15 @@ class hh_cond_exp_traub(Neuron):
         Conductance jumps are applied **after** ODE integration, matching NEST's
         update sequence.
 
-        **Computational Complexity:**
+        Computational Complexity
+        ------------------------
 
         The method performs per-neuron integration, so runtime scales linearly
         with the total number of neurons (``prod(in_size)``). For large populations,
         consider vectorized implementations if numerical accuracy can be relaxed.
 
-        **Failure Modes:**
+        Failure Modes
+        -------------
 
         - If ODE solver fails to converge (stiff dynamics), ``solve_ivp`` may
           return partial integration. Check ``sol.success`` if debugging.

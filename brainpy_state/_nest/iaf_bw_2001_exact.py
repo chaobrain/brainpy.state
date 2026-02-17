@@ -133,9 +133,8 @@ class iaf_bw_2001_exact(Neuron):
     iaf_cond_exp : Simpler conductance-based LIF without NMDA
     aeif_cond_alpha : Adaptive exponential IF with alpha-shaped conductances
 
-    Notes
-    -----
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     ============================ ======================== ============================================
     **NEST Parameter**           **brainpy.state**        **Notes**
@@ -157,7 +156,8 @@ class iaf_bw_2001_exact(Neuron):
     ``gsl_error_tol``            ``gsl_error_tol``        RKF45 tolerance (dimensionless)
     ============================ ======================== ============================================
 
-    **Mathematical Model**
+    Mathematical Model
+    ------------------
 
     **1. Membrane Dynamics**
 
@@ -270,7 +270,8 @@ class iaf_bw_2001_exact(Neuron):
     - ``I_GABA`` — GABA current (pA)
     - ``I_NMDA`` — NMDA current (pA)
 
-    **Additional State Variables**
+    Additional State Variables
+    --------------------------
 
     - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[*in_size, n_ports]``)
     - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[*in_size, n_ports]``)

@@ -196,8 +196,8 @@ class aeif_psc_delta(Neuron):
     name : str, optional
         Name of the neuron group.
 
-    Parameter Mapping (NEST to brainpy.state)
-    ------------------------------------------
+    Parameter Mapping
+    -----------------
 
     ==================== ================== ========================================== =====================================================
     **Parameter**        **Default**        **Math equivalent**                        **Description**

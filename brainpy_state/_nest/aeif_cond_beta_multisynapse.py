@@ -114,8 +114,8 @@ class aeif_cond_beta_multisynapse(Neuron):
     name : str, optional
         Instance name. If None, auto-generated.
 
-    Parameter Mapping (NEST Compatibility)
-    ---------------------------------------
+    Parameter Mapping
+    -----------------
 
     ======================== ===================== ===============================================
     **BrainPy Parameter**    **NEST Parameter**    **Description**

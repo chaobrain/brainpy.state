@@ -186,7 +186,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
     activation with lower and upper saturation bounds, commonly used for modeling
     neural populations with firing rate constraints and additive stochastic drive.
 
-    **Mathematical Description**
+    Mathematical Description
+    ------------------------
 
     **1. Continuous-Time Stochastic Dynamics**
 
@@ -460,7 +461,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
     - ``threshold_lin_rate_opn``: Output-noise variant (noise applied after
       nonlinearity) vs. input noise (applied before dynamics propagation).
 
-    **Failure Modes**
+    Failure Modes
+    -------------
 
     - No automatic failure handling. Negative time constants, decay rates, or
       noise parameters are caught at construction by ``_validate_parameters``.
@@ -863,7 +865,8 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
     (``threshold_lin_rate_ipn``), noise is applied to the output after deterministic
     dynamics, leading to different stationary distributions and noise scaling.
 
-    **Mathematical Description**
+    Mathematical Description
+    ------------------------
 
     **1. Continuous-Time Deterministic Dynamics with Output Noise**
 
@@ -1130,7 +1133,8 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
     - **Rectification**: Input-noise variant supports ``rectify_output``; output-
       noise variant does not (noise is on output only).
 
-    **Failure Modes**
+    Failure Modes
+    -------------
 
     - No automatic failure handling. Negative time constants or noise parameters
       are caught at construction by ``_validate_parameters``.

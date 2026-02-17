@@ -171,9 +171,8 @@ class vogels_sprekeler_synapse:
     stdp_synapse : Classical asymmetric STDP rule
     stdp_dopamine_synapse : Reward-modulated STDP
 
-    Notes
-    -----
-    **Parameter Mapping (NEST to brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     +-----------------+---------------------+-------------------+
     | NEST Parameter  | brainpy.state       | Unit              |

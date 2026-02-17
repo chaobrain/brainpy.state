@@ -207,7 +207,8 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
         If ``None``, a name is auto-generated. Default is ``None``.
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     .. list-table::
        :header-rows: 1

@@ -63,7 +63,8 @@ class rate_neuron_opn(_lin_rate_base):
     - ``mult_coupling_ex(rate) = g_ex * (theta_ex - rate)``
     - ``mult_coupling_in(rate) = g_in * (theta_in + rate)``
 
-    **Mathematical Description**
+    Mathematical Description
+    ------------------------
 
     **1. Continuous-Time Deterministic Dynamics**
 
@@ -1183,7 +1184,8 @@ class rate_neuron_opn(_lin_rate_base):
           :math:`h\to 0` limit, but per-step noise variance diverges (reflecting
           white-noise nature).
 
-        **Failure Modes**
+        Failure Modes
+        -------------
 
         - **Invalid time constants**: Caught at construction by
           ``_validate_parameters`` (enforces :math:`\tau>0`, :math:`\sigma\ge 0`).

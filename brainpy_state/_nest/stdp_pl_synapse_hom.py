@@ -51,7 +51,8 @@ class stdp_pl_synapse_hom(static_synapse):
 
     **1. Mathematical Model**
 
-    **State Variables:**
+    State Variables
+    ---------------
 
     - ``weight`` (:math:`w`): Synaptic efficacy (current/conductance units or dimensionless)
     - ``Kplus`` (:math:`K^+`): Presynaptic eligibility trace (dimensionless)
@@ -188,7 +189,8 @@ class stdp_pl_synapse_hom(static_synapse):
     - :math:`K^+ \geq 0` (initial presynaptic trace; typically zero)
     - :math:`w \geq 0` (maintained via clipping in depression)
 
-    **Numerical Considerations:**
+    Numerical Considerations
+    ------------------------
 
     - Trace propagation uses ``math.exp()`` for exponential decay
     - Power-law computation uses ``numpy.power()`` with float64 precision
@@ -209,7 +211,8 @@ class stdp_pl_synapse_hom(static_synapse):
     - **Weight clamping**: Depression clipping at :math:`w = 0` prevents negative
       weights; no upper bound is enforced (unlike ``stdp_synapse`` with ``Wmax``)
 
-    **Failure Modes:**
+    Failure Modes
+    -------------
 
     - **Non-finite weights**: Power-law computation :math:`w^\mu` can produce
       ``inf`` or ``nan`` for extreme weights; users should monitor weight distributions
@@ -262,7 +265,8 @@ class stdp_pl_synapse_hom(static_synapse):
     name : str, optional
         Object name for identification and debugging. Default: ``None``.
 
-    **Parameter Mapping (NEST vs. brainpy.state)**
+    Parameter Mapping
+    -----------------
 
     The following table maps NEST parameter names to this implementation:
 
