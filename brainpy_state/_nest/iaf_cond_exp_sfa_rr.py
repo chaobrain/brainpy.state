@@ -71,13 +71,13 @@ class iaf_cond_exp_sfa_rr(Neuron):
 
        .. math::
 
-          \begin{align}
+          \begin{aligned}
           I_{\mathrm{L}} &= g_{\mathrm{L}} (V_{\mathrm{eff}} - E_{\mathrm{L}}) \\
           I_{\mathrm{syn,ex}} &= g_{\mathrm{ex}} (V_{\mathrm{eff}} - E_{\mathrm{ex}}) \\
           I_{\mathrm{syn,in}} &= g_{\mathrm{in}} (V_{\mathrm{eff}} - E_{\mathrm{in}}) \\
           I_{\mathrm{sfa}} &= g_{\mathrm{sfa}} (V_{\mathrm{eff}} - E_{\mathrm{sfa}}) \\
           I_{\mathrm{rr}} &= g_{\mathrm{rr}} (V_{\mathrm{eff}} - E_{\mathrm{rr}})
-          \end{align}
+          \end{aligned}
 
        The effective voltage :math:`V_{\mathrm{eff}}` implements NEST voltage clamping:
 

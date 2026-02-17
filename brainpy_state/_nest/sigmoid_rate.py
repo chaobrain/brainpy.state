@@ -201,8 +201,7 @@ class sigmoid_rate_ipn(_sigmoid_rate_base):
     instantiated with ``sigmoid_rate`` nonlinearity. Multiplicative coupling
     factors are fixed to one for this model (the flag is kept for compatibility).
 
-    Update ordering (matching NEST ``rate_neuron_ipn`` with sigmoid nonlinearity)
-    .............................................................................
+    **Update ordering (matching NEST ``rate_neuron_ipn`` with sigmoid nonlinearity)**
 
     Per simulation step:
 

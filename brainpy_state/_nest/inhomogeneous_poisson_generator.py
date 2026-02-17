@@ -56,7 +56,7 @@ class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
        \begin{cases}
          \mathrm{round}(t_k / \Delta t), & \text{if representable on grid}, \\
          \left\lceil t_k / \Delta t \right\rceil, &
-         \text{if off-grid and ``allow_offgrid_times`` is True}.
+         \text{if off-grid and ``allow\_offgrid\_times`` is True}.
        \end{cases}
 
     During :meth:`update`, entries with :math:`s_k \le n` are skipped as past

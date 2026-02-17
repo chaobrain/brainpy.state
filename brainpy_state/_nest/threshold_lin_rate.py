@@ -234,14 +234,14 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
     .. math::
 
        I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t) + I_\mathrm{in}(t))
-       \quad\text{(if linear_summation=True)},
+       \quad\text{(if linear\_summation=True)},
 
     or:
 
     .. math::
 
        I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t)) + \phi(I_\mathrm{in}(t))
-       \quad\text{(if linear_summation=False)},
+       \quad\text{(if linear\_summation=False)},
 
     where :math:`I_\mathrm{ex}(t)` and :math:`I_\mathrm{in}(t)` are excitatory and
     inhibitory branches (sign-separated by event weight).
@@ -919,14 +919,14 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
     .. math::
 
        I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t) + I_\mathrm{in}(t))
-       \quad\text{(if linear_summation=True)},
+       \quad\text{(if linear\_summation=True)},
 
     or:
 
     .. math::
 
        I_\mathrm{net}(t) = \phi(I_\mathrm{ex}(t)) + \phi(I_\mathrm{in}(t))
-       \quad\text{(if linear_summation=False)},
+       \quad\text{(if linear\_summation=False)},
 
     where :math:`I_\mathrm{ex}(t)` and :math:`I_\mathrm{in}(t)` are excitatory and
     inhibitory branches (sign-separated by event weight).

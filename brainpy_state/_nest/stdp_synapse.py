@@ -257,6 +257,7 @@ class stdp_synapse(static_synapse):
         Unique identifier for this synapse instance. Default: auto-generated.
 
     Parameter Mapping
+    -----------------
 
     NEST ``stdp_synapse`` parameters map to this implementation as follows:
 

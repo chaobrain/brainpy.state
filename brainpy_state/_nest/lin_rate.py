@@ -266,8 +266,7 @@ class lin_rate_ipn(_lin_rate_base):
     - linear/nonlinear summation mode (``linear_summation``),
     - optional output rectification (``rectify_output``).
 
-    Update ordering (matching NEST ``rate_neuron_ipn``)
-    ...................................................
+    **Update ordering (matching NEST ``rate_neuron_ipn``)**
 
     For each simulation step:
 
@@ -483,8 +482,7 @@ class lin_rate_opn(_lin_rate_base):
 
     with :math:`\phi(h)=g\,h` and piecewise-constant Gaussian noise.
 
-    Update ordering (matching NEST ``rate_neuron_opn``)
-    ...................................................
+    **Update ordering (matching NEST ``rate_neuron_opn``)**
 
     For each simulation step:
 

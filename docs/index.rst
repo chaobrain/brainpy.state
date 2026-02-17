@@ -9,19 +9,19 @@ It is the point-neuron modeling layer of the
 
 The library ships **167+ models** organized in three tiers:
 
-- **Base classes** — ``Dynamics``, ``Neuron``, ``Synapse`` — the abstract foundation every model inherits from.
-- **BrainPy-style models (45+)** — high-level, composable neurons (LIF, HH, Izhikevich, ...),
+- **Base classes**: ``Dynamics``, ``Neuron``, ``Synapse``, the abstract foundation every model inherits from.
+- **BrainPy-style models (45+)**: high-level, composable neurons (LIF, HH, Izhikevich, ...),
   synapses (Expon, Alpha, AMPA, NMDA, ...), projections, readouts, and input generators
   previously designed in `BrainPy <https://brainpy.readthedocs.io/>`_.
-- **NEST-compatible models (119+)** — faithful JAX re-implementations of
+- **NEST-compatible models (119+)**: faithful JAX re-implementations of
   `NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron, synapse,
   plasticity (STDP, STP), and device models.
-- All parameters carry physical units via `brainunit <https://github.com/chaobrain/brainunit>`_,
+- All parameters carry **physical units** via `brainunit <https://github.com/chaobrain/brainunit>`_,
   and every neuron supports surrogate-gradient-based training out of the box.
 
-Different from ``brainpy.dyn``, ``brainpy.state`` has the following characteristics:
+Compared to ``brainpy.dyn``, ``brainpy.state`` has the following characteristics:
 
-- **Programming model**: ``brainpy.state`` is built on `brainstate <https://github.com/chaobrain/brainstate>`_ with explicit state objects; ``brainpy.dyn`` follows the older dynamics-module style in ``brainpy``.
+- **Ecosystem compatability**: ``brainpy.state`` is built on `brainstate <https://github.com/chaobrain/brainstate>`_ and fully compatible with `BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
 - **Model scope**: ``brainpy.state`` implements much more models including BrainPy-style models plus a large NEST-compatible model set.
 - **Scientific ergonomics**: ``brainpy.state`` uses physical units via ``brainunit`` by default and is designed for surrogate-gradient training.
 
