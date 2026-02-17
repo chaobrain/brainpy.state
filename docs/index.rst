@@ -16,9 +16,14 @@ The library ships **167+ models** organized in three tiers:
 - **NEST-compatible models (119+)** — faithful JAX re-implementations of
   `NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron, synapse,
   plasticity (STDP, STP), and device models.
+- All parameters carry physical units via `brainunit <https://github.com/chaobrain/brainunit>`_,
+  and every neuron supports surrogate-gradient-based training out of the box.
 
-All parameters carry physical units via `brainunit <https://github.com/chaobrain/brainunit>`_,
-and every neuron supports surrogate-gradient-based training out of the box.
+Different from ``brainpy.dyn``, ``brainpy.state`` has the following characteristics:
+
+- **Programming model**: ``brainpy.state`` is built on `brainstate <https://github.com/chaobrain/brainstate>`_ with explicit state objects; ``brainpy.dyn`` follows the older dynamics-module style in ``brainpy``.
+- **Model scope**: ``brainpy.state`` implements much more models including BrainPy-style models plus a large NEST-compatible model set.
+- **Scientific ergonomics**: ``brainpy.state`` uses physical units via ``brainunit`` by default and is designed for surrogate-gradient training.
 
 
 Installation
@@ -122,7 +127,7 @@ Learn more
 See also the ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``brainpy.state`` is part of the `BrainX ecosystem <https://brainmodeling.readthedocs.io/>`_:
+``brainpy.state`` is one part of the `BrainPy project <https://brainpy.readthedocs.io/>`_ and the `BrainX ecosystem <https://brainmodeling.readthedocs.io/>`_:
 
 - `brainpy <https://brainpy.readthedocs.io/>`_ — general-purpose brain dynamics programming framework
 - `brainstate <https://github.com/chaobrain/brainstate>`_ — state management for JAX-based brain modeling
