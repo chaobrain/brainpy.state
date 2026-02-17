@@ -205,10 +205,10 @@ class iaf_cond_beta(Neuron):
     ``E_ex``             0 mV               :math:`E_\mathrm{ex}`                    Excitatory reversal potential
     ``E_in``             -85 mV             :math:`E_\mathrm{in}`                    Inhibitory reversal potential
     ``g_L``              16.6667 nS         :math:`g_\mathrm{L}`                     Leak conductance
-    ``tau_rise_ex``      0.2 ms             :math:`\tau_{\mathrm{rise,ex}}`         Excitatory beta rise constant
-    ``tau_decay_ex``     0.2 ms             :math:`\tau_{\mathrm{decay,ex}}`        Excitatory beta decay constant
-    ``tau_rise_in``      2.0 ms             :math:`\tau_{\mathrm{rise,in}}`         Inhibitory beta rise constant
-    ``tau_decay_in``     2.0 ms             :math:`\tau_{\mathrm{decay,in}}`        Inhibitory beta decay constant
+    ``tau_rise_ex``      0.2 ms             :math:`\tau_{\mathrm{rise,ex}}`          Excitatory beta rise constant
+    ``tau_decay_ex``     0.2 ms             :math:`\tau_{\mathrm{decay,ex}}`         Excitatory beta decay constant
+    ``tau_rise_in``      2.0 ms             :math:`\tau_{\mathrm{rise,in}}`          Inhibitory beta rise constant
+    ``tau_decay_in``     2.0 ms             :math:`\tau_{\mathrm{decay,in}}`         Inhibitory beta decay constant
     ``I_e``              0 pA               :math:`I_\mathrm{e}`                     Constant external current
     ``V_initializer``    Constant(-70 mV)   —                                        Membrane initializer
     ``g_ex_initializer`` Constant(0 nS)     —                                        Excitatory conductance initializer
