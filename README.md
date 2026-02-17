@@ -7,7 +7,7 @@
 <p align="center">
 	<a href="https://pypi.org/project/brainpy_state/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainpy_state"></a>
 	<a href="https://github.com/chaobrain/brainpy.state"><img alt="LICENSE" src="https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?style=plastic"></a>
-  	<a href="https://brainpy.readthedocs.io/projects/state/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
+  	<a href="https://brainpy-state.readthedocs.io/?badge=latest"><img alt="Documentation" src="https://readthedocs.org/projects/brainpy-state/badge/?version=latest"></a>
   	<a href="https://badge.fury.io/py/brainpy_state"><img alt="PyPI version" src="https://badge.fury.io/py/brainpy_state.svg"></a>
     <a href="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml/badge.svg"></a>
 </p>
@@ -57,7 +57,7 @@ I = brainpy.state.LIF(800,  V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
 
 ## Links
 
-- **Documentation**: https://brainpy.readthedocs.io/projects/state/
+- **Documentation**: https://brainpy-state.readthedocs.io/
 - **Source**: https://github.com/chaobrain/brainpy.state
 - **Bug reports**: https://github.com/chaobrain/brainpy.state/issues
 - **Ecosystem**: https://brainmodeling.readthedocs.io/
