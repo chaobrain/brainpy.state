@@ -599,7 +599,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
         Returns
         -------
-        dict of {str: int}
+        dict[str, int]
             ``{'RATE': 0}``. Rate neurons have a single unified receptor port
             for all rate-based inputs. Excitatory vs. inhibitory separation is
             handled internally via event weight signs.
@@ -1263,7 +1263,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
 
         Returns
         -------
-        dict of {str: int}
+        dict[str, int]
             ``{'RATE': 0}``. Rate neurons have a single unified receptor port
             for all rate-based inputs. Excitatory vs. inhibitory separation is
             handled internally via event weight signs.

@@ -482,7 +482,7 @@ class rate_neuron_ipn(_lin_rate_base):
 
         Returns
         -------
-        dict of {str: int}
+        dict[str, int]
             ``{'RATE': 0}``. Rate neurons have a single unified receptor port
             for all rate-based inputs. Excitatory vs. inhibitory separation is
             handled internally via event weight signs.

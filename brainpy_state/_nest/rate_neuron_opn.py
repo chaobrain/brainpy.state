@@ -497,7 +497,7 @@ class rate_neuron_opn(_lin_rate_base):
 
         Returns
         -------
-        dict of {str: int}
+        dict[str, int]
             ``{'RATE': 0}``. Rate neurons have a single receptor type.
         """
         return {'RATE': 0}

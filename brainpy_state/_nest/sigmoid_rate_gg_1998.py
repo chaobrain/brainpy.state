@@ -724,7 +724,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
         Returns
         -------
-        dict of {str: int}
+        dict[str, int]
             ``{'RATE': 0}`` — single receptor port accepting all rate events.
         """
         return {'RATE': 0}
