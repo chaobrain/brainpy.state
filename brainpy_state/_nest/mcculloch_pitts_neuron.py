@@ -319,7 +319,7 @@ class mcculloch_pitts_neuron(Dynamics):
             )
 
     def _heaviside(self, h):
-        """Heaviside step function with strict inequality threshold test.
+        r"""Heaviside step function with strict inequality threshold test.
 
         Computes the binary activation :math:`H(h - \theta)` where:
 
@@ -355,7 +355,7 @@ class mcculloch_pitts_neuron(Dynamics):
         return u.math.asarray(h > self.theta, dtype=jnp.float64)
 
     def update(self, x=0. * u.mV):
-        """Update the neuron state for one simulation time step.
+        r"""Update the neuron state for one simulation time step.
 
         Accumulates delta and current inputs into the total input variable :math:`h`, then
         evaluates the Heaviside activation function :math:`H(h - \theta)` to determine the

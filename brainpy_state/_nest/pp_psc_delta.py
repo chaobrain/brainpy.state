@@ -709,7 +709,7 @@ class pp_psc_delta(Neuron):
         return self.spk_fun(v_scaled)
 
     def update(self, x=0.0 * u.pA):
-        """Update neuron state for one simulation step.
+        r"""Update neuron state for one simulation step.
 
         Performs the complete update sequence: (1) updates membrane potential
         via exact propagator, (2) decays adaptation kernels, (3) computes

@@ -456,7 +456,7 @@ class iaf_cond_beta(Neuron):
             return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables for the neuron population.
+        r"""Initialize all state variables for the neuron population.
 
         Creates and initializes state variables for membrane voltage, conductances, refractory
         tracking, RKF45 integration bookkeeping, and delayed current buffering. Called automatically
@@ -561,7 +561,7 @@ class iaf_cond_beta(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradients.
+        r"""Compute differentiable spike output using surrogate gradients.
 
         Scales the membrane voltage relative to threshold and reset, then applies the surrogate
         spike function to produce a continuous spike signal suitable for gradient-based learning.
@@ -680,7 +680,7 @@ class iaf_cond_beta(Neuron):
         return y[0], y[1], y[2], y[3], y[4], h
 
     def update(self, x=0. * u.pA):
-        """Advance neuron dynamics by one simulation time step.
+        r"""Advance neuron dynamics by one simulation time step.
 
         Performs the full NEST-compatible update cycle: ODE integration via RKF45, refractory
         countdown, threshold detection, spike emission, reset, synaptic input application, and

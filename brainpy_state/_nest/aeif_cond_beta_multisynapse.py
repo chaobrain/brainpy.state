@@ -532,7 +532,7 @@ class aeif_cond_beta_multisynapse(Neuron):
 
     @classmethod
     def _beta_normalization_factor_scalar(cls, tau_rise: float, tau_decay: float):
-        """Compute beta normalization factor for single receptor.
+        r"""Compute beta normalization factor for single receptor.
 
         Ensures unit weight produces unit peak conductance. Implements NEST's
         beta normalization formula, degenerating to alpha normalization
@@ -750,7 +750,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Compute refractory period in simulation timesteps.
+        r"""Compute refractory period in simulation timesteps.
 
         Returns
         -------
@@ -881,7 +881,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         return dy
 
     def update(self, x=0.0 * u.pA, spike_events=None):
-        """Advance model by one simulation timestep (NEST-compatible update).
+        r"""Advance model by one simulation timestep (NEST-compatible update).
 
         Integrates ODEs over :math:`(t, t+dt]` using adaptive RKF45 with per-neuron
         scalar loops, spike detection, refractory handling, and receptor-specific

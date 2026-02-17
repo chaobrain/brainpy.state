@@ -528,7 +528,7 @@ class aeif_psc_alpha(Neuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        """Validate parameter constraints and check for numerical overflow conditions.
+        r"""Validate parameter constraints and check for numerical overflow conditions.
 
         Raises
         ------
@@ -708,7 +708,7 @@ class aeif_psc_alpha(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradient.
+        r"""Compute differentiable spike output using surrogate gradient.
 
         Applies the surrogate spike function to the scaled membrane potential for
         gradient-based learning. This method is used for backpropagation and does
@@ -744,7 +744,7 @@ class aeif_psc_alpha(Neuron):
         return self.spk_fun(v_scaled)
 
     def _refractory_counts(self):
-        """Compute refractory period duration in discrete time steps.
+        r"""Compute refractory period duration in discrete time steps.
 
         Returns
         -------
@@ -806,7 +806,7 @@ class aeif_psc_alpha(Neuron):
 
     @staticmethod
     def _dynamics_scalar(v, dI_ex, I_ex, dI_in, I_in, w, is_refractory, i_stim, p):
-        """Compute time derivatives for all state variables (single neuron, scalar computation).
+        r"""Compute time derivatives for all state variables (single neuron, scalar computation).
 
         This function implements the right-hand side of the ODE system for one neuron,
         used within the RKF45 integration loop.
@@ -893,7 +893,7 @@ class aeif_psc_alpha(Neuron):
         return dv, ddI_ex, dI_ex_dt, ddI_in, dI_in_dt, dw
 
     def update(self, x=0.0 * u.pA):
-        """Advance the neuron state by one simulation time step.
+        r"""Advance the neuron state by one simulation time step.
 
         Performs adaptive RKF45 integration of membrane, synaptic, and adaptation dynamics
         over the interval :math:`[t, t+dt]`, with in-loop spike detection, reset, and

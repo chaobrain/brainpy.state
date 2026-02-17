@@ -852,7 +852,7 @@ class gif_psc_exp_multisynapse(Neuron):
             self._rng_state = jax.random.PRNGKey(0)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute spike output via surrogate gradient function.
+        r"""Compute spike output via surrogate gradient function.
 
         Converts membrane potential to a differentiable spike signal by
         scaling and applying the surrogate gradient function. This method is

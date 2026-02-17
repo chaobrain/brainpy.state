@@ -760,7 +760,7 @@ class aeif_psc_exp(Neuron):
         return dv, dI_ex, dI_in, dw
 
     def update(self, x=0.0 * u.pA):
-        """Advance neuron state by one simulation timestep.
+        r"""Advance neuron state by one simulation timestep.
 
         Performs one simulation step of the adaptive exponential integrate-and-fire
         neuron using adaptive RKF45 integration. Handles refractory clamping, spike

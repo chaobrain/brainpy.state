@@ -60,7 +60,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 def _m_eq_h(V):
-    """Compute equilibrium activation for I_h hyperpolarization-activated current.
+    r"""Compute equilibrium activation for I_h hyperpolarization-activated current.
 
     Implements the steady-state activation function for the h-current, which activates
     with hyperpolarization and provides a depolarizing inward current that contributes
@@ -94,7 +94,7 @@ def _m_eq_h(V):
 
 
 def _h_eq_T(V):
-    """Compute equilibrium inactivation for I_T low-threshold calcium current.
+    r"""Compute equilibrium inactivation for I_T low-threshold calcium current.
 
     Calculates the steady-state inactivation gate for the T-type Ca²⁺ channel,
     which is responsible for burst firing and oscillatory behavior in thalamic neurons.
@@ -128,7 +128,7 @@ def _h_eq_T(V):
 
 
 def _m_eq_T(V):
-    """Compute equilibrium activation for I_T low-threshold calcium current.
+    r"""Compute equilibrium activation for I_T low-threshold calcium current.
 
     Calculates the steady-state activation gate for the T-type Ca²⁺ channel. This
     channel activates at relatively hyperpolarized potentials (hence "low-threshold")
@@ -162,7 +162,7 @@ def _m_eq_T(V):
 
 
 def _D_eq_KNa(V, tau_D_KNa):
-    """Compute steady-state D value for I_KNa depolarization-activated potassium current.
+    r"""Compute steady-state D value for I_KNa depolarization-activated potassium current.
 
     The D variable represents an internal concentration-like quantity that accumulates
     during sustained depolarization and drives the slow activation of I_KNa. This
@@ -207,7 +207,7 @@ def _D_eq_KNa(V, tau_D_KNa):
 
 
 def _m_eq_NMDA(V, S_act_NMDA, V_act_NMDA):
-    """Compute steady-state magnesium unblock ratio for NMDA receptor channels.
+    r"""Compute steady-state magnesium unblock ratio for NMDA receptor channels.
 
     NMDA receptors are blocked by extracellular Mg²⁺ at hyperpolarized potentials
     and unblock with depolarization, providing voltage-dependent gain and enabling
@@ -248,7 +248,7 @@ def _m_eq_NMDA(V, S_act_NMDA, V_act_NMDA):
 
 
 def _m_NMDA(V, m_eq, m_fast, m_slow, instant_unblock_NMDA):
-    """Compute effective NMDA channel activation combining fast and slow unblocking kinetics.
+    r"""Compute effective NMDA channel activation combining fast and slow unblocking kinetics.
 
     NMDA receptors exhibit two-stage Mg²⁺ unblocking kinetics: a fast component
     (tau ~0.68 ms) and a slow component (tau ~22.7 ms). The relative contributions
@@ -322,7 +322,7 @@ def _m_NMDA(V, m_eq, m_fast, m_slow, instant_unblock_NMDA):
 
 
 def _beta_normalization_factor(tau_rise, tau_decay):
-    """Compute normalization constant for beta-function (difference-of-exponentials) synapse.
+    r"""Compute normalization constant for beta-function (difference-of-exponentials) synapse.
 
     The beta function describes a synaptic conductance that rises and decays with two
     different time constants. This normalization factor ensures that a unit synaptic
@@ -1127,7 +1127,7 @@ class ht_neuron(Neuron):
         return int(round(self.t_ref / dt_ms))
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables to physiologically consistent equilibrium values.
+        r"""Initialize all state variables to physiologically consistent equilibrium values.
 
         Sets the membrane potential to the leak reversal potential (weighted average of
         E_Na and E_K based on leak conductances), threshold to theta_eq, all synaptic
@@ -1313,7 +1313,7 @@ class ht_neuron(Neuron):
         self._V_clamp = V_init
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate differentiable spike output using surrogate gradient function.
+        r"""Generate differentiable spike output using surrogate gradient function.
 
         Converts the discrete spike condition (V >= theta) into a continuous,
         differentiable output suitable for gradient-based optimization. The voltage

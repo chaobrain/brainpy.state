@@ -946,7 +946,7 @@ class iaf_bw_2001(Neuron):
 
     @staticmethod
     def _nmda_jump_constants(alpha, tau_rise, tau_decay):
-        """Compute NMDA spike offset jump constants k0 and k1.
+        r"""Compute NMDA spike offset jump constants k0 and k1.
 
         Calculates precomputed constants for NMDA spike offset approximation
         based on alpha-function rise dynamics. These constants are used to
@@ -1004,7 +1004,7 @@ class iaf_bw_2001(Neuron):
         return k0, k1
 
     def update(self, x=0. * u.pA, spike_events=None):
-        """Advance the neuron state by one simulation timestep.
+        r"""Advance the neuron state by one simulation timestep.
 
         Performs a complete update cycle including: (1) RKF45 integration of
         ODEs, (2) reception of AMPA/GABA/NMDA spike events, (3) threshold

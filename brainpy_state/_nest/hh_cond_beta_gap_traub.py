@@ -36,7 +36,7 @@ __all__ = [
 
 
 def _hh_cond_beta_gap_traub_equilibrium(V):
-    """Compute Traub HH gating variable equilibrium values at voltage V (mV).
+    r"""Compute Traub HH gating variable equilibrium values at voltage V (mV).
 
     This matches NEST's ``State_::State_(const Parameters_&)`` initialization,
     which applies the Traub rate equations **without** the V_T offset.  The
@@ -82,7 +82,7 @@ def _hh_cond_beta_gap_traub_equilibrium(V):
 
 
 def _beta_normalization_factor(tau_rise, tau_decay):
-    """Compute the normalization factor for a beta-function synapse.
+    r"""Compute the normalization factor for a beta-function synapse.
 
     This is a Python translation of NEST's ``beta_normalization_factor()``
     from ``libnestutil/beta_normalization_factor.h``.
@@ -681,7 +681,7 @@ class hh_cond_beta_gap_traub(Neuron):
             raise ValueError('All conductances must be non-negative.')
 
     def _refractory_counts(self):
-        """Compute number of simulation steps in refractory period.
+        r"""Compute number of simulation steps in refractory period.
 
         Returns
         -------
@@ -700,7 +700,7 @@ class hh_cond_beta_gap_traub(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize all state variables to equilibrium or user-specified values.
+        r"""Initialize all state variables to equilibrium or user-specified values.
 
         Sets up hidden states (membrane potential, gating variables, synaptic conductances)
         and short-term states (refractory counter, spike time buffer). By default, initializes
@@ -864,7 +864,7 @@ class hh_cond_beta_gap_traub(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output from membrane potential.
+        r"""Compute differentiable spike output from membrane potential.
 
         Applies the surrogate gradient function (``spk_fun``) to the membrane potential
         to generate a differentiable spike signal for gradient-based learning. This is
@@ -977,7 +977,7 @@ class hh_cond_beta_gap_traub(Neuron):
         return self.spk_fun(v_scaled)
 
     def _sum_signed_delta_inputs(self):
-        """Split delta inputs into excitatory (positive) and inhibitory (negative) conductances.
+        r"""Split delta inputs into excitatory (positive) and inhibitory (negative) conductances.
 
         Processes all registered delta inputs (spike-triggered conductance jumps) and
         separates them by sign: positive weights drive excitatory conductance, negative

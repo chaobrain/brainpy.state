@@ -751,7 +751,7 @@ class iaf_cond_alpha_mc(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute differentiable spike output using surrogate gradient.
+        r"""Compute differentiable spike output using surrogate gradient.
 
         Applies the surrogate gradient function to voltage scaled to the range
         ``[0, 1]`` relative to threshold and reset potentials. This enables

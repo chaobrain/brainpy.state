@@ -36,7 +36,7 @@ __all__ = [
 
 
 def _hh_psc_alpha_gap_equilibrium(V):
-    """Compute equilibrium gating variables for hh_psc_alpha_gap at given voltage.
+    r"""Compute equilibrium gating variables for hh_psc_alpha_gap at given voltage.
 
     This function computes steady-state values of all four gating variables
     (m, h, n, p) using the voltage-dependent rate functions specific to the

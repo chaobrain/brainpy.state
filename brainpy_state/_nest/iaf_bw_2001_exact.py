@@ -752,7 +752,7 @@ class iaf_bw_2001_exact(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate differentiable spike output from membrane potential.
+        r"""Generate differentiable spike output from membrane potential.
 
         Scales voltage relative to threshold and applies surrogate gradient function
         for gradient-based learning. Voltage is scaled linearly between V_reset (0)

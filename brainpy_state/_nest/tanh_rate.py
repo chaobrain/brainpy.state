@@ -43,7 +43,7 @@ class _tanh_rate_base(_lin_rate_base):
     __module__ = 'brainpy.state'
 
     def _input(self, h, g, theta):
-        """Apply hyperbolic-tangent nonlinearity to input.
+        r"""Apply hyperbolic-tangent nonlinearity to input.
 
         Parameters
         ----------

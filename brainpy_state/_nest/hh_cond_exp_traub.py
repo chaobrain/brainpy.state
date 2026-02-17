@@ -36,7 +36,7 @@ __all__ = [
 
 
 def _hh_cond_exp_traub_equilibrium(V):
-    """Compute Traub HH gating variable equilibrium values at voltage V (mV).
+    r"""Compute Traub HH gating variable equilibrium values at voltage V (mV).
 
     This matches NEST's ``State_::State_(const Parameters_&)`` initialization,
     which applies the Traub rate equations **without** the V_T offset.  The

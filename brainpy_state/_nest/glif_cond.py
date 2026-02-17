@@ -722,7 +722,7 @@ class glif_cond(Neuron):
         self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate surrogate spike signal from membrane potential.
+        r"""Generate surrogate spike signal from membrane potential.
 
         Computes a differentiable spike signal by scaling membrane potential
         relative to threshold range and applying the surrogate gradient function.
@@ -817,7 +817,7 @@ class glif_cond(Neuron):
         return dg
 
     def _dynamics_scalar(self, v_rel, dg_vals, g_vals, is_refractory, i_ext, asc_sum, p):
-        """Compute derivatives for ODE system [V_rel, dg_0, g_0, dg_1, g_1, ...].
+        r"""Compute derivatives for ODE system [V_rel, dg_0, g_0, dg_1, g_1, ...].
 
         Implements NEST's ``glif_cond_dynamics()`` function exactly. Membrane potential
         is relative to ``E_L``. During refractory period, voltage is clamped to
@@ -898,7 +898,7 @@ class glif_cond(Neuron):
         return (dv,) + tuple(ddg) + tuple(dg_out)
 
     def _rkf45_integrate_scalar(self, v0, dg0_vals, g0_vals, is_refractory, i_stim, asc_sum, h0, dt, p):
-        """Adaptive RKF45(4,5) integration for single-neuron ODE system.
+        r"""Adaptive RKF45(4,5) integration for single-neuron ODE system.
 
         Implements Runge-Kutta-Fehlberg method with embedded 4th/5th-order pairs
         for error estimation and automatic step size control, matching NEST's GSL
@@ -1028,7 +1028,7 @@ class glif_cond(Neuron):
         return v_out, dg_out, g_out, h
 
     def update(self, x=0.0 * u.pA):
-        """Perform a single simulation step with GLIF dynamics.
+        r"""Perform a single simulation step with GLIF dynamics.
 
         Executes the full GLIF update cycle: ODE integration via RKF45, threshold
         computation (spike/voltage-dependent components if enabled), spike detection,

@@ -350,7 +350,7 @@ class ginzburg_neuron(Dynamics):
         self.rng_seed = int(rng_seed)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize neuron state variables.
+        r"""Initialize neuron state variables.
 
         Creates binary output state :math:`y`, persistent input :math:`h`, PRNG key,
         and (if ``stochastic_update=True``) the next update time :math:`t_{\text{next}}`.
@@ -408,7 +408,7 @@ class ginzburg_neuron(Dynamics):
         return jax.random.uniform(subkey, shape=shape, dtype=jnp.float64)
 
     def _sample_exponential(self, shape):
-        """Draw exponential random samples with rate=1.
+        r"""Draw exponential random samples with rate=1.
 
         Parameters
         ----------
@@ -430,7 +430,7 @@ class ginzburg_neuron(Dynamics):
         return jax.random.exponential(subkey, shape=shape, dtype=jnp.float64)
 
     def _gain_probability(self, h):
-        """Compute transition probability from input state.
+        r"""Compute transition probability from input state.
 
         Evaluates the combined linear-sigmoidal gain function:
 
@@ -459,7 +459,7 @@ class ginzburg_neuron(Dynamics):
         return self.c_1 * h + self.c_2 * 0.5 * (1.0 + u.math.tanh(self.c_3 * (h - self.theta)))
 
     def update(self, x=0. * u.mV):
-        """Perform one simulation step with stochastic state transition.
+        r"""Perform one simulation step with stochastic state transition.
 
         Accumulates inputs, evaluates gain function, and (if scheduled or in synchronous
         mode) performs Bernoulli trial for state transition.

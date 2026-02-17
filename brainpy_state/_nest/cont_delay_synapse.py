@@ -365,7 +365,7 @@ class cont_delay_synapse(static_synapse):
         self._dt_cache_ms = float(dt_ms)
 
     def get(self) -> dict:
-        """Return current public parameters including delay decomposition.
+        r"""Return current public parameters including delay decomposition.
 
         Returns
         -------

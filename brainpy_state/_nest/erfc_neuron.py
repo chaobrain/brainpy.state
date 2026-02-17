@@ -395,7 +395,7 @@ class erfc_neuron(Dynamics):
         return jax.random.exponential(subkey, shape=shape, dtype=jnp.float64)
 
     def _gain_probability(self, h):
-        """Evaluate complementary error function gain at input ``h``.
+        r"""Evaluate complementary error function gain at input ``h``.
 
         Computes :math:`g(h) = \\frac{1}{2}\\,\\mathrm{erfc}\\!\\left(-\\frac{h - \\theta}{\\sqrt{2}\\,\\sigma}\\right)`.
 

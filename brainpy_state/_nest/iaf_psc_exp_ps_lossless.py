@@ -659,7 +659,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
         return 0.5 * (lo + hi)
 
     def update(self, x=0. * u.pA, spike_events=None):
-        """Advance one global step with lossless precise spike detection.
+        r"""Advance one global step with lossless precise spike detection.
 
         This method implements the complete NEST-compatible lossless
         precise-spike-time algorithm for ``iaf_psc_exp_ps_lossless``. Each

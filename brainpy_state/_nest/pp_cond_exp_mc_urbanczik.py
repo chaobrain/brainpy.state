@@ -824,7 +824,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
     @staticmethod
     def _dynamics(t, y, p):
-        """Compute ODE right-hand-side for the two-compartment neuron state vector.
+        r"""Compute ODE right-hand-side for the two-compartment neuron state vector.
 
         This static method implements the 10-dimensional ODE system governing the
         dynamics of the two-compartment model. It is called by the adaptive ODE
@@ -1293,7 +1293,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         return jnp.asarray(spike_mask, dtype=jnp.float32)
 
     def get_urbanczik_history(self, neuron_idx=0):
-        """Retrieve the Urbanczik-Senn learning signal history for a specific neuron.
+        r"""Retrieve the Urbanczik-Senn learning signal history for a specific neuron.
 
         This method returns the complete time series of error signals (δΠ) computed
         during simulation, which can be used to implement the Urbanczik-Senn synaptic

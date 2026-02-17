@@ -1058,7 +1058,7 @@ class glif_psc_double_alpha(Neuron):
         self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute spike output from membrane potential using surrogate gradient function.
+        r"""Compute spike output from membrane potential using surrogate gradient function.
 
         Applies the surrogate gradient function (``self.spk_fun``) to a scaled version
         of the membrane potential to produce a differentiable spike signal. This
@@ -1200,7 +1200,7 @@ class glif_psc_double_alpha(Neuron):
         return dy
 
     def update(self, x=0.0 * u.pA):
-        """Perform a single simulation step for all neurons in the population.
+        r"""Perform a single simulation step for all neurons in the population.
 
         This method implements the full GLIF update sequence using exact integration
         via precomputed propagator matrices. The update follows NEST's discrete-time
@@ -1550,7 +1550,7 @@ class glif_psc_double_alpha(Neuron):
         return jnp.asarray(spike_mask, dtype=jnp.float32)
 
     def get_I_syn(self):
-        """Get the total synaptic current summed across all receptor ports and components.
+        r"""Get the total synaptic current summed across all receptor ports and components.
 
         Computes the instantaneous total synaptic current by summing the fast and
         slow alpha-function current components (``y2_fast`` and ``y2_slow``) across
@@ -1585,7 +1585,7 @@ class glif_psc_double_alpha(Neuron):
         return I_syn
 
     def get_I_syn_fast(self):
-        """Get the fast component of synaptic current summed across all receptor ports.
+        r"""Get the fast component of synaptic current summed across all receptor ports.
 
         Computes the instantaneous fast synaptic current by summing the fast alpha-function
         current components (``y2_fast``) across all receptor ports. The fast component
@@ -1617,7 +1617,7 @@ class glif_psc_double_alpha(Neuron):
         return I_syn
 
     def get_I_syn_slow(self):
-        """Get the slow component of synaptic current summed across all receptor ports.
+        r"""Get the slow component of synaptic current summed across all receptor ports.
 
         Computes the instantaneous slow synaptic current by summing the slow alpha-function
         current components (``y2_slow``) across all receptor ports. The slow component

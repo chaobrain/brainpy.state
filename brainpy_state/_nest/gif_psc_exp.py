@@ -653,7 +653,7 @@ class gif_psc_exp(Neuron):
 
     @staticmethod
     def _propagator_exp(tau_syn: np.ndarray, tau_m: np.ndarray, c_m: np.ndarray, h_ms: float):
-        """Compute the propagator coefficient P21 (I_syn -> V_m) for exact integration.
+        r"""Compute the propagator coefficient P21 (I_syn -> V_m) for exact integration.
 
         This matches NEST's ``IAFPropagatorExp::evaluate()`` with singularity handling.
         The propagator describes how a synaptic current at step :math:`n` contributes
@@ -714,7 +714,7 @@ class gif_psc_exp(Neuron):
             return np.where(regular_mask, p32_raw, p32_singular)
 
     def update(self, x=0.0 * u.pA):
-        """Update neuron state for one simulation step.
+        r"""Update neuron state for one simulation step.
 
         Performs a complete simulation step following NEST's ``gif_psc_exp`` update
         order: decay adaptation elements, decay and update synaptic currents, update

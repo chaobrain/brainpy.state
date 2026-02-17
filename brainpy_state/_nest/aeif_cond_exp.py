@@ -657,7 +657,7 @@ class aeif_cond_exp(Neuron):
         return dv, dg_ex, dg_in, dw
 
     def update(self, x=0.0 * u.pA):
-        """Advance neuron state by one simulation time step.
+        r"""Advance neuron state by one simulation time step.
 
         Integrates the AdEx ODE system over interval :math:`(t, t+dt]` using adaptive
         RKF45 with local error control. Handles spike detection, reset, adaptation jumps,

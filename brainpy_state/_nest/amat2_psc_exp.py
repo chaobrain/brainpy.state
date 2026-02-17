@@ -582,7 +582,7 @@ class amat2_psc_exp(Neuron):
             self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
 
     def get_spike(self, V: ArrayLike = None, V_th: ArrayLike = None):
-        """Compute spike output using surrogate gradient function.
+        r"""Compute spike output using surrogate gradient function.
 
         Applies the surrogate gradient function to the scaled distance between
         membrane potential and adaptive threshold. This enables differentiable
@@ -639,7 +639,7 @@ class amat2_psc_exp(Neuron):
         return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
 
     def update(self, x=0. * u.pA):
-        """Perform one simulation time step.
+        r"""Perform one simulation time step.
 
         Integrates membrane potential, synaptic currents, and adaptive threshold
         components for one time step using the exact integration scheme. Detects

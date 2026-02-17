@@ -36,7 +36,7 @@ __all__ = [
 
 
 def _hh_psc_alpha_equilibrium(V):
-    """Compute equilibrium values of Hodgkin-Huxley gating variables.
+    r"""Compute equilibrium values of Hodgkin-Huxley gating variables.
 
     Calculates steady-state activation and inactivation at a given membrane
     potential using the voltage-dependent rate functions from NEST's

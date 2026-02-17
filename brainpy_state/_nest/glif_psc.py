@@ -937,7 +937,7 @@ class glif_psc(Neuron):
         return dy
 
     def update(self, x=0.0 * u.pA):
-        """Perform a single simulation step.
+        r"""Perform a single simulation step.
 
         Executes the complete GLIF update sequence: threshold adaptation,
         after-spike current decay, exact membrane potential integration,

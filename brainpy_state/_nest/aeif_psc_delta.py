@@ -548,7 +548,7 @@ class aeif_psc_delta(Neuron):
             self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
-        """Generate differentiable spike output using surrogate gradient function.
+        r"""Generate differentiable spike output using surrogate gradient function.
 
         Computes spike probability via the surrogate function ``spk_fun`` applied to
         normalized membrane potential. Used for gradient-based learning.
@@ -614,7 +614,7 @@ class aeif_psc_delta(Neuron):
         return dv, dw
 
     def update(self, x=0.0 * u.pA):
-        """Advance neuron state by one simulation timestep using adaptive RKF45 integration.
+        r"""Advance neuron state by one simulation timestep using adaptive RKF45 integration.
 
         Integrates membrane and adaptation dynamics over interval :math:`(t, t+\Delta t]`
         using adaptive Runge-Kutta-Fehlberg 4(5) with per-neuron step size control. Handles

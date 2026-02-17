@@ -333,7 +333,7 @@ class izhikevich(Neuron):
         self.U_initializer = U_initializer
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Initialize state variables for the Izhikevich neuron.
+        r"""Initialize state variables for the Izhikevich neuron.
 
         This method initializes the membrane potential :math:`V_{\text{m}}`,
         recovery variable :math:`U_{\text{m}}`, and buffered input current
@@ -374,7 +374,7 @@ class izhikevich(Neuron):
         self.I = brainstate.ShortTermState(zeros * u.pA)
 
     def get_spike(self, V: ArrayLike = None):
-        """Compute spike output using the surrogate gradient function.
+        r"""Compute spike output using the surrogate gradient function.
 
         This method applies the surrogate gradient function (``spk_fun``) to
         the scaled voltage difference :math:`(V - V_{\text{th}}) / (V_{\text{th}} - c)`,
@@ -411,7 +411,7 @@ class izhikevich(Neuron):
         return self.spk_fun(v_scaled)
 
     def update(self, x=0. * u.pA):
-        """Advance the neuron state by one simulation step.
+        r"""Advance the neuron state by one simulation step.
 
         This method implements the NEST ``izhikevich::update`` function,
         integrating the differential equations for one time step and handling

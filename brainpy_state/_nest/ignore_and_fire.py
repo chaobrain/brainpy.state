@@ -237,7 +237,7 @@ class ignore_and_fire(Dynamics):
         self._validate_parameters()
 
     def _validate_parameters(self):
-        """Validate ``phase`` and ``rate`` parameters after initialization.
+        r"""Validate ``phase`` and ``rate`` parameters after initialization.
 
         Ensures that:
 
@@ -274,7 +274,7 @@ class ignore_and_fire(Dynamics):
             raise ValueError("Firing rate must be > 0.")
 
     def _calc_initial_variables(self, batch_size=None):
-        """Compute firing period and phase countdown in simulation time steps.
+        r"""Compute firing period and phase countdown in simulation time steps.
 
         This method replicates NEST's ``calc_initial_variables_`` semantics,
         which converts rate and phase parameters to integer step counts using

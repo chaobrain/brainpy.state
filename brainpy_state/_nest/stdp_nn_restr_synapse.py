@@ -274,7 +274,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
         )
 
     def _get_nearest_neighbor_K_value(self, t_ms: float) -> float:
-        """Compute nearest-neighbor depression trace value at given time.
+        r"""Compute nearest-neighbor depression trace value at given time.
 
         Matches NEST ``ArchivingNode::get_K_values`` nearest-neighbor behavior:
         searches backward through the postsynaptic spike history to find the

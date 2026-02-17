@@ -781,7 +781,7 @@ class gif_cond_exp(Neuron):
         return v, ge, gi, h
 
     def update(self, x=0.0 * u.pA):
-        """Advance the neuron state by one simulation timestep.
+        r"""Advance the neuron state by one simulation timestep.
 
         Performs the complete GIF update cycle: decay adaptation elements, integrate
         membrane dynamics via RKF45, add synaptic inputs, evaluate stochastic spike
