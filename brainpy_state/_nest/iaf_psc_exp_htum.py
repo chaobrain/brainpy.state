@@ -47,8 +47,8 @@ class iaf_psc_exp_htum(Neuron):
     membrane integration is disabled during absolute refractory, while
     threshold crossing is disabled during total refractory.
 
-    1. Continuous-Time Dynamics
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Continuous-Time Dynamics**
+
 
     For membrane potential :math:`V_m` and resting potential :math:`E_L`,
     subthreshold dynamics are:
@@ -69,8 +69,8 @@ class iaf_psc_exp_htum(Neuron):
        \frac{dI_{\mathrm{syn,in}}}{dt} =
        -\frac{I_{\mathrm{syn,in}}}{\tau_{\mathrm{syn,in}}}.
 
-    2. Exact Discrete-Time Propagation and Dual Refractory Gating
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Exact Discrete-Time Propagation and Dual Refractory Gating**
+
 
     With :math:`h=dt` (ms), the implementation uses exact linear propagators:
 
@@ -114,8 +114,8 @@ class iaf_psc_exp_htum(Neuron):
     reloaded from their ceiling-converted refractory durations, and
     ``last_spike_time`` is set to ``t + dt`` (NEST-aligned grid timing).
 
-    3. Step Ordering and NEST Timing Equivalence
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Step Ordering and NEST Timing Equivalence**
+
 
     Per simulation step:
 
@@ -131,8 +131,8 @@ class iaf_psc_exp_htum(Neuron):
     This ordering preserves NEST's one-step delayed current-event handling and
     supports mixed per-neuron parameterization via broadcasted arrays.
 
-    4. Stability Constraints and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Stability Constraints and Computational Implications**
+
 
     - Construction enforces ``V_reset < V_th``, ``C_m > 0``, ``tau_m > 0``,
       ``tau_syn_ex > 0``, ``tau_syn_in > 0``, ``t_ref_abs > 0``,

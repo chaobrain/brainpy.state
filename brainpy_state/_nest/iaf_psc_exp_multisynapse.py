@@ -52,8 +52,8 @@ class iaf_psc_exp_multisynapse(Neuron):
     constant ``tau_syn[k-1]``. Synaptic weights are signed currents in pA;
     positive values are depolarizing and negative values are hyperpolarizing.
 
-    1. Continuous-Time Dynamics and Receptor States
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Continuous-Time Dynamics and Receptor States**
+
     Define :math:`V_{\mathrm{rel}} = V_m - E_L`. For receptor :math:`k`, the
     synaptic current decays exponentially:
 
@@ -74,8 +74,8 @@ class iaf_psc_exp_multisynapse(Neuron):
     additive receptor currents, constant parameters within one simulation step,
     and fixed ``dt`` for exact propagator coefficients.
 
-    2. Exact Discrete Propagator, Derivation Constraints, and Stability
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Exact Discrete Propagator, Derivation Constraints, and Stability**
+
     For step size :math:`h = dt` (ms), receptor currents are integrated
     exactly:
 
@@ -117,8 +117,8 @@ class iaf_psc_exp_multisynapse(Neuron):
     Construction additionally rejects ``np.isclose(tau_syn, tau_m)`` to
     preserve robust conditioning and avoid near-degenerate parameterizations.
 
-    3. Update Order per Simulation Step (NEST Semantics)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Update Order per Simulation Step (NEST Semantics)**
+
     Per-step execution order:
 
     1. Integrate membrane with exact propagator for neurons not refractory
@@ -131,8 +131,8 @@ class iaf_psc_exp_multisynapse(Neuron):
        spike time, and store buffered continuous current ``x`` for step
        :math:`n+1`.
 
-    4. Assumptions, Constraints, and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Assumptions, Constraints, and Computational Implications**
+
     - ``C_m > 0``, ``tau_m > 0``, all ``tau_syn > 0``,
       ``not isclose(tau_syn, tau_m)``, ``t_ref >= 0``, and
       ``V_reset < V_th`` are enforced at construction.

@@ -46,8 +46,8 @@ class iaf_psc_exp(Neuron):
     ``models/iaf_psc_exp.{h,cpp}`` update order, including one-step buffered
     current input and receptor-1 filtered current handling.
 
-    1. Continuous-Time Dynamics
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Continuous-Time Dynamics**
+
 
     The subthreshold membrane equation is
 
@@ -69,8 +69,8 @@ class iaf_psc_exp(Neuron):
     through the excitatory kernel; this is exposed via
     ``update(x_filtered=...)``.
 
-    2. Exact Step Propagator and NEST Update Ordering
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Exact Step Propagator and NEST Update Ordering**
+
 
     For time step :math:`h = dt` (in ms), exact exponentials are used for
     all linear sub-systems:
@@ -112,8 +112,8 @@ class iaf_psc_exp(Neuron):
     5. Threshold test, reset and refractory assignment.
     6. Store buffered currents for next step.
 
-    3. Escape-Noise Threshold Dynamics
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Escape-Noise Threshold Dynamics**
+
 
     Deterministic thresholding is used when :math:`\delta < 10^{-10}`:
     :math:`V_{\mathrm{rel}} \ge \theta`, where
@@ -129,8 +129,8 @@ class iaf_psc_exp(Neuron):
     because :math:`\phi` is in ``1/s`` while ``h`` is in ms. Stochastic
     decisions use ``numpy.random.random``.
 
-    4. Stability Constraints and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Stability Constraints and Computational Implications**
+
 
     - Construction enforces ``V_reset < V_th``, ``C_m > 0``, ``tau_m > 0``,
       ``tau_syn_ex > 0``, ``tau_syn_in > 0``, ``t_ref >= 0``, ``rho >= 0``,

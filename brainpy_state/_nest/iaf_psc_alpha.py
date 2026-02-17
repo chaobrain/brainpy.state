@@ -44,8 +44,8 @@ class iaf_psc_alpha(Neuron):
     excitatory/inhibitory current kernels. The implementation mirrors NEST
     ``models/iaf_psc_alpha.{h,cpp}`` update order and propagator formulas.
 
-    1. Continuous-Time Dynamics
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Continuous-Time Dynamics**
+
     The membrane dynamics are
 
     .. math::
@@ -72,8 +72,8 @@ class iaf_psc_alpha(Neuron):
     :math:`w` (pA) is split by sign so :math:`w_+=\max(w,0)` drives excitatory
     state and :math:`w_-=\min(w,0)` drives inhibitory state.
 
-    2. Exact Discrete Propagator and NEST Update Order
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Exact Discrete Propagator and NEST Update Order**
+
     For fixed step :math:`h=dt`, exact linear propagation is applied to
     :math:`y_3=V_m-E_L`, synaptic states, and a one-step delayed current buffer
     :math:`y_0`:
@@ -112,8 +112,8 @@ class iaf_psc_alpha(Neuron):
     4. Perform threshold test, reset, refractory assignment, spike emission.
     5. Store buffered external current for the next step.
 
-    3. Near-Singular Regime :math:`\tau_m \approx \tau_{\text{syn}}`
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Near-Singular Regime :math:`\tau_m \approx \tau_{\text{syn}}`**
+
     Direct formulas for :math:`P_{31}` and :math:`P_{32}` contain divisions by
     :math:`(\tau_m-\tau_{\text{syn}})`, which are ill-conditioned near
     equality. The helper :meth:`_alpha_propagator_p31_p32` follows NEST's
@@ -127,8 +127,8 @@ class iaf_psc_alpha(Neuron):
     preventing cancellation/underflow artifacts around
     :math:`\tau_m=\tau_{\text{syn}}`.
 
-    4. Assumptions, Constraints, and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Assumptions, Constraints, and Computational Implications**
+
     - ``C_m > 0``, ``tau_m > 0``, ``tau_syn_ex > 0``, ``tau_syn_in > 0``,
       ``t_ref >= 0``, and ``V_reset < V_th`` are enforced at construction.
     - ``update(x=...)`` uses one-step delayed current buffering (NEST

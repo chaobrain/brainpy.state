@@ -49,8 +49,8 @@ class iaf_psc_alpha_ps(Neuron):
     exact linear propagators for alpha states, and bisection-based sub-step
     threshold-time localization.
 
-    1. Continuous-Time Model and Alpha Current State-Space
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Continuous-Time Model and Alpha Current State-Space**
+
 
     Define :math:`U = V_m - E_L` and :math:`I_\mathrm{syn}=I_\mathrm{ex}+I_\mathrm{in}`.
     Subthreshold dynamics are
@@ -79,8 +79,8 @@ class iaf_psc_alpha_ps(Neuron):
     :math:`dI_\mathrm{in}\leftarrow dI_\mathrm{in}+\frac{e}{\tau_{\mathrm{syn,in}}}w`
     for :math:`w<0` (inhibitory channel stays negative by sign convention).
 
-    2. Exact Mini-Step Propagation and Precise Threshold Crossing
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Exact Mini-Step Propagation and Precise Threshold Crossing**
+
 
     For each local interval :math:`\Delta t` between two ordered event offsets,
     the code uses exact closed-form updates:
@@ -110,8 +110,8 @@ class iaf_psc_alpha_ps(Neuron):
     bisection (64 iterations), producing off-grid spike offset
     ``spike_off = dt - (local_time + delta)``.
 
-    3. Event Ordering, Refractory Pseudo-Event, and Timing Convention
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Event Ordering, Refractory Pseudo-Event, and Timing Convention**
+
 
     Off-grid events are sorted by ``offset`` in descending order, where
     ``offset`` is measured from the right boundary of the current step
@@ -126,8 +126,8 @@ class iaf_psc_alpha_ps(Neuron):
     - ``last_spike_step``, ``last_spike_offset``, ``last_spike_time`` are
       updated with precise sub-step timing.
 
-    4. Assumptions, Constraints, and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Assumptions, Constraints, and Computational Implications**
+
 
     - Construction constraints enforce ``C_m > 0``, ``tau_m > 0``,
       ``tau_syn_ex > 0``, ``tau_syn_in > 0``, and ``V_reset < V_th``.

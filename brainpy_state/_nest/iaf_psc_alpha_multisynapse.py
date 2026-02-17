@@ -52,8 +52,8 @@ class iaf_psc_alpha_multisynapse(Neuron):
     constant ``tau_syn[k-1]``. Synaptic weights are signed currents in pA;
     positive values are depolarizing and negative values are hyperpolarizing.
 
-    1. Continuous-Time Dynamics and Receptor States
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **1. Continuous-Time Dynamics and Receptor States**
+
     Membrane dynamics are
 
     .. math::
@@ -90,8 +90,8 @@ class iaf_psc_alpha_multisynapse(Neuron):
        I_k(t) = w_k \frac{t}{\tau_{\mathrm{syn},k}}
        \exp\!\left(1 - \frac{t}{\tau_{\mathrm{syn},k}}\right), \quad t \ge 0.
 
-    2. Exact Discrete Propagator, Derivation Constraints, and Stability
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **2. Exact Discrete Propagator, Derivation Constraints, and Stability**
+
     With fixed step :math:`h = dt`, exact matrix propagation of the linear
     subsystem is used. For each receptor :math:`k`:
 
@@ -126,8 +126,8 @@ class iaf_psc_alpha_multisynapse(Neuron):
 
     preventing catastrophic cancellation when :math:`\tau_m = \tau_{\mathrm{syn},k}`.
 
-    3. Update Order per Simulation Step (NEST Semantics)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **3. Update Order per Simulation Step (NEST Semantics)**
+
     Per-step execution order:
 
     1. Integrate membrane with exact propagator for neurons not refractory
@@ -141,8 +141,8 @@ class iaf_psc_alpha_multisynapse(Neuron):
        emission.
     6. Store buffered continuous current for the next step.
 
-    4. Assumptions, Constraints, and Computational Implications
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    **4. Assumptions, Constraints, and Computational Implications**
+
     - ``C_m > 0``, ``tau_m > 0``, all ``tau_syn > 0``, ``t_ref >= 0``, and
       ``V_reset < V_th`` are enforced at construction.
     - ``update(x=...)`` uses one-step delayed current buffering: current
