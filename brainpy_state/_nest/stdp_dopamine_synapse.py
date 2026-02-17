@@ -551,7 +551,7 @@ class stdp_dopamine_synapse(static_synapse):
         *,
         t_spike_ms: ArrayLike | None = None,
     ) -> int:
-        """Record postsynaptic spikes into internal STDP history.
+        r"""Record postsynaptic spikes into internal STDP history.
 
         Adds postsynaptic spike events to the internal history buffer and updates the
         postsynaptic depression trace (``Kminus``). These spikes are used during
@@ -620,7 +620,7 @@ class stdp_dopamine_synapse(static_synapse):
         *,
         t_spike_ms: ArrayLike | None = None,
     ) -> float:
-        """Record dopamine spikes into internal volume-transmitter history.
+        r"""Record dopamine spikes into internal volume-transmitter history.
 
         Adds dopamine delivery events to the internal dopamine spike buffer. These
         events are processed during subsequent :meth:`trigger_update_weight` calls
@@ -1037,7 +1037,7 @@ class stdp_dopamine_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing spike event with dopamine-modulated STDP updates.
+        r"""Schedule one outgoing spike event with dopamine-modulated STDP updates.
 
         Implements the NEST ``stdp_dopamine_synapse::send`` method: processes postsynaptic
         spike history, updates eligibility trace, propagates dopamine and weight dynamics,
@@ -1153,7 +1153,7 @@ class stdp_dopamine_synapse(static_synapse):
         return True
 
     def trigger_update_weight(self, *, t_trig_ms: ArrayLike | None = None):
-        """Propagate dopamine, eligibility, and weight to specified trigger time.
+        r"""Propagate dopamine, eligibility, and weight to specified trigger time.
 
         Implements NEST ``stdp_dopamine_synapse::trigger_update_weight``: processes
         postsynaptic spikes, integrates dopamine spike history, updates weight via

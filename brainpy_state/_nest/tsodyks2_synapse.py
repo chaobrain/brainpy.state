@@ -703,7 +703,7 @@ class tsodyks2_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``tsodyks2_synapse`` dynamics.
+        r"""Schedule one outgoing event with NEST ``tsodyks2_synapse`` dynamics.
 
         Processes a presynaptic spike event by:
 

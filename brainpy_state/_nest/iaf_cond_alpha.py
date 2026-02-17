@@ -214,20 +214,20 @@ class iaf_cond_alpha(Neuron):
     State Variables
     ---------------
 
-    ======================== ===============================================
-    **State variable**       **Description**
-    ======================== ===============================================
-    ``V``                    Membrane potential :math:`V_\mathrm{m}`
-    ``dg_ex``                Excitatory alpha auxiliary state
-    ``g_ex``                 Excitatory conductance :math:`g_\mathrm{ex}`
-    ``dg_in``                Inhibitory alpha auxiliary state
-    ``g_in``                 Inhibitory conductance :math:`g_\mathrm{in}`
-    ``last_spike_time``      Last spike time (recorded at :math:`t+dt`)
-    ``refractory_step_count``Remaining refractory grid steps
-    ``integration_step``     Internal RKF45 step-size state (persistent)
-    ``I_stim``               Buffered current applied in next step
-    ``refractory``           Optional boolean refractory indicator (if ``ref_var=True``)
-    ======================== ===============================================
+    ========================= ================================================================
+    **State variable**        **Description**
+    ========================= ================================================================
+    ``V``                     Membrane potential :math:`V_\mathrm{m}`
+    ``dg_ex``                 Excitatory alpha auxiliary state
+    ``g_ex``                  Excitatory conductance :math:`g_\mathrm{ex}`
+    ``dg_in``                 Inhibitory alpha auxiliary state
+    ``g_in``                  Inhibitory conductance :math:`g_\mathrm{in}`
+    ``last_spike_time``       Last spike time (recorded at :math:`t+dt`)
+    ``refractory_step_count`` Remaining refractory grid steps
+    ``integration_step``      Internal RKF45 step-size state (persistent)
+    ``I_stim``                Buffered current applied in next step
+    ``refractory``            Optional boolean refractory indicator (if ``ref_var=True``)
+    ========================= ================================================================
 
     Sends
     -----

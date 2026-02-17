@@ -633,7 +633,7 @@ class quantal_stp_synapse(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing synaptic event with quantal STP dynamics.
+        r"""Schedule one outgoing synaptic event with quantal STP dynamics.
 
         Processes a presynaptic spike by updating facilitation state, recovering
         depleted sites, drawing stochastic vesicle release, and scheduling

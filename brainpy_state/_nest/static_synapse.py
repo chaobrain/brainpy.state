@@ -120,16 +120,16 @@ class static_synapse(Dynamics):
 
     **Event type → Receiver method mapping:**
 
-    ==================  ====================================  ===========================
-    Event Type          Receiver Method                       Typical Use Case
-    ==================  ====================================  ===========================
-    ``'spike'``         ``add_delta_input(key, value, label)`` Binary spike transmission
+    ==================  ======================================  ============================
+    Event Type          Receiver Method                         Typical Use Case
+    ==================  ======================================  ============================
+    ``'spike'``         ``add_delta_input(key, value, label)``  Binary spike transmission
     ``'rate'``          ``add_current_input(key, value, label)`` Rate-coded signals
     ``'current'``       ``add_current_input(key, value, label)`` Direct current injection
     ``'conductance'``   ``add_current_input(key, value, label)`` Conductance-based input
-    ``'double_data'``   ``add_current_input`` (fallback)     Arbitrary data transmission
-    ``'data_logging'``  ``add_current_input`` (fallback)     Logging/monitoring signals
-    ==================  ====================================  ===========================
+    ``'double_data'``   ``add_current_input`` (fallback)        Arbitrary data transmission
+    ``'data_logging'``  ``add_current_input`` (fallback)        Logging/monitoring signals
+    ==================  ======================================  ============================
 
     If the receiver implements ``handle_static_synapse_event(value, receptor_type, event_type)``,
     that callback takes precedence over the standard routing.

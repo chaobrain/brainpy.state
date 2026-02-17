@@ -607,7 +607,7 @@ class gap_junction:
         }
 
     def handle_gap_event(self, coeffarray: ArrayLike, weight: ArrayLike | None = None):
-        """Process an incoming gap junction event and accumulate contributions.
+        r"""Process an incoming gap junction event and accumulate contributions.
 
         Updates runtime state by adding the event weight to ``sumj_g_ij`` and
         accumulating weighted interpolation coefficients. This method matches
@@ -695,7 +695,7 @@ class gap_junction:
         t: ArrayLike = 0.0,
         interpolation_order: int | None = None,
     ):
-        """Evaluate the gap junction current at a specific WFR lag and substep time.
+        r"""Evaluate the gap junction current at a specific WFR lag and substep time.
 
         Computes the gap junction current contribution using the accumulated weight
         sum and interpolation coefficients from incoming events. The current is

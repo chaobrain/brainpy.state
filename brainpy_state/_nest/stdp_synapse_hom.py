@@ -225,9 +225,9 @@ class stdp_synapse_hom(stdp_synapse):
 
     NEST ``stdp_synapse_hom`` parameters map to this implementation as follows:
 
-    =======================  ======================  ========================================
+    =======================  ======================  ===========================================
     NEST Parameter           brainpy.state Param     Scope
-    =======================  ======================  ========================================
+    =======================  ======================  ===========================================
     ``weight``               ``weight``              Per-connection (can vary)
     ``delay``                ``delay``               Per-connection (can vary)
     ``receptor_type``        ``receptor_type``       Per-connection (can vary)
@@ -238,7 +238,7 @@ class stdp_synapse_hom(stdp_synapse):
     ``mu_minus``             ``mu_minus``            **Common property** (model-level)
     ``Wmax``                 ``Wmax``                **Common property** (model-level)
     (postsynaptic archiving) ``tau_minus``           Synapse-level (NEST: neuron property)
-    =======================  ======================  ========================================
+    =======================  ======================  ===========================================
 
     Attributes
     ----------

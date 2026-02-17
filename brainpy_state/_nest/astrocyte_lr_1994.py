@@ -568,7 +568,7 @@ class astrocyte_lr_1994(Dynamics):
         self.J_noise.value = jnp.zeros(shape, dtype=jnp.float64)
 
     def _dynamics(self, ip3, ca, h_ip3r, J_noise):
-        """Compute time derivatives of the IP3-calcium ODE system.
+        r"""Compute time derivatives of the IP3-calcium ODE system.
 
         Evaluates the right-hand side of the three coupled differential equations
         governing IP3 concentration, cytosolic calcium concentration, and IP3R
@@ -634,7 +634,7 @@ class astrocyte_lr_1994(Dynamics):
 
     @staticmethod
     def _compute_sic(ca, SIC_th, SIC_scale):
-        """Compute slow inward current (SIC) from cytosolic calcium concentration.
+        r"""Compute slow inward current (SIC) from cytosolic calcium concentration.
 
         Transforms calcium concentration above threshold into a logarithmic SIC output
         signal. Matches NEST's implementation exactly.
@@ -679,7 +679,7 @@ class astrocyte_lr_1994(Dynamics):
         return 0.0
 
     def update(self, spike_weights=0.0, J_ext=0.0):
-        """Advance astrocyte state by one simulation time step using RKF45 integration.
+        r"""Advance astrocyte state by one simulation time step using RKF45 integration.
 
         Integrates the IP3-calcium ODE system over the interval :math:`[t, t+\Delta t]`
         using adaptive Runge–Kutta–Fehlberg 4(5) substeps, applies incoming spike

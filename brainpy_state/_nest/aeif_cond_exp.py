@@ -231,8 +231,8 @@ class aeif_cond_exp(Neuron):
     ``a``                 ``a``                 :math:`a`                                 Subthreshold adaptation coupling
     ``b``                 ``b``                 :math:`b`                                 Spike-triggered adaptation increment
     ``V_th``              ``V_th``              :math:`V_\mathrm{th}`                     Spike initiation threshold
-    ``tau_syn_ex``        ``tau_syn_ex``        :math:`\tau_{\mathrm{syn,ex}}`           Excitatory conductance time constant
-    ``tau_syn_in``        ``tau_syn_in``        :math:`\tau_{\mathrm{syn,in}}`           Inhibitory conductance time constant
+    ``tau_syn_ex``        ``tau_syn_ex``        :math:`\tau_{\mathrm{syn,ex}}`            Excitatory conductance time constant
+    ``tau_syn_in``        ``tau_syn_in``        :math:`\tau_{\mathrm{syn,in}}`            Inhibitory conductance time constant
     ``I_e``               ``I_e``               :math:`I_\mathrm{e}`                      Constant external current
     ``gsl_error_tol``     ``gsl_error_tol``     —                                         RKF45 solver tolerance
     ===================== ===================== ========================================= ==========================================

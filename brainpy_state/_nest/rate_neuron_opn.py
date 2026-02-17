@@ -284,9 +284,9 @@ class rate_neuron_opn(_lin_rate_base):
     The following table maps NEST ``rate_neuron_opn`` / ``lin_rate_opn``
     parameters to brainpy.state equivalents:
 
-    =============================== ================== =========
+    =============================== ================== ===========
     NEST Parameter                  brainpy.state      Default
-    =============================== ================== =========
+    =============================== ================== ===========
     ``tau``                         ``tau``            10 ms
     ``sigma``                       ``sigma``          1.0
     ``mu``                          ``mu``             0.0
@@ -295,7 +295,7 @@ class rate_neuron_opn(_lin_rate_base):
     ``g_ex``, ``g_in``              ``g_ex``, ``g_in`` 1.0
     ``theta_ex``, ``theta_in``      ``theta_ex``, ``theta_in`` 0.0
     ``linear_summation``            ``linear_summation`` True
-    =============================== ================== =========
+    =============================== ================== ===========
 
     Attributes
     ----------
@@ -548,7 +548,7 @@ class rate_neuron_opn(_lin_rate_base):
                 raise first_error
 
     def _input_transform(self, h: np.ndarray, state_shape):
-        """Apply input nonlinearity :math:`g(h)`.
+        r"""Apply input nonlinearity :math:`g(h)`.
 
         Parameters
         ----------
@@ -566,7 +566,7 @@ class rate_neuron_opn(_lin_rate_base):
         -----
         If ``input_nonlinearity`` is ``None``, uses default :math:`g(h)=g\,h`.
         Otherwise calls user-provided callable.
-        """
+        r"""
         h_np = self._broadcast_to_state(self._to_numpy(h), state_shape)
         if self.input_nonlinearity is None:
             g = self._broadcast_to_state(self._to_numpy(self.g), state_shape)
@@ -575,7 +575,7 @@ class rate_neuron_opn(_lin_rate_base):
         return self._broadcast_to_state(self._to_numpy(y), state_shape)
 
     def _mult_ex_transform(self, rate: np.ndarray, state_shape):
-        """Compute excitatory multiplicative coupling factor :math:`H_\mathrm{ex}(X_\mathrm{noisy})`.
+        r"""Compute excitatory multiplicative coupling factor :math:`H_\mathrm{ex}(X_\mathrm{noisy})`.
 
         Parameters
         ----------
@@ -596,7 +596,7 @@ class rate_neuron_opn(_lin_rate_base):
         :math:`g_\mathrm{ex}(\theta_\mathrm{ex}-X_\mathrm{noisy})`. Otherwise
         calls user-provided callable. Evaluated at the *noisy* rate (matching
         NEST ``rate_neuron_opn_impl.h``).
-        """
+        r"""
         rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
         if self.mult_coupling_ex_fn is None:
             g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex), state_shape)
@@ -606,7 +606,7 @@ class rate_neuron_opn(_lin_rate_base):
         return self._broadcast_to_state(self._to_numpy(y), state_shape)
 
     def _mult_in_transform(self, rate: np.ndarray, state_shape):
-        """Compute inhibitory multiplicative coupling factor :math:`H_\mathrm{in}(X_\mathrm{noisy})`.
+        r"""Compute inhibitory multiplicative coupling factor :math:`H_\mathrm{in}(X_\mathrm{noisy})`.
 
         Parameters
         ----------

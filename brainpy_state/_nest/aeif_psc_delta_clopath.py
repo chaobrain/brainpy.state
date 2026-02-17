@@ -273,7 +273,7 @@ class aeif_psc_delta_clopath(Neuron):
     ``z_initializer``          Constant(0 pA)     —                                Spike afterpotential initializer
     ``V_th_initializer``       Constant(-50.4 mV) —                                Adaptive threshold initializer
     ``u_bar_plus_initializer`` Constant(-70.6 mV) —                                ``u_bar_plus`` initializer
-    ``u_bar_minus_initializer`` Constant(-70.6 mV) —                               ``u_bar_minus`` initializer
+    `u_bar_minus_initializer`  Constant(-70.6 mV) —                                ``u_bar_minus`` initializer
     ``u_bar_bar_initializer``  Constant(-70.6 mV) —                                ``u_bar_bar`` initializer
     ``spk_fun``                ReluGrad()         —                                Surrogate spike function
     ``spk_reset``              ``'hard'``         —                                Reset mode (``'hard'`` or ``'soft'``)

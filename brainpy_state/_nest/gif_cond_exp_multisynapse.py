@@ -241,9 +241,9 @@ class gif_cond_exp_multisynapse(Neuron):
     -----------------
     Maps brainpy.state parameter names to NEST equivalents for cross-framework compatibility:
 
-    ==================== =================== =================================== =====================================================
+    ==================== =================== =================================== ============================================================
     **Parameter**        **Default**         **Math equivalent**                 **Description**
-    ==================== =================== =================================== =====================================================
+    ==================== =================== =================================== ============================================================
     ``in_size``          (required)                                              Population shape
     ``g_L``              4.0 nS              :math:`g_\mathrm{L}`               Leak conductance
     ``E_L``              -70.0 mV            :math:`E_\mathrm{L}`               Leak reversal potential
@@ -264,22 +264,22 @@ class gif_cond_exp_multisynapse(Neuron):
     ``V_initializer``    Constant(-70 mV)                                        Initializer for membrane potential
     ``spk_fun``          ReluGrad()                                              Surrogate spike function
     ``spk_reset``        ``'hard'``                                              Reset mode; hard reset matches NEST
-    ==================== =================== =================================== =====================================================
+    ==================== =================== =================================== ============================================================
 
     State Variables
     ---------------
     After ``init_state()``, the following state variables are available:
 
-    ========================== =============== ===========================================
-    **State variable**         **Type**        **Description**
-    ========================== =============== ===========================================
-    ``V``                      HiddenState     Membrane potential :math:`V_\mathrm{m}` (mV)
-    ``g``                      List[HiddenState] List of synaptic conductances :math:`g_k` (nS), one per receptor
-    ``refractory_step_count``  ShortTermState  Remaining refractory grid steps (int32)
-    ``integration_step``       ShortTermState  Internal RKF45 step-size state (ms)
-    ``I_stim``                 ShortTermState  Buffered current applied in next step (pA)
-    ``last_spike_time``        ShortTermState  Last spike time (ms)
-    ========================== =============== ===========================================
+    ========================== ==================== ==============================================================
+    **State variable**         **Type**             **Description**
+    ========================== ==================== ==============================================================
+    ``V``                      HiddenState          Membrane potential :math:`V_\mathrm{m}` (mV)
+    ``g``                      List[HiddenState]    List of synaptic conductances :math:`g_k` (nS), one per receptor
+    ``refractory_step_count``  ShortTermState       Remaining refractory grid steps (int32)
+    ``integration_step``       ShortTermState       Internal RKF45 step-size state (ms)
+    ``I_stim``                 ShortTermState       Buffered current applied in next step (pA)
+    ``last_spike_time``        ShortTermState       Last spike time (ms)
+    ========================== ==================== ==============================================================
 
     Additionally, the following NumPy arrays are maintained internally:
 

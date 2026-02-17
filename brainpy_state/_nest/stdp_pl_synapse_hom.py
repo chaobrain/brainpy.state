@@ -495,7 +495,7 @@ class stdp_pl_synapse_hom(static_synapse):
         *,
         t_spike_ms: ArrayLike | None = None,
     ) -> int:
-        """Record postsynaptic spikes into the internal STDP history buffer.
+        r"""Record postsynaptic spikes into the internal STDP history buffer.
 
         This method manually adds postsynaptic spike events to the internal history
         buffer used for STDP computation. It is intended for standalone STDP
@@ -949,7 +949,7 @@ class stdp_pl_synapse_hom(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``stdp_pl_synapse_hom`` dynamics.
+        r"""Schedule one outgoing event with NEST ``stdp_pl_synapse_hom`` dynamics.
 
         Processes a presynaptic spike event by applying power-law STDP weight updates
         and scheduling the weighted event for delayed delivery to the postsynaptic
@@ -1102,7 +1102,7 @@ class stdp_pl_synapse_hom(static_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> int:
-        """Deliver due events, update postsynaptic history, then process presynaptic spikes.
+        r"""Deliver due events, update postsynaptic history, then process presynaptic spikes.
 
         Main update method for standalone STDP simulation. This method orchestrates
         the complete synaptic update cycle in three phases:

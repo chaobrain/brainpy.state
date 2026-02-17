@@ -616,7 +616,7 @@ class urbanczik_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Process presynaptic spike, update weight via dendritic prediction errors, and emit event.
+        r"""Process presynaptic spike, update weight via dendritic prediction errors, and emit event.
 
         This method implements the core Urbanczik-Senn plasticity computation. It retrieves
         postsynaptic prediction error history from the target neuron, updates presynaptic traces

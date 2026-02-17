@@ -613,7 +613,7 @@ class jonke_synapse:
         delay: ArrayLike | None = None,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Process presynaptic spike with plasticity and return spike event payload.
+        r"""Process presynaptic spike with plasticity and return spike event payload.
 
         Implements the full NEST ``jonke_synapse::send()`` protocol:
 
@@ -964,7 +964,7 @@ class jonke_synapse:
         return events
 
     def _facilitate(self, w: float, kplus: float) -> float:
-        """Compute facilitation weight update with exponential weight dependence.
+        r"""Compute facilitation weight update with exponential weight dependence.
 
         Applies potentiation rule: :math:`\Delta w = \lambda (\exp(\mu_+ w) K_+ - \beta)`.
         Weight is clipped to :math:`[0, W_{\max}]` after update.
@@ -995,7 +995,7 @@ class jonke_synapse:
         return new_w if new_w < self.Wmax else self.Wmax
 
     def _depress(self, w: float, kminus: float) -> float:
-        """Compute depression weight update with exponential weight dependence.
+        r"""Compute depression weight update with exponential weight dependence.
 
         Applies depression rule: :math:`\Delta w = \lambda (-\alpha \exp(\mu_- w) K_- - \beta)`.
         Weight is clipped to :math:`[0, W_{\max}]` after update (lower bound at 0).
@@ -1098,7 +1098,7 @@ class jonke_synapse:
 
     @staticmethod
     def _get_k_value(target: Any, t: float) -> float:
-        """Retrieve postsynaptic depression trace value at specified time.
+        r"""Retrieve postsynaptic depression trace value at specified time.
 
         Parameters
         ----------

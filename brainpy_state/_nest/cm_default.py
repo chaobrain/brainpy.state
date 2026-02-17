@@ -41,7 +41,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 class _NaChannel:
-    """Sodium channel with Hodgkin-Huxley style activation and inactivation kinetics.
+    r"""Sodium channel with Hodgkin-Huxley style activation and inactivation kinetics.
 
     This class implements voltage-dependent sodium channels based on the kinetics from
     ModelDB entry 140828 (Branco 2010), originally from Huguenard et al. (1988) and
@@ -178,7 +178,7 @@ class _NaChannel:
         return h_inf, tau_h
 
     def f_numstep(self, v_comp: float, dt: float):
-        """Advance channel state by one timestep and compute Crank-Nicolson contributions.
+        r"""Advance channel state by one timestep and compute Crank-Nicolson contributions.
 
         This method updates the gating variables m_Na and h_Na using exact exponential
         integration, then computes the linearized conductance and current terms needed
@@ -232,7 +232,7 @@ class _NaChannel:
 
 
 class _KChannel:
-    """Potassium channel with simplified Hodgkin-Huxley style activation kinetics.
+    r"""Potassium channel with simplified Hodgkin-Huxley style activation kinetics.
 
     This class implements voltage-dependent potassium channels based on the kinetics from
     ModelDB entry 140828 (Branco 2010), originally from Sah et al. and Hamill et al. (1991).
@@ -388,7 +388,7 @@ class _KChannel:
 # ---------------------------------------------------------------------------
 
 def _compute_g_norm(tau_r: float, tau_d: float) -> float:
-    """Compute normalization constant for dual-exponential conductance waveforms.
+    r"""Compute normalization constant for dual-exponential conductance waveforms.
 
     The normalization ensures that the peak conductance of the dual-exponential
     waveform equals 1.0 when the synaptic weight is 1.0.
@@ -431,7 +431,7 @@ def _compute_g_norm(tau_r: float, tau_d: float) -> float:
 
 
 class _AMPAReceptor:
-    """AMPA receptor with dual-exponential conductance kinetics for fast excitatory transmission.
+    r"""AMPA receptor with dual-exponential conductance kinetics for fast excitatory transmission.
 
     This class models AMPA (α-amino-3-hydroxy-5-methyl-4-isoxazolepropionic acid) glutamate
     receptors, which mediate fast excitatory synaptic transmission in the central nervous system.
@@ -578,7 +578,7 @@ class _AMPAReceptor:
 
 
 class _GABAReceptor:
-    """GABA receptor with dual-exponential conductance kinetics for inhibitory transmission.
+    r"""GABA receptor with dual-exponential conductance kinetics for inhibitory transmission.
 
     This class models GABA_A (γ-aminobutyric acid type A) receptors, which mediate fast
     inhibitory synaptic transmission in the central nervous system. The conductance follows
@@ -718,7 +718,7 @@ class _GABAReceptor:
 
 
 def _nmda_sigmoid(v_comp: float):
-    """Compute voltage-dependent Mg²⁺ block function for NMDA receptors and its derivative.
+    r"""Compute voltage-dependent Mg²⁺ block function for NMDA receptors and its derivative.
 
     This function implements the sigmoidal voltage dependence of magnesium ion block
     in NMDA receptor channels. At hyperpolarized potentials, Mg²⁺ ions block the channel
@@ -770,7 +770,7 @@ def _nmda_sigmoid(v_comp: float):
 
 
 class _NMDAReceptor:
-    """NMDA receptor with dual-exponential kinetics and voltage-dependent Mg²⁺ block.
+    r"""NMDA receptor with dual-exponential kinetics and voltage-dependent Mg²⁺ block.
 
     This class models NMDA (N-methyl-D-aspartate) glutamate receptors, which mediate
     slow excitatory synaptic transmission with unique voltage-dependent properties.
@@ -880,7 +880,7 @@ class _NMDAReceptor:
         self.prop_d = math.exp(-dt / self.tau_d)
 
     def f_numstep(self, v_comp: float, spike_weight: float):
-        """Advance receptor state by one timestep and compute Crank-Nicolson contributions.
+        r"""Advance receptor state by one timestep and compute Crank-Nicolson contributions.
 
         Updates the dual-exponential conductance state variables and computes the linearized
         conductance and current terms, including the voltage-dependent Mg²⁺ block.
@@ -933,7 +933,7 @@ class _NMDAReceptor:
 
 
 class _AMPA_NMDAReceptor:
-    """Combined AMPA and NMDA receptor with shared reversal potential and dual kinetics.
+    r"""Combined AMPA and NMDA receptor with shared reversal potential and dual kinetics.
 
     This class models colocalized AMPA and NMDA receptors at the same synapse, a common
     configuration at excitatory synapses in the brain. A single presynaptic spike activates
@@ -1069,7 +1069,7 @@ class _AMPA_NMDAReceptor:
         self.prop_d_NMDA = math.exp(-dt / self.tau_d_NMDA)
 
     def f_numstep(self, v_comp: float, spike_weight: float):
-        """Advance receptor state by one timestep and compute Crank-Nicolson contributions.
+        r"""Advance receptor state by one timestep and compute Crank-Nicolson contributions.
 
         Updates both AMPA and NMDA conductance state variables and computes the linearized
         conductance and current terms for the combined receptor complex.
@@ -1143,7 +1143,7 @@ class _AMPA_NMDAReceptor:
 # ---------------------------------------------------------------------------
 
 class _Compartment:
-    """A single compartment in the multi-compartment neuron's dendritic tree structure.
+    r"""A single compartment in the multi-compartment neuron's dendritic tree structure.
 
     This class represents one cylindrical segment of dendrite, soma, or axon in a
     morphologically realistic neuron model. Compartments are connected in a tree
@@ -1349,7 +1349,7 @@ class _Compartment:
             rec.pre_run_hook(dt)
 
     def construct_matrix_element(self, dt: float, spike_buffers: Dict[int, float]):
-        """Build Crank-Nicolson matrix row elements for this compartment.
+        r"""Build Crank-Nicolson matrix row elements for this compartment.
 
         This method constructs the implicit equation for this compartment's voltage
         update, incorporating passive membrane properties, coupling to parent and children,
@@ -2078,7 +2078,7 @@ class cm_default:
         self._spike_buffer[key] = self._spike_buffer.get(key, 0.0) + weight
 
     def add_current(self, comp_idx: int, current: float):
-        """Inject external current into a specific compartment for the next timestep.
+        r"""Inject external current into a specific compartment for the next timestep.
 
         This method allows direct current injection, useful for probing intrinsic
         excitability, applying step currents, or simulating artificial stimulation
@@ -2145,7 +2145,7 @@ class cm_default:
         comp._current_buffer.append(current)
 
     def step(self) -> bool:
-        """Advance the simulation by one integration timestep.
+        r"""Advance the simulation by one integration timestep.
 
         This method performs the core computational work: it constructs the Crank-Nicolson
         matrix system from the cable equation, solves for new voltages using the O(n)

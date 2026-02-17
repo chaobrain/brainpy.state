@@ -193,9 +193,9 @@ class iaf_cond_beta(Neuron):
 
     The following table maps constructor parameters to mathematical notation and NEST equivalents:
 
-    ==================== ================== ======================================== ===============================================
+    ==================== ================== ======================================== ================================================
     **Parameter**        **Default**        **Math equivalent**                      **Description**
-    ==================== ================== ======================================== ===============================================
+    ==================== ================== ======================================== ================================================
     ``in_size``          (required)         —                                        Population shape
     ``E_L``              -70 mV             :math:`E_\mathrm{L}`                     Leak reversal potential
     ``C_m``              250 pF             :math:`C_\mathrm{m}`                     Membrane capacitance
@@ -216,7 +216,7 @@ class iaf_cond_beta(Neuron):
     ``spk_fun``          ReluGrad()         —                                        Surrogate spike function
     ``spk_reset``        ``'hard'``         —                                        Reset mode (``'hard'`` matches NEST)
     ``ref_var``          ``False``          —                                        Expose boolean refractory indicator
-    ==================== ================== ======================================== ===============================================
+    ==================== ================== ======================================== ================================================
 
     Returns
     -------

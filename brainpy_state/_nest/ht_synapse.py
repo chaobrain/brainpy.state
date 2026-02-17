@@ -608,7 +608,7 @@ class ht_synapse:
         self.t_last_spike_ms = self._to_float_scalar(t_last_spike_ms, name='t_last_spike_ms')
 
     def recover_pool(self, t_spike_ms: ArrayLike) -> float:
-        """Advance pool state to specified time via exponential recovery.
+        r"""Advance pool state to specified time via exponential recovery.
 
         Updates the internal pool variable ``P`` by integrating the recovery ODE
         from ``t_last_spike_ms`` to ``t_spike_ms``, *without* depletion. This is
@@ -672,7 +672,7 @@ class ht_synapse:
         multiplicity: ArrayLike = 1.0,
         delay_steps: ArrayLike | None = None,
     ) -> dict[str, Any]:
-        """Process incoming presynaptic spike and return emitted event payload.
+        r"""Process incoming presynaptic spike and return emitted event payload.
 
         Implements the full Hill-Tononi spike transmission protocol: recover pool,
         emit depression-modulated spike, deplete pool, update timestamp. Event

@@ -348,7 +348,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
             raise ValueError('x + y must be <= 1.0.')
 
     def init_state(self, batch_size: int = None, **kwargs):
-        """Reset queue state and restore initial resource/utilization values.
+        r"""Reset queue state and restore initial resource/utilization values.
 
         Resets the event delivery queue (inherited from parent) and restores the
         short-term plasticity state variables (``x``, ``y``, ``u``) to their
@@ -612,7 +612,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``tsodyks_synapse_hom`` dynamics.
+        r"""Schedule one outgoing event with NEST ``tsodyks_synapse_hom`` dynamics.
 
         Computes short-term plasticity state updates following the Tsodyks-Markram model,
         calculates the effective synaptic weight, and schedules a delayed spike event

@@ -844,7 +844,7 @@ class diffusion_connection:
         raise ValueError(self._DELAY_ERROR)
 
     def prepare_secondary_event(self, coeffarray: ArrayLike) -> dict[str, Any]:
-        """Construct a WFR secondary event payload for transmission.
+        r"""Construct a WFR secondary event payload for transmission.
 
         Packages presynaptic rate coefficients with connection scaling factors into
         a dictionary suitable for delivery to target ``siegert_neuron`` instances
@@ -953,7 +953,7 @@ class diffusion_connection:
         }
 
     def project_coeffarray(self, coeffarray: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
-        """Apply connection scaling factors to coefficient array.
+        r"""Apply connection scaling factors to coefficient array.
 
         Transforms presynaptic rate coefficients into separate drift and diffusion
         input contributions by element-wise multiplication with ``drift_factor`` and
@@ -1078,7 +1078,7 @@ class diffusion_connection:
         delay_steps: ArrayLike = 1,
         multiplicity: ArrayLike = 1.0,
     ) -> dict[str, Any]:
-        """Create a single-step event payload for custom ``siegert_neuron`` handling.
+        r"""Create a single-step event payload for custom ``siegert_neuron`` handling.
 
         Constructs a minimal event dictionary representing a single rate value
         scheduled for delivery at a specific future time step with optional
@@ -1229,7 +1229,7 @@ class diffusion_connection:
         first_delay_steps: ArrayLike = 0,
         multiplicity: ArrayLike = 1.0,
     ) -> list[dict[str, Any]]:
-        """Convert multi-lag coefficient array into sequential single-step events.
+        r"""Convert multi-lag coefficient array into sequential single-step events.
 
         Transforms a NEST-style lag-indexed coefficient array (used in WFR secondary
         events) into a list of single-step event dictionaries with linearly increasing

@@ -795,7 +795,7 @@ class stdp_triplet_synapse(stdp_synapse):
         post=None,
         receptor_type: ArrayLike | None = None,
     ) -> bool:
-        """Schedule one outgoing event with NEST ``stdp_triplet_synapse`` dynamics.
+        r"""Schedule one outgoing event with NEST ``stdp_triplet_synapse`` dynamics.
 
         Processes a presynaptic spike event by updating synaptic weight according to
         triplet STDP rules and scheduling the weighted event for delayed delivery to
