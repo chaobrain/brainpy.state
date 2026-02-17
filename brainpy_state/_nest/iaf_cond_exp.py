@@ -170,6 +170,7 @@ class iaf_cond_exp(Neuron):
     name : str, optional
         Name of the neuron population. If None, an automatic name is generated.
 
+
     **Parameter Mapping**
 
     ==================== ================== ==========================================

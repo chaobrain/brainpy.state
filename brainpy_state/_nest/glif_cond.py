@@ -297,6 +297,7 @@ class glif_cond(Neuron):
     name : str, optional
         Name of the neuron population.
 
+
     **Parameter Mapping**
 
     =============================== =================== ========================================== =====================================================

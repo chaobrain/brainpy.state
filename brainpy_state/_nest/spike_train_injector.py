@@ -341,13 +341,6 @@ class spike_train_injector(brainstate.nn.Dynamics):
     def update(self):
         r"""Compute the accumulated spike output for the current simulation step.
 
-        Parameters
-        ----------
-        None
-            Reads ``brainstate.environ['t']`` and
-            ``brainstate.environ.get_dt()`` together with the instance
-            parameters initialised in :meth:`__init__`.
-
         Returns
         -------
         out : jax.Array

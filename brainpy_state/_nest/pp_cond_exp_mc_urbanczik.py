@@ -1022,9 +1022,9 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
         Compute dendritic prediction and error signal:
 
-        * V*_W = (E_L_s · g_L_s + V_d · g_sp) / (g_sp + g_L_s)
-        * δΠ = (n_spikes - φ(V*_W)·dt) · h(V*_W)
-        * Store (time, δΠ) in history dict
+        * :math:`V^*_W = (E_{L,s} \cdot g_{L,s} + V_d \cdot g_{sp}) / (g_{sp} + g_{L,s})`
+        * :math:`\delta\Pi = (n_{\text{spikes}} - \phi(V^*_W) \cdot dt) \cdot h(V^*_W)`
+        * Store :math:`(t, \delta\Pi)` in history dict
 
         **5. Current Input Buffering**
 

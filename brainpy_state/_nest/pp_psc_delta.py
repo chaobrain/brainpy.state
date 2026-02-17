@@ -107,7 +107,34 @@ class pp_psc_delta(Neuron):
     name : str, optional
         Name of the neuron population. Default: None.
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    Raises
+    ------
+    ValueError
+        If ``C_m <= 0`` (capacitance must be strictly positive).
+    ValueError
+        If ``tau_m <= 0`` (membrane time constant must be strictly positive).
+    ValueError
+        If ``dead_time < 0`` (dead time must be non-negative).
+    ValueError
+        If ``dead_time_shape < 1`` (gamma shape parameter must be at least 1).
+    ValueError
+        If ``t_ref_remaining < 0`` (remaining refractory time must be non-negative).
+    ValueError
+        If ``c_3 < 0`` (exponential coefficient must be non-negative).
+    ValueError
+        If any element of ``tau_sfa <= 0`` (adaptation time constants must be positive).
+    ValueError
+        If ``len(tau_sfa) != len(q_sfa)`` (adaptation parameter lists must match).
+
+    See Also
+    --------
+    iaf_psc_delta : Integrate-and-fire neuron with delta PSCs
+    gif_psc_exp : Generalized integrate-and-fire with exponential PSCs
+
+    Notes
+    -----
+
+    **Parameter Mapping (NEST <-> brainpy.state)**
 
     ========================= ====================== ===============================================
     **NEST Parameter**        **brainpy.state**      **Notes**
@@ -117,7 +144,7 @@ class pp_psc_delta(Neuron):
     ``dead_time``             ``dead_time``          Refractory period duration
     ``dead_time_random``      ``dead_time_random``   Enable random dead time
     ``dead_time_shape``       ``dead_time_shape``    Gamma distribution shape parameter
-    ``with_reset``            ``with_reset``         Reset V_m after spike
+    ``with_reset``            ``with_reset``         Reset ``V_m`` after spike
     ``tau_sfa``               ``tau_sfa``            Adaptation time constants (list)
     ``q_sfa``                 ``q_sfa``              Adaptation jump sizes (list)
     ``c_1``                   ``c_1``                Linear transfer function coefficient
@@ -178,9 +205,9 @@ class pp_psc_delta(Neuron):
 
     By adjusting ``c_1``, ``c_2``, and ``c_3``, the transfer function can be:
 
-    - Linear: Set ``c_3 = 0``, ``c_1 > 0`` → :math:`\text{rate} = c_1 V' + c_2`
-    - Exponential: Set ``c_1 = 0`` → :math:`\text{rate} = c_2 \exp(c_3 V')`
-    - Mixed: All coefficients nonzero → linear + exponential
+    - Linear: Set ``c_3 = 0``, ``c_1 > 0`` -- :math:`\text{rate} = c_1 V' + c_2`
+    - Exponential: Set ``c_1 = 0`` -- :math:`\text{rate} = c_2 \exp(c_3 V')`
+    - Mixed: All coefficients nonzero -- linear + exponential
 
     **1.3. Spike-Frequency Adaptation**
 
@@ -225,7 +252,7 @@ class pp_psc_delta(Neuron):
 
          n_{\text{spikes}} \sim \text{Poisson}(\text{rate} \cdot h \cdot 10^{-3})
 
-    The factor :math:`10^{-3}` converts from Hz·ms to a dimensionless rate.
+    The factor :math:`10^{-3}` converts from Hz*ms to a dimensionless rate.
 
     **1.5. Dead Time (Refractory Period)**
 
@@ -248,13 +275,14 @@ class pp_psc_delta(Neuron):
     2. **Decay adaptation elements** and compute total :math:`E_\mathrm{sfa}`.
     3. **Spike check**:
 
-       - If not refractory: compute effective potential :math:`V' = V_\mathrm{m} - E_\mathrm{sfa}`,
+       - If not refractory: compute effective potential
+         :math:`V' = V_\mathrm{m} - E_\mathrm{sfa}`,
          compute instantaneous rate, draw random number and potentially emit spike(s).
          If spike occurs:
 
-           - Jump all adaptation elements by ``q_sfa``
-           - Optionally reset :math:`V_\mathrm{m}` to 0 (if ``with_reset = True``)
-           - Set dead time counter
+         - Jump all adaptation elements by ``q_sfa``
+         - Optionally reset :math:`V_\mathrm{m}` to 0 (if ``with_reset = True``)
+         - Set dead time counter
 
        - If refractory: decrement dead time counter
 
@@ -291,32 +319,6 @@ class pp_psc_delta(Neuron):
     ``_rng_state``                 JAX PRNG key      Random number generator state (internal)
     ============================== ================= ==========================================
 
-    Raises
-    ------
-    ValueError
-        If ``C_m <= 0`` (capacitance must be strictly positive).
-    ValueError
-        If ``tau_m <= 0`` (membrane time constant must be strictly positive).
-    ValueError
-        If ``dead_time < 0`` (dead time must be non-negative).
-    ValueError
-        If ``dead_time_shape < 1`` (gamma shape parameter must be at least 1).
-    ValueError
-        If ``t_ref_remaining < 0`` (remaining refractory time must be non-negative).
-    ValueError
-        If ``c_3 < 0`` (exponential coefficient must be non-negative).
-    ValueError
-        If any element of ``tau_sfa <= 0`` (adaptation time constants must be positive).
-    ValueError
-        If ``len(tau_sfa) != len(q_sfa)`` (adaptation parameter lists must match).
-
-    See Also
-    --------
-    iaf_psc_delta : Integrate-and-fire neuron with delta PSCs
-    gif_psc_exp : Generalized integrate-and-fire with exponential PSCs
-
-    Notes
-    -----
     - Default parameter values match NEST C++ source for ``pp_psc_delta``,
       which are based on Jolivet et al. (2006) [2]_.
     - ``tau_sfa`` and ``q_sfa`` default to empty tuples (no adaptation).

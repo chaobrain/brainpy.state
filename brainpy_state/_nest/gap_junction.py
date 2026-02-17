@@ -45,18 +45,44 @@ class gap_junction:
     name : str or None, optional
         Optional model instance name for identification. Default: ``None``.
 
-    **Parameter Mapping (NEST → brainpy.state)**
+    Attributes
+    ----------
+    name : str or None
+        Model instance name.
+    weight : float
+        Gap junction conductance weight.
+    sumj_g_ij : float
+        Sum of incoming gap junction weights (runtime state).
+    interpolation_coefficients : ndarray
+        Buffer of summed interpolation coefficients from incoming events,
+        shape ``(min_delay_steps * (interpolation_order + 1),)``.
+    REQUIRES_SYMMETRIC : bool
+        Class constant, always ``True`` for gap junctions.
+    SUPPORTS_WFR : bool
+        Class constant, always ``True`` for WFR compatibility.
+    SUPPORTED_WFR_INTERPOLATION_ORDERS : tuple
+        Supported interpolation orders: ``(0, 1, 3)``.
 
-    ============  ====================  =========================================
-    NEST Name     brainpy.state Name    Description
-    ============  ====================  =========================================
-    weight        weight                Gap junction conductance (nS)
-    delay         *unsupported*         Delay not allowed for gap junctions
-    ============  ====================  =========================================
+    Notes
+    -----
+    **Parameter Mapping (NEST to brainpy.state)**
+
+    .. list-table::
+       :header-rows: 1
+
+       * - NEST Name
+         - brainpy.state Name
+         - Description
+       * - weight
+         - weight
+         - Gap junction conductance (nS)
+       * - delay
+         - *unsupported*
+         - Delay not allowed for gap junctions
 
     **Mathematical Formulation**
 
-    **1. Gap Junction Current**
+    *1. Gap Junction Current*
 
     The gap junction current for a post-synaptic neuron :math:`i` coupled to
     pre-synaptic neurons :math:`j` is given by:
@@ -67,12 +93,13 @@ class gap_junction:
 
     where:
 
-      - :math:`g_{ij}` is the gap junction conductance (weight) from neuron :math:`j` to :math:`i`
-      - :math:`V_i` is the membrane potential of the post-synaptic neuron
-      - :math:`P_{\text{interp}}(t)` is the interpolation polynomial constructed from
-        pre-synaptic voltage contributions
+    - :math:`g_{ij}` is the gap junction conductance (weight) from neuron
+      :math:`j` to :math:`i`
+    - :math:`V_i` is the membrane potential of the post-synaptic neuron
+    - :math:`P_{\text{interp}}(t)` is the interpolation polynomial constructed
+      from pre-synaptic voltage contributions
 
-    **2. Waveform Relaxation (WFR) Event Accumulation**
+    *2. Waveform Relaxation (WFR) Event Accumulation*
 
     During WFR cycles, incoming ``GapJunctionEvent`` objects update two quantities:
 
@@ -83,11 +110,12 @@ class gap_junction:
 
     where:
 
-      - :math:`w_{ij}` is the connection weight
-      - :math:`a_k` are source neuron interpolation coefficients
-      - :math:`c_k` are target-side summed coefficients for polynomial reconstruction
+    - :math:`w_{ij}` is the connection weight
+    - :math:`a_k` are source neuron interpolation coefficients
+    - :math:`c_k` are target-side summed coefficients for polynomial
+      reconstruction
 
-    **3. Interpolation Polynomials**
+    *3. Interpolation Polynomials*
 
     The interpolation term :math:`P_{\text{interp}}(t)` depends on the WFR order:
 
@@ -109,34 +137,36 @@ class gap_junction:
 
           P_{\text{interp}}(t) = c_0 + c_1 \cdot t + c_2 \cdot t^2 + c_3 \cdot t^3
 
-    where :math:`t \in [0, 1]` is the normalized time within the current WFR substep.
+    where :math:`t \in [0, 1]` is the normalized time within the current WFR
+    substep.
 
     **Implementation Details**
 
-    **1. Update Ordering (matching NEST)**
+    *1. Update Ordering (matching NEST)*
 
     The WFR cycle follows this sequence:
 
-      1. **Begin WFR window**: Clear ``sumj_g_ij`` and interpolation coefficient buffer
-      2. **Event accumulation**: For each arriving secondary event, add weight and
-         weighted coefficients
-      3. **ODE substeps**: Evaluate :math:`I_{\text{gap}}` from current voltage, lag,
-         interpolation order, and normalized substep time
-      4. **End WFR window**: Reset runtime buffers for the next window
+    1. **Begin WFR window**: Clear ``sumj_g_ij`` and interpolation coefficient
+       buffer.
+    2. **Event accumulation**: For each arriving secondary event, add weight and
+       weighted coefficients.
+    3. **ODE substeps**: Evaluate :math:`I_{\text{gap}}` from current voltage,
+       lag, interpolation order, and normalized substep time.
+    4. **End WFR window**: Reset runtime buffers for the next window.
 
-    **2. Symmetric Connectivity Requirement**
+    *2. Symmetric Connectivity Requirement*
 
     Gap junctions require symmetric connections: if neuron :math:`i` is coupled to
     neuron :math:`j` with weight :math:`w_{ij}`, then neuron :math:`j` must also be
     coupled to neuron :math:`i` with weight :math:`w_{ji}`. Asymmetric configurations
     will produce incorrect dynamics.
 
-    **3. Delay Constraint**
+    *3. Delay Constraint*
 
     Unlike chemical synapses, gap junctions are instantaneous (or near-instantaneous)
     electrical connections. Setting a delay raises a ``ValueError``.
 
-    **4. Coefficient Buffer Sizing**
+    *4. Coefficient Buffer Sizing*
 
     For WFR with ``min_delay_steps`` lags and interpolation order :math:`n`, the
     coefficient buffer size is:
@@ -144,24 +174,6 @@ class gap_junction:
     .. math::
 
         \text{buffer\_size} = \text{min\_delay\_steps} \times (n + 1)
-
-    Attributes
-    ----------
-    name : str or None
-        Model instance name.
-    weight : float
-        Gap junction conductance weight.
-    sumj_g_ij : float
-        Sum of incoming gap junction weights (runtime state).
-    interpolation_coefficients : ndarray
-        Buffer of summed interpolation coefficients from incoming events,
-        shape ``(min_delay_steps * (interpolation_order + 1),)``.
-    REQUIRES_SYMMETRIC : bool
-        Class constant, always ``True`` for gap junctions.
-    SUPPORTS_WFR : bool
-        Class constant, always ``True`` for WFR compatibility.
-    SUPPORTED_WFR_INTERPOLATION_ORDERS : tuple
-        Supported interpolation orders: ``(0, 1, 3)``.
 
     Examples
     --------

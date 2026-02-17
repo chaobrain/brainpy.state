@@ -224,12 +224,6 @@ class dc_generator(brainstate.nn.Dynamics):
     def update(self):
         r"""Compute the window-gated constant current at environment time ``t``.
 
-        Parameters
-        ----------
-        None
-            Uses the current simulation time ``t`` from ``brainstate.environ``
-            and instance parameters set in :meth:`__init__`.
-
         Returns
         -------
         current : Any

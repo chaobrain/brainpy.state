@@ -284,12 +284,6 @@ class step_current_generator(brainstate.nn.Dynamics):
     def update(self):
         r"""Compute scheduled current at environment time ``t``.
 
-        Parameters
-        ----------
-        None
-            Uses the current simulation time from ``brainstate.environ['t']``
-            and instance parameters initialized in :meth:`__init__`.
-
         Returns
         -------
         out : Any

@@ -152,7 +152,7 @@ class vogels_sprekeler_synapse:
     Wmax : float, array-like, optional
         Signed maximum absolute weight (unitless). Defines saturation bounds
         :math:`[-|W_{\max}|, +|W_{\max}|]` and determines sign of weight dynamics.
-        Must have same sign as ``weight`` (if ``weight ≠ 0``).
+        Must have same sign as ``weight`` (if ``weight != 0``).
         Default: ``1.0``.
     Kplus : float, array-like, optional
         Initial presynaptic STDP trace value (unitless, ≥0). Represents accumulated
@@ -166,7 +166,7 @@ class vogels_sprekeler_synapse:
         Model instance name for identification.
         Default: ``None``.
 
-    **Parameter Mapping (NEST ↔ brainpy.state)**
+    **Parameter Mapping (NEST to brainpy.state)**
 
     +-----------------+---------------------+-------------------+
     | NEST Parameter  | brainpy.state       | Unit              |
@@ -214,7 +214,7 @@ class vogels_sprekeler_synapse:
        for history lookup: :math:`(t_{\text{last}} - d, t - d]`. This implements
        NEST's dendritic delay convention.
 
-    2. **Sign constraints**: If ``weight ≠ 0``, both ``weight`` and ``Wmax`` must
+    2. **Sign constraints**: If ``weight != 0``, both ``weight`` and ``Wmax`` must
        have the same sign. Attempting to set opposite signs raises ``ValueError``.
        This preserves synapse type (excitatory/inhibitory) throughout learning.
 
@@ -438,7 +438,7 @@ class vogels_sprekeler_synapse:
         ------
         ValueError
             If ``delay ≤ 0``, ``tau ≤ 0``, ``delay_steps < 1``, ``Kplus < 0``,
-            or ``weight`` and ``Wmax`` have opposite signs (when ``weight ≠ 0``).
+            or ``weight`` and ``Wmax`` have opposite signs (when ``weight != 0``).
         TypeError
             If parameter values are not scalar or convertible to required numeric type.
 

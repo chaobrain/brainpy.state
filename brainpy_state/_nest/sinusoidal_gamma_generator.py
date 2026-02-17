@@ -596,10 +596,6 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         **kwargs
             Unused extra keyword arguments; silently ignored.
 
-        Returns
-        -------
-        None
-
         Raises
         ------
         ValueError
@@ -676,10 +672,6 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
         origin : ArrayLike or None, optional
             New scalar origin offset in ms, shape ``()`` after conversion.
             ``_UNSET`` retains the current value.
-
-        Returns
-        -------
-        None
 
         Raises
         ------

@@ -530,10 +530,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
     def get(self) -> dict:
         r"""Return current public parameters as plain Python scalars.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         params : dict

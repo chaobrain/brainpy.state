@@ -530,6 +530,7 @@ class glif_psc_double_alpha(Neuron):
     name : str, optional
         Name of this neuron population.
 
+
     **Parameter Mapping (NEST to brainpy.state)**
 
     =============================== ========================== ========================================== =====================================================

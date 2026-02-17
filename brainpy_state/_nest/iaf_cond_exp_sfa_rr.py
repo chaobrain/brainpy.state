@@ -200,6 +200,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
     name : str, optional
         Name of the neuron group. If None, auto-generated.
 
+
     **Parameter Mapping (NEST ↔ brainpy.state)**
 
     ==================== ================== ==========================================

@@ -146,6 +146,7 @@ class mcculloch_pitts_neuron(Dynamics):
     name : str, optional
         Name of the neuron module for identification in the computational graph.
 
+
     **Parameter Mapping (NEST ↔ brainpy.state)**
 
     ====================== ================== =============================== ====================================================

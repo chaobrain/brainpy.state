@@ -296,6 +296,7 @@ class stdp_triplet_synapse(stdp_synapse):
         Unique identifier for this synapse instance.
         Default: auto-generated.
 
+
     Parameter Mapping
 
     NEST ``stdp_triplet_synapse`` parameters map to this implementation as follows:

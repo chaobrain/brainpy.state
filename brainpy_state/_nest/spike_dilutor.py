@@ -393,11 +393,6 @@ class spike_dilutor(Dynamics):
         **kwargs
             Unused; accepted for forward compatibility.
 
-        Returns
-        -------
-        None
-            Modifies ``self._rng`` in-place.
-
         Notes
         -----
         Calling :meth:`init_state` a second time resets the RNG to the

@@ -290,12 +290,6 @@ class spike_generator(brainstate.nn.Dynamics):
     def update(self):
         r"""Compute spike output for the current simulation step.
 
-        Parameters
-        ----------
-        None
-            Uses ``brainstate.environ['t']`` and ``brainstate.environ.get_dt()``
-            together with instance parameters initialized in :meth:`__init__`.
-
         Returns
         -------
         out : jax.Array

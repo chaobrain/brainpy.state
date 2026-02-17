@@ -491,10 +491,6 @@ class tsodyks2_synapse(static_synapse):
         **kwargs : dict, optional
             Additional keyword arguments. Ignored.
 
-        Returns
-        -------
-        None
-
         Notes
         -----
         - The initial values of ``x`` and ``u`` are determined by the values
@@ -616,10 +612,6 @@ class tsodyks2_synapse(static_synapse):
             If not provided, unchanged.
         post : object, optional
             New default postsynaptic receiver. If not provided, unchanged.
-
-        Returns
-        -------
-        None
 
         Raises
         ------

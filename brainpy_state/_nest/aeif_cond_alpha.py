@@ -436,11 +436,6 @@ class aeif_cond_alpha(Neuron):
     def _validate_parameters(self):
         r"""Validate model parameters against NEST constraints.
 
-        Returns
-        -------
-        None
-            Validation is performed for side effects only.
-
         Raises
         ------
         ValueError
@@ -501,11 +496,6 @@ class aeif_cond_alpha(Neuron):
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
 
-        Returns
-        -------
-        None
-            State objects are created and stored on ``self``.
-
         Raises
         ------
         ValueError
@@ -555,11 +545,6 @@ class aeif_cond_alpha(Neuron):
             ``self.varshape`` layout.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
-
-        Returns
-        -------
-        None
-            Existing state objects are overwritten in place.
 
         Raises
         ------

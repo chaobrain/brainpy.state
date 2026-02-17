@@ -488,11 +488,6 @@ class aeif_cond_alpha_astro(Neuron):
     def _validate_parameters(self):
         r"""Validate model parameters against NEST constraints.
 
-        Returns
-        -------
-        None
-            Validation is performed for side effects only.
-
         Raises
         ------
         ValueError
@@ -552,11 +547,6 @@ class aeif_cond_alpha_astro(Neuron):
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
 
-        Returns
-        -------
-        None
-            State objects are created and SIC queue bookkeeping is reset.
-
         Raises
         ------
         ValueError
@@ -612,12 +602,6 @@ class aeif_cond_alpha_astro(Neuron):
             ``self.varshape`` layout.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
-
-        Returns
-        -------
-        None
-            Existing state objects are overwritten in place and SIC queue state
-            ``(_sic_queue, _sic_step)`` is reinitialized.
 
         Raises
         ------
@@ -731,11 +715,6 @@ class aeif_cond_alpha_astro(Neuron):
             ``delay_steps=1``.
         state_shape : tuple[int, ...]
             Target neuron state shape used to broadcast event values.
-
-        Returns
-        -------
-        None
-            Events are accumulated into ``self._sic_queue`` in-place.
 
         Raises
         ------

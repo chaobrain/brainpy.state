@@ -462,10 +462,6 @@ class poisson_generator(brainstate.nn.Dynamics):
     def get(self) -> dict:
         r"""Return current public parameters as scalar SI-compatible values.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         params : dict
@@ -524,13 +520,6 @@ class poisson_generator(brainstate.nn.Dynamics):
 
     def update(self):
         r"""Advance one simulation step and return per-step spike multiplicities.
-
-        Parameters
-        ----------
-        None
-            Uses runtime values from ``brainstate.environ``: simulation time
-            ``t`` (via :meth:`_current_time_ms`) and resolution ``dt`` (via
-            :meth:`_dt_ms`).
 
         Returns
         -------

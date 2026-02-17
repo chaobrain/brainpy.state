@@ -521,10 +521,6 @@ class volume_transmitter(brainstate.nn.Dynamics):
             Additional keyword arguments accepted for API compatibility and
             silently ignored.
 
-        Returns
-        -------
-        None
-            State is reset in-place; no value is returned.
         """
         del batch_size, kwargs
         self._pending_multiplicities.clear()

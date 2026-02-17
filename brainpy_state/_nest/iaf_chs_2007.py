@@ -487,11 +487,6 @@ class iaf_chs_2007(Neuron):
         **kwargs
             Additional keyword arguments (currently unused).
 
-        Returns
-        -------
-        None
-            State variables are created and registered as instance attributes.
-
         Notes
         -----
         All states except ``V`` are initialized to zero. The membrane potential
@@ -527,11 +522,6 @@ class iaf_chs_2007(Neuron):
             ``self.varshape``.
         **kwargs
             Additional keyword arguments (currently unused).
-
-        Returns
-        -------
-        None
-            State variable values are updated in-place.
 
         Notes
         -----

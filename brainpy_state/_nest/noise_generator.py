@@ -379,12 +379,6 @@ class noise_generator(brainstate.nn.Dynamics):
     def update(self):
         r"""Advance the generator one simulation step and return current output.
 
-        Parameters
-        ----------
-        None
-            Uses runtime values from ``brainstate.environ``:
-            simulation time ``t`` and resolution ``dt``.
-
         Returns
         -------
         out : Any

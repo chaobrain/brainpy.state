@@ -114,6 +114,27 @@ class iaf_bw_2001_exact(Neuron):
     name : str, optional
         Module name. Default: None (auto-generated).
 
+    Raises
+    ------
+    ValueError
+        If V_reset >= V_th, or any of C_m, tau_*, alpha, conc_Mg2, gsl_error_tol <= 0.
+    ValueError
+        If attempting to change NMDA port weights after first registration.
+    ValueError
+        If attempting to add new NMDA ports after first :meth:`update` call.
+    ValueError
+        If NMDA port is not hashable.
+    ValueError
+        If spike event format is invalid.
+
+    See Also
+    --------
+    iaf_bw_2001 : Approximate version using presynaptic-jump NMDA dynamics
+    iaf_cond_exp : Simpler conductance-based LIF without NMDA
+    aeif_cond_alpha : Adaptive exponential IF with alpha-shaped conductances
+
+    Notes
+    -----
     **Parameter Mapping (NEST ↔ brainpy.state)**
 
     ============================ ======================== ============================================
@@ -259,27 +280,6 @@ class iaf_bw_2001_exact(Neuron):
     - ``I_stim`` — One-step delayed external current buffer (pA)
     - ``refractory`` — Boolean refractory indicator (only if ``ref_var=True``)
 
-    Raises
-    ------
-    ValueError
-        If V_reset >= V_th, or any of C_m, tau_*, alpha, conc_Mg2, gsl_error_tol <= 0.
-    ValueError
-        If attempting to change NMDA port weights after first registration.
-    ValueError
-        If attempting to add new NMDA ports after first :meth:`update` call.
-    ValueError
-        If NMDA port is not hashable.
-    ValueError
-        If spike event format is invalid.
-
-    See Also
-    --------
-    iaf_bw_2001 : Approximate version using presynaptic-jump NMDA dynamics
-    iaf_cond_exp : Simpler conductance-based LIF without NMDA
-    aeif_cond_alpha : Adaptive exponential IF with alpha-shaped conductances
-
-    Notes
-    -----
     **Performance Considerations:**
 
     - RKF45 integration is performed per-neuron in NumPy (not vectorized)

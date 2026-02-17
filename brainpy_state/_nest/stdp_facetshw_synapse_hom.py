@@ -103,9 +103,9 @@ class stdp_facetshw_synapse_hom(static_synapse):
 
     c. **LUT selection and weight update**:
 
-       - If :math:`(E_0, E_1) = (1, 0)` -- apply ``lookuptable_0[w_discrete]`` → :math:`w_{\text{discrete}}'`
-       - If :math:`(E_0, E_1) = (0, 1)` -- apply ``lookuptable_1[w_discrete]`` → :math:`w_{\text{discrete}}'`
-       - If :math:`(E_0, E_1) = (1, 1)` -- apply ``lookuptable_2[w_discrete]`` → :math:`w_{\text{discrete}}'`
+       - If :math:`(E_0, E_1) = (1, 0)` -- apply ``lookuptable_0[w_discrete]`` to get :math:`w_{\text{discrete}}'`
+       - If :math:`(E_0, E_1) = (0, 1)` -- apply ``lookuptable_1[w_discrete]`` to get :math:`w_{\text{discrete}}'`
+       - If :math:`(E_0, E_1) = (1, 1)` -- apply ``lookuptable_2[w_discrete]`` to get :math:`w_{\text{discrete}}'`
        - If :math:`(E_0, E_1) = (0, 0)` -- no weight change
 
     d. **Capacitor reset**: After LUT application, accumulators may be reset to zero based on
@@ -146,10 +146,9 @@ class stdp_facetshw_synapse_hom(static_synapse):
        - Advance :math:`t_{\text{next\_readout}}` until :math:`t_{\text{pre}} \leq t_{\text{next\_readout}}`
        - Convert updated discrete weight back to continuous value
 
-    3. **Spike pairing**: query postsynaptic history in :math:`(t_{\text{last}} - d, t_{\text{pre}} - d]`
-       - If history non-empty:
-         - Update :math:`a_{\text{causal}}` using *first* post-spike timestamp
-         - Update :math:`a_{\text{acausal}}` using *last* post-spike timestamp
+    3. **Spike pairing**: query postsynaptic history in :math:`(t_{\text{last}} - d, t_{\text{pre}} - d]`.
+       If history non-empty, update :math:`a_{\text{causal}}` using *first* post-spike timestamp
+       and update :math:`a_{\text{acausal}}` using *last* post-spike timestamp.
 
     4. **Event transmission**: schedule spike event with current weight at :math:`t_{\text{pre}} + d`
 
@@ -1326,15 +1325,16 @@ class stdp_facetshw_synapse_hom(static_synapse):
              * ``(0, 1)`` -- apply ``lookuptable_1`` (typically depression)
              * ``(1, 1)`` -- apply ``lookuptable_2`` (typically no change or combined rule)
              * ``(0, 0)`` -- no weight update
+
            - Reset accumulators to zero according to selected LUT's reset bits in ``reset_pattern``
            - Advance ``next_readout_time`` by ``readout_cycle_duration`` until it exceeds current time
            - Convert updated discrete weight back to continuous value
 
         3. **Spike pairing** (if postsynaptic history exists):
            - Query postsynaptic spikes in interval :math:`(t_{\text{last}} - d, t_{\text{pre}} - d]`
-             where :math:`d` is dendritic delay
-           - Update ``a_causal`` using *first* post-spike in interval (pre-before-post timing)
-           - Update ``a_acausal`` using *last* post-spike in interval (post-before-pre timing)
+             where :math:`d` is dendritic delay.
+           - Update ``a_causal`` using *first* post-spike in interval (pre-before-post timing).
+           - Update ``a_acausal`` using *last* post-spike in interval (post-before-pre timing).
 
         4. **Event scheduling**:
            - Schedule spike event with weighted payload ``multiplicity * weight``

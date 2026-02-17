@@ -391,6 +391,7 @@ class hh_psc_alpha_gap(Neuron):
         Name of the neuron population for identification. If None, an
         automatic name is generated. Default: None.
 
+
     **Parameter Mapping (NEST ↔ brainpy.state)**
 
     ==================== ================== =============================== ====================================================

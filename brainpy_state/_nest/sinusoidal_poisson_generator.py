@@ -525,10 +525,6 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         origin : ArrayLike or object, optional
             Scalar origin time in ms. ``_UNSET`` keeps current value.
 
-        Returns
-        -------
-        None
-
         Raises
         ------
         ValueError

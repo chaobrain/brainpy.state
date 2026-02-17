@@ -640,10 +640,6 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
     def get(self) -> dict:
         r"""Return current public parameter values.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         out : Any
@@ -671,12 +667,6 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
             ``M >= 3`` in NEST order:
             ``[activity, sdev_ms, pulse_time_0_ms, ...]``. Entries are parsed
             as ``float64``. ``sdev`` and ``pulse_times`` are interpreted in ms.
-
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates internal parameters by delegating to
-            :meth:`set`.
 
         Raises
         ------
@@ -741,12 +731,6 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
 
     def update(self):
         r"""Advance one simulation step and emit spike multiplicities.
-
-        Parameters
-        ----------
-        None
-            Uses ``brainstate.environ`` runtime context:
-            simulation time ``t`` and resolution ``dt``.
 
         Returns
         -------

@@ -185,6 +185,7 @@ class iaf_cond_alpha(Neuron):
     name : str, optional
         Name of the neuron group.
 
+
     Parameter Mapping
     -----------------
 

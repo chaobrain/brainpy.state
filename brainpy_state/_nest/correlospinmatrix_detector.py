@@ -425,10 +425,6 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
     def connect(self):
         r"""Compatibility no-op for device connection API.
 
-        Returns
-        -------
-        None
-            Always ``None``.
         """
         return None
 

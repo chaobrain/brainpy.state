@@ -416,13 +416,6 @@ class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
             Additional keyword arguments accepted for API compatibility and
             silently ignored.
 
-        Returns
-        -------
-        None
-            All initialization is performed as side effects on ``self``.
-            After this call ``self._rate_idx``, ``self._rate_hz``, and
-            ``self.rng_key`` are available as
-            :class:`brainstate.ShortTermState` instances.
         """
         del batch_size, kwargs
         self._rate_idx = brainstate.ShortTermState(jnp.asarray(0, dtype=jnp.int64))
@@ -465,18 +458,6 @@ class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
             same call, or when no schedule has been configured yet. Attempting
             to change the flag with an existing non-empty schedule and without
             new times raises :class:`ValueError`.
-
-        Returns
-        -------
-        None
-            All changes are applied as side effects. On success:
-
-            - ``self._rate_times_ms`` is replaced with the grid-aligned times.
-            - ``self._rate_values_hz`` is replaced with the new rates.
-            - ``self._rate_steps`` is replaced with the corresponding
-              grid-step integers.
-            - If state has already been initialized (``_rate_idx`` exists),
-              ``self._rate_idx.value`` is reset to ``0``.
 
         Raises
         ------

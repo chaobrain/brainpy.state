@@ -390,6 +390,7 @@ class gif_psc_exp_multisynapse(Neuron):
         Name of the neuron population. Used for logging and debugging. If
         ``None``, an automatic name is generated. Default: None.
 
+
     **Parameter Mapping to NEST**
 
     Below is the correspondence between brainpy.state and NEST parameter names:
