@@ -412,7 +412,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
           cannot be sampled and update times will not advance correctly.
         - **Non-differentiability**: Output is wrapped in ``stop_gradient`` to prevent
           autodiff from propagating gradients through the discontinuous threshold operation.
-"""
+        """
         # Accumulate delta inputs into h (analogous to binary spike events
         # modifying h via the spikes_ ring buffer in NEST)
         delta_h = self.sum_delta_inputs(u.math.zeros_like(self.h.value))

@@ -596,7 +596,7 @@ class spike_dilutor(NESTDevice):
         --------
         _sample_child_spikes : Low-level Binomial sampling routine.
         init_state : Initialise the RNG before calling update.
-"""
+        """
         if not hasattr(self, '_rng'):
             self.init_state()
 

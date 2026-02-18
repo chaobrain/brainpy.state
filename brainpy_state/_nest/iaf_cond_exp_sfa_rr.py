@@ -825,7 +825,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         * **Vectorization**: This implementation uses scalar RKF45 integration with explicit
           loop over neurons. This ensures exact NEST compatibility but is slower than vectorized
           integration. Each neuron maintains independent adaptive step size.
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

@@ -872,7 +872,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         **Random number generation**: Uses NumPy's default RNG
         (``np.random.normal``). For reproducibility, seed the global RNG before
         simulation.
-"""
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 

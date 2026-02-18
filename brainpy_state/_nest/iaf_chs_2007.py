@@ -648,7 +648,7 @@ class iaf_chs_2007(NESTNeuron):
         :math:`O(|\mathrm{state}|)` for noise sampling (if active). All
         operations are vectorized NumPy array operations followed by transfer
         to JAX arrays.
-"""
+        """
         # NEST iaf_chs_2007 has no CurrentEvent handler; x is intentionally unused.
         del x
 

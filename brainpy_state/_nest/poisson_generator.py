@@ -545,7 +545,7 @@ class poisson_generator(NESTDevice):
         --------
         poisson_generator.init_state : RNG initialization called lazily here.
         poisson_generator.set : Update parameters between runs.
-"""
+        """
         if not hasattr(self, 'rng_key'):
             self.init_state()
 

@@ -960,7 +960,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         fully vectorized implementations but ensure identical spike timing and
         update ordering. For large-scale simulations, consider NEST-GPU or
         vectorized BrainPy models.
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

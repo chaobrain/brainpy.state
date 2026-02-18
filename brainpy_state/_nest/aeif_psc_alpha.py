@@ -949,7 +949,7 @@ class aeif_psc_alpha(NESTNeuron):
         For large populations, this can be slow compared to vectorized solvers, but it
         ensures exact NEST compatibility including adaptive step sizing and in-loop spike
         handling.
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

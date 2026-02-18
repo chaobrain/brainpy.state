@@ -248,7 +248,7 @@ class dc_generator(NESTDevice):
         --------
         dc_generator : Class-level parameter definitions and model equations.
         ac_generator.update : Windowed sinusoidal-current update rule.
-"""
+        """
         t = brainstate.environ.get('t')
         t_start = self.origin + self.start
         if self.stop is not None:

@@ -426,7 +426,7 @@ class ignore_and_fire(NESTNeuron):
 
         The spike output is suitable for direct use as delta-synapse input
         (units of spikes/step) or as a binary event indicator for recording.
-"""
+        """
         phase_steps = self.phase_steps.value
         firing_period_steps = self.firing_period_steps.value
 

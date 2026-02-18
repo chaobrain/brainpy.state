@@ -736,7 +736,7 @@ class iaf_cond_exp(NESTNeuron):
         * Integration may degrade to minimum step size (1e-8 ms) for stiff dynamics
         * Iteration limit (10000) may be reached for extreme parameter combinations
         * No warning is issued on integration failure (matches NEST silent fallback)
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

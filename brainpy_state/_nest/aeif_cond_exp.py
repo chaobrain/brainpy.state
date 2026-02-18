@@ -717,7 +717,7 @@ class aeif_cond_exp(NESTNeuron):
         - Per-neuron scalar integration (no vectorization across neurons)
         - Cost scales with ``1/gsl_error_tol`` (smaller tolerance = more substeps)
         - Typical: 1-10 substeps per simulation step for standard parameters
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

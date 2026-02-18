@@ -1184,7 +1184,7 @@ class iaf_bw_2001_exact(NESTNeuron):
         - During refractory period, V_m is clamped to V_reset
         - Refractory countdown decrements each time step
         - Threshold check bypassed while refractory
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

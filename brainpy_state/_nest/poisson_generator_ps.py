@@ -703,7 +703,7 @@ class poisson_generator_ps(NESTDevice):
         poisson_generator_ps.set : Update parameters between runs.
         poisson_generator_ps.step_spike_times_ms : Access precise times after
             update without the overhead of the return value.
-"""
+        """
         if not hasattr(self, 'next_spike_time'):
             self.init_state()
 

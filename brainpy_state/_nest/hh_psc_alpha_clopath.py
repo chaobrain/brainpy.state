@@ -970,7 +970,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
         - Computational cost scales roughly as :math:`O(N_{\text{neurons}} \times N_{\text{RK45 steps}})`.
           For large populations with ``rtol=1e-3``, expect 5-10 RK45 steps per
           simulation time step on average.
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt_q / u.ms))

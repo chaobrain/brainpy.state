@@ -634,7 +634,7 @@ class rate_transformer_node(NESTNeuron):
           - Delayed events are stored in ``_delayed_queue`` until their scheduled timestep
           - Queue entries are automatically removed after retrieval (no memory leak)
           - Queue persists across ``update()`` calls but is cleared by ``init_state()``
-"""
+        """
         del x  # NEST rate transformer has no intrinsic current input.
 
         state_shape = self.rate.value.shape

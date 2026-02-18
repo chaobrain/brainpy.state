@@ -724,7 +724,7 @@ class astrocyte_lr_1994(NESTNeuron):
         - **Performance**: Integration is performed per-element in a NumPy loop (not
           vectorized). For :math:`N` astrocytes, expect :math:`\mathcal{O}(N \times k)`
           cost where :math:`k` is the average substep count (typically 5–20).
-"""
+        """
         dt_q = brainstate.environ.get_dt()
         dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=np.float64))
 

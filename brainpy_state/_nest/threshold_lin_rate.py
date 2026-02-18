@@ -755,7 +755,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         **Failure modes**: No automatic failure handling. Negative time constants,
         decay rates, or noise parameters are caught at construction by
         ``_validate_parameters``. Invalid event formats raise ``ValueError``.
-"""
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 
@@ -1401,7 +1401,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         **Failure modes**: No automatic failure handling. Negative time constants
         or noise parameters are caught at construction by ``_validate_parameters``.
         Invalid event formats raise ``ValueError``.
-"""
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 

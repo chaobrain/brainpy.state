@@ -993,7 +993,7 @@ class rate_neuron_ipn(_lin_rate_base):
         **Failure modes**: No automatic failure handling. Negative time constants,
         decay rates, or noise parameters are caught at construction by
         ``_validate_parameters``. Invalid event formats raise ``ValueError``.
-"""
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
 
         state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs_template(

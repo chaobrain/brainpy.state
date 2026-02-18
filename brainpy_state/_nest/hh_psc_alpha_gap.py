@@ -1083,7 +1083,7 @@ class hh_psc_alpha_gap(NESTNeuron):
         get_spike : Compute spike output from membrane potential.
         sum_delta_inputs : Collect all registered delta-function inputs.
         sum_current_inputs : Collect all registered current inputs.
-"""
+        """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt_q / u.ms))

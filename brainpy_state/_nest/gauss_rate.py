@@ -742,7 +742,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         **State side effects**: Updates ``self.rate``, ``self.noise``,
         ``self.delayed_rate``, ``self.instant_rate``, ``self._step_count``, and
         modifies delay queues ``self._delayed_ex_queue`` and ``self._delayed_in_queue``.
-"""
+        """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 
