@@ -35,13 +35,11 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
+import numpy as np
+from scipy.integrate import solve_ivp
 
 from brainpy_state import hh_cond_beta_gap_traub
 from brainpy_state._nest.hh_cond_beta_gap_traub import (
@@ -54,9 +52,9 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 
 def _nest_hh_cond_beta_gap_traub_dynamics(t, y, g_Na, g_K, g_L, E_Na, E_K, E_L,
-                                           V_T, E_ex, E_in, C_m, I_e, I_stim,
-                                           tau_rise_ex, tau_decay_ex,
-                                           tau_rise_in, tau_decay_in):
+                                          V_T, E_ex, E_in, C_m, I_e, I_stim,
+                                          tau_rise_ex, tau_decay_ex,
+                                          tau_rise_in, tau_decay_in):
     r"""Reference dynamics matching NEST hh_cond_beta_gap_traub_dynamics exactly.
 
     State vector y = [V_m, m, h, n, dg_ex, g_ex, dg_in, g_in].
@@ -452,7 +450,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
                 r_now = int(neuron.refractory_step_count.value[0])
                 if r_prev > 0:
                     self.assertEqual(r_now, r_prev - 1,
-                                     f"Refractory counter should decrement from {r_prev} to {r_prev-1}")
+                                     f"Refractory counter should decrement from {r_prev} to {r_prev - 1}")
                 r_prev = r_now
 
     def test_dynamics_evolve_during_refractory(self):
@@ -663,8 +661,8 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
 
             for i in range(1, len(rates)):
                 self.assertGreaterEqual(rates[i], rates[i - 1],
-                                         f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
-                                         f"{[500, 1000, 1500][i-1]} pA")
+                                        f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
+                                        f"{[500, 1000, 1500][i - 1]} pA")
 
 
 class TestHHCondBetaGapTraubNESTReference(unittest.TestCase):

@@ -15,14 +15,17 @@
 
 # -*- coding: utf-8 -*-
 
-import brainstate
 
-from ._base import NESTDevice
+from typing import Optional
+
+import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
 
 __all__ = [
     'noise_generator',
@@ -275,8 +278,8 @@ class noise_generator(NESTDevice):
         start: ArrayLike = 0. * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0. * u.ms,
-        seed: int = None,
-        name: str = None,
+        seed: Optional[int] = None,
+        name: Optional[str] = None,
     ):
         super().__init__(in_size=in_size, name=name)
 

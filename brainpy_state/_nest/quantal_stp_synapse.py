@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 
 import brainunit as u
@@ -29,7 +28,6 @@ from .static_synapse import static_synapse
 __all__ = [
     'quantal_stp_synapse',
 ]
-
 
 _UNSET = object()
 

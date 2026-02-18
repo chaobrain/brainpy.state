@@ -26,6 +26,18 @@ and input models that are previously designed in the BrainPy simulator.
 # Neuron models
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Synapse models
+# ---------------------------------------------------------------------------
+from .exponential import Expon, DualExpon
+# Hodgkin-Huxley family
+from .hh import HH, MorrisLecar, WangBuzsakiHH
+# ---------------------------------------------------------------------------
+# Input generators
+# ---------------------------------------------------------------------------
+from .inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
+# Izhikevich family
+from .izhikevich import Izhikevich, IzhikevichRef
 # LIF family
 from .lif import (
     IF, LIF, LIFRef, ALIF,
@@ -34,29 +46,6 @@ from .lif import (
     QuaIF, AdQuaIF, AdQuaIFRef,
     Gif, GifRef,
 )
-
-# Hodgkin-Huxley family
-from .hh import HH, MorrisLecar, WangBuzsakiHH
-
-# Izhikevich family
-from .izhikevich import Izhikevich, IzhikevichRef
-
-# ---------------------------------------------------------------------------
-# Synapse models
-# ---------------------------------------------------------------------------
-from .exponential import Expon, DualExpon
-from .synapse import Alpha, AMPA, GABAa, BioNMDA
-
-# ---------------------------------------------------------------------------
-# Synaptic outputs
-# ---------------------------------------------------------------------------
-from .synouts import SynOut, COBA, CUBA, MgBlock
-
-# ---------------------------------------------------------------------------
-# Short-term plasticity
-# ---------------------------------------------------------------------------
-from .stp import STP, STD
-
 # ---------------------------------------------------------------------------
 # Projections
 # ---------------------------------------------------------------------------
@@ -64,17 +53,20 @@ from .projection import (
     Projection, AlignPostProj, DeltaProj, CurrentProj,
     align_pre_projection, align_post_projection,
 )
-from .synaptic_projection import SymmetryGapJunction, AsymmetryGapJunction
-
 # ---------------------------------------------------------------------------
 # Readouts
 # ---------------------------------------------------------------------------
 from .readout import LeakyRateReadout, LeakySpikeReadout
-
 # ---------------------------------------------------------------------------
-# Input generators
+# Short-term plasticity
 # ---------------------------------------------------------------------------
-from .inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
+from .stp import STP, STD
+from .synapse import Alpha, AMPA, GABAa, BioNMDA
+from .synaptic_projection import SymmetryGapJunction, AsymmetryGapJunction
+# ---------------------------------------------------------------------------
+# Synaptic outputs
+# ---------------------------------------------------------------------------
+from .synouts import SynOut, COBA, CUBA, MgBlock
 
 __all__ = [
     # Neuron models - LIF family

@@ -42,8 +42,9 @@ def _rhs(y, is_refractory, is_clamped, i_stim, p):
 
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - v_th) / p['Delta_T'])
     dv = 0.0 if (is_refractory or is_clamped) else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p['I_e'] + i_stim
-    ) / p['C_m']
+                                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p[
+                                                       'I_e'] + i_stim
+                                                   ) / p['C_m']
 
     dw = 0.0 if is_clamped else (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
     dz = -z / p['tau_z']
@@ -174,7 +175,8 @@ def _reference_step(state, p, x_next, delta_step, dt_ms):
     delayed_minus = state['delay_minus'][state['delay_idx']]
 
     if p['A_LTD_const']:
-        state['last_ltd_dw'] = p['A_LTD'] * (delayed_minus - p['theta_minus']) if delayed_minus > p['theta_minus'] else 0.0
+        state['last_ltd_dw'] = p['A_LTD'] * (delayed_minus - p['theta_minus']) if delayed_minus > p[
+            'theta_minus'] else 0.0
     else:
         state['last_ltd_dw'] = (
             p['A_LTD'] * y[6] * y[6] * (delayed_minus - p['theta_minus']) / p['u_ref_squared']
@@ -458,7 +460,8 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
                 self.assertEqual(int(neuron.clamp_step_count.value[0]), ref_state['clamp'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=3e-6)
 
-                self.assertEqual(int(np.asarray(neuron.delayed_u_bars_idx.value, dtype=np.int32)), ref_state['delay_idx'])
+                self.assertEqual(int(np.asarray(neuron.delayed_u_bars_idx.value, dtype=np.int32)),
+                                 ref_state['delay_idx'])
                 npt.assert_allclose(
                     np.asarray(neuron.delayed_u_bar_plus_buffer.value, dtype=np.float64)[:, 0],
                     ref_state['delay_plus'],
@@ -612,9 +615,12 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
         npt.assert_allclose(bp_w[bp_indices], nest_w, atol=2e-4, rtol=0.0, err_msg='w trace mismatch vs NEST')
         npt.assert_allclose(bp_z[bp_indices], nest_z, atol=2e-4, rtol=0.0, err_msg='z trace mismatch vs NEST')
         npt.assert_allclose(bp_v_th[bp_indices], nest_v_th, atol=2e-4, rtol=0.0, err_msg='V_th trace mismatch vs NEST')
-        npt.assert_allclose(bp_u_plus[bp_indices], nest_u_plus, atol=2e-4, rtol=0.0, err_msg='u_bar_plus trace mismatch vs NEST')
-        npt.assert_allclose(bp_u_minus[bp_indices], nest_u_minus, atol=2e-4, rtol=0.0, err_msg='u_bar_minus trace mismatch vs NEST')
-        npt.assert_allclose(bp_u_bar[bp_indices], nest_u_bar, atol=2e-4, rtol=0.0, err_msg='u_bar_bar trace mismatch vs NEST')
+        npt.assert_allclose(bp_u_plus[bp_indices], nest_u_plus, atol=2e-4, rtol=0.0,
+                            err_msg='u_bar_plus trace mismatch vs NEST')
+        npt.assert_allclose(bp_u_minus[bp_indices], nest_u_minus, atol=2e-4, rtol=0.0,
+                            err_msg='u_bar_minus trace mismatch vs NEST')
+        npt.assert_allclose(bp_u_bar[bp_indices], nest_u_bar, atol=2e-4, rtol=0.0,
+                            err_msg='u_bar_bar trace mismatch vs NEST')
 
 
 if __name__ == '__main__':

@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -571,10 +570,10 @@ class glif_cond(NESTNeuron):
         s, a, v = self.has_theta_spike, self.has_asc, self.has_theta_voltage
         valid_combos = [
             (False, False, False),  # GLIF1
-            (True, False, False),   # GLIF2
-            (False, True, False),   # GLIF3
-            (True, True, False),    # GLIF4
-            (True, True, True),     # GLIF5
+            (True, False, False),  # GLIF2
+            (False, True, False),  # GLIF3
+            (True, True, False),  # GLIF4
+            (True, True, True),  # GLIF5
         ]
         if (s, a, v) not in valid_combos:
             raise ValueError(
@@ -974,8 +973,8 @@ class glif_cond(NESTNeuron):
         def f(state):
             return self._dynamics_scalar(
                 state[0],
-                state[1:1+n_rec],
-                state[1+n_rec:],
+                state[1:1 + n_rec],
+                state[1 + n_rec:],
                 is_refractory, i_stim, asc_sum, p
             )
 
@@ -993,17 +992,17 @@ class glif_cond(NESTNeuron):
                   for i in range(n)]
             k4 = f(y4)
             y5 = [y[i] + h * (439.0 * k1[i] / 216.0 - 8.0 * k2[i] + 3680.0 * k3[i] / 513.0
-                               - 845.0 * k4[i] / 4104.0) for i in range(n)]
+                              - 845.0 * k4[i] / 4104.0) for i in range(n)]
             k5 = f(y5)
             y6 = [y[i] + h * (-8.0 * k1[i] / 27.0 + 2.0 * k2[i] - 3544.0 * k3[i] / 2565.0
-                               + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
+                              + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
             k6 = f(y6)
 
             y4_sol = [y[i] + h * (25.0 * k1[i] / 216.0 + 1408.0 * k3[i] / 2565.0
-                                   + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
+                                  + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
             y5_sol = [y[i] + h * (16.0 * k1[i] / 135.0 + 6656.0 * k3[i] / 12825.0
-                                   + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
-                                   + 2.0 * k6[i] / 55.0) for i in range(n)]
+                                  + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
+                                  + 2.0 * k6[i] / 55.0) for i in range(n)]
 
             err = max(abs(y5_sol[i] - y4_sol[i]) for i in range(n))
 
@@ -1022,8 +1021,8 @@ class glif_cond(NESTNeuron):
                 h = max(self._MIN_H, h * fac)
 
         v_out = y[0]
-        dg_out = y[1:1+n_rec]
-        g_out = y[1+n_rec:]
+        dg_out = y[1:1 + n_rec]
+        g_out = y[1 + n_rec:]
         return v_out, dg_out, g_out, h
 
     def update(self, x=0.0 * u.pA):

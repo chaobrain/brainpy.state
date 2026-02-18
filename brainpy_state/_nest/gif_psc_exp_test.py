@@ -45,7 +45,6 @@ import braintools
 import brainstate
 import brainunit as u
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from brainpy.state import gif_psc_exp

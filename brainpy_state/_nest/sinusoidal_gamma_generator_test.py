@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -140,7 +141,7 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             gen = sinusoidal_gamma_generator(
                 in_size=1,
-                rate=1000.0 * u.Hz,   # order=1 -> hazard = 1 at dt=1 ms
+                rate=1000.0 * u.Hz,  # order=1 -> hazard = 1 at dt=1 ms
                 amplitude=0.0 * u.Hz,
                 frequency=0.0 * u.Hz,
                 order=1.0,

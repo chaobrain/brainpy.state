@@ -18,14 +18,13 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
+import numpy as np
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -81,11 +80,15 @@ def _rkf45_ref_step(y0, i_stim, dt, h0, p, atol):
         k2 = _dynamics_ref(y + h * (1.0 / 4.0) * k1, i_stim, p)
         k3 = _dynamics_ref(y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0), i_stim, p)
         k4 = _dynamics_ref(y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0), i_stim, p)
-        k5 = _dynamics_ref(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0), i_stim, p)
-        k6 = _dynamics_ref(y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0), i_stim, p)
+        k5 = _dynamics_ref(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0), i_stim,
+                           p)
+        k6 = _dynamics_ref(
+            y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0),
+            i_stim, p)
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
 
         if err <= atol or h <= min_h:
@@ -473,7 +476,8 @@ class TestIAFBW2001(unittest.TestCase):
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref['h'], delta=7e-6)
                 self.assertAlmostEqual(float(neuron.s_NMDA_pre.value[0]), ref['s_nmda_pre'], delta=7e-6)
                 self.assertAlmostEqual(float(neuron.spike_offset.value[0]), ref['spike_offset'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.last_spike_time.value / u.ms)[0]), ref['last_spike_time'], delta=7e-6)
+                self.assertAlmostEqual(float((neuron.last_spike_time.value / u.ms)[0]), ref['last_spike_time'],
+                                       delta=7e-6)
 
             self.assertEqual(spk_model, spk_ref)
             self.assertTrue(any(spk_model))

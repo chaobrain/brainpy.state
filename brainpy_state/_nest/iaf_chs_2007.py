@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -390,7 +389,7 @@ class iaf_chs_2007(NESTNeuron):
     __module__ = 'brainpy.state'
 
     _U_TH = 1.0  # NEST hard-coded normalized threshold.
-    _E_L = 0.0   # NEST hard-coded normalized rest potential.
+    _E_L = 0.0  # NEST hard-coded normalized rest potential.
 
     def __init__(
         self,
@@ -662,7 +661,8 @@ class iaf_chs_2007(NESTNeuron):
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value), state_shape).copy()
         V_syn = self._broadcast_to_state(self._to_numpy(self.V_syn.value), state_shape).copy()
         V_spike = self._broadcast_to_state(self._to_numpy(self.V_spike.value), state_shape).copy()
-        pos = self._broadcast_to_state(np.asarray(u.math.asarray(self.position.value), dtype=np.int64), state_shape).copy()
+        pos = self._broadcast_to_state(np.asarray(u.math.asarray(self.position.value), dtype=np.int64),
+                                       state_shape).copy()
 
         tau_epsp = self._broadcast_to_state(self._to_numpy_ms(self.tau_epsp), state_shape)
         tau_reset = self._broadcast_to_state(self._to_numpy_ms(self.tau_reset), state_shape)

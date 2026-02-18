@@ -181,7 +181,8 @@ class TestStaticSynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), 1)
         _, value, _ = recv.delta_events[0]
-        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), -3.6, delta=1e-12)
+        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), -3.6,
+                               delta=1e-12)
 
     def test_current_and_delta_inputs_are_summed_before_send(self):
         recv = _MockReceiver()

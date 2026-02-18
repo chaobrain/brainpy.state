@@ -18,13 +18,12 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -738,8 +737,9 @@ class aeif_psc_exp(NESTNeuron):
         )
 
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p[
+                                           'I_e'] + i_stim
+                                       ) / p['C_m']
 
         dI_ex = -I_ex / p['tau_syn_ex']
         dI_in = -I_in / p['tau_syn_in']

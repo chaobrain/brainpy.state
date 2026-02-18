@@ -25,7 +25,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import tanh_rate_ipn, tanh_rate_opn
 
 jax.config.update('jax_enable_x64', True)
@@ -251,8 +250,10 @@ class TestTanhRate(unittest.TestCase):
                 self.assertAlmostEqual(float(np.asarray(out).reshape(-1)[0]), rate_new, delta=1e-12)
                 self.assertAlmostEqual(float(np.asarray(neuron.rate.value).reshape(-1)[0]), rate_new, delta=1e-12)
                 self.assertAlmostEqual(float(np.asarray(neuron.noise.value).reshape(-1)[0]), noise_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.delayed_rate.value).reshape(-1)[0]), rate_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.instant_rate.value).reshape(-1)[0]), rate_new, delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.delayed_rate.value).reshape(-1)[0]), rate_ref,
+                                       delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.instant_rate.value).reshape(-1)[0]), rate_new,
+                                       delta=1e-12)
 
                 rate_ref = rate_new
 
@@ -356,9 +357,12 @@ class TestTanhRate(unittest.TestCase):
                 self.assertAlmostEqual(float(np.asarray(out).reshape(-1)[0]), rate_new, delta=1e-12)
                 self.assertAlmostEqual(float(np.asarray(neuron.rate.value).reshape(-1)[0]), rate_new, delta=1e-12)
                 self.assertAlmostEqual(float(np.asarray(neuron.noise.value).reshape(-1)[0]), noise_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.noisy_rate.value).reshape(-1)[0]), noisy_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.delayed_rate.value).reshape(-1)[0]), noisy_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.instant_rate.value).reshape(-1)[0]), noisy_ref, delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.noisy_rate.value).reshape(-1)[0]), noisy_ref,
+                                       delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.delayed_rate.value).reshape(-1)[0]), noisy_ref,
+                                       delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.instant_rate.value).reshape(-1)[0]), noisy_ref,
+                                       delta=1e-12)
 
                 rate_ref = rate_new
 

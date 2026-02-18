@@ -28,9 +28,7 @@ Validates the brainpy.state ``step_rate_generator`` against:
 import unittest
 
 import brainstate
-import braintools
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -215,8 +213,8 @@ class TestStepRateGeneratorVsNEST(unittest.TestCase):
 
         data = nest.GetStatus(mm)[0]["events"]
         rates_nest = np.array(data["rate"][
-            np.where(data["senders"] == srg_nest.get("global_id"))
-        ])
+                                  np.where(data["senders"] == srg_nest.get("global_id"))
+                              ])
 
         npt.assert_array_equal(rates, rates_nest,
                                err_msg="NEST step_rate_generator rates don't match expected")

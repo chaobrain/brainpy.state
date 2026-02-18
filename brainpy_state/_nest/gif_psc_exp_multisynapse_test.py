@@ -47,7 +47,6 @@ import braintools
 import brainstate
 import brainunit as u
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._nest.gif_psc_exp_multisynapse import gif_psc_exp_multisynapse
@@ -1248,7 +1247,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
             for j, tau in enumerate(tau_syn):
                 expected = 100.0 * math.exp(-2.0 / tau)
                 self.assertAlmostEqual(i_syn[0, j], expected, places=4,
-                                       msg=f"Receptor {j+1} (tau={tau}) decay mismatch")
+                                       msg=f"Receptor {j + 1} (tau={tau}) decay mismatch")
 
             # Fast receptor should have decayed more
             self.assertTrue(i_syn[0, 0] < i_syn[0, 1] < i_syn[0, 2],

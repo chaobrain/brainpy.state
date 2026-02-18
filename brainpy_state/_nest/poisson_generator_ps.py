@@ -16,19 +16,17 @@
 # -*- coding: utf-8 -*-
 
 
-
 import brainstate
-
-from ._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'poisson_generator_ps',
 ]
-
 
 _UNSET = object()
 

@@ -32,7 +32,6 @@ from brainpy.state import iaf_psc_alpha, static_synapse_hom_w
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-
 # Reference from NEST testsuite/pytests/sli2py_synapses/test_syn_hom_w.py
 # Columns: [time_step, V_m], where time_step must be multiplied by dt (0.1 ms).
 REFERENCE_DATA = np.array(

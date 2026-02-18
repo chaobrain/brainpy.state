@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 from collections import defaultdict
 
@@ -31,7 +30,6 @@ from ._base import NESTSynapse
 __all__ = [
     'static_synapse',
 ]
-
 
 _UNSET = object()
 _SPIKE_EVENT = 'spike'

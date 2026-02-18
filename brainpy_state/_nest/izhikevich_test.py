@@ -23,10 +23,9 @@ Run with:
 """
 
 import unittest
-import math
 
-import braintools
 import brainstate
+import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -894,7 +893,7 @@ class TestIzhikevich(unittest.TestCase):
                 a=0.02,
                 b=0.2,
                 c=-50. * u.mV,  # high reset
-                d=0. * u.mV,    # no U increment
+                d=0. * u.mV,  # no U increment
                 I_e=0. * u.pA,
                 V_th=30. * u.mV,
                 V_initializer=braintools.init.Constant(-50. * u.mV),

@@ -16,22 +16,20 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 
 import brainstate
-
-from ._base import NESTDevice
 import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'poisson_generator',
 ]
-
 
 _UNSET = object()
 
@@ -553,7 +551,8 @@ class poisson_generator(NESTDevice):
             self.init_state()
 
         dt_ms = self._dt_ms()
-        if (not np.isfinite(self._dt_cache_ms)) or (not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)):
+        if (not np.isfinite(self._dt_cache_ms)) or (
+        not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)):
             self._refresh_timing_cache(dt_ms)
 
         if self.rate <= 0.0:

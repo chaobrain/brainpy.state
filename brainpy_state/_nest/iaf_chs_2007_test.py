@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_chs_2007
 
 jax.config.update('jax_enable_x64', True)

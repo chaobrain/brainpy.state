@@ -15,16 +15,14 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -642,7 +640,9 @@ class iaf_psc_exp(NESTNeuron):
         stoch_spike = np.random.random(size=v_shape) < phi * h * 1e-3
         spike_cond = np.where(deterministic, det_spike, stoch_spike)
 
-        r = np.where(spike_cond, self._broadcast_to_state(np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape), r)
+        r = np.where(spike_cond,
+                     self._broadcast_to_state(np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+                                              v_shape), r)
         V_before_reset = V_rel
         V_rel = np.where(spike_cond, V_reset_rel, V_rel)
 

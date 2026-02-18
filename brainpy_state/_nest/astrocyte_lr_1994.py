@@ -16,15 +16,12 @@
 # -*- coding: utf-8 -*-
 
 import math
-from typing import Callable
-
-import numpy as np
 
 import brainstate
-import braintools
 import brainunit as u
 import jax.numpy as jnp
-from brainstate.typing import ArrayLike, Size
+import numpy as np
+from brainstate.typing import Size
 
 from ._base import NESTNeuron
 
@@ -396,33 +393,33 @@ class astrocyte_lr_1994(NESTNeuron):
         'SIC',
     )
 
-    _MIN_H = 1e-8   # ms – minimum integration step
+    _MIN_H = 1e-8  # ms – minimum integration step
     _MAX_ITERS = 100000
 
     def __init__(
         self,
         in_size: Size,
         # Parameters (Nadkarni & Jung 2003 defaults, matching NEST)
-        Ca_tot: float = 2.0,          # µM
-        IP3_0: float = 0.16,          # µM
-        Kd_IP3_1: float = 0.13,       # µM
-        Kd_IP3_2: float = 0.9434,     # µM
-        Kd_act: float = 0.08234,      # µM
-        Kd_inh: float = 1.049,        # µM
-        Km_SERCA: float = 0.1,        # µM
-        SIC_scale: float = 1.0,       # dimensionless
-        SIC_th: float = 0.19669,      # µM
-        delta_IP3: float = 0.0002,    # µM
-        k_IP3R: float = 0.0002,       # 1/(µM·ms)
-        rate_IP3R: float = 0.006,     # 1/ms
-        rate_L: float = 0.00011,      # 1/ms
-        rate_SERCA: float = 0.0009,   # µM/ms
+        Ca_tot: float = 2.0,  # µM
+        IP3_0: float = 0.16,  # µM
+        Kd_IP3_1: float = 0.13,  # µM
+        Kd_IP3_2: float = 0.9434,  # µM
+        Kd_act: float = 0.08234,  # µM
+        Kd_inh: float = 1.049,  # µM
+        Km_SERCA: float = 0.1,  # µM
+        SIC_scale: float = 1.0,  # dimensionless
+        SIC_th: float = 0.19669,  # µM
+        delta_IP3: float = 0.0002,  # µM
+        k_IP3R: float = 0.0002,  # 1/(µM·ms)
+        rate_IP3R: float = 0.006,  # 1/ms
+        rate_L: float = 0.00011,  # 1/ms
+        rate_SERCA: float = 0.0009,  # µM/ms
         ratio_ER_cyt: float = 0.185,  # dimensionless
-        tau_IP3: float = 7142.0,      # ms
+        tau_IP3: float = 7142.0,  # ms
         gsl_error_tol: float = 1e-3,
         # State initializers
         IP3_initializer: float = None,
-        Ca_initializer: float = 0.073,    # µM
+        Ca_initializer: float = 0.073,  # µM
         h_IP3R_initializer: float = 0.793,
         name: str = None,
     ):

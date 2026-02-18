@@ -40,8 +40,9 @@ def _rhs(y, is_refractory, i_stim, i_sic, p):
     i_syn_in = g_in * (v_eff - p['E_in'])
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
     dv = 0.0 if is_refractory else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_ex - i_syn_in - w + p['I_e'] + i_stim + i_sic
-    ) / p['C_m']
+                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_ex - i_syn_in - w + p[
+                                       'I_e'] + i_stim + i_sic
+                                   ) / p['C_m']
 
     ddg_ex = -dg_ex / p['tau_syn_ex']
     dg_ex_dt = dg_ex - g_ex / p['tau_syn_ex']
@@ -55,7 +56,8 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
     min_h = 1e-8
     t = 0.0
     h = max(state['h'], min_h)
-    y = np.asarray([state['v'], state['dg_ex'], state['g_ex'], state['dg_in'], state['g_in'], state['w']], dtype=np.float64)
+    y = np.asarray([state['v'], state['dg_ex'], state['g_ex'], state['dg_in'], state['g_in'], state['w']],
+                   dtype=np.float64)
     r = int(state['r'])
     spike_count = 0
     iters = 0
@@ -540,7 +542,8 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
         nrn = nest.Create('aeif_cond_alpha_astro')
         nest.Connect(astro, nrn, syn_spec={'synapse_model': 'sic_connection'})
 
-        mm_nrn = nest.Create('multimeter', params={'record_from': ['V_m', 'w', 'g_ex', 'g_in', 'I_SIC'], 'interval': dt_ms})
+        mm_nrn = nest.Create('multimeter',
+                             params={'record_from': ['V_m', 'w', 'g_ex', 'g_in', 'I_SIC'], 'interval': dt_ms})
         mm_astro = nest.Create('multimeter', params={'record_from': ['Ca_astro'], 'interval': dt_ms})
         nest.Connect(mm_nrn, nrn)
         nest.Connect(mm_astro, astro)
@@ -594,7 +597,8 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
         valid = (bp_indices >= 0) & (bp_indices < len(bp_v))
         bp_indices = bp_indices[valid]
 
-        npt.assert_allclose(bp_v[bp_indices], nest_v[valid], atol=2e-5, rtol=0.0, err_msg='V_m mismatch vs NEST SIC run')
+        npt.assert_allclose(bp_v[bp_indices], nest_v[valid], atol=2e-5, rtol=0.0,
+                            err_msg='V_m mismatch vs NEST SIC run')
         npt.assert_allclose(bp_w[bp_indices], nest_w[valid], atol=2e-5, rtol=0.0, err_msg='w mismatch vs NEST SIC run')
         npt.assert_allclose(
             bp_g_ex[bp_indices], nest_g_ex[valid], atol=2e-12, rtol=0.0, err_msg='g_ex mismatch vs NEST SIC run'

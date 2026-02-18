@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 
 from brainstate.typing import ArrayLike
@@ -26,7 +25,6 @@ from .stdp_synapse import stdp_synapse
 __all__ = [
     'stdp_nn_pre_centered_synapse',
 ]
-
 
 _STDP_EPS = 1.0e-6
 

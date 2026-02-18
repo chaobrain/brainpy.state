@@ -38,8 +38,8 @@ def _rhs(y, is_refractory, i_stim, p):
 
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
     dv = 0.0 if is_refractory else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + p['I_e'] + i_stim
-    ) / p['C_m']
+                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + p['I_e'] + i_stim
+                                   ) / p['C_m']
 
     dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
     return np.asarray([dv, dw], dtype=np.float64)
@@ -92,7 +92,8 @@ def _reference_step(state, p, x_next, delta_step, dt_ms):
         )
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
         atol = p['atol']
 
@@ -278,7 +279,8 @@ class TestAEIFPscDelta(unittest.TestCase):
 
                 self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['v'], delta=2e-6)
                 self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['w'], delta=2e-6)
-                self.assertAlmostEqual(float(neuron.refractory_spike_buffer.value[0]), ref_state['refr_buf'], delta=2e-6)
+                self.assertAlmostEqual(float(neuron.refractory_spike_buffer.value[0]), ref_state['refr_buf'],
+                                       delta=2e-6)
                 self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=2e-6)
 

@@ -16,10 +16,9 @@
 # -*- coding: utf-8 -*-
 
 
-
-import numpy as np
-import jax.numpy as jnp
 import brainunit as u
+import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike
 
 from .static_synapse import static_synapse
@@ -27,7 +26,6 @@ from .static_synapse import static_synapse
 __all__ = [
     'bernoulli_synapse',
 ]
-
 
 _UNSET = object()
 

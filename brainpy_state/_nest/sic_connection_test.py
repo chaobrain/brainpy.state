@@ -24,7 +24,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import aeif_cond_alpha_astro, sic_connection
 
 jax.config.update('jax_enable_x64', True)

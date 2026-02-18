@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Iterable, Optional, Sequence, Tuple, Union
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -583,7 +582,8 @@ class iaf_psc_delta_ps(NESTNeuron):
                     raise ValueError(f'Unsupported spike event format: {ev}.')
                 offset, weight = ev
 
-            offset_ms = float(u.math.asarray((offset if not isinstance(offset, (int, float)) else offset * u.ms) / u.ms))
+            offset_ms = float(
+                u.math.asarray((offset if not isinstance(offset, (int, float)) else offset * u.ms) / u.ms))
             weight_q = weight if not isinstance(weight, (int, float)) else weight * u.mV
             weight_np = self._broadcast_to_state(self._to_numpy(weight_q, u.mV), shape)
             parsed.append((offset_ms, weight_np))

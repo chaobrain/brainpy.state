@@ -1,4 +1,12 @@
+import math
+from typing import Any
+
+import brainunit as u
+import numpy as np
+from brainstate.typing import ArrayLike
+
 from ._base import NESTSynapse
+
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,17 +21,7 @@ from ._base import NESTSynapse
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 # -*- coding: utf-8 -*-
-
-
-
-import math
-from typing import Any
-
-import brainunit as u
-import numpy as np
-from brainstate.typing import ArrayLike
 
 __all__ = [
     'urbanczik_synapse',
@@ -730,9 +728,9 @@ class urbanczik_synapse(NESTSynapse):
             minus_t_down = t_up - t_spike
 
             PI = (
-                self.tau_L_trace * math.exp(minus_delta_t_up / tau_L)
-                - self.tau_s_trace * math.exp(minus_delta_t_up / tau_s)
-            ) * dw
+                     self.tau_L_trace * math.exp(minus_delta_t_up / tau_L)
+                     - self.tau_s_trace * math.exp(minus_delta_t_up / tau_s)
+                 ) * dw
             self.PI_integral += PI
             dPI_exp_integral += math.exp(minus_t_down / self.tau_Delta) * PI
 

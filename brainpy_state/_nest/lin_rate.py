@@ -16,14 +16,12 @@
 # -*- coding: utf-8 -*-
 
 
-
-from typing import Callable, Iterable, Tuple
-
-import numpy as np
+from typing import Callable, Tuple
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron

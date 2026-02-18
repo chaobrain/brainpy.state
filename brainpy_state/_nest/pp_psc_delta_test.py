@@ -46,7 +46,6 @@ import braintools
 import brainstate
 import brainunit as u
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._nest.pp_psc_delta import pp_psc_delta
@@ -153,7 +152,7 @@ def _run_nest_ref(n_steps, h, p, i_stim_seq, delta_v_seq, rand_seq,
                     # For reference, use numpy Poisson with same seed approach
                     lam_p = rate * h * 1e-3
                     n_spikes = int(np.random.RandomState(
-                        int(rand_seq[k] * 2**31)
+                        int(rand_seq[k] * 2 ** 31)
                     ).poisson(lam_p))
 
                 if n_spikes > 0:

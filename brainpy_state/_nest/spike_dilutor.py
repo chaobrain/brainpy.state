@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 
 import brainstate
@@ -30,7 +29,6 @@ from ._base import NESTDevice
 __all__ = [
     'spike_dilutor',
 ]
-
 
 _UNSET = object()
 

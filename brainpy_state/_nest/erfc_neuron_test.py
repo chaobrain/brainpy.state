@@ -24,6 +24,7 @@ import math
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u

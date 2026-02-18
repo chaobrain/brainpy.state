@@ -33,7 +33,6 @@ from brainpy.state import stdp_nn_restr_synapse
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-
 _STDP_EPS = 1.0e-6
 
 

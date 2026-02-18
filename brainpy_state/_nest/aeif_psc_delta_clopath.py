@@ -18,13 +18,12 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -825,8 +824,9 @@ class aeif_psc_delta_clopath(NESTNeuron):
         )
 
         dv = 0.0 if (is_refractory or is_clamped) else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p['I_e'] + i_stim
-        ) / p['C_m']
+                                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p[
+                                                           'I_e'] + i_stim
+                                                       ) / p['C_m']
 
         # NEST sets dw/dt = 0 while clamped, but not during pure refractory.
         dw = 0.0 if is_clamped else (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']

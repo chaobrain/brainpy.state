@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Optional, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -508,7 +507,7 @@ class gif_psc_exp(NESTNeuron):
         if self.lambda_0 < 0.0:
             raise ValueError('lambda_0 must not be negative.')
         if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or \
-           np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
+            np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
             raise ValueError('Synapse time constants must be strictly positive.')
         for tau in self.tau_sfa:
             if tau <= 0.0:

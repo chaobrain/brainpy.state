@@ -16,23 +16,21 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 from collections import deque
 from typing import Sequence
 
 import brainstate
-
-from ._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'pulsepacket_generator',
 ]
-
 
 _UNSET = object()
 
@@ -601,7 +599,8 @@ class pulsepacket_generator(NESTDevice):
             stop=new_stop,
         )
 
-        need_new_pulse = (new_activity != self.activity) or (not math.isclose(new_sdev, self.sdev, rel_tol=0.0, abs_tol=0.0))
+        need_new_pulse = (new_activity != self.activity) or (
+            not math.isclose(new_sdev, self.sdev, rel_tol=0.0, abs_tol=0.0))
 
         if pulse_times is _UNSET:
             new_pulse_times = self._pulse_times_ms.copy()

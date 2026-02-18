@@ -34,12 +34,11 @@ amat2_psc_exp model, including:
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
+import numpy as np
 
 from brainpy_state._nest.amat2_psc_exp import amat2_psc_exp
 
@@ -70,25 +69,25 @@ def _compute_propagators(h, taum, tauE, tauI, tauV, c, beta, tau_1, tau_2):
 
     P60 = (beta * (em - eV) * taum * tauV) / (c * (taum - tauV))
     P61 = (beta * tauE * taum * tauV * (eV * (-tauE + taum) + em * (tauE - tauV) + eE * (-taum + tauV))) \
-        / (c * (tauE - taum) * (tauE - tauV) * (taum - tauV))
+          / (c * (tauE - taum) * (tauE - tauV) * (taum - tauV))
     P62 = (beta * tauI * taum * tauV * (eV * (-tauI + taum) + em * (tauI - tauV) + eI * (-taum + tauV))) \
-        / (c * (tauI - taum) * (tauI - tauV) * (taum - tauV))
+          / (c * (tauI - taum) * (tauI - tauV) * (taum - tauV))
     P63 = (beta * (-em + eV) * tauV) / (taum - tauV)
 
     P70 = (beta * taum * tauV * (em * taum * tauV - eV * (h * (taum - tauV) + taum * tauV))) \
-        / (c * (taum - tauV) ** 2)
+          / (c * (taum - tauV) ** 2)
     P71 = (beta * tauE * taum * tauV
            * ((em * taum * (tauE - tauV) ** 2 - eE * tauE * (taum - tauV) ** 2) * tauV
               - eV * (tauE - taum)
               * (h * (tauE - tauV) * (taum - tauV) + tauE * taum * tauV - tauV ** 3))) \
-        / (c * (tauE - taum) * (tauE - tauV) ** 2 * (taum - tauV) ** 2)
+          / (c * (tauE - taum) * (tauE - tauV) ** 2 * (taum - tauV) ** 2)
     P72 = (beta * tauI * taum * tauV
            * ((em * taum * (tauI - tauV) ** 2 - eI * tauI * (taum - tauV) ** 2) * tauV
               - eV * (tauI - taum)
               * (h * (tauI - tauV) * (taum - tauV) + tauI * taum * tauV - tauV ** 3))) \
-        / (c * (tauI - taum) * (tauI - tauV) ** 2 * (taum - tauV) ** 2)
+          / (c * (tauI - taum) * (tauI - tauV) ** 2 * (taum - tauV) ** 2)
     P73 = (beta * tauV * (-(em * taum * tauV) + eV * (h * (taum - tauV) + taum * tauV))) \
-        / (taum - tauV) ** 2
+          / (taum - tauV) ** 2
     P76 = eV * h
 
     return dict(
@@ -123,9 +122,9 @@ def _nest_reference_step(state, p, P, w_ex=0.0, w_in=0.0, x0_new=0.0):
 
     # Step 1: Evolve voltage-dependent threshold
     V_th_v_new = (I_e + i_0) * P['P70'] + i_syn_ex * P['P71'] + i_syn_in * P['P72'] \
-        + V_rel * P['P73'] + V_th_dv * P['P76'] + V_th_v * P['P77']
+                 + V_rel * P['P73'] + V_th_dv * P['P76'] + V_th_v * P['P77']
     V_th_dv_new = (I_e + i_0) * P['P60'] + i_syn_ex * P['P61'] + i_syn_in * P['P62'] \
-        + V_rel * P['P63'] + V_th_dv * P['P66']
+                  + V_rel * P['P63'] + V_th_dv * P['P66']
     V_th_v = V_th_v_new
     V_th_dv = V_th_dv_new
 

@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -267,9 +268,9 @@ class TestPoissonGeneratorPSVsNEST(unittest.TestCase):
         bp_counts_aligned = np.zeros_like(bp_counts)
         bp_counts_aligned[1:] = bp_counts[:-1]
 
-        active = slice(600, 1900)      # [60, 190) ms, safely inside active interval
-        off_early = slice(50, 200)     # [5, 20) ms, before activation
-        off_late = slice(2600, 3050)   # [260, 305) ms, after deactivation
+        active = slice(600, 1900)  # [60, 190) ms, safely inside active interval
+        off_early = slice(50, 200)  # [5, 20) ms, before activation
+        off_late = slice(2600, 3050)  # [260, 305) ms, after deactivation
 
         nest_mean_active = float(np.mean(nest_counts[active]))
         bp_mean_active = float(np.mean(bp_counts_aligned[active]))

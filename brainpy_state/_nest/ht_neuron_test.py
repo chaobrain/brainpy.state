@@ -34,15 +34,13 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import ht_neuron
+from scipy.integrate import solve_ivp
+
 from brainpy_state._nest.ht_neuron import (
     _beta_normalization_factor,
     _m_eq_h,

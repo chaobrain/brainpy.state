@@ -42,8 +42,8 @@ def _rhs(y, is_refractory, i_stim, p):
     i_syn = float(np.sum(g * (p['E_rev'] - v_eff)))
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
     dv = 0.0 if is_refractory else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
-    ) / p['C_m']
+                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
+                                   ) / p['C_m']
     dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
 
     dy = np.empty_like(y, dtype=np.float64)
@@ -371,8 +371,10 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
 
                 self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['y'][0], delta=2e-6)
                 self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['y'][1], delta=2e-6)
-                npt.assert_allclose(np.asarray(neuron.dg.value, dtype=np.float64)[0], ref_state['y'][2::2], atol=2e-6, rtol=0.0)
-                npt.assert_allclose(np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=np.float64)[0], ref_state['y'][3::2], atol=2e-6, rtol=0.0)
+                npt.assert_allclose(np.asarray(neuron.dg.value, dtype=np.float64)[0], ref_state['y'][2::2], atol=2e-6,
+                                    rtol=0.0)
+                npt.assert_allclose(np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=np.float64)[0],
+                                    ref_state['y'][3::2], atol=2e-6, rtol=0.0)
                 self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=2e-6)
 

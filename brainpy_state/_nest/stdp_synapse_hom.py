@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 from collections.abc import Mapping
 
 from .stdp_synapse import stdp_synapse
