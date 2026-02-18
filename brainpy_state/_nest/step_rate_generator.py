@@ -18,12 +18,11 @@
 from typing import Sequence
 
 import brainstate
-
-from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
-import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
+
+from brainpy_state._nest._base import NESTDevice
 
 __all__ = [
     'step_rate_generator',
@@ -75,7 +74,7 @@ class step_rate_generator(NESTDevice):
     Enforced constraints:
 
     - ``len(amplitude_times) == len(amplitude_values)``.
-    - ``amplitude_times`` are strictly increasing after conversion to float ms.
+    - ``amplitude_times`` are strictly increasing.
 
     Accepted but not additionally constrained:
 
@@ -86,11 +85,11 @@ class step_rate_generator(NESTDevice):
 
     **3. Computational implications**
 
-    :meth:`update` performs a linear scan over ``amplitude_times`` to locate
-    the active plateau, then broadcasts one scalar rate over ``self.varshape``
-    and applies one boolean activity mask. Per-call complexity is
-    :math:`O(K + \prod \mathrm{varshape})`, where :math:`K` is the number of
-    schedule entries.
+    Each :meth:`update` call uses :func:`u.math.searchsorted` to find the
+    active plateau, then selects the pre-broadcast rate array for
+    ``self.varshape`` and applies one boolean activity mask. Per-call
+    complexity is :math:`O(\log K + \prod \mathrm{varshape})`, where
+    :math:`K` is the number of schedule entries.
 
     Parameters
     ----------
@@ -100,14 +99,16 @@ class step_rate_generator(NESTDevice):
         ``self.varshape`` derived from ``in_size``. Default is ``1``.
     amplitude_times : Sequence, optional
         Ordered sequence of change times with length ``K``. Each value may be
-        a unitful time (typically ms) or a unitless numeric interpreted as ms.
-        Internally converted to plain ``float`` milliseconds and stored as a
-        Python list. Must be strictly increasing. Default is ``()``.
+        a unitful time (typically ms) or a unitless numeric. Passed directly to
+        :func:`u.math.asarray`, which validates unit consistency across all
+        entries. Must be strictly increasing. Default is ``()``.
     amplitude_values : Sequence, optional
         Sequence of plateau rates with length ``K`` matching
         ``amplitude_times`` elementwise. Values represent spikes/s (Hz) and
-        may be unitful or unitless. Internally converted to plain ``float``
-        values and stored as a Python list. Default is ``()``.
+        may be unitful or unitless. Each entry is converted via
+        :func:`u.math.asarray` and expanded to the maximum ndim found across
+        all entries (by prepending size-1 axes); the results are stacked to a
+        shape that is broadcastable to ``(K, *varshape)``. Default is ``()``.
     start : ArrayLike, optional
         Relative start time :math:`t_{\mathrm{start,rel}}` (typically ms),
         broadcast to ``self.varshape`` via :func:`braintools.init.param`.
@@ -137,7 +138,7 @@ class step_rate_generator(NESTDevice):
        * - ``amplitude_times``
          - ``()``
          - :math:`t_k`
-         - Change times (ms) for piecewise-constant rate plateaus.
+         - Change times for piecewise-constant rate plateaus.
        * - ``amplitude_values``
          - ``()``
          - :math:`a_k`
@@ -159,10 +160,11 @@ class step_rate_generator(NESTDevice):
     ------
     ValueError
         If ``amplitude_times`` and ``amplitude_values`` lengths differ, or if
-        ``amplitude_times`` is not strictly increasing after conversion to ms.
+        ``amplitude_times`` is not strictly increasing.
     TypeError
-        If unitful/unitless arithmetic is invalid during schedule conversion,
-        parameter broadcasting, or time-window comparisons.
+        If :func:`u.math.asarray` detects unit inconsistency across entries,
+        or if unitful/unitless arithmetic is invalid during broadcasting or
+        time-window comparisons.
     KeyError
         At update time, if simulation time ``'t'`` is missing from
         ``brainstate.environ``.
@@ -172,7 +174,7 @@ class step_rate_generator(NESTDevice):
     NEST recommends specifying ``amplitude_times`` on a grid of simulation
     resolution ``dt``. Using off-grid change times is allowed but may shift
     the effective change by up to one ``dt`` step depending on floating-point
-    rounding when comparing ``t_ms >= amp_time_ms``. Use ``dc_generator``
+    rounding when comparing ``t >= amp_time``. Use ``dc_generator``
     when only a constant current drive is needed; use ``step_rate_generator``
     when a rate-coded drive must take different values at different simulation
     intervals. Unlike ``step_current_generator``, the emitted quantity is
@@ -238,46 +240,61 @@ class step_rate_generator(NESTDevice):
     ):
         super().__init__(in_size=in_size, name=name)
 
-        # Validate
         if len(amplitude_times) != len(amplitude_values):
             raise ValueError(
                 "amplitude_times and amplitude_values must have the same length. "
                 f"Got {len(amplitude_times)} and {len(amplitude_values)}."
             )
+        assert len(amplitude_times) > 0, "At least one schedule entry is required. Got len(amplitude_times) = 0."
 
-        # Store amplitude schedule as plain Python lists
-        self._amp_times_ms = []
-        for t in amplitude_times:
-            if u.is_unitless(t):
-                self._amp_times_ms.append(float(t))
-            else:
-                self._amp_times_ms.append(float(t / u.ms))
+        # Store amplitude_times as a Quantity array; u.math.asarray validates
+        # that all entries share a consistent unit.
+        # Shape: (K,)
+        self.amplitude_times = u.math.asarray(amplitude_times)
 
-        self._amp_values = []
-        for a in amplitude_values:
-            if u.is_unitless(a):
-                self._amp_values.append(float(a))
-            else:
-                # Rate values may have Hz units or be dimensionless
-                self._amp_values.append(float(a))
-
-        # Validate strictly increasing times
-        for i in range(1, len(self._amp_times_ms)):
-            if self._amp_times_ms[i] <= self._amp_times_ms[i - 1]:
+        # Validate strictly increasing times before storing.
+        for i in range(1, len(self.amplitude_times)):
+            if self.amplitude_times[i] <= self.amplitude_times[i - 1]:
                 raise ValueError(
                     "amplitude_times must be strictly increasing. "
-                    f"Got {self._amp_times_ms[i - 1]} >= {self._amp_times_ms[i]} at index {i}."
+                    f"Got {self.amplitude_times[i - 1]} >= {self.amplitude_times[i]} at index {i}."
                 )
 
-        self.start = braintools.init.param(start, self.varshape)
-        if stop is not None:
-            self.stop = braintools.init.param(stop, self.varshape)
+        # Convert each amplitude value to an array.
+        # 1. Find the maximum ndim across all values.
+        # 2. Align each value to max_ndim by prepending size-1 axes.
+        # 3. Compute the element-wise maximum size per dimension as the final
+        #    broadcast shape (each element must have size 1 or the max size in
+        #    every dimension, which is the standard broadcast contract).
+        # 4. Broadcast every element to that final shape, then stack to
+        #    (K, *final_shape) so that final_shape is broadcastable to varshape.
+        amp_vals = [u.math.asarray(v) for v in amplitude_values]
+        if amp_vals:
+            max_ndim = max(v.ndim for v in amp_vals)
+            expanded = []
+            for v in amp_vals:
+                extra = max_ndim - v.ndim
+                if extra:
+                    v = u.math.reshape(v, (1,) * extra + v.shape)
+                expanded.append(v)
+            final_shape = tuple(max(v.shape[d] for v in expanded) for d in range(max_ndim))
+            self.amplitude_values = u.math.stack(
+                [u.math.broadcast_to(v, final_shape) for v in expanded]
+            )
         else:
-            self.stop = None
+            self.amplitude_values = u.math.zeros((0,) + tuple(self.varshape))
+
+        self.start = braintools.init.param(start, self.varshape)
+        self.stop = None if stop is None else braintools.init.param(stop, self.varshape)
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
         r"""Compute scheduled rate at environment time ``t``.
+
+        The implementation is fully compatible with ``jax.jit``: the schedule
+        look-up uses :func:`u.math.searchsorted` on the static
+        ``amplitude_times`` array, while ``t`` remains a traced value
+        throughout.
 
         Returns
         -------
@@ -292,46 +309,50 @@ class step_rate_generator(NESTDevice):
         ------
         KeyError
             If ``brainstate.environ`` has no ``'t'`` entry.
-        TypeError
-            If provided time values cannot be compared because of incompatible
-            units or dtypes.
-        ValueError
-            If conversion of schedule entries to floating-point ms fails.
 
         Notes
         -----
-        The schedule lookup is linear in ``len(amplitude_times)``. This is
-        efficient for short schedules and preserves straightforward NEST-like
-        semantics without interpolation. Start is inclusive and stop is
-        exclusive, matching NEST semantics. If ``stop <= start`` (after
-        adding ``origin``), the active set is empty and the output is
-        identically zero for all ``t``.
+        Both ``amplitude_times`` and ``t`` are divided by ``u.ms`` to obtain
+        dimensionless arrays before calling :func:`u.math.searchsorted`.
+        ``u.math.searchsorted(..., side='right') - 1`` returns the index of
+        the most-recently-passed change point, or ``-1`` when ``t`` precedes
+        all change times (zero rate).  :func:`u.math.clip` keeps the index in
+        bounds for the gather; :func:`u.math.where` then suppresses the result
+        when the index is negative.  Start is inclusive and stop is exclusive,
+        matching NEST semantics.
 
         See Also
         --------
         step_rate_generator : Class-level parameter definitions and model equations.
         step_current_generator.update : Windowed piecewise-constant current update rule.
         dc_generator.update : Windowed constant-current update rule.
-"""
+        """
         t = brainstate.environ.get('t')
+        # zeros has shape varshape so that u.math.where always broadcasts the
+        # selected rate value to the full output shape.
+        zeros = u.math.zeros(self.varshape, unit=u.get_unit(self.amplitude_values))
 
-        # Get t in ms
-        if u.is_unitless(t):
-            t_ms = float(t)
-        else:
-            t_ms = float(t / u.ms)
+        if len(self.amplitude_times) == 0:
+            # No schedule entries: output is always zero.
+            return zeros
 
-        # Find the current rate based on time
-        rate = 0.0
-        for i in range(len(self._amp_times_ms)):
-            if t_ms >= self._amp_times_ms[i]:
-                rate = self._amp_values[i]
-            else:
-                break
+        # Divide both by u.ms to obtain dimensionless arrays for searchsorted.
+        # amplitude_times is a static array (compile-time constant under jit);
+        # t_dimless is the only traced value in the look-up.
+        t_dimless = u.math.asarray(t / u.ms)
+        times_dimless = u.math.asarray(self.amplitude_times / u.ms)
 
-        rate_arr = rate * jnp.ones(self.varshape)
+        # Last index k such that amplitude_times[k] <= t, or -1 if none.
+        idx = u.math.searchsorted(times_dimless, t_dimless, side='right') - 1
 
-        # Check if device is active
+        # Clamp to a valid index for the gather (idx=-1 is handled by where).
+        safe_idx = u.math.clip(idx, 0, self.amplitude_values.shape[0] - 1)
+
+        # amplitude_values has shape (K, *broadcast_shape); indexing with a scalar
+        # safe_idx yields shape (*broadcast_shape,) broadcastable to varshape.
+        rate = u.math.where(idx >= 0, self.amplitude_values[safe_idx], zeros)
+
+        # NEST-compatible half-open activity window [origin+start, origin+stop).
         t_start = self.origin + self.start
         if self.stop is not None:
             t_stop = self.origin + self.stop
@@ -339,8 +360,4 @@ class step_rate_generator(NESTDevice):
         else:
             active = t >= t_start
 
-        # For rate, we use dimensionless values
-        if u.is_unitless(active):
-            return jnp.where(active, rate_arr, jnp.zeros_like(rate_arr))
-        else:
-            return jnp.where(active, rate_arr, jnp.zeros_like(rate_arr))
+        return u.math.where(active, rate, u.math.zeros_like(rate))
