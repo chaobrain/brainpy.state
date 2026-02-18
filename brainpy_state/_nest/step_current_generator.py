@@ -20,15 +20,17 @@ from typing import Sequence
 import brainstate
 import braintools
 import brainunit as u
-import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
+from ._utils import stack_schedule_values
 
 __all__ = [
     'step_current_generator',
 ]
 
 
-class step_current_generator(brainstate.nn.Dynamics):
+class step_current_generator(NESTDevice):
     r"""Piecewise-constant current generator -- NEST-compatible stimulation device.
 
     Generate a deterministic piecewise-constant current trace and gate it with
@@ -73,7 +75,7 @@ class step_current_generator(brainstate.nn.Dynamics):
     Enforced constraints in this implementation:
 
     - ``len(amplitude_times) == len(amplitude_values)``.
-    - ``amplitude_times`` are strictly increasing after conversion to float ms.
+    - ``amplitude_times`` are strictly increasing.
 
     Inputs accepted but not explicitly constrained:
 
@@ -84,10 +86,10 @@ class step_current_generator(brainstate.nn.Dynamics):
 
     **3. Computational implications**
 
-    Each :meth:`update` call scans ``amplitude_times`` linearly to find the
-    active plateau, then broadcasts one scalar current over ``self.varshape``
-    and applies one boolean mask. Per-call complexity is
-    :math:`O(K + \prod \mathrm{varshape})`, with :math:`K` schedule entries.
+    Each :meth:`update` call uses :func:`u.math.searchsorted` to find the
+    active plateau, then selects the pre-broadcast current array for
+    ``self.varshape`` and applies one boolean mask. Per-call complexity is
+    :math:`O(\log K + \prod \mathrm{varshape})`, with :math:`K` schedule entries.
 
     Parameters
     ----------
@@ -97,15 +99,16 @@ class step_current_generator(brainstate.nn.Dynamics):
         ``self.varshape`` derived from ``in_size``. Default is ``1``.
     amplitude_times : Sequence, optional
         Ordered sequence of change times with length ``K``. Entries may be
-        unitful times (typically ms) or unitless numerics interpreted as ms.
-        Internally, each entry is converted to ``float(t / u.ms)`` (or
-        ``float(t)`` when unitless). Must be strictly increasing. Default is
-        ``()``.
+        unitful times (typically ms) or unitless numerics. Passed directly to
+        :func:`u.math.asarray`, which validates unit consistency across all
+        entries. Must be strictly increasing. Default is ``()``.
     amplitude_values : Sequence, optional
         Sequence of current plateaus with length ``K`` matching
         ``amplitude_times`` elementwise. Entries may be unitful currents
-        (typically pA) or unitless numerics interpreted as pA. Internally
-        converted to plain floats in pA. Default is ``()``.
+        (typically pA) or unitless numerics. Each entry is converted via
+        :func:`u.math.asarray` and expanded to the maximum ndim found across
+        all entries (by prepending size-1 axes); the results are stacked to a
+        shape that is broadcastable to ``(K, *varshape)``. Default is ``()``.
     start : ArrayLike, optional
         Relative start time :math:`t_{\mathrm{start,rel}}` (typically ms),
         broadcast to ``self.varshape`` via :func:`braintools.init.param`.
@@ -135,11 +138,11 @@ class step_current_generator(brainstate.nn.Dynamics):
        * - ``amplitude_times``
          - ``()``
          - :math:`t_k`
-         - Change times (ms) for piecewise-constant plateaus.
+         - Change times for piecewise-constant plateaus.
        * - ``amplitude_values``
          - ``()``
          - :math:`a_k`
-         - Plateau currents (pA) selected at and after corresponding ``t_k``.
+         - Plateau currents selected at and after corresponding ``t_k``.
        * - ``start``
          - ``0. * u.ms``
          - :math:`t_{\mathrm{start,rel}}`
@@ -157,10 +160,11 @@ class step_current_generator(brainstate.nn.Dynamics):
     ------
     ValueError
         If ``amplitude_times`` and ``amplitude_values`` lengths differ, or if
-        ``amplitude_times`` is not strictly increasing after conversion to ms.
+        ``amplitude_times`` is not strictly increasing.
     TypeError
-        If unitful/unitless arithmetic is invalid during conversion,
-        broadcasting, or time-window comparisons.
+        If :func:`u.math.asarray` detects unit inconsistency across entries,
+        or if unitful/unitless arithmetic is invalid during broadcasting or
+        time-window comparisons.
     KeyError
         At update time, if simulation time ``'t'`` is missing from
         ``brainstate.environ``.
@@ -170,7 +174,7 @@ class step_current_generator(brainstate.nn.Dynamics):
     NEST recommends specifying ``amplitude_times`` on a grid of simulation
     resolution ``dt``.  Using off-grid change times is allowed but may shift
     the effective change by up to one ``dt`` step depending on floating-point
-    rounding when comparing ``t_ms >= amp_time_ms``.  Use ``dc_generator``
+    rounding when comparing ``t >= amp_time``.  Use ``dc_generator``
     when only a single constant plateau is needed; ``step_current_generator``
     is the preferred device when the current must take different values at
     different intervals within a single simulation run.
@@ -236,74 +240,63 @@ class step_current_generator(brainstate.nn.Dynamics):
     ):
         super().__init__(in_size=in_size, name=name)
 
-        # Validate
         if len(amplitude_times) != len(amplitude_values):
             raise ValueError(
                 "amplitude_times and amplitude_values must have the same length. "
                 f"Got {len(amplitude_times)} and {len(amplitude_values)}."
             )
+        assert len(amplitude_times) > 0, "At least one schedule entry is required. Got len(amplitude_times) = 0."
 
-        # Store amplitude schedule as plain Python lists for easy indexing
-        # Convert to float ms and float pA for internal use
-        self._amp_times_ms = []
-        for t in amplitude_times:
-            if u.is_unitless(t):
-                self._amp_times_ms.append(float(t))
-            else:
-                self._amp_times_ms.append(float(t / u.ms))
+        # Store amplitude_times as a Quantity array; u.math.asarray validates
+        # that all entries share a consistent unit.
+        # Shape: (K,)
+        self.amplitude_times = u.math.asarray(amplitude_times)
 
-        self._amp_values_pA = []
-        for a in amplitude_values:
-            if u.is_unitless(a):
-                self._amp_values_pA.append(float(a))
-            else:
-                self._amp_values_pA.append(float(a / u.pA))
-
-        # Validate strictly increasing times
-        for i in range(1, len(self._amp_times_ms)):
-            if self._amp_times_ms[i] <= self._amp_times_ms[i - 1]:
+        # Validate strictly increasing times before storing.
+        for i in range(1, len(self.amplitude_times)):
+            if self.amplitude_times[i] <= self.amplitude_times[i - 1]:
                 raise ValueError(
                     "amplitude_times must be strictly increasing. "
-                    f"Got {self._amp_times_ms[i - 1]} >= {self._amp_times_ms[i]} at index {i}."
+                    f"Got {self.amplitude_times[i - 1]} >= {self.amplitude_times[i]} at index {i}."
                 )
 
+        self.amplitude_values = stack_schedule_values(amplitude_values, self.varshape)
+
         self.start = braintools.init.param(start, self.varshape)
-        if stop is not None:
-            self.stop = braintools.init.param(stop, self.varshape)
-        else:
-            self.stop = None
+        self.stop = None if stop is None else braintools.init.param(stop, self.varshape)
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
         r"""Compute scheduled current at environment time ``t``.
 
+        The implementation is fully compatible with ``jax.jit``: the schedule
+        look-up uses :func:`u.math.searchsorted` on the static ``amplitude_times``
+        array, while ``t`` remains a traced value throughout.
+
         Returns
         -------
-        out : jax.Array
-            Current-like quantity with shape ``self.varshape``. For each output
+        out : Quantity
+            Current quantity with shape ``self.varshape``. For each output
             channel, value equals the latest scheduled plateau whose change time
             is ``<= t``; channels outside the active window
-            ``[origin + start, origin + stop)`` are set to zero (or
-            ``t >= origin + start`` when ``stop is None``).
+            ``[origin + start, origin + stop)`` are set to zero (or all
+            active when ``stop is None``).
 
         Raises
         ------
         KeyError
             If ``brainstate.environ`` has no ``'t'`` entry.
-        TypeError
-            If provided time values cannot be compared because of incompatible
-            units or dtypes.
-        ValueError
-            If conversion of schedule entries to floating-point ms/pA fails.
 
         Notes
         -----
-        The schedule lookup is linear in ``len(amplitude_times)``. This is
-        efficient for short schedules and preserves straightforward NEST-like
-        semantics without interpolation.  Start is inclusive and stop is
-        exclusive, matching NEST semantics.  If ``stop <= start`` (after
-        adding ``origin``), the active set is empty and the output is
-        identically zero for all ``t``.
+        Both ``amplitude_times`` and ``t`` are divided by ``u.ms`` to obtain
+        dimensionless arrays before calling :func:`u.math.searchsorted`.
+        ``u.math.searchsorted(..., side='right') - 1`` returns the index of
+        the most-recently-passed change point, or ``-1`` when ``t`` precedes
+        all change times (zero current).  :func:`u.math.clip` keeps the index
+        in bounds for the gather; :func:`u.math.where` then suppresses the
+        result when the index is negative.  Start is inclusive and stop is
+        exclusive, matching NEST semantics.
 
         See Also
         --------
@@ -313,28 +306,25 @@ class step_current_generator(brainstate.nn.Dynamics):
 
         """
         t = brainstate.environ.get('t')
+        zeros = u.math.zeros(self.amplitude_values.shape[1:], unit=u.get_unit(self.amplitude_values))
 
-        # Get t in ms
-        if u.is_unitless(t):
-            t_ms = float(t)
-        else:
-            t_ms = float(t / u.ms)
+        # Divide both by u.ms to obtain dimensionless arrays for searchsorted.
+        # amplitude_times is a static array (compile-time constant under jit);
+        # t_dimless is the only traced value in the look-up.
+        t_dimless = u.math.asarray(t / u.ms)
+        times_dimless = u.math.asarray(self.amplitude_times / u.ms)
 
-        # Find the current amplitude based on time
-        # NEST applies amplitude one step ahead: at step where
-        # curr_time + 1 == amp_time, so by the time we reach amp_time,
-        # the amplitude is already set. This means: at time t, the amplitude
-        # is the value for the largest amp_time <= t.
-        amp_pA = 0.0
-        for i in range(len(self._amp_times_ms)):
-            if t_ms >= self._amp_times_ms[i]:
-                amp_pA = self._amp_values_pA[i]
-            else:
-                break
+        # Last index k such that amplitude_times[k] <= t, or -1 if none.
+        idx = u.math.searchsorted(times_dimless, t_dimless, side='right') - 1
 
-        amplitude = amp_pA * u.pA * jnp.ones(self.varshape)
+        # Clamp to a valid index for the gather (idx=-1 is handled by where).
+        safe_idx = u.math.clip(idx, 0, self.amplitude_values.shape[0] - 1)
 
-        # Check if device is active
+        # amplitude_values has shape (K, *broadcast_shape); indexing with a scalar
+        # safe_idx yields shape (*broadcast_shape,) broadcastable to varshape.
+        amplitude = u.math.where(idx >= 0, self.amplitude_values[safe_idx], zeros)
+
+        # NEST-compatible half-open activity window [origin+start, origin+stop).
         t_start = self.origin + self.start
         if self.stop is not None:
             t_stop = self.origin + self.stop

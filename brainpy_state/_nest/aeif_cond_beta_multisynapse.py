@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_beta_multisynapse',
 ]
 
 
-class aeif_cond_beta_multisynapse(Neuron):
+class aeif_cond_beta_multisynapse(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_beta_multisynapse`` neuron model.
 
     Conductance-based adaptive exponential integrate-and-fire neuron with
@@ -960,35 +960,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         fully vectorized implementations but ensure identical spike timing and
         update ordering. For large-scale simulations, consider NEST-GPU or
         vectorized BrainPy models.
-
-        Examples
-        --------
-        Single timestep with continuous current:
-
-        .. code-block:: python
-
-           >>> import brainstate as bst
-           >>> import brainunit as u
-           >>> neuron = bp.aeif_cond_beta_multisynapse(in_size=5)
-           >>> with bst.environ.context(dt=0.1 * u.ms):
-           ...     neuron.init_all_states()
-           ...     spk = neuron.update(x=300.0 * u.pA)
-           ...     print(spk)  # doctest: +SKIP
-
-        With receptor-specific spike events:
-
-        .. code-block:: python
-
-           >>> events = [(1, 5.0 * u.nS), (2, 3.0 * u.nS)]
-           >>> spk = neuron.update(x=100.0 * u.pA, spike_events=events)  # doctest: +SKIP
-
-        Accessing updated state:
-
-        .. code-block:: python
-
-           >>> print(neuron.V.value)  # doctest: +SKIP
-           >>> print(neuron.g.value)  # shape: (\*in_size, n_receptors)  # doctest: +SKIP
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

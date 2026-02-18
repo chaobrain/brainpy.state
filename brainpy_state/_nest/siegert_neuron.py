@@ -27,7 +27,7 @@ import braintools
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from ._base import NESTNeuron
 
 __all__ = [
     'siegert_neuron',
@@ -46,7 +46,7 @@ except Exception:  # pragma: no cover - fallback path when SciPy is unavailable.
 _GAUSS_NODES, _GAUSS_WEIGHTS = np.polynomial.legendre.leggauss(64)
 
 
-class siegert_neuron(Dynamics):
+class siegert_neuron(NESTNeuron):
     r"""NEST-compatible ``siegert_neuron`` mean-field rate model.
 
     **1. Overview**

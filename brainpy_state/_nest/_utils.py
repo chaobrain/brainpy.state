@@ -23,11 +23,10 @@ This module extracts common helper functions used across 60+ model files in the
 parameter) and operate on plain NumPy / JAX arrays or brainunit quantities.
 """
 
-import numpy as np
-
 import brainstate
 import brainunit as u
 import jax.numpy as jnp
+import numpy as np
 
 __all__ = [
     'to_numpy',
@@ -43,6 +42,7 @@ __all__ = [
     'rkf45_integrate',
     'sum_signed_delta_inputs',
     'time_window_gate',
+    'stack_schedule_values',
 ]
 
 
@@ -481,3 +481,53 @@ def time_window_gate(value, origin, start, stop):
     else:
         active = t >= t_start
     return u.math.where(active, value, u.math.zeros_like(value))
+
+
+# ---------------------------------------------------------------------------
+# I. Schedule value stacking
+# ---------------------------------------------------------------------------
+
+def stack_schedule_values(amplitude_values, varshape):
+    """Convert a sequence of schedule values into a stacked Quantity array.
+
+    Each entry in *amplitude_values* is converted via :func:`u.math.asarray`
+    and then expanded to the same number of dimensions as the element with the
+    highest ndim (by prepending size-1 axes).  The element-wise maximum size
+    in each dimension defines *final_shape*, and every entry is broadcast to
+    that shape before stacking.  The result has shape
+    ``(K, *final_shape)`` where ``final_shape`` is broadcastable to
+    *varshape*.
+
+    Parameters
+    ----------
+    amplitude_values : Sequence
+        Ordered sequence of ``K`` plateau values.  Entries may be unitful
+        Quantities or plain numerics; unit consistency is enforced by
+        :func:`u.math.stack`.
+    varshape : tuple
+        Output shape of the model (``self.varshape``).  Used only for the
+        empty-schedule fallback zeros array.
+
+    Returns
+    -------
+    amplitude_values : Quantity or jax.Array
+        Shape ``(K, *final_shape)`` when *amplitude_values* is non-empty, or
+        shape ``(0, *varshape)`` when it is empty.
+    """
+    assert len(amplitude_values) >= 0, 'Schedule must have at least one plateau value.'
+    amp_vals = [u.math.asarray(v) for v in amplitude_values]
+    max_ndim = max(v.ndim for v in amp_vals)
+    # Align all values to max_ndim by prepending size-1 axes.
+    expanded = []
+    for v in amp_vals:
+        extra = max_ndim - v.ndim
+        if extra:
+            v = u.math.reshape(v, (1,) * extra + v.shape)
+        expanded.append(v)
+    # Final shape: element-wise maximum size in each dimension.
+    final_shape = tuple(max(v.shape[d] for v in expanded) for d in range(max_ndim))
+    assert u.math.broadcast_shapes(final_shape, varshape), (
+        f'Final shape {final_shape} is not broadcastable to varshape {varshape}'
+    )
+    # Broadcast each element to final_shape, then stack to (K, *final_shape).
+    return u.math.stack([u.math.broadcast_to(v, final_shape) for v in expanded])

@@ -25,14 +25,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_exp_sfa_rr',
 ]
 
 
-class iaf_cond_exp_sfa_rr(Neuron):
+class iaf_cond_exp_sfa_rr(NESTNeuron):
     r"""NEST-compatible conductance-based LIF neuron with spike-frequency adaptation and relative refractory mechanisms.
 
     This model implements a conductance-based leaky integrate-and-fire neuron with exponential
@@ -823,22 +823,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         * **Vectorization**: This implementation uses scalar RKF45 integration with explicit
           loop over neurons. This ensures exact NEST compatibility but is slower than vectorized
           integration. Each neuron maintains independent adaptive step size.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            >>> import brainstate as bst
-            >>> import brainunit as u
-            >>> import brainpy.state as bp
-            >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=1, I_e=500*u.pA)
-            >>> with bst.environ.context(dt=0.1*u.ms):
-            ...     neuron.init_all_states()
-            ...     for step in range(100):
-            ...         spike = neuron.update()
-            ...         if spike[0] > 0.5:
-            ...             print(f"Spike at step {step}")
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

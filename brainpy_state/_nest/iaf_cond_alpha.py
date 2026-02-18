@@ -26,14 +26,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_alpha',
 ]
 
 
-class iaf_cond_alpha(Neuron):
+class iaf_cond_alpha(NESTNeuron):
     r"""Leaky integrate-and-fire model with alpha-shaped conductance synapses.
 
     Description

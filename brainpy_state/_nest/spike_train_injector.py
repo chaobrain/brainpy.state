@@ -18,6 +18,8 @@
 from typing import Sequence
 
 import brainstate
+
+from ._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -28,7 +30,7 @@ __all__ = [
 ]
 
 
-class spike_train_injector(brainstate.nn.Dynamics):
+class spike_train_injector(NESTDevice):
     r"""Spike train injector -- NEST-compatible event source device.
 
     Emit deterministic spike events at configured times with optional
@@ -386,26 +388,7 @@ class spike_train_injector(brainstate.nn.Dynamics):
         spike_generator.update : Weight-selection (last-match) update rule.
         dc_generator.update : Windowed constant-current update rule.
         step_current_generator.update : Windowed piecewise-constant update rule.
-
-        Examples
-        --------
-        Two entries at ``t = 1 ms`` with multiplicities 2 and 3 accumulate to
-        an output of ``5``:
-
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import spike_train_injector
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = spike_train_injector(
-           ...         spike_times=[1.0 * u.ms, 1.0 * u.ms],
-           ...         spike_multiplicities=[2, 3],
-           ...     )
-           ...     with brainstate.environ.context(t=1.0 * u.ms):
-           ...         out = gen.update()
-           ...     _ = out.shape
-        """
+"""
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
 

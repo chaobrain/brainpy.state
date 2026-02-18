@@ -96,7 +96,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 from .gif_psc_exp import gif_psc_exp
 
 __all__ = [
@@ -104,7 +104,7 @@ __all__ = [
 ]
 
 
-class gif_psc_exp_multisynapse(Neuron):
+class gif_psc_exp_multisynapse(NESTNeuron):
     r"""Current-based generalized integrate-and-fire neuron (GIF) model
     with multiple synaptic time constants.
 

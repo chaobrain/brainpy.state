@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'hh_cond_exp_traub',
@@ -123,7 +123,7 @@ def _hh_cond_exp_traub_equilibrium(V):
     return m_inf, h_inf, n_inf
 
 
-class hh_cond_exp_traub(Neuron):
+class hh_cond_exp_traub(NESTNeuron):
     r"""NEST-compatible ``hh_cond_exp_traub`` neuron model.
 
     Hodgkin-Huxley model for Brette et al. (2007) review, based on Traub and
@@ -908,36 +908,6 @@ class hh_cond_exp_traub(Neuron):
         - Division by zero in rate equations at special voltages (e.g., V = 15 mV
           for alpha_n) is mitigated by L'Hospital's rule in the analytical form,
           but numerical issues may still arise near singularities.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate as bst
-           >>> import brainunit as u
-           >>> from brainpy_state import hh_cond_exp_traub
-           >>>
-           >>> # Single neuron simulation
-           >>> neuron = hh_cond_exp_traub(1)
-           >>> neuron.init_state()
-           >>>
-           >>> with bst.environ.context(dt=0.1*u.ms):
-           ...     for t in range(1000):
-           ...         spike = neuron.update(x=500*u.pA)  # Strong current injection
-           ...         if spike[0]:
-           ...             print(f"Spike at t={t*0.1} ms")
-
-        .. code-block:: python
-
-           >>> # Network simulation with synaptic inputs
-           >>> neurons = hh_cond_exp_traub(100)
-           >>> neurons.init_state()
-           >>>
-           >>> # Register synaptic input
-           >>> neurons.add_delta_input('syn', lambda: 10*u.nS)  # 10 nS conductance jump
-           >>>
-           >>> with bst.environ.context(dt=0.1*u.ms):
-           ...     spikes = neurons.update(x=0*u.pA)
 
         See Also
         --------

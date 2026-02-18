@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_alpha',
 ]
 
 
-class aeif_psc_alpha(Neuron):
+class aeif_psc_alpha(NESTNeuron):
     r"""NEST-compatible adaptive exponential integrate-and-fire neuron with alpha-shaped postsynaptic currents.
 
     This model implements the adaptive exponential integrate-and-fire (AdEx) neuron with
@@ -949,44 +949,7 @@ class aeif_psc_alpha(Neuron):
         For large populations, this can be slow compared to vectorized solvers, but it
         ensures exact NEST compatibility including adaptive step sizing and in-loop spike
         handling.
-
-        Examples
-        --------
-        Single step update:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate as bs
-            >>>
-            >>> neuron = bst.aeif_psc_alpha(10)
-            >>> with bs.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spike = neuron.update(x=400 * u.pA)
-            >>> spike.shape
-            (10,)
-
-        Multi-step simulation:
-
-        .. code-block:: python
-
-            >>> import jax.numpy as jnp
-            >>>
-            >>> neuron = bst.aeif_psc_alpha(5)
-            >>> n_steps = 100
-            >>> spike_train = []
-            >>>
-            >>> with bs.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     for i in range(n_steps):
-            ...         # Inject step current
-            ...         current = 500 * u.pA if i > 20 else 0 * u.pA
-            ...         spike = neuron.update(x=current)
-            ...         spike_train.append(spike)
-            >>>
-            >>> spike_train = jnp.array(spike_train)  # shape: (100, 5)
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

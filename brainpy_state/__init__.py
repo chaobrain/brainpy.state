@@ -94,6 +94,11 @@ from ._brainpy import (
 # =============================================================================
 
 from ._nest import (
+    # base class
+    NESTSynapse,
+    NESTDevice,
+    NESTNeuron,
+
     # Stimulation devices - Current generators
     ac_generator,
     dc_generator,
@@ -308,6 +313,9 @@ __all__ = [
     # =========================================================================
     # NEST-Compatible Models
     # =========================================================================
+
+    # Base classes
+    'NESTDevice', 'NESTNeuron', 'NESTSynapse',
 
     # Stimulation devices - Current generators
     'ac_generator',

@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
@@ -176,7 +176,7 @@ def _h_func(u_val, rate_slope, beta, theta):
     return 15.0 * beta / (1.0 + (1.0 / rate_slope) * math.exp(-beta * (theta - u_val)))
 
 
-class pp_cond_exp_mc_urbanczik(Neuron):
+class pp_cond_exp_mc_urbanczik(NESTNeuron):
     r"""Two-compartment point process neuron with conductance-based synapses for Urbanczik-Senn learning.
 
     ``pp_cond_exp_mc_urbanczik`` implements a two-compartment spiking neuron model
@@ -1068,45 +1068,6 @@ class pp_cond_exp_mc_urbanczik(Neuron):
            Numerical issues (NaN, Inf) can arise from invalid parameter
            combinations (e.g., zero capacitance), extremely large input
            currents, or ODE solver failure.
-
-        Examples
-        --------
-        **Simple forward pass:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=10)
-            >>> neuron.init_all_states()
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     spike_output = neuron.update(x=200.0 * u.pA)
-            >>> print(spike_output.shape)
-            (10,)
-
-        **Monitoring state over time:**
-
-        .. code-block:: python
-
-            >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=1)
-            >>> neuron.init_all_states()
-            >>> V_soma_history = []
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     for step in range(1000):
-            ...         neuron.update(x=300.0 * u.pA)
-            ...         V_soma_history.append(float(neuron.V_s.value[0] / u.mV))
-
-        **Using with projections (delta inputs):**
-
-        .. code-block:: python
-
-            >>> pre_neurons = bp.LIF(100)
-            >>> post_neurons = bp.pp_cond_exp_mc_urbanczik(50)
-            >>> # Projection would call post_neurons.add_delta_input('soma_exc', ...)
-            >>> # Then update() automatically processes these inputs
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     post_neurons.update()  # Processes queued delta inputs
 
         Notes
         -----

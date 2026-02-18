@@ -20,6 +20,8 @@
 import math
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -33,7 +35,7 @@ __all__ = [
 _UNSET = object()
 
 
-class ppd_sup_generator(brainstate.nn.Dynamics):
+class ppd_sup_generator(NESTDevice):
     r"""Superposition of Poisson processes with dead time (NEST-compatible).
 
     Description

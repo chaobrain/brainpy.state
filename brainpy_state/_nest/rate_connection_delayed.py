@@ -1,3 +1,4 @@
+from ._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-class rate_connection_delayed:
+class rate_connection_delayed(NESTSynapse):
     r"""NEST-compatible ``rate_connection_delayed`` connection model.
 
     Implements connection-level semantics for delayed rate connections following NEST's

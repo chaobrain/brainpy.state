@@ -27,7 +27,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'glif_psc',
@@ -193,7 +193,7 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     return P31, P32
 
 
-class glif_psc(Neuron):
+class glif_psc(NESTNeuron):
     r"""Current-based generalized leaky integrate-and-fire (GLIF) neuron model.
 
     The ``glif_psc`` model implements the five-level GLIF model hierarchy

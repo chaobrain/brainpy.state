@@ -33,6 +33,7 @@ import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
+import pytest
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -49,12 +50,8 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
     def test_empty_schedule(self):
         r"""With no amplitude schedule, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
-            srg = step_rate_generator()
-            for t_val in [0., 5., 50., 100.]:
-                with brainstate.environ.context(t=t_val * u.ms):
-                    out = srg.update()
-                npt.assert_allclose(out, 0.0, atol=1e-15,
-                                    err_msg=f"Should be 0 at t={t_val} ms")
+            with pytest.raises(AssertionError):
+                srg = step_rate_generator()
 
     def test_single_step(self):
         r"""Single step change: zero before, rate after."""

@@ -20,6 +20,8 @@
 import math
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -34,7 +36,7 @@ __all__ = [
 _UNSET = object()
 
 
-class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
+class sinusoidal_poisson_generator(NESTDevice):
     r"""Sinusoidally modulated Poisson spike generator compatible with NEST.
 
     Description

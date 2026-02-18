@@ -25,14 +25,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_exp',
 ]
 
 
-class iaf_cond_exp(Neuron):
+class iaf_cond_exp(NESTNeuron):
     r"""Leaky integrate-and-fire model with exponential conductance synapses.
 
     This is a conductance-based leaky integrate-and-fire neuron with hard threshold,
@@ -730,27 +730,7 @@ class iaf_cond_exp(Neuron):
         * Integration may degrade to minimum step size (1e-8 ms) for stiff dynamics
         * Iteration limit (10000) may be reached for extreme parameter combinations
         * No warning is issued on integration failure (matches NEST silent fallback)
-
-        Examples
-        --------
-        Single timestep update with external current:
-
-        .. code-block:: python
-
-            >>> import brainunit as u
-            >>> spike = neuron.update(x=100 * u.pA)
-
-        Simulate over 1 second with constant input:
-
-        .. code-block:: python
-
-            >>> import brainstate as bst
-            >>> with bst.environ.context(dt=0.1*u.ms):
-            ...     neuron.init_all_states()
-            ...     spikes = []
-            ...     for _ in range(10000):
-            ...         spikes.append(neuron.update(x=200*u.pA))
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

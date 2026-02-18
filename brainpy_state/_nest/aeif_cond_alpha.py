@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_alpha',
 ]
 
 
-class aeif_cond_alpha(Neuron):
+class aeif_cond_alpha(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_alpha`` neuron model.
 
     Conductance-based adaptive exponential integrate-and-fire neuron with
