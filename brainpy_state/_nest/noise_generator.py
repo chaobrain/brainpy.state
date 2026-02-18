@@ -292,6 +292,7 @@ class noise_generator(brainstate.nn.Dynamics):
             self.stop = None
         self.origin = braintools.init.param(origin, self.varshape)
         self.seed = seed
+        self.rng = brainstate.random.default_rng(self.seed)
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize RNG and internal state buffers for piecewise noise updates.
@@ -343,15 +344,8 @@ class noise_generator(brainstate.nn.Dynamics):
            ...     )
            ...     gen.init_state()
         """
-        if self.seed is not None:
-            self._rng_key = jax.random.PRNGKey(self.seed)
-        else:
-            self._rng_key = jax.random.PRNGKey(0)
-
         # Current noise amplitude (piecewise constant)
-        amp = braintools.init.param(
-            braintools.init.Constant(0. * u.pA), self.varshape, batch_size
-        )
+        amp = braintools.init.param(braintools.init.Constant(0. * u.pA), self.varshape, batch_size)
         self.current_amp = brainstate.ShortTermState(amp)
 
         # Step counter for noise update interval tracking
@@ -413,27 +407,6 @@ class noise_generator(brainstate.nn.Dynamics):
         noise_generator : Class-level parameter definitions and model equations.
         ac_generator.update : Windowed sinusoidal-current update rule.
 
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import noise_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = noise_generator(
-           ...         in_size=3,
-           ...         mean=0.0 * u.pA,
-           ...         std=120.0 * u.pA,
-           ...         noise_dt=1.0 * u.ms,
-           ...         start=0.0 * u.ms,
-           ...         stop=10.0 * u.ms,
-           ...         seed=1,
-           ...     )
-           ...     gen.init_state()
-           ...     with brainstate.environ.context(t=5.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
@@ -445,36 +418,14 @@ class noise_generator(brainstate.nn.Dynamics):
             noise_dt = dt
 
         # Determine noise update interval in steps
-        if u.is_unitless(noise_dt) and u.is_unitless(dt):
-            dt_steps = jnp.int32(jnp.round(noise_dt / dt))
-        else:
-            dt_steps = jnp.int32(jnp.round(
-                (noise_dt / u.ms) / (dt / u.ms)
-            ))
+        dt_steps = jnp.int32(jnp.round(noise_dt / dt))
 
         # Check if we need to draw a new noise sample
         step_count = self._step_counter.value
         need_update = (step_count % dt_steps) == 0
 
-        # Advance RNG key
-        self._rng_key, subkey = jax.random.split(self._rng_key)
-
-        # Compute the effective standard deviation (with optional modulation)
-        if u.is_unitless(t):
-            t_ms = t
-        else:
-            t_ms = t / u.ms
-
-        freq_val = self.frequency
-        if u.is_unitless(freq_val):
-            freq_ms = freq_val
-        else:
-            freq_ms = freq_val / u.Hz
-
-        omega = 2.0 * jnp.pi * freq_ms / 1000.0
         phi_rad = self.phase * 2.0 * jnp.pi / 360.0
-
-        sin_val = jnp.sin(omega * t_ms + phi_rad)
+        sin_val = jnp.sin(2.0 * jnp.pi * self.frequency * t + phi_rad)
 
         # std_eff = sqrt(std^2 + std_mod^2 * sin(omega*t + phi))
         std_sq = self.std * self.std
@@ -491,15 +442,12 @@ class noise_generator(brainstate.nn.Dynamics):
             effective_std = u.math.sqrt(effective_std_sq)
 
         # Draw noise: mean + N * effective_std
-        noise = jax.random.normal(subkey, shape=self.varshape)
+        noise = self.rng.randn(*self.varshape)
         new_amp = self.mean + noise * effective_std
 
         # Update current amplitude only when needed
         old_amp = self.current_amp.value
-        self.current_amp.value = u.math.where(
-            jnp.broadcast_to(need_update, self.varshape),
-            new_amp, old_amp
-        )
+        self.current_amp.value = u.math.where(jnp.broadcast_to(need_update, self.varshape), new_amp, old_amp)
 
         # Increment step counter
         self._step_counter.value = step_count + 1
