@@ -1,4 +1,12 @@
+import math
+from typing import Any
+
+import brainunit as u
+import numpy as np
+from brainstate.typing import ArrayLike
+
 from ._base import NESTSynapse
+
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,17 +21,7 @@ from ._base import NESTSynapse
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 # -*- coding: utf-8 -*-
-
-
-
-import math
-from typing import Any
-
-import brainunit as u
-import numpy as np
-from brainstate.typing import ArrayLike
 
 __all__ = [
     'jonke_synapse',

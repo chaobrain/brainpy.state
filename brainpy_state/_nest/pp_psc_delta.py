@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Optional, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -873,7 +872,7 @@ class pp_psc_delta(NESTNeuron):
                         lam_poisson = rate * h * 1e-3
                         # Use a deterministic approach based on JAX random
                         n_spikes = int(np.random.RandomState(
-                            int(rand_vals[idx] * 2**31)
+                            int(rand_vals[idx] * 2 ** 31)
                         ).poisson(lam_poisson))
 
                     if n_spikes > 0:
@@ -884,7 +883,7 @@ class pp_psc_delta(NESTNeuron):
                         if self.dead_time_random:
                             # Gamma-distributed dead time
                             gamma_sample = np.random.RandomState(
-                                int(rand_vals[idx] * 2**30 + 1)
+                                int(rand_vals[idx] * 2 ** 30 + 1)
                             ).gamma(self.dead_time_shape)
                             r[idx] = max(1, int(round(gamma_sample / dt_rate / h)))
                         elif dead_time > 0.0:

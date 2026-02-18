@@ -18,15 +18,14 @@
 import math
 from typing import Callable, Optional
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
 from ._base import NESTNeuron
 
@@ -616,12 +615,12 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         in_size: Size,
         # Global parameters
         t_ref: ArrayLike = 3.0 * u.ms,
-        phi_max: float = 0.15,      # kHz
-        rate_slope: float = 0.5,     # dimensionless
-        beta: float = 1.0 / 3.0,    # 1/mV
-        theta: float = -55.0,        # mV
+        phi_max: float = 0.15,  # kHz
+        rate_slope: float = 0.5,  # dimensionless
+        beta: float = 1.0 / 3.0,  # 1/mV
+        theta: float = -55.0,  # mV
         g_sp: ArrayLike = 600.0 * u.nS,  # soma-dendrite coupling
-        g_ps: ArrayLike = 0.0 * u.nS,    # dendrite-soma coupling
+        g_ps: ArrayLike = 0.0 * u.nS,  # dendrite-soma coupling
         # Soma compartment parameters
         soma_g_L: ArrayLike = 30.0 * u.nS,
         soma_C_m: ArrayLike = 300.0 * u.pF,
@@ -940,9 +939,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         # Dendrite membrane potential derivative
         f[_idx(DEND, _V_M)] = (
-            -p['g_L_dend'] * (V_d - p['E_L_dend'])
-            + I_syn_ex_d + I_syn_in_d + I_conn_s_d
-        ) / p['C_m_dend']
+                                  -p['g_L_dend'] * (V_d - p['E_L_dend'])
+                                  + I_syn_ex_d + I_syn_in_d + I_conn_s_d
+                              ) / p['C_m_dend']
 
         # Dendrite current derivatives
         f[_idx(DEND, _I_EXC)] = -I_syn_ex_d / p['tau_syn_ex_dend']
@@ -954,9 +953,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         # Soma membrane potential derivative
         f[_idx(SOMA, _V_M)] = (
-            -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
-            + p['I_stim_soma'] + p['I_e_soma']
-        ) / p['C_m_soma']
+                                  -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
+                                  + p['I_stim_soma'] + p['I_e_soma']
+                              ) / p['C_m_soma']
 
         # Soma conductance derivatives
         f[_idx(SOMA, _G_EXC)] = -y[_idx(SOMA, _G_EXC)] / p['tau_syn_ex_soma']
@@ -1209,7 +1208,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
                         # No dead time: Poisson spikes
                         lam = rate * dt * 1e-3
                         n_spikes = int(np.random.RandomState(
-                            int(rand_vals[idx] * 2**31)
+                            int(rand_vals[idx] * 2 ** 31)
                         ).poisson(lam))
 
                     if n_spikes > 0:

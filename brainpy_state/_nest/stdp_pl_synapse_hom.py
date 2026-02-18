@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 from collections.abc import Mapping
 
@@ -30,7 +29,6 @@ from .static_synapse import static_synapse
 __all__ = [
     'stdp_pl_synapse_hom',
 ]
-
 
 _UNSET = object()
 _STDP_EPS = 1.0e-6

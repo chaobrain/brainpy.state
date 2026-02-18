@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -697,10 +696,10 @@ class glif_psc(NESTNeuron):
         s, a, v = self.has_theta_spike, self.has_asc, self.has_theta_voltage
         valid_combos = [
             (False, False, False),  # GLIF1
-            (True, False, False),   # GLIF2
-            (False, True, False),   # GLIF3
-            (True, True, False),    # GLIF4
-            (True, True, True),     # GLIF5
+            (True, False, False),  # GLIF2
+            (False, True, False),  # GLIF3
+            (True, True, False),  # GLIF4
+            (True, True, True),  # GLIF5
         ]
         if (s, a, v) not in valid_combos:
             raise ValueError(

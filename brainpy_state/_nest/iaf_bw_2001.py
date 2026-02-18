@@ -18,14 +18,13 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron

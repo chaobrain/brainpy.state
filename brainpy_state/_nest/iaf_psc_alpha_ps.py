@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -530,8 +529,10 @@ class iaf_psc_alpha_ps(NESTNeuron):
         dI_in = self._broadcast_to_state(np.asarray(self.dI_syn_in.value, dtype=np.float64), v_shape)
         y_input = self._broadcast_to_state(self._to_numpy(self.y_input.value, u.pA), v_shape)
 
-        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool), v_shape)
-        last_spike_step = self._broadcast_to_state(np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
+        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
+                                                 v_shape)
+        last_spike_step = self._broadcast_to_state(
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
         last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
         last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
 

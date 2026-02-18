@@ -17,13 +17,12 @@
 
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -924,8 +923,9 @@ class iaf_cond_alpha_mc(NESTNeuron):
             i_leak = p['g_L'][n] * (v_eff - p['E_L'][n])
 
             f[cls._state_index(n, cls.V_M)] = 0.0 if is_refractory else (
-                -i_leak - i_syn_ex - i_syn_in - i_conn + i_stim[n] + p['I_e'][n]
-            ) / p['C_m'][n]
+                                                                            -i_leak - i_syn_ex - i_syn_in - i_conn +
+                                                                            i_stim[n] + p['I_e'][n]
+                                                                        ) / p['C_m'][n]
 
             f[cls._state_index(n, cls.DG_EXC)] = -y[cls._state_index(n, cls.DG_EXC)] / p['tau_syn_ex'][n]
             f[cls._state_index(n, cls.G_EXC)] = (
@@ -1078,7 +1078,8 @@ class iaf_cond_alpha_mc(NESTNeuron):
         g_in = self._broadcast_to_state(np.asarray(self._to_numpy(self.g_in.value, u.nS), dtype=np.float64), comp_shape)
 
         r = self._broadcast_to_state(r_raw, state_shape)
-        i_stim = self._broadcast_to_state(np.asarray(self._to_numpy(self.I_stim.value, u.pA), dtype=np.float64), comp_shape)
+        i_stim = self._broadcast_to_state(np.asarray(self._to_numpy(self.I_stim.value, u.pA), dtype=np.float64),
+                                          comp_shape)
         h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), state_shape)
 
         p = {

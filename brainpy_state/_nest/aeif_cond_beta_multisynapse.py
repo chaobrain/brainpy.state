@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -590,7 +589,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         delta_t = self._to_numpy(self.Delta_T, u.mV)
 
         if self.E_rev.size != self.tau_rise.size or self.E_rev.size != self.tau_decay.size:
-            raise ValueError('The reversal potential, synaptic rise time and synaptic decay time arrays must have the same size.')
+            raise ValueError(
+                'The reversal potential, synaptic rise time and synaptic decay time arrays must have the same size.')
         if np.any(self.tau_rise <= 0.0) or np.any(self.tau_decay <= 0.0):
             raise ValueError('All synaptic time constants must be strictly positive')
         if np.any(self.tau_decay < self.tau_rise):
@@ -854,8 +854,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
             p['Delta_T'] * p['g_L'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
         )
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
+                                       ) / p['C_m']
         dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
 
         dy = np.empty_like(y)

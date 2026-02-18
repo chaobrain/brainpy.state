@@ -43,7 +43,6 @@ import numpy as np
 import brainstate
 import braintools
 import brainunit as u
-import jax
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -88,7 +87,7 @@ def _rkf45_ref_step(v_rel, dg_vals, g_vals, is_refractory,
 
     def f(state):
         return _glif_cond_dynamics(
-            state[0], state[1:1+n_rec], state[1+n_rec:],
+            state[0], state[1:1 + n_rec], state[1 + n_rec:],
             is_refractory, i_stim, asc_sum, p
         )
 
@@ -107,17 +106,17 @@ def _rkf45_ref_step(v_rel, dg_vals, g_vals, is_refractory,
               for i in range(n)]
         k4 = f(y4)
         y5 = [y[i] + h * (439.0 * k1[i] / 216.0 - 8.0 * k2[i] + 3680.0 * k3[i] / 513.0
-                           - 845.0 * k4[i] / 4104.0) for i in range(n)]
+                          - 845.0 * k4[i] / 4104.0) for i in range(n)]
         k5 = f(y5)
         y6 = [y[i] + h * (-8.0 * k1[i] / 27.0 + 2.0 * k2[i] - 3544.0 * k3[i] / 2565.0
-                           + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
+                          + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
         k6 = f(y6)
 
         y4_sol = [y[i] + h * (25.0 * k1[i] / 216.0 + 1408.0 * k3[i] / 2565.0
-                               + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
+                              + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
         y5_sol = [y[i] + h * (16.0 * k1[i] / 135.0 + 6656.0 * k3[i] / 12825.0
-                               + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
-                               + 2.0 * k6[i] / 55.0) for i in range(n)]
+                              + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
+                              + 2.0 * k6[i] / 55.0) for i in range(n)]
 
         err = max(abs(y5_sol[i] - y4_sol[i]) for i in range(n))
 
@@ -130,7 +129,7 @@ def _rkf45_ref_step(v_rel, dg_vals, g_vals, is_refractory,
             fac = min(1.0, max(0.2, 0.9 * (atol / err) ** 0.25))
             h = max(min_h, h * fac)
 
-    return y[0], y[1:1+n_rec], y[1+n_rec:], h
+    return y[0], y[1:1 + n_rec], y[1 + n_rec:], h
 
 
 # ---------------------------------------------------------------------------
@@ -798,7 +797,7 @@ class TestGlifCond(unittest.TestCase):
             # Step 0: inject spikes
             self._step(base, 0)
             self._step(exc, 0, dg_inputs=[(0, 50.0)])  # excitatory receptor
-            self._step(inh, 0, dg_inputs=[(1, 50.0)])   # inhibitory receptor
+            self._step(inh, 0, dg_inputs=[(1, 50.0)])  # inhibitory receptor
 
             # Step 1-5: let dynamics evolve
             for k in range(1, 6):

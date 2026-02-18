@@ -15,16 +15,14 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -880,26 +878,26 @@ class amat2_psc_exp(NESTNeuron):
         # Voltage-dependent threshold propagators (V_th_dv -> row 6)
         P60 = (beta * (em - eV) * taum * tauV) / (c * (taum - tauV))
         P61 = (beta * tauE * taum * tauV * (eV * (-tauE + taum) + em * (tauE - tauV) + eE * (-taum + tauV))) \
-            / (c * (tauE - taum) * (tauE - tauV) * (taum - tauV))
+              / (c * (tauE - taum) * (tauE - tauV) * (taum - tauV))
         P62 = (beta * tauI * taum * tauV * (eV * (-tauI + taum) + em * (tauI - tauV) + eI * (-taum + tauV))) \
-            / (c * (tauI - taum) * (tauI - tauV) * (taum - tauV))
+              / (c * (tauI - taum) * (tauI - tauV) * (taum - tauV))
         P63 = (beta * (-em + eV) * tauV) / (taum - tauV)
 
         # Voltage-dependent threshold propagators (V_th_v -> row 7)
         P70 = (beta * taum * tauV * (em * taum * tauV - eV * (h * (taum - tauV) + taum * tauV))) \
-            / (c * (taum - tauV) ** 2)
+              / (c * (taum - tauV) ** 2)
         P71 = (beta * tauE * taum * tauV
                * ((em * taum * (tauE - tauV) ** 2 - eE * tauE * (taum - tauV) ** 2) * tauV
                   - eV * (tauE - taum)
                   * (h * (tauE - tauV) * (taum - tauV) + tauE * taum * tauV - tauV ** 3))) \
-            / (c * (tauE - taum) * (tauE - tauV) ** 2 * (taum - tauV) ** 2)
+              / (c * (tauE - taum) * (tauE - tauV) ** 2 * (taum - tauV) ** 2)
         P72 = (beta * tauI * taum * tauV
                * ((em * taum * (tauI - tauV) ** 2 - eI * tauI * (taum - tauV) ** 2) * tauV
                   - eV * (tauI - taum)
                   * (h * (tauI - tauV) * (taum - tauV) + tauI * taum * tauV - tauV ** 3))) \
-            / (c * (tauI - taum) * (tauI - tauV) ** 2 * (taum - tauV) ** 2)
+              / (c * (tauI - taum) * (tauI - tauV) ** 2 * (taum - tauV) ** 2)
         P73 = (beta * tauV * (-(em * taum * tauV) + eV * (h * (taum - tauV) + taum * tauV))) \
-            / (taum - tauV) ** 2
+              / (taum - tauV) ** 2
         P76 = eV * h
 
         # --- Get spike inputs ---
@@ -916,9 +914,9 @@ class amat2_psc_exp(NESTNeuron):
         # IMPORTANT: V_th_v must be computed BEFORE V_th_dv is updated,
         # because V_th_v uses the OLD V_th_dv value.
         V_th_v_new = (I_e + i_0) * P70 + i_syn_ex * P71 + i_syn_in * P72 \
-            + V_rel * P73 + V_th_dv * P76 + V_th_v * P77
+                     + V_rel * P73 + V_th_dv * P76 + V_th_v * P77
         V_th_dv_new = (I_e + i_0) * P60 + i_syn_ex * P61 + i_syn_in * P62 \
-            + V_rel * P63 + V_th_dv * P66
+                      + V_rel * P63 + V_th_dv * P66
         V_th_v = V_th_v_new
         V_th_dv = V_th_dv_new
 

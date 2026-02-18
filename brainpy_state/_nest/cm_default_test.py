@@ -41,7 +41,6 @@ from brainpy_state._nest.cm_default import (
     _GABAReceptor,
     _NMDAReceptor,
     _AMPA_NMDAReceptor,
-    _Compartment,
     _compute_g_norm,
     _nmda_sigmoid,
 )

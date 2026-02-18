@@ -16,16 +16,12 @@
 # -*- coding: utf-8 -*-
 
 import math
-from typing import Callable, Optional, Sequence
-
-import numpy as np
+from typing import Sequence
 
 import brainstate
-import braintools
 import brainunit as u
-import jax
-import jax.numpy as jnp
-from brainstate.typing import ArrayLike, Size
+import numpy as np
+from brainstate.typing import Size
 
 from ._base import NESTNeuron
 
@@ -263,19 +259,19 @@ class gif_pop_psc_exp(NESTNeuron):
         self,
         in_size: Size,
         N: int = 100,
-        tau_m: float = 20.0,      # ms
-        C_m: float = 250.0,       # pF
-        t_ref: float = 4.0,       # ms
-        lambda_0: float = 10.0,   # 1/s
-        Delta_V: float = 2.0,     # mV
-        E_L: float = 0.0,         # mV
-        V_reset: float = 0.0,     # mV
-        V_T_star: float = 15.0,   # mV
-        I_e: float = 0.0,         # pA
+        tau_m: float = 20.0,  # ms
+        C_m: float = 250.0,  # pF
+        t_ref: float = 4.0,  # ms
+        lambda_0: float = 10.0,  # 1/s
+        Delta_V: float = 2.0,  # mV
+        E_L: float = 0.0,  # mV
+        V_reset: float = 0.0,  # mV
+        V_T_star: float = 15.0,  # mV
+        I_e: float = 0.0,  # pA
         tau_syn_ex: float = 3.0,  # ms
         tau_syn_in: float = 6.0,  # ms
         tau_sfa: Sequence[float] = (300.0,),  # ms
-        q_sfa: Sequence[float] = (0.5,),      # mV
+        q_sfa: Sequence[float] = (0.5,),  # mV
         len_kernel: int = -1,
         BinoRand: bool = True,
         rng_seed: int = 0,
@@ -477,10 +473,10 @@ class gif_pop_psc_exp(NESTNeuron):
         self._lambda_free = 0.0
 
         # History buffers (rotating), length = len_kernel
-        self._n = np.zeros(len_kernel, dtype=np.float64)      # spike counts
-        self._m = np.zeros(len_kernel, dtype=np.float64)      # survival
-        self._v_buf = np.zeros(len_kernel, dtype=np.float64)   # variance of survivors
-        self._u = np.zeros(len_kernel, dtype=np.float64)       # mean of survivors
+        self._n = np.zeros(len_kernel, dtype=np.float64)  # spike counts
+        self._m = np.zeros(len_kernel, dtype=np.float64)  # survival
+        self._v_buf = np.zeros(len_kernel, dtype=np.float64)  # variance of survivors
+        self._u = np.zeros(len_kernel, dtype=np.float64)  # mean of survivors
         self._lambda_buf = np.zeros(len_kernel, dtype=np.float64)  # escape rates
 
         # Adaptation kernel values
@@ -490,7 +486,7 @@ class gif_pop_psc_exp(NESTNeuron):
         # Procedure InitPopulations, see Fig. 11 of [1]
         for k in range(len_kernel):
             theta_tmp = self._adaptation_kernel(len_kernel - k, h)
-            self._theta[k] = theta_tmp                                   # line 4
+            self._theta[k] = theta_tmp  # line 4
             self._theta_tld[k] = (
                 self.Delta_V * (1.0 - math.exp(-theta_tmp / self.Delta_V))
                 / float(self.N)
@@ -514,10 +510,10 @@ class gif_pop_psc_exp(NESTNeuron):
         self._g = np.zeros(len(self.tau_sfa), dtype=np.float64)
 
         # Observable state variables
-        self._V_m = 0.0        # mV
-        self._I_syn_ex = 0.0   # pA
-        self._I_syn_in = 0.0   # pA
-        self._y0 = 0.0         # pA (external current state)
+        self._V_m = 0.0  # mV
+        self._I_syn_ex = 0.0  # pA
+        self._I_syn_in = 0.0  # pA
+        self._y0 = 0.0  # pA (external current state)
         self._n_expect = 0.0
         self._theta_hat = 0.0
         self._n_spikes = 0
@@ -747,7 +743,7 @@ class gif_pop_psc_exp(NESTNeuron):
                 / (float(self.N) * h)
             )
             self._g[j] = self._g[j] * self._Q30[j] + g_j_tmp  # line 5
-            self._theta_hat += self._Q30K[j] * self._g[j]      # line 6
+            self._theta_hat += self._Q30K[j] * self._g[j]  # line 6
 
         # Compute free escape rate (line 8)
         lambda_tld = self._escrate(self._V_m - self._theta_hat)
@@ -777,8 +773,8 @@ class gif_pop_psc_exp(NESTNeuron):
 
             self._lambda_buf[k] = lambda_tld  # line 21
             Y_ += P_lambda_ * self._v_buf[k]  # line 22
-            Z_ += self._v_buf[k]               # line 23
-            W_ += P_lambda_ * self._m[k]       # line 24
+            Z_ += self._v_buf[k]  # line 23
+            W_ += P_lambda_ * self._m[k]  # line 24
 
             ompl = 1.0 - P_lambda_
             self._v_buf[k] = ompl * ompl * self._v_buf[k] + P_lambda_ * self._m[k]

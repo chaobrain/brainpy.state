@@ -23,7 +23,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import SpikeTime, PoissonSpike, PoissonEncoder, poisson_input
 
 

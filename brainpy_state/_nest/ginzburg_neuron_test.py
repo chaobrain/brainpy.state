@@ -24,6 +24,7 @@ import unittest
 
 import numpy as np
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -112,7 +113,7 @@ class TestGinzburgNeuron(unittest.TestCase):
             h_trace = []
             for step in range(19):
                 if step == 9:
-                    delta = 1.0 * u.mV   # up-transition encoding
+                    delta = 1.0 * u.mV  # up-transition encoding
                 elif step == 14:
                     delta = -1.0 * u.mV  # down-transition encoding
                 else:
@@ -131,7 +132,7 @@ class TestGinzburgNeuron(unittest.TestCase):
                 1,
                 tau_m=1.0 * u.ms,
                 c_1=0.0 / u.mV,
-                c_2=2.0,        # p=1 exactly
+                c_2=2.0,  # p=1 exactly
                 c_3=0.0 / u.mV,
                 stochastic_update=True,
                 rng_seed=7,

@@ -26,7 +26,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import urbanczik_synapse
 
 jax.config.update('jax_enable_x64', True)
@@ -142,9 +141,9 @@ def _reference_urbanczik_weight_trace(spike_times_ms, history_entries, params, t
             minus_delta_t_up = t_last - t_up
             minus_t_down = t_up - t_spike
             pi = (
-                tau_l_trace * math.exp(minus_delta_t_up / tau_L)
-                - tau_s_trace * math.exp(minus_delta_t_up / tau_s)
-            ) * float(e.dw_)
+                     tau_l_trace * math.exp(minus_delta_t_up / tau_L)
+                     - tau_s_trace * math.exp(minus_delta_t_up / tau_s)
+                 ) * float(e.dw_)
             pi_integral += pi
             d_pi_exp_integral += math.exp(minus_t_down / tau_delta) * pi
 

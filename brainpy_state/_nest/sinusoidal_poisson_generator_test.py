@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -121,7 +122,7 @@ class TestSinusoidalPoissonGeneratorOrdering(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             gen = sinusoidal_poisson_generator(
                 in_size=1,
-                rate=1000.0 * u.Hz,   # lam = 1 at dt = 1 ms
+                rate=1000.0 * u.Hz,  # lam = 1 at dt = 1 ms
                 amplitude=0.0 * u.Hz,
                 frequency=0.0 * u.Hz,
                 start=2.0 * u.ms,

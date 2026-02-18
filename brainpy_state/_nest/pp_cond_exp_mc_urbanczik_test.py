@@ -43,7 +43,6 @@ os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['JAX_ENABLE_X64'] = 'True'
 
 import brainstate
-import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -55,7 +54,6 @@ from brainpy_state._nest.pp_cond_exp_mc_urbanczik import (
     _phi,
     _h_func,
     _idx,
-    _STATE_VEC_SIZE,
     SOMA, DEND,
     _V_M, _G_EXC, _G_INH, _I_EXC, _I_INH,
 )
@@ -118,6 +116,7 @@ def _run_ref_dynamics(y0, dt, p):
     yf : array of float, shape (10,)
         Final state vector after integration.
     """
+
     def rhs(t, y):
         f = np.zeros(10)
 
@@ -134,18 +133,18 @@ def _run_ref_dynamics(y0, dt, p):
         I_syn_in_d = y[_idx(DEND, _I_INH)]
 
         f[_idx(DEND, _V_M)] = (
-            -p['g_L_dend'] * (V_d - p['E_L_dend'])
-            + I_syn_ex_d + I_syn_in_d + I_conn_s_d
-        ) / p['C_m_dend']
+                                  -p['g_L_dend'] * (V_d - p['E_L_dend'])
+                                  + I_syn_ex_d + I_syn_in_d + I_conn_s_d
+                              ) / p['C_m_dend']
         f[_idx(DEND, _I_EXC)] = -I_syn_ex_d / p['tau_syn_ex_dend']
         f[_idx(DEND, _I_INH)] = -I_syn_in_d / p['tau_syn_in_dend']
         f[_idx(DEND, _G_EXC)] = 0.0
         f[_idx(DEND, _G_INH)] = 0.0
 
         f[_idx(SOMA, _V_M)] = (
-            -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
-            + p['I_stim_soma'] + p['I_e_soma']
-        ) / p['C_m_soma']
+                                  -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
+                                  + p['I_stim_soma'] + p['I_e_soma']
+                              ) / p['C_m_soma']
         f[_idx(SOMA, _G_EXC)] = -y[_idx(SOMA, _G_EXC)] / p['tau_syn_ex_soma']
         f[_idx(SOMA, _G_INH)] = -y[_idx(SOMA, _G_INH)] / p['tau_syn_in_soma']
         f[_idx(SOMA, _I_EXC)] = 0.0

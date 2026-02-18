@@ -27,14 +27,13 @@ This test module validates the brainpy.state implementation against:
 All tests use float64 precision and CPU backend.
 """
 
-import unittest
 import math
-
-import numpy as np
-from scipy.integrate import odeint
+import unittest
 
 import brainstate
 import brainunit as u
+import numpy as np
+from scipy.integrate import odeint
 
 brainstate.environ.set(precision=64, platform='cpu')
 

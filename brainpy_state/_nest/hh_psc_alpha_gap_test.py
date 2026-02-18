@@ -34,15 +34,12 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import hh_psc_alpha_gap
+from scipy.integrate import solve_ivp
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')

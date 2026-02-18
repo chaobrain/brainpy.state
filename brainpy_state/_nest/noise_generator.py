@@ -19,13 +19,13 @@
 from typing import Optional
 
 import brainstate
-
-from ._base import NESTDevice
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
 
 __all__ = [
     'noise_generator',

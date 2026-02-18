@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 from collections.abc import Mapping
 
@@ -30,7 +29,6 @@ from .static_synapse_hom_w import static_synapse_hom_w
 __all__ = [
     'tsodyks_synapse_hom',
 ]
-
 
 _UNSET = object()
 

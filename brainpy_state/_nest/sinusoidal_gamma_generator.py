@@ -16,22 +16,20 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 
 import brainstate
-
-from ._base import NESTDevice
 import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'sinusoidal_gamma_generator',
 ]
-
 
 _UNSET = object()
 

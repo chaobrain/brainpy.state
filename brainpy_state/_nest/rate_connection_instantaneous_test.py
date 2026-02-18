@@ -24,7 +24,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import lin_rate_ipn, rate_connection_instantaneous
 
 jax.config.update('jax_enable_x64', True)

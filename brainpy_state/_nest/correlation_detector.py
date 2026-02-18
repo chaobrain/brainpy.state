@@ -20,11 +20,11 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
-
-from ._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
 
 __all__ = [
     'correlation_detector',

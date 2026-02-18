@@ -16,11 +16,10 @@
 
 import unittest
 
+import brainpy.state
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
-
-import brainpy.state
 
 
 class TestSynOutModels(unittest.TestCase):

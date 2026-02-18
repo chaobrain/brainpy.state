@@ -18,15 +18,14 @@
 import math
 from typing import Callable
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
 from ._base import NESTNeuron
 

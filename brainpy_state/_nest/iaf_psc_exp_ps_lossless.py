@@ -18,13 +18,12 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -758,8 +757,10 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
         I_syn_in = self._broadcast_to_state(self._to_numpy(self.I_syn_in.value, u.pA), v_shape)
         y0 = self._broadcast_to_state(self._to_numpy(self.y0.value, u.pA), v_shape)
 
-        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool), v_shape)
-        last_spike_step = self._broadcast_to_state(np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
+        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
+                                                 v_shape)
+        last_spike_step = self._broadcast_to_state(
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
         last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
         last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
 
@@ -833,9 +834,12 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
 
             def threshold_distance(dt_local):
                 P20 = -tau_m_i / c_m_i * math.expm1(-dt_local / tau_m_i)
-                P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
-                P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
-                y2_r = P20 * (i_e_i + before[0]) + P21e * before[1] + P21i * before[2] + before[3] * math.exp(-dt_local / tau_m_i)
+                P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                   dt_local)
+                P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                   dt_local)
+                y2_r = P20 * (i_e_i + before[0]) + P21e * before[1] + P21i * before[2] + before[3] * math.exp(
+                    -dt_local / tau_m_i)
                 return y2_r - u_th_i
 
             def propagate(dt_local):
@@ -844,8 +848,10 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
                     return
                 if not refr_i:
                     P20 = -tau_m_i / c_m_i * math.expm1(-dt_local / tau_m_i)
-                    P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
-                    P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
+                    P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                       dt_local)
+                    P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                       dt_local)
                     y2_i = P20 * (i_e_i + y0_i) + P21e * y1e_i + P21i * y1i_i + y2_i * math.exp(-dt_local / tau_m_i)
                     y2_i = max(y2_i, u_min_i)
                 y1e_i = y1e_i * math.exp(-dt_local / tau_ex_i)
@@ -879,7 +885,8 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
                 c6 = 1.0 - (tau_ex_i / tau_m_i)
 
                 f = (a1 * I0 * exp_tau_m_s + exp_tau_m * (a3 - Ie_tot * a2) + a3) / a4
-                g = ((I0 + Ie_tot) * (b1 * exp_tau_m + b2 * exp_tau_s) + b3 * (exp_tau_m - exp_tau_s)) / (b4 * exp_tau_s)
+                g = ((I0 + Ie_tot) * (b1 * exp_tau_m + b2 * exp_tau_s) + b3 * (exp_tau_m - exp_tau_s)) / (
+                        b4 * exp_tau_s)
                 b_env = c1 * Ie_tot + c2 * I0 + c3 * (I0 ** c4) * ((c5 - Ie_tot) ** c6)
 
                 if (V0 < g) and (V0 <= f):

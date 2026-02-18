@@ -18,12 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
+import numpy as np
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -49,8 +48,8 @@ def _rkf45_ref_step(v, dg_ex, g_ex, dg_in, g_in, is_refractory, i_stim, dt, h0, 
         i_syn_in = g_in_ * (v_eff - p['E_in'])
         i_leak = p['g_L'] * (v_eff - p['E_L'])
         dv = 0.0 if is_refractory else (
-            -i_leak - i_syn_ex - i_syn_in + i_stim + p['I_e']
-        ) / p['C_m']
+                                           -i_leak - i_syn_ex - i_syn_in + i_stim + p['I_e']
+                                       ) / p['C_m']
 
         ddg_ex = -dg_ex_ / p['tau_syn_ex']
         dg_ex_dt = dg_ex_ - g_ex_ / p['tau_syn_ex']
@@ -69,7 +68,8 @@ def _rkf45_ref_step(v, dg_ex, g_ex, dg_in, g_in, is_refractory, i_stim, dt, h0, 
         k6 = f(y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
 
         if err <= atol or h <= min_h:

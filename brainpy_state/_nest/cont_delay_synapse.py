@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 import warnings
 from collections.abc import Mapping, Sequence

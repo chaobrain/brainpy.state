@@ -230,9 +230,9 @@ class TestQuantalSTPSynapseOrdering(unittest.TestCase):
         spike_steps = [1, 4]
 
         draws = [
-            0.3, 0.8,              # first spike release trials (a=2): one release
+            0.3, 0.8,  # first spike release trials (a=2): one release
             0.01, 0.4, 0.02, 0.8,  # second spike recovery trials (n-a=4): two recoveries
-            0.2, 0.7, 0.1,         # second spike release trials (a=3): two releases
+            0.2, 0.7, 0.1,  # second spike release trials (a=3): two releases
         ]
         draw_iter = iter(draws)
 

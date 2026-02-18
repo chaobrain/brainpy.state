@@ -20,7 +20,6 @@ import brainstate
 import brainunit as u
 import jax.numpy as jnp
 import pytest
-
 from brainpy.state import Expon, STP, STD, AMPA, GABAa, BioNMDA
 
 

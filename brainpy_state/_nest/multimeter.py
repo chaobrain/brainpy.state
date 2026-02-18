@@ -20,11 +20,11 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 import brainstate
-
-from ._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
 
 __all__ = [
     'multimeter',
@@ -534,7 +534,8 @@ class multimeter(NESTDevice):
 
         offset_steps = self._to_step_count(self.offset, dt_ms, 'offset')
         if offset_steps != 0 and offset_steps < 1:
-            raise ValueError('The offset for the sampling interval must be at least as long as the simulation resolution.')
+            raise ValueError(
+                'The offset for the sampling interval must be at least as long as the simulation resolution.')
 
         start_steps = self._to_step_count(self.start, dt_ms, 'start')
         stop_value = math.inf if self.stop is None else self.stop

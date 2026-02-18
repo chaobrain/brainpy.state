@@ -25,7 +25,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import vogels_sprekeler_synapse
 
 jax.config.update('jax_enable_x64', True)

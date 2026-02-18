@@ -38,8 +38,8 @@ def _rhs(y, is_refractory, i_stim, p):
 
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
     dv = 0.0 if is_refractory else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p['I_e'] + i_stim
-    ) / p['C_m']
+                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p['I_e'] + i_stim
+                                   ) / p['C_m']
 
     ddI_ex = -dI_ex / p['tau_syn_ex']
     dI_ex_dt = dI_ex - I_ex / p['tau_syn_ex']
@@ -53,7 +53,8 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
     min_h = 1e-8
     t = 0.0
     h = max(state['h'], min_h)
-    y = np.asarray([state['v'], state['dI_ex'], state['I_ex'], state['dI_in'], state['I_in'], state['w']], dtype=np.float64)
+    y = np.asarray([state['v'], state['dI_ex'], state['I_ex'], state['dI_in'], state['I_in'], state['w']],
+                   dtype=np.float64)
     r = int(state['r'])
     spike_count = 0
     iters = 0
@@ -94,7 +95,8 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
         )
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
         atol = p['atol']
 
@@ -465,8 +467,10 @@ class TestAEIFPscAlpha(unittest.TestCase):
 
         npt.assert_allclose(bp_v[bp_indices], nest_v, atol=3e-5, rtol=0.0, err_msg='V_m trace mismatch vs NEST')
         npt.assert_allclose(bp_w[bp_indices], nest_w, atol=2e-5, rtol=0.0, err_msg='w trace mismatch vs NEST')
-        npt.assert_allclose(bp_i_ex[bp_indices], nest_i_ex, atol=2e-5, rtol=0.0, err_msg='I_syn_ex trace mismatch vs NEST')
-        npt.assert_allclose(bp_i_in[bp_indices], nest_i_in, atol=2e-5, rtol=0.0, err_msg='I_syn_in trace mismatch vs NEST')
+        npt.assert_allclose(bp_i_ex[bp_indices], nest_i_ex, atol=2e-5, rtol=0.0,
+                            err_msg='I_syn_ex trace mismatch vs NEST')
+        npt.assert_allclose(bp_i_in[bp_indices], nest_i_in, atol=2e-5, rtol=0.0,
+                            err_msg='I_syn_in trace mismatch vs NEST')
 
 
 if __name__ == '__main__':

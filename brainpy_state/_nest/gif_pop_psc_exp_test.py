@@ -926,7 +926,7 @@ class TestGIFPopPscExpLongSimulation(unittest.TestCase):
         - Expected steady-state rate ~22 Hz +/- 1 Hz
         - Expected rate variance ~102 Hz^2 +/- 6 Hz^2
         """
-        res = 0.5   # ms
+        res = 0.5  # ms
         T = 10000.0  # ms
         start_time = 1000.0  # ms
         pop_size = 500

@@ -17,13 +17,12 @@
 
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as bu
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -660,7 +659,8 @@ class iaf_tum_2000(NESTNeuron):
             raise ValueError('Capacitance must be strictly positive.')
         if np.any(self._to_numpy(self.tau_m, bu.ms) <= 0.0):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_syn_ex, bu.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, bu.ms) <= 0.0):
+        if np.any(self._to_numpy(self.tau_syn_ex, bu.ms) <= 0.0) or np.any(
+            self._to_numpy(self.tau_syn_in, bu.ms) <= 0.0):
             raise ValueError('Synaptic time constants must be strictly positive.')
         if np.any(self._to_numpy(self.tau_psc, bu.ms) <= 0.0) or np.any(self._to_numpy(self.tau_rec, bu.ms) <= 0.0):
             raise ValueError('Tsodyks time constants tau_psc and tau_rec must be strictly positive.')
@@ -1117,7 +1117,8 @@ class iaf_tum_2000(NESTNeuron):
         w_ex = ev_ex + reg_ex
         w_in = ev_in + reg_in
 
-        i_0_next = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.V.value), bu.pA), state_shape)
+        i_0_next = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.V.value), bu.pA),
+                                            state_shape)
         i_1_next = self._broadcast_to_state(self._to_numpy(x_filtered, bu.pA), state_shape)
 
         not_refractory = r == 0

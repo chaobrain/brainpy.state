@@ -15,14 +15,12 @@
 
 # -*- coding: utf-8 -*-
 
-import unittest
 import math
+import unittest
 
-import braintools
 import brainstate
+import braintools
 import brainunit as u
-import jax.numpy as jnp
-
 from brainpy.state import iaf_psc_delta
 
 

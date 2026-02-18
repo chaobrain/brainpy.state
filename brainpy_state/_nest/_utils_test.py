@@ -18,11 +18,10 @@
 import math
 import unittest
 
-import numpy as np
-import numpy.testing as npt
-
 import brainstate
 import brainunit as u
+import numpy as np
+import numpy.testing as npt
 
 from ._utils import (
     to_numpy,

@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
-import braintools
 import brainstate
+import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_cond_exp, iaf_cond_exp_sfa_rr
 
 jax.config.update('jax_enable_x64', True)
@@ -53,8 +51,8 @@ def _rkf45_ref_step(v, g_ex, g_in, g_sfa, g_rr, is_refractory, i_stim, dt, h0, p
         i_rr = g_rr_ * (v_eff - p['E_rr'])
 
         dv = 0.0 if is_refractory else (
-            -i_l + i_stim + p['I_e'] - i_syn_ex - i_syn_in - i_sfa - i_rr
-        ) / p['C_m']
+                                           -i_l + i_stim + p['I_e'] - i_syn_ex - i_syn_in - i_sfa - i_rr
+                                       ) / p['C_m']
 
         dg_ex = -g_ex_ / p['tau_syn_ex']
         dg_in = -g_in_ / p['tau_syn_in']
@@ -73,7 +71,8 @@ def _rkf45_ref_step(v, g_ex, g_in, g_sfa, g_rr, is_refractory, i_stim, dt, h0, p
         k6 = f(y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
 
         if err <= atol or h <= min_h:
@@ -290,9 +289,12 @@ class TestIAFCondExpSfaRr(unittest.TestCase):
                 spk_sfa = self._step(neuron_sfa, k, x=x_i * u.pA, dg_values=dgs)
 
                 self.assertEqual(self._is_spike(spk_ref), self._is_spike(spk_sfa))
-                self.assertAlmostEqual(float((neuron_ref.V.value / u.mV)[0]), float((neuron_sfa.V.value / u.mV)[0]), delta=3e-6)
-                self.assertAlmostEqual(float((neuron_ref.g_ex.value / u.nS)[0]), float((neuron_sfa.g_ex.value / u.nS)[0]), delta=2e-6)
-                self.assertAlmostEqual(float((neuron_ref.g_in.value / u.nS)[0]), float((neuron_sfa.g_in.value / u.nS)[0]), delta=2e-6)
+                self.assertAlmostEqual(float((neuron_ref.V.value / u.mV)[0]), float((neuron_sfa.V.value / u.mV)[0]),
+                                       delta=3e-6)
+                self.assertAlmostEqual(float((neuron_ref.g_ex.value / u.nS)[0]),
+                                       float((neuron_sfa.g_ex.value / u.nS)[0]), delta=2e-6)
+                self.assertAlmostEqual(float((neuron_ref.g_in.value / u.nS)[0]),
+                                       float((neuron_sfa.g_in.value / u.nS)[0]), delta=2e-6)
 
     def test_reference_trace_matches_nest_step_logic(self):
         with brainstate.environ.context(dt=self.dt):

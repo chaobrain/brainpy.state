@@ -16,15 +16,13 @@
 # -*- coding: utf-8 -*-
 
 
-
 import math
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -40,7 +38,6 @@ try:
     _HAVE_SCIPY = True
 except Exception:  # pragma: no cover - fallback path when SciPy is unavailable.
     _HAVE_SCIPY = False
-
 
 # Gauss-Legendre nodes used by the scalar quadrature helpers.
 _GAUSS_NODES, _GAUSS_WEIGHTS = np.polynomial.legendre.leggauss(64)
@@ -562,7 +559,7 @@ class siegert_neuron(NESTNeuron):
 
         inv = 1.0 / x
         inv2 = inv * inv
-        poly = 1.0 + 0.5 * inv2 + 0.75 * inv2 * inv2 + 1.875 * inv2**3 + 6.5625 * inv2**4
+        poly = 1.0 + 0.5 * inv2 + 0.75 * inv2 * inv2 + 1.875 * inv2 ** 3 + 6.5625 * inv2 ** 4
         return (inv / math.sqrt(math.pi)) * poly
 
     @staticmethod
@@ -573,8 +570,8 @@ class siegert_neuron(NESTNeuron):
         term0 = math.log(b / a)
         term1 = -0.25 * (inv_b2 - inv_a2)
         term2 = -(3.0 / 16.0) * (inv_b2 * inv_b2 - inv_a2 * inv_a2)
-        term3 = -(5.0 / 16.0) * (inv_b2**3 - inv_a2**3)
-        term4 = -(105.0 / 128.0) * (inv_b2**4 - inv_a2**4)
+        term3 = -(5.0 / 16.0) * (inv_b2 ** 3 - inv_a2 ** 3)
+        term4 = -(105.0 / 128.0) * (inv_b2 ** 4 - inv_a2 ** 4)
 
         return (term0 + term1 + term2 + term3 + term4) / math.sqrt(math.pi)
 
@@ -635,8 +632,8 @@ class siegert_neuron(NESTNeuron):
                 1.0
                 - (2.0 / 3.0) * x2
                 + (4.0 / 15.0) * x2 * x2
-                - (8.0 / 105.0) * x2**3
-                + (16.0 / 945.0) * x2**4
+                - (8.0 / 105.0) * x2 ** 3
+                + (16.0 / 945.0) * x2 ** 4
             )
 
         if x >= 8.0:
@@ -645,9 +642,9 @@ class siegert_neuron(NESTNeuron):
             return (
                 0.5 * inv
                 + 0.25 * inv * inv2
-                + (3.0 / 8.0) * inv * inv2**2
-                + (15.0 / 16.0) * inv * inv2**3
-                + (105.0 / 32.0) * inv * inv2**4
+                + (3.0 / 8.0) * inv * inv2 ** 2
+                + (15.0 / 16.0) * inv * inv2 ** 3
+                + (105.0 / 32.0) * inv * inv2 ** 4
             )
 
         # Dawson(x) = exp(-x^2) * integral_0^x exp(t^2) dt

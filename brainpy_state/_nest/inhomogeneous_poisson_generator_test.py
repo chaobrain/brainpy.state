@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -296,8 +297,8 @@ class TestInhomogeneousPoissonGeneratorVsNEST(unittest.TestCase):
         bp_counts_aligned = np.zeros_like(bp_counts)
         bp_counts_aligned[1:] = bp_counts[:-1]
 
-        phase2 = slice(250, 550)   # inside [20, 60) ms
-        phase3 = slice(650, 850)   # inside [60, 90) ms
+        phase2 = slice(250, 550)  # inside [20, 60) ms
+        phase3 = slice(650, 850)  # inside [60, 90) ms
 
         nest_mean_2 = float(np.mean(nest_counts[phase2]))
         nest_mean_3 = float(np.mean(nest_counts[phase3]))
