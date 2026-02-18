@@ -45,6 +45,7 @@ class NESTDevice(Dynamics):
     Poisson generators, …) and recording devices (multimeter, spike
     recorder, correlation detectors, …).
     """
+    __module__ = 'brainpy.state'
 
 
 class NESTNeuron(Neuron):
@@ -54,6 +55,7 @@ class NESTNeuron(Neuron):
     rate-coded neurons, binary neurons, multi-compartment models, and
     astrocyte models.
     """
+    __module__ = 'brainpy.state'
 
 
 class NESTSynapse(Dynamics):
@@ -62,3 +64,4 @@ class NESTSynapse(Dynamics):
     Covers static synapses, short-term plasticity synapses, STDP synapses,
     gap junctions, rate connections, and other connection models.
     """
+    __module__ = 'brainpy.state'
