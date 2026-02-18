@@ -333,27 +333,11 @@ class ac_generator(brainstate.nn.Dynamics):
         """
         t = brainstate.environ.get('t')
 
-        # Convert frequency from Hz to angular frequency in rad/ms
-        # omega = 2 * pi * freq / 1000 (since t is in ms, freq is in Hz)
-        freq_val = self.frequency
-        if u.is_unitless(freq_val):
-            omega = 2.0 * jnp.pi * freq_val / 1000.0
-        else:
-            # frequency in Hz -> convert to 1/ms
-            freq_ms = freq_val / u.Hz  # dimensionless number in Hz
-            omega = 2.0 * jnp.pi * freq_ms / 1000.0
-
         # Convert phase from degrees to radians
         phi_rad = self.phase * 2.0 * jnp.pi / 360.0
 
-        # Get t in ms (dimensionless)
-        if u.is_unitless(t):
-            t_ms = t
-        else:
-            t_ms = t / u.ms
-
         # Compute sine current: amplitude * sin(omega * t + phi) + offset
-        I_ac = self.amplitude * jnp.sin(omega * t_ms + phi_rad) + self.offset
+        I_ac = self.amplitude * jnp.sin(2.0 * jnp.pi * self.frequency * t + phi_rad) + self.offset
 
         # Check if device is active
         t_start = self.origin + self.start
