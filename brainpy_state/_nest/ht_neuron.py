@@ -38,17 +38,16 @@ exactly, including:
 import math
 from typing import Callable
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'ht_neuron',
@@ -431,7 +430,7 @@ _h_IT = 15
 _STATE_VEC_SIZE = 16
 
 
-class ht_neuron(Neuron):
+class ht_neuron(NESTNeuron):
     r"""NEST-compatible Hill-Tononi thalamocortical neuron model with intrinsic currents.
 
     Implements the conductance-based integrate-and-fire neuron model from Hill & Tononi
@@ -1554,49 +1553,6 @@ class ht_neuron(Neuron):
         surrogate gradient spike output enables backpropagation through the network for
         learning tasks. For fully differentiable ODE solving, consider using JAX-based
         ODE solvers (e.g., diffrax), though this requires significant refactoring.
-
-        Examples
-        --------
-        **Example 1: Single step with no input**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bps
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neuron = bps.ht_neuron(1)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spike = neuron.update(x=0.0)
-            ...     print(f"V = {neuron.V.value[0]:.2f} mV")
-            ...     print(f"Spike = {spike[0]:.2f}")
-
-        **Example 2: Step current injection**
-
-        .. code-block:: python
-
-            >>> neuron = bps.ht_neuron(1)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     for _ in range(100):
-            ...         spike = neuron.update(x=2.0)  # 2 mV/ms depolarizing current
-            ...     print(f"Final V = {neuron.V.value[0]:.2f} mV")
-
-        **Example 3: Receiving synaptic input**
-
-        .. code-block:: python
-
-            >>> pre = bps.LIF(10)
-            >>> post = bps.ht_neuron(1)
-            >>> proj = bps.AlignPostProj(
-            ...     pre=pre, post=post,
-            ...     comm=bp.event.FixedProb(0.2, weight=1.0),
-            ...     syn=bps.Expon.desc(tau=2.4 * u.ms),
-            ...     label='AMPA'  # Route to AMPA receptors
-            ... )
-            >>> # During simulation, pre spikes are delivered to post.delta_inputs['AMPA']
-            >>> # and processed by post.update()
 
         Warnings
         --------

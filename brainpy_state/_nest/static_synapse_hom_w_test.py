@@ -32,7 +32,6 @@ from brainpy.state import iaf_psc_alpha, static_synapse_hom_w
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-
 # Reference from NEST testsuite/pytests/sli2py_synapses/test_syn_hom_w.py
 # Columns: [time_step, V_m], where time_step must be multiplied by dt (0.1 ms).
 REFERENCE_DATA = np.array(
@@ -111,6 +110,9 @@ def _run_bp_vm_trace(*, dt_ms, delay_ms, weight_pA, spike_times_ms, sim_steps):
 
 
 class TestStaticSynapseHomWParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = static_synapse_hom_w()
@@ -156,6 +158,9 @@ class TestStaticSynapseHomWParameters(unittest.TestCase):
 
 
 class TestStaticSynapseHomWDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_delivery_occurs_after_delay_steps(self):
         recv = _MockReceiver()
         dt = 0.1 * u.ms

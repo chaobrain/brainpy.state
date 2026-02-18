@@ -66,6 +66,9 @@ def _run_bp_transmitted_count(*, n_spikes, p_transmit, seed):
 
 
 class TestBernoulliSynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = bernoulli_synapse()
@@ -98,6 +101,9 @@ class TestBernoulliSynapseParameters(unittest.TestCase):
 
 
 class TestBernoulliSynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_bernoulli_trial_applied_before_event_scheduling(self):
         recv = _MockReceiver()
         dt = 1.0 * u.ms
@@ -150,6 +156,9 @@ class TestBernoulliSynapseOrdering(unittest.TestCase):
 
 
 class TestBernoulliSynapseStatistics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_statistics_match_binomial_expectation(self):
         # Mirrors NEST testsuite/pytests/test_bernoulli_synapse.py.
         n_spikes = 1000

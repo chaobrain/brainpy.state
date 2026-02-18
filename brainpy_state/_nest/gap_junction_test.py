@@ -19,10 +19,10 @@ import importlib.util
 import unittest
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import gap_junction
 
 jax.config.update('jax_enable_x64', True)
@@ -52,6 +52,9 @@ def _nest_gap_current_reference(sumj_g_ij, interpolation_coefficients, lag, inte
 
 
 class TestGapJunction(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = gap_junction()
         self.assertAlmostEqual(syn.weight, 1.0, delta=0.0)
@@ -112,7 +115,8 @@ class TestGapJunction(unittest.TestCase):
 
             got = syn.evaluate_gap_current(v_m, lag=lag, t=t, interpolation_order=order)
             ref = _nest_gap_current_reference(sumj_g_ij, coeff, lag, order, v_m, t)
-            self.assertAlmostEqual(float(np.asarray(got).reshape(-1)[0]), float(np.asarray(ref).reshape(-1)[0]), delta=1e-15)
+            self.assertAlmostEqual(float(np.asarray(got).reshape(-1)[0]), float(np.asarray(ref).reshape(-1)[0]),
+                                   delta=1e-15)
 
         syn = gap_junction()
         syn.begin_wfr_cycle(min_delay_steps=1, interpolation_order=0)

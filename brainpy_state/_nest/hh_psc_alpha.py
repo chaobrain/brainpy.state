@@ -18,17 +18,16 @@
 import math
 from typing import Callable
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'hh_psc_alpha',
@@ -89,7 +88,7 @@ def _hh_psc_alpha_equilibrium(V):
     return m_inf, h_inf, n_inf
 
 
-class hh_psc_alpha(Neuron):
+class hh_psc_alpha(NESTNeuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with alpha-shaped postsynaptic currents.
 
     Current-based spiking neuron using the Hodgkin-Huxley formalism with
@@ -588,7 +587,8 @@ class hh_psc_alpha(Neuron):
             raise ValueError('Refractory time cannot be negative.')
         if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.g_Na, u.nS) < 0.0) or np.any(self._to_numpy(self.g_K, u.nS) < 0.0) or np.any(self._to_numpy(self.g_L, u.nS) < 0.0):
+        if np.any(self._to_numpy(self.g_Na, u.nS) < 0.0) or np.any(self._to_numpy(self.g_K, u.nS) < 0.0) or np.any(
+            self._to_numpy(self.g_L, u.nS) < 0.0):
             raise ValueError('All conductances must be non-negative.')
 
     def _refractory_counts(self):

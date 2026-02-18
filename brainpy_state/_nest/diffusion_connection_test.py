@@ -24,7 +24,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import diffusion_connection, siegert_neuron
 
 jax.config.update('jax_enable_x64', True)
@@ -70,6 +69,7 @@ def _run_nest_two_siegert_trace(dt_ms, simtime_ms, src_params, tgt_params, drift
 
 class TestDiffusionConnection(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

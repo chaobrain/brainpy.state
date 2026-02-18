@@ -18,23 +18,22 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_beta_multisynapse',
 ]
 
 
-class aeif_cond_beta_multisynapse(Neuron):
+class aeif_cond_beta_multisynapse(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_beta_multisynapse`` neuron model.
 
     Conductance-based adaptive exponential integrate-and-fire neuron with
@@ -271,6 +270,7 @@ class aeif_cond_beta_multisynapse(Neuron):
     refractory : ShortTermState, optional
         Boolean refractory indicator, shape ``(*in_size,)``. Only present if
         ``ref_var=True``.
+
     Raises
     ------
     ValueError
@@ -589,7 +589,8 @@ class aeif_cond_beta_multisynapse(Neuron):
         delta_t = self._to_numpy(self.Delta_T, u.mV)
 
         if self.E_rev.size != self.tau_rise.size or self.E_rev.size != self.tau_decay.size:
-            raise ValueError('The reversal potential, synaptic rise time and synaptic decay time arrays must have the same size.')
+            raise ValueError(
+                'The reversal potential, synaptic rise time and synaptic decay time arrays must have the same size.')
         if np.any(self.tau_rise <= 0.0) or np.any(self.tau_decay <= 0.0):
             raise ValueError('All synaptic time constants must be strictly positive')
         if np.any(self.tau_decay < self.tau_rise):
@@ -618,19 +619,6 @@ class aeif_cond_beta_multisynapse(Neuron):
                     'The current combination of V_peak, V_th and Delta_T will lead to numerical overflow at spike '
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
-
-    def _safe_dt(self):
-        r"""Get simulation timestep with fallback.
-
-        Returns
-        -------
-        Quantity
-            Simulation timestep (ms). Returns 0.1 ms if environment context is not set.
-        """
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
@@ -674,7 +662,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -708,7 +696,7 @@ class aeif_cond_beta_multisynapse(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -866,8 +854,8 @@ class aeif_cond_beta_multisynapse(Neuron):
             p['Delta_T'] * p['g_L'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
         )
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
+                                       ) / p['C_m']
         dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
 
         dy = np.empty_like(y)
@@ -972,34 +960,6 @@ class aeif_cond_beta_multisynapse(Neuron):
         fully vectorized implementations but ensure identical spike timing and
         update ordering. For large-scale simulations, consider NEST-GPU or
         vectorized BrainPy models.
-
-        Examples
-        --------
-        Single timestep with continuous current:
-
-        .. code-block:: python
-
-           >>> import brainstate as bst
-           >>> import brainunit as u
-           >>> neuron = bp.aeif_cond_beta_multisynapse(in_size=5)
-           >>> with bst.environ.context(dt=0.1 * u.ms):
-           ...     neuron.init_all_states()
-           ...     spk = neuron.update(x=300.0 * u.pA)
-           ...     print(spk)  # doctest: +SKIP
-
-        With receptor-specific spike events:
-
-        .. code-block:: python
-
-           >>> events = [(1, 5.0 * u.nS), (2, 3.0 * u.nS)]
-           >>> spk = neuron.update(x=100.0 * u.pA, spike_events=events)  # doctest: +SKIP
-
-        Accessing updated state:
-
-        .. code-block:: python
-
-           >>> print(neuron.V.value)  # doctest: +SKIP
-           >>> print(neuron.g.value)  # shape: (\*in_size, n_receptors)  # doctest: +SKIP
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_psc_alpha
 
 
@@ -136,6 +134,7 @@ class TestIAFPscAlpha(unittest.TestCase):
         brainstate.environ.set(precision=64, platform='cpu')
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

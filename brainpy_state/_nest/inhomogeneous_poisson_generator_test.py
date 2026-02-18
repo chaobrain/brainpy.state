@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -76,6 +77,7 @@ def _run_bp_counts(
 
 class TestInhomogeneousPoissonGeneratorParameters(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_rate_times_and_values_match(self):
@@ -154,6 +156,7 @@ class TestInhomogeneousPoissonGeneratorParameters(unittest.TestCase):
 
 class TestInhomogeneousPoissonGeneratorOrdering(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 1.0 * u.ms
 
     def _run_trace(self, gen, n_steps):
@@ -213,6 +216,7 @@ class TestInhomogeneousPoissonGeneratorOrdering(unittest.TestCase):
 
 class TestInhomogeneousPoissonGeneratorVsNEST(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 
@@ -293,8 +297,8 @@ class TestInhomogeneousPoissonGeneratorVsNEST(unittest.TestCase):
         bp_counts_aligned = np.zeros_like(bp_counts)
         bp_counts_aligned[1:] = bp_counts[:-1]
 
-        phase2 = slice(250, 550)   # inside [20, 60) ms
-        phase3 = slice(650, 850)   # inside [60, 90) ms
+        phase2 = slice(250, 550)  # inside [20, 60) ms
+        phase3 = slice(650, 850)  # inside [60, 90) ms
 
         nest_mean_2 = float(np.mean(nest_counts[phase2]))
         nest_mean_3 = float(np.mean(nest_counts[phase3]))

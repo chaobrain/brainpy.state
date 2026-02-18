@@ -54,8 +54,8 @@ def _rhs(y, is_refractory, i_stim, p):
     i_syn = float(np.sum(g * (p['E_rev'] - v_eff)))
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
     dv = 0.0 if is_refractory else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
-    ) / p['C_m']
+                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
+                                   ) / p['C_m']
     dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
 
     dy = np.empty_like(y, dtype=np.float64)
@@ -174,6 +174,7 @@ def _parse_event_weights(events, n_receptors):
 
 class TestAEIFCondBetaMultisynapse(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

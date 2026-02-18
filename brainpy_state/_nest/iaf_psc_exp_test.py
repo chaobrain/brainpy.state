@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_psc_exp
 
 jax.config.update('jax_enable_x64', True)
@@ -43,6 +41,7 @@ def _propagator_exp(tau_syn, tau_m, c_m, h):
 
 class TestIAFPscExp(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

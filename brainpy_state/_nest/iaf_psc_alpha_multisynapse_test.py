@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_psc_alpha_multisynapse
 
 jax.config.update('jax_enable_x64', True)
@@ -51,6 +49,7 @@ def alpha_psc_voltage_response(t, tau_syn, tau_m, c_m, w):
 
 class TestIAFPscAlphaMultisynapse(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, spike_events=None):

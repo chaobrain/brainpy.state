@@ -17,16 +17,15 @@
 
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 from .iaf_psc_exp import iaf_psc_exp
 
 __all__ = [
@@ -34,7 +33,7 @@ __all__ = [
 ]
 
 
-class iaf_psc_exp_htum(Neuron):
+class iaf_psc_exp_htum(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_exp_htum`` neuron model.
 
     Description
@@ -494,7 +493,7 @@ class iaf_psc_exp_htum(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike`, with shape equal to
             the neuron state shape (or batched state shape after
             :meth:`init_state`). Values correspond to threshold events detected

@@ -33,7 +33,6 @@ from brainpy.state import stdp_dopamine_synapse
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-
 _STDP_EPS = 1.0e-6
 
 
@@ -487,6 +486,9 @@ def _run_bp_trace(
 
 
 class TestSTDPDopamineSynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_dopamine_synapse(volume_transmitter=object())
@@ -549,6 +551,9 @@ class TestSTDPDopamineSynapseParameters(unittest.TestCase):
 
 
 class TestSTDPDopamineSynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         params = dict(
             dt_ms=0.1,

@@ -23,6 +23,8 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'volume_transmitter',
 ]
@@ -81,7 +83,7 @@ class _StepCalibration:
     delivery_period_steps: int
 
 
-class volume_transmitter(brainstate.nn.Dynamics):
+class volume_transmitter(NESTDevice):
     r"""NEST-compatible ``volume_transmitter`` support device.
 
     ``volume_transmitter`` collects neuromodulatory spikes and periodically
@@ -222,14 +224,6 @@ class volume_transmitter(brainstate.nn.Dynamics):
          - runtime
          - :math:`T_s`
          - :math:`k \cdot \mathrm{round}(d_{\min} / \Delta t)`.
-
-    Returns
-    -------
-    out : volume_transmitter
-        Configured dynamics node instance.  Calling :meth:`update` returns a
-        ``dict`` with keys ``'triggered'`` (``bool``), ``'t_trig'`` (``float``
-        ms or ``None``), ``'delivered_spikes'`` (``tuple[spikecounter, ...]``),
-        and ``'spike_history'`` (``tuple[spikecounter, ...]``).
 
     Raises
     ------
@@ -535,9 +529,7 @@ class volume_transmitter(brainstate.nn.Dynamics):
         Provided so that code that calls ``connect()`` on NEST devices works
         without modification when targeting :class:`volume_transmitter`.
 
-        Returns
-        -------
-        None
+
         """
         return None
 

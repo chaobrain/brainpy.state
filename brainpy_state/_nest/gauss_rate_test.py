@@ -25,7 +25,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import gauss_rate_ipn
 
 jax.config.update('jax_enable_x64', True)
@@ -105,6 +104,7 @@ def _run_nest_gauss_driven_trace(linear_summation, dt_ms, simtime_ms, drive, wei
 
 class TestGaussRate(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 
@@ -248,8 +248,10 @@ class TestGaussRate(unittest.TestCase):
                 self.assertAlmostEqual(float(np.asarray(out).reshape(-1)[0]), rate_new, delta=1e-12)
                 self.assertAlmostEqual(float(np.asarray(neuron.rate.value).reshape(-1)[0]), rate_new, delta=1e-12)
                 self.assertAlmostEqual(float(np.asarray(neuron.noise.value).reshape(-1)[0]), noise_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.delayed_rate.value).reshape(-1)[0]), rate_ref, delta=1e-12)
-                self.assertAlmostEqual(float(np.asarray(neuron.instant_rate.value).reshape(-1)[0]), rate_new, delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.delayed_rate.value).reshape(-1)[0]), rate_ref,
+                                       delta=1e-12)
+                self.assertAlmostEqual(float(np.asarray(neuron.instant_rate.value).reshape(-1)[0]), rate_new,
+                                       delta=1e-12)
 
                 rate_ref = rate_new
 

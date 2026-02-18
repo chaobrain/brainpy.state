@@ -32,12 +32,11 @@ mat2_psc_exp model, including:
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
+import numpy as np
 
 from brainpy_state._nest.mat2_psc_exp import mat2_psc_exp
 
@@ -47,6 +46,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 class TestMat2PscExp(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

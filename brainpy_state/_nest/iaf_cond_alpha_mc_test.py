@@ -18,17 +18,15 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import brainunit as u
 import jax
+import numpy as np
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 from brainpy.state import iaf_cond_alpha_mc
-
 
 SOMA = 0
 PROX = 1
@@ -67,8 +65,8 @@ def _dynamics_ref(y, is_refractory, i_stim, p):
         i_leak = p['g_L'][n] * (v_eff - p['E_L'][n])
 
         f[_idx(n, V_M)] = 0.0 if is_refractory else (
-            -i_leak - i_syn_ex - i_syn_in - i_conn + i_stim[n] + p['I_e'][n]
-        ) / p['C_m'][n]
+                                                        -i_leak - i_syn_ex - i_syn_in - i_conn + i_stim[n] + p['I_e'][n]
+                                                    ) / p['C_m'][n]
 
         f[_idx(n, DG_EX)] = -y[_idx(n, DG_EX)] / p['tau_syn_ex'][n]
         f[_idx(n, G_EX)] = y[_idx(n, DG_EX)] - y[_idx(n, G_EX)] / p['tau_syn_ex'][n]
@@ -163,6 +161,7 @@ def _reference_step(state, p, x_next, w_step, dt):
 
 class TestIAFCondAlphaMC(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod
@@ -427,9 +426,12 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                     self.assertAlmostEqual(dg_in[c], ref_state['y'][_idx(c, DG_IN)], delta=3e-6)
                     self.assertAlmostEqual(g_in[c], ref_state['y'][_idx(c, G_IN)], delta=3e-6)
 
-                self.assertEqual(int(np.asarray(neuron.refractory_step_count.value, dtype=np.int32).reshape(-1)[0]), ref_state['r'])
+                self.assertEqual(int(np.asarray(neuron.refractory_step_count.value, dtype=np.int32).reshape(-1)[0]),
+                                 ref_state['r'])
                 self.assertAlmostEqual(
-                    float(np.asarray(u.math.asarray(neuron.integration_step.value / u.ms), dtype=np.float64).reshape(-1)[0]),
+                    float(
+                        np.asarray(u.math.asarray(neuron.integration_step.value / u.ms), dtype=np.float64).reshape(-1)[
+                            0]),
                     ref_state['h'],
                     delta=3e-6,
                 )

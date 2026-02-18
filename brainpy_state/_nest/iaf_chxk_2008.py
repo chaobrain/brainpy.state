@@ -18,23 +18,22 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_chxk_2008',
 ]
 
 
-class iaf_chxk_2008(Neuron):
+class iaf_chxk_2008(NESTNeuron):
     r"""NEST-compatible ``iaf_chxk_2008`` with alpha synapses and precise AHP timing.
 
     Description
@@ -359,12 +358,6 @@ class iaf_chxk_2008(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -548,12 +541,6 @@ class iaf_chxk_2008(Neuron):
         if np.any(self._to_numpy(self.tau_ahp, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
@@ -578,7 +565,7 @@ class iaf_chxk_2008(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         self.last_spike_offset = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64) * u.ms)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -606,7 +593,7 @@ class iaf_chxk_2008(Neuron):
         )
         self.last_spike_offset.value = np.asarray(zeros, dtype=np.float64) * u.ms
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -677,10 +664,12 @@ class iaf_chxk_2008(Neuron):
             k3 = f(y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
             k4 = f(y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
             k5 = f(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-            k6 = f(y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
+            k6 = f(
+                y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
 
             y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-            y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+            y5 = y + h * (
+                    16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
             err = float(np.max(np.abs(y5 - y4)))
 
             if err <= self._ATOL or h <= self._MIN_H:

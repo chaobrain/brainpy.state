@@ -15,26 +15,25 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 
 import brainstate
 import brainunit as u
 import jax
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
 
 __all__ = [
     'poisson_generator',
 ]
 
-
 _UNSET = object()
 
 
-class poisson_generator(brainstate.nn.Dynamics):
+class poisson_generator(NESTDevice):
     r"""Poisson spike generator compatible with NEST.
 
     Description
@@ -155,13 +154,6 @@ class poisson_generator(brainstate.nn.Dynamics):
          - -
          - Seed for JAX key state used by Poisson sampling.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns a JAX array
-        of dtype ``int64`` and shape ``self.varshape`` containing per-step
-        spike multiplicities.
-
     Raises
     ------
     ValueError
@@ -263,7 +255,7 @@ class poisson_generator(brainstate.nn.Dynamics):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -273,7 +265,7 @@ class poisson_generator(brainstate.nn.Dynamics):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
@@ -333,13 +325,6 @@ class poisson_generator(brainstate.nn.Dynamics):
         **kwargs : Any
             Unused keyword arguments accepted for API compatibility.
 
-        Returns
-        -------
-        out : None
-            The method mutates internal state by creating one attribute:
-
-            - ``rng_key`` -- :class:`brainstate.ShortTermState` wrapping a
-              ``jax.random.PRNGKey`` derived from ``self.rng_seed``.
 
         Notes
         -----
@@ -401,13 +386,6 @@ class poisson_generator(brainstate.nn.Dynamics):
             ``stop``. Must be scalar-convertible and grid-representable when
             ``dt`` is available. Omit to keep the current value.
 
-        Returns
-        -------
-        out : None
-            Mutates ``self.rate``, ``self.start``, ``self.stop``, and
-            ``self.origin`` in place, then calls
-            :meth:`_refresh_timing_cache` when ``dt`` is present in the
-            environment so that :meth:`update` step bounds stay consistent.
 
         Raises
         ------
@@ -514,9 +492,9 @@ class poisson_generator(brainstate.nn.Dynamics):
         self.rng_key.value = key
         return jax.random.poisson(
             subkey,
-            lam=jnp.asarray(lam, dtype=jnp.float64),
+            lam=lam,
             shape=self.varshape,
-        ).astype(jnp.int64)
+        ).astype(np.int64)
 
     def update(self):
         r"""Advance one simulation step and return per-step spike multiplicities.
@@ -567,39 +545,20 @@ class poisson_generator(brainstate.nn.Dynamics):
         --------
         poisson_generator.init_state : RNG initialization called lazily here.
         poisson_generator.set : Update parameters between runs.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = brainpy.state.poisson_generator(
-           ...         in_size=(2, 3),
-           ...         rate=1000.0 * u.Hz,
-           ...         start=0.0 * u.ms,
-           ...         stop=50.0 * u.ms,
-           ...         rng_seed=0,
-           ...     )
-           ...     gen.init_state()
-           ...     with brainstate.environ.context(t=10.0 * u.ms):
-           ...         spikes = gen.update()
-           ...     _ = spikes.shape  # (2, 3)
         """
         if not hasattr(self, 'rng_key'):
             self.init_state()
 
         dt_ms = self._dt_ms()
-        if (not np.isfinite(self._dt_cache_ms)) or (not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)):
+        if (not np.isfinite(self._dt_cache_ms)) or (
+        not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)):
             self._refresh_timing_cache(dt_ms)
 
         if self.rate <= 0.0:
-            return jnp.zeros(self.varshape, dtype=jnp.int64)
+            return jax.numpy.zeros(self.varshape, dtype=np.int64)
 
         curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
         if self._is_active(curr_step):
             lam = self.rate * dt_ms / 1000.0
             return self._sample_poisson(lam)
-        return jnp.zeros(self.varshape, dtype=jnp.int64)
+        return jax.numpy.zeros(self.varshape, dtype=np.int64)

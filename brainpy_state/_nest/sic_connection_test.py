@@ -24,7 +24,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import aeif_cond_alpha_astro, sic_connection
 
 jax.config.update('jax_enable_x64', True)
@@ -37,6 +36,7 @@ def _is_nest_available():
 
 class TestSICConnection(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

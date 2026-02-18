@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
-import braintools
 import brainstate
+import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_cond_exp
 
 jax.config.update('jax_enable_x64', True)
@@ -71,9 +69,14 @@ def _rkf45_ref_step(v, g_ex, g_in, is_refractory, i_stim, dt, h0, p, atol=1e-3):
         )
         k5 = f(*y5)
         y6 = (
-            v + h * (-8.0 * k1[0] / 27.0 + 2.0 * k2[0] - 3544.0 * k3[0] / 2565.0 + 1859.0 * k4[0] / 4104.0 - 11.0 * k5[0] / 40.0),
-            g_ex + h * (-8.0 * k1[1] / 27.0 + 2.0 * k2[1] - 3544.0 * k3[1] / 2565.0 + 1859.0 * k4[1] / 4104.0 - 11.0 * k5[1] / 40.0),
-            g_in + h * (-8.0 * k1[2] / 27.0 + 2.0 * k2[2] - 3544.0 * k3[2] / 2565.0 + 1859.0 * k4[2] / 4104.0 - 11.0 * k5[2] / 40.0),
+            v + h * (-8.0 * k1[0] / 27.0 + 2.0 * k2[0] - 3544.0 * k3[0] / 2565.0 + 1859.0 * k4[0] / 4104.0 - 11.0 * k5[
+                0] / 40.0),
+            g_ex + h * (
+                    -8.0 * k1[1] / 27.0 + 2.0 * k2[1] - 3544.0 * k3[1] / 2565.0 + 1859.0 * k4[1] / 4104.0 - 11.0 * k5[
+                    1] / 40.0),
+            g_in + h * (
+                    -8.0 * k1[2] / 27.0 + 2.0 * k2[2] - 3544.0 * k3[2] / 2565.0 + 1859.0 * k4[2] / 4104.0 - 11.0 * k5[
+                    2] / 40.0),
         )
         k6 = f(*y6)
 
@@ -83,9 +86,12 @@ def _rkf45_ref_step(v, g_ex, g_in, is_refractory, i_stim, dt, h0, p, atol=1e-3):
             g_in + h * (25.0 * k1[2] / 216.0 + 1408.0 * k3[2] / 2565.0 + 2197.0 * k4[2] / 4104.0 - k5[2] / 5.0),
         )
         y5_sol = (
-            v + h * (16.0 * k1[0] / 135.0 + 6656.0 * k3[0] / 12825.0 + 28561.0 * k4[0] / 56430.0 - 9.0 * k5[0] / 50.0 + 2.0 * k6[0] / 55.0),
-            g_ex + h * (16.0 * k1[1] / 135.0 + 6656.0 * k3[1] / 12825.0 + 28561.0 * k4[1] / 56430.0 - 9.0 * k5[1] / 50.0 + 2.0 * k6[1] / 55.0),
-            g_in + h * (16.0 * k1[2] / 135.0 + 6656.0 * k3[2] / 12825.0 + 28561.0 * k4[2] / 56430.0 - 9.0 * k5[2] / 50.0 + 2.0 * k6[2] / 55.0),
+            v + h * (16.0 * k1[0] / 135.0 + 6656.0 * k3[0] / 12825.0 + 28561.0 * k4[0] / 56430.0 - 9.0 * k5[
+                0] / 50.0 + 2.0 * k6[0] / 55.0),
+            g_ex + h * (16.0 * k1[1] / 135.0 + 6656.0 * k3[1] / 12825.0 + 28561.0 * k4[1] / 56430.0 - 9.0 * k5[
+                1] / 50.0 + 2.0 * k6[1] / 55.0),
+            g_in + h * (16.0 * k1[2] / 135.0 + 6656.0 * k3[2] / 12825.0 + 28561.0 * k4[2] / 56430.0 - 9.0 * k5[
+                2] / 50.0 + 2.0 * k6[2] / 55.0),
         )
         err = max(abs(y5_sol[0] - y4_sol[0]), abs(y5_sol[1] - y4_sol[1]), abs(y5_sol[2] - y4_sol[2]))
         if err <= atol or h <= min_h:
@@ -102,6 +108,7 @@ def _rkf45_ref_step(v, g_ex, g_in, is_refractory, i_stim, dt, h0, p, atol=1e-3):
 
 class TestIAFCondExp(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

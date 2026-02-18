@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 from collections.abc import Mapping
@@ -30,7 +29,6 @@ from .static_synapse import _UNSET, static_synapse
 __all__ = [
     'stdp_dopamine_synapse',
 ]
-
 
 _STDP_EPS = 1.0e-6
 
@@ -874,7 +872,8 @@ class stdp_dopamine_synapse(static_synapse):
         """
         if syn_spec is None:
             return
-        disallowed = ('vt', 'volume_transmitter', 'A_minus', 'A_plus', 'Wmax', 'Wmin', 'b', 'tau_c', 'tau_n', 'tau_plus')
+        disallowed = ('vt', 'volume_transmitter', 'A_minus', 'A_plus', 'Wmax', 'Wmin', 'b', 'tau_c', 'tau_n',
+                      'tau_plus')
         for key in disallowed:
             if key in syn_spec:
                 raise ValueError(

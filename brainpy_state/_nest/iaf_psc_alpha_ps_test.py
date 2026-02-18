@@ -22,7 +22,6 @@ import brainstate
 import braintools
 import brainunit as u
 import jax
-
 from brainpy.state import iaf_psc_alpha_ps
 
 jax.config.update('jax_enable_x64', True)
@@ -30,6 +29,9 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 
 class TestIAFPscAlphaPS(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     @staticmethod
     def _step(neuron, step_idx, spike_events=None):
         with brainstate.environ.context(t=step_idx * brainstate.environ.get_dt()):

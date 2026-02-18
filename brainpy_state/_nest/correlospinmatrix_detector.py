@@ -24,6 +24,8 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'correlospinmatrix_detector',
 ]
@@ -54,7 +56,7 @@ class _Calibration:
     signature: tuple
 
 
-class correlospinmatrix_detector(brainstate.nn.Dynamics):
+class correlospinmatrix_detector(NESTDevice):
     r"""NEST-compatible ``correlospinmatrix_detector`` device.
 
     **1. Overview**
@@ -353,7 +355,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
         self._incoming: deque[_BinaryPulse] = deque()
 
         self._last_i = 0
-        self._t_last_in_spike = -2**62
+        self._t_last_in_spike = -2 ** 62
         self._tentative_down = False
         self._curr_state = np.zeros((0,), dtype=np.bool_)
         self._last_change = np.zeros((0,), dtype=np.int64)
@@ -388,7 +390,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             Requested value. Time-valued scalars are returned in milliseconds,
             ``count_covariance`` is returned as ``np.ndarray[int64]``.
 
@@ -495,7 +497,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Mapping ``{'count_covariance': ndarray}``, where the ndarray is
             ``int64`` with shape ``(N_channels, N_channels, N_bins)``.
 
@@ -679,7 +681,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
     def _reset_state(self):
         self._incoming = deque()
         self._last_i = 0
-        self._t_last_in_spike = -2**62
+        self._t_last_in_spike = -2 ** 62
         self._tentative_down = False
 
         if self._calib is None:

@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 from typing import Sequence
@@ -27,15 +26,16 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'inhomogeneous_poisson_generator',
 ]
 
-
 _UNSET = object()
 
 
-class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
+class inhomogeneous_poisson_generator(NESTDevice):
     r"""Inhomogeneous Poisson spike generator with NEST-compatible scheduling.
 
     Emit Poisson-distributed spike multiplicities from a piecewise-constant
@@ -197,13 +197,6 @@ class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
          - ``0``
          - —
          - Seed for the JAX PRNG key used in Poisson sampling.
-
-    Returns
-    -------
-    out : inhomogeneous_poisson_generator
-        Configured dynamics node. Each :meth:`update` call returns a
-        ``jax.Array`` with dtype ``int64`` and shape ``self.varshape``
-        containing per-step Poisson spike multiplicities.
 
     Raises
     ------

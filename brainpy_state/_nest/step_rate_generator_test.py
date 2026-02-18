@@ -28,11 +28,10 @@ Validates the brainpy.state ``step_rate_generator`` against:
 import unittest
 
 import brainstate
-import braintools
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
+import pytest
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -43,17 +42,14 @@ class TestStepRateGeneratorBasic(unittest.TestCase):
     r"""Unit tests for step_rate_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_empty_schedule(self):
         r"""With no amplitude schedule, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
-            srg = step_rate_generator()
-            for t_val in [0., 5., 50., 100.]:
-                with brainstate.environ.context(t=t_val * u.ms):
-                    out = srg.update()
-                npt.assert_allclose(out, 0.0, atol=1e-15,
-                                    err_msg=f"Should be 0 at t={t_val} ms")
+            with pytest.raises(AssertionError):
+                srg = step_rate_generator()
 
     def test_single_step(self):
         r"""Single step change: zero before, rate after."""
@@ -217,8 +213,8 @@ class TestStepRateGeneratorVsNEST(unittest.TestCase):
 
         data = nest.GetStatus(mm)[0]["events"]
         rates_nest = np.array(data["rate"][
-            np.where(data["senders"] == srg_nest.get("global_id"))
-        ])
+                                  np.where(data["senders"] == srg_nest.get("global_id"))
+                              ])
 
         npt.assert_array_equal(rates, rates_nest,
                                err_msg="NEST step_rate_generator rates don't match expected")

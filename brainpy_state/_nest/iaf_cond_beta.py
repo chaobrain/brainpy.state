@@ -17,23 +17,22 @@
 
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_beta',
 ]
 
 
-class iaf_cond_beta(Neuron):
+class iaf_cond_beta(NESTNeuron):
     r"""NEST-compatible conductance-based leaky integrate-and-fire neuron with beta-shaped synaptic conductances.
 
     This model implements a conductance-based LIF neuron with beta-function (dual-exponential)
@@ -217,13 +216,6 @@ class iaf_cond_beta(Neuron):
     ``spk_reset``        ``'hard'``         —                                        Reset mode (``'hard'`` matches NEST)
     ``ref_var``          ``False``          —                                        Expose boolean refractory indicator
     ==================== ================== ======================================== ================================================
-
-    Returns
-    -------
-    spike : jax.Array
-        Binary spike output for the current time step, with shape ``(*in_size, *batch_shape)``
-        and dtype ``float32``. Values are in :math:`[0, 1]` when using surrogate gradients;
-        exact values depend on ``spk_fun``.
 
     Raises
     ------
@@ -445,16 +437,12 @@ class iaf_cond_beta(Neuron):
             raise ValueError('Capacitance must be strictly positive.')
         if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self._to_numpy(self.tau_rise_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_decay_ex, u.ms) <= 0.0):
+        if np.any(self._to_numpy(self.tau_rise_ex, u.ms) <= 0.0) or np.any(
+            self._to_numpy(self.tau_decay_ex, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_rise_in, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_decay_in, u.ms) <= 0.0):
+        if np.any(self._to_numpy(self.tau_rise_in, u.ms) <= 0.0) or np.any(
+            self._to_numpy(self.tau_decay_in, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
-
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables for the neuron population.
@@ -504,7 +492,7 @@ class iaf_cond_beta(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -550,7 +538,7 @@ class iaf_cond_beta(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -631,8 +619,8 @@ class iaf_cond_beta(Neuron):
         i_syn_inh = g_in * (v_eff - p['E_in'])
         i_leak = p['g_L'] * (v_eff - p['E_L'])
         dv = 0.0 if is_refractory else (
-            -i_leak - i_syn_exc - i_syn_inh + i_stim + p['I_e']
-        ) / p['C_m']
+                                           -i_leak - i_syn_exc - i_syn_inh + i_stim + p['I_e']
+                                       ) / p['C_m']
 
         ddg_ex = -dg_ex / p['tau_decay_ex']
         dg_ex_dt = dg_ex - (g_ex / p['tau_rise_ex'])
@@ -663,10 +651,12 @@ class iaf_cond_beta(Neuron):
             k3 = f(y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
             k4 = f(y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
             k5 = f(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-            k6 = f(y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
+            k6 = f(
+                y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
 
             y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-            y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+            y5 = y + h * (
+                    16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
             err = float(np.max(np.abs(y5 - y4)))
 
             if err <= self._ATOL or h <= self._MIN_H:
@@ -766,38 +756,6 @@ class iaf_cond_beta(Neuron):
         - If ``dt`` changes between calls (via ``brainstate.environ.set_dt()``), the refractory
           counter may become inaccurate because it's computed in grid steps. Reset state after
           changing ``dt``.
-
-        Examples
-        --------
-        **Single Neuron Step:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate as bstate
-            >>>
-            >>> with bstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
-            ...     neuron = bst.iaf_cond_beta(1, V_th=-50*u.mV, V_reset=-65*u.mV)
-            ...     neuron.init_all_states()
-            ...     # Apply constant current
-            ...     spike = neuron.update(x=500 * u.pA)
-            ...     print(f"Spike: {spike}, Voltage: {neuron.V.value}")
-            Spike: [0.], Voltage: [-69.8] mV
-
-        **Synaptic Input Handling:**
-
-        .. code-block:: python
-
-            >>> with bstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron = bst.iaf_cond_beta(5)
-            ...     neuron.init_all_states()
-            ...     # Register excitatory input (10 nS per spike)
-            ...     exc_weights = u.math.array([10, 0, 10, 0, 10]) * u.nS
-            ...     neuron.add_delta_input('exc_syn', exc_weights)
-            ...     spikes = neuron.update()
-            ...     print(neuron.g_ex.value)  # Only neurons 0, 2, 4 receive input
-            [0.17 0.   0.17 0.   0.17] nS
 
         See Also
         --------

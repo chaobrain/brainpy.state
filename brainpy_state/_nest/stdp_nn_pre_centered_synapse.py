@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 
@@ -26,7 +25,6 @@ from .stdp_synapse import stdp_synapse
 __all__ = [
     'stdp_nn_pre_centered_synapse',
 ]
-
 
 _STDP_EPS = 1.0e-6
 

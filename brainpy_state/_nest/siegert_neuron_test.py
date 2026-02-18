@@ -25,7 +25,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import siegert_neuron
 
 jax.config.update('jax_enable_x64', True)
@@ -70,6 +69,7 @@ def _run_nest_siegert_trace(dt_ms, simtime_ms, model_params, drift_factor, diffu
 
 class TestSiegertNeuron(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

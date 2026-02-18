@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -99,6 +100,7 @@ class TestPoissonGeneratorParameters(unittest.TestCase):
 
 class TestPoissonGeneratorOrdering(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 1.0 * u.ms
 
     def _run_trace(self, gen, n_steps):
@@ -112,7 +114,7 @@ class TestPoissonGeneratorOrdering(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             gen = poisson_generator(
                 in_size=1,
-                rate=1000.0 * u.Hz,   # lam = 1 at dt=1 ms
+                rate=1000.0 * u.Hz,  # lam = 1 at dt=1 ms
                 start=2.0 * u.ms,
                 stop=5.0 * u.ms,
                 rng_seed=1,
@@ -229,8 +231,8 @@ class TestPoissonGeneratorVsNEST(unittest.TestCase):
         bp_counts_aligned = np.zeros_like(bp_counts)
         bp_counts_aligned[1:] = bp_counts[:-1]
 
-        off_early = slice(50, 250)    # [5, 25) ms, before active interval
-        active = slice(700, 1600)     # [70, 160) ms, well inside active interval
+        off_early = slice(50, 250)  # [5, 25) ms, before active interval
+        active = slice(700, 1600)  # [70, 160) ms, well inside active interval
         off_late = slice(2050, 2350)  # [205, 235) ms, after active interval
 
         nest_mean_active = float(np.mean(nest_counts[active]))

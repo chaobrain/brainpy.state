@@ -18,23 +18,22 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_alpha',
 ]
 
 
-class aeif_psc_alpha(Neuron):
+class aeif_psc_alpha(NESTNeuron):
     r"""NEST-compatible adaptive exponential integrate-and-fire neuron with alpha-shaped postsynaptic currents.
 
     This model implements the adaptive exponential integrate-and-fire (AdEx) neuron with
@@ -279,12 +278,6 @@ class aeif_psc_alpha(Neuron):
         Time of last spike emission, unit ms. Updated to :math:`t + dt` on spike.
     refractory : brainstate.ShortTermState, optional
         Boolean refractory indicator (only if ``ref_var=True``).
-
-    Returns
-    -------
-    spike : Array
-        Binary spike indicator array with shape ``(*in_size, *batch_size)``, dtype float.
-        Value is 1.0 where spikes occurred in the current step, 0.0 otherwise.
 
     Raises
     ------
@@ -589,25 +582,6 @@ class aeif_psc_alpha(Neuron):
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        r"""Retrieve current simulation time step with fallback.
-
-        Returns
-        -------
-        Quantity
-            Simulation time step with unit ms. Returns ``0.1 * u.ms`` if no context is set.
-
-        Notes
-        -----
-        Used during state initialization when ``brainstate.environ.context`` may not yet
-        be active. The fallback value is arbitrary and will be overwritten when the first
-        update occurs within a proper context.
-        """
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
 
@@ -654,7 +628,7 @@ class aeif_psc_alpha(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -698,7 +672,7 @@ class aeif_psc_alpha(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -884,8 +858,9 @@ class aeif_psc_alpha(Neuron):
             p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
         )
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p[
+                                           'I_e'] + i_stim
+                                       ) / p['C_m']
 
         ddI_ex = -dI_ex / p['tau_syn_ex']
         dI_ex_dt = dI_ex - (I_ex / p['tau_syn_ex'])
@@ -974,43 +949,6 @@ class aeif_psc_alpha(Neuron):
         For large populations, this can be slow compared to vectorized solvers, but it
         ensures exact NEST compatibility including adaptive step sizing and in-loop spike
         handling.
-
-        Examples
-        --------
-        Single step update:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate as bs
-            >>>
-            >>> neuron = bst.aeif_psc_alpha(10)
-            >>> with bs.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spike = neuron.update(x=400 * u.pA)
-            >>> spike.shape
-            (10,)
-
-        Multi-step simulation:
-
-        .. code-block:: python
-
-            >>> import jax.numpy as jnp
-            >>>
-            >>> neuron = bst.aeif_psc_alpha(5)
-            >>> n_steps = 100
-            >>> spike_train = []
-            >>>
-            >>> with bs.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     for i in range(n_steps):
-            ...         # Inject step current
-            ...         current = 500 * u.pA if i > 20 else 0 * u.pA
-            ...         spike = neuron.update(x=current)
-            ...         spike_train.append(spike)
-            >>>
-            >>> spike_train = jnp.array(spike_train)  # shape: (100, 5)
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

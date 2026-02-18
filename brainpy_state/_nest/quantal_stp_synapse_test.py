@@ -149,6 +149,9 @@ def _run_quantal_spike_weights(
 
 
 class TestQuantalSTPSynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = quantal_stp_synapse()
@@ -209,6 +212,9 @@ class TestQuantalSTPSynapseParameters(unittest.TestCase):
 
 
 class TestQuantalSTPSynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_state_update_order_and_effective_weight(self):
         recv = _MockReceiver()
         dt_ms = 1.0
@@ -224,9 +230,9 @@ class TestQuantalSTPSynapseOrdering(unittest.TestCase):
         spike_steps = [1, 4]
 
         draws = [
-            0.3, 0.8,              # first spike release trials (a=2): one release
+            0.3, 0.8,  # first spike release trials (a=2): one release
             0.01, 0.4, 0.02, 0.8,  # second spike recovery trials (n-a=4): two recoveries
-            0.2, 0.7, 0.1,         # second spike release trials (a=3): two releases
+            0.2, 0.7, 0.1,  # second spike release trials (a=3): two releases
         ]
         draw_iter = iter(draws)
 
@@ -291,6 +297,9 @@ class TestQuantalSTPSynapseOrdering(unittest.TestCase):
 
 
 class TestQuantalSTPSynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_mean_converges_to_deterministic_tsodyks2_equivalent(self):
         # Mirrors NEST testsuite/pytests/test_quantal_stp_synapse.py idea:
         # the stochastic model converges to tsodyks2 dynamics in expectation.

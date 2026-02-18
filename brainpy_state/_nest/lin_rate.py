@@ -15,18 +15,16 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
-from typing import Callable, Iterable, Tuple
-
-import numpy as np
+from typing import Callable, Tuple
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from ._base import NESTNeuron
 
 __all__ = [
     'lin_rate_ipn',
@@ -34,7 +32,7 @@ __all__ = [
 ]
 
 
-class _lin_rate_base(Dynamics):
+class _lin_rate_base(NESTNeuron):
     __module__ = 'brainpy.state'
 
     def __init__(

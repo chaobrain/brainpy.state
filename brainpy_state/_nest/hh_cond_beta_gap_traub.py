@@ -18,17 +18,16 @@
 import math
 from typing import Callable
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'hh_cond_beta_gap_traub',
@@ -171,7 +170,7 @@ def _beta_normalization_factor(tau_rise, tau_decay):
         return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
 
-class hh_cond_beta_gap_traub(Neuron):
+class hh_cond_beta_gap_traub(NESTNeuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with beta-function synapses and gap junctions.
 
     Implements a conductance-based Hodgkin-Huxley model with Traub-Miles gating
@@ -1149,51 +1148,6 @@ class hh_cond_beta_gap_traub(Neuron):
           solution. Check ``sol.success`` if you encounter NaN values.
         - Extremely stiff parameter regimes (e.g., very small time constants with large ``dt``)
           may require tighter tolerances (smaller ``rtol``/``atol``).
-
-        Examples
-        --------
-        **Step current injection:**
-
-        .. code-block:: python
-
-           >>> import brainpy.state as bst
-           >>> import brainunit as u
-           >>> import brainstate
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     neuron = bst.hh_cond_beta_gap_traub(1)
-           ...     neuron.init_all_states()
-           ...     # Apply 400 pA current for one step
-           ...     spike = neuron.update(400 * u.pA)
-           ...     print(f"Spike emitted: {spike.item() > 0}")
-           ...     print(f"Membrane potential: {neuron.V.value.item():.2f} mV")
-
-        **Gap-junction coupling between two neurons:**
-
-        .. code-block:: python
-
-           >>> neurons = bst.hh_cond_beta_gap_traub(2)
-           >>> neurons.init_all_states()
-           >>> g_gap = 50.0 * u.nS  # Gap conductance
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     # Simulate one step with gap coupling
-           ...     V = neurons.V.value
-           ...     I_gap_0 = g_gap * (V[1] - V[0])  # Current into neuron 0
-           ...     I_gap_1 = g_gap * (V[0] - V[1])  # Current into neuron 1
-           ...     I_gap = u.math.stack([I_gap_0, I_gap_1])
-           ...     spikes = neurons.update(I_gap)
-
-        **Synaptic input with registered projection:**
-
-        .. code-block:: python
-
-           >>> neuron = bst.hh_cond_beta_gap_traub(1)
-           >>> neuron.init_all_states()
-           >>> # Register synaptic input (e.g., from a projection)
-           >>> def synaptic_input():
-           ...     return 2.0 * u.nS  # 2 nS conductance jump
-           >>> neuron.add_delta_input('synapse', synaptic_input)
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     spike = neuron.update()  # Synapse input applied automatically
 
         See Also
         --------

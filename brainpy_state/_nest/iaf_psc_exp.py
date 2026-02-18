@@ -15,26 +15,24 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_psc_exp',
 ]
 
 
-class iaf_psc_exp(Neuron):
+class iaf_psc_exp(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_exp`` neuron model.
 
     Description
@@ -285,12 +283,6 @@ class iaf_psc_exp(Neuron):
          - --
          - Optional instance name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -463,13 +455,6 @@ class iaf_psc_exp(Neuron):
         **kwargs : Any
             Unused compatibility arguments.
 
-        Returns
-        -------
-        out : None
-            The method mutates the object in-place, creating:
-            ``V``, ``i_syn_ex``, ``i_syn_in``, ``i_0``, ``i_1``,
-            ``refractory_step_count``, ``last_spike_time``, and optionally
-            ``refractory`` (when ``ref_var=True``).
 
         Raises
         ------
@@ -517,7 +502,7 @@ class iaf_psc_exp(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Surrogate spike output from ``self.spk_fun`` with the same shape
             as ``V`` (or ``self.V.value`` when ``V`` is ``None``).
 
@@ -573,7 +558,7 @@ class iaf_psc_exp(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. For neurons that fire this step, the
             voltage argument to :meth:`get_spike` is nudged
@@ -655,7 +640,9 @@ class iaf_psc_exp(Neuron):
         stoch_spike = np.random.random(size=v_shape) < phi * h * 1e-3
         spike_cond = np.where(deterministic, det_spike, stoch_spike)
 
-        r = np.where(spike_cond, self._broadcast_to_state(np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape), r)
+        r = np.where(spike_cond,
+                     self._broadcast_to_state(np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+                                              v_shape), r)
         V_before_reset = V_rel
         V_rel = np.where(spike_cond, V_reset_rel, V_rel)
 

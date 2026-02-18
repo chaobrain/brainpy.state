@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
@@ -123,6 +124,7 @@ class TestPulsepacketGeneratorParameters(unittest.TestCase):
 
 class TestPulsepacketGeneratorOrdering(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 1.0 * u.ms
 
     def _run_trace(self, gen, n_steps):

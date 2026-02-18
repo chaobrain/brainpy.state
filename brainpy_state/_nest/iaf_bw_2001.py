@@ -18,24 +18,23 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_bw_2001',
 ]
 
 
-class iaf_bw_2001(Neuron):
+class iaf_bw_2001(NESTNeuron):
     r"""NEST-compatible ``iaf_bw_2001`` neuron model.
 
     Conductance-based leaky integrate-and-fire neuron with AMPA, GABA, and
@@ -537,12 +536,6 @@ class iaf_bw_2001(Neuron):
         if np.any(self._value_to_float(self.gsl_error_tol, None) <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables for the neuron population.
 
@@ -589,7 +582,7 @@ class iaf_bw_2001(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -641,7 +634,7 @@ class iaf_bw_2001(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -1097,38 +1090,6 @@ class iaf_bw_2001(Neuron):
           and typically stabilizes after a few milliseconds.
         - Maximum iterations: 10000 per timestep (prevents infinite loops).
         - Minimum step size: 1e-8 ms (prevents numerical instability).
-
-        Examples
-        --------
-        Simple update with external current:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neurons = bst.iaf_bw_2001(10)
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     neurons.init_all_states()
-            ...     spike = neurons.update(x=500*u.pA)  # Returns spike array
-
-        Update with spike events (receptor-routed):
-
-        .. code-block:: python
-
-            >>> # Receive AMPA spike with 1 nS weight
-            >>> ampa_event = ('AMPA', 1.0*u.nS)
-            >>> spike = neurons.update(spike_events=[ampa_event])
-            >>>
-            >>> # Receive NMDA spike with offset from another iaf_bw_2001 neuron
-            >>> nmda_event = {
-            ...     'receptor_type': 'NMDA',
-            ...     'weight': 0.5*u.nS,
-            ...     'offset': neurons.spike_offset.value[0],  # From presynaptic neuron
-            ...     'sender_model': 'iaf_bw_2001'
-            ... }
-            >>> spike = neurons.update(spike_events=[nmda_event])
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

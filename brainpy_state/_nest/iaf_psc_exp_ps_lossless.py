@@ -18,16 +18,15 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 from .iaf_psc_exp import iaf_psc_exp
 
 __all__ = [
@@ -35,7 +34,7 @@ __all__ = [
 ]
 
 
-class iaf_psc_exp_ps_lossless(Neuron):
+class iaf_psc_exp_ps_lossless(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_exp_ps_lossless`` with lossless spike detection.
 
     Description
@@ -292,12 +291,6 @@ class iaf_psc_exp_ps_lossless(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -482,17 +475,6 @@ class iaf_psc_exp_ps_lossless(Neuron):
         **kwargs : Any
             Unused compatibility arguments for subclass extension.
 
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates the object in-place by creating
-            ``V`` (HiddenState, mV), ``I_syn_ex`` (ShortTermState, pA),
-            ``I_syn_in`` (ShortTermState, pA), ``y0`` (ShortTermState, pA),
-            ``is_refractory`` (ShortTermState, bool),
-            ``last_spike_step`` (ShortTermState, int32),
-            ``last_spike_offset`` (ShortTermState, ms),
-            ``last_spike_time`` (ShortTermState, ms), and optionally
-            ``refractory`` (ShortTermState, bool) when ``ref_var=True``.
 
         Raises
         ------
@@ -545,7 +527,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Output of ``self.spk_fun`` applied to normalized threshold distance
             ``(V - V_th) / (V_th - V_reset)`` with same shape as input ``V``.
             Typically float values in ``[0, 1]`` or similar range depending on
@@ -728,7 +710,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike`, shape
             ``self.V.value.shape``. Values correspond to
             ``self.spk_fun((V - V_th) / (V_th - V_reset))`` after lossless
@@ -775,8 +757,10 @@ class iaf_psc_exp_ps_lossless(Neuron):
         I_syn_in = self._broadcast_to_state(self._to_numpy(self.I_syn_in.value, u.pA), v_shape)
         y0 = self._broadcast_to_state(self._to_numpy(self.y0.value, u.pA), v_shape)
 
-        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool), v_shape)
-        last_spike_step = self._broadcast_to_state(np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
+        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
+                                                 v_shape)
+        last_spike_step = self._broadcast_to_state(
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
         last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
         last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
 
@@ -850,9 +834,12 @@ class iaf_psc_exp_ps_lossless(Neuron):
 
             def threshold_distance(dt_local):
                 P20 = -tau_m_i / c_m_i * math.expm1(-dt_local / tau_m_i)
-                P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
-                P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
-                y2_r = P20 * (i_e_i + before[0]) + P21e * before[1] + P21i * before[2] + before[3] * math.exp(-dt_local / tau_m_i)
+                P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                   dt_local)
+                P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                   dt_local)
+                y2_r = P20 * (i_e_i + before[0]) + P21e * before[1] + P21i * before[2] + before[3] * math.exp(
+                    -dt_local / tau_m_i)
                 return y2_r - u_th_i
 
             def propagate(dt_local):
@@ -861,8 +848,10 @@ class iaf_psc_exp_ps_lossless(Neuron):
                     return
                 if not refr_i:
                     P20 = -tau_m_i / c_m_i * math.expm1(-dt_local / tau_m_i)
-                    P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
-                    P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local)
+                    P21e = iaf_psc_exp._propagator_exp(np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                       dt_local)
+                    P21i = iaf_psc_exp._propagator_exp(np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i),
+                                                       dt_local)
                     y2_i = P20 * (i_e_i + y0_i) + P21e * y1e_i + P21i * y1i_i + y2_i * math.exp(-dt_local / tau_m_i)
                     y2_i = max(y2_i, u_min_i)
                 y1e_i = y1e_i * math.exp(-dt_local / tau_ex_i)
@@ -896,7 +885,8 @@ class iaf_psc_exp_ps_lossless(Neuron):
                 c6 = 1.0 - (tau_ex_i / tau_m_i)
 
                 f = (a1 * I0 * exp_tau_m_s + exp_tau_m * (a3 - Ie_tot * a2) + a3) / a4
-                g = ((I0 + Ie_tot) * (b1 * exp_tau_m + b2 * exp_tau_s) + b3 * (exp_tau_m - exp_tau_s)) / (b4 * exp_tau_s)
+                g = ((I0 + Ie_tot) * (b1 * exp_tau_m + b2 * exp_tau_s) + b3 * (exp_tau_m - exp_tau_s)) / (
+                        b4 * exp_tau_s)
                 b_env = c1 * Ie_tot + c2 * I0 + c3 * (I0 ** c4) * ((c5 - Ie_tot) ** c6)
 
                 if (V0 < g) and (V0 <= f):

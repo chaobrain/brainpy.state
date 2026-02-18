@@ -443,6 +443,7 @@ class TestGIFPopPscExpSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
@@ -490,6 +491,7 @@ class TestGIFPopPscExpSynapticDynamics(unittest.TestCase):
     r"""Test synaptic current dynamics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
@@ -556,6 +558,7 @@ class TestGIFPopPscExpPopulationDynamics(unittest.TestCase):
     r"""Test population-level dynamics and spike generation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
@@ -652,6 +655,7 @@ class TestGIFPopPscExpReferenceTrace(unittest.TestCase):
     r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.5  # ms
         self.dt_q = 0.5 * u.ms
 
@@ -922,7 +926,7 @@ class TestGIFPopPscExpLongSimulation(unittest.TestCase):
         - Expected steady-state rate ~22 Hz +/- 1 Hz
         - Expected rate variance ~102 Hz^2 +/- 6 Hz^2
         """
-        res = 0.5   # ms
+        res = 0.5  # ms
         T = 10000.0  # ms
         start_time = 1000.0  # ms
         pop_size = 500

@@ -15,23 +15,22 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import brainstate
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
+
+from ._base import NESTDevice
 
 __all__ = [
     'poisson_generator_ps',
 ]
 
-
 _UNSET = object()
 
 
-class poisson_generator_ps(brainstate.nn.Dynamics):
+class poisson_generator_ps(NESTDevice):
     r"""Precise-time Poisson spike generator with dead time (NEST-compatible).
 
     Description
@@ -171,13 +170,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
          - -
          - Root seed used to spawn independent per-target RNG streams.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. :meth:`update` returns per-step multiplicities
-        as ``numpy.ndarray`` of dtype ``int64`` and shape ``self.varshape``,
-        and can optionally return precise spike-time event arrays per target.
-
     Raises
     ------
     ValueError
@@ -281,7 +273,7 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -291,7 +283,7 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
@@ -341,26 +333,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         **kwargs : Any
             Unused keyword arguments accepted for API compatibility.
 
-        Returns
-        -------
-        out : None
-            The method mutates internal state by creating three
-            :class:`brainstate.ShortTermState` attributes and a private RNG
-            tuple:
-
-            - ``next_spike_time`` -- shape ``(num_targets,)``, dtype
-              ``float64``, initialized to ``-inf``. Stores the scheduled
-              precise emission time (ms) for each target stream.
-            - ``last_spike_time`` -- shape ``self.varshape``, dtype
-              ``float64``, initialized to ``-inf``. Records the most recently
-              emitted spike time (ms) for each output.
-            - ``last_spike_offset`` -- shape ``self.varshape``, dtype
-              ``float64``, initialized to ``0``. Records
-              ``(t + dt) - last_spike_time`` at the step where the last spike
-              was emitted.
-            - ``_rngs`` -- tuple of ``num_targets`` independent
-              ``numpy.random.Generator`` instances spawned from ``rng_seed``
-              via ``numpy.random.SeedSequence``.
 
         Notes
         -----
@@ -446,14 +418,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
             ``stop``. Must be finite after conversion. Omit to keep the
             current value.
 
-        Returns
-        -------
-        out : None
-            Mutates ``self.rate``, ``self.dead_time``, ``self.start``,
-            ``self.stop``, and ``self.origin`` in place. If ``start`` or
-            ``origin`` move the activation window forward past already-scheduled
-            finite ``next_spike_time`` values, those states are reinitialized
-            to ``-inf`` to preserve NEST pre-run semantics.
 
         Raises
         ------
@@ -739,43 +703,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         poisson_generator_ps.set : Update parameters between runs.
         poisson_generator_ps.step_spike_times_ms : Access precise times after
             update without the overhead of the return value.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = brainpy.state.poisson_generator_ps(
-           ...         in_size=(2, 3),
-           ...         rate=1000.0 * u.Hz,
-           ...         dead_time=0.0 * u.ms,
-           ...         start=0.0 * u.ms,
-           ...         stop=50.0 * u.ms,
-           ...         rng_seed=0,
-           ...     )
-           ...     gen.init_state()
-           ...     with brainstate.environ.context(t=10.0 * u.ms):
-           ...         counts = gen.update()
-           ...     _ = counts.shape  # (2, 3)
-
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = brainpy.state.poisson_generator_ps(
-           ...         in_size=(4,),
-           ...         rate=500.0 * u.Hz,
-           ...         dead_time=1.0 * u.ms,
-           ...         rng_seed=42,
-           ...     )
-           ...     with brainstate.environ.context(t=5.0 * u.ms):
-           ...         counts, times = gen.update(return_precise_times=True)
-           ...     _ = len(times)  # 4
         """
         if not hasattr(self, 'next_spike_time'):
             self.init_state()

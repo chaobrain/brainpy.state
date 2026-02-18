@@ -18,17 +18,16 @@
 import math
 from typing import Callable
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'hh_psc_alpha_clopath',
@@ -89,7 +88,7 @@ def _hh_psc_alpha_clopath_equilibrium(V):
     return m_inf, h_inf, n_inf
 
 
-class hh_psc_alpha_clopath(Neuron):
+class hh_psc_alpha_clopath(NESTNeuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with Clopath plasticity support.
 
     Current-based spiking neuron using the Hodgkin-Huxley formalism with
@@ -698,9 +697,12 @@ class hh_psc_alpha_clopath(Neuron):
             raise ValueError('Refractory time cannot be negative.')
         if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_u_bar_plus, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_u_bar_minus, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_u_bar_bar, u.ms) <= 0.0):
+        if np.any(self._to_numpy(self.tau_u_bar_plus, u.ms) <= 0.0) or np.any(
+            self._to_numpy(self.tau_u_bar_minus, u.ms) <= 0.0) or np.any(
+            self._to_numpy(self.tau_u_bar_bar, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.g_Na, u.nS) < 0.0) or np.any(self._to_numpy(self.g_K, u.nS) < 0.0) or np.any(self._to_numpy(self.g_L, u.nS) < 0.0):
+        if np.any(self._to_numpy(self.g_Na, u.nS) < 0.0) or np.any(self._to_numpy(self.g_K, u.nS) < 0.0) or np.any(
+            self._to_numpy(self.g_L, u.nS) < 0.0):
             raise ValueError('All conductances must be non-negative.')
 
     def _refractory_counts(self):
@@ -968,33 +970,6 @@ class hh_psc_alpha_clopath(Neuron):
         - Computational cost scales roughly as :math:`O(N_{\text{neurons}} \times N_{\text{RK45 steps}})`.
           For large populations with ``rtol=1e-3``, expect 5-10 RK45 steps per
           simulation time step on average.
-
-        Examples
-        --------
-        Inject constant current and simulate:
-
-        .. code-block:: python
-
-            >>> import brainstate as bst
-            >>> import brainpy_state as bps
-            >>> import brainunit as u
-            >>> bst.environ.set(dt=0.1 * u.ms)
-            >>> neurons = bps.hh_psc_alpha_clopath(in_size=10)
-            >>> neurons.init_state()
-            >>> # Inject 500 pA for 10 ms
-            >>> for _ in range(100):
-            ...     spikes = neurons.update(500. * u.pA)
-            >>> # Check filtered voltages for plasticity
-            >>> print(neurons.u_bar_plus.value)  # Slow LTP filter
-            >>> print(neurons.u_bar_minus.value)  # Fast LTD filter
-
-        Deliver spike input via projection:
-
-        .. code-block:: python
-
-            >>> # Assuming pre_spikes is a boolean array
-            >>> neurons.add_delta_input('syn_exc', pre_spikes * 10. * u.pA)
-            >>> spikes = neurons.update()  # No external current
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

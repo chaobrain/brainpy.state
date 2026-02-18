@@ -24,7 +24,6 @@ import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import rate_transformer_node
 
 jax.config.update('jax_enable_x64', True)
@@ -94,6 +93,7 @@ def _run_nest_tanh_transformer_driven_trace(linear_summation, dt_ms, simtime_ms,
 
 class TestRateTransformerNode(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

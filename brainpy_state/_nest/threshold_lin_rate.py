@@ -15,15 +15,13 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
@@ -757,34 +755,6 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         **Failure modes**: No automatic failure handling. Negative time constants,
         decay rates, or noise parameters are caught at construction by
         ``_validate_parameters``. Invalid event formats raise ``ValueError``.
-
-        Examples
-        --------
-        Single update step with external drive:
-
-        .. code-block:: python
-
-           >>> import brainpy.state as bst
-           >>> import brainunit as u
-           >>> model = bst.threshold_lin_rate_ipn(
-           ...     in_size=5, tau=10*u.ms, g=2.0, theta=1.0
-           ... )
-           >>> model.init_all_states()
-           >>> rate = model.update(x=0.5)
-
-        Update with instantaneous event:
-
-        .. code-block:: python
-
-           >>> event = {'rate': 2.0, 'weight': 0.1}
-           >>> rate = model.update(instant_rate_events=event)
-
-        Update with delayed event (arrives 3 steps later):
-
-        .. code-block:: python
-
-           >>> event = {'rate': 1.5, 'weight': 0.1, 'delay_steps': 3}
-           >>> rate = model.update(delayed_rate_events=event)
         """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
@@ -1431,35 +1401,6 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         **Failure modes**: No automatic failure handling. Negative time constants
         or noise parameters are caught at construction by ``_validate_parameters``.
         Invalid event formats raise ``ValueError``.
-
-        Examples
-        --------
-        Single update step with external drive:
-
-        .. code-block:: python
-
-           >>> import brainpy.state as bst
-           >>> import brainunit as u
-           >>> model = bst.threshold_lin_rate_opn(
-           ...     in_size=5, tau=10*u.ms, g=2.0, theta=1.0
-           ... )
-           >>> model.init_all_states()
-           >>> rate = model.update(x=0.5)  # deterministic state
-           >>> noisy_output = model.noisy_rate.value  # noisy transmitted value
-
-        Update with instantaneous event:
-
-        .. code-block:: python
-
-           >>> event = {'rate': 2.0, 'weight': 0.1}
-           >>> rate = model.update(instant_rate_events=event)
-
-        Update with delayed event (arrives 3 steps later):
-
-        .. code-block:: python
-
-           >>> event = {'rate': 1.5, 'weight': 0.1, 'delay_steps': 3}
-           >>> rate = model.update(delayed_rate_events=event)
         """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape

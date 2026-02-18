@@ -21,10 +21,10 @@ import unittest
 from dataclasses import dataclass
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import jonke_synapse
 
 jax.config.update('jax_enable_x64', True)
@@ -138,6 +138,9 @@ def _jonke_reference_weight_trace(pre_spike_times_ms, post_spike_times_ms, param
 
 
 class TestJonkeSynapse(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = jonke_synapse()
 

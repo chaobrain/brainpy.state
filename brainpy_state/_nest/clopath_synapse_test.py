@@ -22,10 +22,10 @@ import unittest
 from dataclasses import dataclass
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import clopath_synapse
 
 jax.config.update('jax_enable_x64', True)
@@ -125,14 +125,16 @@ def _build_histories_from_nest_multimeter(events, resolution_ms, params):
         delayed_minus = minus_buf[idx]
 
         if u_i > params['theta_plus'] and delayed_plus > params['theta_minus']:
-            dw_ltp = params['A_LTP'] * (u_i - params['theta_plus']) * (delayed_plus - params['theta_minus']) * resolution_ms
+            dw_ltp = params['A_LTP'] * (u_i - params['theta_plus']) * (
+                    delayed_plus - params['theta_minus']) * resolution_ms
             ltp_hist.append(_HistEntry(float(t_ms), float(dw_ltp), 0))
 
         if delayed_minus > params['theta_minus']:
             if params['A_LTD_const']:
                 dw_ltd = params['A_LTD'] * (delayed_minus - params['theta_minus'])
             else:
-                dw_ltd = params['A_LTD'] * (u_b * u_b) * (delayed_minus - params['theta_minus']) / params['u_ref_squared']
+                dw_ltd = params['A_LTD'] * (u_b * u_b) * (delayed_minus - params['theta_minus']) / params[
+                    'u_ref_squared']
             ltd_hist.append(_HistEntry(float(t_ms), float(dw_ltd), 0))
 
     return ltp_hist, ltd_hist
@@ -211,6 +213,9 @@ def _run_nest_clopath_pairing(spike_times_pre, spike_times_post):
 
 
 class TestClopathSynapse(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = clopath_synapse()
 
@@ -253,7 +258,8 @@ class TestClopathSynapse(unittest.TestCase):
 
     def test_set_status_and_validation(self):
         syn = clopath_synapse()
-        syn.set_status({'weight': 2.5, 'delay': 0.3, 'delay_steps': 3, 'x_bar': 0.2, 'tau_x': 20.0, 'Wmin': 0.0, 'Wmax': 200.0})
+        syn.set_status(
+            {'weight': 2.5, 'delay': 0.3, 'delay_steps': 3, 'x_bar': 0.2, 'tau_x': 20.0, 'Wmin': 0.0, 'Wmax': 200.0})
 
         self.assertAlmostEqual(syn.weight, 2.5, delta=0.0)
         self.assertAlmostEqual(syn.delay, 0.3, delta=0.0)

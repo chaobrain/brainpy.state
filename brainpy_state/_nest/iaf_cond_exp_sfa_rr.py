@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-import numpy as np
 from typing import Callable
 
 import brainstate
@@ -23,16 +22,17 @@ import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_exp_sfa_rr',
 ]
 
 
-class iaf_cond_exp_sfa_rr(Neuron):
+class iaf_cond_exp_sfa_rr(NESTNeuron):
     r"""NEST-compatible conductance-based LIF neuron with spike-frequency adaptation and relative refractory mechanisms.
 
     This model implements a conductance-based leaky integrate-and-fire neuron with exponential
@@ -466,24 +466,6 @@ class iaf_cond_exp_sfa_rr(Neuron):
         if np.any(self._to_numpy(self.tau_rr, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
 
-    def _safe_dt(self):
-        r"""Get simulation time step from environment with fallback.
-
-        Returns
-        -------
-        ArrayLike
-            Simulation time step with units (e.g., 0.1 ms).
-
-        Notes
-        -----
-        If no environment context is active, returns default value 0.1 ms to allow
-        parameter initialization before simulation context is established.
-        """
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
 
@@ -523,7 +505,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -563,7 +545,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -707,8 +689,8 @@ class iaf_cond_exp_sfa_rr(Neuron):
         i_rr = g_rr * (v_eff - p['E_rr'])
 
         dv = 0.0 if is_refractory else (
-            -i_l + i_stim + p['I_e'] - i_syn_exc - i_syn_inh - i_sfa - i_rr
-        ) / p['C_m']
+                                           -i_l + i_stim + p['I_e'] - i_syn_exc - i_syn_inh - i_sfa - i_rr
+                                       ) / p['C_m']
         dg_ex = -g_ex / p['tau_syn_ex']
         dg_in = -g_in / p['tau_syn_in']
         dg_sfa = -g_sfa / p['tau_sfa']
@@ -782,10 +764,12 @@ class iaf_cond_exp_sfa_rr(Neuron):
             k3 = f(y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
             k4 = f(y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
             k5 = f(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-            k6 = f(y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
+            k6 = f(
+                y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
 
             y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-            y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+            y5 = y + h * (
+                    16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
             err = float(np.max(np.abs(y5 - y4)))
 
             if err <= self._ATOL or h <= self._MIN_H:
@@ -841,21 +825,6 @@ class iaf_cond_exp_sfa_rr(Neuron):
         * **Vectorization**: This implementation uses scalar RKF45 integration with explicit
           loop over neurons. This ensures exact NEST compatibility but is slower than vectorized
           integration. Each neuron maintains independent adaptive step size.
-
-        Examples
-        --------
-        .. code-block:: python
-
-            >>> import brainstate as bst
-            >>> import brainunit as u
-            >>> import brainpy.state as bp
-            >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=1, I_e=500*u.pA)
-            >>> with bst.environ.context(dt=0.1*u.ms):
-            ...     neuron.init_all_states()
-            ...     for step in range(100):
-            ...         spike = neuron.update()
-            ...         if spike[0] > 0.5:
-            ...             print(f"Spike at step {step}")
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

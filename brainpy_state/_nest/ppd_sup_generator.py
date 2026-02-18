@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 
@@ -25,15 +24,16 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'ppd_sup_generator',
 ]
 
-
 _UNSET = object()
 
 
-class ppd_sup_generator(brainstate.nn.Dynamics):
+class ppd_sup_generator(NESTDevice):
     r"""Superposition of Poisson processes with dead time (NEST-compatible).
 
     Description
@@ -235,13 +235,6 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
          - ``0``
          - -
          - Seed for NumPy RNG used by stochastic transition draws.
-
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns a JAX array
-        of dtype ``int64`` and shape ``self.varshape`` containing per-step
-        spike multiplicities per output train.
 
     Raises
     ------
@@ -503,26 +496,6 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
             Additional unused keyword arguments accepted for API compatibility.
             Ignored.
 
-        Returns
-        -------
-        out : Any
-            ``None``. Side effects:
-
-            - ``self.occ_refractory`` — :class:`brainstate.ShortTermState`
-              of dtype ``int64`` and shape
-              ``(prod(varshape), num_age_bins)`` where
-              ``num_age_bins = floor(dead_time / dt)``.  Each row ``[i]``
-              holds per-bin refractory occupancy for output train ``i``.
-              All bins initialized to ``floor(rate / 1000 * n_proc * dt)``.
-            - ``self.occ_active`` — :class:`brainstate.ShortTermState`
-              of dtype ``int64`` and shape ``(prod(varshape),)``.  Each
-              element is ``n_proc - ini_occ_ref * num_age_bins``.
-            - ``self.activate`` — :class:`brainstate.ShortTermState`
-              of dtype ``int64`` and shape ``(prod(varshape),)``,
-              initialized to zero; stores the rotating bin pointer for each
-              output train.
-            - ``self._rng`` — ``numpy.random.Generator`` seeded by
-              ``rng_seed``.
 
         Notes
         -----
@@ -612,13 +585,6 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
             New scalar time-origin offset in ms.  If omitted, keep current
             value.
 
-        Returns
-        -------
-        out : Any
-            ``None``.  Parameters are updated in place.  The internal runtime
-            cache (``_hazard_step``, ``_omega_rad_per_ms``, ``_num_age_bins``,
-            ``_t_min_step``, ``_t_max_step``) is refreshed when ``dt`` is
-            available.
 
         Raises
         ------
@@ -684,7 +650,7 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             ``dict`` with the following keys and value types:
 
             - ``'rate'`` — ``float``, component-process rate in Hz.
@@ -784,7 +750,7 @@ class ppd_sup_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             JAX array of dtype ``int64`` and shape ``self.varshape``.  Each
             element is the number of spikes emitted by the corresponding
             output train during the current step.  Returns all-zeros when

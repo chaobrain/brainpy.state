@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 
@@ -26,15 +25,16 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'sinusoidal_poisson_generator',
 ]
 
-
 _UNSET = object()
 
 
-class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
+class sinusoidal_poisson_generator(NESTDevice):
     r"""Sinusoidally modulated Poisson spike generator compatible with NEST.
 
     Description
@@ -248,13 +248,6 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
          - ``0``
          - -
          - Seed for JAX random key evolution.
-
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns an ``int64``
-        JAX array with shape ``self.varshape`` containing per-step spike
-        multiplicities.
 
     Raises
     ------
@@ -474,9 +467,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         **kwargs
             Unused extra keyword arguments.
 
-        Returns
-        -------
-        None
+
         """
         del batch_size, kwargs
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))

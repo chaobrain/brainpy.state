@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 from collections.abc import Mapping
@@ -30,7 +29,6 @@ from .static_synapse import _UNSET, static_synapse
 __all__ = [
     'stdp_facetshw_synapse_hom',
 ]
-
 
 _STDP_EPS = 1.0e-6
 _LUT_ENTRY_MIN = 0

@@ -15,15 +15,13 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
@@ -874,33 +872,6 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         **Random number generation**: Uses NumPy's default RNG
         (``np.random.normal``). For reproducibility, seed the global RNG before
         simulation.
-
-        Examples
-        --------
-        Step with external drive and noise:
-
-        .. code-block:: python
-
-           >>> with bs.environ.context(dt=0.1*u.ms):
-           ...     r = pop.update(x=0.3)
-
-        Apply instantaneous event with weight:
-
-        .. code-block:: python
-
-           >>> r = pop.update(instant_rate_events=[{'rate': 1.0, 'weight': 0.5}])
-
-        Schedule delayed event for delivery in 10 steps:
-
-        .. code-block:: python
-
-           >>> r = pop.update(delayed_rate_events=[(2.0, 0.8, 10)])
-
-        Override noise with deterministic value:
-
-        .. code-block:: python
-
-           >>> r = pop.update(noise=np.zeros(pop.varshape))
         """
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape

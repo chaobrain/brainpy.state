@@ -47,7 +47,6 @@ import braintools
 import brainstate
 import brainunit as u
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
@@ -119,17 +118,17 @@ def _rkf45_ref_step_multi(v, g_vals, is_refractory, i_stim, stc, dt, h0, p,
               for i in range(n)]
         k4 = f(y4)
         y5 = [y[i] + h * (439.0 * k1[i] / 216.0 - 8.0 * k2[i] + 3680.0 * k3[i] / 513.0
-                           - 845.0 * k4[i] / 4104.0) for i in range(n)]
+                          - 845.0 * k4[i] / 4104.0) for i in range(n)]
         k5 = f(y5)
         y6 = [y[i] + h * (-8.0 * k1[i] / 27.0 + 2.0 * k2[i] - 3544.0 * k3[i] / 2565.0
-                           + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
+                          + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
         k6 = f(y6)
 
         y4_sol = [y[i] + h * (25.0 * k1[i] / 216.0 + 1408.0 * k3[i] / 2565.0
-                               + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
+                              + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
         y5_sol = [y[i] + h * (16.0 * k1[i] / 135.0 + 6656.0 * k3[i] / 12825.0
-                               + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
-                               + 2.0 * k6[i] / 55.0) for i in range(n)]
+                              + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
+                              + 2.0 * k6[i] / 55.0) for i in range(n)]
 
         err = max(abs(y5_sol[i] - y4_sol[i]) for i in range(n))
         if err <= atol or h <= min_h:
@@ -326,6 +325,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -435,8 +435,8 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
 
             # Apply conductances
             self._step(base, 0)
-            self._step(exc, 0, dg_values=[(0, 5.0)])   # excitatory receptor
-            self._step(inh, 0, dg_values=[(1, 5.0)])   # inhibitory receptor
+            self._step(exc, 0, dg_values=[(0, 5.0)])  # excitatory receptor
+            self._step(inh, 0, dg_values=[(1, 5.0)])  # inhibitory receptor
 
             # Let dynamics evolve
             self._step(base, 1)
@@ -494,6 +494,7 @@ class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
     r"""Test refractory period mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -580,6 +581,7 @@ class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
     r"""Test stc and sfa adaptation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -681,6 +683,7 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
     r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -758,6 +761,7 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
     r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_val = 0.1
         self.dt = self.dt_val * u.ms
 
@@ -990,6 +994,7 @@ class TestGIFCondExpMultisynUpdateOrder(unittest.TestCase):
     r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):

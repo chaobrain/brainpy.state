@@ -34,15 +34,13 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import ht_neuron
+from scipy.integrate import solve_ivp
+
 from brainpy_state._nest.ht_neuron import (
     _beta_normalization_factor,
     _m_eq_h,
@@ -234,6 +232,9 @@ def _get_scalar(x):
 class TestBetaNormalizationFactor(unittest.TestCase):
     r"""Test the beta normalization factor computation."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_known_values(self):
         r"""Check normalization factor for AMPA defaults (tau_rise=0.5, tau_decay=2.4)."""
         tau_rise = 0.5
@@ -261,6 +262,9 @@ class TestBetaNormalizationFactor(unittest.TestCase):
 
 class TestEquilibriumFunctions(unittest.TestCase):
     r"""Test steady-state equilibrium helper functions."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_m_eq_h_at_minus75(self):
         r"""At V=-75 (threshold), m_eq_h should be 0.5."""
@@ -296,6 +300,9 @@ class TestEquilibriumFunctions(unittest.TestCase):
 
 class TestHTNeuronDefaults(unittest.TestCase):
     r"""Test that default parameter values match NEST ht_neuron."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_default_parameters(self):
         neuron = ht_neuron(1)
@@ -345,6 +352,9 @@ class TestHTNeuronDefaults(unittest.TestCase):
 
 class TestHTNeuronInitialState(unittest.TestCase):
     r"""Test initial state variable values."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_initial_membrane_potential(self):
         r"""V_m should start at (g_NaL*E_Na + g_KL*E_K) / (g_NaL + g_KL)."""
@@ -419,6 +429,9 @@ class TestHTNeuronInitialState(unittest.TestCase):
 class TestHTNeuronValidation(unittest.TestCase):
     r"""Test parameter validation."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_negative_conductances(self):
         r"""Negative peak conductances should raise ValueError."""
         for param in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A',
@@ -457,6 +470,9 @@ class TestHTNeuronValidation(unittest.TestCase):
 
 class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold dynamics against standalone reference solver."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_free_evolution_no_input(self):
         r"""With no input, neuron should remain subthreshold and near resting potential.
@@ -561,6 +577,9 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
 class TestHTNeuronSpiking(unittest.TestCase):
     r"""Test spike generation and refractory behavior."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_strong_current_produces_spike(self):
         r"""A strong DC current should cause the neuron to spike."""
         dt = 0.1
@@ -637,6 +656,9 @@ class TestHTNeuronSpiking(unittest.TestCase):
 
 class TestHTNeuronSynapticDynamics(unittest.TestCase):
     r"""Test synaptic conductance dynamics with beta-function kernels."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_ampa_spike_response(self):
         r"""An AMPA spike should produce a transient conductance increase."""
@@ -732,6 +754,9 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
 class TestHTNeuronIntrinsicCurrents(unittest.TestCase):
     r"""Test intrinsic current computation."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_I_NaP_at_rest(self):
         r"""I_NaP should be computable at rest voltage."""
         V = -70.0
@@ -772,6 +797,9 @@ class TestHTNeuronIntrinsicCurrents(unittest.TestCase):
 
 class TestHTNeuronNMDA(unittest.TestCase):
     r"""Test NMDA voltage-dependent unblocking."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_instant_unblock_mode(self):
         r"""With instant_unblock=True, m_NMDA should equal m_eq."""
@@ -821,6 +849,9 @@ class TestHTNeuronNMDA(unittest.TestCase):
 class TestHTNeuronThresholdDynamics(unittest.TestCase):
     r"""Test dynamic threshold behavior."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_threshold_relaxes_to_equilibrium(self):
         r"""Theta should relax exponentially toward theta_eq."""
         dt = 0.1
@@ -847,6 +878,9 @@ class TestHTNeuronThresholdDynamics(unittest.TestCase):
 
 class TestHTNeuronMultipleNeurons(unittest.TestCase):
     r"""Test with population of multiple neurons."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_population_size(self):
         r"""Should work with in_size > 1."""
@@ -878,6 +912,9 @@ class TestHTNeuronMultipleNeurons(unittest.TestCase):
 class TestHTNeuronCondSteps(unittest.TestCase):
     r"""Test that conductance step pre-computation matches NEST."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_cond_step_AMPA(self):
         r"""AMPA cond_step should equal g_peak * beta_normalization_factor."""
         neuron = ht_neuron(1)
@@ -902,6 +939,9 @@ class TestHTNeuronCondSteps(unittest.TestCase):
 
 class TestHTNeuronReferenceComparison(unittest.TestCase):
     r"""Compare full simulation traces between model and reference solver."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_dc_driven_trace(self):
         r"""Compare voltage trace under DC input with reference solver."""

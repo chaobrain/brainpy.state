@@ -22,12 +22,12 @@ import brainstate
 import brainunit as u
 import jax
 import jax.numpy as jnp
-
 from brainpy.state import Izhikevich, IzhikevichRef
 
 
 class TestIzhikevichNeuron(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.in_size = 10
         self.batch_size = 5
         self.time_steps = 100

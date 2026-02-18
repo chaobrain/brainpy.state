@@ -17,16 +17,17 @@
 
 import math
 import unittest
+
 import brainstate
 import braintools
 import brainunit as u
 import jax.numpy as jnp
-
 from brainpy.state import iaf_psc_delta_ps
 
 
 class TestIAFPscDeltaPS(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

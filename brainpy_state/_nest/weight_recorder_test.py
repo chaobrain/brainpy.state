@@ -124,6 +124,7 @@ class TestWeightRecorder(unittest.TestCase):
         return importlib.util.find_spec('nest') is not None
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 
@@ -374,7 +375,8 @@ class TestWeightRecorder(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     weight_recorder(start=1.0 * u.ms, stop=0.5 * u.ms).update(weights=np.array([1.0], dtype=np.float64))
                 with self.assertRaises(ValueError):
-                    weight_recorder().update(weights=np.array([1.0, 2.0], dtype=np.float64), senders=np.array([1, 2, 3], dtype=np.int64))
+                    weight_recorder().update(weights=np.array([1.0, 2.0], dtype=np.float64),
+                                             senders=np.array([1, 2, 3], dtype=np.int64))
                 with self.assertRaises(ValueError):
                     weight_recorder().update(weights=np.array([1.0], dtype=np.float64), offsets=np.array([np.nan]))
 

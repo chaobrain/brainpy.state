@@ -30,10 +30,7 @@ import math
 import unittest
 
 import brainstate
-import braintools
 import brainunit as u
-import jax
-import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -46,6 +43,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
     r"""Unit tests for noise_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):

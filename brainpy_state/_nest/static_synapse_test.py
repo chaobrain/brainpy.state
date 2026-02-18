@@ -88,6 +88,9 @@ def _run_bp_trace(spike_times_ms, dt_ms, sim_steps):
 
 
 class TestStaticSynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = static_synapse()
@@ -138,6 +141,9 @@ class TestStaticSynapseParameters(unittest.TestCase):
 
 
 class TestStaticSynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_delivery_occurs_after_delay_steps(self):
         recv = _MockReceiver()
         dt = 0.1 * u.ms
@@ -175,7 +181,8 @@ class TestStaticSynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), 1)
         _, value, _ = recv.delta_events[0]
-        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), -3.6, delta=1e-12)
+        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), -3.6,
+                               delta=1e-12)
 
     def test_current_and_delta_inputs_are_summed_before_send(self):
         recv = _MockReceiver()
@@ -214,6 +221,9 @@ class TestStaticSynapseOrdering(unittest.TestCase):
 
 
 class TestStaticSynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_iaf_psc_delta_trace_matches_nest_style_reference(self):
         dt_ms = 0.01
         sim_steps = 2000  # 20 ms

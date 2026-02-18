@@ -18,23 +18,22 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_exp',
 ]
 
 
-class aeif_psc_exp(Neuron):
+class aeif_psc_exp(NESTNeuron):
     r"""NEST-compatible adaptive exponential integrate-and-fire neuron with exponential synapses.
 
     Current-based adaptive exponential integrate-and-fire neuron with exponentially
@@ -498,19 +497,6 @@ class aeif_psc_exp(Neuron):
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        r"""Get simulation timestep with fallback.
-
-        Returns
-        -------
-        Quantity
-            Simulation timestep in ms. Returns 0.1 ms if not set in environment.
-        """
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
 
@@ -554,7 +540,7 @@ class aeif_psc_exp(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -593,7 +579,7 @@ class aeif_psc_exp(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -751,8 +737,9 @@ class aeif_psc_exp(Neuron):
         )
 
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike + I_ex - I_in - w + p[
+                                           'I_e'] + i_stim
+                                       ) / p['C_m']
 
         dI_ex = -I_ex / p['tau_syn_ex']
         dI_in = -I_in / p['tau_syn_in']
@@ -868,36 +855,6 @@ class aeif_psc_exp(Neuron):
         necessary because each neuron has independent adaptive step size and refractory
         state. For large populations, this is slower than vectorized Euler integration
         but provides higher accuracy and NEST-compatible semantics.
-
-        Examples
-        --------
-        Basic update with constant current:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neurons = bp.aeif_psc_exp(100, I_e=200 * u.pA)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neurons.init_all_states()
-            ...     spike = neurons.update(x=50 * u.pA)  # External current
-            ...     print(spike.sum())  # Number of spikes this step
-
-        With synaptic delta inputs:
-
-        .. code-block:: python
-
-            >>> neurons = bp.aeif_psc_exp(100)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neurons.init_all_states()
-            ...
-            ...     # Register synaptic input
-            ...     neurons.add_delta_input('exc', lambda: 100 * u.pA)
-            ...
-            ...     # Update step
-            ...     spike = neurons.update()
 
         See Also
         --------

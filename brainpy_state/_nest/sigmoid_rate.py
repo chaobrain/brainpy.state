@@ -15,15 +15,13 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base

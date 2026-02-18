@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-import numpy as np
 from typing import Callable
 
 import brainstate
@@ -23,16 +22,17 @@ import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_exp',
 ]
 
 
-class iaf_cond_exp(Neuron):
+class iaf_cond_exp(NESTNeuron):
     r"""Leaky integrate-and-fire model with exponential conductance synapses.
 
     This is a conductance-based leaky integrate-and-fire neuron with hard threshold,
@@ -343,12 +343,6 @@ class iaf_cond_exp(Neuron):
         if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
             raise ValueError('All synaptic time constants must be strictly positive.')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables for the neuron population.
 
@@ -386,7 +380,7 @@ class iaf_cond_exp(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -426,7 +420,7 @@ class iaf_cond_exp(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -644,9 +638,12 @@ class iaf_cond_exp(Neuron):
             )
             k5 = f(*y5)
             y6 = (
-                v + h * (-8.0 * k1[0] / 27.0 + 2.0 * k2[0] - 3544.0 * k3[0] / 2565.0 + 1859.0 * k4[0] / 4104.0 - 11.0 * k5[0] / 40.0),
-                ge + h * (-8.0 * k1[1] / 27.0 + 2.0 * k2[1] - 3544.0 * k3[1] / 2565.0 + 1859.0 * k4[1] / 4104.0 - 11.0 * k5[1] / 40.0),
-                gi + h * (-8.0 * k1[2] / 27.0 + 2.0 * k2[2] - 3544.0 * k3[2] / 2565.0 + 1859.0 * k4[2] / 4104.0 - 11.0 * k5[2] / 40.0),
+                v + h * (-8.0 * k1[0] / 27.0 + 2.0 * k2[0] - 3544.0 * k3[0] / 2565.0 + 1859.0 * k4[0] / 4104.0 - 11.0 *
+                         k5[0] / 40.0),
+                ge + h * (-8.0 * k1[1] / 27.0 + 2.0 * k2[1] - 3544.0 * k3[1] / 2565.0 + 1859.0 * k4[1] / 4104.0 - 11.0 *
+                          k5[1] / 40.0),
+                gi + h * (-8.0 * k1[2] / 27.0 + 2.0 * k2[2] - 3544.0 * k3[2] / 2565.0 + 1859.0 * k4[2] / 4104.0 - 11.0 *
+                          k5[2] / 40.0),
             )
             k6 = f(*y6)
 
@@ -656,9 +653,12 @@ class iaf_cond_exp(Neuron):
                 gi + h * (25.0 * k1[2] / 216.0 + 1408.0 * k3[2] / 2565.0 + 2197.0 * k4[2] / 4104.0 - k5[2] / 5.0),
             )
             y5_sol = (
-                v + h * (16.0 * k1[0] / 135.0 + 6656.0 * k3[0] / 12825.0 + 28561.0 * k4[0] / 56430.0 - 9.0 * k5[0] / 50.0 + 2.0 * k6[0] / 55.0),
-                ge + h * (16.0 * k1[1] / 135.0 + 6656.0 * k3[1] / 12825.0 + 28561.0 * k4[1] / 56430.0 - 9.0 * k5[1] / 50.0 + 2.0 * k6[1] / 55.0),
-                gi + h * (16.0 * k1[2] / 135.0 + 6656.0 * k3[2] / 12825.0 + 28561.0 * k4[2] / 56430.0 - 9.0 * k5[2] / 50.0 + 2.0 * k6[2] / 55.0),
+                v + h * (16.0 * k1[0] / 135.0 + 6656.0 * k3[0] / 12825.0 + 28561.0 * k4[0] / 56430.0 - 9.0 * k5[
+                    0] / 50.0 + 2.0 * k6[0] / 55.0),
+                ge + h * (16.0 * k1[1] / 135.0 + 6656.0 * k3[1] / 12825.0 + 28561.0 * k4[1] / 56430.0 - 9.0 * k5[
+                    1] / 50.0 + 2.0 * k6[1] / 55.0),
+                gi + h * (16.0 * k1[2] / 135.0 + 6656.0 * k3[2] / 12825.0 + 28561.0 * k4[2] / 56430.0 - 9.0 * k5[
+                    2] / 50.0 + 2.0 * k6[2] / 55.0),
             )
 
             err = max(
@@ -736,26 +736,6 @@ class iaf_cond_exp(Neuron):
         * Integration may degrade to minimum step size (1e-8 ms) for stiff dynamics
         * Iteration limit (10000) may be reached for extreme parameter combinations
         * No warning is issued on integration failure (matches NEST silent fallback)
-
-        Examples
-        --------
-        Single timestep update with external current:
-
-        .. code-block:: python
-
-            >>> import brainunit as u
-            >>> spike = neuron.update(x=100 * u.pA)
-
-        Simulate over 1 second with constant input:
-
-        .. code-block:: python
-
-            >>> import brainstate as bst
-            >>> with bst.environ.context(dt=0.1*u.ms):
-            ...     neuron.init_all_states()
-            ...     spikes = []
-            ...     for _ in range(10000):
-            ...         spikes.append(neuron.update(x=200*u.pA))
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

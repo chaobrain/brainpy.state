@@ -24,6 +24,8 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'multimeter',
 ]
@@ -45,7 +47,7 @@ class _StepCalibration:
     t_max_steps: float
 
 
-class multimeter(brainstate.nn.Dynamics):
+class multimeter(NESTDevice):
     r"""NEST-compatible analog recorder for neuron/device state variables.
 
     ``multimeter`` records analog state samples from connected targets into an
@@ -205,24 +207,6 @@ class multimeter(brainstate.nn.Dynamics):
          - ``()``
          - :math:`\{x_r\}_{r=1}^{R}`
          - Ordered recordable channels expected in each payload.
-
-    Returns
-    -------
-    events : dict[str, np.ndarray]
-        Returned by :meth:`update` and :meth:`flush`.  All arrays are
-        one-dimensional with length ``E`` equal to the total number of
-        emitted samples accumulated so far:
-
-        - ``'times'`` — ``float64``, shape ``(E,)``: timestamp of each
-          sample in ms (or integer step index when
-          ``time_in_steps=True``).
-        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for
-          each sample, defaulting to ``1`` when not supplied.
-        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
-          ``time_in_steps=True``): zero-filled offset array matching NEST
-          semantics.
-        - ``<key>`` — ``float64``, shape ``(E,)`` for each name in
-          ``record_from``: recorded values for that channel.
 
     Raises
     ------
@@ -550,7 +534,8 @@ class multimeter(brainstate.nn.Dynamics):
 
         offset_steps = self._to_step_count(self.offset, dt_ms, 'offset')
         if offset_steps != 0 and offset_steps < 1:
-            raise ValueError('The offset for the sampling interval must be at least as long as the simulation resolution.')
+            raise ValueError(
+                'The offset for the sampling interval must be at least as long as the simulation resolution.')
 
         start_steps = self._to_step_count(self.start, dt_ms, 'start')
         stop_value = math.inf if self.stop is None else self.stop

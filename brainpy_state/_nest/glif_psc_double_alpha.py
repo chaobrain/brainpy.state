@@ -43,16 +43,15 @@ References
 import math
 from typing import Callable, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'glif_psc_double_alpha',
@@ -207,7 +206,7 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     return P31, P32
 
 
-class glif_psc_double_alpha(Neuron):
+class glif_psc_double_alpha(NESTNeuron):
     r"""Current-based generalized leaky integrate-and-fire (GLIF) neuron model
     with double alpha-function shaped synaptic currents.
 
@@ -792,10 +791,10 @@ class glif_psc_double_alpha(Neuron):
         s, a, v = self.has_theta_spike, self.has_asc, self.has_theta_voltage
         valid_combos = [
             (False, False, False),  # GLIF1
-            (True, False, False),   # GLIF2
-            (False, True, False),   # GLIF3
-            (True, True, False),    # GLIF4
-            (True, True, True),     # GLIF5
+            (True, False, False),  # GLIF2
+            (False, True, False),  # GLIF3
+            (True, True, False),  # GLIF4
+            (True, True, True),  # GLIF5
         ]
         if (s, a, v) not in valid_combos:
             raise ValueError(
@@ -867,12 +866,6 @@ class glif_psc_double_alpha(Neuron):
         for amp in self.amp_slow:
             if amp <= 0.0:
                 raise ValueError("All slow synaptic amplitudes must be strictly positive.")
-
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables for the neuron population.

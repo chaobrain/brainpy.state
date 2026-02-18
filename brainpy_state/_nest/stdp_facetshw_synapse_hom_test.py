@@ -33,7 +33,6 @@ from brainpy.state import stdp_facetshw_synapse_hom
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-
 _STDP_EPS = 1.0e-6
 _DEFAULT_LUT_0 = np.asarray([2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15], dtype=np.int64)
 _DEFAULT_LUT_1 = np.asarray([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13], dtype=np.int64)
@@ -94,7 +93,8 @@ def _facetshw_send_ref(state, *, multiplicity, t_spike, delay, post_hist_t):
             state['synapses_per_driver'],
             state['driver_readout_time'],
         )
-        state['next_readout_time'] = int(state['synapse_id'] / state['synapses_per_driver']) * state['driver_readout_time']
+        state['next_readout_time'] = int(state['synapse_id'] / state['synapses_per_driver']) * state[
+            'driver_readout_time']
         state['init_flag'] = True
 
     if t_spike > state['next_readout_time']:
@@ -292,6 +292,9 @@ def _run_reference_trace(
 
 
 class TestSTDPFACETSHWSynapseHomParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_facetshw_synapse_hom()
@@ -330,20 +333,20 @@ class TestSTDPFACETSHWSynapseHomParameters(unittest.TestCase):
     def test_common_properties_rejected_in_connect_syn_spec(self):
         syn = stdp_facetshw_synapse_hom()
         for key in (
-            'tau_plus',
-            'tau_minus_stdp',
-            'Wmax',
-            'weight_per_lut_entry',
-            'no_synapses',
-            'synapses_per_driver',
-            'driver_readout_time',
-            'readout_cycle_duration',
-            'lookuptable_0',
-            'lookuptable_1',
-            'lookuptable_2',
-            'configbit_0',
-            'configbit_1',
-            'reset_pattern',
+                'tau_plus',
+                'tau_minus_stdp',
+                'Wmax',
+                'weight_per_lut_entry',
+                'no_synapses',
+                'synapses_per_driver',
+                'driver_readout_time',
+                'readout_cycle_duration',
+                'lookuptable_0',
+                'lookuptable_1',
+                'lookuptable_2',
+                'configbit_0',
+                'configbit_1',
+                'reset_pattern',
         ):
             with self.subTest(key=key):
                 with self.assertRaisesRegex(ValueError, f'{key} cannot be specified'):
@@ -384,6 +387,9 @@ class TestSTDPFACETSHWSynapseHomParameters(unittest.TestCase):
 
 
 class TestSTDPFACETSHWSynapseHomOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         dt_ms = 0.1
         delay_ms = 0.3
@@ -432,6 +438,9 @@ class TestSTDPFACETSHWSynapseHomOrdering(unittest.TestCase):
 
 
 class TestSTDPFACETSHWSynapseHomDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_dynamics_match_nest_reference_logic(self):
         # Mirrors NEST testsuite/pytests/test_facetshw_stdp.py with shorter
         # runtime while keeping the 36-pair LUT update structure.

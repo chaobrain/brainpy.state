@@ -24,6 +24,8 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'correlomatrix_detector',
 ]
@@ -57,7 +59,7 @@ class _Calibration:
     signature: tuple
 
 
-class correlomatrix_detector(brainstate.nn.Dynamics):
+class correlomatrix_detector(NESTDevice):
     r"""NEST-compatible ``correlomatrix_detector`` device.
 
     **1. Overview**

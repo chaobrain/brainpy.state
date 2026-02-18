@@ -15,6 +15,9 @@
 
 # -*- coding: utf-8 -*-
 
+
+from typing import Optional
+
 import brainstate
 import braintools
 import brainunit as u
@@ -22,12 +25,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'noise_generator',
 ]
 
 
-class noise_generator(brainstate.nn.Dynamics):
+class noise_generator(NESTDevice):
     r"""Gaussian white-noise current generator compatible with NEST.
 
     Generate a piecewise-constant Gaussian current with optional sinusoidal
@@ -183,13 +188,6 @@ class noise_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global time offset for both activity boundaries.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a current-like quantity
-        with shape ``self.varshape``: sampled Gaussian drive while active and
-        zeros while inactive.
-
     Raises
     ------
     ValueError
@@ -280,8 +278,8 @@ class noise_generator(brainstate.nn.Dynamics):
         start: ArrayLike = 0. * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0. * u.ms,
-        seed: int = None,
-        name: str = None,
+        seed: Optional[int] = None,
+        name: Optional[str] = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -299,6 +297,7 @@ class noise_generator(brainstate.nn.Dynamics):
             self.stop = None
         self.origin = braintools.init.param(origin, self.varshape)
         self.seed = seed
+        self.rng = brainstate.random.default_rng(self.seed)
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize RNG and internal state buffers for piecewise noise updates.
@@ -313,18 +312,6 @@ class noise_generator(brainstate.nn.Dynamics):
             Extra keyword arguments accepted for API compatibility with
             :class:`brainstate.nn.Dynamics`. They are currently unused.
 
-        Returns
-        -------
-        out : None
-            The method mutates internal state by creating three attributes:
-
-            - ``_rng_key`` -- JAX PRNG key derived from ``seed`` (or ``0`` when
-              ``seed is None``).
-            - ``current_amp`` -- :class:`brainstate.ShortTermState` holding the
-              piecewise-constant current amplitude, initialized to
-              ``0. * u.pA`` broadcast to ``self.varshape``.
-            - ``_step_counter`` -- :class:`brainstate.ShortTermState` holding a
-              scalar ``int32`` step counter, initialized to ``0``.
 
         Raises
         ------
@@ -362,15 +349,8 @@ class noise_generator(brainstate.nn.Dynamics):
            ...     )
            ...     gen.init_state()
         """
-        if self.seed is not None:
-            self._rng_key = jax.random.PRNGKey(self.seed)
-        else:
-            self._rng_key = jax.random.PRNGKey(0)
-
         # Current noise amplitude (piecewise constant)
-        amp = braintools.init.param(
-            braintools.init.Constant(0. * u.pA), self.varshape, batch_size
-        )
+        amp = braintools.init.param(braintools.init.Constant(0. * u.pA), self.varshape, batch_size)
         self.current_amp = brainstate.ShortTermState(amp)
 
         # Step counter for noise update interval tracking
@@ -381,7 +361,7 @@ class noise_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Current-like quantity with shape ``self.varshape``. If active,
             values equal the cached piecewise-constant amplitude sampled from
             ``mean + N(0,1) * effective_std``; otherwise values are zero.
@@ -432,27 +412,6 @@ class noise_generator(brainstate.nn.Dynamics):
         noise_generator : Class-level parameter definitions and model equations.
         ac_generator.update : Windowed sinusoidal-current update rule.
 
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import noise_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = noise_generator(
-           ...         in_size=3,
-           ...         mean=0.0 * u.pA,
-           ...         std=120.0 * u.pA,
-           ...         noise_dt=1.0 * u.ms,
-           ...         start=0.0 * u.ms,
-           ...         stop=10.0 * u.ms,
-           ...         seed=1,
-           ...     )
-           ...     gen.init_state()
-           ...     with brainstate.environ.context(t=5.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
@@ -464,61 +423,29 @@ class noise_generator(brainstate.nn.Dynamics):
             noise_dt = dt
 
         # Determine noise update interval in steps
-        if u.is_unitless(noise_dt) and u.is_unitless(dt):
-            dt_steps = jnp.int32(jnp.round(noise_dt / dt))
-        else:
-            dt_steps = jnp.int32(jnp.round(
-                (noise_dt / u.ms) / (dt / u.ms)
-            ))
+        dt_steps = jnp.int32(jnp.round(noise_dt / dt))
 
         # Check if we need to draw a new noise sample
         step_count = self._step_counter.value
         need_update = (step_count % dt_steps) == 0
 
-        # Advance RNG key
-        self._rng_key, subkey = jax.random.split(self._rng_key)
-
-        # Compute the effective standard deviation (with optional modulation)
-        if u.is_unitless(t):
-            t_ms = t
-        else:
-            t_ms = t / u.ms
-
-        freq_val = self.frequency
-        if u.is_unitless(freq_val):
-            freq_ms = freq_val
-        else:
-            freq_ms = freq_val / u.Hz
-
-        omega = 2.0 * jnp.pi * freq_ms / 1000.0
         phi_rad = self.phase * 2.0 * jnp.pi / 360.0
-
-        sin_val = jnp.sin(omega * t_ms + phi_rad)
+        sin_val = jnp.sin(2.0 * jnp.pi * self.frequency * t + phi_rad)
 
         # std_eff = sqrt(std^2 + std_mod^2 * sin(omega*t + phi))
         std_sq = self.std * self.std
         std_mod_sq = self.std_mod * self.std_mod
 
-        if u.is_unitless(std_sq):
-            effective_std_sq = std_sq + std_mod_sq * sin_val
-            effective_std = u.math.sqrt(u.math.maximum(effective_std_sq, 0.))
-        else:
-            effective_std_sq = std_sq + std_mod_sq * sin_val
-            # Ensure non-negative before sqrt
-            zero = u.math.zeros_like(effective_std_sq)
-            effective_std_sq = u.math.maximum(effective_std_sq, zero)
-            effective_std = u.math.sqrt(effective_std_sq)
+        effective_std_sq = std_sq + std_mod_sq * sin_val
+        effective_std = u.math.sqrt(u.math.maximum(effective_std_sq, 0. * u.get_unit(effective_std_sq)))
 
         # Draw noise: mean + N * effective_std
-        noise = jax.random.normal(subkey, shape=self.varshape)
+        noise = self.rng.randn(*self.varshape)
         new_amp = self.mean + noise * effective_std
 
         # Update current amplitude only when needed
         old_amp = self.current_amp.value
-        self.current_amp.value = u.math.where(
-            jnp.broadcast_to(need_update, self.varshape),
-            new_amp, old_amp
-        )
+        self.current_amp.value = u.math.where(jnp.broadcast_to(need_update, self.varshape), new_amp, old_amp)
 
         # Increment step counter
         self._step_counter.value = step_count + 1

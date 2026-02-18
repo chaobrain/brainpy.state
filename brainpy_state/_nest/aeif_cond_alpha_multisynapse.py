@@ -18,23 +18,22 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_alpha_multisynapse',
 ]
 
 
-class aeif_cond_alpha_multisynapse(Neuron):
+class aeif_cond_alpha_multisynapse(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_alpha_multisynapse`` neuron model.
 
     Conductance-based adaptive exponential integrate-and-fire neuron with
@@ -209,13 +208,6 @@ class aeif_cond_alpha_multisynapse(Neuron):
          - ``None``
          - --
          - Optional node name.
-
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns a binary spike
-        tensor (dtype ``float64``) with shape ``self.V.value.shape``; values are
-        ``1.0`` for spiking elements and ``0.0`` otherwise.
 
     Raises
     ------
@@ -514,12 +506,6 @@ class aeif_cond_alpha_multisynapse(Neuron):
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         w = braintools.init.param(self.w_initializer, self.varshape, batch_size)
@@ -535,7 +521,7 @@ class aeif_cond_alpha_multisynapse(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -557,7 +543,7 @@ class aeif_cond_alpha_multisynapse(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -614,8 +600,8 @@ class aeif_cond_alpha_multisynapse(Neuron):
             p['Delta_T'] * p['g_L'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
         )
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike + i_syn - w + p['I_e'] + i_stim
+                                       ) / p['C_m']
         dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
 
         dy = np.empty_like(y)

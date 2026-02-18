@@ -111,6 +111,9 @@ def _run_bp_simulation(resolution_ms: float, delay_ms: float, explicit: bool = F
 
 
 class TestContDelaySynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = cont_delay_synapse()
@@ -158,6 +161,9 @@ class TestContDelaySynapseParameters(unittest.TestCase):
 
 
 class TestContDelaySynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_offset_carry_matches_nest_send_semantics(self):
         recv = _PreciseReceiver()
         dt = 1.0 * u.ms
@@ -218,6 +224,9 @@ class TestContDelaySynapseOrdering(unittest.TestCase):
 
 
 class TestContDelaySynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_delay_compatible_with_resolution(self):
         # Mirrors NEST testsuite/pytests/sli2py_synapses/test_cont_delay_synapse.py.
         cases = [

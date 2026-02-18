@@ -31,8 +31,6 @@ import unittest
 
 import brainstate
 import brainunit as u
-import jax.numpy as jnp
-import numpy as np
 import numpy.testing as npt
 
 brainstate.environ.set(precision=64, platform='cpu')
@@ -44,6 +42,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
     r"""Unit tests for spike_train_injector output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_empty_spike_times(self):
@@ -209,8 +208,8 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
         self.assertFalse(inj.precise_times)
         self.assertFalse(inj.allow_offgrid_times)
         self.assertFalse(inj.shift_now_spikes)
-        self.assertEqual(len(inj._spike_times_ms), 0)
-        self.assertEqual(len(inj._spike_multiplicities), 0)
+        self.assertIsNone(inj.spike_times)
+        self.assertIsNone(inj.spike_multiplicities)
 
 
 class TestSpikeTrainInjectorValidation(unittest.TestCase):
@@ -253,7 +252,7 @@ class TestSpikeTrainInjectorValidation(unittest.TestCase):
             spike_times=[1. * u.ms, 2. * u.ms],
             spike_multiplicities=[],
         )
-        self.assertEqual(len(inj._spike_multiplicities), 0)
+        self.assertIsNone(inj.spike_multiplicities)
 
 
 class TestSpikeTrainInjectorSimulation(unittest.TestCase):
@@ -342,6 +341,7 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
     r"""Compare against NEST simulator."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

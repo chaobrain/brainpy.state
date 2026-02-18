@@ -16,25 +16,24 @@
 # -*- coding: utf-8 -*-
 
 import math
-from typing import Callable, Optional, Sequence, Tuple
-
-import numpy as np
+from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'gif_cond_exp',
 ]
 
 
-class gif_cond_exp(Neuron):
+class gif_cond_exp(NESTNeuron):
     r"""Conductance-based generalized integrate-and-fire neuron (GIF) model.
 
     ``gif_cond_exp`` is the generalized integrate-and-fire neuron according to
@@ -451,7 +450,7 @@ class gif_cond_exp(Neuron):
         if self.lambda_0 < 0.0:
             raise ValueError('lambda_0 must not be negative.')
         if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or \
-           np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
+            np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
             raise ValueError('Synapse time constants must be strictly positive.')
         for tau in self.tau_sfa:
             if tau <= 0.0:
@@ -459,12 +458,6 @@ class gif_cond_exp(Neuron):
         for tau in self.tau_stc:
             if tau <= 0.0:
                 raise ValueError('All STC time constants must be strictly positive.')
-
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables for the GIF neuron.
@@ -502,7 +495,7 @@ class gif_cond_exp(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -520,7 +513,8 @@ class gif_cond_exp(Neuron):
         self._stc_elems = np.zeros((n_stc, *v_shape), dtype=np.float64) if n_stc > 0 else None
         self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
         self._stc_val = np.zeros(v_shape, dtype=np.float64)  # total stc current (nA)
-        self._sfa_val = np.full(v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=np.float64)  # adaptive threshold (mV)
+        self._sfa_val = np.full(v_shape, float(self._to_numpy(self.V_T_star, u.mV)),
+                                dtype=np.float64)  # adaptive threshold (mV)
 
         # RNG state
         if self._rng_key is not None:
@@ -555,7 +549,7 @@ class gif_cond_exp(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -741,9 +735,12 @@ class gif_cond_exp(Neuron):
             )
             k5 = f(*y5)
             y6 = (
-                v + h * (-8.0 * k1[0] / 27.0 + 2.0 * k2[0] - 3544.0 * k3[0] / 2565.0 + 1859.0 * k4[0] / 4104.0 - 11.0 * k5[0] / 40.0),
-                ge + h * (-8.0 * k1[1] / 27.0 + 2.0 * k2[1] - 3544.0 * k3[1] / 2565.0 + 1859.0 * k4[1] / 4104.0 - 11.0 * k5[1] / 40.0),
-                gi + h * (-8.0 * k1[2] / 27.0 + 2.0 * k2[2] - 3544.0 * k3[2] / 2565.0 + 1859.0 * k4[2] / 4104.0 - 11.0 * k5[2] / 40.0),
+                v + h * (-8.0 * k1[0] / 27.0 + 2.0 * k2[0] - 3544.0 * k3[0] / 2565.0 + 1859.0 * k4[0] / 4104.0 - 11.0 *
+                         k5[0] / 40.0),
+                ge + h * (-8.0 * k1[1] / 27.0 + 2.0 * k2[1] - 3544.0 * k3[1] / 2565.0 + 1859.0 * k4[1] / 4104.0 - 11.0 *
+                          k5[1] / 40.0),
+                gi + h * (-8.0 * k1[2] / 27.0 + 2.0 * k2[2] - 3544.0 * k3[2] / 2565.0 + 1859.0 * k4[2] / 4104.0 - 11.0 *
+                          k5[2] / 40.0),
             )
             k6 = f(*y6)
 
@@ -753,9 +750,12 @@ class gif_cond_exp(Neuron):
                 gi + h * (25.0 * k1[2] / 216.0 + 1408.0 * k3[2] / 2565.0 + 2197.0 * k4[2] / 4104.0 - k5[2] / 5.0),
             )
             y5_sol = (
-                v + h * (16.0 * k1[0] / 135.0 + 6656.0 * k3[0] / 12825.0 + 28561.0 * k4[0] / 56430.0 - 9.0 * k5[0] / 50.0 + 2.0 * k6[0] / 55.0),
-                ge + h * (16.0 * k1[1] / 135.0 + 6656.0 * k3[1] / 12825.0 + 28561.0 * k4[1] / 56430.0 - 9.0 * k5[1] / 50.0 + 2.0 * k6[1] / 55.0),
-                gi + h * (16.0 * k1[2] / 135.0 + 6656.0 * k3[2] / 12825.0 + 28561.0 * k4[2] / 56430.0 - 9.0 * k5[2] / 50.0 + 2.0 * k6[2] / 55.0),
+                v + h * (16.0 * k1[0] / 135.0 + 6656.0 * k3[0] / 12825.0 + 28561.0 * k4[0] / 56430.0 - 9.0 * k5[
+                    0] / 50.0 + 2.0 * k6[0] / 55.0),
+                ge + h * (16.0 * k1[1] / 135.0 + 6656.0 * k3[1] / 12825.0 + 28561.0 * k4[1] / 56430.0 - 9.0 * k5[
+                    1] / 50.0 + 2.0 * k6[1] / 55.0),
+                gi + h * (16.0 * k1[2] / 135.0 + 6656.0 * k3[2] / 12825.0 + 28561.0 * k4[2] / 56430.0 - 9.0 * k5[
+                    2] / 50.0 + 2.0 * k6[2] / 55.0),
             )
 
             err = max(

@@ -18,16 +18,15 @@
 import math
 from typing import Callable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 from .iaf_psc_alpha import iaf_psc_alpha
 
 __all__ = [
@@ -35,7 +34,7 @@ __all__ = [
 ]
 
 
-class iaf_psc_alpha_ps(Neuron):
+class iaf_psc_alpha_ps(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_alpha_ps`` with precise spike timing.
 
     Description
@@ -278,13 +277,6 @@ class iaf_psc_alpha_ps(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns spike output
-        with shape ``self.V.value.shape`` from ``spk_fun`` evaluated at
-        threshold-scaled membrane state.
-
     Raises
     ------
     ValueError
@@ -500,7 +492,7 @@ class iaf_psc_alpha_ps(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. Values are surrogate spikes from
             ``self.spk_fun`` evaluated on threshold-scaled membrane potential
@@ -537,8 +529,10 @@ class iaf_psc_alpha_ps(Neuron):
         dI_in = self._broadcast_to_state(np.asarray(self.dI_syn_in.value, dtype=np.float64), v_shape)
         y_input = self._broadcast_to_state(self._to_numpy(self.y_input.value, u.pA), v_shape)
 
-        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool), v_shape)
-        last_spike_step = self._broadcast_to_state(np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
+        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
+                                                 v_shape)
+        last_spike_step = self._broadcast_to_state(
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
         last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
         last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
 

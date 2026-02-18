@@ -30,14 +30,9 @@ import math
 import unittest
 
 import brainstate
-import braintools
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
-
-brainstate.environ.set(precision=64, platform='cpu')
-
 from brainpy.state import ac_generator
 
 
@@ -49,6 +44,7 @@ class TestACGenerator(unittest.TestCase):
     r"""Unit tests for ac_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):
@@ -208,12 +204,12 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
 
         Reproduces the logic of NEST's test_ac_generator.py.
         """
-        dc = 1000.0   # pA offset
-        ac = 550.0     # pA amplitude
-        freq = 100.0   # Hz
-        phi = 0.0      # degrees
-        start = 5.0    # ms
-        stop = 6.0     # ms
+        dc = 1000.0  # pA offset
+        ac = 550.0  # pA amplitude
+        freq = 100.0  # Hz
+        phi = 0.0  # degrees
+        start = 5.0  # ms
+        stop = 6.0  # ms
         dt_ms = 0.1
 
         omega = freq / 1000.0 * 2 * math.pi  # rad/ms
@@ -287,6 +283,7 @@ class TestACGeneratorVsNEST(unittest.TestCase):
     r"""Compare ac_generator against NEST. Skipped when NEST is not installed."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

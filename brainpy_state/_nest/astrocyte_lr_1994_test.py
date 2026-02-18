@@ -27,14 +27,13 @@ This test module validates the brainpy.state implementation against:
 All tests use float64 precision and CPU backend.
 """
 
-import unittest
 import math
-
-import numpy as np
-from scipy.integrate import odeint
+import unittest
 
 import brainstate
 import brainunit as u
+import numpy as np
+from scipy.integrate import odeint
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -250,6 +249,7 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
     r"""Test astrocyte dynamics against SciPy ODEINT reference solution."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1  # ms
         self.dt_q = 0.1 * u.ms
 

@@ -16,24 +16,21 @@
 # -*- coding: utf-8 -*-
 
 import math
-from typing import Callable
-
-import numpy as np
 
 import brainstate
-import braintools
 import brainunit as u
 import jax.numpy as jnp
-from brainstate.typing import ArrayLike, Size
+import numpy as np
+from brainstate.typing import Size
 
-from brainpy_state._base import Dynamics
+from ._base import NESTNeuron
 
 __all__ = [
     'astrocyte_lr_1994',
 ]
 
 
-class astrocyte_lr_1994(Dynamics):
+class astrocyte_lr_1994(NESTNeuron):
     r"""NEST-compatible astrocyte model with IP3-mediated calcium dynamics.
 
     Implements the Li & Rinzel (1994) [1]_ astrocytic calcium oscillation model with
@@ -396,33 +393,33 @@ class astrocyte_lr_1994(Dynamics):
         'SIC',
     )
 
-    _MIN_H = 1e-8   # ms – minimum integration step
+    _MIN_H = 1e-8  # ms – minimum integration step
     _MAX_ITERS = 100000
 
     def __init__(
         self,
         in_size: Size,
         # Parameters (Nadkarni & Jung 2003 defaults, matching NEST)
-        Ca_tot: float = 2.0,          # µM
-        IP3_0: float = 0.16,          # µM
-        Kd_IP3_1: float = 0.13,       # µM
-        Kd_IP3_2: float = 0.9434,     # µM
-        Kd_act: float = 0.08234,      # µM
-        Kd_inh: float = 1.049,        # µM
-        Km_SERCA: float = 0.1,        # µM
-        SIC_scale: float = 1.0,       # dimensionless
-        SIC_th: float = 0.19669,      # µM
-        delta_IP3: float = 0.0002,    # µM
-        k_IP3R: float = 0.0002,       # 1/(µM·ms)
-        rate_IP3R: float = 0.006,     # 1/ms
-        rate_L: float = 0.00011,      # 1/ms
-        rate_SERCA: float = 0.0009,   # µM/ms
+        Ca_tot: float = 2.0,  # µM
+        IP3_0: float = 0.16,  # µM
+        Kd_IP3_1: float = 0.13,  # µM
+        Kd_IP3_2: float = 0.9434,  # µM
+        Kd_act: float = 0.08234,  # µM
+        Kd_inh: float = 1.049,  # µM
+        Km_SERCA: float = 0.1,  # µM
+        SIC_scale: float = 1.0,  # dimensionless
+        SIC_th: float = 0.19669,  # µM
+        delta_IP3: float = 0.0002,  # µM
+        k_IP3R: float = 0.0002,  # 1/(µM·ms)
+        rate_IP3R: float = 0.006,  # 1/ms
+        rate_L: float = 0.00011,  # 1/ms
+        rate_SERCA: float = 0.0009,  # µM/ms
         ratio_ER_cyt: float = 0.185,  # dimensionless
-        tau_IP3: float = 7142.0,      # ms
+        tau_IP3: float = 7142.0,  # ms
         gsl_error_tol: float = 1e-3,
         # State initializers
         IP3_initializer: float = None,
-        Ca_initializer: float = 0.073,    # µM
+        Ca_initializer: float = 0.073,  # µM
         h_IP3R_initializer: float = 0.793,
         name: str = None,
     ):
@@ -727,36 +724,6 @@ class astrocyte_lr_1994(Dynamics):
         - **Performance**: Integration is performed per-element in a NumPy loop (not
           vectorized). For :math:`N` astrocytes, expect :math:`\mathcal{O}(N \times k)`
           cost where :math:`k` is the average substep count (typically 5–20).
-
-        Examples
-        --------
-        Simulate astrocyte response to periodic synaptic input:
-
-        .. code-block:: python
-
-           >>> import brainstate as bst
-           >>> import brainunit as u
-           >>> import numpy as np
-           >>> with bst.environ.context(dt=0.1 * u.ms):
-           ...     astro = bps.astrocyte_lr_1994(in_size=5)
-           ...     astro.init_state()
-           ...     for i in range(1000):
-           ...         # Spike every 50 steps
-           ...         w = 1.0 if i % 50 == 0 else 0.0
-           ...         sic = astro.update(spike_weights=w)
-           ...         if i % 100 == 0:
-           ...             print(f"t={i*0.1:.1f} ms, Ca={float(astro.Ca.value[0]):.4f} µM")
-
-        Apply external current injection:
-
-        .. code-block:: python
-
-           >>> with bst.environ.context(dt=0.1 * u.ms):
-           ...     astro = bps.astrocyte_lr_1994(in_size=1)
-           ...     astro.init_state()
-           ...     # Apply constant external flux for 100 ms
-           ...     for _ in range(1000):
-           ...         sic = astro.update(J_ext=0.001)  # µM/ms
         """
         dt_q = brainstate.environ.get_dt()
         dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=np.float64))

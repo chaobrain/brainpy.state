@@ -18,23 +18,22 @@
 import math
 from typing import Callable, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_chs_2007',
 ]
 
 
-class iaf_chs_2007(Neuron):
+class iaf_chs_2007(NESTNeuron):
     r"""NEST-compatible ``iaf_chs_2007`` spike-response neuron model.
 
     Description
@@ -276,14 +275,6 @@ class iaf_chs_2007(Neuron):
          - --
          - Reset mode; ``'hard'`` matches NEST semantics.
 
-    Returns
-    -------
-    ArrayLike
-        Spike output tensor from :meth:`update`, with shape matching the
-        state ``V`` (``self.varshape`` plus optional batch prefix). Spikes
-        are emitted when :math:`V_m \ge U_{th} = 1` via the surrogate
-        function ``spk_fun``.
-
     Raises
     ------
     ValueError
@@ -398,7 +389,7 @@ class iaf_chs_2007(Neuron):
     __module__ = 'brainpy.state'
 
     _U_TH = 1.0  # NEST hard-coded normalized threshold.
-    _E_L = 0.0   # NEST hard-coded normalized rest potential.
+    _E_L = 0.0  # NEST hard-coded normalized rest potential.
 
     def __init__(
         self,
@@ -657,33 +648,6 @@ class iaf_chs_2007(Neuron):
         :math:`O(|\mathrm{state}|)` for noise sampling (if active). All
         operations are vectorized NumPy array operations followed by transfer
         to JAX arrays.
-
-        Examples
-        --------
-        Typical usage in a simulation loop:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate as bs
-            >>> import numpy as np
-            >>>
-            >>> # Create model with noise
-            >>> noise = np.random.randn(1000)
-            >>> model = bp.iaf_chs_2007(
-            ...     in_size=10,
-            ...     V_noise=0.1,
-            ...     noise=noise
-            ... )
-            >>>
-            >>> # Simulate
-            >>> with bs.environ.context(dt=0.1 * u.ms):
-            ...     model.init_state()
-            ...     for step in range(1000):
-            ...         spk = model.update()
-            ...         # Process spike output...
-            ...
         """
         # NEST iaf_chs_2007 has no CurrentEvent handler; x is intentionally unused.
         del x
@@ -697,7 +661,8 @@ class iaf_chs_2007(Neuron):
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value), state_shape).copy()
         V_syn = self._broadcast_to_state(self._to_numpy(self.V_syn.value), state_shape).copy()
         V_spike = self._broadcast_to_state(self._to_numpy(self.V_spike.value), state_shape).copy()
-        pos = self._broadcast_to_state(np.asarray(u.math.asarray(self.position.value), dtype=np.int64), state_shape).copy()
+        pos = self._broadcast_to_state(np.asarray(u.math.asarray(self.position.value), dtype=np.int64),
+                                       state_shape).copy()
 
         tau_epsp = self._broadcast_to_state(self._to_numpy_ms(self.tau_epsp), state_shape)
         tau_reset = self._broadcast_to_state(self._to_numpy_ms(self.tau_reset), state_shape)

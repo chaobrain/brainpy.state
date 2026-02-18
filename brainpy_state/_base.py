@@ -666,11 +666,6 @@ class Synapse(Dynamics):
     varshape : tuple
         Shape of the synaptic state variables, derived from ``in_size``.
 
-    Returns
-    -------
-    ArrayLike
-        Synaptic output (e.g., conductance, current, or gating variable)
-
     See Also
     --------
     Expon : Simple first-order exponential decay synapse model

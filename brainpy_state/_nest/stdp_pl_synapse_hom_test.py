@@ -33,7 +33,6 @@ from brainpy.state import stdp_pl_synapse_hom
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-
 _STDP_EPS = 1.0e-6
 
 
@@ -244,6 +243,9 @@ def _run_reference_weight_trace(
 
 
 class TestSTDPPLSynapseHomParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_pl_synapse_hom()
@@ -299,6 +301,9 @@ class TestSTDPPLSynapseHomParameters(unittest.TestCase):
 
 
 class TestSTDPPLSynapseHomOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         dt_ms = 0.1
         delay_ms = 0.3
@@ -339,14 +344,19 @@ class TestSTDPPLSynapseHomOrdering(unittest.TestCase):
 
 
 class TestSTDPPLSynapseHomDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_dynamics_match_nest_reference_logic(self):
         # Mirrors edge-case trains from NEST testsuite/pytests/test_stdp_pl_synapse_hom.py.
         pre_spikes = np.asarray(
-            [1.0, 5.0, 6.0, 7.0, 9.0, 11.0, 12.0, 13.0, 14.5, 16.1, 21.0, 25.0, 26.0, 27.0, 29.0, 31.0, 32.0, 33.0, 34.5, 36.1],
+            [1.0, 5.0, 6.0, 7.0, 9.0, 11.0, 12.0, 13.0, 14.5, 16.1, 21.0, 25.0, 26.0, 27.0, 29.0, 31.0, 32.0, 33.0,
+             34.5, 36.1],
             dtype=np.float64,
         )
         post_spikes = np.asarray(
-            [2.0, 3.0, 4.0, 8.0, 9.0, 10.0, 12.0, 12.2, 14.1, 15.4, 22.0, 23.0, 24.0, 28.0, 29.0, 30.0, 32.0, 33.2, 35.1, 36.4],
+            [2.0, 3.0, 4.0, 8.0, 9.0, 10.0, 12.0, 12.2, 14.1, 15.4, 22.0, 23.0, 24.0, 28.0, 29.0, 30.0, 32.0, 33.2,
+             35.1, 36.4],
             dtype=np.float64,
         )
 

@@ -18,23 +18,22 @@
 import math
 from typing import Callable, Optional, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'gif_cond_exp_multisynapse',
 ]
 
 
-class gif_cond_exp_multisynapse(Neuron):
+class gif_cond_exp_multisynapse(NESTNeuron):
     r"""Conductance-based generalized integrate-and-fire neuron (GIF) model
     with multiple synaptic time constants.
 
@@ -486,12 +485,6 @@ class gif_cond_exp_multisynapse(Neuron):
             if tau <= 0.0:
                 raise ValueError(f'All STC time constants must be strictly positive (tau_stc[{i}]={tau}).')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
 
@@ -537,7 +530,7 @@ class gif_cond_exp_multisynapse(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -587,7 +580,7 @@ class gif_cond_exp_multisynapse(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -816,18 +809,18 @@ class gif_cond_exp_multisynapse(Neuron):
             k4 = f(y4)
 
             y5 = [y[i] + h * (439.0 * k1[i] / 216.0 - 8.0 * k2[i] + 3680.0 * k3[i] / 513.0
-                               - 845.0 * k4[i] / 4104.0) for i in range(n)]
+                              - 845.0 * k4[i] / 4104.0) for i in range(n)]
             k5 = f(y5)
 
             y6 = [y[i] + h * (-8.0 * k1[i] / 27.0 + 2.0 * k2[i] - 3544.0 * k3[i] / 2565.0
-                               + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
+                              + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0) for i in range(n)]
             k6 = f(y6)
 
             y4_sol = [y[i] + h * (25.0 * k1[i] / 216.0 + 1408.0 * k3[i] / 2565.0
-                                   + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
+                                  + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0) for i in range(n)]
             y5_sol = [y[i] + h * (16.0 * k1[i] / 135.0 + 6656.0 * k3[i] / 12825.0
-                                   + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
-                                   + 2.0 * k6[i] / 55.0) for i in range(n)]
+                                  + 28561.0 * k4[i] / 56430.0 - 9.0 * k5[i] / 50.0
+                                  + 2.0 * k6[i] / 55.0) for i in range(n)]
 
             err = max(abs(y5_sol[i] - y4_sol[i]) for i in range(n))
 

@@ -22,7 +22,6 @@ import brainstate
 import braintools
 import brainunit as u
 import jax
-
 from brainpy.state import iaf_psc_exp_ps, iaf_psc_exp_ps_lossless
 
 jax.config.update('jax_enable_x64', True)
@@ -31,6 +30,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 class TestIAFPscExpPSLossless(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

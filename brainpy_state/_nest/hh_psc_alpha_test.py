@@ -32,15 +32,12 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import hh_psc_alpha
+from scipy.integrate import solve_ivp
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -184,6 +181,7 @@ class TestHHPscAlphaSubthreshold(unittest.TestCase):
     r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -265,6 +263,7 @@ class TestHHPscAlphaSpiking(unittest.TestCase):
     r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -363,7 +362,7 @@ class TestHHPscAlphaSpiking(unittest.TestCase):
                 r_now = int(neuron.refractory_step_count.value[0])
                 if r_prev > 0:
                     self.assertEqual(r_now, r_prev - 1,
-                                     f"Refractory counter should decrement from {r_prev} to {r_prev-1}")
+                                     f"Refractory counter should decrement from {r_prev} to {r_prev - 1}")
                 r_prev = r_now
 
     def test_dynamics_evolve_during_refractory(self):
@@ -393,6 +392,7 @@ class TestHHPscAlphaSynaptic(unittest.TestCase):
     r"""Test synaptic current dynamics (alpha-shaped PSCs)."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -482,6 +482,7 @@ class TestHHPscAlphaMultiStep(unittest.TestCase):
     r"""Multi-step integration tests comparing against a reference solver."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -572,14 +573,15 @@ class TestHHPscAlphaMultiStep(unittest.TestCase):
 
             for i in range(1, len(rates)):
                 self.assertGreaterEqual(rates[i], rates[i - 1],
-                                         f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
-                                         f"{[500, 1000, 1500][i-1]} pA")
+                                        f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
+                                        f"{[500, 1000, 1500][i - 1]} pA")
 
 
 class TestHHPscAlphaEdgeCases(unittest.TestCase):
     r"""Test edge cases and special configurations."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):

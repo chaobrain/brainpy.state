@@ -40,8 +40,9 @@ def _rhs(y, is_refractory, i_stim, p):
     i_syn_in = g_in * (v_eff - p['E_in'])
     i_spike = 0.0 if p['Delta_T'] == 0.0 else p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
     dv = 0.0 if is_refractory else (
-        -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_ex - i_syn_in - w + p['I_e'] + i_stim
-    ) / p['C_m']
+                                       -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_ex - i_syn_in - w + p[
+                                       'I_e'] + i_stim
+                                   ) / p['C_m']
 
     dg_ex = -g_ex / p['tau_syn_ex']
     dg_in = -g_in / p['tau_syn_in']
@@ -94,7 +95,8 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
         )
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
         atol = p['atol']
 
@@ -138,6 +140,7 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
 
 class TestAEIFCondExp(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

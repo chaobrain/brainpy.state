@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 
@@ -26,15 +25,16 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'sinusoidal_gamma_generator',
 ]
 
-
 _UNSET = object()
 
 
-class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
+class sinusoidal_gamma_generator(NESTDevice):
     r"""Sinusoidally modulated gamma spike generator compatible with NEST.
 
     Description
@@ -279,13 +279,6 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
          - ``0``
          - —
          - Seed for JAX random key initialization and splitting.
-
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns an ``int64``
-        JAX array with shape ``self.varshape`` containing binary spike events
-        (``0`` or ``1``) for the current simulation step.
 
     Raises
     ------

@@ -18,13 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import iaf_chs_2007
 
 jax.config.update('jax_enable_x64', True)
@@ -69,6 +67,7 @@ def _reference_step(state, params, w_step):
 
 class TestIAFChs2007(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

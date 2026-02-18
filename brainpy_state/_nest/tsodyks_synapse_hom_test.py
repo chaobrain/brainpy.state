@@ -145,6 +145,9 @@ def _tsodyks_hom_reference_step(*, x, y, u_state, t_last, t_spike, tau_psc, tau_
 
 
 class TestTsodyksSynapseHomParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = tsodyks_synapse_hom()
@@ -215,6 +218,9 @@ class TestTsodyksSynapseHomParameters(unittest.TestCase):
 
 
 class TestTsodyksSynapseHomOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_state_update_order_and_effective_weight(self):
         recv = _MockReceiver()
         dt_ms = 1.0
@@ -277,6 +283,9 @@ class TestTsodyksSynapseHomOrdering(unittest.TestCase):
 
 
 class TestTsodyksSynapseHomDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_depressing_trace_matches_nest_reference(self):
         times_vm_sim = _run_tsodyks_vm_trace(
             h_ms=0.1,

@@ -46,7 +46,6 @@ import numpy as np
 import brainstate
 import braintools
 import brainunit as u
-import jax
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -303,6 +302,7 @@ def _make_ref_state(params, V_abs=None, asc_init=(0.0, 0.0)):
 
 class TestGlifPsc(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.01 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dy_inputs=None):

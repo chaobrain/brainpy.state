@@ -22,7 +22,6 @@ import brainstate
 import brainunit as u
 import jax
 import jax.numpy as jnp
-
 from brainpy.state import (
     IF, LIF, LIFRef, ALIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, QuaIF, AdQuaIF, AdQuaIFRef, Gif,
     GifRef
@@ -31,6 +30,7 @@ from brainpy.state import (
 
 class TestNeuron(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.in_size = 10
         self.batch_size = 5
         self.time_steps = 100

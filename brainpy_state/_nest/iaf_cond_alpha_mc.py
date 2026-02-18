@@ -17,23 +17,22 @@
 
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_alpha_mc',
 ]
 
 
-class iaf_cond_alpha_mc(Neuron):
+class iaf_cond_alpha_mc(NESTNeuron):
     r"""NEST-compatible ``iaf_cond_alpha_mc`` neuron model.
 
     Short Description
@@ -600,12 +599,6 @@ class iaf_cond_alpha_mc(Neuron):
             if np.any(tau_ex <= 0.0) or np.any(tau_in <= 0.0):
                 raise ValueError(f'All time constants ({comp}) must be strictly positive.')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def _initial_membrane_potential(self, batch_size):
         state_shape = self._state_shape(batch_size)
 
@@ -698,7 +691,7 @@ class iaf_cond_alpha_mc(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -745,7 +738,7 @@ class iaf_cond_alpha_mc(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -930,8 +923,9 @@ class iaf_cond_alpha_mc(Neuron):
             i_leak = p['g_L'][n] * (v_eff - p['E_L'][n])
 
             f[cls._state_index(n, cls.V_M)] = 0.0 if is_refractory else (
-                -i_leak - i_syn_ex - i_syn_in - i_conn + i_stim[n] + p['I_e'][n]
-            ) / p['C_m'][n]
+                                                                            -i_leak - i_syn_ex - i_syn_in - i_conn +
+                                                                            i_stim[n] + p['I_e'][n]
+                                                                        ) / p['C_m'][n]
 
             f[cls._state_index(n, cls.DG_EXC)] = -y[cls._state_index(n, cls.DG_EXC)] / p['tau_syn_ex'][n]
             f[cls._state_index(n, cls.G_EXC)] = (
@@ -1067,47 +1061,6 @@ class iaf_cond_alpha_mc(Neuron):
 
         - Raises ``ValueError`` if spike weights are negative (NEST constraint).
         - May fail to converge if integration step size becomes too small (>10000 iterations).
-
-        Examples
-        --------
-        Simple current injection to soma:
-
-        .. code-block:: python
-
-            >>> spike = neuron.update(x=100.0 * u.pA)
-
-        Multi-compartment current injection:
-
-        .. code-block:: python
-
-            >>> currents = {
-            ...     'soma': 50.0 * u.pA,
-            ...     'proximal': 30.0 * u.pA,
-            ...     'distal': 20.0 * u.pA
-            ... }
-            >>> spike = neuron.update(x=currents)
-
-        Spike input to proximal dendrite:
-
-        .. code-block:: python
-
-            >>> spike_events = [('proximal_exc', 2.5 * u.nS)]
-            >>> spike = neuron.update(spike_events=spike_events)
-
-        Combined spike and current inputs:
-
-        .. code-block:: python
-
-            >>> spike_events = [
-            ...     ('soma_exc', 3.0 * u.nS),
-            ...     ('distal_inh', 1.5 * u.nS)
-            ... ]
-            >>> current_events = [('soma_curr', 75.0 * u.pA)]
-            >>> spike = neuron.update(
-            ...     x=50.0 * u.pA,
-            ...     spike_events=spike_events,
-            ...     current_events=current_events
-            ... )
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
@@ -1125,7 +1078,8 @@ class iaf_cond_alpha_mc(Neuron):
         g_in = self._broadcast_to_state(np.asarray(self._to_numpy(self.g_in.value, u.nS), dtype=np.float64), comp_shape)
 
         r = self._broadcast_to_state(r_raw, state_shape)
-        i_stim = self._broadcast_to_state(np.asarray(self._to_numpy(self.I_stim.value, u.pA), dtype=np.float64), comp_shape)
+        i_stim = self._broadcast_to_state(np.asarray(self._to_numpy(self.I_stim.value, u.pA), dtype=np.float64),
+                                          comp_shape)
         h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), state_shape)
 
         p = {

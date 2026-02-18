@@ -1,3 +1,12 @@
+import math
+from typing import Any
+
+import brainunit as u
+import numpy as np
+from brainstate.typing import ArrayLike
+
+from ._base import NESTSynapse
+
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,24 +21,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 # -*- coding: utf-8 -*-
-
-from __future__ import annotations
-
-import math
-from typing import Any
-
-import brainunit as u
-import numpy as np
-from brainstate.typing import ArrayLike
 
 __all__ = [
     'ht_synapse',
 ]
 
 
-class ht_synapse:
+class ht_synapse(NESTSynapse):
     r"""NEST-compatible Hill-Tononi synapse with vesicle-pool depression.
 
     Implements the short-term depression model from Hill & Tononi (2005) used to

@@ -15,15 +15,13 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 from typing import Callable
-
-import numpy as np
 
 import brainstate
 import braintools
 import brainunit as u
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
@@ -593,12 +591,6 @@ class tanh_rate_ipn(_tanh_rate_base):
          - :math:`r_{\min}`
          - Lower clamp bound when ``rectify_output=True``.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns updated rate array with
-        shape ``self.varshape`` and dimensionless dtype (float64).
-
     Raises
     ------
     ValueError
@@ -1055,12 +1047,6 @@ class tanh_rate_opn(_tanh_rate_base):
          - ``0.0``
          - :math:`\theta`
          - Horizontal shift of tanh nonlinearity (dimensionless).
-
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns updated rate array with
-        shape ``self.varshape`` and dimensionless dtype (float64).
 
     Raises
     ------

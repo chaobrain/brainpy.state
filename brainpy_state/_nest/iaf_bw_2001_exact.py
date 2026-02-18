@@ -18,23 +18,22 @@
 import math
 from typing import Callable, Hashable, Iterable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_bw_2001_exact',
 ]
 
 
-class iaf_bw_2001_exact(Neuron):
+class iaf_bw_2001_exact(NESTNeuron):
     r"""NEST-compatible conductance-based LIF neuron with exact per-synapse NMDA dynamics.
 
     This model implements the Brunel-Wang (2001) neuron with exact NMDA kinetics, maintaining
@@ -625,12 +624,6 @@ class iaf_bw_2001_exact(Neuron):
         if np.any(self._value_to_float(self.gsl_error_tol, None) <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def _nmda_num_ports(self):
         if hasattr(self, 'x_NMDA'):
             return int(np.asarray(self.x_NMDA.value).shape[-1])
@@ -683,7 +676,7 @@ class iaf_bw_2001_exact(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -740,7 +733,7 @@ class iaf_bw_2001_exact(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -1191,62 +1184,6 @@ class iaf_bw_2001_exact(Neuron):
         - During refractory period, V_m is clamped to V_reset
         - Refractory countdown decrements each time step
         - Threshold check bypassed while refractory
-
-        Examples
-        --------
-        **Single neuron with AMPA spike:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> brainstate.environ.context(dt=0.1 * u.ms)
-            >>> net = bp.iaf_bw_2001_exact(in_size=1)
-            >>> net.init_all_states()
-            >>> spike = net(spike_events=[(1, 500*u.nS)])
-            >>> print(net.s_AMPA.value)  # doctest: +SKIP
-
-        **Population with mixed input:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> import jax.numpy as jnp
-            >>> brainstate.environ.context(dt=0.1 * u.ms)
-            >>> net = bp.iaf_bw_2001_exact(in_size=10)
-            >>> net.init_all_states()
-            >>> # AMPA to all, GABA to subset
-            >>> events = [
-            ...     (1, jnp.ones(10) * 100*u.nS),  # AMPA
-            ...     (2, jnp.array([0,0,0,0,0,50,50,50,50,50])*u.nS),  # GABA
-            ... ]
-            >>> spike = net(spike_events=events)
-            >>> print(spike)  # doctest: +SKIP
-
-        **NMDA port registration:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> brainstate.environ.context(dt=0.1 * u.ms)
-            >>> net = bp.iaf_bw_2001_exact(in_size=2)
-            >>> net.init_all_states()
-            >>> # First update: register ports 'A' and 'B'
-            >>> events = [
-            ...     (3, 60*u.nS, 'A', 1.0),
-            ...     (3, 80*u.nS, 'B', 2.0),
-            ... ]
-            >>> spike = net(spike_events=events)
-            >>> print(net.nmda_weights.value.shape)  # doctest: +SKIP
-            (2, 2)  # 2 neurons × 2 ports
-            >>> # Subsequent updates: ports A and B exist, weights fixed
-            >>> spike = net(spike_events=[(3, 60*u.nS, 'A', 3.0)])  # OK
-            >>> spike = net(spike_events=[(3, 99*u.nS, 'A', 1.0)])  # Raises ValueError
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

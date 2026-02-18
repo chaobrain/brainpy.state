@@ -46,7 +46,6 @@ import braintools
 import brainstate
 import brainunit as u
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._nest.pp_psc_delta import pp_psc_delta
@@ -153,7 +152,7 @@ def _run_nest_ref(n_steps, h, p, i_stim_seq, delta_v_seq, rand_seq,
                     # For reference, use numpy Poisson with same seed approach
                     lam_p = rate * h * 1e-3
                     n_spikes = int(np.random.RandomState(
-                        int(rand_seq[k] * 2**31)
+                        int(rand_seq[k] * 2 ** 31)
                     ).poisson(lam_p))
 
                 if n_spikes > 0:
@@ -255,6 +254,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, delta=None):
@@ -400,6 +400,7 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
     r"""Test dead time (refractory period) mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, delta=None):
@@ -510,6 +511,7 @@ class TestPpPscDeltaMembraneReset(unittest.TestCase):
     r"""Test membrane potential reset behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, delta=None):
@@ -564,6 +566,7 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
     r"""Test spike-frequency adaptation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, delta=None):
@@ -681,6 +684,7 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
     r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, delta=None):
@@ -807,6 +811,7 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
     r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_val = 0.1
         self.dt = self.dt_val * u.ms
 
@@ -1079,6 +1084,7 @@ class TestPpPscDeltaUpdateOrder(unittest.TestCase):
     r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, delta=None):

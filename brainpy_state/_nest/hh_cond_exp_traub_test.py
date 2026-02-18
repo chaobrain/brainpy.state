@@ -34,13 +34,11 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
+import numpy as np
+from scipy.integrate import solve_ivp
 
 from brainpy_state import hh_cond_exp_traub
 
@@ -192,6 +190,7 @@ class TestHHCondExpTraubSubthreshold(unittest.TestCase):
     r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -282,6 +281,7 @@ class TestHHCondExpTraubSpiking(unittest.TestCase):
     r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -388,7 +388,7 @@ class TestHHCondExpTraubSpiking(unittest.TestCase):
                 r_now = int(neuron.refractory_step_count.value[0])
                 if r_prev > 0:
                     self.assertEqual(r_now, r_prev - 1,
-                                     f"Refractory counter should decrement from {r_prev} to {r_prev-1}")
+                                     f"Refractory counter should decrement from {r_prev} to {r_prev - 1}")
                 r_prev = r_now
 
     def test_dynamics_evolve_during_refractory(self):
@@ -418,6 +418,7 @@ class TestHHCondExpTraubSynaptic(unittest.TestCase):
     r"""Test synaptic conductance dynamics (exponential decay)."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -506,6 +507,7 @@ class TestHHCondExpTraubMultiStep(unittest.TestCase):
     r"""Multi-step integration tests comparing against a reference solver."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -598,8 +600,8 @@ class TestHHCondExpTraubMultiStep(unittest.TestCase):
 
             for i in range(1, len(rates)):
                 self.assertGreaterEqual(rates[i], rates[i - 1],
-                                         f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
-                                         f"{[500, 1000, 1500][i-1]} pA")
+                                        f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
+                                        f"{[500, 1000, 1500][i - 1]} pA")
 
 
 class TestHHCondExpTraubNESTReference(unittest.TestCase):
@@ -613,6 +615,7 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
     """
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         # NEST test reference parameters
         self.ref_params = dict(
@@ -710,18 +713,18 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
                     # (depolarization followed by rapid repolarization)
                     abs_err = abs(model_V - ref_V)
                     self.assertLess(abs_err, 15.0,
-                                    f"V_m at step {k+1}: model={model_V:.4f}, "
+                                    f"V_m at step {k + 1}: model={model_V:.4f}, "
                                     f"NEST={ref_V:.4f}, abs_err={abs_err:.4f}")
                 else:
                     # Subthreshold phase: require relative match within 5%
                     if abs(ref_V) > 1.0:
                         rel_err = abs(model_V - ref_V) / abs(ref_V)
                         self.assertLess(rel_err, 0.05,
-                                        f"V_m at step {k+1}: model={model_V:.4f}, "
+                                        f"V_m at step {k + 1}: model={model_V:.4f}, "
                                         f"NEST={ref_V:.4f}, rel_err={rel_err:.6f}")
                     else:
                         self.assertAlmostEqual(model_V, ref_V, delta=2.0,
-                                               msg=f"V_m at step {k+1}: model={model_V:.4f}, "
+                                               msg=f"V_m at step {k + 1}: model={model_V:.4f}, "
                                                    f"NEST={ref_V:.4f}")
 
     def test_nest_reference_conductance_trace(self):
@@ -749,11 +752,11 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
                 if ref_g > 1e-6:
                     rel_err = abs(model_g - ref_g) / ref_g
                     self.assertLess(rel_err, 0.02,
-                                    f"g_ex at step {k+1}: model={model_g:.6f}, "
+                                    f"g_ex at step {k + 1}: model={model_g:.6f}, "
                                     f"NEST={ref_g:.6f}, rel_err={rel_err:.6f}")
                 else:
                     self.assertAlmostEqual(model_g, ref_g, delta=1e-6,
-                                           msg=f"g_ex at step {k+1}: model={model_g:.6f}, "
+                                           msg=f"g_ex at step {k + 1}: model={model_g:.6f}, "
                                                f"NEST={ref_g:.6f}")
 
 
@@ -761,6 +764,7 @@ class TestHHCondExpTraubEdgeCases(unittest.TestCase):
     r"""Test edge cases and special configurations."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):

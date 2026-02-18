@@ -34,15 +34,12 @@ All tests use float64 precision on CPU to match NEST's numerical behavior.
 import math
 import unittest
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
-import braintools
 import brainunit as u
 import jax
-
+import numpy as np
 from brainpy.state import hh_psc_alpha_gap
+from scipy.integrate import solve_ivp
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -214,6 +211,7 @@ class TestHHPscAlphaGapSubthreshold(unittest.TestCase):
     r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA, delta=None):
@@ -397,6 +395,7 @@ class TestHHPscAlphaGapSpiking(unittest.TestCase):
     r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA, delta=None):
@@ -543,6 +542,7 @@ class TestHHPscAlphaGapSynaptic(unittest.TestCase):
     r"""Test synaptic current dynamics (alpha-shaped PSCs)."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA, delta=None):
@@ -632,6 +632,7 @@ class TestHHPscAlphaGapEdgeCases(unittest.TestCase):
     r"""Test edge cases and special configurations."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA, delta=None):
@@ -727,6 +728,7 @@ class TestHHPscAlphaGapFiringProperties(unittest.TestCase):
     r"""Test firing rate and AP waveform properties."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA):

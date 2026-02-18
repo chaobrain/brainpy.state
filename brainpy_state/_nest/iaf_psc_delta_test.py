@@ -15,19 +15,18 @@
 
 # -*- coding: utf-8 -*-
 
-import unittest
 import math
+import unittest
 
-import braintools
 import brainstate
+import braintools
 import brainunit as u
-import jax.numpy as jnp
-
 from brainpy.state import iaf_psc_delta
 
 
 class TestIAFPscDelta(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

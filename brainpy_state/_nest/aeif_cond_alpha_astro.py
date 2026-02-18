@@ -18,23 +18,22 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_alpha_astro',
 ]
 
 
-class aeif_cond_alpha_astro(Neuron):
+class aeif_cond_alpha_astro(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_alpha_astro`` neuron model.
 
     Short description
@@ -266,12 +265,6 @@ class aeif_cond_alpha_astro(Neuron):
          - ``None``
          - --
          - Optional node name.
-
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns a binary spike
-        tensor (dtype ``float64``) with shape ``self.V.value.shape``.
 
     Raises
     ------
@@ -529,12 +522,6 @@ class aeif_cond_alpha_astro(Neuron):
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize persistent and short-term state variables.
 
@@ -573,7 +560,7 @@ class aeif_cond_alpha_astro(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -622,7 +609,7 @@ class aeif_cond_alpha_astro(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -782,8 +769,9 @@ class aeif_cond_alpha_astro(Neuron):
         )
 
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p['I_e'] + i_stim + i_sic
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p[
+                                           'I_e'] + i_stim + i_sic
+                                       ) / p['C_m']
 
         ddg_ex = -dg_ex / p['tau_syn_ex']
         dg_ex_dt = dg_ex - (g_ex / p['tau_syn_ex'])

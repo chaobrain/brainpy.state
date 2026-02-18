@@ -20,10 +20,10 @@ import math
 import unittest
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import ht_synapse
 
 jax.config.update('jax_enable_x64', True)
@@ -54,6 +54,9 @@ def _ht_reference_weight_trace(spike_times_ms, tau_P, delta_P, p0=1.0):
 
 
 class TestHTSynapse(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = ht_synapse()
 

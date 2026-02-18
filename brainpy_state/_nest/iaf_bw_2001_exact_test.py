@@ -18,12 +18,11 @@
 import math
 import unittest
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
+import numpy as np
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -93,7 +92,8 @@ def _rkf45_ref_step(y0, i_stim, dt, h0, p, nmda_weights, atol):
         )
 
         y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-        y5 = y + h * (16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
+        y5 = y + h * (
+                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
         err = float(np.max(np.abs(y5 - y4)))
 
         if err <= atol or h <= min_h:
@@ -189,6 +189,7 @@ def _reference_step(state, p, x_next, events, dt, t_step):
 
 class TestIAFBW2001Exact(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod
@@ -444,9 +445,13 @@ class TestIAFBW2001Exact(unittest.TestCase):
                 self.assertAlmostEqual(float((neuron.I_NMDA.value / u.pA)[0]), ref['i_nmda'], delta=1e-5)
                 self.assertEqual(int(neuron.refractory_step_count.value[0]), ref['r'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref['h'], delta=1e-5)
-                self.assertAlmostEqual(float((neuron.last_spike_time.value / u.ms)[0]), ref['last_spike_time'], delta=1e-5)
-                self.assertTrue(np.allclose(np.asarray(neuron.x_NMDA.value[0], dtype=np.float64), ref['x_nmda'], atol=1e-5))
-                self.assertTrue(np.allclose(np.asarray(neuron.s_NMDA_components.value[0], dtype=np.float64), ref['s_nmda'], atol=1e-5))
+                self.assertAlmostEqual(float((neuron.last_spike_time.value / u.ms)[0]), ref['last_spike_time'],
+                                       delta=1e-5)
+                self.assertTrue(
+                    np.allclose(np.asarray(neuron.x_NMDA.value[0], dtype=np.float64), ref['x_nmda'], atol=1e-5))
+                self.assertTrue(
+                    np.allclose(np.asarray(neuron.s_NMDA_components.value[0], dtype=np.float64), ref['s_nmda'],
+                                atol=1e-5))
 
             self.assertEqual(spk_model, spk_ref)
             self.assertTrue(any(spk_model))
@@ -480,9 +485,11 @@ class TestIAFBW2001Exact(unittest.TestCase):
 
                 events_nmda = list(events)
                 if k == 0:
-                    events_nmda.append({'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 0.0})
+                    events_nmda.append(
+                        {'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 0.0})
                 if rng.random() < 0.10:
-                    events_nmda.append({'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 1.0})
+                    events_nmda.append(
+                        {'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 1.0})
 
                 with brainstate.environ.context(t=k * self.dt):
                     base.update(spike_events=events)
@@ -514,7 +521,8 @@ class TestIAFBW2001Exact(unittest.TestCase):
                 self._step(
                     neuron,
                     2,
-                    spike_events=[{'receptor_type': 'NMDA', 'weight': 6.0 * u.nS, 'port': 'nmda0', 'multiplicity': 1.0}],
+                    spike_events=[
+                        {'receptor_type': 'NMDA', 'weight': 6.0 * u.nS, 'port': 'nmda0', 'multiplicity': 1.0}],
                 )
 
             neuron2 = iaf_bw_2001_exact(1, V_th=1000.0 * u.mV, V_initializer=braintools.init.Constant(-70.0 * u.mV))
@@ -524,7 +532,8 @@ class TestIAFBW2001Exact(unittest.TestCase):
                 self._step(
                     neuron2,
                     1,
-                    spike_events=[{'receptor_type': 'NMDA', 'weight': 1.0 * u.nS, 'port': 'late_port', 'multiplicity': 1.0}],
+                    spike_events=[
+                        {'receptor_type': 'NMDA', 'weight': 1.0 * u.nS, 'port': 'late_port', 'multiplicity': 1.0}],
                 )
 
 

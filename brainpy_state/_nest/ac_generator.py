@@ -21,12 +21,14 @@ import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'ac_generator',
 ]
 
 
-class ac_generator(brainstate.nn.Dynamics):
+class ac_generator(NESTDevice):
     r"""AC current generator -- NEST-compatible stimulation device.
 
     Generate a sinusoidal current with a constant DC offset and gate the output
@@ -165,14 +167,6 @@ class ac_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global offset applied to both window boundaries.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a current-like quantity
-        with shape ``self.varshape`` and units inherited from ``amplitude`` and
-        ``offset``: :math:`I_0 + A\sin(\omega t + \phi)` while active and
-        zeros otherwise.
-
     Raises
     ------
     ValueError
@@ -272,7 +266,7 @@ class ac_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        current : Any
+        current : jax.Array
             Current-like quantity with shape ``self.varshape``. For channels
             where ``origin + start <= t < origin + stop`` (or
             ``t >= origin + start`` when ``stop is None``), values equal
@@ -309,51 +303,14 @@ class ac_generator(brainstate.nn.Dynamics):
         --------
         ac_generator : Class-level parameter definitions and model equations.
         dc_generator.update : Windowed constant-current update rule.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import ac_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = ac_generator(
-           ...         in_size=3,
-           ...         amplitude=200.0 * u.pA,
-           ...         offset=20.0 * u.pA,
-           ...         frequency=250.0 * u.Hz,
-           ...         phase=90.0,
-           ...         start=1.0 * u.ms,
-           ...         stop=3.0 * u.ms,
-           ...     )
-           ...     with brainstate.environ.context(t=1.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
-
-        # Convert frequency from Hz to angular frequency in rad/ms
-        # omega = 2 * pi * freq / 1000 (since t is in ms, freq is in Hz)
-        freq_val = self.frequency
-        if u.is_unitless(freq_val):
-            omega = 2.0 * jnp.pi * freq_val / 1000.0
-        else:
-            # frequency in Hz -> convert to 1/ms
-            freq_ms = freq_val / u.Hz  # dimensionless number in Hz
-            omega = 2.0 * jnp.pi * freq_ms / 1000.0
 
         # Convert phase from degrees to radians
         phi_rad = self.phase * 2.0 * jnp.pi / 360.0
 
-        # Get t in ms (dimensionless)
-        if u.is_unitless(t):
-            t_ms = t
-        else:
-            t_ms = t / u.ms
-
         # Compute sine current: amplitude * sin(omega * t + phi) + offset
-        I_ac = self.amplitude * jnp.sin(omega * t_ms + phi_rad) + self.offset
+        I_ac = self.amplitude * jnp.sin(2.0 * jnp.pi * self.frequency * t + phi_rad) + self.offset
 
         # Check if device is active
         t_start = self.origin + self.start

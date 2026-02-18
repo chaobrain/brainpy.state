@@ -1,3 +1,5 @@
+from ._base import NESTNeuron
+
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,9 +29,7 @@ tree-based matrix solver, matching NEST's implementation exactly.
 """
 
 import math
-from typing import Optional, Dict, List, Any
-
-import numpy as np
+from typing import Optional, Dict, List
 
 __all__ = [
     'cm_default',
@@ -1251,10 +1251,10 @@ class _Compartment:
         self.children: List['_Compartment'] = []
 
         # Electrical parameters (defaults match NEST)
-        self.ca = 1.0       # C_m [nF]
-        self.gc = 0.01      # g_C [uS]
-        self.gl = 0.1       # g_L [uS]
-        self.el = -70.0     # e_L [mV]
+        self.ca = 1.0  # C_m [nF]
+        self.gc = 0.01  # g_C [uS]
+        self.gl = 0.1  # g_L [uS]
+        self.el = -70.0  # e_L [mV]
         self.v_comp = self.el  # voltage [mV]
 
         # Ion channel parameters
@@ -1474,7 +1474,7 @@ class _Compartment:
 # Main cm_default class
 # ---------------------------------------------------------------------------
 
-class cm_default:
+class cm_default(NESTNeuron):
     r"""Multi-compartment neuron model with user-defined morphological structure and flexible synapse placement.
 
     This class implements a compartmental neuron model with arbitrary dendritic tree

@@ -15,27 +15,24 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
 import math
 
 import brainstate
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from ._base import NESTDevice
 
 __all__ = [
     'spike_dilutor',
 ]
 
-
 _UNSET = object()
 
 
-class spike_dilutor(Dynamics):
+class spike_dilutor(NESTDevice):
     r"""NEST-compatible ``spike_dilutor`` device.
 
     Short description
@@ -184,13 +181,6 @@ class spike_dilutor(Dynamics):
          - :math:`M`
          - Number/shape of child targets; ``M = prod(varshape)``.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a NumPy array with dtype
-        ``int64`` and shape ``self.varshape``. Each element is the copied child
-        multiplicity for one target in the current simulation step.
-
     Raises
     ------
     ValueError
@@ -301,14 +291,14 @@ class spike_dilutor(Dynamics):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))
@@ -340,7 +330,7 @@ class spike_dilutor(Dynamics):
 
     @staticmethod
     def _to_nonnegative_count(value: ArrayLike) -> int:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         total = float(arr.sum())
         if total < 0.0:
             raise ValueError('mother_spikes must be non-negative.')
@@ -606,21 +596,6 @@ class spike_dilutor(Dynamics):
         --------
         _sample_child_spikes : Low-level Binomial sampling routine.
         init_state : Initialise the RNG before calling update.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     sd = brainpy.state.spike_dilutor(in_size=3, p_copy=0.5, rng_seed=0)
-           ...     sd.init_state()
-           ...     with brainstate.environ.context(t=1.0 * u.ms):
-           ...         out = sd.update(mother_spikes=4)
-           ...     _ = out.shape   # (3,)
-           ...     _ = out.dtype   # int64
         """
         if not hasattr(self, '_rng'):
             self.init_state()

@@ -18,17 +18,16 @@
 import math
 from typing import Callable, Optional
 
-import numpy as np
-from scipy.integrate import solve_ivp
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
+from scipy.integrate import solve_ivp
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
@@ -176,7 +175,7 @@ def _h_func(u_val, rate_slope, beta, theta):
     return 15.0 * beta / (1.0 + (1.0 / rate_slope) * math.exp(-beta * (theta - u_val)))
 
 
-class pp_cond_exp_mc_urbanczik(Neuron):
+class pp_cond_exp_mc_urbanczik(NESTNeuron):
     r"""Two-compartment point process neuron with conductance-based synapses for Urbanczik-Senn learning.
 
     ``pp_cond_exp_mc_urbanczik`` implements a two-compartment spiking neuron model
@@ -616,12 +615,12 @@ class pp_cond_exp_mc_urbanczik(Neuron):
         in_size: Size,
         # Global parameters
         t_ref: ArrayLike = 3.0 * u.ms,
-        phi_max: float = 0.15,      # kHz
-        rate_slope: float = 0.5,     # dimensionless
-        beta: float = 1.0 / 3.0,    # 1/mV
-        theta: float = -55.0,        # mV
+        phi_max: float = 0.15,  # kHz
+        rate_slope: float = 0.5,  # dimensionless
+        beta: float = 1.0 / 3.0,  # 1/mV
+        theta: float = -55.0,  # mV
         g_sp: ArrayLike = 600.0 * u.nS,  # soma-dendrite coupling
-        g_ps: ArrayLike = 0.0 * u.nS,    # dendrite-soma coupling
+        g_ps: ArrayLike = 0.0 * u.nS,  # dendrite-soma coupling
         # Soma compartment parameters
         soma_g_L: ArrayLike = 30.0 * u.nS,
         soma_C_m: ArrayLike = 300.0 * u.pF,
@@ -940,9 +939,9 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
         # Dendrite membrane potential derivative
         f[_idx(DEND, _V_M)] = (
-            -p['g_L_dend'] * (V_d - p['E_L_dend'])
-            + I_syn_ex_d + I_syn_in_d + I_conn_s_d
-        ) / p['C_m_dend']
+                                  -p['g_L_dend'] * (V_d - p['E_L_dend'])
+                                  + I_syn_ex_d + I_syn_in_d + I_conn_s_d
+                              ) / p['C_m_dend']
 
         # Dendrite current derivatives
         f[_idx(DEND, _I_EXC)] = -I_syn_ex_d / p['tau_syn_ex_dend']
@@ -954,9 +953,9 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
         # Soma membrane potential derivative
         f[_idx(SOMA, _V_M)] = (
-            -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
-            + p['I_stim_soma'] + p['I_e_soma']
-        ) / p['C_m_soma']
+                                  -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
+                                  + p['I_stim_soma'] + p['I_e_soma']
+                              ) / p['C_m_soma']
 
         # Soma conductance derivatives
         f[_idx(SOMA, _G_EXC)] = -y[_idx(SOMA, _G_EXC)] / p['tau_syn_ex_soma']
@@ -993,6 +992,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
         Notes
         -----
+
         Update Procedure
         ----------------
 
@@ -1067,45 +1067,6 @@ class pp_cond_exp_mc_urbanczik(Neuron):
            Numerical issues (NaN, Inf) can arise from invalid parameter
            combinations (e.g., zero capacitance), extremely large input
            currents, or ODE solver failure.
-
-        Examples
-        --------
-        **Simple forward pass:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=10)
-            >>> neuron.init_all_states()
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     spike_output = neuron.update(x=200.0 * u.pA)
-            >>> print(spike_output.shape)
-            (10,)
-
-        **Monitoring state over time:**
-
-        .. code-block:: python
-
-            >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=1)
-            >>> neuron.init_all_states()
-            >>> V_soma_history = []
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     for step in range(1000):
-            ...         neuron.update(x=300.0 * u.pA)
-            ...         V_soma_history.append(float(neuron.V_s.value[0] / u.mV))
-
-        **Using with projections (delta inputs):**
-
-        .. code-block:: python
-
-            >>> pre_neurons = bp.LIF(100)
-            >>> post_neurons = bp.pp_cond_exp_mc_urbanczik(50)
-            >>> # Projection would call post_neurons.add_delta_input('soma_exc', ...)
-            >>> # Then update() automatically processes these inputs
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     post_neurons.update()  # Processes queued delta inputs
 
         Notes
         -----
@@ -1247,7 +1208,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
                         # No dead time: Poisson spikes
                         lam = rate * dt * 1e-3
                         n_spikes = int(np.random.RandomState(
-                            int(rand_vals[idx] * 2**31)
+                            int(rand_vals[idx] * 2 ** 31)
                         ).poisson(lam))
 
                     if n_spikes > 0:

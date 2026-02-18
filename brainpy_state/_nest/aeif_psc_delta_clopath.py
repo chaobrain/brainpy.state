@@ -18,23 +18,22 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_delta_clopath',
 ]
 
 
-class aeif_psc_delta_clopath(Neuron):
+class aeif_psc_delta_clopath(NESTNeuron):
     r"""Adaptive exponential integrate-and-fire neuron with delta-shaped synaptic input and Clopath voltage traces.
 
     This model extends the standard adaptive exponential integrate-and-fire (AdEx) neuron with additional
@@ -321,6 +320,7 @@ class aeif_psc_delta_clopath(Neuron):
     Raises
     ------
     ValueError
+
         - If ``V_reset >= V_peak``.
         - If ``Delta_T < 0``.
         - If ``V_th_max < V_th_rest`` or ``V_peak < V_th_rest``.
@@ -606,12 +606,6 @@ class aeif_psc_delta_clopath(Neuron):
                     'spike time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def _delay_u_bars_steps(self, dt_q):
         dt_ms = float(u.math.asarray(dt_q / u.ms))
         delay_ms = self._to_numpy_time_ms(self.delay_u_bars)
@@ -693,7 +687,7 @@ class aeif_psc_delta_clopath(Neuron):
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
         self.clamp_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -750,7 +744,7 @@ class aeif_psc_delta_clopath(Neuron):
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
         self.clamp_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -830,8 +824,9 @@ class aeif_psc_delta_clopath(Neuron):
         )
 
         dv = 0.0 if (is_refractory or is_clamped) else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p['I_e'] + i_stim
-        ) / p['C_m']
+                                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p[
+                                                           'I_e'] + i_stim
+                                                       ) / p['C_m']
 
         # NEST sets dw/dt = 0 while clamped, but not during pure refractory.
         dw = 0.0 if is_clamped else (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']

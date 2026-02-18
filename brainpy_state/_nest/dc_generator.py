@@ -21,12 +21,14 @@ import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'dc_generator',
 ]
 
 
-class dc_generator(brainstate.nn.Dynamics):
+class dc_generator(NESTDevice):
     r"""DC current generator -- NEST-compatible stimulation device.
 
     Generate a constant current pulse and gate it with a half-open activity
@@ -133,13 +135,6 @@ class dc_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global offset applied to both window boundaries.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a current-like quantity
-        with shape ``self.varshape`` and units inherited from ``amplitude``:
-        ``amplitude`` for channels in the active window and zeros elsewhere.
-
     Raises
     ------
     ValueError
@@ -226,7 +221,7 @@ class dc_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        current : Any
+        current : jax.Array
             Current-like quantity with shape ``self.varshape`` and units
             inherited from ``amplitude``. Values equal ``amplitude`` on channels
             where ``origin + start <= t < origin + stop`` (or
@@ -253,19 +248,6 @@ class dc_generator(brainstate.nn.Dynamics):
         --------
         dc_generator : Class-level parameter definitions and model equations.
         ac_generator.update : Windowed sinusoidal-current update rule.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import dc_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = dc_generator(amplitude=250.0 * u.pA, start=2.0 * u.ms, stop=4.0 * u.ms)
-           ...     with brainstate.environ.context(t=3.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
         t_start = self.origin + self.start

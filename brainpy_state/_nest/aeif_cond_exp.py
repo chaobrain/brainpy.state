@@ -18,23 +18,22 @@
 import math
 from typing import Callable
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_exp',
 ]
 
 
-class aeif_cond_exp(Neuron):
+class aeif_cond_exp(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_exp`` neuron model.
 
     Conductance-based adaptive exponential integrate-and-fire neuron with
@@ -445,12 +444,6 @@ class aeif_cond_exp(Neuron):
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
 
@@ -491,7 +484,7 @@ class aeif_cond_exp(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -530,7 +523,7 @@ class aeif_cond_exp(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )
@@ -648,8 +641,9 @@ class aeif_cond_exp(Neuron):
         )
 
         dv = 0.0 if is_refractory else (
-            -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p['I_e'] + i_stim
-        ) / p['C_m']
+                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p[
+                                           'I_e'] + i_stim
+                                       ) / p['C_m']
 
         dg_ex = -g_ex / p['tau_syn_ex']
         dg_in = -g_in / p['tau_syn_in']
@@ -723,30 +717,6 @@ class aeif_cond_exp(Neuron):
         - Per-neuron scalar integration (no vectorization across neurons)
         - Cost scales with ``1/gsl_error_tol`` (smaller tolerance = more substeps)
         - Typical: 1-10 substeps per simulation step for standard parameters
-
-        Examples
-        --------
-        Basic usage:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> neurons = bst.aeif_cond_exp(100)
-            >>> neurons.init_all_states()
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     spikes = neurons.update(x=300 * u.pA)
-            >>> print(spikes.sum())  # Number of neurons that spiked
-
-        Access updated states:
-
-        .. code-block:: python
-
-            >>> spikes = neurons.update(x=300 * u.pA)
-            >>> print(neurons.V.value)  # Updated membrane potential
-            >>> print(neurons.w.value)  # Updated adaptation current
-            >>> print(neurons.last_spike_time.value)  # Spike times
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()

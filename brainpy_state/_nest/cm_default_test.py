@@ -41,7 +41,6 @@ from brainpy_state._nest.cm_default import (
     _GABAReceptor,
     _NMDAReceptor,
     _AMPA_NMDAReceptor,
-    _Compartment,
     _compute_g_norm,
     _nmda_sigmoid,
 )
@@ -159,6 +158,7 @@ class TestPassiveSingleCompartment(unittest.TestCase):
     r"""Test passive (no ion channels) single compartment dynamics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1  # ms
 
     def test_resting_potential_stable(self):
@@ -225,6 +225,7 @@ class TestPassiveMultiCompartment(unittest.TestCase):
     r"""Test passive multi-compartment dynamics and coupling."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1  # ms
 
     def test_two_compartments_voltage_coupling(self):

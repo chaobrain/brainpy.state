@@ -23,7 +23,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
-
 from brainpy.state import SpikeTime, PoissonSpike, PoissonEncoder, poisson_input
 
 
@@ -35,6 +34,7 @@ class TestSpikeTimeConstruction(unittest.TestCase):
     r"""Tests for SpikeTime.__init__ validation and CSR construction."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_basic_construction(self):
@@ -105,6 +105,7 @@ class TestSpikeTimeUpdate(unittest.TestCase):
     r"""Tests for the three update() call paths: index, time, environ."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _make(self):
@@ -174,6 +175,7 @@ class TestSpikeTimeSimultaneous(unittest.TestCase):
     r"""Tests for multiple events at the same time step."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_two_neurons_same_step(self):
@@ -205,6 +207,7 @@ class TestSpikeTimeWeights(unittest.TestCase):
     r"""Tests for different weight modes."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_default_weight_value(self):
@@ -251,6 +254,7 @@ class TestSpikeTimeRounding(unittest.TestCase):
     r"""Tests for time_as_step rounding modes."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_round_mode(self):
@@ -301,6 +305,7 @@ class TestSpikeTimeSorting(unittest.TestCase):
     r"""Tests that events are always sorted correctly during construction."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_unsorted_input_produces_correct_output(self):
@@ -344,6 +349,7 @@ class TestSpikeTimeJIT(unittest.TestCase):
     r"""Tests for JIT compatibility via brainstate.transform.for_loop and jax.jit."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_for_loop_scalar_weight(self):
@@ -417,6 +423,7 @@ class TestSpikeTimeDimenslessTimes(unittest.TestCase):
     r"""Tests with dimensionless (plain float) spike times."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_float_times_with_units(self):
@@ -437,6 +444,7 @@ class TestSpikeTimeLargeScale(unittest.TestCase):
     r"""Test with a larger number of events."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_many_events(self):
@@ -465,6 +473,7 @@ class TestSpikeTimeLargeScale(unittest.TestCase):
 
 class TestPoissonSpike(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         self.in_size = 100
 
@@ -527,6 +536,7 @@ class TestPoissonSpike(unittest.TestCase):
 
 class TestPoissonEncoder(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         self.in_size = 50
 
@@ -580,6 +590,7 @@ class TestPoissonEncoder(unittest.TestCase):
 
 class TestPoissonInputFunction(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_updates_target_all_indices(self):

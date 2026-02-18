@@ -18,16 +18,15 @@
 import math
 from typing import Callable, Sequence
 
-import numpy as np
-
 import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'glif_psc',
@@ -193,7 +192,7 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     return P31, P32
 
 
-class glif_psc(Neuron):
+class glif_psc(NESTNeuron):
     r"""Current-based generalized leaky integrate-and-fire (GLIF) neuron model.
 
     The ``glif_psc`` model implements the five-level GLIF model hierarchy
@@ -498,12 +497,6 @@ class glif_psc(Neuron):
         Spike component of threshold (mV). Shape: (batch, \*in_size).
     _threshold_voltage : numpy.ndarray
         Voltage component of threshold (mV). Shape: (batch, \*in_size).
-    Returns
-    -------
-    spike : jax.numpy.ndarray
-        Spike output (float32) via surrogate gradient function. Shape: (batch,
-        \*in_size). Values in [0, 1] during forward pass; gradient computed via
-        surrogate function.
 
     Raises
     ------
@@ -703,10 +696,10 @@ class glif_psc(Neuron):
         s, a, v = self.has_theta_spike, self.has_asc, self.has_theta_voltage
         valid_combos = [
             (False, False, False),  # GLIF1
-            (True, False, False),   # GLIF2
-            (False, True, False),   # GLIF3
-            (True, True, False),    # GLIF4
-            (True, True, True),     # GLIF5
+            (True, False, False),  # GLIF2
+            (False, True, False),  # GLIF3
+            (True, True, False),  # GLIF4
+            (True, True, True),  # GLIF5
         ]
         if (s, a, v) not in valid_combos:
             raise ValueError(
@@ -759,12 +752,6 @@ class glif_psc(Neuron):
         for tau in self.tau_syn:
             if tau <= 0.0:
                 raise ValueError("All synaptic time constants must be strictly positive.")
-
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
 
     def init_state(self, batch_size: int = None, **kwargs):
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)

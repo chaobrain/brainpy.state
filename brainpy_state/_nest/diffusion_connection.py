@@ -1,3 +1,11 @@
+from typing import Any
+
+import brainunit as u
+import numpy as np
+from brainstate.typing import ArrayLike
+
+from ._base import NESTSynapse
+
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,23 +20,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-
 # -*- coding: utf-8 -*-
-
-from __future__ import annotations
-
-from typing import Any
-
-import brainunit as u
-import numpy as np
-from brainstate.typing import ArrayLike
 
 __all__ = [
     'diffusion_connection',
 ]
 
 
-class diffusion_connection:
+class diffusion_connection(NESTSynapse):
     r"""NEST-compatible ``diffusion_connection`` connection model.
 
     ``diffusion_connection`` implements instantaneous diffusion-based coupling

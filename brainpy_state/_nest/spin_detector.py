@@ -23,6 +23,8 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
+from ._base import NESTDevice
+
 __all__ = [
     'spin_detector',
 ]
@@ -35,7 +37,7 @@ class _StepCalibration:
     t_max_steps: float
 
 
-class spin_detector(brainstate.nn.Dynamics):
+class spin_detector(NESTDevice):
     r"""NEST-compatible detector for binary state decoding from spikes.
 
     ``spin_detector`` decodes binary activity (``state`` :math:`\in \{0, 1\}`)
@@ -191,25 +193,6 @@ class spin_detector(brainstate.nn.Dynamics):
          - ``False``
          - :math:`\mathrm{repr}_t`
          - Output-time representation: ms float or integer ``(step, offset)`` pair.
-
-    Returns
-    -------
-    events : dict[str, np.ndarray]
-        Returned by :meth:`update`, :meth:`flush`, and the ``events``
-        property. All arrays are one-dimensional with length :math:`E`
-        equal to the total number of stored events accumulated so far:
-
-        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for
-          each recorded event, defaulting to ``1`` when not supplied.
-        - ``'state'`` — ``int64``, shape ``(E,)``: decoded binary state
-          (:math:`0` or :math:`1`) for each event.
-        - ``'times'`` — shape ``(E,)``: timestamp of each event.
-          ``float64`` in ms (:math:`s \cdot dt - \delta_j`) when
-          ``time_in_steps=False``; ``int64`` step stamp :math:`s` when
-          ``time_in_steps=True``.
-        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
-          ``time_in_steps=True``): per-event sub-step offset :math:`\delta_j`
-          in ms.
 
     Raises
     ------
