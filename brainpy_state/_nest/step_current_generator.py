@@ -311,21 +311,6 @@ class step_current_generator(brainstate.nn.Dynamics):
         dc_generator.update : Windowed constant-current update rule.
         ac_generator.update : Windowed sinusoidal-current update rule.
 
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import step_current_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = step_current_generator(
-           ...         amplitude_times=[2.0 * u.ms, 4.0 * u.ms],
-           ...         amplitude_values=[150.0 * u.pA, -50.0 * u.pA],
-           ...     )
-           ...     with brainstate.environ.context(t=3.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
 
