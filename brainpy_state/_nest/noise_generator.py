@@ -16,6 +16,8 @@
 # -*- coding: utf-8 -*-
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
 import jax
@@ -27,7 +29,7 @@ __all__ = [
 ]
 
 
-class noise_generator(brainstate.nn.Dynamics):
+class noise_generator(NESTDevice):
     r"""Gaussian white-noise current generator compatible with NEST.
 
     Generate a piecewise-constant Gaussian current with optional sinusoidal

@@ -24,14 +24,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'ginzburg_neuron',
 ]
 
 
-class ginzburg_neuron(Dynamics):
+class ginzburg_neuron(NESTNeuron):
     r"""Binary stochastic neuron with sigmoidal/affine gain function.
 
     This model re-implements the NEST ``ginzburg_neuron``, a binary neuron that

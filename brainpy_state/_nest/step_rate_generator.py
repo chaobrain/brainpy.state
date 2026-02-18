@@ -18,6 +18,8 @@
 from typing import Sequence
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -28,7 +30,7 @@ __all__ = [
 ]
 
 
-class step_rate_generator(brainstate.nn.Dynamics):
+class step_rate_generator(NESTDevice):
     r"""Piecewise-constant rate generator -- NEST-compatible stimulation device.
 
     Generate a deterministic piecewise-constant rate trace and gate it with a

@@ -26,14 +26,14 @@ import braintools
 import brainunit as u
 from brainstate.typing import Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'rate_transformer_node',
 ]
 
 
-class rate_transformer_node(Dynamics):
+class rate_transformer_node(NESTNeuron):
     r"""NEST-compatible ``rate_transformer_node`` template model.
 
     A stateless rate-based processing node that aggregates weighted incoming rate signals

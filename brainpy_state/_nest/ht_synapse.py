@@ -1,3 +1,4 @@
+from brainpy_state._nest._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 
-class ht_synapse:
+class ht_synapse(NESTSynapse):
     r"""NEST-compatible Hill-Tononi synapse with vesicle-pool depression.
 
     Implements the short-term depression model from Hill & Tononi (2005) used to

@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
@@ -176,7 +176,7 @@ def _h_func(u_val, rate_slope, beta, theta):
     return 15.0 * beta / (1.0 + (1.0 / rate_slope) * math.exp(-beta * (theta - u_val)))
 
 
-class pp_cond_exp_mc_urbanczik(Neuron):
+class pp_cond_exp_mc_urbanczik(NESTNeuron):
     r"""Two-compartment point process neuron with conductance-based synapses for Urbanczik-Senn learning.
 
     ``pp_cond_exp_mc_urbanczik`` implements a two-compartment spiking neuron model

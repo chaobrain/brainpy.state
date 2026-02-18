@@ -25,14 +25,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_exp_sfa_rr',
 ]
 
 
-class iaf_cond_exp_sfa_rr(Neuron):
+class iaf_cond_exp_sfa_rr(NESTNeuron):
     r"""NEST-compatible conductance-based LIF neuron with spike-frequency adaptation and relative refractory mechanisms.
 
     This model implements a conductance-based leaky integrate-and-fire neuron with exponential

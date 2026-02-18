@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_bw_2001_exact',
 ]
 
 
-class iaf_bw_2001_exact(Neuron):
+class iaf_bw_2001_exact(NESTNeuron):
     r"""NEST-compatible conductance-based LIF neuron with exact per-synapse NMDA dynamics.
 
     This model implements the Brunel-Wang (2001) neuron with exact NMDA kinetics, maintaining

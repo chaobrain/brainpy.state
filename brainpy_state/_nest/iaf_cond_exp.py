@@ -25,14 +25,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_exp',
 ]
 
 
-class iaf_cond_exp(Neuron):
+class iaf_cond_exp(NESTNeuron):
     r"""Leaky integrate-and-fire model with exponential conductance synapses.
 
     This is a conductance-based leaky integrate-and-fire neuron with hard threshold,

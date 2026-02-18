@@ -20,6 +20,8 @@
 import math
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -33,7 +35,7 @@ __all__ = [
 _UNSET = object()
 
 
-class gamma_sup_generator(brainstate.nn.Dynamics):
+class gamma_sup_generator(NESTDevice):
     r"""Superposition of independent gamma processes (NEST-compatible).
 
     Description

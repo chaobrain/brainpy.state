@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'hh_psc_alpha_gap',
@@ -153,7 +153,7 @@ def _hh_psc_alpha_gap_equilibrium(V):
     return m_inf, h_inf, n_inf, p_inf
 
 
-class hh_psc_alpha_gap(Neuron):
+class hh_psc_alpha_gap(NESTNeuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with alpha PSCs and gap junctions.
 
     Short Description

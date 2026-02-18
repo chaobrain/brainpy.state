@@ -26,14 +26,14 @@ import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'astrocyte_lr_1994',
 ]
 
 
-class astrocyte_lr_1994(Dynamics):
+class astrocyte_lr_1994(NESTNeuron):
     r"""NEST-compatible astrocyte model with IP3-mediated calcium dynamics.
 
     Implements the Li & Rinzel (1994) [1]_ astrocytic calcium oscillation model with

@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_chxk_2008',
 ]
 
 
-class iaf_chxk_2008(Neuron):
+class iaf_chxk_2008(NESTNeuron):
     r"""NEST-compatible ``iaf_chxk_2008`` with alpha synapses and precise AHP timing.
 
     Description

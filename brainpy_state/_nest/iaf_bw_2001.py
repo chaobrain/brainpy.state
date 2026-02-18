@@ -28,14 +28,14 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_bw_2001',
 ]
 
 
-class iaf_bw_2001(Neuron):
+class iaf_bw_2001(NESTNeuron):
     r"""NEST-compatible ``iaf_bw_2001`` neuron model.
 
     Conductance-based leaky integrate-and-fire neuron with AMPA, GABA, and

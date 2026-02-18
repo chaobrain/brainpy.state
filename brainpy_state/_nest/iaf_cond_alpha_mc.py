@@ -26,14 +26,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_alpha_mc',
 ]
 
 
-class iaf_cond_alpha_mc(Neuron):
+class iaf_cond_alpha_mc(NESTNeuron):
     r"""NEST-compatible ``iaf_cond_alpha_mc`` neuron model.
 
     Short Description

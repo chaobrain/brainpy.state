@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_alpha',
 ]
 
 
-class aeif_psc_alpha(Neuron):
+class aeif_psc_alpha(NESTNeuron):
     r"""NEST-compatible adaptive exponential integrate-and-fire neuron with alpha-shaped postsynaptic currents.
 
     This model implements the adaptive exponential integrate-and-fire (AdEx) neuron with

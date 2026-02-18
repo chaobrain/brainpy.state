@@ -24,14 +24,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'mcculloch_pitts_neuron',
 ]
 
 
-class mcculloch_pitts_neuron(Dynamics):
+class mcculloch_pitts_neuron(NESTNeuron):
     r"""Binary deterministic neuron with Heaviside activation function.
 
     This model implements a binary neuron that transitions between two discrete states (0 or 1)

@@ -18,6 +18,8 @@
 from typing import Sequence
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -28,7 +30,7 @@ __all__ = [
 ]
 
 
-class spike_train_injector(brainstate.nn.Dynamics):
+class spike_train_injector(NESTDevice):
     r"""Spike train injector -- NEST-compatible event source device.
 
     Emit deterministic spike events at configured times with optional

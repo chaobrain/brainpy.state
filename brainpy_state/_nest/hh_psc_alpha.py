@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'hh_psc_alpha',
@@ -89,7 +89,7 @@ def _hh_psc_alpha_equilibrium(V):
     return m_inf, h_inf, n_inf
 
 
-class hh_psc_alpha(Neuron):
+class hh_psc_alpha(NESTNeuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with alpha-shaped postsynaptic currents.
 
     Current-based spiking neuron using the Hodgkin-Huxley formalism with

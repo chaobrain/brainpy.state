@@ -52,7 +52,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'glif_psc_double_alpha',
@@ -207,7 +207,7 @@ def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
     return P31, P32
 
 
-class glif_psc_double_alpha(Neuron):
+class glif_psc_double_alpha(NESTNeuron):
     r"""Current-based generalized leaky integrate-and-fire (GLIF) neuron model
     with double alpha-function shaped synaptic currents.
 

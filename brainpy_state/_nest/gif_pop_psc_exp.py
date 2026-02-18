@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'gif_pop_psc_exp',
 ]
 
 
-class gif_pop_psc_exp(Dynamics):
+class gif_pop_psc_exp(NESTNeuron):
     r"""Population of generalized integrate-and-fire neurons (GIF) with
     exponential postsynaptic currents and adaptation.
 

@@ -26,7 +26,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 from .iaf_psc_exp import iaf_psc_exp
 
 __all__ = [
@@ -34,7 +34,7 @@ __all__ = [
 ]
 
 
-class iaf_tum_2000(Neuron):
+class iaf_tum_2000(NESTNeuron):
     r"""NEST-compatible ``iaf_tum_2000`` neuron model.
 
     Description

@@ -20,6 +20,8 @@
 import math
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -34,7 +36,7 @@ __all__ = [
 _UNSET = object()
 
 
-class poisson_generator(brainstate.nn.Dynamics):
+class poisson_generator(NESTDevice):
     r"""Poisson spike generator compatible with NEST.
 
     Description

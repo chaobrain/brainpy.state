@@ -27,7 +27,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 from .iaf_psc_alpha import iaf_psc_alpha
 
 __all__ = [
@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 
-class iaf_psc_alpha_multisynapse(Neuron):
+class iaf_psc_alpha_multisynapse(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_alpha_multisynapse`` neuron model.
 
     Current-based leaky integrate-and-fire neuron with an arbitrary number of

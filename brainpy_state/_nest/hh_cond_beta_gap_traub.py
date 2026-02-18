@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'hh_cond_beta_gap_traub',
@@ -171,7 +171,7 @@ def _beta_normalization_factor(tau_rise, tau_decay):
         return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
 
-class hh_cond_beta_gap_traub(Neuron):
+class hh_cond_beta_gap_traub(NESTNeuron):
     r"""NEST-compatible Hodgkin-Huxley neuron with beta-function synapses and gap junctions.
 
     Implements a conductance-based Hodgkin-Huxley model with Traub-Miles gating

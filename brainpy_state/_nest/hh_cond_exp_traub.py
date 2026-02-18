@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'hh_cond_exp_traub',
@@ -123,7 +123,7 @@ def _hh_cond_exp_traub_equilibrium(V):
     return m_inf, h_inf, n_inf
 
 
-class hh_cond_exp_traub(Neuron):
+class hh_cond_exp_traub(NESTNeuron):
     r"""NEST-compatible ``hh_cond_exp_traub`` neuron model.
 
     Hodgkin-Huxley model for Brette et al. (2007) review, based on Traub and

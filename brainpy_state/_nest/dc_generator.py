@@ -16,6 +16,8 @@
 # -*- coding: utf-8 -*-
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -26,7 +28,7 @@ __all__ = [
 ]
 
 
-class dc_generator(brainstate.nn.Dynamics):
+class dc_generator(NESTDevice):
     r"""DC current generator -- NEST-compatible stimulation device.
 
     Generate a constant current pulse and gate it with a half-open activity

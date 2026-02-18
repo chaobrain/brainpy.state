@@ -18,6 +18,8 @@
 
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -31,7 +33,7 @@ __all__ = [
 _UNSET = object()
 
 
-class poisson_generator_ps(brainstate.nn.Dynamics):
+class poisson_generator_ps(NESTDevice):
     r"""Precise-time Poisson spike generator with dead time (NEST-compatible).
 
     Description

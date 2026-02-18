@@ -26,14 +26,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_beta',
 ]
 
 
-class iaf_cond_beta(Neuron):
+class iaf_cond_beta(NESTNeuron):
     r"""NEST-compatible conductance-based leaky integrate-and-fire neuron with beta-shaped synaptic conductances.
 
     This model implements a conductance-based LIF neuron with beta-function (dual-exponential)

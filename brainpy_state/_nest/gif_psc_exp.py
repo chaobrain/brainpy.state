@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'gif_psc_exp',
 ]
 
 
-class gif_psc_exp(Neuron):
+class gif_psc_exp(NESTNeuron):
     r"""Current-based generalized integrate-and-fire neuron (GIF) model.
 
     This is a brainpy.state re-implementation of the NEST simulator's ``gif_psc_exp``

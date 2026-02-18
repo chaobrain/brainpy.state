@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -45,7 +47,7 @@ class _StepCalibration:
     t_max_steps: float
 
 
-class multimeter(brainstate.nn.Dynamics):
+class multimeter(NESTDevice):
     r"""NEST-compatible analog recorder for neuron/device state variables.
 
     ``multimeter`` records analog state samples from connected targets into an

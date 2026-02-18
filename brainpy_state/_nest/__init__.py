@@ -23,6 +23,11 @@ that are compatible with the NEST simulator (https://nest-simulator.readthedocs.
 """
 
 # ---------------------------------------------------------------------------
+# Base classes
+# ---------------------------------------------------------------------------
+from ._base import NESTDevice, NESTNeuron, NESTSynapse
+
+# ---------------------------------------------------------------------------
 # Stimulation devices - Current generators
 # ---------------------------------------------------------------------------
 from .ac_generator import ac_generator
@@ -239,6 +244,11 @@ from .rate_connection_instantaneous import rate_connection_instantaneous
 from .sic_connection import sic_connection
 
 __all__ = [
+    # Base classes
+    'NESTDevice',
+    'NESTNeuron',
+    'NESTSynapse',
+
     # Stimulation devices - Current generators
     'ac_generator',
     'dc_generator',

@@ -22,14 +22,14 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'ignore_and_fire',
 ]
 
 
-class ignore_and_fire(Dynamics):
+class ignore_and_fire(NESTNeuron):
     r"""Ignore-and-fire neuron model for generating spikes at fixed intervals.
 
     Description

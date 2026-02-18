@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from brainpy_state._nest._base import NESTDevice
 
 __all__ = [
     'spike_dilutor',
@@ -35,7 +35,7 @@ __all__ = [
 _UNSET = object()
 
 
-class spike_dilutor(Dynamics):
+class spike_dilutor(NESTDevice):
     r"""NEST-compatible ``spike_dilutor`` device.
 
     Short description

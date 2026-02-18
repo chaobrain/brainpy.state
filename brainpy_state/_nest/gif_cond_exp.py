@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'gif_cond_exp',
 ]
 
 
-class gif_cond_exp(Neuron):
+class gif_cond_exp(NESTNeuron):
     r"""Conductance-based generalized integrate-and-fire neuron (GIF) model.
 
     ``gif_cond_exp`` is the generalized integrate-and-fire neuron according to

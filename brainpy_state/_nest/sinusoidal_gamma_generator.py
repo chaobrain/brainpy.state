@@ -20,6 +20,8 @@
 import math
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -34,7 +36,7 @@ __all__ = [
 _UNSET = object()
 
 
-class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
+class sinusoidal_gamma_generator(NESTDevice):
     r"""Sinusoidally modulated gamma spike generator compatible with NEST.
 
     Description

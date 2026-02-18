@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_delta_clopath',
 ]
 
 
-class aeif_psc_delta_clopath(Neuron):
+class aeif_psc_delta_clopath(NESTNeuron):
     r"""Adaptive exponential integrate-and-fire neuron with delta-shaped synaptic input and Clopath voltage traces.
 
     This model extends the standard adaptive exponential integrate-and-fire (AdEx) neuron with additional

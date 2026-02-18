@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'glif_cond',
 ]
 
 
-class glif_cond(Neuron):
+class glif_cond(NESTNeuron):
     r"""Conductance-based generalized leaky integrate-and-fire (GLIF) neuron model.
 
     Implements the five-level GLIF model hierarchy from Teeter et al. (2018) [1]_,

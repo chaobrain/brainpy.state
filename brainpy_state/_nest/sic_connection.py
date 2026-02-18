@@ -1,3 +1,4 @@
+from brainpy_state._nest._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-class sic_connection:
+class sic_connection(NESTSynapse):
     r"""NEST-compatible ``sic_connection`` synapse model for astrocyte-to-neuron slow inward current (SIC) coupling.
 
     This class implements connection-level semantics of NEST's ``sic_connection`` model

@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'amat2_psc_exp',
 ]
 
 
-class amat2_psc_exp(Neuron):
+class amat2_psc_exp(NESTNeuron):
     r"""NEST-compatible ``amat2_psc_exp`` neuron model.
 
     Non-resetting leaky integrate-and-fire neuron with exponential postsynaptic

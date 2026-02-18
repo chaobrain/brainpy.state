@@ -1,3 +1,4 @@
+from brainpy_state._nest._base import NESTNeuron
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1474,7 +1475,7 @@ class _Compartment:
 # Main cm_default class
 # ---------------------------------------------------------------------------
 
-class cm_default:
+class cm_default(NESTNeuron):
     r"""Multi-compartment neuron model with user-defined morphological structure and flexible synapse placement.
 
     This class implements a compartmental neuron model with arbitrary dendritic tree

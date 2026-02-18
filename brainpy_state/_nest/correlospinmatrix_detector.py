@@ -20,6 +20,8 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -54,7 +56,7 @@ class _Calibration:
     signature: tuple
 
 
-class correlospinmatrix_detector(brainstate.nn.Dynamics):
+class correlospinmatrix_detector(NESTDevice):
     r"""NEST-compatible ``correlospinmatrix_detector`` device.
 
     **1. Overview**

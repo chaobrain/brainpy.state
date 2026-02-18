@@ -19,6 +19,8 @@ import math
 from dataclasses import dataclass
 
 import brainstate
+
+from brainpy_state._nest._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -35,7 +37,7 @@ class _StepCalibration:
     t_max_steps: float
 
 
-class spike_recorder(brainstate.nn.Dynamics):
+class spike_recorder(NESTDevice):
     r"""NEST-compatible spike recording device.
 
     ``spike_recorder`` accumulates spike events into an in-memory ``events``

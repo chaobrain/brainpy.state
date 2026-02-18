@@ -1,3 +1,4 @@
+from brainpy_state._nest._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 
-class vogels_sprekeler_synapse:
+class vogels_sprekeler_synapse(NESTSynapse):
     r"""NEST-compatible ``vogels_sprekeler_synapse`` connection model.
 
     This class reproduces connection-level semantics of NEST

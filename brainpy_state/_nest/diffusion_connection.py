@@ -1,3 +1,4 @@
+from brainpy_state._nest._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-class diffusion_connection:
+class diffusion_connection(NESTSynapse):
     r"""NEST-compatible ``diffusion_connection`` connection model.
 
     ``diffusion_connection`` implements instantaneous diffusion-based coupling

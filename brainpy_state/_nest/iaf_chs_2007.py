@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_chs_2007',
 ]
 
 
-class iaf_chs_2007(Neuron):
+class iaf_chs_2007(NESTNeuron):
     r"""NEST-compatible ``iaf_chs_2007`` spike-response neuron model.
 
     Description

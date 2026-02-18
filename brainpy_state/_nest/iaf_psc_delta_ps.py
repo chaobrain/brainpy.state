@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'iaf_psc_delta_ps',
 ]
 
 
-class iaf_psc_delta_ps(Neuron):
+class iaf_psc_delta_ps(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_delta_ps`` with precise spike timing.
 
     Description

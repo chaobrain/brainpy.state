@@ -48,7 +48,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from brainpy_state._nest._base import NESTNeuron
 
 __all__ = [
     'ht_neuron',
@@ -431,7 +431,7 @@ _h_IT = 15
 _STATE_VEC_SIZE = 16
 
 
-class ht_neuron(Neuron):
+class ht_neuron(NESTNeuron):
     r"""NEST-compatible Hill-Tononi thalamocortical neuron model with intrinsic currents.
 
     Implements the conductance-based integrate-and-fire neuron model from Hill & Tononi
