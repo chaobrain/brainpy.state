@@ -18,7 +18,6 @@
 
 import brainstate
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -274,7 +273,7 @@ class poisson_generator_ps(NESTDevice):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -284,7 +283,7 @@ class poisson_generator_ps(NESTDevice):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))

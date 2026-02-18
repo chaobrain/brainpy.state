@@ -20,7 +20,6 @@ from typing import Sequence
 import brainstate
 import braintools
 import brainunit as u
-import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTDevice
@@ -84,7 +83,7 @@ class spike_train_injector(NESTDevice):
 
     Enforced constraints:
 
-    - ``spike_times`` must be non-descending after conversion to float ms.
+    - ``spike_times`` must be non-descending after conversion.
     - ``spike_multiplicities`` must be empty or have exactly
       ``len(spike_multiplicities) == len(spike_times)`` elements.
     - ``precise_times=True`` cannot be combined with
@@ -96,9 +95,6 @@ class spike_train_injector(NESTDevice):
       ``shift_now_spikes`` are accepted for API compatibility but the current
       update rule always uses the fixed tolerance test above regardless of
       their values.
-    - ``start``, ``stop``, and ``origin`` are converted to scalar ms via
-      ``float(...)`` inside :meth:`update`; non-scalar or traced JAX arrays
-      are not supported by this conversion path.
     - NEST documentation states spikes should be strictly in the future. This
       implementation does not perform explicit future-time validation in
       :meth:`__init__` and instead relies on runtime matching combined with
@@ -106,13 +102,14 @@ class spike_train_injector(NESTDevice):
 
     **3. Computational implications**
 
-    Each :meth:`update` call performs one linear scan over all ``K`` spike
-    times and one broadcast over ``self.varshape``. Per-step complexity is
-    :math:`O(K + \prod \mathrm{varshape})`. Memory cost is :math:`O(K)` for
-    the stored times and optional multiplicity list. For large :math:`K`, a
-    binary-search variant over the sorted ``spike_times`` list could reduce
-    the scan to :math:`O(\log K)` plus the number of matches, but the current
-    implementation favours simplicity.
+    Each :meth:`update` call uses :func:`u.math.searchsorted` to locate the
+    open interval :math:`(t - \Delta t/2,\, t + \Delta t/2)` in the sorted
+    ``spike_times`` array, yielding a range :math:`[\textit{idx\_lo},
+    \textit{idx\_hi})` of matching indices. A Boolean mask over
+    :math:`\{0,\ldots,K-1\}` is then used to sum the multiplicities of all
+    matching entries. Per-call complexity is :math:`O(\log K + K + \prod
+    \mathrm{varshape})`.  The :meth:`update` method is fully compatible with
+    ``jax.jit``: no Python control flow branches on traced values.
 
     Parameters
     ----------
@@ -123,15 +120,16 @@ class spike_train_injector(NESTDevice):
     spike_times : Sequence, optional
         Sequence of spike times with length ``K``. Entries may be unitful
         times (typically ``brainunit`` ms quantities) or bare numerics
-        interpreted as ms. Internally converted to ``float`` milliseconds and
-        required to be non-descending. Duplicate times are allowed and their
-        multiplicities are accumulated. Default is ``()``.
+        interpreted as ms. Passed directly to :func:`u.math.asarray`, which
+        validates unit consistency across all entries. Must be non-descending.
+        Duplicate times are allowed and their multiplicities are accumulated.
+        Default is ``()``.
     spike_multiplicities : Sequence, optional
         Sequence of integer multiplicities with length ``K`` matching
         ``spike_times``, or empty to use implicit unit multiplicities
-        (:math:`m_i = 1`). Entries are converted with ``int(m)`` and
-        accumulated across all indices matching the same step. Default is
-        ``()``.
+        (:math:`m_i = 1`). Entries are converted with ``int(m)`` and stored
+        as a dimensionless JAX array; accumulated across all indices matching
+        the same step. Default is ``()``.
     precise_times : bool, optional
         NEST compatibility flag for sub-step precise timing. Stored and
         validated against ``allow_offgrid_times`` / ``shift_now_spikes`` but
@@ -149,18 +147,15 @@ class spike_train_injector(NESTDevice):
         Relative activation time :math:`t_{\mathrm{start,rel}}` (typically
         ms), initialized via :func:`braintools.init.param`. The effective
         inclusive lower bound of the active window is ``origin + start``.
-        Must be scalar-convertible inside :meth:`update`.
         Default is ``0. * u.ms``.
     stop : ArrayLike or None, optional
         Relative deactivation time :math:`t_{\mathrm{stop,rel}}` (typically
         ms), initialized via :func:`braintools.init.param` when not ``None``.
         The effective exclusive upper bound is ``origin + stop``. ``None``
-        disables the upper bound. Must be scalar-convertible when not ``None``.
-        Default is ``None``.
+        disables the upper bound. Default is ``None``.
     origin : ArrayLike, optional
         Global time origin :math:`t_0` (typically ms) added to both ``start``
-        and ``stop`` to obtain absolute window bounds. Must be
-        scalar-convertible inside :meth:`update`. Default is ``0. * u.ms``.
+        and ``stop`` to obtain absolute window bounds. Default is ``0. * u.ms``.
     name : str or None, optional
         Optional node name forwarded to :class:`brainstate.nn.Dynamics`.
 
@@ -177,7 +172,7 @@ class spike_train_injector(NESTDevice):
        * - ``spike_times``
          - ``()``
          - :math:`t_i`
-         - Spike schedule in ms; matched by ``|t - t_i| < dt/2``.
+         - Spike schedule; matched by ``|t - t_i| < dt/2``.
        * - ``spike_multiplicities``
          - ``()``
          - :math:`m_i`
@@ -200,12 +195,12 @@ class spike_train_injector(NESTDevice):
     ValueError
         If ``precise_times=True`` is combined with ``allow_offgrid_times=True``
         or ``shift_now_spikes=True``, if ``spike_times`` is not non-descending
-        after ms conversion, or if ``spike_multiplicities`` is non-empty and
-        has a different length than ``spike_times``.
+        after conversion, or if ``spike_multiplicities`` is non-empty and has
+        a different length than ``spike_times``.
     TypeError
-        If any spike-time or multiplicity entry cannot be converted to
-        ``float`` / ``int``, or if ``start``, ``stop``, or ``origin`` are not
-        scalar-convertible at update time.
+        If :func:`u.math.asarray` detects unit inconsistency across entries,
+        or if unitful/unitless arithmetic is invalid during time-window
+        comparisons.
     KeyError
         At update time, if required simulation context entries (e.g. ``'t'``
         or ``dt``) are absent from ``brainstate.environ``.
@@ -307,41 +302,46 @@ class spike_train_injector(NESTDevice):
         self.allow_offgrid_times = allow_offgrid_times
         self.shift_now_spikes = shift_now_spikes
 
-        # ---- Convert spike times to ms (float) ----
-        self._spike_times_ms = []
-        for t in spike_times:
-            if u.is_unitless(t):
-                self._spike_times_ms.append(float(t))
-            else:
-                self._spike_times_ms.append(float(t / u.ms))
+        # ---- Store spike times as a Quantity array ----
+        # u.math.asarray validates unit consistency across all entries.
+        if len(spike_times) > 0:
+            self.spike_times = u.math.asarray(spike_times)
 
-        # ---- Validate non-descending order ----
-        for i in range(1, len(self._spike_times_ms)):
-            if self._spike_times_ms[i] < self._spike_times_ms[i - 1]:
-                raise ValueError(
-                    "spike_times must be sorted in non-descending order. "
-                    f"Got {self._spike_times_ms[i - 1]} > {self._spike_times_ms[i]} at index {i}."
-                )
+            # Validate non-descending order.
+            for i in range(1, len(self.spike_times)):
+                if self.spike_times[i] < self.spike_times[i - 1]:
+                    raise ValueError(
+                        "spike_times must be sorted in non-descending order. "
+                        f"Got {self.spike_times[i - 1]} > {self.spike_times[i]} at index {i}."
+                    )
+        else:
+            self.spike_times = None
 
-        # ---- Validate and store spike multiplicities ----
+        # ---- Validate and store spike multiplicities as a JAX array ----
         if len(spike_multiplicities) > 0 and len(spike_multiplicities) != len(spike_times):
             raise ValueError(
                 "spike_multiplicities must have the same number of elements "
                 "as spike_times or 0 elements to clear the property. "
                 f"Got {len(spike_multiplicities)} and {len(spike_times)}."
             )
-        self._spike_multiplicities = [int(m) for m in spike_multiplicities]
+        if len(spike_multiplicities) > 0:
+            self.spike_multiplicities = u.math.asarray([int(m) for m in spike_multiplicities], dtype=float)
+        else:
+            self.spike_multiplicities = None
 
         # ---- Device window parameters ----
         self.start = braintools.init.param(start, self.varshape)
-        if stop is not None:
-            self.stop = braintools.init.param(stop, self.varshape)
-        else:
-            self.stop = None
+        self.stop = None if stop is None else braintools.init.param(stop, self.varshape)
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
         r"""Compute the accumulated spike output for the current simulation step.
+
+        The implementation is fully compatible with ``jax.jit``: spike-time
+        matching uses :func:`u.math.searchsorted` on the static
+        ``spike_times`` array while ``t`` and ``dt`` remain traced values
+        throughout. The multiplicity sum uses a Boolean mask with no Python
+        branching over traced values.
 
         Returns
         -------
@@ -361,21 +361,21 @@ class spike_train_injector(NESTDevice):
         KeyError
             If required simulation context entries are missing from
             ``brainstate.environ`` (e.g. ``'t'`` or ``dt``).
-        TypeError
-            If ``t``, ``dt``, ``start``, ``stop``, or ``origin`` cannot be
-            converted to scalar ms values due to incompatible shapes or units.
-        ValueError
-            If downstream unit conversion raises an invalid-value error.
 
         Notes
         -----
-        Matching uses strict inequality ``abs(t_ms - spike_t) < dt_ms / 2``,
-        so a spike exactly at half-step distance from ``t`` is *not* emitted
-        at that step.
+        Matching uses the open interval :math:`(t - \Delta t/2,\, t +
+        \Delta t/2)` located via two :func:`u.math.searchsorted` calls:
 
-        The activity-window check short-circuits to a zero array before the
-        spike scan, so steps outside ``[origin + start, origin + stop)``
-        incur only the scalar comparisons, not the :math:`O(K)` scan.
+        - ``idx_lo = searchsorted(times, t - dt/2, side='right')`` — first
+          index strictly greater than the lower bound.
+        - ``idx_hi = searchsorted(times, t + dt/2, side='left')`` — first
+          index at or above the upper bound.
+
+        A Boolean mask ``indices in [idx_lo, idx_hi)`` selects all matching
+        entries; their multiplicities (or 1s if none configured) are summed
+        to obtain the scalar count :math:`a(t)`. Start is inclusive and stop
+        is exclusive, matching NEST semantics.
 
         Unlike :meth:`spike_generator.update`, which keeps only the last
         matching weight, this method *accumulates* all matching multiplicities.
@@ -388,51 +388,39 @@ class spike_train_injector(NESTDevice):
         spike_generator.update : Weight-selection (last-match) update rule.
         dc_generator.update : Windowed constant-current update rule.
         step_current_generator.update : Windowed piecewise-constant update rule.
-"""
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
 
-        # ---- Get t and dt in ms ----
-        if u.is_unitless(t):
-            t_ms = float(t)
-        else:
-            t_ms = float(t / u.ms)
+        zeros = u.math.zeros(self.varshape)
 
-        if u.is_unitless(dt):
-            dt_ms = float(dt)
-        else:
-            dt_ms = float(dt / u.ms)
+        if self.spike_times is None:
+            return zeros
 
-        # ---- Check if device is active ----
-        if u.is_unitless(self.start):
-            t_start_ms = float(self.origin + self.start)
-        else:
-            t_start_ms = float((self.origin + self.start) / u.ms)
+        # Locate the open interval (t - dt/2, t + dt/2) via two searchsorted calls.
+        # idx_lo: first index where spike_times > t - dt/2  (side='right')
+        # idx_hi: first index where spike_times >= t + dt/2 (side='left')
+        # Matching range is [idx_lo, idx_hi).
+        idx_lo = u.math.searchsorted(self.spike_times, t - dt / 2, side='right')
+        idx_hi = u.math.searchsorted(self.spike_times, t + dt / 2, side='left')
 
+        # Build a Boolean mask over all K spike indices for the matching range.
+        K = self.spike_times.shape[0]
+        indices = u.math.arange(K)
+        in_range = u.math.logical_and(indices >= idx_lo, indices < idx_hi)
+
+        # Sum multiplicities (or 1s) over all matching indices.
+        if self.spike_multiplicities is not None:
+            spike_val = u.math.sum(u.math.where(in_range, self.spike_multiplicities, 0.0))
+        else:
+            spike_val = u.math.sum(in_range.astype(float))
+
+        # NEST-compatible half-open activity window [origin+start, origin+stop).
+        t_start = self.origin + self.start
         if self.stop is not None:
-            if u.is_unitless(self.stop):
-                t_stop_ms = float(self.origin + self.stop)
-            else:
-                t_stop_ms = float((self.origin + self.stop) / u.ms)
-            active = t_ms >= t_start_ms and t_ms < t_stop_ms
+            t_stop = self.origin + self.stop
+            active = u.math.logical_and(t >= t_start, t < t_stop)
         else:
-            active = t_ms >= t_start_ms
+            active = t >= t_start
 
-        if not active:
-            return jnp.zeros(self.varshape)
-
-        # ---- Check for spikes at current time ----
-        # A spike at time t_s fires at the simulation step where
-        # |t - t_s| < dt/2 (grid-aligned). Multiplicities are accumulated
-        # when multiple spike times map to the same step.
-        tol = dt_ms / 2.0
-        spike_val = 0.0
-        for i in range(len(self._spike_times_ms)):
-            spike_t = self._spike_times_ms[i]
-            if abs(t_ms - spike_t) < tol:
-                if self._spike_multiplicities:
-                    spike_val += self._spike_multiplicities[i]
-                else:
-                    spike_val += 1.0
-
-        return spike_val * jnp.ones(self.varshape)
+        return u.math.where(active, spike_val * u.math.ones(self.varshape), zeros)

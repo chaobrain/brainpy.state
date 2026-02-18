@@ -20,7 +20,6 @@ import math
 
 import brainstate
 import brainunit as u
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -292,14 +291,14 @@ class spike_dilutor(NESTDevice):
         if isinstance(value, u.Quantity):
             arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))
@@ -331,7 +330,7 @@ class spike_dilutor(NESTDevice):
 
     @staticmethod
     def _to_nonnegative_count(value: ArrayLike) -> int:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
         total = float(arr.sum())
         if total < 0.0:
             raise ValueError('mother_spikes must be non-negative.')

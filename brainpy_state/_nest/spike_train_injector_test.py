@@ -208,8 +208,8 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
         self.assertFalse(inj.precise_times)
         self.assertFalse(inj.allow_offgrid_times)
         self.assertFalse(inj.shift_now_spikes)
-        self.assertEqual(len(inj._spike_times_ms), 0)
-        self.assertEqual(len(inj._spike_multiplicities), 0)
+        self.assertIsNone(inj.spike_times)
+        self.assertIsNone(inj.spike_multiplicities)
 
 
 class TestSpikeTrainInjectorValidation(unittest.TestCase):
@@ -252,7 +252,7 @@ class TestSpikeTrainInjectorValidation(unittest.TestCase):
             spike_times=[1. * u.ms, 2. * u.ms],
             spike_multiplicities=[],
         )
-        self.assertEqual(len(inj._spike_multiplicities), 0)
+        self.assertIsNone(inj.spike_multiplicities)
 
 
 class TestSpikeTrainInjectorSimulation(unittest.TestCase):

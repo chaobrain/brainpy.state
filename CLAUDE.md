@@ -501,17 +501,3 @@ idx = u.math.searchsorted(times_dimless, t_dimless, side='right') - 1
 safe_idx = u.math.clip(idx, 0, self.amplitude_values.shape[0] - 1)
 amplitude = u.math.where(idx >= 0, self.amplitude_values[safe_idx], zeros)
 ```
-
----
-
-### Cross-Ecosystem Coordination
-
-Some functionality gaps are better addressed in sibling packages:
-
-| Gap | Recommended Package | Notes |
-|-----|--------------------|----|
-| e-prop online learning | **braintrace** | Already implements eligibility trace learning |
-| Multi-compartment neurons | **braincell** | Morphological neuron simulation |
-| Event-driven sparse operators | **brainevent** | GPU-accelerated spike event processing |
-| Whole-brain mean-field | **brainmass** | Neural mass models |
-| Recording/analysis tools | **braintools** | Checkpointing, analysis utilities |
