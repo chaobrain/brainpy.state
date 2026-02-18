@@ -22,6 +22,11 @@ Organization
 
       Abstract base classes: Dynamics, Neuron, Synapse
 
+   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
+      :link: nest-base.html
+
+      NEST marker bases: NESTNeuron, NESTSynapse, NESTPlasticity, NESTDevice
+
 
 **BrainPy-style Models**
 
@@ -72,10 +77,15 @@ Organization
 
       IAF, AdEx, GIF, GLIF, HH, Izhikevich, rate, and binary neurons
 
-   .. grid-item-card:: :material-regular:`sync_alt;2em` NEST Synapses & Plasticity
+   .. grid-item-card:: :material-regular:`sync_alt;2em` NEST Synapses
       :link: nest-synapses.html
 
-      Static, STP, STDP, voltage-based, and specialized synapse models
+      Static synapses, gap junctions, and special connections
+
+   .. grid-item-card:: :material-regular:`auto_awesome;2em` NEST Plasticity
+      :link: nest-plasticity.html
+
+      STP, STDP, and voltage-based learning rules
 
    .. grid-item-card:: :material-regular:`developer_board;2em` NEST Devices
       :link: nest-devices.html
@@ -91,6 +101,7 @@ Organization
    :caption: Base Models
 
    base
+   nest-base
 
 .. toctree::
    :hidden:
@@ -112,4 +123,5 @@ Organization
 
    nest-neurons
    nest-synapses
+   nest-plasticity
    nest-devices

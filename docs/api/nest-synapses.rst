@@ -1,7 +1,9 @@
-NEST-Compatible Synapse & Plasticity Models
-============================================
+NEST-Compatible Synapse Models
+==============================
 
-Synapse and plasticity models compatible with the `NEST simulator <https://nest-simulator.readthedocs.io/>`_.
+Static and structural synapse models compatible with the
+`NEST simulator <https://nest-simulator.readthedocs.io/>`_.
+For activity-dependent plasticity models see :doc:`nest-plasticity`.
 
 .. currentmodule:: brainpy.state
 
@@ -18,54 +20,6 @@ Static Synapses
     static_synapse_hom_w
     bernoulli_synapse
     cont_delay_synapse
-
-
-Short-Term Plasticity (STP)
-----------------------------
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-    :template: classtemplate.rst
-
-    tsodyks_synapse
-    tsodyks_synapse_hom
-    tsodyks2_synapse
-    quantal_stp_synapse
-
-
-Spike-Timing Dependent Plasticity (STDP)
------------------------------------------
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-    :template: classtemplate.rst
-
-    stdp_synapse
-    stdp_synapse_hom
-    stdp_pl_synapse_hom
-    stdp_facetshw_synapse_hom
-    stdp_nn_pre_centered_synapse
-    stdp_nn_restr_synapse
-    stdp_nn_symm_synapse
-    stdp_triplet_synapse
-    stdp_dopamine_synapse
-
-
-Voltage-Based / Specialized Synapses
---------------------------------------
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-    :template: classtemplate.rst
-
-    clopath_synapse
-    jonke_synapse
-    urbanczik_synapse
-    vogels_sprekeler_synapse
-    ht_synapse
 
 
 Gap Junctions & Special Connections
