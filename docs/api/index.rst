@@ -22,11 +22,6 @@ Organization
 
       Abstract base classes: Dynamics, Neuron, Synapse
 
-   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
-      :link: nest-base.html
-
-      NEST marker bases: NESTNeuron, NESTSynapse, NESTPlasticity, NESTDevice
-
 
 **BrainPy-style Models**
 
@@ -71,6 +66,11 @@ Organization
 **NEST-Compatible Models**
 
 .. grid:: 1 2 2 3
+
+   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
+      :link: nest-base.html
+
+      NEST marker bases: NESTNeuron, NESTSynapse, NESTPlasticity, NESTDevice
 
    .. grid-item-card:: :material-regular:`hub;2em` NEST Neurons
       :link: nest-neurons.html

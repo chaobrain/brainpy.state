@@ -516,12 +516,8 @@ class aeif_cond_alpha(NESTNeuron):
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
         dt = brainstate.environ.get_dt()
-        self.integration_step = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
-        )
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
-        )
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape, batch_size)
+        self.I_stim = brainstate.ShortTermState.init(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
 
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
@@ -559,12 +555,8 @@ class aeif_cond_alpha(NESTNeuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
         dt = brainstate.environ.get_dt()
-        self.integration_step.value = braintools.init.param(
-            braintools.init.Constant(dt), self.varshape, batch_size
-        )
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-        )
+        self.integration_step.value = braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
+        self.I_stim.value = braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             self.refractory.value = refractory
