@@ -325,20 +325,7 @@ class spike_generator(NESTDevice):
         spike_generator : Class-level parameter definitions and model equations.
         dc_generator.update : Windowed constant-current update rule.
         step_current_generator.update : Windowed piecewise-constant update rule.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import spike_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = spike_generator(spike_times=[1.0 * u.ms, 2.0 * u.ms])
-           ...     with brainstate.environ.context(t=2.0 * u.ms):
-           ...         out = gen.update()
-           ...     _ = out.shape
-        """
+"""
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
 

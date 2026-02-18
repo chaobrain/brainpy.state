@@ -1117,27 +1117,6 @@ class glif_cond(NESTNeuron):
         - If threshold parameters cause continuous spiking (violating stability
           constraint), spike output will be 1.0 every step.
 
-        Examples
-        --------
-        **Example 1: Constant current stimulation**
-
-        .. code-block:: python
-
-            >>> with bts.environ.context(dt=0.1 * u.ms):
-            ...     for t in range(1000):
-            ...         spike = neuron.update(200.0 * u.pA)
-
-        **Example 2: Time-varying input**
-
-        .. code-block:: python
-
-            >>> import numpy as np
-            >>> t = np.arange(0, 100, 0.1)  # ms
-            >>> I_input = 100 * np.sin(2 * np.pi * 0.01 * t) * u.pA
-            >>> with bts.environ.context(dt=0.1 * u.ms):
-            ...     for I in I_input:
-            ...         spike = neuron.update(I)
-
         See Also
         --------
         get_spike : Compute surrogate spike signal for gradient computation

@@ -599,22 +599,7 @@ class spike_dilutor(NESTDevice):
         --------
         _sample_child_spikes : Low-level Binomial sampling routine.
         init_state : Initialise the RNG before calling update.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     sd = brainpy.state.spike_dilutor(in_size=3, p_copy=0.5, rng_seed=0)
-           ...     sd.init_state()
-           ...     with brainstate.environ.context(t=1.0 * u.ms):
-           ...         out = sd.update(mother_spikes=4)
-           ...     _ = out.shape   # (3,)
-           ...     _ = out.dtype   # int64
-        """
+"""
         if not hasattr(self, '_rng'):
             self.init_state()
 

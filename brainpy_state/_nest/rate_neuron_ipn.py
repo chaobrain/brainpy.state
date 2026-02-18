@@ -995,33 +995,7 @@ class rate_neuron_ipn(_lin_rate_base):
         **Failure modes**: No automatic failure handling. Negative time constants,
         decay rates, or noise parameters are caught at construction by
         ``_validate_parameters``. Invalid event formats raise ``ValueError``.
-
-        Examples
-        --------
-        Single update step with external drive:
-
-        .. code-block:: python
-
-           >>> import brainpy.state as bst
-           >>> import brainunit as u
-           >>> model = bst.rate_neuron_ipn(in_size=5, tau=10*u.ms)
-           >>> model.init_all_states()
-           >>> rate = model.update(x=0.5)
-
-        Update with instantaneous event:
-
-        .. code-block:: python
-
-           >>> event = {'rate': 1.0, 'weight': 0.1}
-           >>> rate = model.update(instant_rate_events=event)
-
-        Update with delayed event (arrives 3 steps later):
-
-        .. code-block:: python
-
-           >>> event = {'rate': 1.0, 'weight': 0.1, 'delay_steps': 3}
-           >>> rate = model.update(delayed_rate_events=event)
-        """
+"""
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
 
         state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs_template(

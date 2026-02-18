@@ -1555,49 +1555,6 @@ class ht_neuron(NESTNeuron):
         learning tasks. For fully differentiable ODE solving, consider using JAX-based
         ODE solvers (e.g., diffrax), though this requires significant refactoring.
 
-        Examples
-        --------
-        **Example 1: Single step with no input**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bps
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neuron = bps.ht_neuron(1)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spike = neuron.update(x=0.0)
-            ...     print(f"V = {neuron.V.value[0]:.2f} mV")
-            ...     print(f"Spike = {spike[0]:.2f}")
-
-        **Example 2: Step current injection**
-
-        .. code-block:: python
-
-            >>> neuron = bps.ht_neuron(1)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     for _ in range(100):
-            ...         spike = neuron.update(x=2.0)  # 2 mV/ms depolarizing current
-            ...     print(f"Final V = {neuron.V.value[0]:.2f} mV")
-
-        **Example 3: Receiving synaptic input**
-
-        .. code-block:: python
-
-            >>> pre = bps.LIF(10)
-            >>> post = bps.ht_neuron(1)
-            >>> proj = bps.AlignPostProj(
-            ...     pre=pre, post=post,
-            ...     comm=bp.event.FixedProb(0.2, weight=1.0),
-            ...     syn=bps.Expon.desc(tau=2.4 * u.ms),
-            ...     label='AMPA'  # Route to AMPA receptors
-            ... )
-            >>> # During simulation, pre spikes are delivered to post.delta_inputs['AMPA']
-            >>> # and processed by post.update()
-
         Warnings
         --------
         - **Computational cost**: The per-neuron adaptive integration is significantly

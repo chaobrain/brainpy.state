@@ -1084,51 +1084,7 @@ class hh_psc_alpha_gap(NESTNeuron):
         get_spike : Compute spike output from membrane potential.
         sum_delta_inputs : Collect all registered delta-function inputs.
         sum_current_inputs : Collect all registered current inputs.
-
-        Examples
-        --------
-        Basic usage with constant current:
-
-        .. code-block:: python
-
-           >>> import brainstate as bst
-           >>> import brainunit as u
-           >>> neuron = bs.hh_psc_alpha_gap(in_size=1)
-           >>> with bst.environ.context(dt=0.1*u.ms):
-           ...     neuron.init_all_states()
-           ...     for t in range(100):
-           ...         spk = neuron.update(x=300*u.pA)
-           ...         if spk > 0:
-           ...             print(f"Spike at step {t}")
-
-        Population with gap-junction coupling:
-
-        .. code-block:: python
-
-           >>> N = 10
-           >>> neurons = bs.hh_psc_alpha_gap(in_size=N)
-           >>> g_gap = 0.5 * u.nS
-           >>> neurons.init_all_states()
-           >>> # Coupling: each neuron coupled to next (ring topology)
-           >>> V = neurons.V.value
-           >>> I_gap = jnp.zeros(N) * u.pA
-           >>> I_gap = I_gap.at[:-1].add(g_gap * (V[1:] - V[:-1]))
-           >>> I_gap = I_gap.at[1:].add(g_gap * (V[:-1] - V[1:]))
-           >>> spikes = neurons.update(x=I_gap)
-
-        With synaptic inputs from projection:
-
-        .. code-block:: python
-
-           >>> pre = bs.LIF(in_size=100)
-           >>> post = bs.hh_psc_alpha_gap(in_size=10)
-           >>> proj = bs.DeltaProj(pre, post, weight=jnp.ones((100,10))*0.1*u.nA)
-           >>> pre.init_all_states()
-           >>> post.init_all_states()
-           >>> # Projection automatically registers delta input
-           >>> spk_pre = pre.update()
-           >>> spk_post = post.update()  # receives input from projection
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt_q / u.ms))

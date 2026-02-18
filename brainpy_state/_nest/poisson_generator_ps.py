@@ -706,44 +706,7 @@ class poisson_generator_ps(NESTDevice):
         poisson_generator_ps.set : Update parameters between runs.
         poisson_generator_ps.step_spike_times_ms : Access precise times after
             update without the overhead of the return value.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = brainpy.state.poisson_generator_ps(
-           ...         in_size=(2, 3),
-           ...         rate=1000.0 * u.Hz,
-           ...         dead_time=0.0 * u.ms,
-           ...         start=0.0 * u.ms,
-           ...         stop=50.0 * u.ms,
-           ...         rng_seed=0,
-           ...     )
-           ...     gen.init_state()
-           ...     with brainstate.environ.context(t=10.0 * u.ms):
-           ...         counts = gen.update()
-           ...     _ = counts.shape  # (2, 3)
-
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = brainpy.state.poisson_generator_ps(
-           ...         in_size=(4,),
-           ...         rate=500.0 * u.Hz,
-           ...         dead_time=1.0 * u.ms,
-           ...         rng_seed=42,
-           ...     )
-           ...     with brainstate.environ.context(t=5.0 * u.ms):
-           ...         counts, times = gen.update(return_precise_times=True)
-           ...     _ = len(times)  # 4
-        """
+"""
         if not hasattr(self, 'next_spike_time'):
             self.init_state()
 

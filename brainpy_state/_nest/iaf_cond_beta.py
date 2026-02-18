@@ -754,38 +754,6 @@ class iaf_cond_beta(NESTNeuron):
           counter may become inaccurate because it's computed in grid steps. Reset state after
           changing ``dt``.
 
-        Examples
-        --------
-        **Single Neuron Step:**
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate as bstate
-            >>>
-            >>> with bstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
-            ...     neuron = bst.iaf_cond_beta(1, V_th=-50*u.mV, V_reset=-65*u.mV)
-            ...     neuron.init_all_states()
-            ...     # Apply constant current
-            ...     spike = neuron.update(x=500 * u.pA)
-            ...     print(f"Spike: {spike}, Voltage: {neuron.V.value}")
-            Spike: [0.], Voltage: [-69.8] mV
-
-        **Synaptic Input Handling:**
-
-        .. code-block:: python
-
-            >>> with bstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron = bst.iaf_cond_beta(5)
-            ...     neuron.init_all_states()
-            ...     # Register excitatory input (10 nS per spike)
-            ...     exc_weights = u.math.array([10, 0, 10, 0, 10]) * u.nS
-            ...     neuron.add_delta_input('exc_syn', exc_weights)
-            ...     spikes = neuron.update()
-            ...     print(neuron.g_ex.value)  # Only neurons 0, 2, 4 receive input
-            [0.17 0.   0.17 0.   0.17] nS
-
         See Also
         --------
         init_state : Initialize state variables before calling ``update()``.

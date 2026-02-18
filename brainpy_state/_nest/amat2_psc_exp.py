@@ -811,31 +811,6 @@ class amat2_psc_exp(NESTNeuron):
         - Setting ``beta`` to large values can make the voltage-dependent threshold
           very sensitive to voltage fluctuations, potentially causing numerical issues.
 
-        Examples
-        --------
-        **Single time step:**
-
-        .. code-block:: python
-
-            >>> neuron = bst.amat2_psc_exp(in_size=10, beta=0.5 / u.ms)
-            >>> with bstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spikes = neuron.update(x=500.0 * u.pA)
-
-        **Simulation loop:**
-
-        .. code-block:: python
-
-            >>> import numpy as np
-            >>> neuron = bst.amat2_psc_exp(in_size=100, beta=0.5 / u.ms)
-            >>> with bstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spike_times = []
-            ...     for i in range(1000):
-            ...         I_ext = 600.0 * u.pA if i > 100 else 0.0 * u.pA
-            ...         spk = neuron.update(x=I_ext)
-            ...         spike_times.append(np.where(spk > 0.5)[0])
-
         References
         ----------
         .. [6] Rotter S and Diesmann M (1999). Exact simulation of

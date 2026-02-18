@@ -744,52 +744,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         **State side effects**: Updates ``self.rate``, ``self.noise``,
         ``self.delayed_rate``, ``self.instant_rate``, ``self._step_count``, and
         modifies delay queues ``self._delayed_ex_queue`` and ``self._delayed_in_queue``.
-
-        Examples
-        --------
-        Minimal update with default inputs:
-
-        .. code-block:: python
-
-            >>> neuron = bpst.gauss_rate_ipn(in_size=50, tau=10.0*u.ms, sigma=0.5)
-            >>> neuron.init_all_states()
-            >>> rate = neuron.update()  # One step with no input
-
-        With external drive and instantaneous events:
-
-        .. code-block:: python
-
-            >>> rate = neuron.update(
-            ...     x=2.0,  # external current
-            ...     instant_rate_events=(1.0, 1.5),  # (rate, weight)
-            ... )
-
-        With delayed events and deterministic noise:
-
-        .. code-block:: python
-
-            >>> import numpy as np
-            >>> # Schedule event 10 steps in the future
-            >>> rate = neuron.update(
-            ...     delayed_rate_events=(0.5, 2.0, 10),  # (rate, weight, delay_steps)
-            ...     noise=np.zeros(50),  # deterministic (no noise this step)
-            ... )
-
-        Multiple events with mixed delays:
-
-        .. code-block:: python
-
-            >>> rate = neuron.update(
-            ...     instant_rate_events=[
-            ...         (1.0, 1.0),    # immediate excitatory
-            ...         (0.5, -0.5),   # immediate inhibitory
-            ...     ],
-            ...     delayed_rate_events=[
-            ...         (0.8, 2.0, 5),  # delayed 5 steps
-            ...         (1.2, 1.0, 0),  # zero delay (applied now)
-            ...     ],
-            ... )
-        """
+"""
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 

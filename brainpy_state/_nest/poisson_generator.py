@@ -548,27 +548,7 @@ class poisson_generator(NESTDevice):
         --------
         poisson_generator.init_state : RNG initialization called lazily here.
         poisson_generator.set : Update parameters between runs.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainpy
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = brainpy.state.poisson_generator(
-           ...         in_size=(2, 3),
-           ...         rate=1000.0 * u.Hz,
-           ...         start=0.0 * u.ms,
-           ...         stop=50.0 * u.ms,
-           ...         rng_seed=0,
-           ...     )
-           ...     gen.init_state()
-           ...     with brainstate.environ.context(t=10.0 * u.ms):
-           ...         spikes = gen.update()
-           ...     _ = spikes.shape  # (2, 3)
-        """
+"""
         if not hasattr(self, 'rng_key'):
             self.init_state()
 

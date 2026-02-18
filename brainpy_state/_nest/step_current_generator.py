@@ -18,12 +18,12 @@
 from typing import Sequence
 
 import brainstate
-
-from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
+
+from brainpy_state._nest._base import NESTDevice
 
 __all__ = [
     'step_current_generator',
@@ -247,26 +247,15 @@ class step_current_generator(NESTDevice):
 
         # Store amplitude schedule as plain Python lists for easy indexing
         # Convert to float ms and float pA for internal use
-        self._amp_times_ms = []
-        for t in amplitude_times:
-            if u.is_unitless(t):
-                self._amp_times_ms.append(float(t))
-            else:
-                self._amp_times_ms.append(float(t / u.ms))
-
-        self._amp_values_pA = []
-        for a in amplitude_values:
-            if u.is_unitless(a):
-                self._amp_values_pA.append(float(a))
-            else:
-                self._amp_values_pA.append(float(a / u.pA))
+        self.amplitude_times = amplitude_times
+        self.amplitude_values = amplitude_values
 
         # Validate strictly increasing times
-        for i in range(1, len(self._amp_times_ms)):
-            if self._amp_times_ms[i] <= self._amp_times_ms[i - 1]:
+        for i in range(1, len(self.amplitude_times)):
+            if self.amplitude_times[i] <= self.amplitude_times[i - 1]:
                 raise ValueError(
                     "amplitude_times must be strictly increasing. "
-                    f"Got {self._amp_times_ms[i - 1]} >= {self._amp_times_ms[i]} at index {i}."
+                    f"Got {self.amplitude_times[i - 1]} >= {self.amplitude_times[i]} at index {i}."
                 )
 
         self.start = braintools.init.param(start, self.varshape)
@@ -316,25 +305,19 @@ class step_current_generator(NESTDevice):
         """
         t = brainstate.environ.get('t')
 
-        # Get t in ms
-        if u.is_unitless(t):
-            t_ms = float(t)
-        else:
-            t_ms = float(t / u.ms)
-
         # Find the current amplitude based on time
         # NEST applies amplitude one step ahead: at step where
         # curr_time + 1 == amp_time, so by the time we reach amp_time,
         # the amplitude is already set. This means: at time t, the amplitude
         # is the value for the largest amp_time <= t.
-        amp_pA = 0.0
-        for i in range(len(self._amp_times_ms)):
-            if t_ms >= self._amp_times_ms[i]:
-                amp_pA = self._amp_values_pA[i]
+        amp_pA = 0.0 * u.pA
+        for i in range(len(self.amplitude_times)):
+            if t >= self.amplitude_times[i]:
+                amp_pA = self.amplitude_times[i]
             else:
                 break
 
-        amplitude = amp_pA * u.pA * jnp.ones(self.varshape)
+        amplitude = amp_pA * jnp.ones(self.varshape)
 
         # Check if device is active
         t_start = self.origin + self.start

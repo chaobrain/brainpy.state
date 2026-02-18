@@ -412,35 +412,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
           cannot be sampled and update times will not advance correctly.
         - **Non-differentiability**: Output is wrapped in ``stop_gradient`` to prevent
           autodiff from propagating gradients through the discontinuous threshold operation.
-
-        Examples
-        --------
-        **Update with external current input:**
-
-        .. code-block:: python
-
-           >>> neuron = bst.mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
-           >>> neuron.init_state()
-           >>> with brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
-           ...     y1 = neuron.update(x=0.3 * u.mV)  # Below threshold
-           ...     y2 = neuron.update(x=0.6 * u.mV)  # Above threshold
-           >>> print(y1, y2)
-           [0.] [1.]
-
-        **Accumulating delta inputs:**
-
-        .. code-block:: python
-
-           >>> neuron = bst.mcculloch_pitts_neuron(1, theta=1.0 * u.mV)
-           >>> neuron.init_state()
-           >>> neuron.add_delta_input('spike', 0.5 * u.mV)
-           >>> with brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
-           ...     y1 = neuron.update(x=0.3 * u.mV)  # Total: 0.5 + 0.3 = 0.8 < 1.0
-           ...     neuron.add_delta_input('spike2', 0.4 * u.mV)
-           ...     y2 = neuron.update(x=0.0 * u.mV)  # Total: 0.8 + 0.4 = 1.2 > 1.0
-           >>> print(y1, y2)
-           [0.] [1.]
-        """
+"""
         # Accumulate delta inputs into h (analogous to binary spike events
         # modifying h via the spikes_ ring buffer in NEST)
         delta_h = self.sum_delta_inputs(u.math.zeros_like(self.h.value))

@@ -856,36 +856,6 @@ class aeif_psc_exp(NESTNeuron):
         state. For large populations, this is slower than vectorized Euler integration
         but provides higher accuracy and NEST-compatible semantics.
 
-        Examples
-        --------
-        Basic update with constant current:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neurons = bp.aeif_psc_exp(100, I_e=200 * u.pA)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neurons.init_all_states()
-            ...     spike = neurons.update(x=50 * u.pA)  # External current
-            ...     print(spike.sum())  # Number of spikes this step
-
-        With synaptic delta inputs:
-
-        .. code-block:: python
-
-            >>> neurons = bp.aeif_psc_exp(100)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neurons.init_all_states()
-            ...
-            ...     # Register synaptic input
-            ...     neurons.add_delta_input('exc', lambda: 100 * u.pA)
-            ...
-            ...     # Update step
-            ...     spike = neurons.update()
-
         See Also
         --------
         init_state : Initialize state variables

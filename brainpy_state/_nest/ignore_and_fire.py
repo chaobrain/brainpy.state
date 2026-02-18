@@ -426,24 +426,7 @@ class ignore_and_fire(NESTNeuron):
 
         The spike output is suitable for direct use as delta-synapse input
         (units of spikes/step) or as a binary event indicator for recording.
-
-        Examples
-        --------
-        Typical usage in a simulation loop:
-
-        .. code-block:: python
-
-            >>> import brainstate
-            >>> import brainpy
-            >>> import brainunit as u
-            >>> neuron = brainpy.state.ignore_and_fire(1, rate=100.0 * u.Hz, phase=1.0)
-            >>> neuron.init_state()
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     for _ in range(20):
-            ...         spike = neuron.update()
-            ...         if spike.item() > 0.5:
-            ...             print("Spike emitted")
-        """
+"""
         phase_steps = self.phase_steps.value
         firing_period_steps = self.firing_period_steps.value
 

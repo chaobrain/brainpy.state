@@ -312,23 +312,7 @@ class step_rate_generator(NESTDevice):
         step_rate_generator : Class-level parameter definitions and model equations.
         step_current_generator.update : Windowed piecewise-constant current update rule.
         dc_generator.update : Windowed constant-current update rule.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import step_rate_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = step_rate_generator(
-           ...         amplitude_times=[2.0 * u.ms, 4.0 * u.ms],
-           ...         amplitude_values=[50.0, 20.0],
-           ...     )
-           ...     with brainstate.environ.context(t=3.0 * u.ms):
-           ...         rate = gen.update()
-           ...     _ = rate.shape
-        """
+"""
         t = brainstate.environ.get('t')
 
         # Get t in ms
