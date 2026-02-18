@@ -26,14 +26,14 @@ import braintools
 import brainunit as u
 from brainstate.typing import Size
 
-from brainpy_state._base import Dynamics
+from ._base import NESTNeuron
 
 __all__ = [
     'rate_transformer_node',
 ]
 
 
-class rate_transformer_node(Dynamics):
+class rate_transformer_node(NESTNeuron):
     r"""NEST-compatible ``rate_transformer_node`` template model.
 
     A stateless rate-based processing node that aggregates weighted incoming rate signals
@@ -636,72 +636,7 @@ class rate_transformer_node(Dynamics):
           - Delayed events are stored in ``_delayed_queue`` until their scheduled timestep
           - Queue entries are automatically removed after retrieval (no memory leak)
           - Queue persists across ``update()`` calls but is cleared by ``init_state()``
-
-        Examples
-        --------
-        **Example 1: Single instant event**
-
-        .. code-block:: python
-
-            >>> import brainpy_state as bst
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> transformer = bst.rate_transformer_node(in_size=2, g=2.0)
-            >>> transformer.init_state()
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     output = transformer.update(instant_rate_events=(0.5, 1.0))
-            >>> print(output)  # doctest: +SKIP
-            [1.0, 1.0]  # g * rate * weight = 2.0 * 0.5 * 1.0
-
-        **Example 2: Multiple instant events**
-
-        .. code-block:: python
-
-            >>> import brainpy_state as bst
-            >>> transformer = bst.rate_transformer_node(in_size=1)
-            >>> transformer.init_state()
-            >>> events = [(0.3, 1.0), (0.2, 2.0), (0.1, 3.0)]
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     output = transformer.update(instant_rate_events=events)
-            >>> print(output)  # doctest: +SKIP
-            [1.0]  # 0.3*1.0 + 0.2*2.0 + 0.1*3.0 = 1.0
-
-        **Example 3: Delayed event processing**
-
-        .. code-block:: python
-
-            >>> import brainpy_state as bst
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> transformer = bst.rate_transformer_node(in_size=1)
-            >>> transformer.init_state()
-            >>> with brainstate.environ.context(dt=1.0 * u.ms):
-            ...     # Schedule event for t+3
-            ...     out_t0 = transformer.update(delayed_rate_events=(1.0, 1.0, 3))
-            ...     out_t1 = transformer.update()  # t=1, still in queue
-            ...     out_t2 = transformer.update()  # t=2, still in queue
-            ...     out_t3 = transformer.update()  # t=3, event arrives
-            >>> print(out_t0, out_t1, out_t2, out_t3)  # doctest: +SKIP
-            [0.] [0.] [0.] [1.]  # Event delivered at t+3
-
-        **Example 4: Dict event format**
-
-        .. code-block:: python
-
-            >>> import brainpy_state as bst
-            >>> transformer = bst.rate_transformer_node(in_size=1)
-            >>> transformer.init_state()
-            >>> event = {
-            ...     'rate': 0.5,
-            ...     'weight': 2.0,
-            ...     'delay_steps': 0,
-            ...     'multiplicity': 3.0
-            ... }
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     output = transformer.update(instant_rate_events=event)
-            >>> print(output)  # doctest: +SKIP
-            [3.0]  # 0.5 * 2.0 * 3.0 = 3.0
-        """
+"""
         del x  # NEST rate transformer has no intrinsic current input.
 
         state_shape = self.rate.value.shape

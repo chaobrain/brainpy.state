@@ -1196,48 +1196,6 @@ class rate_neuron_opn(_lin_rate_base):
         - **NaN propagation**: If input contains NaN, all downstream states will
           be NaN. No automatic detection or recovery.
 
-        Examples
-        --------
-        Single update step with external drive:
-
-        .. code-block:: python
-
-           >>> import brainpy.state as bst
-           >>> import brainunit as u
-           >>> model = bst.rate_neuron_opn(in_size=5, tau=10*u.ms)
-           >>> model.init_all_states()
-           >>> rate_deterministic = model.update(x=0.5)
-
-        Access noisy rate output:
-
-        .. code-block:: python
-
-           >>> rate_noisy = model.noisy_rate.value
-           >>> print(rate_noisy.shape)
-           (5,)
-
-        Update with instantaneous event:
-
-        .. code-block:: python
-
-           >>> event = {'rate': 1.0, 'weight': 0.1}
-           >>> rate = model.update(instant_rate_events=event)
-
-        Update with delayed event (arrives 3 steps later):
-
-        .. code-block:: python
-
-           >>> event = {'rate': 1.0, 'weight': 0.1, 'delay_steps': 3}
-           >>> rate = model.update(delayed_rate_events=event)
-
-        Supply external noise sample:
-
-        .. code-block:: python
-
-           >>> import numpy as np
-           >>> xi = np.random.normal(size=(5,))
-           >>> rate = model.update(x=0.2, noise=xi)
-
         See Also
         --------
         init_state : Initialize all state variables before first update.

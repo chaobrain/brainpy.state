@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'amat2_psc_exp',
 ]
 
 
-class amat2_psc_exp(Neuron):
+class amat2_psc_exp(NESTNeuron):
     r"""NEST-compatible ``amat2_psc_exp`` neuron model.
 
     Non-resetting leaky integrate-and-fire neuron with exponential postsynaptic
@@ -810,31 +810,6 @@ class amat2_psc_exp(Neuron):
           for consistency with NEST and exact integration numerics.
         - Setting ``beta`` to large values can make the voltage-dependent threshold
           very sensitive to voltage fluctuations, potentially causing numerical issues.
-
-        Examples
-        --------
-        **Single time step:**
-
-        .. code-block:: python
-
-            >>> neuron = bst.amat2_psc_exp(in_size=10, beta=0.5 / u.ms)
-            >>> with bstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spikes = neuron.update(x=500.0 * u.pA)
-
-        **Simulation loop:**
-
-        .. code-block:: python
-
-            >>> import numpy as np
-            >>> neuron = bst.amat2_psc_exp(in_size=100, beta=0.5 / u.ms)
-            >>> with bstate.environ.context(dt=0.1 * u.ms):
-            ...     neuron.init_all_states()
-            ...     spike_times = []
-            ...     for i in range(1000):
-            ...         I_ext = 600.0 * u.pA if i > 100 else 0.0 * u.pA
-            ...         spk = neuron.update(x=I_ext)
-            ...         spike_times.append(np.where(spk > 0.5)[0])
 
         References
         ----------

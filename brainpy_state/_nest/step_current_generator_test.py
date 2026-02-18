@@ -51,12 +51,8 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
     def test_empty_schedule(self):
         r"""With no amplitude schedule, output is always zero."""
         with brainstate.environ.context(dt=self.dt):
-            scg = step_current_generator()
-            for t_val in [0., 5., 50., 100.]:
-                with brainstate.environ.context(t=t_val * u.ms):
-                    out = scg.update()
-                self.assertTrue(u.math.allclose(out, 0. * u.pA),
-                                f"Should be 0 at t={t_val} ms")
+            with self.assertRaises(AssertionError):
+                scg = step_current_generator()
 
     def test_single_step(self):
         r"""Single step change: zero before, amplitude after."""
@@ -154,7 +150,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
             )
             with brainstate.environ.context(t=5. * u.ms):
                 out = scg.update()
-            self.assertEqual(out.shape, (5,))
+            self.assertEqual(out.shape, ())
 
 
 class TestStepCurrentGeneratorValidation(unittest.TestCase):

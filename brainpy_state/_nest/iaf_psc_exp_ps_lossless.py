@@ -27,7 +27,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 from .iaf_psc_exp import iaf_psc_exp
 
 __all__ = [
@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 
-class iaf_psc_exp_ps_lossless(Neuron):
+class iaf_psc_exp_ps_lossless(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_exp_ps_lossless`` with lossless spike detection.
 
     Description

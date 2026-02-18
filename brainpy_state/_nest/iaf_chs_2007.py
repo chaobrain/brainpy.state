@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_chs_2007',
 ]
 
 
-class iaf_chs_2007(Neuron):
+class iaf_chs_2007(NESTNeuron):
     r"""NEST-compatible ``iaf_chs_2007`` spike-response neuron model.
 
     Description
@@ -649,34 +649,7 @@ class iaf_chs_2007(Neuron):
         :math:`O(|\mathrm{state}|)` for noise sampling (if active). All
         operations are vectorized NumPy array operations followed by transfer
         to JAX arrays.
-
-        Examples
-        --------
-        Typical usage in a simulation loop:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate as bs
-            >>> import numpy as np
-            >>>
-            >>> # Create model with noise
-            >>> noise = np.random.randn(1000)
-            >>> model = bp.iaf_chs_2007(
-            ...     in_size=10,
-            ...     V_noise=0.1,
-            ...     noise=noise
-            ... )
-            >>>
-            >>> # Simulate
-            >>> with bs.environ.context(dt=0.1 * u.ms):
-            ...     model.init_state()
-            ...     for step in range(1000):
-            ...         spk = model.update()
-            ...         # Process spike output...
-            ...
-        """
+"""
         # NEST iaf_chs_2007 has no CurrentEvent handler; x is intentionally unused.
         del x
 

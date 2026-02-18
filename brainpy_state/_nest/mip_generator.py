@@ -20,6 +20,8 @@
 import math
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -33,7 +35,7 @@ __all__ = [
 _UNSET = object()
 
 
-class mip_generator(brainstate.nn.Dynamics):
+class mip_generator(NESTDevice):
     r"""Correlated spike trains from a Multiple Interaction Process (MIP).
 
     ``mip_generator`` reproduces NEST's ``mip_generator`` device by combining

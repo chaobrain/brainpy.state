@@ -19,6 +19,8 @@ import math
 from dataclasses import dataclass
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -81,7 +83,7 @@ class _StepCalibration:
     delivery_period_steps: int
 
 
-class volume_transmitter(brainstate.nn.Dynamics):
+class volume_transmitter(NESTDevice):
     r"""NEST-compatible ``volume_transmitter`` support device.
 
     ``volume_transmitter`` collects neuromodulatory spikes and periodically

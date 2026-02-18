@@ -24,14 +24,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'izhikevich',
 ]
 
 
-class izhikevich(Neuron):
+class izhikevich(NESTNeuron):
     r"""Izhikevich neuron model (NEST-compatible).
 
     This model is a brainpy.state re-implementation of the NEST simulator

@@ -26,14 +26,14 @@ import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Dynamics
+from ._base import NESTNeuron
 
 __all__ = [
     'astrocyte_lr_1994',
 ]
 
 
-class astrocyte_lr_1994(Dynamics):
+class astrocyte_lr_1994(NESTNeuron):
     r"""NEST-compatible astrocyte model with IP3-mediated calcium dynamics.
 
     Implements the Li & Rinzel (1994) [1]_ astrocytic calcium oscillation model with
@@ -727,37 +727,7 @@ class astrocyte_lr_1994(Dynamics):
         - **Performance**: Integration is performed per-element in a NumPy loop (not
           vectorized). For :math:`N` astrocytes, expect :math:`\mathcal{O}(N \times k)`
           cost where :math:`k` is the average substep count (typically 5–20).
-
-        Examples
-        --------
-        Simulate astrocyte response to periodic synaptic input:
-
-        .. code-block:: python
-
-           >>> import brainstate as bst
-           >>> import brainunit as u
-           >>> import numpy as np
-           >>> with bst.environ.context(dt=0.1 * u.ms):
-           ...     astro = bps.astrocyte_lr_1994(in_size=5)
-           ...     astro.init_state()
-           ...     for i in range(1000):
-           ...         # Spike every 50 steps
-           ...         w = 1.0 if i % 50 == 0 else 0.0
-           ...         sic = astro.update(spike_weights=w)
-           ...         if i % 100 == 0:
-           ...             print(f"t={i*0.1:.1f} ms, Ca={float(astro.Ca.value[0]):.4f} µM")
-
-        Apply external current injection:
-
-        .. code-block:: python
-
-           >>> with bst.environ.context(dt=0.1 * u.ms):
-           ...     astro = bps.astrocyte_lr_1994(in_size=1)
-           ...     astro.init_state()
-           ...     # Apply constant external flux for 100 ms
-           ...     for _ in range(1000):
-           ...         sic = astro.update(J_ext=0.001)  # µM/ms
-        """
+"""
         dt_q = brainstate.environ.get_dt()
         dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=np.float64))
 

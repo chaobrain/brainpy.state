@@ -1,3 +1,4 @@
+from ._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 
-class urbanczik_synapse:
+class urbanczik_synapse(NESTSynapse):
     r"""NEST-compatible ``urbanczik_synapse`` connection model.
 
     Plastic synapse implementing Urbanczik-Senn dendritic prediction error learning rule for

@@ -28,14 +28,14 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_bw_2001',
 ]
 
 
-class iaf_bw_2001(Neuron):
+class iaf_bw_2001(NESTNeuron):
     r"""NEST-compatible ``iaf_bw_2001`` neuron model.
 
     Conductance-based leaky integrate-and-fire neuron with AMPA, GABA, and
@@ -1091,39 +1091,7 @@ class iaf_bw_2001(Neuron):
           and typically stabilizes after a few milliseconds.
         - Maximum iterations: 10000 per timestep (prevents infinite loops).
         - Minimum step size: 1e-8 ms (prevents numerical instability).
-
-        Examples
-        --------
-        Simple update with external current:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neurons = bst.iaf_bw_2001(10)
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     neurons.init_all_states()
-            ...     spike = neurons.update(x=500*u.pA)  # Returns spike array
-
-        Update with spike events (receptor-routed):
-
-        .. code-block:: python
-
-            >>> # Receive AMPA spike with 1 nS weight
-            >>> ampa_event = ('AMPA', 1.0*u.nS)
-            >>> spike = neurons.update(spike_events=[ampa_event])
-            >>>
-            >>> # Receive NMDA spike with offset from another iaf_bw_2001 neuron
-            >>> nmda_event = {
-            ...     'receptor_type': 'NMDA',
-            ...     'weight': 0.5*u.nS,
-            ...     'offset': neurons.spike_offset.value[0],  # From presynaptic neuron
-            ...     'sender_model': 'iaf_bw_2001'
-            ... }
-            >>> spike = neurons.update(spike_events=[nmda_event])
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

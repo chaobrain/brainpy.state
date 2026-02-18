@@ -16,6 +16,8 @@
 # -*- coding: utf-8 -*-
 
 import brainstate
+
+from ._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -26,7 +28,7 @@ __all__ = [
 ]
 
 
-class ac_generator(brainstate.nn.Dynamics):
+class ac_generator(NESTDevice):
     r"""AC current generator -- NEST-compatible stimulation device.
 
     Generate a sinusoidal current with a constant DC offset and gate the output
@@ -301,27 +303,6 @@ class ac_generator(brainstate.nn.Dynamics):
         --------
         ac_generator : Class-level parameter definitions and model equations.
         dc_generator.update : Windowed constant-current update rule.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import ac_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = ac_generator(
-           ...         in_size=3,
-           ...         amplitude=200.0 * u.pA,
-           ...         offset=20.0 * u.pA,
-           ...         frequency=250.0 * u.Hz,
-           ...         phase=90.0,
-           ...         start=1.0 * u.ms,
-           ...         stop=3.0 * u.ms,
-           ...     )
-           ...     with brainstate.environ.context(t=1.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
         """
         t = brainstate.environ.get('t')
 

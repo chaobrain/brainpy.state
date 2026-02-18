@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_delta',
 ]
 
 
-class aeif_psc_delta(Neuron):
+class aeif_psc_delta(NESTNeuron):
     r"""NEST-compatible ``aeif_psc_delta`` neuron model.
 
     Current-based adaptive exponential integrate-and-fire neuron with

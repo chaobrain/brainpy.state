@@ -24,14 +24,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_psc_delta',
 ]
 
 
-class iaf_psc_delta(Neuron):
+class iaf_psc_delta(NESTNeuron):
     r"""NEST-compatible ``iaf_psc_delta`` neuron model.
 
     Description

@@ -1,3 +1,4 @@
+from ._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +30,7 @@ __all__ = [
 ]
 
 
-class clopath_synapse:
+class clopath_synapse(NESTSynapse):
     r"""NEST-compatible voltage-based STDP synapse following the Clopath plasticity rule.
 
     This synapse model implements the voltage-based spike-timing-dependent plasticity (STDP)

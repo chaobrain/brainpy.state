@@ -1,3 +1,4 @@
+from ._base import NESTSynapse
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-class gap_junction:
+class gap_junction(NESTSynapse):
     r"""NEST-compatible ``gap_junction`` connection model for electrical synaptic coupling.
 
     This class implements electrical gap junction connections that transmit

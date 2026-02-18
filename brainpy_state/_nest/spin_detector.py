@@ -19,6 +19,8 @@ import math
 from dataclasses import dataclass
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -35,7 +37,7 @@ class _StepCalibration:
     t_max_steps: float
 
 
-class spin_detector(brainstate.nn.Dynamics):
+class spin_detector(NESTDevice):
     r"""NEST-compatible detector for binary state decoding from spikes.
 
     ``spin_detector`` decodes binary activity (``state`` :math:`\in \{0, 1\}`)

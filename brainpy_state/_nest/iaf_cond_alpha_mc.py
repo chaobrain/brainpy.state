@@ -26,14 +26,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_cond_alpha_mc',
 ]
 
 
-class iaf_cond_alpha_mc(Neuron):
+class iaf_cond_alpha_mc(NESTNeuron):
     r"""NEST-compatible ``iaf_cond_alpha_mc`` neuron model.
 
     Short Description
@@ -1061,48 +1061,7 @@ class iaf_cond_alpha_mc(Neuron):
 
         - Raises ``ValueError`` if spike weights are negative (NEST constraint).
         - May fail to converge if integration step size becomes too small (>10000 iterations).
-
-        Examples
-        --------
-        Simple current injection to soma:
-
-        .. code-block:: python
-
-            >>> spike = neuron.update(x=100.0 * u.pA)
-
-        Multi-compartment current injection:
-
-        .. code-block:: python
-
-            >>> currents = {
-            ...     'soma': 50.0 * u.pA,
-            ...     'proximal': 30.0 * u.pA,
-            ...     'distal': 20.0 * u.pA
-            ... }
-            >>> spike = neuron.update(x=currents)
-
-        Spike input to proximal dendrite:
-
-        .. code-block:: python
-
-            >>> spike_events = [('proximal_exc', 2.5 * u.nS)]
-            >>> spike = neuron.update(spike_events=spike_events)
-
-        Combined spike and current inputs:
-
-        .. code-block:: python
-
-            >>> spike_events = [
-            ...     ('soma_exc', 3.0 * u.nS),
-            ...     ('distal_inh', 1.5 * u.nS)
-            ... ]
-            >>> current_events = [('soma_curr', 75.0 * u.pA)]
-            >>> spike = neuron.update(
-            ...     x=50.0 * u.pA,
-            ...     spike_events=spike_events,
-            ...     current_events=current_events
-            ... )
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

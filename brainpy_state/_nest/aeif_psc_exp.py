@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_psc_exp',
 ]
 
 
-class aeif_psc_exp(Neuron):
+class aeif_psc_exp(NESTNeuron):
     r"""NEST-compatible adaptive exponential integrate-and-fire neuron with exponential synapses.
 
     Current-based adaptive exponential integrate-and-fire neuron with exponentially
@@ -855,36 +855,6 @@ class aeif_psc_exp(Neuron):
         necessary because each neuron has independent adaptive step size and refractory
         state. For large populations, this is slower than vectorized Euler integration
         but provides higher accuracy and NEST-compatible semantics.
-
-        Examples
-        --------
-        Basic update with constant current:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bp
-            >>> import brainunit as u
-            >>> import brainstate
-            >>>
-            >>> neurons = bp.aeif_psc_exp(100, I_e=200 * u.pA)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neurons.init_all_states()
-            ...     spike = neurons.update(x=50 * u.pA)  # External current
-            ...     print(spike.sum())  # Number of spikes this step
-
-        With synaptic delta inputs:
-
-        .. code-block:: python
-
-            >>> neurons = bp.aeif_psc_exp(100)
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     neurons.init_all_states()
-            ...
-            ...     # Register synaptic input
-            ...     neurons.add_delta_input('exc', lambda: 100 * u.pA)
-            ...
-            ...     # Update step
-            ...     spike = neurons.update()
 
         See Also
         --------

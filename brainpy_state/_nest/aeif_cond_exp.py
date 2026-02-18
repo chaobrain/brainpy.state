@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'aeif_cond_exp',
 ]
 
 
-class aeif_cond_exp(Neuron):
+class aeif_cond_exp(NESTNeuron):
     r"""NEST-compatible ``aeif_cond_exp`` neuron model.
 
     Conductance-based adaptive exponential integrate-and-fire neuron with
@@ -717,31 +717,7 @@ class aeif_cond_exp(Neuron):
         - Per-neuron scalar integration (no vectorization across neurons)
         - Cost scales with ``1/gsl_error_tol`` (smaller tolerance = more substeps)
         - Typical: 1-10 substeps per simulation step for standard parameters
-
-        Examples
-        --------
-        Basic usage:
-
-        .. code-block:: python
-
-            >>> import brainpy.state as bst
-            >>> import brainunit as u
-            >>> import brainstate
-            >>> neurons = bst.aeif_cond_exp(100)
-            >>> neurons.init_all_states()
-            >>> with brainstate.environ.context(dt=0.1 * u.ms):
-            ...     spikes = neurons.update(x=300 * u.pA)
-            >>> print(spikes.sum())  # Number of neurons that spiked
-
-        Access updated states:
-
-        .. code-block:: python
-
-            >>> spikes = neurons.update(x=300 * u.pA)
-            >>> print(neurons.V.value)  # Updated membrane potential
-            >>> print(neurons.w.value)  # Updated adaptation current
-            >>> print(neurons.last_spike_time.value)  # Spike times
-        """
+"""
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
         dt = float(u.math.asarray(dt_q / u.ms))

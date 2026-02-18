@@ -21,6 +21,8 @@ import math
 from typing import Sequence
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -35,7 +37,7 @@ __all__ = [
 _UNSET = object()
 
 
-class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
+class inhomogeneous_poisson_generator(NESTDevice):
     r"""Inhomogeneous Poisson spike generator with NEST-compatible scheduling.
 
     Emit Poisson-distributed spike multiplicities from a piecewise-constant

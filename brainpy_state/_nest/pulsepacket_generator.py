@@ -22,6 +22,8 @@ from collections import deque
 from typing import Sequence
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -35,7 +37,7 @@ __all__ = [
 _UNSET = object()
 
 
-class pulsepacket_generator(brainstate.nn.Dynamics):
+class pulsepacket_generator(NESTDevice):
     r"""Gaussian pulse-packet spike generator compatible with NEST.
 
     Description

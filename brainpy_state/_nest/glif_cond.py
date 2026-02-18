@@ -27,14 +27,14 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._base import Neuron
+from ._base import NESTNeuron
 
 __all__ = [
     'glif_cond',
 ]
 
 
-class glif_cond(Neuron):
+class glif_cond(NESTNeuron):
     r"""Conductance-based generalized leaky integrate-and-fire (GLIF) neuron model.
 
     Implements the five-level GLIF model hierarchy from Teeter et al. (2018) [1]_,
@@ -1116,27 +1116,6 @@ class glif_cond(Neuron):
           current state (no exception raised).
         - If threshold parameters cause continuous spiking (violating stability
           constraint), spike output will be 1.0 every step.
-
-        Examples
-        --------
-        **Example 1: Constant current stimulation**
-
-        .. code-block:: python
-
-            >>> with bts.environ.context(dt=0.1 * u.ms):
-            ...     for t in range(1000):
-            ...         spike = neuron.update(200.0 * u.pA)
-
-        **Example 2: Time-varying input**
-
-        .. code-block:: python
-
-            >>> import numpy as np
-            >>> t = np.arange(0, 100, 0.1)  # ms
-            >>> I_input = 100 * np.sin(2 * np.pi * 0.01 * t) * u.pA
-            >>> with bts.environ.context(dt=0.1 * u.ms):
-            ...     for I in I_input:
-            ...         spike = neuron.update(I)
 
         See Also
         --------

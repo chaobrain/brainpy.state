@@ -19,6 +19,8 @@ import math
 from dataclasses import dataclass
 
 import brainstate
+
+from ._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -35,7 +37,7 @@ class _StepCalibration:
     t_max_steps: float
 
 
-class weight_recorder(brainstate.nn.Dynamics):
+class weight_recorder(NESTDevice):
     r"""NEST-compatible recorder for synaptic weights.
 
     ``weight_recorder`` accumulates transmitted synaptic events in memory,

@@ -26,7 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from brainpy_state._base import Dynamics
+from ._base import NESTSynapse
 
 __all__ = [
     'static_synapse',
@@ -40,7 +40,7 @@ _PASS_THROUGH_EVENT_TYPES = {'double_data', 'data_logging'}
 _ALL_EVENT_TYPES = {_SPIKE_EVENT, *_CURRENT_EVENT_TYPES, *_PASS_THROUGH_EVENT_TYPES}
 
 
-class static_synapse(Dynamics):
+class static_synapse(NESTSynapse):
     r"""NEST-compatible static (non-plastic) synapse connection model.
 
     ``static_synapse`` implements a fixed-weight, fixed-delay synaptic connection

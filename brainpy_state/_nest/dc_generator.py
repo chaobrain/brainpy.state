@@ -16,6 +16,8 @@
 # -*- coding: utf-8 -*-
 
 import brainstate
+
+from ._base import NESTDevice
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -26,7 +28,7 @@ __all__ = [
 ]
 
 
-class dc_generator(brainstate.nn.Dynamics):
+class dc_generator(NESTDevice):
     r"""DC current generator -- NEST-compatible stimulation device.
 
     Generate a constant current pulse and gate it with a half-open activity
@@ -246,20 +248,7 @@ class dc_generator(brainstate.nn.Dynamics):
         --------
         dc_generator : Class-level parameter definitions and model equations.
         ac_generator.update : Windowed sinusoidal-current update rule.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> import brainstate
-           >>> import brainunit as u
-           >>> from brainpy.state import dc_generator
-           >>> with brainstate.environ.context(dt=0.1 * u.ms):
-           ...     gen = dc_generator(amplitude=250.0 * u.pA, start=2.0 * u.ms, stop=4.0 * u.ms)
-           ...     with brainstate.environ.context(t=3.0 * u.ms):
-           ...         current = gen.update()
-           ...     _ = current.shape
-        """
+"""
         t = brainstate.environ.get('t')
         t_start = self.origin + self.start
         if self.stop is not None:
