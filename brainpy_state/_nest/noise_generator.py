@@ -433,15 +433,8 @@ class noise_generator(NESTDevice):
         std_sq = self.std * self.std
         std_mod_sq = self.std_mod * self.std_mod
 
-        if u.is_unitless(std_sq):
-            effective_std_sq = std_sq + std_mod_sq * sin_val
-            effective_std = u.math.sqrt(u.math.maximum(effective_std_sq, 0.))
-        else:
-            effective_std_sq = std_sq + std_mod_sq * sin_val
-            # Ensure non-negative before sqrt
-            zero = u.math.zeros_like(effective_std_sq)
-            effective_std_sq = u.math.maximum(effective_std_sq, zero)
-            effective_std = u.math.sqrt(effective_std_sq)
+        effective_std_sq = std_sq + std_mod_sq * sin_val
+        effective_std = u.math.sqrt(u.math.maximum(effective_std_sq, 0. * u.get_unit(effective_std_sq)))
 
         # Draw noise: mean + N * effective_std
         noise = self.rng.randn(*self.varshape)
