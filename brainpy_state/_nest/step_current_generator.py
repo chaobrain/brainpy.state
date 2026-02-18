@@ -153,13 +153,6 @@ class step_current_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global offset added to ``start`` and ``stop``.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a current-like array with
-        shape ``self.varshape`` and current units (typically pA), equal to the
-        scheduled plateau while active and zero otherwise.
-
     Raises
     ------
     ValueError
@@ -286,7 +279,7 @@ class step_current_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Current-like quantity with shape ``self.varshape``. For each output
             channel, value equals the latest scheduled plateau whose change time
             is ``<= t``; channels outside the active window

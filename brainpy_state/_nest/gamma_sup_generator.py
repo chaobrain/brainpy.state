@@ -203,13 +203,6 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
          - -
          - Seed of the NumPy generator used for transition draws.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns a JAX array
-        of dtype ``int64`` and shape ``self.varshape`` containing per-step
-        spike multiplicities.
-
     Raises
     ------
     ValueError
@@ -429,16 +422,6 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         **kwargs
             Additional unused keyword arguments. Ignored.
 
-        Returns
-        -------
-        out : Any
-            ``None``. Side effects:
-
-            - ``self.occ`` is created as ``brainstate.ShortTermState`` with
-              shape ``(prod(self.varshape), gamma_shape)`` and dtype
-              ``int64``, initialized with NEST's equilibrium approximation.
-            - ``self._rng`` is set to ``numpy.random.Generator`` seeded by
-              ``rng_seed``.
         """
         del batch_size, kwargs
 
@@ -485,12 +468,6 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
         origin : ArrayLike or object, optional
             New scalar origin time in ms. ``_UNSET`` keeps current value.
 
-        Returns
-        -------
-        out : Any
-            ``None``. Parameters are updated in place. If ``dt`` exists in
-            ``brainstate.environ``, timing bounds and transition probability
-            cache are recomputed immediately.
 
         Raises
         ------
@@ -543,7 +520,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             ``dict`` with keys ``rate``, ``gamma_shape``, ``n_proc``,
             ``start``, ``stop``, and ``origin``. Values are ``float``/``int``
             in public units (Hz for ``rate``, ms for times).
@@ -613,7 +590,7 @@ class gamma_sup_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             JAX array with dtype ``int64`` and shape ``self.varshape``.
             Each element is the number of emitted spikes for one output train
             in the current step.

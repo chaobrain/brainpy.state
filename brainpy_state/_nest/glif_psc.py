@@ -498,12 +498,6 @@ class glif_psc(Neuron):
         Spike component of threshold (mV). Shape: (batch, \*in_size).
     _threshold_voltage : numpy.ndarray
         Voltage component of threshold (mV). Shape: (batch, \*in_size).
-    Returns
-    -------
-    spike : jax.numpy.ndarray
-        Spike output (float32) via surrogate gradient function. Shape: (batch,
-        \*in_size). Values in [0, 1] during forward pass; gradient computed via
-        surrogate function.
 
     Raises
     ------

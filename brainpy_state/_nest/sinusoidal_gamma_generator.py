@@ -280,13 +280,6 @@ class sinusoidal_gamma_generator(brainstate.nn.Dynamics):
          - —
          - Seed for JAX random key initialization and splitting.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns an ``int64``
-        JAX array with shape ``self.varshape`` containing binary spike events
-        (``0`` or ``1``) for the current simulation step.
-
     Raises
     ------
     ValueError

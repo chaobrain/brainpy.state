@@ -770,7 +770,7 @@ class iaf_tum_2000(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Surrogate spike activation, shape matching the input ``V`` (or
             ``self.V.value``). The output is typically in ``[0, 1]`` for
             sub-threshold voltages and close to 1 for supra-threshold voltages,
@@ -998,7 +998,7 @@ class iaf_tum_2000(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output returned by :meth:`get_spike`. The output is
             elementwise over the neuron state shape (and batch axis, if
             initialized). For emitted spikes, the voltage argument to

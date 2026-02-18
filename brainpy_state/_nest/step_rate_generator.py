@@ -153,13 +153,6 @@ class step_rate_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global time offset added to ``start`` and ``stop``.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a dimensionless rate
-        array with shape ``self.varshape`` and values in spikes/s: the
-        scheduled plateau while active, and zeros outside the activity window.
-
     Raises
     ------
     ValueError
@@ -286,7 +279,7 @@ class step_rate_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Dimensionless rate array with shape ``self.varshape`` and values in
             spikes/s. For each output channel, value equals the latest
             scheduled plateau whose change time is ``<= t``. Channels outside

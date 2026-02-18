@@ -378,7 +378,7 @@ class correlation_detector(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             Requested value. Histogram outputs are NumPy arrays with shapes
             ``(N_bins,)`` (float64/int64). ``n_events`` has shape ``(2,)``.
             Time scalar outputs are returned in milliseconds as Python
@@ -422,22 +422,12 @@ class correlation_detector(brainstate.nn.Dynamics):
     def connect(self):
         r"""Compatibility no-op for NEST-like device interface.
 
-        Returns
-        -------
-        out : Any
-            Always returns ``None``.
         """
         return None
 
     def flush(self):
         r"""Return current detector outputs without consuming internal state.
 
-        Returns
-        -------
-        out : Any
-            Dictionary with keys ``'histogram'``, ``'histogram_correction'``,
-            ``'count_histogram'``, and ``'n_events'``. Returned arrays are
-            snapshots (NumPy conversions) of the current internal state.
         """
         return {
             'histogram': self.histogram,
@@ -457,10 +447,6 @@ class correlation_detector(brainstate.nn.Dynamics):
         **kwargs
             Unused compatibility arguments.
 
-        Returns
-        -------
-        out : Any
-            ``None``.
         """
         del batch_size, kwargs
         self._ensure_calibrated_from_env_if_available()
@@ -507,7 +493,7 @@ class correlation_detector(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Same dictionary as :meth:`flush`, containing current
             ``histogram``, ``histogram_correction``, ``count_histogram``, and
             ``n_events`` after processing this call.

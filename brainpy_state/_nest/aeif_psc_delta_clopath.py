@@ -321,6 +321,7 @@ class aeif_psc_delta_clopath(Neuron):
     Raises
     ------
     ValueError
+
         - If ``V_reset >= V_peak``.
         - If ``Delta_T < 0``.
         - If ``V_th_max < V_th_rest`` or ``V_peak < V_th_rest``.

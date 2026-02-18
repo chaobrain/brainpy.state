@@ -277,12 +277,6 @@ class iaf_psc_delta(Neuron):
          - --
          - Optional node identifier.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -404,12 +398,6 @@ class iaf_psc_delta(Neuron):
         **kwargs : Any
             Unused compatibility arguments.
 
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates the object in-place by creating
-            ``V``, ``last_spike_time``, ``refractory_step_count``,
-            ``refractory_spike_buffer``, and optionally ``refractory``.
 
         Raises
         ------
@@ -441,7 +429,7 @@ class iaf_psc_delta(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Surrogate spike output from ``self.spk_fun`` with the same shape as
             ``V`` (or ``self.V.value`` when ``V`` is ``None``).
 
@@ -488,7 +476,7 @@ class iaf_psc_delta(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. The returned spike signal is computed from
             pre-reset post-threshold voltage ``v_post``.

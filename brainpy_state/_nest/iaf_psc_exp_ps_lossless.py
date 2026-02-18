@@ -292,12 +292,6 @@ class iaf_psc_exp_ps_lossless(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -482,17 +476,6 @@ class iaf_psc_exp_ps_lossless(Neuron):
         **kwargs : Any
             Unused compatibility arguments for subclass extension.
 
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates the object in-place by creating
-            ``V`` (HiddenState, mV), ``I_syn_ex`` (ShortTermState, pA),
-            ``I_syn_in`` (ShortTermState, pA), ``y0`` (ShortTermState, pA),
-            ``is_refractory`` (ShortTermState, bool),
-            ``last_spike_step`` (ShortTermState, int32),
-            ``last_spike_offset`` (ShortTermState, ms),
-            ``last_spike_time`` (ShortTermState, ms), and optionally
-            ``refractory`` (ShortTermState, bool) when ``ref_var=True``.
 
         Raises
         ------
@@ -545,7 +528,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Output of ``self.spk_fun`` applied to normalized threshold distance
             ``(V - V_th) / (V_th - V_reset)`` with same shape as input ``V``.
             Typically float values in ``[0, 1]`` or similar range depending on
@@ -728,7 +711,7 @@ class iaf_psc_exp_ps_lossless(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike`, shape
             ``self.V.value.shape``. Values correspond to
             ``self.spk_fun((V - V_th) / (V_th - V_reset))`` after lossless

@@ -155,13 +155,6 @@ class poisson_generator(brainstate.nn.Dynamics):
          - -
          - Seed for JAX key state used by Poisson sampling.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns a JAX array
-        of dtype ``int64`` and shape ``self.varshape`` containing per-step
-        spike multiplicities.
-
     Raises
     ------
     ValueError
@@ -333,13 +326,6 @@ class poisson_generator(brainstate.nn.Dynamics):
         **kwargs : Any
             Unused keyword arguments accepted for API compatibility.
 
-        Returns
-        -------
-        out : None
-            The method mutates internal state by creating one attribute:
-
-            - ``rng_key`` -- :class:`brainstate.ShortTermState` wrapping a
-              ``jax.random.PRNGKey`` derived from ``self.rng_seed``.
 
         Notes
         -----
@@ -401,13 +387,6 @@ class poisson_generator(brainstate.nn.Dynamics):
             ``stop``. Must be scalar-convertible and grid-representable when
             ``dt`` is available. Omit to keep the current value.
 
-        Returns
-        -------
-        out : None
-            Mutates ``self.rate``, ``self.start``, ``self.stop``, and
-            ``self.origin`` in place, then calls
-            :meth:`_refresh_timing_cache` when ``dt`` is present in the
-            environment so that :meth:`update` step bounds stay consistent.
 
         Raises
         ------

@@ -494,7 +494,7 @@ class iaf_psc_exp_htum(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike`, with shape equal to
             the neuron state shape (or batched state shape after
             :meth:`init_state`). Values correspond to threshold events detected

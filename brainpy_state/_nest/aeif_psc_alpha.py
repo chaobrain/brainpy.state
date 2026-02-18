@@ -280,12 +280,6 @@ class aeif_psc_alpha(Neuron):
     refractory : brainstate.ShortTermState, optional
         Boolean refractory indicator (only if ``ref_var=True``).
 
-    Returns
-    -------
-    spike : Array
-        Binary spike indicator array with shape ``(*in_size, *batch_size)``, dtype float.
-        Value is 1.0 where spikes occurred in the current step, 0.0 otherwise.
-
     Raises
     ------
     ValueError

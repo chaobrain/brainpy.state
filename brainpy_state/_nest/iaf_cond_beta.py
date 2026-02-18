@@ -218,13 +218,6 @@ class iaf_cond_beta(Neuron):
     ``ref_var``          ``False``          —                                        Expose boolean refractory indicator
     ==================== ================== ======================================== ================================================
 
-    Returns
-    -------
-    spike : jax.Array
-        Binary spike output for the current time step, with shape ``(*in_size, *batch_shape)``
-        and dtype ``float32``. Values are in :math:`[0, 1]` when using surrogate gradients;
-        exact values depend on ``spk_fun``.
-
     Raises
     ------
     ValueError

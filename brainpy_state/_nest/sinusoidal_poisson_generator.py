@@ -249,13 +249,6 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
          - -
          - Seed for JAX random key evolution.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns an ``int64``
-        JAX array with shape ``self.varshape`` containing per-step spike
-        multiplicities.
-
     Raises
     ------
     ValueError
@@ -474,9 +467,7 @@ class sinusoidal_poisson_generator(brainstate.nn.Dynamics):
         **kwargs
             Unused extra keyword arguments.
 
-        Returns
-        -------
-        None
+
         """
         del batch_size, kwargs
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))

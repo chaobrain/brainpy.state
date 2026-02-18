@@ -993,6 +993,7 @@ class pp_cond_exp_mc_urbanczik(Neuron):
 
         Notes
         -----
+
         Update Procedure
         ----------------
 

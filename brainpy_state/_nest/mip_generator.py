@@ -182,13 +182,6 @@ class mip_generator(brainstate.nn.Dynamics):
          - -
          - Entropy source for parent/child RNG stream initialization.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each call to :meth:`update` returns a
-        NumPy ``int64`` array of shape ``self.varshape`` containing per-step
-        spike multiplicities for each child process.
-
     Raises
     ------
     ValueError
@@ -393,12 +386,6 @@ class mip_generator(brainstate.nn.Dynamics):
             Additional keyword arguments accepted for API compatibility.
             Ignored.
 
-        Returns
-        -------
-        out : Any
-            ``None``. Side effects: ``self._rng_parent`` and
-            ``self._rng_child`` are set as independent
-            ``numpy.random.Generator`` instances derived from ``rng_seed``.
 
         Raises
         ------
@@ -448,10 +435,6 @@ class mip_generator(brainstate.nn.Dynamics):
         origin : ArrayLike or object, optional
             New scalar time origin in ms. If omitted, keep current value.
 
-        Returns
-        -------
-        out : Any
-            ``None``. Parameters are updated in place.
 
         Raises
         ------
@@ -500,7 +483,7 @@ class mip_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             ``dict`` with keys ``'rate'``, ``'p_copy'``, ``'start'``,
             ``'stop'``, and ``'origin'``. Values are Python ``float`` in
             public units: Hz for ``rate`` and ms for all time fields.
@@ -547,7 +530,7 @@ class mip_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             NumPy ``int64`` array of shape ``self.varshape``. Entries are
             per-step spike multiplicities for each child train. Returns all
             zeros when the generator is inactive, when ``rate <= 0``, or when

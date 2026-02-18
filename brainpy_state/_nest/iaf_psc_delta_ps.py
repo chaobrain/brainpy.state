@@ -277,12 +277,6 @@ class iaf_psc_delta_ps(Neuron):
          - --
          - Optional node identifier.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -468,13 +462,6 @@ class iaf_psc_delta_ps(Neuron):
         **kwargs : Any
             Unused compatibility arguments.
 
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates the object in-place by creating
-            ``V``, ``I_stim``, ``last_spike_time``, ``last_spike_step``,
-            ``last_spike_offset``, ``is_refractory``,
-            ``refractory_spike_buffer``, and optionally ``refractory``.
 
         Raises
         ------
@@ -513,7 +500,7 @@ class iaf_psc_delta_ps(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Output of ``self.spk_fun`` evaluated on normalized threshold
             distance ``(V - V_th) / (V_th - V_reset)`` with same shape as ``V``.
 
@@ -541,7 +528,7 @@ class iaf_psc_delta_ps(Neuron):
 
         Returns
         -------
-        out : Any
+        out : Sequence
             Sequence-like iterable of event records. Single dict/tuple inputs
             are wrapped into a one-element list; ``None`` returns ``[]``.
         """
@@ -572,7 +559,7 @@ class iaf_psc_delta_ps(Neuron):
 
         Returns
         -------
-        out : Any
+        out : Sequence[Tuple[float, np.ndarray]]
             List of parsed events ``[(offset_ms, weight_np), ...]`` where
             ``offset_ms`` is ``float`` and ``weight_np`` is a ``float64``
             ``numpy.ndarray`` broadcast to ``shape`` (unit: mV).
@@ -622,7 +609,7 @@ class iaf_psc_delta_ps(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. Elements corresponding to neurons that
             spiked in this step are forced slightly above threshold before

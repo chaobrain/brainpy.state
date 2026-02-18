@@ -388,7 +388,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             Requested value. Time-valued scalars are returned in milliseconds,
             ``count_covariance`` is returned as ``np.ndarray[int64]``.
 
@@ -495,7 +495,7 @@ class correlospinmatrix_detector(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Mapping ``{'count_covariance': ndarray}``, where the ndarray is
             ``int64`` with shape ``(N_channels, N_channels, N_bins)``.
 

@@ -278,13 +278,6 @@ class iaf_psc_alpha_ps(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns spike output
-        with shape ``self.V.value.shape`` from ``spk_fun`` evaluated at
-        threshold-scaled membrane state.
-
     Raises
     ------
     ValueError
@@ -500,7 +493,7 @@ class iaf_psc_alpha_ps(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. Values are surrogate spikes from
             ``self.spk_fun`` evaluated on threshold-scaled membrane potential

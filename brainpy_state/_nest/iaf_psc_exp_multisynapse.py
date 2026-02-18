@@ -275,13 +275,6 @@ class iaf_psc_exp_multisynapse(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape`` computed from membrane
-        voltage relative to ``V_th`` and ``V_reset``.
-
     Raises
     ------
     ValueError
@@ -535,22 +528,6 @@ class iaf_psc_exp_multisynapse(Neuron):
             Unused compatibility arguments; accepted for interface consistency
             with other nodes.
 
-        Returns
-        -------
-        out : None
-            Mutates the instance in-place, creating:
-
-            - ``V`` (:class:`brainstate.HiddenState`) — membrane potential.
-            - ``i_syn`` (:class:`brainstate.ShortTermState`) — per-receptor
-              synaptic currents of shape ``V.shape + (n_receptors,)``.
-            - ``i_const`` (:class:`brainstate.ShortTermState`) — buffered
-              continuous current applied on the next step.
-            - ``refractory_step_count`` (:class:`brainstate.ShortTermState`)
-              — integer refractory countdown (``jnp.int32``).
-            - ``last_spike_time`` (:class:`brainstate.ShortTermState`) —
-              spike time in ms, initialized to ``-1e7 * u.ms``.
-            - ``refractory`` (:class:`brainstate.ShortTermState`, optional)
-              — boolean refractory mask; only when ``ref_var=True``.
 
         Raises
         ------
@@ -596,7 +573,7 @@ class iaf_psc_exp_multisynapse(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Surrogate spike output from ``self.spk_fun`` with the same shape
             as ``V`` (or ``self.V.value`` when ``V is None``). Positive values
             indicate a spike; the argument to ``spk_fun`` is positive when
@@ -719,7 +696,7 @@ class iaf_psc_exp_multisynapse(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. For neurons that fire this step, the
             voltage argument to :meth:`get_spike` is nudged

@@ -220,13 +220,6 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
          - -
          - Seed for NumPy RNG used for Gaussian pulse sampling.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. Each :meth:`update` call returns a JAX array
-        with dtype ``int64`` and shape ``self.varshape`` containing spike
-        multiplicities emitted at the current simulation step.
-
     Raises
     ------
     ValueError
@@ -503,11 +496,6 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
             Additional unused keyword arguments accepted for interface
             compatibility.
 
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates internal runtime state in place by
-            creating the NumPy RNG, spike queues, and center-window indices.
 
         Raises
         ------
@@ -572,10 +560,6 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
             New scalar origin offset in ms, shape ``()`` after conversion.
             Pass ``_UNSET`` to keep the current value.
 
-        Returns
-        -------
-        out : Any
-            ``None``. Parameters and runtime caches are updated in place.
 
         Raises
         ------
@@ -642,7 +626,7 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             ``dict`` with keys ``pulse_times``, ``activity``, ``sdev``,
             ``start``, ``stop``, and ``origin``. Time values are returned in
             milliseconds as Python ``float`` values, and ``pulse_times`` is a
@@ -734,7 +718,7 @@ class pulsepacket_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             JAX array of dtype ``int64`` and shape ``self.varshape``.
             Each element is the number of spikes emitted by one output
             generator in the current step. Returns all zeros when inactive or

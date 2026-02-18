@@ -267,12 +267,6 @@ class aeif_cond_alpha_astro(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns a binary spike
-        tensor (dtype ``float64``) with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError

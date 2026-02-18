@@ -273,12 +273,6 @@ class iaf_psc_alpha(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns spike output
-        with shape ``self.V.value.shape`` produced by ``spk_fun``.
-
     Raises
     ------
     ValueError
@@ -422,11 +416,6 @@ class iaf_psc_alpha(Neuron):
             Unused compatibility arguments. Accepted for interface consistency
             with other nodes.
 
-        Returns
-        -------
-        out : Any
-            ``None``. This method mutates the instance in-place by creating
-            ``V``, synaptic states, refractory counters, and spike-time state.
 
         Raises
         ------
@@ -465,7 +454,7 @@ class iaf_psc_alpha(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Surrogate spike output from ``self.spk_fun`` with the same shape as
             ``V`` (or ``self.V.value`` when ``V is None``).
         """
@@ -497,7 +486,7 @@ class iaf_psc_alpha(Neuron):
 
         Returns
         -------
-        out : Any
+        out : float
             Tuple ``(P31, P32)`` of ``float64`` NumPy arrays, each broadcast to
             the input shapes. Singular fallback limits are applied when regular
             formulas become numerically unreliable near
@@ -547,7 +536,7 @@ class iaf_psc_alpha(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Spike output tensor from :meth:`get_spike`, shape
             ``self.V.value.shape``. On threshold crossings, ``v_out`` is nudged
             above threshold by ``1e-12`` mV-equivalent to preserve positive

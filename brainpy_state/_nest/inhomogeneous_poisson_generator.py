@@ -198,13 +198,6 @@ class inhomogeneous_poisson_generator(brainstate.nn.Dynamics):
          - —
          - Seed for the JAX PRNG key used in Poisson sampling.
 
-    Returns
-    -------
-    out : inhomogeneous_poisson_generator
-        Configured dynamics node. Each :meth:`update` call returns a
-        ``jax.Array`` with dtype ``int64`` and shape ``self.varshape``
-        containing per-step Poisson spike multiplicities.
-
     Raises
     ------
     ValueError

@@ -478,12 +478,6 @@ class aeif_cond_alpha(Neuron):
                     'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize persistent and short-term state variables.
 
@@ -522,7 +516,7 @@ class aeif_cond_alpha(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -565,7 +559,7 @@ class aeif_cond_alpha(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )

@@ -161,13 +161,6 @@ class spike_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global offset applied to ``start`` and ``stop``.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a float-valued JAX array
-        with shape ``self.varshape``, equal to ``0`` when inactive or when no
-        spike matches the current step.
-
     Raises
     ------
     ValueError

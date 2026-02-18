@@ -165,14 +165,6 @@ class ac_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global offset applied to both window boundaries.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a current-like quantity
-        with shape ``self.varshape`` and units inherited from ``amplitude`` and
-        ``offset``: :math:`I_0 + A\sin(\omega t + \phi)` while active and
-        zeros otherwise.
-
     Raises
     ------
     ValueError
@@ -272,7 +264,7 @@ class ac_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        current : Any
+        current : jax.Array
             Current-like quantity with shape ``self.varshape``. For channels
             where ``origin + start <= t < origin + stop`` (or
             ``t >= origin + start`` when ``stop is None``), values equal

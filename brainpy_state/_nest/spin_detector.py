@@ -192,25 +192,6 @@ class spin_detector(brainstate.nn.Dynamics):
          - :math:`\mathrm{repr}_t`
          - Output-time representation: ms float or integer ``(step, offset)`` pair.
 
-    Returns
-    -------
-    events : dict[str, np.ndarray]
-        Returned by :meth:`update`, :meth:`flush`, and the ``events``
-        property. All arrays are one-dimensional with length :math:`E`
-        equal to the total number of stored events accumulated so far:
-
-        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for
-          each recorded event, defaulting to ``1`` when not supplied.
-        - ``'state'`` — ``int64``, shape ``(E,)``: decoded binary state
-          (:math:`0` or :math:`1`) for each event.
-        - ``'times'`` — shape ``(E,)``: timestamp of each event.
-          ``float64`` in ms (:math:`s \cdot dt - \delta_j`) when
-          ``time_in_steps=False``; ``int64`` step stamp :math:`s` when
-          ``time_in_steps=True``.
-        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
-          ``time_in_steps=True``): per-event sub-step offset :math:`\delta_j`
-          in ms.
-
     Raises
     ------
     ValueError

@@ -171,13 +171,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
          - -
          - Root seed used to spawn independent per-target RNG streams.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node instance. :meth:`update` returns per-step multiplicities
-        as ``numpy.ndarray`` of dtype ``int64`` and shape ``self.varshape``,
-        and can optionally return precise spike-time event arrays per target.
-
     Raises
     ------
     ValueError
@@ -341,26 +334,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
         **kwargs : Any
             Unused keyword arguments accepted for API compatibility.
 
-        Returns
-        -------
-        out : None
-            The method mutates internal state by creating three
-            :class:`brainstate.ShortTermState` attributes and a private RNG
-            tuple:
-
-            - ``next_spike_time`` -- shape ``(num_targets,)``, dtype
-              ``float64``, initialized to ``-inf``. Stores the scheduled
-              precise emission time (ms) for each target stream.
-            - ``last_spike_time`` -- shape ``self.varshape``, dtype
-              ``float64``, initialized to ``-inf``. Records the most recently
-              emitted spike time (ms) for each output.
-            - ``last_spike_offset`` -- shape ``self.varshape``, dtype
-              ``float64``, initialized to ``0``. Records
-              ``(t + dt) - last_spike_time`` at the step where the last spike
-              was emitted.
-            - ``_rngs`` -- tuple of ``num_targets`` independent
-              ``numpy.random.Generator`` instances spawned from ``rng_seed``
-              via ``numpy.random.SeedSequence``.
 
         Notes
         -----
@@ -446,14 +419,6 @@ class poisson_generator_ps(brainstate.nn.Dynamics):
             ``stop``. Must be finite after conversion. Omit to keep the
             current value.
 
-        Returns
-        -------
-        out : None
-            Mutates ``self.rate``, ``self.dead_time``, ``self.start``,
-            ``self.stop``, and ``self.origin`` in place. If ``start`` or
-            ``origin`` move the activation window forward past already-scheduled
-            finite ``next_spike_time`` values, those states are reinitialized
-            to ``-inf`` to preserve NEST pre-run semantics.
 
         Raises
         ------

@@ -276,14 +276,6 @@ class iaf_chs_2007(Neuron):
          - --
          - Reset mode; ``'hard'`` matches NEST semantics.
 
-    Returns
-    -------
-    ArrayLike
-        Spike output tensor from :meth:`update`, with shape matching the
-        state ``V`` (``self.varshape`` plus optional batch prefix). Spikes
-        are emitted when :math:`V_m \ge U_{th} = 1` via the surrogate
-        function ``spk_fun``.
-
     Raises
     ------
     ValueError

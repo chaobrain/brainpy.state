@@ -285,12 +285,6 @@ class iaf_psc_exp(Neuron):
          - --
          - Optional instance name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError
@@ -463,13 +457,6 @@ class iaf_psc_exp(Neuron):
         **kwargs : Any
             Unused compatibility arguments.
 
-        Returns
-        -------
-        out : None
-            The method mutates the object in-place, creating:
-            ``V``, ``i_syn_ex``, ``i_syn_in``, ``i_0``, ``i_1``,
-            ``refractory_step_count``, ``last_spike_time``, and optionally
-            ``refractory`` (when ``ref_var=True``).
 
         Raises
         ------
@@ -517,7 +504,7 @@ class iaf_psc_exp(Neuron):
 
         Returns
         -------
-        out : Any
+        out : dict
             Surrogate spike output from ``self.spk_fun`` with the same shape
             as ``V`` (or ``self.V.value`` when ``V`` is ``None``).
 
@@ -573,7 +560,7 @@ class iaf_psc_exp(Neuron):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Surrogate spike output from :meth:`get_spike` with shape
             ``self.V.value.shape``. For neurons that fire this step, the
             voltage argument to :meth:`get_spike` is nudged

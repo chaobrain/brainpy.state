@@ -359,12 +359,6 @@ class iaf_chxk_2008(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns surrogate
-        spike output with shape ``self.V.value.shape``.
-
     Raises
     ------
     ValueError

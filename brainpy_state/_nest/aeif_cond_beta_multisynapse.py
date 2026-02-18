@@ -271,6 +271,7 @@ class aeif_cond_beta_multisynapse(Neuron):
     refractory : ShortTermState, optional
         Boolean refractory indicator, shape ``(*in_size,)``. Only present if
         ``ref_var=True``.
+
     Raises
     ------
     ValueError

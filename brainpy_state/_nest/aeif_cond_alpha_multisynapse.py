@@ -210,13 +210,6 @@ class aeif_cond_alpha_multisynapse(Neuron):
          - --
          - Optional node name.
 
-    Returns
-    -------
-    out : Any
-        Configured neuron node. Each :meth:`update` call returns a binary spike
-        tensor (dtype ``float64``) with shape ``self.V.value.shape``; values are
-        ``1.0`` for spiking elements and ``0.0`` otherwise.
-
     Raises
     ------
     ValueError

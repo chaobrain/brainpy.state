@@ -183,13 +183,6 @@ class noise_generator(brainstate.nn.Dynamics):
          - :math:`t_0`
          - Global time offset for both activity boundaries.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a current-like quantity
-        with shape ``self.varshape``: sampled Gaussian drive while active and
-        zeros while inactive.
-
     Raises
     ------
     ValueError
@@ -313,18 +306,6 @@ class noise_generator(brainstate.nn.Dynamics):
             Extra keyword arguments accepted for API compatibility with
             :class:`brainstate.nn.Dynamics`. They are currently unused.
 
-        Returns
-        -------
-        out : None
-            The method mutates internal state by creating three attributes:
-
-            - ``_rng_key`` -- JAX PRNG key derived from ``seed`` (or ``0`` when
-              ``seed is None``).
-            - ``current_amp`` -- :class:`brainstate.ShortTermState` holding the
-              piecewise-constant current amplitude, initialized to
-              ``0. * u.pA`` broadcast to ``self.varshape``.
-            - ``_step_counter`` -- :class:`brainstate.ShortTermState` holding a
-              scalar ``int32`` step counter, initialized to ``0``.
 
         Raises
         ------
@@ -381,7 +362,7 @@ class noise_generator(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Current-like quantity with shape ``self.varshape``. If active,
             values equal the cached piecewise-constant amplitude sampled from
             ``mean + N(0,1) * effective_std``; otherwise values are zero.

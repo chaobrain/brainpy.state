@@ -184,13 +184,6 @@ class spike_dilutor(Dynamics):
          - :math:`M`
          - Number/shape of child targets; ``M = prod(varshape)``.
 
-    Returns
-    -------
-    out : Any
-        Dynamics node. Calling :meth:`update` returns a NumPy array with dtype
-        ``int64`` and shape ``self.varshape``. Each element is the copied child
-        multiplicity for one target in the current simulation step.
-
     Raises
     ------
     ValueError

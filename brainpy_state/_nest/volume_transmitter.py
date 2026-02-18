@@ -223,14 +223,6 @@ class volume_transmitter(brainstate.nn.Dynamics):
          - :math:`T_s`
          - :math:`k \cdot \mathrm{round}(d_{\min} / \Delta t)`.
 
-    Returns
-    -------
-    out : volume_transmitter
-        Configured dynamics node instance.  Calling :meth:`update` returns a
-        ``dict`` with keys ``'triggered'`` (``bool``), ``'t_trig'`` (``float``
-        ms or ``None``), ``'delivered_spikes'`` (``tuple[spikecounter, ...]``),
-        and ``'spike_history'`` (``tuple[spikecounter, ...]``).
-
     Raises
     ------
     ValueError
@@ -535,9 +527,7 @@ class volume_transmitter(brainstate.nn.Dynamics):
         Provided so that code that calls ``connect()`` on NEST devices works
         without modification when targeting :class:`volume_transmitter`.
 
-        Returns
-        -------
-        None
+
         """
         return None
 

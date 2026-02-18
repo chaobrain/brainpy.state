@@ -191,13 +191,6 @@ class erfc_neuron(Dynamics):
          - --
          - Optional node identifier.
 
-    Returns
-    -------
-    out : Any
-        Configured binary neuron node. Each :meth:`update` call returns binary
-        output ``self.y.value`` with shape ``self.varshape`` (or
-        ``(batch_size,) + self.varshape`` if batched).
-
     Raises
     ------
     ValueError
@@ -322,13 +315,6 @@ class erfc_neuron(Dynamics):
         **kwargs : Any
             Unused compatibility arguments.
 
-        Returns
-        -------
-        out : Any
-            ``None``. The method mutates the object in-place by creating
-            ``y`` (binary output), ``h`` (persistent input), ``rng_key``
-            (random state), and optionally ``t_next`` (next update time when
-            ``stochastic_update=True``).
 
         Raises
         ------
@@ -407,7 +393,7 @@ class erfc_neuron(Dynamics):
 
         Returns
         -------
-        out : Any
+        out : float
             Activation probability with the same shape as ``h`` (unitless float64).
 
         Raises
@@ -440,7 +426,7 @@ class erfc_neuron(Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Binary output state ``self.y.value`` with shape ``self.varshape``
             (or ``(batch_size,) + self.varshape`` if batched). Values are
             float64 (0.0 or 1.0) wrapped in ``jax.lax.stop_gradient`` to

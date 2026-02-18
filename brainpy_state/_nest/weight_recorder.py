@@ -210,30 +210,6 @@ class weight_recorder(brainstate.nn.Dynamics):
          - :math:`\mathrm{repr}_t`
          - Time representation: physical ms or integer step-stamp + offset.
 
-    Returns
-    -------
-    events : dict[str, np.ndarray]
-        Returned by :meth:`update`, :meth:`flush`, and the ``events``
-        property. All arrays are one-dimensional with length :math:`E` equal
-        to the total number of stored events accumulated so far:
-
-        - ``'senders'`` — ``int64``, shape ``(E,)``: sender node ID for each
-          recorded event, defaulting to ``1`` when not supplied.
-        - ``'targets'`` — ``int64``, shape ``(E,)``: target node ID for each
-          recorded event, defaulting to ``1`` when not supplied.
-        - ``'weights'`` — ``float64``, shape ``(E,)``: synaptic weight value
-          for each recorded event.
-        - ``'receptors'`` — ``int64``, shape ``(E,)``: receptor port (rport)
-          per event, defaulting to ``0`` when not supplied.
-        - ``'ports'`` — ``int64``, shape ``(E,)``: connection port metadata
-          per event, defaulting to ``-1`` when not supplied.
-        - ``'times'`` — shape ``(E,)``: timestamp per event. ``float64`` in ms
-          (:math:`s \cdot dt - \delta_j`) when ``time_in_steps=False``;
-          ``int64`` step stamp :math:`s` when ``time_in_steps=True``.
-        - ``'offsets'`` — ``float64``, shape ``(E,)`` (only present when
-          ``time_in_steps=True``): per-event sub-step offset :math:`\delta_j`
-          in ms.
-
     Raises
     ------
     ValueError
@@ -427,7 +403,7 @@ class weight_recorder(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : dict
             Selected value:
 
             - ``'events'`` -> ``dict[str, np.ndarray]`` with event arrays,
@@ -481,10 +457,6 @@ class weight_recorder(brainstate.nn.Dynamics):
         **kwargs
             Unused extra keyword arguments for framework compatibility.
 
-        Returns
-        -------
-        out : Any
-            ``None``.
         """
         del batch_size, kwargs
         self.clear_events()
@@ -492,21 +464,12 @@ class weight_recorder(brainstate.nn.Dynamics):
     def connect(self):
         r"""Compatibility no-op for device connection phase.
 
-        Returns
-        -------
-        out : Any
-            ``None``.
         """
         return None
 
     def flush(self):
         r"""Return a snapshot of all recorded events.
 
-        Returns
-        -------
-        out : Any
-            Same object contract as :attr:`events`: a dictionary of NumPy
-            arrays whose fields are synchronized to equal length ``(E,)``.
         """
         return self.events
 
@@ -550,7 +513,7 @@ class weight_recorder(brainstate.nn.Dynamics):
 
         Returns
         -------
-        out : Any
+        out : jax.Array
             Updated events dictionary ``dict[str, np.ndarray]``. If no events
             are accepted by window/filter gates, returns current unchanged
             buffers.
