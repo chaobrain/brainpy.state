@@ -215,13 +215,13 @@ pytest --cov=brainpy_state brainpy_state/
 - Keep the API reference up to date
 - Fix typos and improve clarity
 
-For comprehensive contribution guidelines, see our [detailed documentation](https://brainpy.readthedocs.io/projects/state/).
+For comprehensive contribution guidelines, see our [detailed documentation](https://brainpy-state.readthedocs.io/).
 
 ## Community
 
 ### Getting Help
 
-- **Documentation**: https://brainpy.readthedocs.io/projects/state/
+- **Documentation**: https://brainpy-state.readthedocs.io/
 - **GitHub Discussions**: https://github.com/chaobrain/brainpy.state/discussions
 - **Issues**: https://github.com/chaobrain/brainpy.state/issues
 
