@@ -23,6 +23,7 @@ import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest._base import NESTDevice
+from brainpy_state._nest._utils import stack_schedule_values
 
 __all__ = [
     'step_rate_generator',
@@ -260,29 +261,7 @@ class step_rate_generator(NESTDevice):
                     f"Got {self.amplitude_times[i - 1]} >= {self.amplitude_times[i]} at index {i}."
                 )
 
-        # Convert each amplitude value to an array.
-        # 1. Find the maximum ndim across all values.
-        # 2. Align each value to max_ndim by prepending size-1 axes.
-        # 3. Compute the element-wise maximum size per dimension as the final
-        #    broadcast shape (each element must have size 1 or the max size in
-        #    every dimension, which is the standard broadcast contract).
-        # 4. Broadcast every element to that final shape, then stack to
-        #    (K, *final_shape) so that final_shape is broadcastable to varshape.
-        amp_vals = [u.math.asarray(v) for v in amplitude_values]
-        if amp_vals:
-            max_ndim = max(v.ndim for v in amp_vals)
-            expanded = []
-            for v in amp_vals:
-                extra = max_ndim - v.ndim
-                if extra:
-                    v = u.math.reshape(v, (1,) * extra + v.shape)
-                expanded.append(v)
-            final_shape = tuple(max(v.shape[d] for v in expanded) for d in range(max_ndim))
-            self.amplitude_values = u.math.stack(
-                [u.math.broadcast_to(v, final_shape) for v in expanded]
-            )
-        else:
-            self.amplitude_values = u.math.zeros((0,) + tuple(self.varshape))
+        self.amplitude_values = stack_schedule_values(amplitude_values, self.varshape)
 
         self.start = braintools.init.param(start, self.varshape)
         self.stop = None if stop is None else braintools.init.param(stop, self.varshape)
