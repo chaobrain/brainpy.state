@@ -17,7 +17,7 @@
 
 import brainstate
 
-from brainpy_state._nest._base import NESTDevice
+from ._base import NESTDevice
 import braintools
 import brainunit as u
 import jax

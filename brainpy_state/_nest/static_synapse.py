@@ -26,7 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest._base import NESTSynapse
+from ._base import NESTSynapse
 
 __all__ = [
     'static_synapse',

@@ -26,7 +26,7 @@ import braintools
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest._base import NESTNeuron
+from ._base import NESTNeuron
 
 __all__ = [
     'lin_rate_ipn',

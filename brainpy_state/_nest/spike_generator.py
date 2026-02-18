@@ -18,12 +18,11 @@
 from typing import Sequence
 
 import brainstate
-
-from brainpy_state._nest._base import NESTDevice
 import braintools
 import brainunit as u
-import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
+
+from brainpy_state._nest._base import NESTDevice
 
 __all__ = [
     'spike_generator',
@@ -75,29 +74,28 @@ class spike_generator(NESTDevice):
     A configured spike at :math:`t_s` is intended for the step satisfying
     :math:`t_s-\Delta t < t \le t_s` under grid-aligned simulation. The
     implementation uses :math:`|t-t_s| < \Delta t/2` for robust floating-point
-    matching.
+    matching, which is equivalent to :math:`t - \Delta t/2 < t_s < t + \Delta
+    t/2`.
 
     Enforced constraints:
 
-    - ``spike_times`` must be sorted in non-descending order after conversion
-      to float ms.
+    - ``spike_times`` must be sorted in non-descending order after conversion.
     - ``spike_weights`` must be empty or have exactly
       ``len(spike_times)`` elements.
 
-    Practical constraints from the current implementation:
+    Accepted but not additionally constrained:
 
-    - ``start``, ``stop`` (if provided), and ``origin`` are converted to scalar
-      ms inside :meth:`update`; non-scalar/broadcasted arrays are not supported
-      by this conversion path.
+    - Unitless ``spike_times`` are interpreted as ms.
     - Duplicate spike times are allowed. Without weights, duplicates remain
       binary output. With weights, the last duplicate's weight is used.
 
     **3. Computational implications**
 
-    Per :meth:`update` call, complexity is
-    :math:`O(K + \prod\mathrm{varshape})`, where :math:`K` is the number of
-    configured spike times. The linear scan preserves deterministic ordering
-    semantics for duplicate times and weight override behavior.
+    Each :meth:`update` call uses :func:`u.math.searchsorted` to locate the
+    spike-time range matching the current step, then selects the last matching
+    weight with :func:`u.math.clip` and :func:`u.math.where`. Per-call
+    complexity is :math:`O(\log K + \prod\mathrm{varshape})`, where :math:`K`
+    is the number of configured spike times.
 
     Parameters
     ----------
@@ -107,28 +105,25 @@ class spike_generator(NESTDevice):
         ``self.varshape`` derived from ``in_size``. Default is ``1``.
     spike_times : Sequence, optional
         Sequence of spike times with length ``K``. Entries may be unitful
-        times (typically ms) or unitless numerics interpreted as ms. Internally
-        converted to ``float`` milliseconds and required to be non-descending.
-        Default is ``()``.
+        times (typically ms) or unitless numerics interpreted as ms. Passed
+        directly to :func:`u.math.asarray`, which validates unit consistency
+        across all entries. Must be non-descending. Default is ``()``.
     spike_weights : Sequence, optional
         Optional sequence of per-spike amplitudes with length ``K`` matching
         ``spike_times`` exactly, or empty to use binary spikes. Entries are
-        converted to ``float`` without unit conversion. Default is ``()``.
+        passed to :func:`u.math.asarray` (dimensionless). Default is ``()``.
     start : ArrayLike, optional
         Relative activation time :math:`t_{\mathrm{start,rel}}` (typically ms),
         initialized through :func:`braintools.init.param`. Effective lower
-        bound is ``origin + start`` (inclusive). Must be scalar-convertible at
-        update time. Default is ``0. * u.ms``.
+        bound is ``origin + start`` (inclusive). Default is ``0. * u.ms``.
     stop : ArrayLike or None, optional
         Relative deactivation time :math:`t_{\mathrm{stop,rel}}` (typically
         ms), initialized through :func:`braintools.init.param` when provided.
         Effective upper bound is ``origin + stop`` (exclusive). ``None`` means
-        no upper bound. Must be scalar-convertible when not ``None``. Default
-        is ``None``.
+        no upper bound. Default is ``None``.
     origin : ArrayLike, optional
         Global time origin :math:`t_0` (typically ms) added to ``start`` and
-        ``stop``. Must be scalar-convertible at update time. Default is
-        ``0. * u.ms``.
+        ``stop``, broadcast to ``self.varshape``. Default is ``0. * u.ms``.
     name : str or None, optional
         Optional node name passed to :class:`brainstate.nn.Dynamics`.
 
@@ -170,11 +165,12 @@ class spike_generator(NESTDevice):
         ``len(spike_weights)`` is non-zero and differs from
         ``len(spike_times)``.
     TypeError
-        If a time/weight entry cannot be converted to float, or if
-        ``start``/``stop``/``origin`` are not scalar-convertible during update.
+        If :func:`u.math.asarray` detects unit inconsistency across entries,
+        or if unitful/unitless arithmetic is invalid during time-window
+        comparisons.
     KeyError
-        At update time, if simulation context lacks required time information
-        (for example ``'t'`` or ``dt``), depending on environment behavior.
+        At update time, if simulation context lacks ``'t'`` or ``dt`` in
+        ``brainstate.environ``.
 
     Notes
     -----
@@ -185,10 +181,11 @@ class spike_generator(NESTDevice):
     model that scales by connection weight.
 
     NEST's ``spike_generator`` uses multiplicity to allow multiple spikes per
-    time step; this implementation preserves that semantics by scanning all
-    ``spike_times`` and keeping the last matching weight (the last duplicate
-    effectively replaces earlier ones). If accumulation of duplicate weights is
-    needed instead, multiple ``spike_generator`` instances can be chained.
+    time step; this implementation preserves that semantics — the last matching
+    weight wins when duplicates exist. The :meth:`update` method is fully
+    compatible with ``jax.jit``: both the spike-time lookup and the
+    activity-window check use purely functional operations with no Python
+    control flow over traced values.
 
     Spike times should ideally be aligned to the simulation grid (multiples of
     ``dt``) to avoid off-by-one steps due to floating-point comparison. The
@@ -250,40 +247,43 @@ class spike_generator(NESTDevice):
     ):
         super().__init__(in_size=in_size, name=name)
 
-        # Store spike times in ms
-        self._spike_times_ms = []
-        for t in spike_times:
-            if u.is_unitless(t):
-                self._spike_times_ms.append(float(t))
-            else:
-                self._spike_times_ms.append(float(t / u.ms))
-
-        # Validate non-descending order
-        for i in range(1, len(self._spike_times_ms)):
-            if self._spike_times_ms[i] < self._spike_times_ms[i - 1]:
-                raise ValueError(
-                    "spike_times must be sorted in non-descending order. "
-                    f"Got {self._spike_times_ms[i - 1]} > {self._spike_times_ms[i]} at index {i}."
-                )
-
-        # Store spike weights
         if len(spike_weights) > 0 and len(spike_weights) != len(spike_times):
             raise ValueError(
                 "spike_weights must have the same length as spike_times "
                 f"or be empty. Got {len(spike_weights)} and {len(spike_times)}."
             )
 
-        self._spike_weights = [float(w) for w in spike_weights]
+        # Store spike_times as a Quantity array; u.math.asarray validates
+        # that all entries share a consistent unit.
+        # Shape: (K,)
+        if len(spike_times) > 0:
+            self.spike_times = u.math.asarray(spike_times)
+
+            # Validate non-descending order.
+            for i in range(1, len(self.spike_times)):
+                if self.spike_times[i] < self.spike_times[i - 1]:
+                    raise ValueError(
+                        "spike_times must be sorted in non-descending order. "
+                        f"Got {self.spike_times[i - 1]} > {self.spike_times[i]} at index {i}."
+                    )
+        else:
+            self.spike_times = None
+
+        # Store spike weights as a dimensionless array, or None for binary mode.
+        self.spike_weights = u.math.asarray(spike_weights) if len(spike_weights) > 0 else None
 
         self.start = braintools.init.param(start, self.varshape)
-        if stop is not None:
-            self.stop = braintools.init.param(stop, self.varshape)
-        else:
-            self.stop = None
+        self.stop = None if stop is None else braintools.init.param(stop, self.varshape)
         self.origin = braintools.init.param(origin, self.varshape)
 
     def update(self):
         r"""Compute spike output for the current simulation step.
+
+        The implementation is fully compatible with ``jax.jit``: spike-time
+        matching uses :func:`u.math.searchsorted` on the static
+        ``spike_times`` array while ``t`` and ``dt`` remain traced values
+        throughout. The activity-window check uses :func:`u.math.logical_and`
+        and :func:`u.math.where` with no Python branching over traced values.
 
         Returns
         -------
@@ -303,74 +303,62 @@ class spike_generator(NESTDevice):
         KeyError
             If required simulation context values are missing from
             ``brainstate.environ`` (e.g. ``'t'`` or ``dt``).
-        TypeError
-            If scalar conversion of time parameters fails due to incompatible
-            shapes, dtypes, or units.
-        ValueError
-            If downstream unit conversion raises an invalid-value error.
 
         Notes
         -----
-        The matching tolerance is ``dt/2`` in ms. When multiple entries in
-        ``spike_times`` match the same step, this implementation intentionally
-        keeps only the last matching weight/value, consistent with NEST's
-        last-event-wins multiplicity semantics.
+        Both ``spike_times`` and ``t`` are divided by ``u.ms`` to obtain
+        dimensionless arrays before calling :func:`u.math.searchsorted`.
+        The matching condition ``|t - t_s| < dt/2`` is rewritten as the open
+        interval ``(t - dt/2, t + dt/2)`` and located with two
+        ``searchsorted`` calls:
 
-        The activity-window check is applied before the spike-matching scan;
-        steps outside ``[origin + start, origin + stop)`` short-circuit to a
-        zero array without iterating over ``spike_times``.
+        - ``idx_lo = searchsorted(times, t - dt/2, side='right')`` — first
+          index strictly greater than the lower bound.
+        - ``idx_hi = searchsorted(times, t + dt/2, side='left')`` — first
+          index at or above the upper bound.
+
+        Any spike exists when ``idx_hi > idx_lo``; the last matching spike
+        index is ``idx_hi - 1``, clamped to a valid range for the gather.
+        Start is inclusive and stop is exclusive, matching NEST semantics.
 
         See Also
         --------
         spike_generator : Class-level parameter definitions and model equations.
         dc_generator.update : Windowed constant-current update rule.
         step_current_generator.update : Windowed piecewise-constant update rule.
-"""
+        """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
 
-        # Get t and dt in ms
-        if u.is_unitless(t):
-            t_ms = float(t)
-        else:
-            t_ms = float(t / u.ms)
+        zeros = u.math.zeros(self.varshape)
 
-        if u.is_unitless(dt):
-            dt_ms = float(dt)
-        else:
-            dt_ms = float(dt / u.ms)
+        if self.spike_times is None:
+            # No spike times configured: output is always zero.
+            return zeros
 
-        # Check if device is active
-        if u.is_unitless(self.start):
-            t_start_ms = float(self.origin + self.start)
-        else:
-            t_start_ms = float((self.origin + self.start) / u.ms)
+        # Locate the open interval (t - dt/2, t + dt/2) via two searchsorted calls.
+        # idx_lo: first index where spike_times > t - dt/2  (side='right')
+        # idx_hi: first index where spike_times >= t + dt/2 (side='left')
+        # Matching range is [idx_lo, idx_hi).
+        idx_lo = u.math.searchsorted(self.spike_times, t - dt / 2, side='right')
+        idx_hi = u.math.searchsorted(self.spike_times, t + dt / 2, side='left')
 
+        any_match = idx_hi > idx_lo
+
+        # Last matching spike index; clamped to [0, K-1] for safe gather.
+        last_idx = u.math.clip(idx_hi - 1, 0, self.spike_times.shape[0] - 1)
+
+        if self.spike_weights is not None:
+            spike_val = u.math.where(any_match, self.spike_weights[last_idx], 0.0)
+        else:
+            spike_val = u.math.where(any_match, 1.0, 0.0)
+
+        # NEST-compatible half-open activity window [origin+start, origin+stop).
+        t_start = self.origin + self.start
         if self.stop is not None:
-            if u.is_unitless(self.stop):
-                t_stop_ms = float(self.origin + self.stop)
-            else:
-                t_stop_ms = float((self.origin + self.stop) / u.ms)
-            active = t_ms >= t_start_ms and t_ms < t_stop_ms
+            t_stop = self.origin + self.stop
+            active = u.math.logical_and(t >= t_start, t < t_stop)
         else:
-            active = t_ms >= t_start_ms
+            active = t >= t_start
 
-        if not active:
-            return jnp.zeros(self.varshape)
-
-        # Check for spikes at current time
-        # A spike at time t_s fires at the simulation step where t == t_s
-        # (grid-aligned). We use a tolerance of dt/2 for matching.
-        tol = dt_ms / 2.0
-        spike_val = 0.0
-        for i in range(len(self._spike_times_ms)):
-            spike_t = self._spike_times_ms[i]
-            if abs(t_ms - spike_t) < tol:
-                if self._spike_weights:
-                    spike_val = self._spike_weights[i]
-                else:
-                    spike_val = 1.0
-                # Don't break -- if multiple spikes at same time, use last weight
-                # (or accumulate if needed, but NEST uses multiplicity)
-
-        return spike_val * jnp.ones(self.varshape)
+        return u.math.where(active, spike_val * u.math.ones(self.varshape), zeros)

@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import jax.scipy.special as jspecial
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest._base import NESTNeuron
+from ._base import NESTNeuron
 
 __all__ = [
     'erfc_neuron',

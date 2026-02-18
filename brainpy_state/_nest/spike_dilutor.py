@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest._base import NESTDevice
+from ._base import NESTDevice
 
 __all__ = [
     'spike_dilutor',

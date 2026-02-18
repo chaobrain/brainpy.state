@@ -27,7 +27,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest._base import NESTNeuron
+from ._base import NESTNeuron
 
 __all__ = [
     'gif_pop_psc_exp',

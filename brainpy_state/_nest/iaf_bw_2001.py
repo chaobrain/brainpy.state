@@ -28,7 +28,7 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest._base import NESTNeuron
+from ._base import NESTNeuron
 
 __all__ = [
     'iaf_bw_2001',

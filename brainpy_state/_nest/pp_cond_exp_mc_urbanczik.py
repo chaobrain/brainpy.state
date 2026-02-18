@@ -28,7 +28,7 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest._base import NESTNeuron
+from ._base import NESTNeuron
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',

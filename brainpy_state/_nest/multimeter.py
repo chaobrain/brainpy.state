@@ -21,7 +21,7 @@ from typing import Mapping, Sequence
 
 import brainstate
 
-from brainpy_state._nest._base import NESTDevice
+from ._base import NESTDevice
 import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
