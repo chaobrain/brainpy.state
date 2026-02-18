@@ -44,6 +44,7 @@ class TestSpikeTrainInjectorBasic(unittest.TestCase):
     r"""Unit tests for spike_train_injector output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_empty_spike_times(self):
@@ -342,6 +343,7 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
     r"""Compare against NEST simulator."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

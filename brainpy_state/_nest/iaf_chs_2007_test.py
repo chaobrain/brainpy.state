@@ -69,6 +69,7 @@ def _reference_step(state, params, w_step):
 
 class TestIAFChs2007(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

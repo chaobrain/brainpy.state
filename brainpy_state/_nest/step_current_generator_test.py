@@ -45,6 +45,7 @@ class TestStepCurrentGeneratorBasic(unittest.TestCase):
     r"""Unit tests for step_current_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_empty_schedule(self):
@@ -246,6 +247,7 @@ class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
     r"""Compare against NEST simulator."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

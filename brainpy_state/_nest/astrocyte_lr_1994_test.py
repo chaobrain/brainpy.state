@@ -250,6 +250,7 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
     r"""Test astrocyte dynamics against SciPy ODEINT reference solution."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1  # ms
         self.dt_q = 0.1 * u.ms
 

@@ -69,6 +69,7 @@ def _run_nest_two_rate_trace(dt_ms, simtime_ms, source_params, target_params, we
 
 class TestRateConnectionInstantaneous(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

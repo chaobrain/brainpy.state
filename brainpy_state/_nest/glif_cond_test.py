@@ -351,6 +351,7 @@ def _make_ref_state(params, V_abs=None, asc_init=(0.0, 0.0)):
 
 class TestGlifCond(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.01 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_inputs=None):

@@ -542,12 +542,6 @@ class iaf_chxk_2008(Neuron):
         if np.any(self._to_numpy(self.tau_ahp, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
@@ -572,7 +566,7 @@ class iaf_chxk_2008(Neuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         self.last_spike_offset = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64) * u.ms)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -600,7 +594,7 @@ class iaf_chxk_2008(Neuron):
         )
         self.last_spike_offset.value = np.asarray(zeros, dtype=np.float64) * u.ms
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )

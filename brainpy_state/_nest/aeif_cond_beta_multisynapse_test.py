@@ -174,6 +174,7 @@ def _parse_event_weights(events, n_receptors):
 
 class TestAEIFCondBetaMultisynapse(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

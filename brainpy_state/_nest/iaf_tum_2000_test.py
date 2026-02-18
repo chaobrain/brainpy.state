@@ -161,6 +161,7 @@ def _tsodyks_connection_spike_jump(state, p, t_spike):
 
 class TestIAFTUM2000(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * bu.ms
         self.dt_ms = 0.1
 

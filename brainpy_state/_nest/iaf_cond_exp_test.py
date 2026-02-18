@@ -102,6 +102,7 @@ def _rkf45_ref_step(v, g_ex, g_in, is_refractory, i_stim, dt, h0, p, atol=1e-3):
 
 class TestIAFCondExp(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

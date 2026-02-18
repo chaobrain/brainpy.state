@@ -164,6 +164,7 @@ def _nest_reference_step(state, p, P, w_ex=0.0, w_in=0.0, x0_new=0.0):
 
 class TestAmat2PscExp(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

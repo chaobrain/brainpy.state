@@ -754,12 +754,6 @@ class glif_psc(Neuron):
             if tau <= 0.0:
                 raise ValueError("All synaptic time constants must be strictly positive.")
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.V = brainstate.HiddenState(V)

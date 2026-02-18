@@ -44,6 +44,7 @@ class TestACGenerator(unittest.TestCase):
     r"""Unit tests for ac_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):
@@ -282,6 +283,7 @@ class TestACGeneratorVsNEST(unittest.TestCase):
     r"""Compare ac_generator against NEST. Skipped when NEST is not installed."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

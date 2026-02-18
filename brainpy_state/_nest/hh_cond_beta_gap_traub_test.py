@@ -268,6 +268,7 @@ class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
     r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -350,6 +351,7 @@ class TestHHCondBetaGapTraubSpiking(unittest.TestCase):
     r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -480,6 +482,7 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
     r"""Test synaptic conductance dynamics (beta-function / double-exponential)."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -575,6 +578,7 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
     r"""Multi-step integration tests comparing against a reference solver."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -676,6 +680,7 @@ class TestHHCondBetaGapTraubNESTReference(unittest.TestCase):
     """
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -731,6 +736,7 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
     r"""Test edge cases and special configurations."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -846,6 +852,7 @@ class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
     r"""Test beta-function synapse ODE dynamics in isolation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):

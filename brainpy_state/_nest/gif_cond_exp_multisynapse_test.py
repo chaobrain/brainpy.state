@@ -326,6 +326,7 @@ class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -494,6 +495,7 @@ class TestGIFCondExpMultisynRefractoryBehavior(unittest.TestCase):
     r"""Test refractory period mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -580,6 +582,7 @@ class TestGIFCondExpMultisynAdaptation(unittest.TestCase):
     r"""Test stc and sfa adaptation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -681,6 +684,7 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
     r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
@@ -758,6 +762,7 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
     r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_val = 0.1
         self.dt = self.dt_val * u.ms
 
@@ -990,6 +995,7 @@ class TestGIFCondExpMultisynUpdateOrder(unittest.TestCase):
     r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):

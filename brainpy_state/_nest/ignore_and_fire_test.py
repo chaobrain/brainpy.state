@@ -72,6 +72,9 @@ def _collect_spike_steps(neuron, n_steps, dt):
 class TestIgnoreAndFireDefaults(unittest.TestCase):
     r"""Verify NEST-compatible default parameter values."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_default_phase(self):
         neuron = ignore_and_fire(1)
         self.assertEqual(float(neuron.phase), 1.0)
@@ -101,6 +104,9 @@ class TestIgnoreAndFireSpikeTimes(unittest.TestCase):
     This reproduces the test from NEST's
     ``testsuite/pytests/test_ignore_and_fire_neuron.py``.
     """
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_spike_times_match_nest_reference(self):
         r"""Spike times must match the analytical prediction from NEST test."""
@@ -155,6 +161,9 @@ class TestIgnoreAndFireSpikeTimes(unittest.TestCase):
 
 class TestIgnoreAndFireInputIgnored(unittest.TestCase):
     r"""Verify that all inputs are truly ignored."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_spike_times_unaffected_by_current_input(self):
         r"""Passing current input should not change spike times."""
@@ -216,6 +225,9 @@ class TestIgnoreAndFireInputIgnored(unittest.TestCase):
 class TestIgnoreAndFirePhaseSteps(unittest.TestCase):
     r"""Verify internal phase step counter behavior."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_phase_steps_countdown(self):
         r"""phase_steps should decrement by 1 each step until 0, then reset."""
         dt_val = 0.1
@@ -269,6 +281,9 @@ class TestIgnoreAndFirePhaseSteps(unittest.TestCase):
 class TestIgnoreAndFireBatch(unittest.TestCase):
     r"""Verify batch dimension handling."""
 
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_batch_dimension(self):
         r"""Neurons should maintain independent phase counters in batch mode."""
         dt = 0.1 * u.ms
@@ -321,6 +336,9 @@ class TestIgnoreAndFireBatch(unittest.TestCase):
 
 class TestIgnoreAndFireInterSpikeInterval(unittest.TestCase):
     r"""Verify constant inter-spike interval."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_constant_isi(self):
         r"""Inter-spike interval should be exactly firing_period_steps."""

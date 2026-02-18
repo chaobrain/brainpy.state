@@ -105,6 +105,7 @@ def _run_nest_gauss_driven_trace(linear_summation, dt_ms, simtime_ms, drive, wei
 
 class TestGaussRate(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

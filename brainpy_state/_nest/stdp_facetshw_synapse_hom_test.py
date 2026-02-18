@@ -292,6 +292,9 @@ def _run_reference_trace(
 
 
 class TestSTDPFACETSHWSynapseHomParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_facetshw_synapse_hom()
@@ -384,6 +387,9 @@ class TestSTDPFACETSHWSynapseHomParameters(unittest.TestCase):
 
 
 class TestSTDPFACETSHWSynapseHomOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         dt_ms = 0.1
         delay_ms = 0.3
@@ -432,6 +438,9 @@ class TestSTDPFACETSHWSynapseHomOrdering(unittest.TestCase):
 
 
 class TestSTDPFACETSHWSynapseHomDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_dynamics_match_nest_reference_logic(self):
         # Mirrors NEST testsuite/pytests/test_facetshw_stdp.py with shorter
         # runtime while keeping the 36-pair LUT update structure.

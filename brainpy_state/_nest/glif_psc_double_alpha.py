@@ -868,12 +868,6 @@ class glif_psc_double_alpha(Neuron):
             if amp <= 0.0:
                 raise ValueError("All slow synaptic amplitudes must be strictly positive.")
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables for the neuron population.
 

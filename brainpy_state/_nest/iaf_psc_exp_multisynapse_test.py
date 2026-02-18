@@ -47,6 +47,7 @@ def exp_psc_voltage_response(t, tau_syn, tau_m, c_m, w):
 
 class TestIAFPscExpMultisynapse(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, spike_events=None):

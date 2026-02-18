@@ -161,6 +161,7 @@ class TestDefaultParameters(unittest.TestCase):
     r"""Test that default parameters match NEST C++ source."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
@@ -292,6 +293,7 @@ class TestStateInitialization(unittest.TestCase):
     r"""Test initial state variable values."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -362,6 +364,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold dynamics match standalone reference ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -567,6 +570,7 @@ class TestSpikeGeneration(unittest.TestCase):
     r"""Test stochastic spike generation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -622,6 +626,7 @@ class TestRefractoryPeriod(unittest.TestCase):
     r"""Test refractory period mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -667,6 +672,7 @@ class TestUrbanczikHistory(unittest.TestCase):
     r"""Test Urbanczik learning signal history computation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -732,6 +738,7 @@ class TestCurrentInput(unittest.TestCase):
     r"""Test external current input handling."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -763,6 +770,7 @@ class TestPopulation(unittest.TestCase):
     r"""Test that the model works with in_size > 1."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -801,6 +809,7 @@ class TestFullReferenceTrace(unittest.TestCase):
     r"""Compare full simulation trace against standalone reference implementation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 
@@ -938,6 +947,7 @@ class TestUrbanczikLearningSignal(unittest.TestCase):
     r"""Test the Urbanczik-Senn learning signal (dPI) computation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         brainstate.environ.set(precision=64, platform='cpu')
 

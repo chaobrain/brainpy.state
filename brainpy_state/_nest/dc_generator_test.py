@@ -167,6 +167,7 @@ class TestDCGenerator(unittest.TestCase):
     r"""Unit tests for dc_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):
@@ -297,6 +298,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
     r"""Integration tests: dc_generator + iaf_psc_delta."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
         # NEST-default iaf_psc_delta parameters
@@ -546,6 +548,7 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
     """
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

@@ -124,6 +124,7 @@ class TestWeightRecorder(unittest.TestCase):
         return importlib.util.find_spec('nest') is not None
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

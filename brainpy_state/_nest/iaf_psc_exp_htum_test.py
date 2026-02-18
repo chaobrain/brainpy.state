@@ -33,6 +33,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 class TestIAFPscExpHtum(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

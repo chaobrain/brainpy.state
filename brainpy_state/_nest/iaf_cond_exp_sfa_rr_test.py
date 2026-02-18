@@ -137,6 +137,7 @@ def _reference_step(state, params, x_next, dg_values, dt):
 
 class TestIAFCondExpSfaRr(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

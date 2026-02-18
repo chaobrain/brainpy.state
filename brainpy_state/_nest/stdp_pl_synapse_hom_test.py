@@ -244,6 +244,9 @@ def _run_reference_weight_trace(
 
 
 class TestSTDPPLSynapseHomParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_pl_synapse_hom()
@@ -299,6 +302,9 @@ class TestSTDPPLSynapseHomParameters(unittest.TestCase):
 
 
 class TestSTDPPLSynapseHomOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         dt_ms = 0.1
         delay_ms = 0.3
@@ -339,6 +345,9 @@ class TestSTDPPLSynapseHomOrdering(unittest.TestCase):
 
 
 class TestSTDPPLSynapseHomDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_dynamics_match_nest_reference_logic(self):
         # Mirrors edge-case trains from NEST testsuite/pytests/test_stdp_pl_synapse_hom.py.
         pre_spikes = np.asarray(

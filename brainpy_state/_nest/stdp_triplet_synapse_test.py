@@ -303,6 +303,9 @@ def _run_reference_weight_trace(
 
 
 class TestSTDPTripletSynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_triplet_synapse()
@@ -350,6 +353,9 @@ class TestSTDPTripletSynapseParameters(unittest.TestCase):
 
 
 class TestSTDPTripletSynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         dt_ms = 0.1
         delay_ms = 0.3
@@ -394,6 +400,9 @@ class TestSTDPTripletSynapseOrdering(unittest.TestCase):
 
 
 class TestSTDPTripletSynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_dynamics_match_nest_reference_logic(self):
         pre_spikes = np.asarray([1.0, 3.0, 5.0, 6.5, 9.0, 12.0, 15.0, 17.5], dtype=np.float64)
         post_spikes = np.asarray([2.0, 4.0, 7.0, 8.5, 11.0, 13.0, 16.0], dtype=np.float64)

@@ -29,6 +29,7 @@ from brainpy.state import HH, MorrisLecar, WangBuzsakiHH
 
 class TestHHNeuron(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.in_size = 10
         self.batch_size = 5
         self.time_steps = 100

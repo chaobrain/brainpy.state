@@ -25,6 +25,7 @@ import brainpy.state
 
 class TestSynOutModels(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.conductance = jnp.array([0.5, 1.0, 1.5])
         self.potential = jnp.array([-70.0, -65.0, -60.0])
         self.E = jnp.array([-70.0])

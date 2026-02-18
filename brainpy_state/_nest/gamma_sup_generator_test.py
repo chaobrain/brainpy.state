@@ -138,6 +138,7 @@ class TestGammaSupGeneratorParameters(unittest.TestCase):
 
 class TestGammaSupGeneratorOrdering(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 1.0 * u.ms
 
     def _run_trace(self, gen, n_steps):

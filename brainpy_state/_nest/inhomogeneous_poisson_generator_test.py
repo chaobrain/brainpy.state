@@ -76,6 +76,7 @@ def _run_bp_counts(
 
 class TestInhomogeneousPoissonGeneratorParameters(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_rate_times_and_values_match(self):
@@ -154,6 +155,7 @@ class TestInhomogeneousPoissonGeneratorParameters(unittest.TestCase):
 
 class TestInhomogeneousPoissonGeneratorOrdering(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 1.0 * u.ms
 
     def _run_trace(self, gen, n_steps):
@@ -213,6 +215,7 @@ class TestInhomogeneousPoissonGeneratorOrdering(unittest.TestCase):
 
 class TestInhomogeneousPoissonGeneratorVsNEST(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

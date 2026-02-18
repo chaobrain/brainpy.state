@@ -100,6 +100,7 @@ def _run_nest_driven_trace(mode, dt_ms, simtime_ms, drive, weight, delay_ms):
 
 class TestRateNeuronIPN(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

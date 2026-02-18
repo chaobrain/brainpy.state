@@ -309,6 +309,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
     r"""Test subthreshold membrane dynamics without spiking."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None, delta=None):
@@ -485,6 +486,7 @@ class TestRefractoryBehavior(unittest.TestCase):
     r"""Test refractory period mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None):
@@ -572,6 +574,7 @@ class TestAdaptation(unittest.TestCase):
     r"""Test stc and sfa adaptation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None):
@@ -698,6 +701,7 @@ class TestStochasticSpiking(unittest.TestCase):
     r"""Test stochastic spike generation mechanics."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA):
@@ -768,6 +772,7 @@ class TestReferenceTrace(unittest.TestCase):
     r"""Compare full simulation traces against standalone reference implementation."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_val = 0.1
         self.dt = self.dt_val * u.ms
 
@@ -1054,6 +1059,7 @@ class TestUpdateOrder(unittest.TestCase):
     r"""Test that the update order matches NEST exactly."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None):
@@ -1185,6 +1191,7 @@ class TestMultisynapseSpecific(unittest.TestCase):
     r"""Tests specific to the multisynapse functionality."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None):

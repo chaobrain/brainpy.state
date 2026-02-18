@@ -607,12 +607,6 @@ class aeif_psc_delta_clopath(Neuron):
                     'spike time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
                 )
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def _delay_u_bars_steps(self, dt_q):
         dt_ms = float(u.math.asarray(dt_q / u.ms))
         delay_ms = self._to_numpy_time_ms(self.delay_u_bars)
@@ -694,7 +688,7 @@ class aeif_psc_delta_clopath(Neuron):
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
         self.clamp_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -751,7 +745,7 @@ class aeif_psc_delta_clopath(Neuron):
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
         self.clamp_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )

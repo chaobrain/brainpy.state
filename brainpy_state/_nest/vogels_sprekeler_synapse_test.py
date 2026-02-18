@@ -21,6 +21,7 @@ import unittest
 from dataclasses import dataclass
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
@@ -126,6 +127,9 @@ def _vogels_reference_weight_trace(pre_spike_times_ms, post_spike_times_ms, para
 
 
 class TestVogelsSprekelerSynapse(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = vogels_sprekeler_synapse()
 

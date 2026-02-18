@@ -22,6 +22,7 @@ import unittest
 from dataclasses import dataclass
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
@@ -211,6 +212,9 @@ def _run_nest_clopath_pairing(spike_times_pre, spike_times_post):
 
 
 class TestClopathSynapse(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = clopath_synapse()
 

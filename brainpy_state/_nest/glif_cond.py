@@ -634,12 +634,6 @@ class glif_cond(Neuron):
             if tau <= 0.0:
                 raise ValueError("All synaptic time constants must be strictly positive.")
 
-    def _safe_dt(self):
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.V = brainstate.HiddenState(V)
@@ -665,7 +659,7 @@ class glif_cond(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -703,7 +697,7 @@ class glif_cond(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )

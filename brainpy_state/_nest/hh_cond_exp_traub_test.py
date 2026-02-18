@@ -192,6 +192,7 @@ class TestHHCondExpTraubSubthreshold(unittest.TestCase):
     r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -282,6 +283,7 @@ class TestHHCondExpTraubSpiking(unittest.TestCase):
     r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -418,6 +420,7 @@ class TestHHCondExpTraubSynaptic(unittest.TestCase):
     r"""Test synaptic conductance dynamics (exponential decay)."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -506,6 +509,7 @@ class TestHHCondExpTraubMultiStep(unittest.TestCase):
     r"""Multi-step integration tests comparing against a reference solver."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -613,6 +617,7 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
     """
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
         # NEST test reference parameters
         self.ref_params = dict(
@@ -761,6 +766,7 @@ class TestHHCondExpTraubEdgeCases(unittest.TestCase):
     r"""Test edge cases and special configurations."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):

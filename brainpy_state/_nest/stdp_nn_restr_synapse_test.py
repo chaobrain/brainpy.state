@@ -240,6 +240,9 @@ def _run_reference_weight_trace(
 
 
 class TestSTDPNNRestrSynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = stdp_nn_restr_synapse()
@@ -278,6 +281,9 @@ class TestSTDPNNRestrSynapseParameters(unittest.TestCase):
 
 
 class TestSTDPNNRestrSynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_update_order_matches_independent_reference(self):
         dt_ms = 0.1
         delay_ms = 0.3
@@ -320,6 +326,9 @@ class TestSTDPNNRestrSynapseOrdering(unittest.TestCase):
 
 
 class TestSTDPNNRestrSynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_dynamics_match_nest_reference_logic(self):
         # Mirrors hardcoded edge-case trains from
         # testsuite/pytests/test_stdp_nn_synapses.py in NEST.

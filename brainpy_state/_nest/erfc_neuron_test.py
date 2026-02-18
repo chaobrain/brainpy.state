@@ -35,6 +35,7 @@ from brainpy_state._nest.erfc_neuron import erfc_neuron
 
 class TestErfcNeuron(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0.0 * u.mV, delta=None):

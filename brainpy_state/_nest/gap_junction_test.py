@@ -19,6 +19,7 @@ import importlib.util
 import unittest
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
@@ -52,6 +53,9 @@ def _nest_gap_current_reference(sumj_g_ij, interpolation_coefficients, lag, inte
 
 
 class TestGapJunction(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_default_parameters_and_properties(self):
         syn = gap_junction()
         self.assertAlmostEqual(syn.weight, 1.0, delta=0.0)

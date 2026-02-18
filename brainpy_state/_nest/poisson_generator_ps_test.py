@@ -81,6 +81,9 @@ def _run_bp_counts_and_times(
 
 
 class TestPoissonGeneratorPSParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_default_parameters(self):
         gen = poisson_generator_ps()
         params = gen.get()
@@ -112,6 +115,9 @@ class TestPoissonGeneratorPSParameters(unittest.TestCase):
 
 
 class TestPoissonGeneratorPSOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_update_returns_precise_times(self):
         with brainstate.environ.context(dt=1.0 * u.ms):
             gen = poisson_generator_ps(in_size=4, rate=1000.0 * u.Hz, rng_seed=2)

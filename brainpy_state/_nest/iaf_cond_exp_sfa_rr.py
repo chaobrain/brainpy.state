@@ -466,24 +466,6 @@ class iaf_cond_exp_sfa_rr(Neuron):
         if np.any(self._to_numpy(self.tau_rr, u.ms) <= 0.0):
             raise ValueError('All time constants must be strictly positive.')
 
-    def _safe_dt(self):
-        r"""Get simulation time step from environment with fallback.
-
-        Returns
-        -------
-        ArrayLike
-            Simulation time step with units (e.g., 0.1 ms).
-
-        Notes
-        -----
-        If no environment context is active, returns default value 0.1 ms to allow
-        parameter initialization before simulation context is established.
-        """
-        try:
-            return brainstate.environ.get_dt()
-        except KeyError:
-            return 0.1 * u.ms
-
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
 
@@ -523,7 +505,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
 
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
         )
@@ -563,7 +545,7 @@ class iaf_cond_exp_sfa_rr(Neuron):
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        dt = self._safe_dt()
+        dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
         )

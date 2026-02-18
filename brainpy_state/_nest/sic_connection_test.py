@@ -37,6 +37,7 @@ def _is_nest_available():
 
 class TestSICConnection(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

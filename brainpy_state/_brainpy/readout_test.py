@@ -26,6 +26,7 @@ import brainpy.state
 
 class TestReadoutModels(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.in_size = 3
         self.out_size = 3
         self.batch_size = 4

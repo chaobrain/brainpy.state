@@ -163,6 +163,7 @@ def _enqueue_reference_sic_event(queue, current_step, event):
 
 class TestAEIFCondAlphaAstro(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     @staticmethod

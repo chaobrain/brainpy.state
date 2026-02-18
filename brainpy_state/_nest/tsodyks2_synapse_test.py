@@ -100,6 +100,9 @@ def _run_tsodyks2_weight_trace(
 
 
 class TestTsodyks2SynapseParameters(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
             syn = tsodyks2_synapse()
@@ -157,6 +160,9 @@ class TestTsodyks2SynapseParameters(unittest.TestCase):
 
 
 class TestTsodyks2SynapseOrdering(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_state_update_order_and_effective_weight(self):
         recv = _MockReceiver()
         dt_ms = 1.0
@@ -217,6 +223,9 @@ class TestTsodyks2SynapseOrdering(unittest.TestCase):
 
 
 class TestTsodyks2SynapseDynamics(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
     def test_weight_drift_matches_independent_reference(self):
         # Mirrors NEST testsuite/pytests/test_tsodyks2_synapse.py logic,
         # with deterministic presynaptic spike times.

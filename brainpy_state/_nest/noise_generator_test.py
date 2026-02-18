@@ -46,6 +46,7 @@ class TestNoiseGeneratorBasic(unittest.TestCase):
     r"""Unit tests for noise_generator output values and timing."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def test_default_parameters(self):

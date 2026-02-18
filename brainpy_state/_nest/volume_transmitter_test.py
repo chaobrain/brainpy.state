@@ -133,6 +133,7 @@ def _run_reference_trace(n_steps, dt_ms, deliver_interval, min_delay_ms, per_ste
 
 class TestVolumeTransmitter(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
 

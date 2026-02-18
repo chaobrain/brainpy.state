@@ -26,6 +26,7 @@ from brainpy.state import Expon, STP, STD, AMPA, GABAa, BioNMDA
 
 class TestSynapse(unittest.TestCase):
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.in_size = 10
         self.batch_size = 5
         self.time_steps = 100

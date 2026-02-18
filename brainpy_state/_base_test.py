@@ -27,6 +27,7 @@ class TestNeuronBaseClass(unittest.TestCase):
     r"""Test suite for the Neuron base class."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         r"""Set up test fixtures."""
         self.in_size = 10
         self.batch_size = 5
@@ -155,6 +156,7 @@ class TestSynapseBaseClass(unittest.TestCase):
     r"""Test suite for the Synapse base class."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         r"""Set up test fixtures."""
         self.in_size = 10
         self.batch_size = 5
@@ -262,6 +264,7 @@ class TestNeuronSynapseIntegration(unittest.TestCase):
     r"""Test integration between Neuron and Synapse classes."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         r"""Set up test fixtures."""
         self.in_size = 20
         self.batch_size = 8

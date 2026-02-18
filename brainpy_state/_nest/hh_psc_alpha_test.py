@@ -184,6 +184,7 @@ class TestHHPscAlphaSubthreshold(unittest.TestCase):
     r"""Test subthreshold dynamics against direct ODE integration."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -265,6 +266,7 @@ class TestHHPscAlphaSpiking(unittest.TestCase):
     r"""Test spike detection and refractory behavior."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -393,6 +395,7 @@ class TestHHPscAlphaSynaptic(unittest.TestCase):
     r"""Test synaptic current dynamics (alpha-shaped PSCs)."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -482,6 +485,7 @@ class TestHHPscAlphaMultiStep(unittest.TestCase):
     r"""Multi-step integration tests comparing against a reference solver."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
@@ -580,6 +584,7 @@ class TestHHPscAlphaEdgeCases(unittest.TestCase):
     r"""Test edge cases and special configurations."""
 
     def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
