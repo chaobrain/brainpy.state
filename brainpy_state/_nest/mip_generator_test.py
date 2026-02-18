@@ -48,7 +48,8 @@ def _run_bp_matrix(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    mat = np.zeros((n_steps, n_trains), dtype=np.int64)
+    ditype = brainstate.environ.ditype()
+    mat = np.zeros((n_steps, n_trains), dtype=ditype)
 
     with brainstate.environ.context(dt=dt):
         gen = mip_generator(
@@ -64,13 +65,14 @@ def _run_bp_matrix(
 
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                mat[step] = np.asarray(gen.update(), dtype=np.int64).reshape(-1)
+                mat[step] = np.asarray(gen.update(), dtype=ditype).reshape(-1)
 
     return mat
 
 
 def _mean_pairwise_corr(mat: np.ndarray) -> float:
-    mat = np.asarray(mat, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    mat = np.asarray(mat, dtype=dftype)
     if mat.ndim != 2 or mat.shape[1] < 2:
         return float('nan')
     corr = np.corrcoef(mat, rowvar=False)
@@ -140,7 +142,8 @@ class TestMIPGeneratorOrdering(unittest.TestCase):
             )
             gen.init_state()
             gen._sample_parent_spikes = lambda lam: 1
-            gen._sample_child_spikes = lambda n_parent_spikes: np.asarray([n_parent_spikes], dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            gen._sample_child_spikes = lambda n_parent_spikes: np.asarray([n_parent_spikes], dtype=ditype)
 
             trace = self._run_trace(gen, n_steps=7)
             self.assertEqual(trace, [0, 0, 0, 1, 1, 1, 0])
@@ -252,19 +255,21 @@ class TestMIPGeneratorVsNEST(unittest.TestCase):
         nest.Connect(pn, sr)
         nest.Simulate(simtime_ms)
 
-        mat = np.zeros((n_steps, n_trains), dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        mat = np.zeros((n_steps, n_trains), dtype=ditype)
         events = sr.get('events')
         if len(events['times']) == 0:
             return mat
 
         try:
-            gids = np.asarray(pn.get('global_id'), dtype=np.int64)
+            gids = np.asarray(pn.get('global_id'), dtype=ditype)
         except Exception:
-            gids = np.asarray(pn.tolist(), dtype=np.int64)
+            gids = np.asarray(pn.tolist(), dtype=ditype)
         id_to_idx = {int(g): i for i, g in enumerate(gids)}
 
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / dt_ms).astype(np.int64)
-        senders = np.asarray(events['senders'], dtype=np.int64)
+        dftype = brainstate.environ.dftype()
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)
+        senders = np.asarray(events['senders'], dtype=ditype)
 
         for step, sender in zip(steps, senders):
             i = id_to_idx.get(int(sender), None)

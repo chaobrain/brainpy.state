@@ -128,7 +128,8 @@ def _generate_reference_trace(params, y0, simtime_ms, dt_ms,
     Ca_trace = np.zeros(n_steps)
     h_trace = np.zeros(n_steps)
 
-    y = np.array(y0, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.array(y0, dtype=dftype)
     t_current = 0.0
 
     for i in range(n_steps):

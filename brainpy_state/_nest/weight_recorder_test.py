@@ -31,15 +31,17 @@ from brainpy.state import weight_recorder
 
 
 def _events_signature(events):
-    senders = np.asarray(events['senders'], dtype=np.int64)
-    targets = np.asarray(events['targets'], dtype=np.int64)
-    receptors = np.asarray(events['receptors'], dtype=np.int64)
-    ports = np.asarray(events['ports'], dtype=np.int64)
-    weights = np.asarray(events['weights'], dtype=np.float64)
+    ditype = brainstate.environ.ditype()
+    senders = np.asarray(events['senders'], dtype=ditype)
+    targets = np.asarray(events['targets'], dtype=ditype)
+    receptors = np.asarray(events['receptors'], dtype=ditype)
+    ports = np.asarray(events['ports'], dtype=ditype)
+    dftype = brainstate.environ.dftype()
+    weights = np.asarray(events['weights'], dtype=dftype)
 
     if 'offsets' in events:
-        times = np.asarray(events['times'], dtype=np.int64)
-        offsets = np.asarray(events['offsets'], dtype=np.float64)
+        times = np.asarray(events['times'], dtype=ditype)
+        offsets = np.asarray(events['offsets'], dtype=dftype)
         return sorted(
             (
                 int(times[i]),
@@ -53,7 +55,7 @@ def _events_signature(events):
             for i in range(times.size)
         )
 
-    times = np.asarray(events['times'], dtype=np.float64)
+    times = np.asarray(events['times'], dtype=dftype)
     return sorted(
         (
             round(float(times[i]), 12),
@@ -71,11 +73,13 @@ def _run_bp_from_schedule(simtime_ms, dt_ms, wr_params, conn_dict, source_spike_
     n_steps = int(round(simtime_ms / dt_ms))
     dt = dt_ms * u.ms
 
-    conn_source = np.asarray(conn_dict['source'], dtype=np.int64)
-    conn_target = np.asarray(conn_dict['target'], dtype=np.int64)
-    conn_port = np.asarray(conn_dict['port'], dtype=np.int64)
-    conn_receptor = np.asarray(conn_dict['receptor'], dtype=np.int64)
-    conn_weight = np.asarray(conn_dict['weight'], dtype=np.float64)
+    ditype = brainstate.environ.ditype()
+    conn_source = np.asarray(conn_dict['source'], dtype=ditype)
+    conn_target = np.asarray(conn_dict['target'], dtype=ditype)
+    conn_port = np.asarray(conn_dict['port'], dtype=ditype)
+    conn_receptor = np.asarray(conn_dict['receptor'], dtype=ditype)
+    dftype = brainstate.environ.dftype()
+    conn_weight = np.asarray(conn_dict['weight'], dtype=dftype)
 
     events_by_step = {}
     for src, spikes_ms in source_spike_times.items():
@@ -83,7 +87,7 @@ def _run_bp_from_schedule(simtime_ms, dt_ms, wr_params, conn_dict, source_spike_
         src_mask = conn_source == src
         idxs = np.where(src_mask)[0]
 
-        for spike_time in np.asarray(spikes_ms, dtype=np.float64):
+        for spike_time in np.asarray(spikes_ms, dtype=dftype):
             stamp_step = int(np.rint(spike_time / dt_ms))
             step_events = events_by_step.setdefault(stamp_step, [])
             for idx in idxs:
@@ -106,11 +110,11 @@ def _run_bp_from_schedule(simtime_ms, dt_ms, wr_params, conn_dict, source_spike_
                 if stamp_step in events_by_step:
                     ev = events_by_step[stamp_step]
                     wr.update(
-                        weights=np.asarray([x[0] for x in ev], dtype=np.float64),
-                        senders=np.asarray([x[1] for x in ev], dtype=np.int64),
-                        targets=np.asarray([x[2] for x in ev], dtype=np.int64),
-                        receptors=np.asarray([x[3] for x in ev], dtype=np.int64),
-                        ports=np.asarray([x[4] for x in ev], dtype=np.int64),
+                        weights=np.asarray([x[0] for x in ev], dtype=dftype),
+                        senders=np.asarray([x[1] for x in ev], dtype=ditype),
+                        targets=np.asarray([x[2] for x in ev], dtype=ditype),
+                        receptors=np.asarray([x[3] for x in ev], dtype=ditype),
+                        ports=np.asarray([x[4] for x in ev], dtype=ditype),
                     )
                 else:
                     wr.update()
@@ -152,48 +156,53 @@ class TestWeightRecorder(unittest.TestCase):
             wr = weight_recorder(start=0.5 * u.ms, stop=1.0 * u.ms)
             for step in range(12):
                 with brainstate.environ.context(t=step * self.dt):
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
                     wr.update(
-                        weights=np.array([2.0], dtype=np.float64),
-                        senders=np.array([9], dtype=np.int64),
-                        targets=np.array([11], dtype=np.int64),
+                        weights=np.array([2.0], dtype=dftype),
+                        senders=np.array([9], dtype=ditype),
+                        targets=np.array([11], dtype=ditype),
                     )
 
         ev = wr.events
-        expected_times = np.array([0.6, 0.7, 0.8, 0.9, 1.0], dtype=np.float64)
+        expected_times = np.array([0.6, 0.7, 0.8, 0.9, 1.0], dtype=dftype)
         npt.assert_allclose(ev['times'], expected_times, atol=1e-12)
-        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 9, dtype=np.int64))
-        npt.assert_array_equal(ev['targets'], np.full(expected_times.shape, 11, dtype=np.int64))
-        npt.assert_allclose(ev['weights'], np.full(expected_times.shape, 2.0, dtype=np.float64), atol=1e-12)
-        npt.assert_array_equal(ev['receptors'], np.zeros(expected_times.shape, dtype=np.int64))
-        npt.assert_array_equal(ev['ports'], -np.ones(expected_times.shape, dtype=np.int64))
+        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 9, dtype=ditype))
+        npt.assert_array_equal(ev['targets'], np.full(expected_times.shape, 11, dtype=ditype))
+        npt.assert_allclose(ev['weights'], np.full(expected_times.shape, 2.0, dtype=dftype), atol=1e-12)
+        npt.assert_array_equal(ev['receptors'], np.zeros(expected_times.shape, dtype=ditype))
+        npt.assert_array_equal(ev['ports'], -np.ones(expected_times.shape, dtype=ditype))
 
     def test_sender_target_filters(self):
         with brainstate.environ.context(dt=self.dt):
             wr = weight_recorder(senders=[2, 4], targets=[8])
 
             with brainstate.environ.context(t=0.0 * u.ms):
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
                 wr.update(
-                    weights=np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64),
-                    senders=np.array([1, 2, 4, 4], dtype=np.int64),
-                    targets=np.array([8, 8, 7, 8], dtype=np.int64),
-                    receptors=np.array([0, 1, 2, 3], dtype=np.int64),
-                    ports=np.array([10, 11, 12, 13], dtype=np.int64),
+                    weights=np.array([1.0, 2.0, 3.0, 4.0], dtype=dftype),
+                    senders=np.array([1, 2, 4, 4], dtype=ditype),
+                    targets=np.array([8, 8, 7, 8], dtype=ditype),
+                    receptors=np.array([0, 1, 2, 3], dtype=ditype),
+                    ports=np.array([10, 11, 12, 13], dtype=ditype),
                 )
 
         ev = wr.events
         self.assertEqual(ev['times'].size, 2)
-        npt.assert_array_equal(ev['senders'], np.array([2, 4], dtype=np.int64))
-        npt.assert_array_equal(ev['targets'], np.array([8, 8], dtype=np.int64))
-        npt.assert_allclose(ev['weights'], np.array([2.0, 4.0], dtype=np.float64), atol=1e-12)
-        npt.assert_array_equal(ev['receptors'], np.array([1, 3], dtype=np.int64))
-        npt.assert_array_equal(ev['ports'], np.array([11, 13], dtype=np.int64))
+        npt.assert_array_equal(ev['senders'], np.array([2, 4], dtype=ditype))
+        npt.assert_array_equal(ev['targets'], np.array([8, 8], dtype=ditype))
+        npt.assert_allclose(ev['weights'], np.array([2.0, 4.0], dtype=dftype), atol=1e-12)
+        npt.assert_array_equal(ev['receptors'], np.array([1, 3], dtype=ditype))
+        npt.assert_array_equal(ev['ports'], np.array([11, 13], dtype=ditype))
 
     def test_n_events_can_only_be_set_to_zero(self):
         with brainstate.environ.context(dt=self.dt):
             wr = weight_recorder()
             for step in range(3):
                 with brainstate.environ.context(t=step * self.dt):
-                    wr.update(weights=np.array([1.0], dtype=np.float64))
+                    dftype = brainstate.environ.dftype()
+                    wr.update(weights=np.array([1.0], dtype=dftype))
 
         self.assertEqual(wr.n_events, 3)
         wr.n_events = 0
@@ -207,19 +216,21 @@ class TestWeightRecorder(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             wr = weight_recorder(time_in_steps=True)
             with brainstate.environ.context(t=0.0 * u.ms):
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
                 wr.update(
-                    weights=np.array([1.5], dtype=np.float64),
-                    senders=np.array([5], dtype=np.int64),
-                    targets=np.array([6], dtype=np.int64),
-                    offsets=np.array([0.03], dtype=np.float64) * u.ms,
+                    weights=np.array([1.5], dtype=dftype),
+                    senders=np.array([5], dtype=ditype),
+                    targets=np.array([6], dtype=ditype),
+                    offsets=np.array([0.03], dtype=dftype) * u.ms,
                 )
 
         ev = wr.events
-        npt.assert_array_equal(ev['senders'], np.array([5], dtype=np.int64))
-        npt.assert_array_equal(ev['targets'], np.array([6], dtype=np.int64))
-        npt.assert_array_equal(ev['times'], np.array([1], dtype=np.int64))
-        npt.assert_allclose(ev['offsets'], np.array([0.03], dtype=np.float64), atol=1e-12)
-        npt.assert_allclose(ev['weights'], np.array([1.5], dtype=np.float64), atol=1e-12)
+        npt.assert_array_equal(ev['senders'], np.array([5], dtype=ditype))
+        npt.assert_array_equal(ev['targets'], np.array([6], dtype=ditype))
+        npt.assert_array_equal(ev['times'], np.array([1], dtype=ditype))
+        npt.assert_allclose(ev['offsets'], np.array([0.03], dtype=dftype), atol=1e-12)
+        npt.assert_allclose(ev['weights'], np.array([1.5], dtype=dftype), atol=1e-12)
 
         with self.assertRaises(ValueError):
             wr.time_in_steps = False
@@ -239,8 +250,9 @@ class TestWeightRecorder(unittest.TestCase):
         wr = nest.Create('weight_recorder')
         nest.CopyModel('static_synapse', 'static_synapse_rec', {'weight_recorder': wr, 'weight': 2.5})
 
-        sg_times_0 = np.array([1.0, 2.0], dtype=np.float64)
-        sg_times_1 = np.array([1.5], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        sg_times_0 = np.array([1.0, 2.0], dtype=dftype)
+        sg_times_1 = np.array([1.5], dtype=dftype)
 
         sg = nest.Create('spike_generator', 2, params=[
             {'spike_times': list(sg_times_0)},
@@ -254,7 +266,8 @@ class TestWeightRecorder(unittest.TestCase):
 
         conn_dict = nest.GetConnections(pre, post).get(['source', 'target', 'weight', 'port', 'receptor'])
 
-        pre_ids = np.asarray(pre.tolist(), dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        pre_ids = np.asarray(pre.tolist(), dtype=ditype)
         source_spike_times = {
             int(pre_ids[0]): sg_times_0 + 1.0,
             int(pre_ids[1]): sg_times_1 + 1.0,
@@ -263,12 +276,12 @@ class TestWeightRecorder(unittest.TestCase):
         nest.Simulate(simtime_ms)
         nest_events = wr.get('events')
         nest_events = {
-            'times': np.asarray(nest_events['times'], dtype=np.float64),
-            'senders': np.asarray(nest_events['senders'], dtype=np.int64),
-            'targets': np.asarray(nest_events['targets'], dtype=np.int64),
-            'weights': np.asarray(nest_events['weights'], dtype=np.float64),
-            'receptors': np.asarray(nest_events['receptors'], dtype=np.int64),
-            'ports': np.asarray(nest_events['ports'], dtype=np.int64),
+            'times': np.asarray(nest_events['times'], dtype=dftype),
+            'senders': np.asarray(nest_events['senders'], dtype=ditype),
+            'targets': np.asarray(nest_events['targets'], dtype=ditype),
+            'weights': np.asarray(nest_events['weights'], dtype=dftype),
+            'receptors': np.asarray(nest_events['receptors'], dtype=ditype),
+            'ports': np.asarray(nest_events['ports'], dtype=ditype),
         }
 
         bp_events = _run_bp_from_schedule(
@@ -303,8 +316,9 @@ class TestWeightRecorder(unittest.TestCase):
         wr = nest.Create('weight_recorder', params=nest_wr_params)
         nest.CopyModel('static_synapse', 'static_synapse_rec', {'weight_recorder': wr, 'weight': 2.5})
 
-        sg_times_0 = np.array([1.0, 2.0], dtype=np.float64)
-        sg_times_1 = np.array([1.5], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        sg_times_0 = np.array([1.0, 2.0], dtype=dftype)
+        sg_times_1 = np.array([1.5], dtype=dftype)
 
         sg = nest.Create('spike_generator', 2, params=[
             {'spike_times': list(sg_times_0)},
@@ -318,8 +332,9 @@ class TestWeightRecorder(unittest.TestCase):
 
         conn_dict = nest.GetConnections(pre, post).get(['source', 'target', 'weight', 'port', 'receptor'])
 
-        pre_ids = np.asarray(pre.tolist(), dtype=np.int64)
-        post_ids = np.asarray(post.tolist(), dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        pre_ids = np.asarray(pre.tolist(), dtype=ditype)
+        post_ids = np.asarray(post.tolist(), dtype=ditype)
 
         nest.SetStatus(wr, {
             'senders': [int(pre_ids[1])],
@@ -334,13 +349,13 @@ class TestWeightRecorder(unittest.TestCase):
         nest.Simulate(simtime_ms)
         nest_events = wr.get('events')
         nest_events = {
-            'times': np.asarray(nest_events['times'], dtype=np.int64),
-            'offsets': np.asarray(nest_events['offsets'], dtype=np.float64),
-            'senders': np.asarray(nest_events['senders'], dtype=np.int64),
-            'targets': np.asarray(nest_events['targets'], dtype=np.int64),
-            'weights': np.asarray(nest_events['weights'], dtype=np.float64),
-            'receptors': np.asarray(nest_events['receptors'], dtype=np.int64),
-            'ports': np.asarray(nest_events['ports'], dtype=np.int64),
+            'times': np.asarray(nest_events['times'], dtype=ditype),
+            'offsets': np.asarray(nest_events['offsets'], dtype=dftype),
+            'senders': np.asarray(nest_events['senders'], dtype=ditype),
+            'targets': np.asarray(nest_events['targets'], dtype=ditype),
+            'weights': np.asarray(nest_events['weights'], dtype=dftype),
+            'receptors': np.asarray(nest_events['receptors'], dtype=ditype),
+            'ports': np.asarray(nest_events['ports'], dtype=ditype),
         }
 
         bp_events = _run_bp_from_schedule(
@@ -361,9 +376,10 @@ class TestWeightRecorder(unittest.TestCase):
         self.assertEqual(_events_signature(bp_events), _events_signature(nest_events))
 
     def test_filter_getters_match_constructor_input(self):
-        wr = weight_recorder(senders=[2, 5], targets=np.array([8, 13], dtype=np.int64))
-        npt.assert_array_equal(wr.get('senders'), np.array([2, 5], dtype=np.int64))
-        npt.assert_array_equal(wr.get('targets'), np.array([8, 13], dtype=np.int64))
+        ditype = brainstate.environ.ditype()
+        wr = weight_recorder(senders=[2, 5], targets=np.array([8, 13], dtype=ditype))
+        npt.assert_array_equal(wr.get('senders'), np.array([2, 5], dtype=ditype))
+        npt.assert_array_equal(wr.get('targets'), np.array([8, 13], dtype=ditype))
 
     def test_validation_rules(self):
         with brainstate.environ.context(dt=self.dt):
@@ -373,12 +389,14 @@ class TestWeightRecorder(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     weight_recorder(targets=[-1])
                 with self.assertRaises(ValueError):
-                    weight_recorder(start=1.0 * u.ms, stop=0.5 * u.ms).update(weights=np.array([1.0], dtype=np.float64))
+                    dftype = brainstate.environ.dftype()
+                    weight_recorder(start=1.0 * u.ms, stop=0.5 * u.ms).update(weights=np.array([1.0], dtype=dftype))
                 with self.assertRaises(ValueError):
-                    weight_recorder().update(weights=np.array([1.0, 2.0], dtype=np.float64),
-                                             senders=np.array([1, 2, 3], dtype=np.int64))
+                    ditype = brainstate.environ.ditype()
+                    weight_recorder().update(weights=np.array([1.0, 2.0], dtype=dftype),
+                                             senders=np.array([1, 2, 3], dtype=ditype))
                 with self.assertRaises(ValueError):
-                    weight_recorder().update(weights=np.array([1.0], dtype=np.float64), offsets=np.array([np.nan]))
+                    weight_recorder().update(weights=np.array([1.0], dtype=dftype), offsets=np.array([np.nan]))
 
 
 if __name__ == '__main__':

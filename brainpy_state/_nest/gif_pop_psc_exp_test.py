@@ -128,13 +128,14 @@ def run_nest_ref(
 
     # Initialize state
     lambda_free = 0.0
-    n_buf = np.zeros(len_kernel, dtype=np.float64)
-    m_buf = np.zeros(len_kernel, dtype=np.float64)
-    v_buf = np.zeros(len_kernel, dtype=np.float64)
-    u_buf = np.zeros(len_kernel, dtype=np.float64)
-    lambda_buf = np.zeros(len_kernel, dtype=np.float64)
-    theta = np.zeros(len_kernel, dtype=np.float64)
-    theta_tld = np.zeros(len_kernel, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    n_buf = np.zeros(len_kernel, dtype=dftype)
+    m_buf = np.zeros(len_kernel, dtype=dftype)
+    v_buf = np.zeros(len_kernel, dtype=dftype)
+    u_buf = np.zeros(len_kernel, dtype=dftype)
+    lambda_buf = np.zeros(len_kernel, dtype=dftype)
+    theta = np.zeros(len_kernel, dtype=dftype)
+    theta_tld = np.zeros(len_kernel, dtype=dftype)
 
     for k in range(len_kernel):
         theta_tmp = _nest_ref_adaptation_kernel(len_kernel - k, h, tau_sfa, q_sfa)
@@ -147,12 +148,12 @@ def run_nest_ref(
     z_ = 0.0
     k0 = 0
 
-    Q30 = np.array([math.exp(-h / tau) for tau in tau_sfa], dtype=np.float64)
+    Q30 = np.array([math.exp(-h / tau) for tau in tau_sfa], dtype=dftype)
     Q30K = np.array([
         q_sfa[j] * tau_sfa[j] * math.exp(-h * len_kernel / tau_sfa[j])
         for j in range(len(tau_sfa))
-    ], dtype=np.float64)
-    g_ = np.zeros(len(tau_sfa), dtype=np.float64)
+    ], dtype=dftype)
+    g_ = np.zeros(len(tau_sfa), dtype=dftype)
 
     V_m = 0.0
     I_syn_ex = 0.0
@@ -968,7 +969,8 @@ class TestGIFPopPscExpLongSimulation(unittest.TestCase):
                 prev_n_spikes = n_spk
                 nspike_trace.append(n_spk)
 
-        nspike_array = np.array(nspike_trace[start_step:], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        nspike_array = np.array(nspike_trace[start_step:], dtype=dftype)
 
         mean_nspike = np.mean(nspike_array)
         mean_rate = mean_nspike / pop_size / res * 1000.0  # Hz

@@ -890,7 +890,8 @@ class urbanczik_synapse(NESTSynapse):
         --------
         send : Process single spike with full control over parameters.
         """
-        times = np.asarray(u.math.asarray(pre_spike_times_ms), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(u.math.asarray(pre_spike_times_ms), dtype=dftype).reshape(-1)
         events = []
         for t in times:
             events.append(
@@ -937,6 +938,7 @@ class urbanczik_synapse(NESTSynapse):
         Returns
         -------
         int
+            dftype = brainstate.environ.dftype()
             ``1`` if x > 0, ``-1`` if x <= 0 (matching NEST's sign semantics for Wmax).
 
         Notes
@@ -1158,7 +1160,7 @@ class urbanczik_synapse(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])
@@ -1195,7 +1197,7 @@ class urbanczik_synapse(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])

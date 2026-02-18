@@ -319,9 +319,10 @@ class gamma_sup_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -329,16 +330,18 @@ class gamma_sup_generator(NESTDevice):
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_int(value: ArrayLike, *, name: str) -> int:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         scalar = float(arr.reshape(()))
@@ -428,10 +431,11 @@ class gamma_sup_generator(NESTDevice):
         ini_occ_ref = int(self.n_proc // self.gamma_shape)
         ini_occ_act = int(self.n_proc - ini_occ_ref * self.gamma_shape)
 
+        ditype = brainstate.environ.ditype()
         occ = np.full(
             (self._num_targets, self.gamma_shape),
             ini_occ_ref,
-            dtype=np.int64,
+            dtype=ditype,
         )
         occ[:, -1] += ini_occ_act
         self.occ = brainstate.ShortTermState(occ)
@@ -542,7 +546,8 @@ class gamma_sup_generator(NESTDevice):
 
     def _update_internal_states(self, occ_row: np.ndarray, transition_prob: float) -> int:
         n_bins = occ_row.size
-        n_trans = np.zeros(n_bins, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        n_trans = np.zeros(n_bins, dtype=ditype)
 
         for i in range(n_bins):
             occ_i = int(occ_row[i])
@@ -614,17 +619,18 @@ class gamma_sup_generator(NESTDevice):
             self._refresh_runtime_cache(dt_ms)
 
         if self.rate <= 0.0 or self._num_targets == 0:
-            return jnp.zeros(self.varshape, dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            return jnp.zeros(self.varshape, dtype=ditype)
 
         curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
         if not self._is_active(curr_step):
-            return jnp.zeros(self.varshape, dtype=jnp.int64)
+            return jnp.zeros(self.varshape, dtype=ditype)
 
-        occ = np.asarray(self.occ.value, dtype=np.int64).copy()
-        counts = np.zeros(self._num_targets, dtype=np.int64)
+        occ = np.asarray(self.occ.value, dtype=ditype).copy()
+        counts = np.zeros(self._num_targets, dtype=ditype)
 
         for idx in range(self._num_targets):
             counts[idx] = self._update_internal_states(occ[idx], self._transition_prob)
 
         self.occ.value = occ
-        return jnp.asarray(counts.reshape(self.varshape), dtype=jnp.int64)
+        return jnp.asarray(counts.reshape(self.varshape), dtype=ditype)

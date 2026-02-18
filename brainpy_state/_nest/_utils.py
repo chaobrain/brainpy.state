@@ -65,7 +65,8 @@ def to_numpy(x, unit):
     np.ndarray
         Unitless float64 array.
     """
-    return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
 
 def to_numpy_unitless(x):
@@ -81,7 +82,8 @@ def to_numpy_unitless(x):
     np.ndarray
         Float64 array.
     """
-    return np.asarray(u.math.asarray(x), dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(u.math.asarray(x), dtype=dftype)
 
 
 def broadcast_to_state(x_np, shape):
@@ -122,7 +124,8 @@ def refractory_counts(t_ref):
         Integer step count (int32).
     """
     dt = brainstate.environ.get_dt()
-    return u.math.asarray(u.math.ceil(t_ref / dt), dtype=jnp.int32)
+    ditype = brainstate.environ.ditype()
+    return u.math.asarray(u.math.ceil(t_ref / dt), dtype=ditype)
 
 
 # ---------------------------------------------------------------------------

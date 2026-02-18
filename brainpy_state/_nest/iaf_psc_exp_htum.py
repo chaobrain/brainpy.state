@@ -360,7 +360,8 @@ class iaf_psc_exp_htum(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -426,8 +427,9 @@ class iaf_psc_exp_htum(NESTNeuron):
         self.i_syn_ex = brainstate.ShortTermState(zeros * u.pA)
         self.i_syn_in = brainstate.ShortTermState(zeros * u.pA)
         self.i_0 = brainstate.ShortTermState(zeros * u.pA)
-        self.refractory_abs_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
-        self.refractory_tot_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_abs_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
+        self.refractory_tot_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         if self.ref_var:
@@ -473,11 +475,13 @@ class iaf_psc_exp_htum(NESTNeuron):
 
     def _refractory_abs_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref_abs / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref_abs / dt), dtype=ditype)
 
     def _refractory_tot_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref_tot / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref_tot / dt), dtype=ditype)
 
     def update(self, x=0. * u.pA):
         r"""Advance the neuron state by one simulation step.
@@ -527,11 +531,12 @@ class iaf_psc_exp_htum(NESTNeuron):
         i_0 = self._broadcast_to_state(self._to_numpy(self.i_0.value, u.pA), v_shape)
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value, u.pA), v_shape)
         i_syn_in = self._broadcast_to_state(self._to_numpy(self.i_syn_in.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         r_abs = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_abs_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_abs_step_count.value), dtype=ditype), v_shape
         )
         r_tot = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_tot_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_tot_step_count.value), dtype=ditype), v_shape
         )
 
         P11_ex = np.exp(-h / tau_ex)
@@ -557,10 +562,10 @@ class iaf_psc_exp_htum(NESTNeuron):
         can_spike = r_tot == 0
         spike_cond = can_spike & (V_rel >= theta)
         refr_abs = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_abs_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_abs_counts()), dtype=ditype), v_shape
         )
         refr_tot = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_tot_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_tot_counts()), dtype=ditype), v_shape
         )
         r_abs = np.where(spike_cond, refr_abs, r_abs)
         r_tot = np.where(spike_cond, refr_tot, np.where(r_tot > 0, r_tot - 1, r_tot))
@@ -571,8 +576,8 @@ class iaf_psc_exp_htum(NESTNeuron):
         self.i_syn_ex.value = i_syn_ex * u.pA
         self.i_syn_in.value = i_syn_in * u.pA
         self.i_0.value = i_0_next * u.pA
-        self.refractory_abs_step_count.value = jnp.asarray(r_abs, dtype=jnp.int32)
-        self.refractory_tot_step_count.value = jnp.asarray(r_tot, dtype=jnp.int32)
+        self.refractory_abs_step_count.value = jnp.asarray(r_abs, dtype=ditype)
+        self.refractory_tot_step_count.value = jnp.asarray(r_tot, dtype=ditype)
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
         )

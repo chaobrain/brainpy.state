@@ -439,9 +439,10 @@ class stdp_synapse(static_synapse):
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
         if isinstance(value, u.Quantity):
             unit = u.get_unit(value)
-            arr = np.asarray(value.to_decimal(unit), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(unit), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr.reshape(()))
@@ -467,7 +468,8 @@ class stdp_synapse(static_synapse):
 
     @staticmethod
     def _to_non_negative_int_count(value: ArrayLike, *, name: str) -> int:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr.reshape(()))

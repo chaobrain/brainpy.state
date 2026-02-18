@@ -104,10 +104,11 @@ def _run_bp_simulation(resolution_ms: float, delay_ms: float, explicit: bool = F
                 spk = neuron.update(spike_events=receiver.pop_spike_events())
 
             if bool(u.math.all(spk > 0.0)):
-                t_spk = float(np.asarray(neuron.last_spike_time.value / u.ms, dtype=np.float64).reshape(()))
+                dftype = brainstate.environ.dftype()
+                t_spk = float(np.asarray(neuron.last_spike_time.value / u.ms, dtype=dftype).reshape(()))
                 spike_times_out.append(t_spk)
 
-    return np.asarray(spike_times_out, dtype=np.float64)
+    return np.asarray(spike_times_out, dtype=dftype)
 
 
 class TestContDelaySynapseParameters(unittest.TestCase):
@@ -199,8 +200,9 @@ class TestContDelaySynapseOrdering(unittest.TestCase):
         value_1, receptor_1, event_type_1, offset_1 = events_step_1[0]
         value_2, receptor_2, event_type_2, offset_2 = events_step_2[0]
 
-        v1 = float(np.asarray(u.math.asarray(value_1), dtype=np.float64).reshape(()))
-        v2 = float(np.asarray(u.math.asarray(value_2), dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        v1 = float(np.asarray(u.math.asarray(value_1), dtype=dftype).reshape(()))
+        v2 = float(np.asarray(u.math.asarray(value_2), dtype=dftype).reshape(()))
 
         self.assertAlmostEqual(v1, 2.0, delta=1e-12)
         self.assertAlmostEqual(v2, 2.0, delta=1e-12)
@@ -247,9 +249,10 @@ class TestContDelaySynapseDynamics(unittest.TestCase):
                     delay_ms=delay,
                     explicit=explicit,
                 )
+                dftype = brainstate.environ.dftype()
                 np.testing.assert_allclose(
                     actual,
-                    np.asarray(expected, dtype=np.float64),
+                    np.asarray(expected, dtype=dftype),
                     atol=1e-12,
                     rtol=0.0,
                 )
@@ -317,7 +320,8 @@ class TestContDelaySynapseVsNEST(unittest.TestCase):
 
         nest.Connect(n, sr)
         nest.Simulate(10.0)
-        return np.asarray(sr.get('events')['times'], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(sr.get('events')['times'], dtype=dftype)
 
     def test_dynamics_match_nest(self):
         if not self._is_nest_available():

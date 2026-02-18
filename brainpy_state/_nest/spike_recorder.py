@@ -235,9 +235,11 @@ class spike_recorder(NESTDevice):
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sr = brainpy.state.spike_recorder(start=0.0 * u.ms, stop=1.0 * u.ms)
        ...     with brainstate.environ.context(t=0.0 * u.ms):
+       dftype = brainstate.environ.dftype()
+       ditype = brainstate.environ.ditype()
        ...         _ = sr.update(
-       ...             spikes=np.array([1.0, 0.0, 2.0], dtype=np.float64),
-       ...             senders=np.array([3, 4, 5], dtype=np.int64),
+       ...             spikes=np.array([1.0, 0.0, 2.0], dtype=dftype),
+       ...             senders=np.array([3, 4, 5], dtype=ditype),
        ...         )
        ...     ev = sr.flush()
        ...     _ = ev['times'].shape
@@ -255,9 +257,9 @@ class spike_recorder(NESTDevice):
        ...     sr = brainpy.state.spike_recorder(time_in_steps=True)
        ...     with brainstate.environ.context(t=0.0 * u.ms):
        ...         _ = sr.update(
-       ...             spikes=np.array([1.0], dtype=np.float64),
-       ...             senders=np.array([9], dtype=np.int64),
-       ...             offsets=np.array([0.03], dtype=np.float64) * u.ms,
+       ...             spikes=np.array([1.0], dtype=dftype),
+       ...             senders=np.array([9], dtype=ditype),
+       ...             offsets=np.array([0.03], dtype=dftype) * u.ms,
        ...         )
        ...     ev = sr.events
        ...     _ = (ev['times'][0], ev['offsets'][0])
@@ -312,14 +314,16 @@ class spike_recorder(NESTDevice):
 
     @property
     def events(self) -> dict[str, np.ndarray]:
+        ditype = brainstate.environ.ditype()
         out = {
-            'senders': np.asarray(self._events_senders, dtype=np.int64),
+            'senders': np.asarray(self._events_senders, dtype=ditype),
         }
         if self.time_in_steps:
-            out['times'] = np.asarray(self._events_times_steps, dtype=np.int64)
-            out['offsets'] = np.asarray(self._events_offsets, dtype=np.float64)
+            out['times'] = np.asarray(self._events_times_steps, dtype=ditype)
+            dftype = brainstate.environ.dftype()
+            out['offsets'] = np.asarray(self._events_offsets, dtype=dftype)
         else:
-            out['times'] = np.asarray(self._events_times_ms, dtype=np.float64)
+            out['times'] = np.asarray(self._events_times_ms, dtype=dftype)
         return out
 
     def get(self, key: str = 'events'):
@@ -477,7 +481,8 @@ class spike_recorder(NESTDevice):
 
         self._events_senders.extend(out_senders.tolist())
         if self.time_in_steps:
-            out_steps = np.full(out_senders.shape, stamp_step, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            out_steps = np.full(out_senders.shape, stamp_step, dtype=ditype)
             self._events_times_steps.extend(out_steps.tolist())
             self._events_offsets.extend(out_offsets.tolist())
         else:
@@ -490,7 +495,8 @@ class spike_recorder(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -569,16 +575,17 @@ class spike_recorder(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
                 x = x / unit
             elif isinstance(x, u.Quantity):
                 x = u.get_mantissa(x)
-            arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
 
         if arr.size == 0 and size is not None:
-            return np.zeros((0,), dtype=np.float64)
+            return np.zeros((0,), dtype=dftype)
 
         if not np.all(np.isfinite(arr)):
             raise ValueError(f'{name} must contain finite values.')
@@ -587,7 +594,7 @@ class spike_recorder(NESTDevice):
             return arr
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), arr[0], dtype=np.float64)
+            return np.full((size,), arr[0], dtype=dftype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.float64, copy=False)
@@ -602,15 +609,16 @@ class spike_recorder(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            arr = np.asarray([default], dtype=ditype)
         else:
-            arr = np.asarray(u.math.asarray(x), dtype=np.int64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)
 
         if size is None:
             return arr.astype(np.int64, copy=False)
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), int(arr[0]), dtype=np.int64)
+            return np.full((size,), int(arr[0]), dtype=ditype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.int64, copy=False)

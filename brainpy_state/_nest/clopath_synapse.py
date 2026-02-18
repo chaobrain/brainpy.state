@@ -907,7 +907,8 @@ class clopath_synapse(NESTSynapse):
             >>> print(f"Final x_bar: {synapse.x_bar:.3f}")
             Final x_bar: 0.091
         """
-        times = np.asarray(u.math.asarray(spike_times_ms), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(u.math.asarray(spike_times_ms), dtype=dftype).reshape(-1)
         events = []
         for t in times:
             events.append(
@@ -1136,7 +1137,8 @@ class clopath_synapse(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])
@@ -1170,7 +1172,8 @@ class clopath_synapse(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])

@@ -228,6 +228,8 @@ class gif_psc_exp_multisynapse(NESTNeuron):
     After a spike, the neuron enters an absolute refractory period of
     duration :math:`t_{\mathrm{ref}}`. During this period:
 
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
     * The membrane potential is clamped to :math:`V_{\mathrm{reset}`
     * No spike can be emitted (firing intensity check is skipped)
     * Synaptic currents continue to evolve and receive inputs
@@ -613,7 +615,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         self.I_e = braintools.init.param(I_e, self.varshape)
 
         # Synaptic time constants (stored as numpy array of ms values)
-        self.tau_syn = np.asarray([float(x) for x in tau_syn], dtype=np.float64)
+        self.tau_syn = np.asarray([float(x) for x in tau_syn], dtype=dftype)
         if len(self.tau_syn) == 0:
             raise ValueError("'tau_syn' must have at least one element.")
 
@@ -658,7 +660,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -746,7 +748,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         self.V = brainstate.HiddenState(V)
 
         # Synaptic currents: shape (..., n_receptors)
-        syn_zeros = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
+        syn_zeros = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
         self.i_syn = brainstate.ShortTermState(syn_zeros * u.pA)
 
         spk_time = braintools.init.param(
@@ -757,7 +759,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
             braintools.init.Constant(0), self.varshape, batch_size
         )
         self.refractory_step_count = brainstate.ShortTermState(
-            u.math.asarray(ref_steps, dtype=jnp.int32)
+            u.math.asarray(ref_steps, dtype=ditype)
         )
 
         self.I_stim = brainstate.ShortTermState(
@@ -769,11 +771,11 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         # Adaptation state: stc and sfa element arrays
         n_stc = len(self.tau_stc)
         n_sfa = len(self.tau_sfa)
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=np.float64) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=np.float64)
+        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
+        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
+        self._stc_val = np.zeros(v_shape, dtype=dftype)
         self._sfa_val = np.full(
-            v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=np.float64
+            v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=dftype
         )
 
         # RNG state
@@ -822,7 +824,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
 
-        syn_zeros = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
+        syn_zeros = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
         self.i_syn.value = syn_zeros * u.pA
 
         self.last_spike_time.value = braintools.init.param(
@@ -831,18 +833,18 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         ref_steps = braintools.init.param(
             braintools.init.Constant(0), self.varshape, batch_size
         )
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         self.I_stim.value = braintools.init.param(
             braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
         )
 
         n_stc = len(self.tau_stc)
         n_sfa = len(self.tau_sfa)
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=np.float64) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=np.float64)
+        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
+        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
+        self._stc_val = np.zeros(v_shape, dtype=dftype)
         self._sfa_val = np.full(
-            v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=np.float64
+            v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=dftype
         )
 
         if self._rng_key is not None:
@@ -888,7 +890,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
         r"""Parse spike events into per-receptor weight arrays.
@@ -921,7 +923,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         ValueError
             If any ``receptor_type`` is outside the range [1, ``n_receptors``].
         """
-        out = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
+        out = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
         if spike_events is None:
             return out
         for ev in spike_events:
@@ -936,7 +938,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
                     f'Receptor type {receptor} out of range '
                     f'[1, {self.n_receptors}].'
                 )
-            w_np = np.asarray(u.math.asarray(weight / u.pA), dtype=np.float64)
+            w_np = np.asarray(u.math.asarray(weight / u.pA), dtype=dftype)
             out[..., receptor - 1] += np.broadcast_to(w_np, v_shape)
         return out
 
@@ -1027,10 +1029,10 @@ class gif_psc_exp_multisynapse(NESTNeuron):
             self._to_numpy(self.V.value, u.mV), v_shape
         ).copy()
         i_syn = np.asarray(
-            u.math.asarray(self.i_syn.value / u.pA), dtype=np.float64
+            u.math.asarray(self.i_syn.value / u.pA), dtype=dftype
         ).copy()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape,
         ).copy()
         i_stim = self._broadcast_to_state(
@@ -1048,7 +1050,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         lambda_0 = self.lambda_0  # 1/ms
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
 
@@ -1089,7 +1091,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         # Advance RNG state for this step
         self._rng_state, subkey = jax.random.split(self._rng_state)
         rand_vals = np.asarray(
-            jax.random.uniform(subkey, shape=v_shape), dtype=np.float64
+            jax.random.uniform(subkey, shape=v_shape), dtype=dftype
         )
 
         spike_mask = np.zeros_like(V, dtype=bool)
@@ -1156,7 +1158,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         # ---- Step 4: Store new I_stim for next step, update state ----
         self.V.value = V * u.mV
         self.i_syn.value = i_syn * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)

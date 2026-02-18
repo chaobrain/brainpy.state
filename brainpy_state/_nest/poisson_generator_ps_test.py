@@ -48,7 +48,8 @@ def _run_bp_counts_and_times(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    totals = np.zeros(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    totals = np.zeros(n_steps, dtype=dftype)
     spikes = [[] for _ in range(n_trains)]
 
     with brainstate.environ.context(dt=dt):
@@ -66,17 +67,17 @@ def _run_bp_counts_and_times(
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
                 counts, step_times = gen.update(return_precise_times=True)
-                totals[step] = float(np.asarray(counts, dtype=np.float64).sum())
+                totals[step] = float(np.asarray(counts, dtype=dftype).sum())
                 for i, ev in enumerate(step_times):
                     if ev.size:
-                        spikes[i].append(np.asarray(ev, dtype=np.float64))
+                        spikes[i].append(np.asarray(ev, dtype=dftype))
 
     spike_times = []
     for chunks in spikes:
         if chunks:
             spike_times.append(np.concatenate(chunks))
         else:
-            spike_times.append(np.asarray([], dtype=np.float64))
+            spike_times.append(np.asarray([], dtype=dftype))
 
     return totals, spike_times
 
@@ -110,7 +111,8 @@ class TestPoissonGeneratorPSParameters(unittest.TestCase):
         with brainstate.environ.context(dt=0.1 * u.ms):
             gen = poisson_generator_ps(in_size=3, rate=500.0 * u.Hz, rng_seed=1)
             gen.init_state()
-            gen.next_spike_time.value = np.asarray([3.0, 4.0, 5.0], dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            gen.next_spike_time.value = np.asarray([3.0, 4.0, 5.0], dtype=dftype)
             gen.set(rate=500.0 * u.Hz)
             self.assertTrue(np.all(np.isneginf(np.asarray(gen.next_spike_time.value))))
 
@@ -220,9 +222,10 @@ class TestPoissonGeneratorPSVsNEST(unittest.TestCase):
 
         events = sr.get('events')
         if len(events['times']) == 0:
-            return np.zeros(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            return np.zeros(n_steps, dtype=dftype)
 
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / dt_ms).astype(np.int64)
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)
         counts = np.bincount(steps, minlength=n_steps + 2).astype(np.float64)
 
         # Recorder timestamps include one-step transmission delay.

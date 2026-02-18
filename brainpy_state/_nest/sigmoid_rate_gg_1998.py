@@ -79,7 +79,8 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         ndarray
             Ones array with shape matching ``rate``, dtype float64.
         """
-        return np.ones_like(rate, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.ones_like(rate, dtype=dftype)
 
     @staticmethod
     def _mult_coupling_in(rate):
@@ -98,7 +99,8 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         ndarray
             Ones array with shape matching ``rate``, dtype float64.
         """
-        return np.ones_like(rate, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.ones_like(rate, dtype=dftype)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
         r"""Parse rate event into (rate, weight, multiplicity, delay_steps).
@@ -200,8 +202,9 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
         weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
         multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
+        dftype = brainstate.environ.dftype()
         weight_sign = self._broadcast_to_state(
-            np.asarray(u.math.asarray(weight), dtype=np.float64) >= 0.0,
+            np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0,
             state_shape,
         )
 
@@ -241,8 +244,9 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         ValueError
             If any event has non-zero ``delay_steps``.
         """
-        ex = np.zeros(state_shape, dtype=np.float64)
-        inh = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex = np.zeros(state_shape, dtype=dftype)
+        inh = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._event_to_ex_in(
                 ev,
@@ -292,8 +296,9 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         by adding entries at ``target_step = step_idx + delay_steps``. Multiple
         events targeting the same step are summed via ``_queue_add``.
         """
-        ex_now = np.zeros(state_shape, dtype=np.float64)
-        inh_now = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex_now = np.zeros(state_shape, dtype=dftype)
+        inh_now = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._event_to_ex_in(
                 ev,
@@ -353,7 +358,8 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         Continuous inputs (via ``add_current_input``) are aggregated into ``mu_ext``.
         """
         state_shape = self.rate.value.shape
-        step_idx = int(np.asarray(self._step_count.value, dtype=np.int64).reshape(-1)[0])
+        ditype = brainstate.environ.ditype()
+        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events_sigmoid_gg_1998(
@@ -786,9 +792,11 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        dftype = brainstate.environ.dftype()
+        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        ditype = brainstate.environ.ditype()
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -940,5 +948,6 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

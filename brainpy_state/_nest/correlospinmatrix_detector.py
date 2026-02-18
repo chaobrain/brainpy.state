@@ -358,8 +358,9 @@ class correlospinmatrix_detector(NESTDevice):
         self._t_last_in_spike = -2 ** 62
         self._tentative_down = False
         self._curr_state = np.zeros((0,), dtype=np.bool_)
-        self._last_change = np.zeros((0,), dtype=np.int64)
-        self._count_covariance = np.zeros((0, 0, 0), dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._last_change = np.zeros((0,), dtype=ditype)
+        self._count_covariance = np.zeros((0, 0, 0), dtype=ditype)
 
         self._ensure_calibrated_from_env_if_available()
 
@@ -375,7 +376,8 @@ class correlospinmatrix_detector(NESTDevice):
             steps.
         """
         self._ensure_calibrated_from_env_if_available()
-        return np.asarray(self._count_covariance, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        return np.asarray(self._count_covariance, dtype=ditype)
 
     def get(self, key: str = 'count_covariance'):
         r"""Read a detector attribute using NEST-style string keys.
@@ -544,7 +546,8 @@ class correlospinmatrix_detector(NESTDevice):
             counts = np.where(spike_arr > 0.0, mult_arr, 0)
 
         if stamp_steps is None:
-            stamp_arr = np.full((n_items,), step_now + 1, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            stamp_arr = np.full((n_items,), step_now + 1, dtype=ditype)
         else:
             stamp_arr = self._to_int_array(stamp_steps, name='stamp_steps', size=n_items)
 
@@ -686,16 +689,17 @@ class correlospinmatrix_detector(NESTDevice):
 
         if self._calib is None:
             self._curr_state = np.zeros((0,), dtype=np.bool_)
-            self._last_change = np.zeros((0,), dtype=np.int64)
-            self._count_covariance = np.zeros((0, 0, 0), dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            self._last_change = np.zeros((0,), dtype=ditype)
+            self._count_covariance = np.zeros((0, 0, 0), dtype=ditype)
             return
 
         n_channels = int(self._calib.n_channels)
         n_bins = int(self._calib.n_bins)
 
         self._curr_state = np.zeros((n_channels,), dtype=np.bool_)
-        self._last_change = np.zeros((n_channels,), dtype=np.int64)
-        self._count_covariance = np.zeros((n_channels, n_channels, n_bins), dtype=np.int64)
+        self._last_change = np.zeros((n_channels,), dtype=ditype)
+        self._count_covariance = np.zeros((n_channels, n_channels, n_bins), dtype=ditype)
 
     def _compute_calibration(self, dt) -> _Calibration:
         dt_ms = self._to_ms_scalar(dt, name='dt')
@@ -783,7 +787,8 @@ class correlospinmatrix_detector(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -793,7 +798,8 @@ class correlospinmatrix_detector(NESTDevice):
 
     @staticmethod
     def _to_int_scalar(value, name: str) -> int:
-        arr = np.asarray(u.math.asarray(value), dtype=np.int64).reshape(-1)
+        ditype = brainstate.environ.ditype()
+        arr = np.asarray(u.math.asarray(value), dtype=ditype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar integer value.')
         return int(arr[0])
@@ -849,14 +855,15 @@ class correlospinmatrix_detector(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray([default], dtype=dftype)
         else:
             if isinstance(x, u.Quantity):
                 x = u.get_mantissa(x)
-            arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
 
         if arr.size == 0 and size is not None:
-            return np.zeros((0,), dtype=np.float64)
+            return np.zeros((0,), dtype=dftype)
 
         if not np.all(np.isfinite(arr)):
             raise ValueError(f'{name} must contain finite values.')
@@ -865,7 +872,7 @@ class correlospinmatrix_detector(NESTDevice):
             return arr
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), arr[0], dtype=np.float64)
+            return np.full((size,), arr[0], dtype=dftype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.float64, copy=False)
@@ -880,15 +887,16 @@ class correlospinmatrix_detector(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            arr = np.asarray([default], dtype=ditype)
         else:
-            arr = np.asarray(u.math.asarray(x), dtype=np.int64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)
 
         if size is None:
             return arr.astype(np.int64, copy=False)
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), int(arr[0]), dtype=np.int64)
+            return np.full((size,), int(arr[0]), dtype=ditype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.int64, copy=False)

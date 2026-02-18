@@ -376,7 +376,8 @@ class TestIAFPscAlpha(unittest.TestCase):
                 if k == 20:
                     delta = np.full_like(tau_syn, -1000.0) * u.pA
                 self._step(neuron, k, delta=delta)
-                trace.append(np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=np.float64))
+                dftype = brainstate.environ.dftype()
+                trace.append(np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=dftype))
 
             trace = np.asarray(trace)
             self.assertFalse(np.any(~np.isfinite(trace)))

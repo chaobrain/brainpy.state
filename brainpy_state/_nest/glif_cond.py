@@ -559,7 +559,8 @@ class glif_cond(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -656,7 +657,8 @@ class glif_cond(NESTNeuron):
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -669,18 +671,19 @@ class glif_cond(NESTNeuron):
         # GLIF-specific state (stored as plain numpy, matching NEST)
         # ASC values
         n_asc = len(self.asc_decay)
-        self._ASCurrents = np.zeros((n_asc, *v_shape), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self._ASCurrents = np.zeros((n_asc, *v_shape), dtype=dftype)
         for a in range(n_asc):
             self._ASCurrents[a] = self.asc_init[a]
-        self._ASCurrents_sum = np.sum(self._ASCurrents, axis=0) if n_asc > 0 else np.zeros(v_shape, dtype=np.float64)
+        self._ASCurrents_sum = np.sum(self._ASCurrents, axis=0) if n_asc > 0 else np.zeros(v_shape, dtype=dftype)
 
         # Threshold components (relative to E_L)
         E_L_mV = float(self._to_numpy(self.E_L, u.mV))
         th_inf = float(self._to_numpy(self.V_th, u.mV)) - E_L_mV
         self._th_inf = th_inf
-        self._threshold_spike = np.zeros(v_shape, dtype=np.float64)
-        self._threshold_voltage = np.zeros(v_shape, dtype=np.float64)
-        self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
+        self._threshold_spike = np.zeros(v_shape, dtype=dftype)
+        self._threshold_voltage = np.zeros(v_shape, dtype=dftype)
+        self._threshold = np.full(v_shape, th_inf, dtype=dftype)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
@@ -695,7 +698,8 @@ class glif_cond(NESTNeuron):
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
@@ -706,17 +710,18 @@ class glif_cond(NESTNeuron):
 
         v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
         n_asc = len(self.asc_decay)
-        self._ASCurrents = np.zeros((n_asc, *v_shape), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self._ASCurrents = np.zeros((n_asc, *v_shape), dtype=dftype)
         for a in range(n_asc):
             self._ASCurrents[a] = self.asc_init[a]
-        self._ASCurrents_sum = np.sum(self._ASCurrents, axis=0) if n_asc > 0 else np.zeros(v_shape, dtype=np.float64)
+        self._ASCurrents_sum = np.sum(self._ASCurrents, axis=0) if n_asc > 0 else np.zeros(v_shape, dtype=dftype)
 
         E_L_mV = float(self._to_numpy(self.E_L, u.mV))
         th_inf = float(self._to_numpy(self.V_th, u.mV)) - E_L_mV
         self._th_inf = th_inf
-        self._threshold_spike = np.zeros(v_shape, dtype=np.float64)
-        self._threshold_voltage = np.zeros(v_shape, dtype=np.float64)
-        self._threshold = np.full(v_shape, th_inf, dtype=np.float64)
+        self._threshold_spike = np.zeros(v_shape, dtype=dftype)
+        self._threshold_voltage = np.zeros(v_shape, dtype=dftype)
+        self._threshold = np.full(v_shape, th_inf, dtype=dftype)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Generate surrogate spike signal from membrane potential.
@@ -749,7 +754,8 @@ class glif_cond(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _collect_receptor_delta_inputs(self):
         r"""Collect and route delta inputs to receptor ports.
@@ -781,7 +787,8 @@ class glif_cond(NESTNeuron):
         All inputs are converted to nS and broadcast to the current state shape.
         """
         v_shape = self.V.value.shape
-        dg = [np.zeros(v_shape, dtype=np.float64) for _ in range(self._n_receptors)]
+        dftype = brainstate.environ.dftype()
+        dg = [np.zeros(v_shape, dtype=dftype) for _ in range(self._n_receptors)]
 
         if self.delta_inputs is None:
             return dg
@@ -831,6 +838,8 @@ class glif_cond(NESTNeuron):
         is_refractory : bool
             If True, clamps voltage and disables membrane dynamics.
         i_ext : float
+            ditype = brainstate.environ.ditype()
+            dftype = brainstate.environ.dftype()
             Total external current ``I_e + I_stim`` in pA (matches NEST's ``B_.I_``).
         asc_sum : float
             Sum of after-spike currents in pA (0.0 if ASC disabled).
@@ -1141,7 +1150,7 @@ class glif_cond(NESTNeuron):
             for k in range(self._n_receptors)
         ]
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         ).copy()
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape).copy()
         h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape).copy()
@@ -1162,7 +1171,7 @@ class glif_cond(NESTNeuron):
         }
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
         )
 
         # Pre-compute decay rates (matching NEST pre_run_hook)
@@ -1199,11 +1208,11 @@ class glif_cond(NESTNeuron):
 
         # Output arrays
         spike_mask = np.zeros(v_shape, dtype=bool)
-        V_next = np.empty(v_shape, dtype=np.float64)
-        dg_next = [np.empty(v_shape, dtype=np.float64) for _ in range(self._n_receptors)]
-        g_next = [np.empty(v_shape, dtype=np.float64) for _ in range(self._n_receptors)]
-        r_next = np.empty(v_shape, dtype=np.int32)
-        h_next = np.empty(v_shape, dtype=np.float64)
+        V_next = np.empty(v_shape, dtype=dftype)
+        dg_next = [np.empty(v_shape, dtype=dftype) for _ in range(self._n_receptors)]
+        g_next = [np.empty(v_shape, dtype=dftype) for _ in range(self._n_receptors)]
+        r_next = np.empty(v_shape, dtype=ditype)
+        h_next = np.empty(v_shape, dtype=dftype)
 
         for idx in np.ndindex(v_shape):
             # ---- Step 1: Record v_old (relative) ----
@@ -1321,7 +1330,7 @@ class glif_cond(NESTNeuron):
         for k in range(self._n_receptors):
             self.dg_syn[k].value = dg_next[k] * u.nS
             self.g_syn[k].value = g_next[k] * u.nS
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(

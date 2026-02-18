@@ -426,7 +426,8 @@ class iaf_psc_delta_ps(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -478,7 +479,8 @@ class iaf_psc_delta_ps(NESTNeuron):
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         )
         last_step = braintools.init.param(braintools.init.Constant(-1), self.varshape, batch_size)
-        self.last_spike_step = brainstate.ShortTermState(u.math.asarray(last_step, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.last_spike_step = brainstate.ShortTermState(u.math.asarray(last_step, dtype=ditype))
         self.last_spike_offset = brainstate.ShortTermState(zeros * u.ms)
         is_refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
         self.is_refractory = brainstate.ShortTermState(is_refractory)
@@ -647,14 +649,16 @@ class iaf_psc_delta_ps(NESTNeuron):
         t_ref = self._broadcast_to_state(self._to_numpy(self.t_ref, u.ms), v_shape)
         U_th = self._broadcast_to_state(self._to_numpy(self.V_th - self.E_L, u.mV), v_shape)
         U_reset = self._broadcast_to_state(self._to_numpy(self.V_reset - self.E_L, u.mV), v_shape)
-        U_min = -np.inf * np.ones(v_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        U_min = -np.inf * np.ones(v_shape, dtype=dftype)
         if self.V_min is not None:
             U_min = self._broadcast_to_state(self._to_numpy(self.V_min - self.E_L, u.mV), v_shape)
         I_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
 
         I_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         last_step = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=ditype),
             v_shape,
         )
         last_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
@@ -813,7 +817,7 @@ class iaf_psc_delta_ps(NESTNeuron):
 
         self.V.value = V_next * u.mV
         self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_step.value = jnp.asarray(last_step_next, dtype=jnp.int32)
+        self.last_spike_step.value = jnp.asarray(last_step_next, dtype=ditype)
         self.last_spike_offset.value = last_offset_next * u.ms
         self.is_refractory.value = jnp.asarray(is_refractory_next, dtype=bool)
         self.refractory_spike_buffer.value = refr_buffer_next * u.mV

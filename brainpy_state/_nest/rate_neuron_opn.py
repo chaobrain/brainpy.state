@@ -720,8 +720,9 @@ class rate_neuron_opn(_lin_rate_base):
         rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
         weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
         multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
+        dftype = brainstate.environ.dftype()
         weight_sign = self._broadcast_to_state(
-            np.asarray(u.math.asarray(weight), dtype=np.float64) >= 0.0,
+            np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0,
             state_shape,
         )
 
@@ -756,8 +757,9 @@ class rate_neuron_opn(_lin_rate_base):
         ValueError
             If any event specifies non-zero ``delay_steps``.
         """
-        ex = np.zeros(state_shape, dtype=np.float64)
-        inh = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex = np.zeros(state_shape, dtype=dftype)
+        inh = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._event_to_ex_in(
                 ev,
@@ -802,8 +804,9 @@ class rate_neuron_opn(_lin_rate_base):
         ``_delayed_ex_queue`` and ``_delayed_in_queue`` at target step
         ``step_idx + delay_steps``.
         """
-        ex_now = np.zeros(state_shape, dtype=np.float64)
-        inh_now = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex_now = np.zeros(state_shape, dtype=dftype)
+        inh_now = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._event_to_ex_in(
                 ev,
@@ -861,7 +864,8 @@ class rate_neuron_opn(_lin_rate_base):
         5. Current inputs via ``sum_current_inputs``.
         """
         state_shape = self.rate.value.shape
-        step_idx = int(np.asarray(self._step_count.value, dtype=np.int64).reshape(-1)[0])
+        ditype = brainstate.environ.ditype()
+        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events(
@@ -996,9 +1000,11 @@ class rate_neuron_opn(_lin_rate_base):
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
         self.noisy_rate = brainstate.ShortTermState(noisy_rate_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        dftype = brainstate.environ.dftype()
+        self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
+        ditype = brainstate.environ.ditype()
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -1251,5 +1257,6 @@ class rate_neuron_opn(_lin_rate_base):
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

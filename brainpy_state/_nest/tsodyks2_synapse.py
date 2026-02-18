@@ -453,7 +453,8 @@ class tsodyks2_synapse(static_synapse):
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))

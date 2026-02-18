@@ -122,12 +122,13 @@ class TestSpikeDilutorOrdering(unittest.TestCase):
             )
             dil.init_state()
             with brainstate.environ.context(t=0.0 * u.ms):
-                got = np.asarray(dil.update(mother_spikes=n_mother), dtype=np.int64).reshape(-1)
+                ditype = brainstate.environ.ditype()
+                got = np.asarray(dil.update(mother_spikes=n_mother), dtype=ditype).reshape(-1)
 
         rng = np.random.default_rng(seed)
         expected = np.asarray(
             [np.count_nonzero(rng.random(n_mother) < p_copy) for _ in range(n_targets)],
-            dtype=np.int64,
+            dtype=ditype,
         )
         np.testing.assert_array_equal(got, expected)
 
@@ -139,11 +140,12 @@ class TestSpikeDilutorOrdering(unittest.TestCase):
             d1.init_state()
 
             with brainstate.environ.context(t=0.0 * u.ms):
-                out0 = np.asarray(d0.update(mother_spikes=9), dtype=np.int64).reshape(-1)
-                out1 = np.asarray(d1.update(mother_spikes=9), dtype=np.int64).reshape(-1)
+                ditype = brainstate.environ.ditype()
+                out0 = np.asarray(d0.update(mother_spikes=9), dtype=ditype).reshape(-1)
+                out1 = np.asarray(d1.update(mother_spikes=9), dtype=ditype).reshape(-1)
 
-            np.testing.assert_array_equal(out0, np.zeros(3, dtype=np.int64))
-            np.testing.assert_array_equal(out1, np.full(3, 9, dtype=np.int64))
+            np.testing.assert_array_equal(out0, np.zeros(3, dtype=ditype))
+            np.testing.assert_array_equal(out1, np.full(3, 9, dtype=ditype))
 
 
 class TestSpikeDilutorStatistics(unittest.TestCase):
@@ -160,10 +162,11 @@ class TestSpikeDilutorStatistics(unittest.TestCase):
             dil = spike_dilutor(in_size=n_targets, p_copy=p_copy, rng_seed=12345)
             dil.init_state()
 
-            counts = np.zeros(n_targets, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            counts = np.zeros(n_targets, dtype=dftype)
             for step in range(1, n_spikes + 1):
                 with brainstate.environ.context(t=step * dt):
-                    counts += np.asarray(dil.update(mother_spikes=1.0), dtype=np.float64).reshape(-1)
+                    counts += np.asarray(dil.update(mother_spikes=1.0), dtype=dftype).reshape(-1)
 
         avg_count = float(np.mean(counts))
         rel_err = abs(avg_count - expected) / expected
@@ -190,7 +193,8 @@ class TestSpikeDilutorVsNEST(unittest.TestCase):
         nest.local_num_threads = 1
         nest.rng_seed = 12345
 
-        spike_times = np.arange(1.0, float(n_spikes) + 1.0, 1.0, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        spike_times = np.arange(1.0, float(n_spikes) + 1.0, 1.0, dtype=dftype)
         sg = nest.Create('spike_generator', params={'spike_times': spike_times})
         dil = nest.Create('spike_dilutor', params={'p_copy': float(p_copy)})
         sr = nest.Create('spike_recorder', n_targets)
@@ -200,9 +204,9 @@ class TestSpikeDilutorVsNEST(unittest.TestCase):
         nest.Simulate(float(n_spikes + 2))
 
         try:
-            events = np.asarray(sr.get('n_events'), dtype=np.float64)
+            events = np.asarray(sr.get('n_events'), dtype=dftype)
         except Exception:
-            events = np.asarray(nest.GetStatus(sr, 'n_events'), dtype=np.float64)
+            events = np.asarray(nest.GetStatus(sr, 'n_events'), dtype=dftype)
         return float(np.mean(events))
 
     @staticmethod
@@ -212,10 +216,11 @@ class TestSpikeDilutorVsNEST(unittest.TestCase):
             dil = spike_dilutor(in_size=n_targets, p_copy=p_copy, rng_seed=12345)
             dil.init_state()
 
-            counts = np.zeros(n_targets, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            counts = np.zeros(n_targets, dtype=dftype)
             for step in range(1, n_spikes + 1):
                 with brainstate.environ.context(t=step * dt):
-                    counts += np.asarray(dil.update(mother_spikes=1.0), dtype=np.float64).reshape(-1)
+                    counts += np.asarray(dil.update(mother_spikes=1.0), dtype=dftype).reshape(-1)
         return float(np.mean(counts))
 
     def test_mean_dynamics_match_nest(self):

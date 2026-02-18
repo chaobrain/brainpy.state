@@ -62,8 +62,9 @@ def _run_nest_two_siegert_trace(dt_ms, simtime_ms, src_params, tgt_params, drift
     nest.Connect(mm_tgt, tgt, syn_spec={'delay': dt_ms})
 
     nest.Simulate(simtime_ms)
-    src_rate = np.asarray(mm_src.events['rate'], dtype=np.float64)
-    tgt_rate = np.asarray(mm_tgt.events['rate'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    src_rate = np.asarray(mm_src.events['rate'], dtype=dftype)
+    tgt_rate = np.asarray(mm_tgt.events['rate'], dtype=dftype)
     return src_rate, tgt_rate
 
 
@@ -140,7 +141,8 @@ class TestDiffusionConnection(unittest.TestCase):
 
     def test_coeff_projection_and_event_helpers_match_nest_semantics(self):
         syn = diffusion_connection(drift_factor=1.3, diffusion_factor=-0.4)
-        coeff = np.asarray([0.5, -2.0, 1.25, 0.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        coeff = np.asarray([0.5, -2.0, 1.25, 0.0], dtype=dftype)
 
         event = syn.prepare_secondary_event(coeff)
         npt.assert_allclose(event['coeffarray'], coeff, atol=0.0, rtol=0.0)
@@ -285,8 +287,9 @@ class TestDiffusionConnection(unittest.TestCase):
         )
 
         replay_steps = min(nest_src.size, nest_tgt.size)
-        bp_src = np.zeros((replay_steps,), dtype=np.float64)
-        bp_tgt = np.zeros((replay_steps,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        bp_src = np.zeros((replay_steps,), dtype=dftype)
+        bp_tgt = np.zeros((replay_steps,), dtype=dftype)
 
         with brainstate.environ.context(dt=self.dt):
             src = siegert_neuron(

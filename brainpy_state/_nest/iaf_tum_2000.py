@@ -557,11 +557,12 @@ class iaf_tum_2000(NESTNeuron):
         is already dimensionless).
         """
         if unit is None:
-            return np.asarray(bu.math.asarray(x), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            return np.asarray(bu.math.asarray(x), dtype=dftype)
         try:
-            return np.asarray(bu.math.asarray(x / unit), dtype=np.float64)
+            return np.asarray(bu.math.asarray(x / unit), dtype=dftype)
         except Exception:
-            return np.asarray(bu.math.asarray(x), dtype=np.float64)
+            return np.asarray(bu.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -731,7 +732,8 @@ class iaf_tum_2000(NESTNeuron):
         """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         state_shape = V.shape
-        zeros = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        zeros = np.zeros(state_shape, dtype=dftype)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * bu.ms), self.varshape, batch_size)
 
@@ -744,7 +746,8 @@ class iaf_tum_2000(NESTNeuron):
         self.i_syn_in = brainstate.ShortTermState(zeros * bu.pA)
         self.i_0 = brainstate.ShortTermState(zeros * bu.pA)
         self.i_1 = brainstate.ShortTermState(zeros * bu.pA)
-        self.refractory_step_count = brainstate.ShortTermState(bu.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(bu.math.asarray(ref_steps, dtype=ditype))
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         self.x = brainstate.ShortTermState(x0)
@@ -806,7 +809,8 @@ class iaf_tum_2000(NESTNeuron):
             containing the number of refractory steps for each neuron.
         """
         dt = brainstate.environ.get_dt()
-        return bu.math.asarray(bu.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return bu.math.asarray(bu.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _parse_spike_events(self, spike_events: Iterable, state_shape):
         r"""Parse external spike events into excitatory and inhibitory weights.
@@ -845,8 +849,9 @@ class iaf_tum_2000(NESTNeuron):
 
         Positive weights route to ``w_ex``, non-positive to ``w_in``.
         """
-        w_ex = np.zeros(state_shape, dtype=np.float64)
-        w_in = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        w_ex = np.zeros(state_shape, dtype=dftype)
+        w_in = np.zeros(state_shape, dtype=dftype)
 
         if spike_events is None:
             return w_ex, w_in
@@ -920,8 +925,9 @@ class iaf_tum_2000(NESTNeuron):
         Values are either callables (invoked and then removed) or direct
         ArrayLike values.
         """
-        w_ex = np.zeros(state_shape, dtype=np.float64)
-        w_in = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        w_ex = np.zeros(state_shape, dtype=dftype)
+        w_in = np.zeros(state_shape, dtype=dftype)
 
         if self.delta_inputs is None:
             return w_ex, w_in
@@ -1095,8 +1101,9 @@ class iaf_tum_2000(NESTNeuron):
         i_1 = self._broadcast_to_state(self._to_numpy(self.i_1.value, bu.pA), state_shape)
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value, bu.pA), state_shape)
         i_syn_in = self._broadcast_to_state(self._to_numpy(self.i_syn_in.value, bu.pA), state_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(bu.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(bu.math.asarray(self.refractory_step_count.value), dtype=ditype),
             state_shape,
         )
 
@@ -1139,7 +1146,7 @@ class iaf_tum_2000(NESTNeuron):
         spike_cond = np.where(deterministic, det_spike, stoch_spike)
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(bu.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(bu.math.asarray(self._refractory_counts()), dtype=ditype),
             state_shape,
         )
         r = np.where(spike_cond, refr_counts, r)
@@ -1177,7 +1184,7 @@ class iaf_tum_2000(NESTNeuron):
         self.i_syn_in.value = i_syn_in * bu.pA
         self.i_0.value = i_0_next * bu.pA
         self.i_1.value = i_1_next * bu.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_next * bu.ms)
 
         self.x.value = x_state

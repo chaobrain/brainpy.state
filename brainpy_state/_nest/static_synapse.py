@@ -406,16 +406,18 @@ class static_synapse(NESTSynapse):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike, *, name: str) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_receptor_type(value: ArrayLike) -> int:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('receptor_type must be scalar.')
         receptor = float(arr.reshape(()))
@@ -430,11 +432,12 @@ class static_synapse(NESTSynapse):
     def _normalize_scalar_weight(weight: ArrayLike):
         if isinstance(weight, u.Quantity):
             unit = u.get_unit(weight)
-            arr = np.asarray(weight.to_decimal(unit), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(weight.to_decimal(unit), dtype=dftype)
             if arr.size != 1:
                 raise ValueError('weight must be scalar.')
             return float(arr.reshape(())) * unit
-        arr = np.asarray(u.math.asarray(weight, dtype=jnp.float64), dtype=np.float64)
+        arr = np.asarray(u.math.asarray(weight, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('weight must be scalar.')
         scalar = float(arr.reshape(()))
@@ -472,12 +475,14 @@ class static_synapse(NESTSynapse):
     def _weight_to_float(weight) -> float:
         if isinstance(weight, u.Quantity):
             unit = u.get_unit(weight)
-            return float(np.asarray(weight.to_decimal(unit), dtype=np.float64).reshape(()))
-        return float(np.asarray(u.math.asarray(weight), dtype=np.float64).reshape(()))
+            dftype = brainstate.environ.dftype()
+            return float(np.asarray(weight.to_decimal(unit), dtype=dftype).reshape(()))
+        return float(np.asarray(u.math.asarray(weight), dtype=dftype).reshape(()))
 
     @staticmethod
     def _is_nonzero(value) -> bool:
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype)
         return bool(np.any(arr != 0.0))
 
     def _maybe_dt_ms(self) -> float | None:

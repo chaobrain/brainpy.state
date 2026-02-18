@@ -307,9 +307,11 @@ class inhomogeneous_poisson_generator(NESTDevice):
         if self.stop < self.start:
             raise ValueError('stop must be greater than or equal to start.')
 
-        self._rate_times_ms = np.asarray([], dtype=np.float64)
-        self._rate_values_hz = np.asarray([], dtype=np.float64)
-        self._rate_steps = np.asarray([], dtype=np.int64)
+        dftype = brainstate.environ.dftype()
+        self._rate_times_ms = np.asarray([], dtype=dftype)
+        self._rate_values_hz = np.asarray([], dtype=dftype)
+        ditype = brainstate.environ.ditype()
+        self._rate_steps = np.asarray([], dtype=ditype)
 
         if (rate_times is None) ^ (rate_values is None):
             raise ValueError('Rate times and values must be reset together.')
@@ -319,9 +321,10 @@ class inhomogeneous_poisson_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -331,24 +334,26 @@ class inhomogeneous_poisson_generator(NESTDevice):
         if not isinstance(values, u.Quantity):
             arr0 = np.asarray(values)
             if arr0.size == 0:
-                return np.asarray([], dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                return np.asarray([], dtype=dftype)
         if isinstance(values, u.Quantity):
             arr = values.to_decimal(u.ms)
         else:
-            arr = u.math.asarray(values, dtype=jnp.float64)
-        return np.asarray(arr, dtype=np.float64).reshape(-1)
+            arr = u.math.asarray(values, dtype=dftype)
+        return np.asarray(arr, dtype=dftype).reshape(-1)
 
     @staticmethod
     def _to_rate_array_hz(values: Sequence[ArrayLike] | ArrayLike) -> np.ndarray:
         if not isinstance(values, u.Quantity):
             arr0 = np.asarray(values)
             if arr0.size == 0:
-                return np.asarray([], dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                return np.asarray([], dtype=dftype)
         if isinstance(values, u.Quantity):
             arr = values.to_decimal(u.Hz)
         else:
-            arr = u.math.asarray(values, dtype=jnp.float64)
-        return np.asarray(arr, dtype=np.float64).reshape(-1)
+            arr = u.math.asarray(values, dtype=dftype)
+        return np.asarray(arr, dtype=dftype).reshape(-1)
 
     @staticmethod
     def _array_to_public(value: np.ndarray):
@@ -411,8 +416,10 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
         """
         del batch_size, kwargs
-        self._rate_idx = brainstate.ShortTermState(jnp.asarray(0, dtype=jnp.int64))
-        self._rate_hz = brainstate.ShortTermState(jnp.asarray(0.0, dtype=jnp.float64))
+        ditype = brainstate.environ.ditype()
+        self._rate_idx = brainstate.ShortTermState(jnp.asarray(0, dtype=ditype))
+        dftype = brainstate.environ.dftype()
+        self._rate_hz = brainstate.ShortTermState(jnp.asarray(0.0, dtype=dftype))
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
 
     def set(
@@ -494,18 +501,20 @@ class inhomogeneous_poisson_generator(NESTDevice):
             raise ValueError('Rate times and values have to be the same size.')
 
         if times_ms.size == 0:
-            self._rate_times_ms = np.asarray([], dtype=np.float64)
-            self._rate_values_hz = np.asarray([], dtype=np.float64)
-            self._rate_steps = np.asarray([], dtype=np.int64)
+            dftype = brainstate.environ.dftype()
+            self._rate_times_ms = np.asarray([], dtype=dftype)
+            self._rate_values_hz = np.asarray([], dtype=dftype)
+            ditype = brainstate.environ.ditype()
+            self._rate_steps = np.asarray([], dtype=ditype)
             if hasattr(self, '_rate_idx'):
-                self._rate_idx.value = jnp.asarray(0, dtype=jnp.int64)
+                self._rate_idx.value = jnp.asarray(0, dtype=ditype)
             return
 
         dt_ms = self._dt_ms()
         now_ms = self._current_time_ms()
 
-        aligned_times = np.empty_like(times_ms, dtype=np.float64)
-        aligned_steps = np.empty_like(times_ms, dtype=np.int64)
+        aligned_times = np.empty_like(times_ms, dtype=dftype)
+        aligned_steps = np.empty_like(times_ms, dtype=ditype)
 
         for i, t_ms in enumerate(times_ms):
             if t_ms <= now_ms:
@@ -524,7 +533,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
         # Match NEST setter semantics: schedule index is reset on new data.
         if hasattr(self, '_rate_idx'):
-            self._rate_idx.value = jnp.asarray(0, dtype=jnp.int64)
+            self._rate_idx.value = jnp.asarray(0, dtype=ditype)
 
     def get(self) -> dict:
         r"""Return current schedule and timing parameters in NEST-style format.
@@ -572,9 +581,10 @@ class inhomogeneous_poisson_generator(NESTDevice):
     def _sample_poisson(self, lam: float) -> jax.Array:
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
+        dftype = brainstate.environ.dftype()
         return jax.random.poisson(
             subkey,
-            lam=jnp.asarray(lam, dtype=jnp.float64),
+            lam=jnp.asarray(lam, dtype=dftype),
             shape=self.varshape,
         ).astype(jnp.int64)
 
@@ -614,11 +624,13 @@ class inhomogeneous_poisson_generator(NESTDevice):
             rate_hz = float(self._rate_values_hz[idx])
             idx += 1
 
-        self._rate_idx.value = jnp.asarray(idx, dtype=jnp.int64)
-        self._rate_hz.value = jnp.asarray(rate_hz, dtype=jnp.float64)
+        ditype = brainstate.environ.ditype()
+        self._rate_idx.value = jnp.asarray(idx, dtype=ditype)
+        dftype = brainstate.environ.dftype()
+        self._rate_hz.value = jnp.asarray(rate_hz, dtype=dftype)
 
         if rate_hz > 0.0 and self._is_active(curr_step, dt_ms):
             lam = rate_hz * dt_ms / 1000.0
             return self._sample_poisson(lam)
 
-        return jnp.zeros(self.varshape, dtype=jnp.int64)
+        return jnp.zeros(self.varshape, dtype=ditype)

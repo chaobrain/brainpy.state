@@ -40,11 +40,13 @@ class _threshold_lin_rate_base(_lin_rate_base):
 
     @staticmethod
     def _mult_coupling_ex(rate):
-        return np.ones_like(rate, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.ones_like(rate, dtype=dftype)
 
     @staticmethod
     def _mult_coupling_in(rate):
-        return np.ones_like(rate, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.ones_like(rate, dtype=dftype)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
         if isinstance(ev, dict):
@@ -79,8 +81,9 @@ class _threshold_lin_rate_base(_lin_rate_base):
         rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
         weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
         multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
+        dftype = brainstate.environ.dftype()
         weight_sign = self._broadcast_to_state(
-            np.asarray(u.math.asarray(weight), dtype=np.float64) >= 0.0,
+            np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0,
             state_shape,
         )
 
@@ -94,8 +97,9 @@ class _threshold_lin_rate_base(_lin_rate_base):
         return ex, inh, delay_steps
 
     def _accumulate_instant_events_threshold(self, events, state_shape, g, theta, alpha):
-        ex = np.zeros(state_shape, dtype=np.float64)
-        inh = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex = np.zeros(state_shape, dtype=dftype)
+        inh = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._event_to_ex_in(
                 ev,
@@ -112,8 +116,9 @@ class _threshold_lin_rate_base(_lin_rate_base):
         return ex, inh
 
     def _schedule_delayed_events_threshold(self, events, step_idx: int, state_shape, g, theta, alpha):
-        ex_now = np.zeros(state_shape, dtype=np.float64)
-        inh_now = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex_now = np.zeros(state_shape, dtype=dftype)
+        inh_now = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._event_to_ex_in(
                 ev,
@@ -136,7 +141,8 @@ class _threshold_lin_rate_base(_lin_rate_base):
 
     def _common_inputs_threshold(self, x, instant_rate_events, delayed_rate_events, g, theta, alpha):
         state_shape = self.rate.value.shape
-        step_idx = int(np.asarray(self._step_count.value, dtype=np.int64).reshape(-1)[0])
+        ditype = brainstate.environ.ditype()
+        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events_threshold(
@@ -668,9 +674,11 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        dftype = brainstate.environ.dftype()
+        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        ditype = brainstate.environ.ditype()
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -742,6 +750,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
            where :math:`\phi(h)=\min(\max(g(h-\theta),0),\alpha)`.
 
         5. Apply optional output rectification:
+           ditype = brainstate.environ.ditype()
+           dftype = brainstate.environ.dftype()
            :math:`X_{n+1}\gets\max(X',\,\mathrm{rectify\_rate})`.
 
         6. Update state variables: ``rate``, ``noise``, ``delayed_rate``,
@@ -823,7 +833,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new
 
 
@@ -1308,9 +1318,9 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
         self.noisy_rate = brainstate.ShortTermState(noisy_rate_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -1453,5 +1463,5 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

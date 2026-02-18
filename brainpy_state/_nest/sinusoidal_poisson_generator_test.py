@@ -55,7 +55,8 @@ def _run_bp_counts(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    totals = np.zeros(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = sinusoidal_poisson_generator(
@@ -74,7 +75,7 @@ def _run_bp_counts(
 
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                totals[step] = float(np.asarray(gen.update(), dtype=np.float64).sum())
+                totals[step] = float(np.asarray(gen.update(), dtype=dftype).sum())
 
     return totals
 
@@ -130,8 +131,9 @@ class TestSinusoidalPoissonGeneratorOrdering(unittest.TestCase):
                 rng_seed=1,
             )
             gen.init_state()
+            ditype = brainstate.environ.ditype()
             gen._sample_poisson_individual = (
-                lambda lam: jnp.asarray([int(round(float(lam)))], dtype=jnp.int64)
+                lambda lam: jnp.asarray([int(round(float(lam)))], dtype=ditype)
             )
 
             trace = self._run_trace(gen, n_steps=7)
@@ -151,7 +153,8 @@ class TestSinusoidalPoissonGeneratorOrdering(unittest.TestCase):
         phi_rad = 2.0
         phase_deg = phi_rad / np.pi * 180.0
 
-        recorded = np.zeros(n_steps, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        recorded = np.zeros(n_steps, dtype=dftype)
         with brainstate.environ.context(dt=dt):
             gen = sinusoidal_poisson_generator(
                 in_size=1,
@@ -167,7 +170,7 @@ class TestSinusoidalPoissonGeneratorOrdering(unittest.TestCase):
                     gen.update()
                 recorded[step] = gen.get_recorded_rate()
 
-        times_ms = (np.arange(n_steps, dtype=np.float64) + 1.0) * dt_ms
+        times_ms = (np.arange(n_steps, dtype=dftype) + 1.0) * dt_ms
         expected = np.maximum(
             0.0,
             dc_hz + ac_hz * np.sin(2.0 * np.pi * freq_hz * times_ms / 1000.0 + phi_rad),
@@ -189,7 +192,8 @@ class TestSinusoidalPoissonGeneratorOrdering(unittest.TestCase):
 
             for step in range(50):
                 with brainstate.environ.context(t=step * dt):
-                    out = np.asarray(gen.update(), dtype=np.int64)
+                    ditype = brainstate.environ.ditype()
+                    out = np.asarray(gen.update(), dtype=ditype)
                 self.assertTrue(np.all(out == out.reshape(-1)[0]))
 
     def test_individual_spike_trains_true_are_not_forced_equal(self):
@@ -208,7 +212,8 @@ class TestSinusoidalPoissonGeneratorOrdering(unittest.TestCase):
             has_non_uniform_step = False
             for step in range(80):
                 with brainstate.environ.context(t=step * dt):
-                    out = np.asarray(gen.update(), dtype=np.int64)
+                    ditype = brainstate.environ.ditype()
+                    out = np.asarray(gen.update(), dtype=ditype)
                 if np.any(out != out.reshape(-1)[0]):
                     has_non_uniform_step = True
                     break
@@ -267,9 +272,10 @@ class TestSinusoidalPoissonGeneratorVsNEST(unittest.TestCase):
 
         events = sr.get('events')
         if len(events['times']) == 0:
-            return np.zeros(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            return np.zeros(n_steps, dtype=dftype)
 
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / dt_ms).astype(np.int64)
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)
         counts = np.bincount(steps, minlength=n_steps + 2).astype(np.float64)
 
         # Spike recorder timestamps include one-step transmission delay.
@@ -314,7 +320,8 @@ class TestSinusoidalPoissonGeneratorVsNEST(unittest.TestCase):
         bp_counts_aligned[1:] = bp_counts[:-1]
 
         n_steps = bp_counts_aligned.size
-        times_ms = np.arange(1, n_steps + 1, dtype=np.float64) * dt_ms
+        dftype = brainstate.environ.dftype()
+        times_ms = np.arange(1, n_steps + 1, dtype=dftype) * dt_ms
         phi_rad = np.deg2rad(phase_deg)
         expected_rate = np.maximum(
             0.0,

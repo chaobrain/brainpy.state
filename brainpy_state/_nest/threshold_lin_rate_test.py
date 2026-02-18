@@ -57,9 +57,10 @@ def _run_nest_trace(model_name, params, record_from, simtime_ms, dt_ms):
     nest.Simulate(simtime_ms)
 
     ev = mm.events
-    out = {'times': np.asarray(ev['times'], dtype=np.float64)}
+    dftype = brainstate.environ.dftype()
+    out = {'times': np.asarray(ev['times'], dtype=dftype)}
     for key in record_from:
-        out[key] = np.asarray(ev[key], dtype=np.float64)
+        out[key] = np.asarray(ev[key], dtype=dftype)
     return out
 
 
@@ -98,7 +99,8 @@ def _run_nest_threshold_driven_trace(linear_summation, dt_ms, simtime_ms, drive,
     )
 
     nest.Simulate(simtime_ms)
-    return np.asarray(mm.events['rate'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(mm.events['rate'], dtype=dftype)
 
 
 class TestThresholdLinRate(unittest.TestCase):
@@ -119,7 +121,8 @@ class TestThresholdLinRate(unittest.TestCase):
         self.assertEqual(ipn.mu, 0.0)
         self.assertEqual(ipn.g, 1.0)
         self.assertEqual(ipn.theta, 0.0)
-        self.assertTrue(np.isinf(np.asarray(u.math.asarray(ipn.alpha), dtype=np.float64)).all())
+        dftype = brainstate.environ.dftype()
+        self.assertTrue(np.isinf(np.asarray(u.math.asarray(ipn.alpha), dtype=dftype)).all())
         self.assertEqual(ipn.mult_coupling, False)
         self.assertEqual(ipn.linear_summation, True)
         self.assertEqual(ipn.rectify_rate, 0.0)
@@ -132,7 +135,7 @@ class TestThresholdLinRate(unittest.TestCase):
         self.assertEqual(opn.mu, 0.0)
         self.assertEqual(opn.g, 1.0)
         self.assertEqual(opn.theta, 0.0)
-        self.assertTrue(np.isinf(np.asarray(u.math.asarray(opn.alpha), dtype=np.float64)).all())
+        self.assertTrue(np.isinf(np.asarray(u.math.asarray(opn.alpha), dtype=dftype)).all())
         self.assertEqual(opn.mult_coupling, False)
         self.assertEqual(opn.linear_summation, True)
         self.assertEqual(opn.recordables, ['rate', 'noise', 'noisy_rate'])
@@ -168,7 +171,8 @@ class TestThresholdLinRate(unittest.TestCase):
             rate0=0.3,
         )
 
-        noise_seq = np.asarray([0.2, -1.0, 0.4, -0.3, 1.1, 0.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        noise_seq = np.asarray([0.2, -1.0, 0.4, -0.3, 1.1, 0.0], dtype=dftype)
         instant_events_seq = [
             [{'rate': 1.0, 'weight': 0.7}, {'rate': 0.5, 'weight': -0.4}],
             [{'rate': 0.2, 'weight': 0.1}],
@@ -289,7 +293,8 @@ class TestThresholdLinRate(unittest.TestCase):
             rate0=-0.2,
         )
 
-        noise_seq = np.asarray([1.0, -0.5, 0.2, 0.0, -1.3, 0.7], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        noise_seq = np.asarray([1.0, -0.5, 0.2, 0.0, -1.3, 0.7], dtype=dftype)
         instant_events_seq = [
             [{'rate': 1.0, 'weight': 0.2}],
             [{'rate': 0.8, 'weight': -0.4}],
@@ -429,8 +434,9 @@ class TestThresholdLinRate(unittest.TestCase):
             n0.init_state()
             n1.init_state()
 
-            y0 = np.zeros(steps, dtype=np.float64)
-            y1 = np.zeros(steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            y0 = np.zeros(steps, dtype=dftype)
+            y1 = np.zeros(steps, dtype=dftype)
             for k in range(steps):
                 self._step(n0, k, instant_rate_events=event)
                 self._step(n1, k, instant_rate_events=event)
@@ -476,8 +482,9 @@ class TestThresholdLinRate(unittest.TestCase):
                 rate_initializer=braintools.init.Constant(-0.3),
             )
             ipn_bp.init_state()
-            bp_rate = np.zeros((steps,), dtype=np.float64)
-            bp_noise = np.zeros((steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            bp_rate = np.zeros((steps,), dtype=dftype)
+            bp_noise = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(ipn_bp, k)
                 bp_rate[k] = float(np.asarray(ipn_bp.rate.value).reshape(-1)[0])
@@ -516,9 +523,9 @@ class TestThresholdLinRate(unittest.TestCase):
                 noisy_rate_initializer=braintools.init.Constant(0.4),
             )
             opn_bp.init_state()
-            bp_rate = np.zeros((steps,), dtype=np.float64)
-            bp_noise = np.zeros((steps,), dtype=np.float64)
-            bp_noisy = np.zeros((steps,), dtype=np.float64)
+            bp_rate = np.zeros((steps,), dtype=dftype)
+            bp_noise = np.zeros((steps,), dtype=dftype)
+            bp_noisy = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(opn_bp, k)
                 bp_rate[k] = float(np.asarray(opn_bp.rate.value).reshape(-1)[0])
@@ -589,8 +596,9 @@ class TestThresholdLinRate(unittest.TestCase):
             bp_linear_sum.init_state()
             bp_event_sum.init_state()
 
-            y_linear_sum = np.zeros((steps,), dtype=np.float64)
-            y_event_sum = np.zeros((steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            y_linear_sum = np.zeros((steps,), dtype=dftype)
+            y_event_sum = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(
                     bp_linear_sum,

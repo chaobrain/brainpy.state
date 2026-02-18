@@ -72,11 +72,13 @@ class TestIAFChs2007(unittest.TestCase):
 
     @staticmethod
     def _scalar(x):
-        return float(np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)[0])
+        dftype = brainstate.environ.dftype()
+        return float(np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)[0])
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64).reshape(-1)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)[0] > 0.0)
 
     def _step(self, neuron, k, x=0.0, delta_weights=None):
         if delta_weights is not None:
@@ -170,7 +172,8 @@ class TestIAFChs2007(unittest.TestCase):
 
     def test_reference_trace_matches_nest_step_logic(self):
         with brainstate.environ.context(dt=self.dt):
-            noise = np.linspace(-1.0, 1.0, 256, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            noise = np.linspace(-1.0, 1.0, 256, dtype=dftype)
             neuron = iaf_chs_2007(
                 1,
                 tau_epsp=8.5 * u.ms,

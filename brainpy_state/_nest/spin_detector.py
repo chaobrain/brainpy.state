@@ -248,10 +248,12 @@ class spin_detector(NESTDevice):
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.spin_detector(start=0.0 * u.ms, stop=1.0 * u.ms)
        ...     with brainstate.environ.context(t=0.0 * u.ms):
+       dftype = brainstate.environ.dftype()
+       ditype = brainstate.environ.ditype()
        ...         _ = det.update(
-       ...             spikes=np.array([1.0, 1.0], dtype=np.float64),
-       ...             senders=np.array([7, 7], dtype=np.int64),
-       ...             stamp_steps=np.array([1, 1], dtype=np.int64),
+       ...             spikes=np.array([1.0, 1.0], dtype=dftype),
+       ...             senders=np.array([7, 7], dtype=ditype),
+       ...             stamp_steps=np.array([1, 1], dtype=ditype),
        ...         )
        ...     ev = det.flush()
        ...     _ = (ev['senders'][0], ev['state'][0])
@@ -271,9 +273,9 @@ class spin_detector(NESTDevice):
        ...     det = brainpy.state.spin_detector(time_in_steps=True)
        ...     with brainstate.environ.context(t=0.0 * u.ms):
        ...         _ = det.update(
-       ...             spikes=np.array([2.0], dtype=np.float64),
-       ...             senders=np.array([3], dtype=np.int64),
-       ...             offsets=np.array([0.02], dtype=np.float64) * u.ms,
+       ...             spikes=np.array([2.0], dtype=dftype),
+       ...             senders=np.array([3], dtype=ditype),
+       ...             offsets=np.array([0.02], dtype=dftype) * u.ms,
        ...         )
        ...     ev = det.events
        ...     _ = (ev['times'][0], ev['offsets'][0], ev['state'][0])
@@ -329,15 +331,17 @@ class spin_detector(NESTDevice):
 
     @property
     def events(self) -> dict[str, np.ndarray]:
+        ditype = brainstate.environ.ditype()
         out = {
-            'senders': np.asarray(self._events_senders, dtype=np.int64),
-            'state': np.asarray(self._events_state, dtype=np.int64),
+            'senders': np.asarray(self._events_senders, dtype=ditype),
+            'state': np.asarray(self._events_state, dtype=ditype),
         }
         if self.time_in_steps:
-            out['times'] = np.asarray(self._events_times_steps, dtype=np.int64)
-            out['offsets'] = np.asarray(self._events_offsets, dtype=np.float64)
+            out['times'] = np.asarray(self._events_times_steps, dtype=ditype)
+            dftype = brainstate.environ.dftype()
+            out['offsets'] = np.asarray(self._events_offsets, dtype=dftype)
         else:
-            out['times'] = np.asarray(self._events_times_ms, dtype=np.float64)
+            out['times'] = np.asarray(self._events_times_ms, dtype=dftype)
         return out
 
     def get(self, key: str = 'events'):
@@ -491,7 +495,8 @@ class spin_detector(NESTDevice):
                     counts = np.where(spike_arr > 0.0, mult_arr, 0)
 
                 if stamp_steps is None:
-                    stamp_arr = np.full((n_items,), step_now + 1, dtype=np.int64)
+                    ditype = brainstate.environ.ditype()
+                    stamp_arr = np.full((n_items,), step_now + 1, dtype=ditype)
                 else:
                     stamp_arr = self._to_int_array(stamp_steps, name='stamp_steps', size=n_items)
 
@@ -590,7 +595,8 @@ class spin_detector(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -669,16 +675,17 @@ class spin_detector(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
                 x = x / unit
             elif isinstance(x, u.Quantity):
                 x = u.get_mantissa(x)
-            arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
 
         if arr.size == 0 and size is not None:
-            return np.zeros((0,), dtype=np.float64)
+            return np.zeros((0,), dtype=dftype)
 
         if not np.all(np.isfinite(arr)):
             raise ValueError(f'{name} must contain finite values.')
@@ -687,7 +694,7 @@ class spin_detector(NESTDevice):
             return arr
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), arr[0], dtype=np.float64)
+            return np.full((size,), arr[0], dtype=dftype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.float64, copy=False)
@@ -702,15 +709,16 @@ class spin_detector(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            arr = np.asarray([default], dtype=ditype)
         else:
-            arr = np.asarray(u.math.asarray(x), dtype=np.int64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)
 
         if size is None:
             return arr.astype(np.int64, copy=False)
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), int(arr[0]), dtype=np.int64)
+            return np.full((size,), int(arr[0]), dtype=ditype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.int64, copy=False)

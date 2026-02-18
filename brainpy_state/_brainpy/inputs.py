@@ -209,7 +209,8 @@ class SpikeTime(brainstate.nn.Dynamics):
 
         # Slice CSR row → dense spike vector of shape (n_cols,)
         # Reshape to 1D for csr_slice_rows, then squeeze back
-        return self._csr[jnp.asarray(i, dtype=jnp.int32).reshape(1)][0]
+        ditype = brainstate.environ.ditype()
+        return self._csr[jnp.asarray(i, dtype=ditype).reshape(1)][0]
 
 
 class PoissonSpike(brainstate.nn.Dynamics):

@@ -380,11 +380,12 @@ class ignore_and_fire(NESTNeuron):
             firing_period_steps = np.broadcast_to(firing_period_steps, (batch_size,) + self.varshape)
             phase_steps = np.broadcast_to(phase_steps, (batch_size,) + self.varshape)
 
+        ditype = brainstate.environ.ditype()
         self.firing_period_steps = brainstate.ShortTermState(
-            jnp.asarray(firing_period_steps, dtype=jnp.int32)
+            jnp.asarray(firing_period_steps, dtype=ditype)
         )
         self.phase_steps = brainstate.ShortTermState(
-            jnp.asarray(phase_steps, dtype=jnp.int32)
+            jnp.asarray(phase_steps, dtype=ditype)
         )
 
     def update(self, x=None):

@@ -287,9 +287,10 @@ class mip_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -297,16 +298,18 @@ class mip_generator(NESTDevice):
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))
@@ -502,7 +505,8 @@ class mip_generator(NESTDevice):
         return int(self._rng_parent.poisson(lam))
 
     def _sample_child_spikes(self, n_parent_spikes: int) -> np.ndarray:
-        out = np.zeros(self._num_targets, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        out = np.zeros(self._num_targets, dtype=ditype)
 
         if n_parent_spikes <= 0 or self._num_targets == 0:
             return out
@@ -558,16 +562,17 @@ class mip_generator(NESTDevice):
             self._refresh_timing_cache(dt_ms)
 
         if self.rate <= 0.0:
-            return np.zeros(self.varshape, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            return np.zeros(self.varshape, dtype=ditype)
 
         curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
         if not self._is_active(curr_step):
-            return np.zeros(self.varshape, dtype=np.int64)
+            return np.zeros(self.varshape, dtype=ditype)
 
         lam = self.rate * dt_ms / 1000.0
         n_parent_spikes = self._sample_parent_spikes(lam)
         if n_parent_spikes <= 0:
-            return np.zeros(self.varshape, dtype=np.int64)
+            return np.zeros(self.varshape, dtype=ditype)
 
         child_counts = self._sample_child_spikes(n_parent_spikes)
         return child_counts.reshape(self.varshape)

@@ -35,7 +35,8 @@ def _to_ms_scalar(value):
         return None
     if isinstance(value, u.Quantity):
         value = value / u.ms
-    arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
     if arr.size != 1:
         raise ValueError('Expected scalar time value.')
     return float(arr[0])
@@ -45,7 +46,8 @@ def _prepare_bp_schedule(spike_times_by_port, dt_ms):
     schedule = {}
     eps = 1e-12
     for port, times in enumerate(spike_times_by_port):
-        times = np.asarray(times, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(times, dtype=dftype)
         for t_spike in times:
             step_f = float(t_spike) / float(dt_ms)
             stamp_step = int(np.ceil(step_f - eps))
@@ -78,23 +80,25 @@ def _run_bp_corrdet(
             with brainstate.environ.context(t=step * dt):
                 if stamp_step in schedule:
                     events = schedule[stamp_step]
-                    ports = np.asarray([e[0] for e in events], dtype=np.int64)
-                    multiplicities = np.asarray([e[1] for e in events], dtype=np.int64)
-                    weights = np.asarray([port_weights[e[0]] for e in events], dtype=np.float64)
+                    ditype = brainstate.environ.ditype()
+                    ports = np.asarray([e[0] for e in events], dtype=ditype)
+                    multiplicities = np.asarray([e[1] for e in events], dtype=ditype)
+                    dftype = brainstate.environ.dftype()
+                    weights = np.asarray([port_weights[e[0]] for e in events], dtype=dftype)
                     cd.update(
-                        spikes=np.ones((len(events),), dtype=np.float64),
+                        spikes=np.ones((len(events),), dtype=dftype),
                         receptor_ports=ports,
                         weights=weights,
                         multiplicities=multiplicities,
-                        stamp_steps=np.full((len(events),), stamp_step, dtype=np.int64),
+                        stamp_steps=np.full((len(events),), stamp_step, dtype=ditype),
                     )
                 else:
                     cd.update()
 
     return {
-        'histogram': np.asarray(cd.get('histogram'), dtype=np.float64),
-        'count_histogram': np.asarray(cd.get('count_histogram'), dtype=np.int64),
-        'n_events': np.asarray(cd.get('n_events'), dtype=np.int64),
+        'histogram': np.asarray(cd.get('histogram'), dtype=dftype),
+        'count_histogram': np.asarray(cd.get('count_histogram'), dtype=ditype),
+        'n_events': np.asarray(cd.get('n_events'), dtype=ditype),
     }
 
 
@@ -127,17 +131,18 @@ def _run_nest_corrdet(
 
     cd = nest.Create('correlation_detector', params=_to_nest_cd_params(cd_params))
 
+    dftype = brainstate.environ.dftype()
     sg1 = nest.Create(
         'spike_generator',
         params={
-            'spike_times': list(np.asarray(spike_times_by_port[0], dtype=np.float64)),
+            'spike_times': list(np.asarray(spike_times_by_port[0], dtype=dftype)),
             'precise_times': False,
         },
     )
     sg2 = nest.Create(
         'spike_generator',
         params={
-            'spike_times': list(np.asarray(spike_times_by_port[1], dtype=np.float64)),
+            'spike_times': list(np.asarray(spike_times_by_port[1], dtype=dftype)),
             'precise_times': False,
         },
     )
@@ -163,10 +168,11 @@ def _run_nest_corrdet(
 
     nest.Simulate(float(simtime_ms))
 
+    ditype = brainstate.environ.ditype()
     return {
-        'histogram': np.asarray(cd.get('histogram'), dtype=np.float64),
-        'count_histogram': np.asarray(cd.get('count_histogram'), dtype=np.int64),
-        'n_events': np.asarray(cd.get('n_events'), dtype=np.int64),
+        'histogram': np.asarray(cd.get('histogram'), dtype=dftype),
+        'count_histogram': np.asarray(cd.get('count_histogram'), dtype=ditype),
+        'n_events': np.asarray(cd.get('n_events'), dtype=ditype),
     }
 
 
@@ -189,9 +195,11 @@ class TestCorrelationDetector(unittest.TestCase):
         self.assertAlmostEqual(cd.get('delta_tau'), 0.5, places=12)
         self.assertAlmostEqual(cd.get('tau_max'), 5.0, places=12)
         self.assertEqual(cd.get('histogram').size, 21)
-        npt.assert_array_equal(cd.get('n_events'), np.array([0, 0], dtype=np.int64))
-        npt.assert_array_equal(cd.get('count_histogram'), np.zeros((21,), dtype=np.int64))
-        npt.assert_allclose(cd.get('histogram'), np.zeros((21,), dtype=np.float64), atol=1e-12)
+        ditype = brainstate.environ.ditype()
+        npt.assert_array_equal(cd.get('n_events'), np.array([0, 0], dtype=ditype))
+        npt.assert_array_equal(cd.get('count_histogram'), np.zeros((21,), dtype=ditype))
+        dftype = brainstate.environ.dftype()
+        npt.assert_allclose(cd.get('histogram'), np.zeros((21,), dtype=dftype), atol=1e-12)
 
     def test_validation_rules(self):
         with brainstate.environ.context(dt=self.dt):
@@ -203,9 +211,11 @@ class TestCorrelationDetector(unittest.TestCase):
                     correlation_detector(delta_tau=1.0 * u.ms, tau_max=2.5 * u.ms).update()
 
                 with self.assertRaises(ValueError):
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
                     correlation_detector(delta_tau=0.1 * u.ms, tau_max=1.0 * u.ms).update(
-                        spikes=np.array([1.0], dtype=np.float64),
-                        receptor_ports=np.array([2], dtype=np.int64),
+                        spikes=np.array([1.0], dtype=dftype),
+                        receptor_ports=np.array([2], dtype=ditype),
                     )
 
     def test_known_histograms_from_nest_testsuite(self):
@@ -230,31 +240,34 @@ class TestCorrelationDetector(unittest.TestCase):
                 cd_params={'delta_tau': 1.0 * u.ms, 'tau_max': 5.0 * u.ms},
             )
 
-            expected_hist_arr = np.asarray(expected_hist, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            expected_hist_arr = np.asarray(expected_hist, dtype=ditype)
             npt.assert_array_equal(out['count_histogram'], expected_hist_arr)
             npt.assert_allclose(out['histogram'], expected_hist_arr.astype(np.float64), atol=1e-12)
             npt.assert_array_equal(
                 out['n_events'],
-                np.array([len(spike_times[0]), len(spike_times[1])], dtype=np.int64),
+                np.array([len(spike_times[0]), len(spike_times[1])], dtype=ditype),
             )
 
     def test_n_events_reset_semantics(self):
         with brainstate.environ.context(dt=self.dt):
             cd = correlation_detector(delta_tau=1.0 * u.ms, tau_max=5.0 * u.ms)
             with brainstate.environ.context(t=0.0 * u.ms):
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
                 cd.update(
-                    spikes=np.array([1.0, 1.0], dtype=np.float64),
-                    receptor_ports=np.array([0, 1], dtype=np.int64),
+                    spikes=np.array([1.0, 1.0], dtype=dftype),
+                    receptor_ports=np.array([0, 1], dtype=ditype),
                 )
 
             self.assertTrue(np.any(cd.get('n_events') > 0))
-            cd.n_events = np.array([0, 0], dtype=np.int64)
-            npt.assert_array_equal(cd.get('n_events'), np.array([0, 0], dtype=np.int64))
-            npt.assert_allclose(cd.get('histogram'), np.zeros((11,), dtype=np.float64), atol=1e-12)
-            npt.assert_array_equal(cd.get('count_histogram'), np.zeros((11,), dtype=np.int64))
+            cd.n_events = np.array([0, 0], dtype=ditype)
+            npt.assert_array_equal(cd.get('n_events'), np.array([0, 0], dtype=ditype))
+            npt.assert_allclose(cd.get('histogram'), np.zeros((11,), dtype=dftype), atol=1e-12)
+            npt.assert_array_equal(cd.get('count_histogram'), np.zeros((11,), dtype=ditype))
 
             with self.assertRaises(ValueError):
-                cd.n_events = np.array([1, 1], dtype=np.int64)
+                cd.n_events = np.array([1, 1], dtype=ditype)
 
     def test_matches_nest_weighted_histogram_and_windows(self):
         if not self._is_nest_available():

@@ -79,9 +79,10 @@ class TestSpikeTimeConstruction(unittest.TestCase):
     def test_empty_events(self):
         r"""Empty events with explicit Quantity arrays."""
         with brainstate.environ.context(dt=self.dt):
+            ditype = brainstate.environ.ditype()
             st = SpikeTime(3,
                            times=u.math.zeros(0) * u.ms,
-                           indices=jnp.zeros(0, dtype=jnp.int32))
+                           indices=jnp.zeros(0, dtype=ditype))
             self.assertEqual(st.num_times, 0)
             result = st.update(index=50)
             npt.assert_array_equal(result, jnp.zeros(3, dtype=st._spk_dtype))

@@ -636,7 +636,8 @@ class TestRefractoryPeriod(unittest.TestCase):
             neuron.init_state()
 
             # Manually set refractory counter
-            neuron.refractory_step_count.value = jnp.array([5], dtype=jnp.int32)
+            ditype = brainstate.environ.ditype()
+            neuron.refractory_step_count.value = jnp.array([5], dtype=ditype)
 
             with brainstate.environ.context(t=0.0 * u.ms):
                 neuron.update()
@@ -658,7 +659,8 @@ class TestRefractoryPeriod(unittest.TestCase):
 
             # Set V_s very high and set refractory counter
             neuron.V_s.value = jnp.array([0.0]) * u.mV
-            neuron.refractory_step_count.value = jnp.array([10], dtype=jnp.int32)
+            ditype = brainstate.environ.ditype()
+            neuron.refractory_step_count.value = jnp.array([10], dtype=ditype)
 
             # No spike should occur while refractory
             for i in range(5):

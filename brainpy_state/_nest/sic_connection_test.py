@@ -115,7 +115,8 @@ class TestSICConnection(unittest.TestCase):
 
     def test_event_helpers_match_nest_delay_mapping(self):
         syn = sic_connection(weight=2.0, delay_steps=7)
-        coeff = np.asarray([0.5, -1.25, 3.0, 0.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        coeff = np.asarray([0.5, -1.25, 3.0, 0.0], dtype=dftype)
 
         sec = syn.prepare_secondary_event(coeff)
         npt.assert_allclose(sec['coeffarray'], coeff, atol=0.0, rtol=0.0)
@@ -164,8 +165,8 @@ class TestSICConnection(unittest.TestCase):
             n_coeffarray.init_state()
             n_mapped.init_state()
 
-            trace_coeffarray = np.zeros((20,), dtype=np.float64)
-            trace_mapped = np.zeros((20,), dtype=np.float64)
+            trace_coeffarray = np.zeros((20,), dtype=dftype)
+            trace_mapped = np.zeros((20,), dtype=dftype)
             for k in range(20):
                 events_coeff = event if k == 0 else None
                 events_mapped = mapped if k == 0 else None
@@ -215,9 +216,10 @@ class TestSICConnection(unittest.TestCase):
 
         nrn_events = mm_nrn.get('events')
         astro_events = mm_astro.get('events')
-        nest_times = np.asarray(nrn_events['times'], dtype=np.float64)
-        nest_i_sic = np.asarray(nrn_events['I_SIC'], dtype=np.float64)
-        ca = np.asarray(astro_events['Ca_astro'], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        nest_times = np.asarray(nrn_events['times'], dtype=dftype)
+        nest_i_sic = np.asarray(nrn_events['I_SIC'], dtype=dftype)
+        ca = np.asarray(astro_events['Ca_astro'], dtype=dftype)
         self.assertGreater(ca.size, 0)
 
         calc_thr = (ca - sic_th) * 1000.0
@@ -235,7 +237,7 @@ class TestSICConnection(unittest.TestCase):
             neuron.init_state()
 
             n_steps = ca.size
-            bp_i_sic = np.empty((n_steps,), dtype=np.float64)
+            bp_i_sic = np.empty((n_steps,), dtype=dftype)
             for k in range(n_steps):
                 ev = syn.to_sic_event(coeff=coeff[k], min_delay_steps=1)
                 self._step(neuron, k, sic_events=ev)

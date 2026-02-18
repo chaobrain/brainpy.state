@@ -354,7 +354,8 @@ class noise_generator(NESTDevice):
         self.current_amp = brainstate.ShortTermState(amp)
 
         # Step counter for noise update interval tracking
-        self._step_counter = brainstate.ShortTermState(jnp.array(0, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self._step_counter = brainstate.ShortTermState(jnp.array(0, dtype=ditype))
 
     def update(self):
         r"""Advance the generator one simulation step and return current output.

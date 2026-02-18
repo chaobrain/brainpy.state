@@ -207,7 +207,8 @@ def _default_initial_state(params):
     r"""Return the NEST-matching initial state vector."""
     V_init = (params['g_NaL'] * params['E_Na'] + params['g_KL'] * params['E_K']) / \
              (params['g_NaL'] + params['g_KL'])
-    y0 = np.zeros(_STATE_VEC_SIZE, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y0 = np.zeros(_STATE_VEC_SIZE, dtype=dftype)
     y0[_V_M] = V_init
     y0[_THETA] = params['theta_eq']
     y0[_m_fast_NMDA] = _m_eq_NMDA(V_init, params['S_act_NMDA'], params['V_act_NMDA'])

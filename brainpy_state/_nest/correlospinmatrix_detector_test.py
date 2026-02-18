@@ -35,7 +35,8 @@ def _to_ms_scalar(value):
         return None
     if isinstance(value, u.Quantity):
         value = value / u.ms
-    arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
     if arr.size != 1:
         raise ValueError('Expected scalar time value.')
     return float(arr[0])
@@ -46,7 +47,8 @@ def _prepare_bp_schedule(spike_times_by_channel, dt_ms):
     eps = 1e-12
 
     for channel, times in enumerate(spike_times_by_channel):
-        times = np.asarray(times, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(times, dtype=dftype)
         if times.size == 0:
             continue
 
@@ -85,17 +87,19 @@ def _run_bp_correlospinmatrix(
             with brainstate.environ.context(t=step * dt):
                 if stamp_step in schedule:
                     events = schedule[stamp_step]
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
                     cmd.update(
-                        spikes=np.ones((len(events),), dtype=np.float64),
-                        receptor_ports=np.asarray([e[0] for e in events], dtype=np.int64),
-                        multiplicities=np.asarray([e[1] for e in events], dtype=np.int64),
-                        stamp_steps=np.full((len(events),), stamp_step, dtype=np.int64),
+                        spikes=np.ones((len(events),), dtype=dftype),
+                        receptor_ports=np.asarray([e[0] for e in events], dtype=ditype),
+                        multiplicities=np.asarray([e[1] for e in events], dtype=ditype),
+                        stamp_steps=np.full((len(events),), stamp_step, dtype=ditype),
                     )
                 else:
                     cmd.update()
 
     return {
-        'count_covariance': np.asarray(cmd.get('count_covariance'), dtype=np.int64),
+        'count_covariance': np.asarray(cmd.get('count_covariance'), dtype=ditype),
     }
 
 
@@ -127,10 +131,11 @@ def _run_nest_correlospinmatrix(
     cmd = nest.Create('correlospinmatrix_detector', params=_to_nest_cmd_params(cmd_params))
 
     for channel, times in enumerate(spike_times_by_channel):
+        dftype = brainstate.environ.dftype()
         sg = nest.Create(
             'spike_generator',
             params={
-                'spike_times': list(np.asarray(times, dtype=np.float64)),
+                'spike_times': list(np.asarray(times, dtype=dftype)),
                 'precise_times': False,
             },
         )
@@ -144,8 +149,9 @@ def _run_nest_correlospinmatrix(
 
     nest.Simulate(float(simtime_ms))
 
+    ditype = brainstate.environ.ditype()
     return {
-        'count_covariance': np.asarray(cmd.get('count_covariance'), dtype=np.int64),
+        'count_covariance': np.asarray(cmd.get('count_covariance'), dtype=ditype),
     }
 
 
@@ -169,7 +175,8 @@ class TestCorrelospinmatrixDetector(unittest.TestCase):
         self.assertAlmostEqual(cmd.get('tau_max'), 1.0, places=12)
         self.assertEqual(cmd.get('N_channels'), 1)
         self.assertEqual(cmd.get('count_covariance').shape, (1, 1, 21))
-        npt.assert_array_equal(cmd.get('count_covariance'), np.zeros((1, 1, 21), dtype=np.int64))
+        ditype = brainstate.environ.ditype()
+        npt.assert_array_equal(cmd.get('count_covariance'), np.zeros((1, 1, 21), dtype=ditype))
 
     def test_validation_rules(self):
         with brainstate.environ.context(dt=self.dt):
@@ -193,9 +200,11 @@ class TestCorrelospinmatrixDetector(unittest.TestCase):
                     correlospinmatrix_detector(Tstop=-1.0 * u.ms).update()
 
                 with self.assertRaises(ValueError):
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
                     correlospinmatrix_detector(N_channels=2).update(
-                        spikes=np.array([1.0], dtype=np.float64),
-                        receptor_ports=np.array([2], dtype=np.int64),
+                        spikes=np.array([1.0], dtype=dftype),
+                        receptor_ports=np.array([2], dtype=ditype),
                     )
 
     def test_reset_on_parameter_change(self):
@@ -218,11 +227,13 @@ class TestCorrelospinmatrixDetector(unittest.TestCase):
                 with brainstate.environ.context(t=step * self.dt):
                     if stamp_step in schedule:
                         events = schedule[stamp_step]
+                        dftype = brainstate.environ.dftype()
+                        ditype = brainstate.environ.ditype()
                         cmd.update(
-                            spikes=np.ones((len(events),), dtype=np.float64),
-                            receptor_ports=np.asarray([e[0] for e in events], dtype=np.int64),
-                            multiplicities=np.asarray([e[1] for e in events], dtype=np.int64),
-                            stamp_steps=np.full((len(events),), stamp_step, dtype=np.int64),
+                            spikes=np.ones((len(events),), dtype=dftype),
+                            receptor_ports=np.asarray([e[0] for e in events], dtype=ditype),
+                            multiplicities=np.asarray([e[1] for e in events], dtype=ditype),
+                            stamp_steps=np.full((len(events),), stamp_step, dtype=ditype),
                         )
                     else:
                         cmd.update()
@@ -234,9 +245,10 @@ class TestCorrelospinmatrixDetector(unittest.TestCase):
                 cmd.update()
 
             self.assertEqual(cmd.get('count_covariance').shape, (3, 3, 11))
-            npt.assert_array_equal(cmd.get('count_covariance'), np.zeros((3, 3, 11), dtype=np.int64))
+            npt.assert_array_equal(cmd.get('count_covariance'), np.zeros((3, 3, 11), dtype=ditype))
 
     def test_known_count_covariance_from_nest_testsuite(self):
+        ditype = brainstate.environ.ditype()
         expected_corr = np.array(
             [
                 [
@@ -255,7 +267,7 @@ class TestCorrelospinmatrixDetector(unittest.TestCase):
                     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                 ],
             ],
-            dtype=np.int64,
+            dtype=ditype,
         )
 
         spike_times = [

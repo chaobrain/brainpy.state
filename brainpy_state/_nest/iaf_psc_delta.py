@@ -412,7 +412,8 @@ class iaf_psc_delta(NESTNeuron):
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
         self.refractory_spike_buffer = brainstate.ShortTermState(u.math.zeros_like(V))
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
@@ -462,7 +463,8 @@ class iaf_psc_delta(NESTNeuron):
         dt = brainstate.environ.get_dt()
         # NEST converts refractory duration to grid steps by rounding up to the
         # next simulation step.
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def update(self, x=0. * u.pA):
         r"""Advance the neuron by one simulation step.

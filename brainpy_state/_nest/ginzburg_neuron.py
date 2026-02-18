@@ -375,15 +375,16 @@ class ginzburg_neuron(NESTNeuron):
         shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
 
         y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
-        self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=jnp.float64))
+        dftype = brainstate.environ.dftype()
+        self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
 
-        self.h = brainstate.ShortTermState(u.math.zeros(shape, dtype=jnp.float64) * u.mV)
+        self.h = brainstate.ShortTermState(u.math.zeros(shape, dtype=dftype) * u.mV)
 
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
 
         if self.stochastic_update:
             exp0 = self._sample_exponential(self.y.value.shape)
-            next_interval = exp0 * u.math.asarray(self.tau_m / u.ms, dtype=jnp.float64) * u.ms
+            next_interval = exp0 * u.math.asarray(self.tau_m / u.ms, dtype=dftype) * u.ms
             self.t_next = brainstate.ShortTermState(next_interval)
 
     def _sample_uniform(self, shape):
@@ -405,7 +406,8 @@ class ginzburg_neuron(NESTNeuron):
         """
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
-        return jax.random.uniform(subkey, shape=shape, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        return jax.random.uniform(subkey, shape=shape, dtype=dftype)
 
     def _sample_exponential(self, shape):
         r"""Draw exponential random samples with rate=1.
@@ -427,7 +429,8 @@ class ginzburg_neuron(NESTNeuron):
         """
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
-        return jax.random.exponential(subkey, shape=shape, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        return jax.random.exponential(subkey, shape=shape, dtype=dftype)
 
     def _gain_probability(self, h):
         r"""Compute transition probability from input state.
@@ -513,7 +516,8 @@ class ginzburg_neuron(NESTNeuron):
 
         # Then include current input for this step in gain evaluation.
         c = self.sum_current_inputs(x, self.h.value)
-        p = u.math.asarray(self._gain_probability(self.h.value + c), dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        p = u.math.asarray(self._gain_probability(self.h.value + c), dtype=dftype)
 
         if self.stochastic_update:
             t = brainstate.environ.get('t')
@@ -523,12 +527,12 @@ class ginzburg_neuron(NESTNeuron):
 
             if bool(u.math.asarray(u.math.any(should_update))):
                 u_rand = self._sample_uniform(self.y.value.shape)
-                new_y = u.math.asarray(u_rand < p, dtype=jnp.float64)
+                new_y = u.math.asarray(u_rand < p, dtype=dftype)
                 self.y.value = jax.lax.stop_gradient(u.math.where(should_update, new_y, self.y.value))
 
                 next_interval = (
                     self._sample_exponential(self.y.value.shape)
-                    * u.math.asarray(self.tau_m / u.ms, dtype=jnp.float64)
+                    * u.math.asarray(self.tau_m / u.ms, dtype=dftype)
                     * u.ms
                 )
                 self.t_next.value = u.math.where(
@@ -539,7 +543,7 @@ class ginzburg_neuron(NESTNeuron):
         else:
             u_rand = self._sample_uniform(self.y.value.shape)
             self.y.value = jax.lax.stop_gradient(
-                u.math.asarray(u_rand < p, dtype=jnp.float64)
+                u.math.asarray(u_rand < p, dtype=dftype)
             )
 
         return self.y.value

@@ -50,7 +50,8 @@ def _run_bp_counts_and_spikes(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    totals = np.zeros(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    totals = np.zeros(n_steps, dtype=dftype)
     spike_chunks = [[] for _ in range(n_trains)] if collect_spikes else None
 
     with brainstate.environ.context(dt=dt):
@@ -68,14 +69,15 @@ def _run_bp_counts_and_spikes(
 
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                out = np.asarray(gen.update(), dtype=np.int64).reshape(-1)
+                ditype = brainstate.environ.ditype()
+                out = np.asarray(gen.update(), dtype=ditype).reshape(-1)
                 totals[step] = float(out.sum())
                 if spike_chunks is not None:
                     event_time = (step + 1.0) * dt_ms
                     for i, k in enumerate(out):
                         k = int(k)
                         if k > 0:
-                            spike_chunks[i].append(np.full(k, event_time, dtype=np.float64))
+                            spike_chunks[i].append(np.full(k, event_time, dtype=dftype))
 
     if spike_chunks is None:
         return totals, None
@@ -85,12 +87,13 @@ def _run_bp_counts_and_spikes(
         if chunks:
             spikes.append(np.concatenate(chunks))
         else:
-            spikes.append(np.asarray([], dtype=np.float64))
+            spikes.append(np.asarray([], dtype=dftype))
     return totals, spikes
 
 
 def _cvsq(spike_times_ms: np.ndarray) -> float:
-    isi = np.diff(np.asarray(spike_times_ms, dtype=np.float64))
+    dftype = brainstate.environ.dftype()
+    isi = np.diff(np.asarray(spike_times_ms, dtype=dftype))
     isi_m1 = np.sum(isi)
     isi_m2 = np.sum(isi ** 2)
     isi_mean = isi_m1 / len(isi)
@@ -315,9 +318,10 @@ class TestGammaSupGeneratorVsNEST(unittest.TestCase):
 
         events = sr.get('events')
         if len(events['times']) == 0:
-            return np.zeros(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            return np.zeros(n_steps, dtype=dftype)
 
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / dt_ms).astype(np.int64)
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)
         counts = np.bincount(steps, minlength=n_steps + 2).astype(np.float64)
         return counts[1:n_steps + 1]
 

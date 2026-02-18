@@ -629,7 +629,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         np.ndarray
             NumPy array with dtype float64 containing unitless values in target unit.
         """
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -696,7 +697,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         returns 20 steps.
         """
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables to equilibrium or user-specified values.
@@ -859,7 +861,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         self.dg_in = brainstate.HiddenState(zeros * u.nS)
         self.g_in = brainstate.HiddenState(zeros * u.nS)
         self.I_stim = brainstate.ShortTermState(zeros * u.pA)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
     def get_spike(self, V: ArrayLike = None):
@@ -1179,16 +1182,18 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         # Current state
         V_m = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        m_val = self._broadcast_to_state(np.asarray(self.m.value, dtype=np.float64), v_shape)
-        h_val = self._broadcast_to_state(np.asarray(self.h.value, dtype=np.float64), v_shape)
-        n_val = self._broadcast_to_state(np.asarray(self.n.value, dtype=np.float64), v_shape)
+        dftype = brainstate.environ.dftype()
+        m_val = self._broadcast_to_state(np.asarray(self.m.value, dtype=dftype), v_shape)
+        h_val = self._broadcast_to_state(np.asarray(self.h.value, dtype=dftype), v_shape)
+        n_val = self._broadcast_to_state(np.asarray(self.n.value, dtype=dftype), v_shape)
         dg_ex_val = self._broadcast_to_state(self._to_numpy(self.dg_ex.value, u.nS), v_shape)
         g_ex_val = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
         dg_in_val = self._broadcast_to_state(self._to_numpy(self.dg_in.value, u.nS), v_shape)
         g_in_val = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
         I_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         )
 
         # Collect spike/current inputs
@@ -1212,14 +1217,14 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         # Integrate ODE for each neuron independently
         flat_size = int(np.prod(v_shape)) if len(v_shape) > 0 else 1
-        V_new = np.empty(flat_size, dtype=np.float64)
-        m_new = np.empty(flat_size, dtype=np.float64)
-        h_new = np.empty(flat_size, dtype=np.float64)
-        n_new = np.empty(flat_size, dtype=np.float64)
-        dg_ex_new = np.empty(flat_size, dtype=np.float64)
-        g_ex_new = np.empty(flat_size, dtype=np.float64)
-        dg_in_new = np.empty(flat_size, dtype=np.float64)
-        g_in_new = np.empty(flat_size, dtype=np.float64)
+        V_new = np.empty(flat_size, dtype=dftype)
+        m_new = np.empty(flat_size, dtype=dftype)
+        h_new = np.empty(flat_size, dtype=dftype)
+        n_new = np.empty(flat_size, dtype=dftype)
+        dg_ex_new = np.empty(flat_size, dtype=dftype)
+        g_ex_new = np.empty(flat_size, dtype=dftype)
+        dg_in_new = np.empty(flat_size, dtype=dftype)
+        g_in_new = np.empty(flat_size, dtype=dftype)
 
         V_m_flat = V_m.ravel()
         m_flat = m_val.ravel()
@@ -1365,7 +1370,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         # Refractory update
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
         r_new = np.where(spike_cond, refr_counts, np.where(r > 0, r - 1, r))
@@ -1380,7 +1385,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         self.dg_in.value = dg_in_val * u.nS
         self.g_in.value = g_in_val * u.nS
         self.I_stim.value = I_stim_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r_new, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_new, dtype=ditype)
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
         )

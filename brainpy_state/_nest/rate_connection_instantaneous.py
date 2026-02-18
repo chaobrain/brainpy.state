@@ -811,7 +811,8 @@ class rate_connection_instantaneous(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size == 0:
             raise ValueError('Coefficient array must not be empty.')
         return arr
@@ -833,7 +834,8 @@ class rate_connection_instantaneous(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size == 1:
             return float(arr.reshape(-1)[0])
         return arr
@@ -861,7 +863,8 @@ class rate_connection_instantaneous(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr[0])
@@ -890,7 +893,8 @@ class rate_connection_instantaneous(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])

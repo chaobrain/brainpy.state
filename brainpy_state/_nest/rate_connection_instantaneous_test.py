@@ -61,8 +61,9 @@ def _run_nest_two_rate_trace(dt_ms, simtime_ms, source_params, target_params, we
     nest.Connect(mm_tgt, tgt, syn_spec={'delay': dt_ms})
 
     nest.Simulate(simtime_ms)
-    src_rate = np.asarray(mm_src.events['rate'], dtype=np.float64)
-    tgt_rate = np.asarray(mm_tgt.events['rate'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    src_rate = np.asarray(mm_src.events['rate'], dtype=dftype)
+    tgt_rate = np.asarray(mm_tgt.events['rate'], dtype=dftype)
     return src_rate, tgt_rate
 
 
@@ -74,7 +75,8 @@ class TestRateConnectionInstantaneous(unittest.TestCase):
 
     @staticmethod
     def _to_scalar(x):
-        return float(np.asarray(x, dtype=np.float64).reshape(-1)[0])
+        dftype = brainstate.environ.dftype()
+        return float(np.asarray(x, dtype=dftype).reshape(-1)[0])
 
     def _step(self, model, k, **kwargs):
         with brainstate.environ.context(t=k * self.dt):
@@ -139,13 +141,14 @@ class TestRateConnectionInstantaneous(unittest.TestCase):
 
     def test_event_helpers_match_nest_instantaneous_receiver_mapping(self):
         syn = rate_connection_instantaneous(weight=-0.75)
-        coeff = np.asarray([0.2, -0.3, 1.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        coeff = np.asarray([0.2, -0.3, 1.0], dtype=dftype)
 
         sec = syn.prepare_secondary_event(coeff)
         npt.assert_allclose(sec['coeffarray'], coeff, atol=0.0, rtol=0.0)
         self.assertAlmostEqual(sec['weight'], -0.75, delta=0.0)
 
-        event = syn.to_rate_event(rate=np.asarray([1.2], dtype=np.float64), multiplicity=2.0)
+        event = syn.to_rate_event(rate=np.asarray([1.2], dtype=dftype), multiplicity=2.0)
         self.assertAlmostEqual(event['rate'], 1.2, delta=0.0)
         self.assertAlmostEqual(event['weight'], -0.75, delta=0.0)
         self.assertEqual(event['delay_steps'], 0)
@@ -195,8 +198,9 @@ class TestRateConnectionInstantaneous(unittest.TestCase):
         )
 
         replay_steps = min(nest_src.size, nest_tgt.size)
-        bp_src = np.zeros((replay_steps,), dtype=np.float64)
-        bp_tgt = np.zeros((replay_steps,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        bp_src = np.zeros((replay_steps,), dtype=dftype)
+        bp_tgt = np.zeros((replay_steps,), dtype=dftype)
 
         with brainstate.environ.context(dt=self.dt):
             src = lin_rate_ipn(

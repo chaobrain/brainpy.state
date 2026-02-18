@@ -418,9 +418,10 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         self.I_e = braintools.init.param(I_e, self.varshape)
         self.gsl_error_tol = braintools.init.param(gsl_error_tol, self.varshape)
 
-        self.tau_rise = np.asarray(u.math.asarray(tau_rise / u.ms), dtype=np.float64).reshape(-1)
-        self.tau_decay = np.asarray(u.math.asarray(tau_decay / u.ms), dtype=np.float64).reshape(-1)
-        self.E_rev = np.asarray(u.math.asarray(E_rev / u.mV), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        self.tau_rise = np.asarray(u.math.asarray(tau_rise / u.ms), dtype=dftype).reshape(-1)
+        self.tau_decay = np.asarray(u.math.asarray(tau_decay / u.ms), dtype=dftype).reshape(-1)
+        self.E_rev = np.asarray(u.math.asarray(E_rev / u.mV), dtype=dftype).reshape(-1)
 
         self.V_initializer = V_initializer
         self.g_initializer = g_initializer
@@ -430,7 +431,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         self._validate_parameters()
         self._g0 = np.asarray(
             [self._beta_normalization_factor_scalar(tr, td) for tr, td in zip(self.tau_rise, self.tau_decay)],
-            dtype=np.float64,
+            dtype=dftype,
         )
 
     @property
@@ -471,7 +472,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         np.ndarray
             Float64 array in target unit (unitless).
         """
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _to_numpy_unitless(x):
@@ -487,7 +489,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         np.ndarray
             Float64 array.
         """
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -654,13 +657,15 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
         self.V = brainstate.HiddenState(V)
         self.w = brainstate.HiddenState(w)
-        self.dg = brainstate.ShortTermState(np.zeros(g.shape, dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        self.dg = brainstate.ShortTermState(np.zeros(g.shape, dtype=dftype))
         self.g = brainstate.HiddenState(g)
 
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -690,12 +695,14 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         self.g.value = braintools.init.param(self.g_initializer, self.varshape + (self.n_receptors,), batch_size)
-        self.dg.value = np.zeros(np.asarray(self.g.value).shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self.dg.value = np.zeros(np.asarray(self.g.value).shape, dtype=dftype)
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
@@ -749,7 +756,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         spike detection.
         """
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
         r"""Parse incoming spike events into receptor-specific weight array.
@@ -786,7 +794,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         Receptor types are 1-based (NEST convention). Internal indexing is 0-based.
         Multiple events for the same receptor are summed.
         """
-        out = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        out = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
         if spike_events is None:
             return out
 
@@ -804,7 +813,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
             if receptor <= 0 or receptor > self.n_receptors:
                 raise ValueError(f'Receptor type {receptor} out of range [1, {self.n_receptors}].')
 
-            w_np = np.asarray(u.math.asarray(weight / u.nS), dtype=np.float64)
+            w_np = np.asarray(u.math.asarray(weight / u.nS), dtype=dftype)
             if np.any(w_np < 0.0):
                 raise ValueError('Synaptic weights for conductance-based multisynapse models must be non-negative.')
             out[..., receptor - 1] += np.broadcast_to(w_np, v_shape)
@@ -936,6 +945,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
            beta normalization factor.
 
         6. **Current Delay**: Current input :math:`x + \sum \text{current\_inputs}`
+           dftype = brainstate.environ.dftype()
+           ditype = brainstate.environ.ditype()
            is stored in ``I_stim`` for use in the **next** timestep (one-step delay,
            matching NEST's event delivery semantics).
 
@@ -970,10 +981,10 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
         w = self._broadcast_to_state(self._to_numpy(self.w.value, u.pA), v_shape)
-        dg = self._broadcast_to_receptors(np.asarray(self.dg.value, dtype=np.float64), v_shape, n_receptors)
+        dg = self._broadcast_to_receptors(np.asarray(self.dg.value, dtype=dftype), v_shape, n_receptors)
         g = self._broadcast_to_receptors(self._to_numpy(self.g.value, u.nS), v_shape, n_receptors)
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape,
         )
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
@@ -999,7 +1010,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
         v_peak_detect = np.where(p['Delta_T'] > 0.0, p['V_peak_rhs'], p['V_th'])
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
 
@@ -1026,7 +1037,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
         for idx in np.ndindex(v_shape):
             local_p = {k: p[k][idx] for k in p}
-            y = np.empty(2 + 2 * n_receptors, dtype=np.float64)
+            y = np.empty(2 + 2 * n_receptors, dtype=dftype)
             y[0] = V[idx]
             y[1] = w[idx]
             y[2::2] = dg[idx]
@@ -1044,7 +1055,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
                 is_refractory = r_i > 0
 
                 def f(y_):
-                    return np.asarray(self._dynamics_scalar(y_, is_refractory, i_stim[idx], local_p), dtype=np.float64)
+                    return np.asarray(self._dynamics_scalar(y_, is_refractory, i_stim[idx], local_p), dtype=dftype)
 
                 k1 = f(y)
                 k2 = f(y + h_i * (1.0 / 4.0) * k1)
@@ -1111,7 +1122,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         self.w.value = w_next * u.pA
         self.dg.value = dg_next
         self.g.value = g_next * u.nS
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
@@ -1121,4 +1132,4 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return u.math.asarray(spike_mask, dtype=jnp.float64)
+        return u.math.asarray(spike_mask, dtype=dftype)

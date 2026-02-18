@@ -52,9 +52,10 @@ def _run_nest_trace(params, record_from, simtime_ms, dt_ms):
     nest.Simulate(simtime_ms)
 
     ev = mm.events
-    out = {'times': np.asarray(ev['times'], dtype=np.float64)}
+    dftype = brainstate.environ.dftype()
+    out = {'times': np.asarray(ev['times'], dtype=dftype)}
     for key in record_from:
-        out[key] = np.asarray(ev[key], dtype=np.float64)
+        out[key] = np.asarray(ev[key], dtype=dftype)
     return out
 
 
@@ -94,7 +95,8 @@ def _run_nest_driven_trace(mode, dt_ms, simtime_ms, drive, weight, delay_ms):
     nest.Connect(source, target, syn_spec=syn_spec)
 
     nest.Simulate(simtime_ms)
-    return np.asarray(mm.events['rate'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(mm.events['rate'], dtype=dftype)
 
 
 class TestRateNeuronIPN(unittest.TestCase):
@@ -157,7 +159,8 @@ class TestRateNeuronIPN(unittest.TestCase):
         def mult_in(rate):
             return 1.1 * (-0.2 + rate)
 
-        noise_seq = np.asarray([0.2, -1.0, 0.4, -0.3, 1.1, 0.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        noise_seq = np.asarray([0.2, -1.0, 0.4, -0.3, 1.1, 0.0], dtype=dftype)
         instant_events_seq = [
             [{'rate': 1.0, 'weight': 0.7}, {'rate': 0.5, 'weight': -0.4}],
             [{'rate': 0.2, 'weight': 0.1}],
@@ -277,7 +280,8 @@ class TestRateNeuronIPN(unittest.TestCase):
         def mult_in(rate):
             return 0.8 - 0.3 * rate
 
-        noise_seq = np.asarray([1.0, -0.5, 0.2, 0.0, -1.3, 0.7], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        noise_seq = np.asarray([1.0, -0.5, 0.2, 0.0, -1.3, 0.7], dtype=dftype)
         instant_events_seq = [
             [{'rate': 1.0, 'weight': 0.2}],
             [{'rate': 0.8, 'weight': -0.4}],
@@ -423,8 +427,9 @@ class TestRateNeuronIPN(unittest.TestCase):
                 rate_initializer=braintools.init.Constant(-0.3),
             )
             bp.init_state()
-            bp_rate = np.zeros((steps,), dtype=np.float64)
-            bp_noise = np.zeros((steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            bp_rate = np.zeros((steps,), dtype=dftype)
+            bp_noise = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(bp, k)
                 bp_rate[k] = float(np.asarray(bp.rate.value).reshape(-1)[0])
@@ -468,8 +473,9 @@ class TestRateNeuronIPN(unittest.TestCase):
             bp_instant.init_state()
             bp_delayed.init_state()
 
-            trace_instant = np.zeros((steps,), dtype=np.float64)
-            trace_delayed = np.zeros((steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            trace_instant = np.zeros((steps,), dtype=dftype)
+            trace_delayed = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(
                     bp_instant,

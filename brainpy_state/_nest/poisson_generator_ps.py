@@ -264,16 +264,18 @@ class poisson_generator_ps(NESTDevice):
         )
 
         self._num_targets = int(np.prod(self.varshape))
+        dftype = brainstate.environ.dftype()
         self._last_step_spike_times_ms = tuple(
-            np.asarray([], dtype=np.float64) for _ in range(self._num_targets)
+            np.asarray([], dtype=dftype) for _ in range(self._num_targets)
         )
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -281,9 +283,10 @@ class poisson_generator_ps(NESTDevice):
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
@@ -357,14 +360,15 @@ class poisson_generator_ps(NESTDevice):
            ...     gen.init_state()
         """
         del batch_size, kwargs
+        dftype = brainstate.environ.dftype()
         self.next_spike_time = brainstate.ShortTermState(
-            np.full(self._num_targets, -np.inf, dtype=np.float64)
+            np.full(self._num_targets, -np.inf, dtype=dftype)
         )
         self.last_spike_time = brainstate.ShortTermState(
-            np.full(self.varshape, -np.inf, dtype=np.float64)
+            np.full(self.varshape, -np.inf, dtype=dftype)
         )
         self.last_spike_offset = brainstate.ShortTermState(
-            np.zeros(self.varshape, dtype=np.float64)
+            np.zeros(self.varshape, dtype=dftype)
         )
 
         # Independent random streams per target keep train generation stable
@@ -374,7 +378,7 @@ class poisson_generator_ps(NESTDevice):
             np.random.default_rng(s) for s in seed_seq.spawn(self._num_targets)
         )
         self._last_step_spike_times_ms = tuple(
-            np.asarray([], dtype=np.float64) for _ in range(self._num_targets)
+            np.asarray([], dtype=dftype) for _ in range(self._num_targets)
         )
 
     def set(
@@ -473,8 +477,9 @@ class poisson_generator_ps(NESTDevice):
 
         # NEST resets next spike states when "rate" is set.
         if (rate is not _UNSET) and hasattr(self, 'next_spike_time'):
+            dftype = brainstate.environ.dftype()
             self.next_spike_time.value = np.full(
-                self._num_targets, -np.inf, dtype=np.float64
+                self._num_targets, -np.inf, dtype=dftype
             )
 
         # Match NEST pre-run behavior when start/origin are shifted forward:
@@ -484,11 +489,11 @@ class poisson_generator_ps(NESTDevice):
             (start is not _UNSET or origin is not _UNSET)
             and hasattr(self, 'next_spike_time')
         ):
-            vals = np.asarray(self.next_spike_time.value, dtype=np.float64)
+            vals = np.asarray(self.next_spike_time.value, dtype=dftype)
             finite = np.isfinite(vals)
             if finite.any() and float(np.min(vals[finite])) < (self.origin + self.start):
                 self.next_spike_time.value = np.full(
-                    self._num_targets, -np.inf, dtype=np.float64
+                    self._num_targets, -np.inf, dtype=dftype
                 )
 
     def get(self) -> dict:
@@ -715,8 +720,10 @@ class poisson_generator_ps(NESTDevice):
         t_min_active = max(t_ms, self.origin + self.start)
         t_max_active = min(t_ms + dt_ms, self.origin + self.stop)
 
-        counts = np.zeros(self._num_targets, dtype=np.int64)
-        empty_events = tuple(np.asarray([], dtype=np.float64) for _ in range(self._num_targets))
+        ditype = brainstate.environ.ditype()
+        counts = np.zeros(self._num_targets, dtype=ditype)
+        dftype = brainstate.environ.dftype()
+        empty_events = tuple(np.asarray([], dtype=dftype) for _ in range(self._num_targets))
 
         if self._num_targets == 0 or self.rate <= 0.0 or not (t_min_active < t_max_active):
             self._last_step_spike_times_ms = empty_events
@@ -726,9 +733,9 @@ class poisson_generator_ps(NESTDevice):
             return out
 
         inv_rate_ms = 1000.0 / self.rate - self.dead_time
-        next_spike = np.asarray(self.next_spike_time.value, dtype=np.float64).copy()
-        last_time = np.asarray(self.last_spike_time.value, dtype=np.float64).reshape(-1).copy()
-        last_offset = np.asarray(self.last_spike_offset.value, dtype=np.float64).reshape(-1).copy()
+        next_spike = np.asarray(self.next_spike_time.value, dtype=dftype).copy()
+        last_time = np.asarray(self.last_spike_time.value, dtype=dftype).reshape(-1).copy()
+        last_offset = np.asarray(self.last_spike_offset.value, dtype=dftype).reshape(-1).copy()
 
         right_edge = t_ms + dt_ms
         events = []
@@ -752,7 +759,7 @@ class poisson_generator_ps(NESTDevice):
                 next_t += self._sample_isi_ms(rng, inv_rate_ms)
 
             next_spike[i] = next_t
-            events.append(np.asarray(ev, dtype=np.float64))
+            events.append(np.asarray(ev, dtype=dftype))
 
         self.next_spike_time.value = next_spike
         self.last_spike_time.value = last_time.reshape(self.varshape)

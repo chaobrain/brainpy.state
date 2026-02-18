@@ -304,6 +304,8 @@ class gif_psc_exp(NESTNeuron):
     Notes
     -----
     - Defaults follow NEST C++ source for ``gif_psc_exp`` (``models/gif_psc_exp.cpp``).
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
     - ``lambda_0`` is specified in 1/s (as in NEST's Python interface) and is
       internally converted to 1/ms for computation.
     - Synaptic spike weights are interpreted in current units (pA), with positive/
@@ -452,7 +454,7 @@ class gif_psc_exp(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -552,7 +554,7 @@ class gif_psc_exp(NESTNeuron):
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         self.I_stim = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
@@ -562,10 +564,10 @@ class gif_psc_exp(NESTNeuron):
         n_stc = len(self.tau_stc)
         n_sfa = len(self.tau_sfa)
         v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=np.float64) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=np.float64)  # total stc current (nA)
-        self._sfa_val = np.full(v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=np.float64)
+        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
+        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
+        self._stc_val = np.zeros(v_shape, dtype=dftype)  # total stc current (nA)
+        self._sfa_val = np.full(v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=dftype)
 
         # RNG state
         if self._rng_key is not None:
@@ -600,7 +602,7 @@ class gif_psc_exp(NESTNeuron):
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         self.I_stim.value = braintools.init.param(
             braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
         )
@@ -608,10 +610,10 @@ class gif_psc_exp(NESTNeuron):
         n_stc = len(self.tau_stc)
         n_sfa = len(self.tau_sfa)
         v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=np.float64) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=np.float64)
-        self._sfa_val = np.full(v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=np.float64)
+        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
+        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
+        self._stc_val = np.zeros(v_shape, dtype=dftype)
+        self._sfa_val = np.full(v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=dftype)
 
         if self._rng_key is not None:
             self._rng_state = self._rng_key
@@ -649,7 +651,7 @@ class gif_psc_exp(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     @staticmethod
     def _propagator_exp(tau_syn: np.ndarray, tau_m: np.ndarray, c_m: np.ndarray, h_ms: float):
@@ -770,7 +772,7 @@ class gif_psc_exp(NESTNeuron):
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.I_syn_ex.value, u.pA), v_shape).copy()
         i_syn_in = self._broadcast_to_state(self._to_numpy(self.I_syn_in.value, u.pA), v_shape).copy()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         ).copy()
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape).copy()
 
@@ -787,7 +789,7 @@ class gif_psc_exp(NESTNeuron):
         lambda_0 = self.lambda_0  # 1/ms
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
         )
 
         # Compute propagator coefficients (exact integration)
@@ -814,7 +816,7 @@ class gif_psc_exp(NESTNeuron):
 
         # Advance RNG state for this step
         self._rng_state, subkey = jax.random.split(self._rng_state)
-        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=np.float64)
+        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=dftype)
 
         spike_mask = np.zeros_like(V, dtype=bool)
 
@@ -880,7 +882,7 @@ class gif_psc_exp(NESTNeuron):
         self.V.value = V * u.mV
         self.I_syn_ex.value = i_syn_ex * u.pA
         self.I_syn_in.value = i_syn_in * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)

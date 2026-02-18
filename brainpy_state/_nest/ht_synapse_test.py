@@ -37,7 +37,8 @@ def _is_nest_available():
 def _ht_reference_weight_trace(spike_times_ms, tau_P, delta_P, p0=1.0):
     p = float(p0)
     t_last = 0.0
-    w = np.empty((len(spike_times_ms),), dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    w = np.empty((len(spike_times_ms),), dtype=dftype)
     p_send = np.empty_like(w)
     p_post = np.empty_like(w)
 
@@ -124,13 +125,14 @@ class TestHTSynapse(unittest.TestCase):
             syn.send(t_spike_ms=1.0, multiplicity=-1.0)
 
     def test_spike_ordering_matches_nest_reference_sequence(self):
-        spike_times = np.asarray([10.0, 12.0, 20.0, 20.5, 100.0, 200.0, 1000.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        spike_times = np.asarray([10.0, 12.0, 20.0, 20.5, 100.0, 200.0, 1000.0], dtype=dftype)
         syn = ht_synapse(weight=1.0, tau_P=500.0, delta_P=0.125, P=1.0)
 
         events = syn.simulate_spike_train(spike_times)
-        got_weights = np.asarray([ev['weight'] for ev in events], dtype=np.float64)
-        got_p_send = np.asarray([ev['P_send'] for ev in events], dtype=np.float64)
-        got_p_post = np.asarray([ev['P_post'] for ev in events], dtype=np.float64)
+        got_weights = np.asarray([ev['weight'] for ev in events], dtype=dftype)
+        got_p_send = np.asarray([ev['P_send'] for ev in events], dtype=dftype)
+        got_p_post = np.asarray([ev['P_post'] for ev in events], dtype=dftype)
 
         ref_weights, ref_p_send, ref_p_post = _ht_reference_weight_trace(
             spike_times_ms=spike_times,
@@ -192,17 +194,18 @@ class TestHTSynapse(unittest.TestCase):
         nest.Connect(n[:1], n[1:], syn_spec='ht_synapse')
         nest.Simulate(1200.0)
 
-        nest_w = np.asarray(wr.get('events', 'weights'), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        nest_w = np.asarray(wr.get('events', 'weights'), dtype=dftype)
         self.assertEqual(nest_w.size, len(spike_times))
 
         syn = ht_synapse(weight=weight, tau_P=tau_P, delta_P=delta_P, P=1.0)
         local_events = syn.simulate_spike_train(spike_times)
-        local_w = np.asarray([ev['weight'] for ev in local_events], dtype=np.float64)
+        local_w = np.asarray([ev['weight'] for ev in local_events], dtype=dftype)
 
         npt.assert_allclose(local_w, nest_w, atol=1e-15, rtol=0.0)
 
         conn = nest.GetConnections(source=n[:1], target=n[1:])
-        nest_final_P = float(np.asarray(conn.get('P'), dtype=np.float64).reshape(-1)[0])
+        nest_final_P = float(np.asarray(conn.get('P'), dtype=dftype).reshape(-1)[0])
         self.assertAlmostEqual(syn.P, nest_final_P, delta=1e-15)
 
 

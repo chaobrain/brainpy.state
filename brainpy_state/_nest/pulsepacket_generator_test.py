@@ -49,12 +49,13 @@ def _run_bp_counts(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    totals = np.zeros(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = pulsepacket_generator(
             in_size=n_trains,
-            pulse_times=np.asarray(pulse_times_ms, dtype=np.float64) * u.ms,
+            pulse_times=np.asarray(pulse_times_ms, dtype=dftype) * u.ms,
             activity=activity,
             sdev=sdev_ms * u.ms,
             start=start_ms * u.ms,
@@ -66,7 +67,8 @@ def _run_bp_counts(
 
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                out = np.asarray(gen.update(), dtype=np.int64).reshape(-1)
+                ditype = brainstate.environ.ditype()
+                out = np.asarray(gen.update(), dtype=ditype).reshape(-1)
                 totals[step] = float(out.sum())
 
     return totals
@@ -118,7 +120,8 @@ class TestPulsepacketGeneratorParameters(unittest.TestCase):
             gen.init_state()
             for step in range(20):
                 with brainstate.environ.context(t=step * dt):
-                    out = np.asarray(gen.update(), dtype=np.int64)
+                    ditype = brainstate.environ.ditype()
+                    out = np.asarray(gen.update(), dtype=ditype)
                     self.assertEqual(int(out.sum()), 0)
 
 
@@ -212,8 +215,9 @@ class TestPulsepacketGeneratorVsNEST(unittest.TestCase):
         nest.local_num_threads = 1
         nest.rng_seed = 12345
 
+        dftype = brainstate.environ.dftype()
         params = {
-            'pulse_times': list(np.asarray(pulse_times_ms, dtype=np.float64)),
+            'pulse_times': list(np.asarray(pulse_times_ms, dtype=dftype)),
             'activity': int(activity),
             'sdev': float(sdev_ms),
             'start': float(start_ms),
@@ -229,9 +233,9 @@ class TestPulsepacketGeneratorVsNEST(unittest.TestCase):
 
         events = sr.get('events')
         if len(events['times']) == 0:
-            return np.zeros(n_steps, dtype=np.float64)
+            return np.zeros(n_steps, dtype=dftype)
 
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / dt_ms).astype(np.int64)
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)
         counts = np.bincount(steps, minlength=n_steps + 2).astype(np.float64)
         return counts[1:n_steps + 1]
 
@@ -280,7 +284,8 @@ class TestPulsepacketGeneratorVsNEST(unittest.TestCase):
         self.assertEqual(float(np.sum(nest_counts)), expected_total)
         self.assertEqual(float(np.sum(bp_counts_aligned)), expected_total)
 
-        kernel = np.asarray([1.0, 2.0, 3.0, 2.0, 1.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        kernel = np.asarray([1.0, 2.0, 3.0, 2.0, 1.0], dtype=dftype)
         kernel = kernel / np.sum(kernel)
         nest_smooth = np.convolve(nest_counts, kernel, mode='same')
         bp_smooth = np.convolve(bp_counts_aligned, kernel, mode='same')

@@ -99,7 +99,8 @@ def _tsodyks2_reference_weights(*, spike_times_ms, U, u0, x0, tau_rec, tau_fac, 
             u_state = U + u_state * (1.0 - U) * u_decay
         out.append(x * u_state * weight)
         t_last = t_spike
-    return np.asarray(out, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(out, dtype=dftype)
 
 
 def _run_quantal_spike_weights(
@@ -140,12 +141,13 @@ def _run_quantal_spike_weights(
                 if sent:
                     delivery_step = int(syn._curr_step(dt_ms) + int(syn._delay_steps))
                     payload = syn._queue[delivery_step][-1][1]
-                    payload_f = float(np.asarray(u.math.asarray(payload), dtype=np.float64).reshape(()))
+                    dftype = brainstate.environ.dftype()
+                    payload_f = float(np.asarray(u.math.asarray(payload), dtype=dftype).reshape(()))
                     weights.append(payload_f)
                 else:
                     weights.append(0.0)
 
-    return np.asarray(weights, dtype=np.float64)
+    return np.asarray(weights, dtype=dftype)
 
 
 class TestQuantalSTPSynapseParameters(unittest.TestCase):
@@ -291,7 +293,8 @@ class TestQuantalSTPSynapseOrdering(unittest.TestCase):
 
         expected_payloads = [float(r * weight) for r in release_ref]
         for idx, (_key, value, label) in enumerate(recv.delta_events):
-            value_f = float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+            dftype = brainstate.environ.dftype()
+            value_f = float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
             self.assertAlmostEqual(value_f, expected_payloads[idx], delta=1e-12)
             self.assertEqual(label, 'receptor_2')
 
@@ -303,9 +306,10 @@ class TestQuantalSTPSynapseDynamics(unittest.TestCase):
     def test_mean_converges_to_deterministic_tsodyks2_equivalent(self):
         # Mirrors NEST testsuite/pytests/test_quantal_stp_synapse.py idea:
         # the stochastic model converges to tsodyks2 dynamics in expectation.
+        dftype = brainstate.environ.dftype()
         spike_times = np.asarray(
             [30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0, 360.0, 390.0, 900.0],
-            dtype=np.float64,
+            dtype=dftype,
         )
         dt_ms = 0.1
         n_sites = 12
@@ -344,7 +348,7 @@ class TestQuantalSTPSynapseDynamics(unittest.TestCase):
                 )
                 for trial in range(n_trials)
             ],
-            dtype=np.float64,
+            dtype=dftype,
         )
         mean_weights = np.mean(trial_weights, axis=0)
 

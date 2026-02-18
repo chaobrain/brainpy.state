@@ -263,7 +263,8 @@ class gap_junction(NESTSynapse):
 
         # Runtime state accumulated from incoming GapJunctionEvent payloads.
         self.sumj_g_ij: float = 0.0
-        self.interpolation_coefficients = np.zeros((0,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self.interpolation_coefficients = np.zeros((0,), dtype=dftype)
         self._interpolation_order = 0
 
     @property
@@ -538,7 +539,8 @@ class gap_junction(NESTSynapse):
 
         self._interpolation_order = interpolation_order
         self.sumj_g_ij = 0.0
-        self.interpolation_coefficients = np.zeros((coeff_len,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self.interpolation_coefficients = np.zeros((coeff_len,), dtype=dftype)
 
     def reset_runtime_state(self):
         r"""Clear runtime state accumulated from gap junction events.
@@ -691,7 +693,8 @@ class gap_junction(NESTSynapse):
         coeff_np = self._to_coeff_array(coeffarray)
 
         if self.interpolation_coefficients.size == 0:
-            self.interpolation_coefficients = np.zeros_like(coeff_np, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            self.interpolation_coefficients = np.zeros_like(coeff_np, dtype=dftype)
         if coeff_np.size != self.interpolation_coefficients.size:
             raise ValueError(
                 f'Coefficient size mismatch: got {coeff_np.size}, expected {self.interpolation_coefficients.size}.'
@@ -839,8 +842,9 @@ class gap_junction(NESTSynapse):
         if lag < 0 or lag >= n_lags:
             raise ValueError(f'lag {lag} is out of bounds for {n_lags} lag slots.')
 
-        v = np.asarray(u.math.asarray(V_m), dtype=np.float64)
-        t = np.asarray(u.math.asarray(t), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        v = np.asarray(u.math.asarray(V_m), dtype=dftype)
+        t = np.asarray(u.math.asarray(t), dtype=dftype)
         base = -self.sumj_g_ij * v
 
         if order == 0:
@@ -904,7 +908,8 @@ class gap_junction(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size == 0:
             raise ValueError('Coefficient array must not be empty.')
         return arr
@@ -932,7 +937,8 @@ class gap_junction(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr[0])
@@ -960,7 +966,8 @@ class gap_junction(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])

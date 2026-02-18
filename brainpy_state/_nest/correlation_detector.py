@@ -333,20 +333,24 @@ class correlation_detector(NESTDevice):
 
         self._calib: _Calibration | None = None
         self._incoming = [deque(), deque()]
-        self._n_events = np.zeros((2,), dtype=np.int64)
-        self._histogram = np.zeros((0,), dtype=np.float64)
-        self._histogram_correction = np.zeros((0,), dtype=np.float64)
-        self._count_histogram = np.zeros((0,), dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._n_events = np.zeros((2,), dtype=ditype)
+        dftype = brainstate.environ.dftype()
+        self._histogram = np.zeros((0,), dtype=dftype)
+        self._histogram_correction = np.zeros((0,), dtype=dftype)
+        self._count_histogram = np.zeros((0,), dtype=ditype)
 
         self._ensure_calibrated_from_env_if_available()
 
     @property
     def n_events(self) -> np.ndarray:
-        return np.asarray(self._n_events, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        return np.asarray(self._n_events, dtype=ditype)
 
     @n_events.setter
     def n_events(self, value):
-        arr = np.asarray(u.math.asarray(value), dtype=np.int64).reshape(-1)
+        ditype = brainstate.environ.ditype()
+        arr = np.asarray(u.math.asarray(value), dtype=ditype).reshape(-1)
         if arr.size != 2 or arr[0] != 0 or arr[1] != 0:
             raise ValueError('/n_events can only be set to [0 0].')
         self._reset_state()
@@ -354,17 +358,20 @@ class correlation_detector(NESTDevice):
     @property
     def histogram(self) -> np.ndarray:
         self._ensure_calibrated_from_env_if_available()
-        return np.asarray(self._histogram, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(self._histogram, dtype=dftype)
 
     @property
     def histogram_correction(self) -> np.ndarray:
         self._ensure_calibrated_from_env_if_available()
-        return np.asarray(self._histogram_correction, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(self._histogram_correction, dtype=dftype)
 
     @property
     def count_histogram(self) -> np.ndarray:
         self._ensure_calibrated_from_env_if_available()
-        return np.asarray(self._count_histogram, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        return np.asarray(self._count_histogram, dtype=ditype)
 
     def get(self, key: str = 'histogram'):
         r"""Return one detector state variable or calibrated scalar parameter.
@@ -546,7 +553,8 @@ class correlation_detector(NESTDevice):
             counts = np.where(spike_arr > 0.0, mult_arr, 0)
 
         if stamp_steps is None:
-            stamp_arr = np.full((n_items,), step_now + 1, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            stamp_arr = np.full((n_items,), step_now + 1, dtype=ditype)
         else:
             stamp_arr = self._to_int_array(stamp_steps, name='stamp_steps', size=n_items)
 
@@ -641,19 +649,21 @@ class correlation_detector(NESTDevice):
         return self._calib
 
     def _reset_state(self):
-        self._n_events = np.zeros((2,), dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._n_events = np.zeros((2,), dtype=ditype)
         self._incoming = [deque(), deque()]
 
         if self._calib is None:
-            self._histogram = np.zeros((0,), dtype=np.float64)
-            self._histogram_correction = np.zeros((0,), dtype=np.float64)
-            self._count_histogram = np.zeros((0,), dtype=np.int64)
+            dftype = brainstate.environ.dftype()
+            self._histogram = np.zeros((0,), dtype=dftype)
+            self._histogram_correction = np.zeros((0,), dtype=dftype)
+            self._count_histogram = np.zeros((0,), dtype=ditype)
             return
 
         n_bins = int(self._calib.n_bins)
-        self._histogram = np.zeros((n_bins,), dtype=np.float64)
-        self._histogram_correction = np.zeros((n_bins,), dtype=np.float64)
-        self._count_histogram = np.zeros((n_bins,), dtype=np.int64)
+        self._histogram = np.zeros((n_bins,), dtype=dftype)
+        self._histogram_correction = np.zeros((n_bins,), dtype=dftype)
+        self._count_histogram = np.zeros((n_bins,), dtype=ditype)
 
     def _compute_calibration(self, dt) -> _Calibration:
         dt_ms = self._to_ms_scalar(dt, name='dt')
@@ -737,7 +747,8 @@ class correlation_detector(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -795,16 +806,17 @@ class correlation_detector(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
                 x = x / unit
             elif isinstance(x, u.Quantity):
                 x = u.get_mantissa(x)
-            arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
 
         if arr.size == 0 and size is not None:
-            return np.zeros((0,), dtype=np.float64)
+            return np.zeros((0,), dtype=dftype)
 
         if not np.all(np.isfinite(arr)):
             raise ValueError(f'{name} must contain finite values.')
@@ -813,7 +825,7 @@ class correlation_detector(NESTDevice):
             return arr
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), arr[0], dtype=np.float64)
+            return np.full((size,), arr[0], dtype=dftype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.float64, copy=False)
@@ -828,15 +840,16 @@ class correlation_detector(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            arr = np.asarray([default], dtype=ditype)
         else:
-            arr = np.asarray(u.math.asarray(x), dtype=np.int64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)
 
         if size is None:
             return arr.astype(np.int64, copy=False)
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), int(arr[0]), dtype=np.int64)
+            return np.full((size,), int(arr[0]), dtype=ditype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match spikes size ({size}).')
         return arr.astype(np.int64, copy=False)

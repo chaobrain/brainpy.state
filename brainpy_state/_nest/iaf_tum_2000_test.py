@@ -30,7 +30,8 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 
 def _is_spike(spk):
-    return bool(np.asarray(bu.math.asarray(spk), dtype=np.float64).reshape(-1)[0] > 0.0)
+    dftype = brainstate.environ.dftype()
+    return bool(np.asarray(bu.math.asarray(spk), dtype=dftype).reshape(-1)[0] > 0.0)
 
 
 def _event_effective_weight_pA(event):
@@ -40,9 +41,10 @@ def _event_effective_weight_pA(event):
 
     if isinstance(event, dict):
         receptor = int(event.get('receptor_type', event.get('receptor', 0)))
-        weight = float(np.asarray(bu.math.asarray(event.get('weight', 0.0 * bu.pA) / bu.pA), dtype=np.float64))
-        offset = float(np.asarray(bu.math.asarray(event.get('offset', 1.0)), dtype=np.float64))
-        multiplicity = float(np.asarray(bu.math.asarray(event.get('multiplicity', 1.0)), dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        weight = float(np.asarray(bu.math.asarray(event.get('weight', 0.0 * bu.pA) / bu.pA), dtype=dftype))
+        offset = float(np.asarray(bu.math.asarray(event.get('offset', 1.0)), dtype=dftype))
+        multiplicity = float(np.asarray(bu.math.asarray(event.get('multiplicity', 1.0)), dtype=dftype))
         sender_model = event.get('sender_model', 'iaf_tum_2000')
     else:
         if len(event) == 2:
@@ -54,9 +56,9 @@ def _event_effective_weight_pA(event):
         else:
             receptor, weight, offset, multiplicity, sender_model = event
         receptor = int(receptor)
-        weight = float(np.asarray(bu.math.asarray(weight / bu.pA), dtype=np.float64))
-        offset = float(np.asarray(bu.math.asarray(offset), dtype=np.float64))
-        multiplicity = float(np.asarray(bu.math.asarray(multiplicity), dtype=np.float64))
+        weight = float(np.asarray(bu.math.asarray(weight / bu.pA), dtype=dftype))
+        offset = float(np.asarray(bu.math.asarray(offset), dtype=dftype))
+        multiplicity = float(np.asarray(bu.math.asarray(multiplicity), dtype=dftype))
 
     if receptor == 1 and sender_model != 'iaf_tum_2000':
         raise ValueError(

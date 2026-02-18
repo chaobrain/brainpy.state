@@ -415,7 +415,8 @@ class mat2_psc_exp(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -453,7 +454,8 @@ class mat2_psc_exp(NESTNeuron):
         self.i_syn_ex = brainstate.ShortTermState(zeros * u.pA)
         self.i_syn_in = brainstate.ShortTermState(zeros * u.pA)
         self.i_0 = brainstate.ShortTermState(zeros * u.pA)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         if self.ref_var:
@@ -488,7 +490,8 @@ class mat2_psc_exp(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def update(self, x=0. * u.pA):
         r"""Advance the neuron state by one time step.
@@ -558,8 +561,9 @@ class mat2_psc_exp(NESTNeuron):
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value, u.pA), v_shape)
         i_syn_in = self._broadcast_to_state(self._to_numpy(self.i_syn_in.value, u.pA), v_shape)
         i_0 = self._broadcast_to_state(self._to_numpy(self.i_0.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         )
 
         # --- Compute propagator coefficients ---
@@ -609,7 +613,7 @@ class mat2_psc_exp(NESTNeuron):
         r = np.where(
             spike_cond,
             self._broadcast_to_state(
-                np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape
+                np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
             ),
             np.where(not_refractory, r, r - 1),
         )
@@ -624,7 +628,7 @@ class mat2_psc_exp(NESTNeuron):
         self.i_syn_ex.value = i_syn_ex * u.pA
         self.i_syn_in.value = i_syn_in * u.pA
         self.i_0.value = i_0_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
         )

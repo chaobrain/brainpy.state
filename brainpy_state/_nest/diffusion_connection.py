@@ -493,6 +493,7 @@ class diffusion_connection(NESTSynapse):
         ValueError
             If ``'delay'`` key is present (message: ``"diffusion_connection has no delay"``).
         ValueError
+            dftype = brainstate.environ.dftype()
             If ``'weight'`` key is present (message: ``"Please use the parameters
             drift_factor and diffusion_factor to specifiy the weights."``).
             Note: NEST's original typo ``"specifiy"`` is preserved.
@@ -1421,7 +1422,7 @@ class diffusion_connection(NESTSynapse):
     def _to_coeff_array(value: ArrayLike) -> np.ndarray:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size == 0:
             raise ValueError('Coefficient array must not be empty.')
         return arr
@@ -1430,7 +1431,7 @@ class diffusion_connection(NESTSynapse):
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr[0])
@@ -1439,7 +1440,7 @@ class diffusion_connection(NESTSynapse):
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])

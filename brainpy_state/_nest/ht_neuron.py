@@ -1215,7 +1215,8 @@ class ht_neuron(NESTNeuron):
         V_init = (self.g_NaL * self.E_Na + self.g_KL * self.E_K) / (self.g_NaL + self.g_KL)
 
         # Build initial state vector
-        y0 = np.zeros(_STATE_VEC_SIZE, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        y0 = np.zeros(_STATE_VEC_SIZE, dtype=dftype)
         y0[_V_M] = V_init
         y0[_THETA] = self.theta_eq
         # Synaptic variables: all zero (indices 2-9)
@@ -1297,13 +1298,14 @@ class ht_neuron(NESTNeuron):
         )
 
         # Refractory counter
+        ditype = brainstate.environ.ditype()
         self.ref_steps = brainstate.ShortTermState(
-            np.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape), dtype=np.int32)
+            np.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape), dtype=ditype)
         )
 
         # Stimulation current buffer
         self.I_stim = brainstate.ShortTermState(
-            np.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape), dtype=np.float64)
+            np.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape), dtype=dftype)
         )
 
         # Spike time tracking
@@ -1399,8 +1401,9 @@ class ht_neuron(NESTNeuron):
             ...     spike = neuron.get_spike()
             ...     print(spike)  # ≈ 1.0 (depends on surrogate function)
         """
-        V = np.asarray(self.V.value, dtype=np.float64) if V is None else V
-        theta = np.asarray(self.theta.value, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        V = np.asarray(self.V.value, dtype=dftype) if V is None else V
+        theta = np.asarray(self.theta.value, dtype=dftype)
         # Scale: positive when V >= theta
         v_scaled = (V - theta) / max(abs(self.theta_eq), 1.0)
         return self.spk_fun(jnp.asarray(v_scaled))
@@ -1461,6 +1464,8 @@ class ht_neuron(NESTNeuron):
         - NMDA Mg²⁺ unblocking kinetics (fast and slow components)
         - Intrinsic gating variable dynamics (I_h, I_T, I_KNa)
 
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         The solver uses adaptive step-size control with rtol=1e-3, atol=1e-9 (matching
         NEST's GSL tolerances).
 
@@ -1577,10 +1582,10 @@ class ht_neuron(NESTNeuron):
         # Spikes arrive as weighted conductance changes to specific receptor types.
         # In this model, we expect delta inputs formatted as a dict with keys
         # 'AMPA', 'NMDA', 'GABA_A', 'GABA_B', or a single aggregated value.
-        spk_ampa = np.zeros(v_shape, dtype=np.float64)
-        spk_nmda = np.zeros(v_shape, dtype=np.float64)
-        spk_gaba_a = np.zeros(v_shape, dtype=np.float64)
-        spk_gaba_b = np.zeros(v_shape, dtype=np.float64)
+        spk_ampa = np.zeros(v_shape, dtype=dftype)
+        spk_nmda = np.zeros(v_shape, dtype=dftype)
+        spk_gaba_a = np.zeros(v_shape, dtype=dftype)
+        spk_gaba_b = np.zeros(v_shape, dtype=dftype)
 
         # Handle labeled delta inputs for each receptor type
         for label, target in [('AMPA', 'ampa'), ('NMDA', 'nmda'),
@@ -1598,7 +1603,7 @@ class ht_neuron(NESTNeuron):
                     elif target == 'gaba_b':
                         spk_gaba_b = arr
             else:
-                arr = np.broadcast_to(np.asarray(val, dtype=np.float64), v_shape).copy()
+                arr = np.broadcast_to(np.asarray(val, dtype=dftype), v_shape).copy()
                 if target == 'ampa':
                     spk_ampa = arr
                 elif target == 'nmda':
@@ -1612,52 +1617,52 @@ class ht_neuron(NESTNeuron):
         unlabeled = self.sum_delta_inputs(0.0)
         if not isinstance(unlabeled, (int, float)) or unlabeled != 0.0:
             spk_ampa = spk_ampa + np.broadcast_to(
-                np.asarray(unlabeled, dtype=np.float64) if not isinstance(unlabeled, (int, float))
-                else np.full(v_shape, unlabeled, dtype=np.float64),
+                np.asarray(unlabeled, dtype=dftype) if not isinstance(unlabeled, (int, float))
+                else np.full(v_shape, unlabeled, dtype=dftype),
                 v_shape
             )
 
         # Collect stimulation current input
-        I_stim_next = float(x) if isinstance(x, (int, float)) else np.asarray(x, dtype=np.float64)
+        I_stim_next = float(x) if isinstance(x, (int, float)) else np.asarray(x, dtype=dftype)
         I_stim_next = np.broadcast_to(
-            np.asarray(I_stim_next, dtype=np.float64), v_shape
+            np.asarray(I_stim_next, dtype=dftype), v_shape
         ).copy()
 
         # Extract current state as flat numpy arrays
-        V_m = np.asarray(self.V.value, dtype=np.float64).ravel()
-        theta_val = np.asarray(self.theta.value, dtype=np.float64).ravel()
-        DG_AMPA = np.asarray(self.DG_AMPA.value, dtype=np.float64).ravel()
-        G_AMPA = np.asarray(self.G_AMPA.value, dtype=np.float64).ravel()
-        DG_NMDA = np.asarray(self.DG_NMDA.value, dtype=np.float64).ravel()
-        G_NMDA = np.asarray(self.G_NMDA.value, dtype=np.float64).ravel()
-        DG_GABA_A = np.asarray(self.DG_GABA_A.value, dtype=np.float64).ravel()
-        G_GABA_A = np.asarray(self.G_GABA_A.value, dtype=np.float64).ravel()
-        DG_GABA_B = np.asarray(self.DG_GABA_B.value, dtype=np.float64).ravel()
-        G_GABA_B = np.asarray(self.G_GABA_B.value, dtype=np.float64).ravel()
-        m_fast = np.asarray(self.m_fast_NMDA_state.value, dtype=np.float64).ravel()
-        m_slow = np.asarray(self.m_slow_NMDA_state.value, dtype=np.float64).ravel()
-        m_Ih = np.asarray(self.m_Ih_state.value, dtype=np.float64).ravel()
-        D_IKNa = np.asarray(self.D_IKNa_state.value, dtype=np.float64).ravel()
-        m_IT = np.asarray(self.m_IT_state.value, dtype=np.float64).ravel()
-        h_IT = np.asarray(self.h_IT_state.value, dtype=np.float64).ravel()
-        ref = np.asarray(self.ref_steps.value, dtype=np.int32).ravel()
-        I_stim_cur = np.asarray(self.I_stim.value, dtype=np.float64).ravel()
+        V_m = np.asarray(self.V.value, dtype=dftype).ravel()
+        theta_val = np.asarray(self.theta.value, dtype=dftype).ravel()
+        DG_AMPA = np.asarray(self.DG_AMPA.value, dtype=dftype).ravel()
+        G_AMPA = np.asarray(self.G_AMPA.value, dtype=dftype).ravel()
+        DG_NMDA = np.asarray(self.DG_NMDA.value, dtype=dftype).ravel()
+        G_NMDA = np.asarray(self.G_NMDA.value, dtype=dftype).ravel()
+        DG_GABA_A = np.asarray(self.DG_GABA_A.value, dtype=dftype).ravel()
+        G_GABA_A = np.asarray(self.G_GABA_A.value, dtype=dftype).ravel()
+        DG_GABA_B = np.asarray(self.DG_GABA_B.value, dtype=dftype).ravel()
+        G_GABA_B = np.asarray(self.G_GABA_B.value, dtype=dftype).ravel()
+        m_fast = np.asarray(self.m_fast_NMDA_state.value, dtype=dftype).ravel()
+        m_slow = np.asarray(self.m_slow_NMDA_state.value, dtype=dftype).ravel()
+        m_Ih = np.asarray(self.m_Ih_state.value, dtype=dftype).ravel()
+        D_IKNa = np.asarray(self.D_IKNa_state.value, dtype=dftype).ravel()
+        m_IT = np.asarray(self.m_IT_state.value, dtype=dftype).ravel()
+        h_IT = np.asarray(self.h_IT_state.value, dtype=dftype).ravel()
+        ref = np.asarray(self.ref_steps.value, dtype=ditype).ravel()
+        I_stim_cur = np.asarray(self.I_stim.value, dtype=dftype).ravel()
 
         # Pre-compute refractory step count
         potassium_refr_counts = self._refractory_counts(h)
 
         # Output arrays
-        V_out = np.empty(flat_size, dtype=np.float64)
-        theta_out = np.empty(flat_size, dtype=np.float64)
-        ref_out = np.empty(flat_size, dtype=np.int32)
+        V_out = np.empty(flat_size, dtype=dftype)
+        theta_out = np.empty(flat_size, dtype=dftype)
+        ref_out = np.empty(flat_size, dtype=ditype)
         spike_flags = np.zeros(flat_size, dtype=bool)
 
         # State output arrays for all 16 variables
-        state_out = np.empty((flat_size, _STATE_VEC_SIZE), dtype=np.float64)
-        I_NaP_out = np.empty(flat_size, dtype=np.float64)
-        I_KNa_out = np.empty(flat_size, dtype=np.float64)
-        I_T_out = np.empty(flat_size, dtype=np.float64)
-        I_h_out = np.empty(flat_size, dtype=np.float64)
+        state_out = np.empty((flat_size, _STATE_VEC_SIZE), dtype=dftype)
+        I_NaP_out = np.empty(flat_size, dtype=dftype)
+        I_KNa_out = np.empty(flat_size, dtype=dftype)
+        I_T_out = np.empty(flat_size, dtype=dftype)
+        I_h_out = np.empty(flat_size, dtype=dftype)
 
         # Flatten spike inputs
         spk_ampa_flat = spk_ampa.ravel()
@@ -1721,7 +1726,7 @@ class ht_neuron(NESTNeuron):
                 m_fast[i], m_slow[i],
                 m_Ih[i], D_IKNa[i],
                 m_IT[i], h_IT[i],
-            ], dtype=np.float64)
+            ], dtype=dftype)
 
             _ref_i = int(ref[i])
             _I_stim_i = I_stim_cur[i]
@@ -1939,7 +1944,7 @@ class ht_neuron(NESTNeuron):
         self.I_h_val.value = I_h_out.reshape(v_shape)
 
         # Refractory counter
-        self.ref_steps.value = jnp.asarray(ref_out.reshape(v_shape), dtype=jnp.int32)
+        self.ref_steps.value = jnp.asarray(ref_out.reshape(v_shape), dtype=ditype)
 
         # Stimulation current for next step
         self.I_stim.value = I_stim_next

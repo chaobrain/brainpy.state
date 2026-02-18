@@ -419,9 +419,10 @@ class sinusoidal_gamma_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -429,16 +430,18 @@ class sinusoidal_gamma_generator(NESTDevice):
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Rate parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))
@@ -519,12 +522,13 @@ class sinusoidal_gamma_generator(NESTDevice):
     @staticmethod
     def _delta_lambda(params: tuple[float, float, float, float, float], t_a, t_b):
         om, phi, order, rate, amplitude = params
-        t_a_arr = np.asarray(t_a, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        t_a_arr = np.asarray(t_a, dtype=dftype)
         if t_a_arr.ndim == 0:
             if float(t_a_arr) == float(t_b):
-                return np.asarray(0.0, dtype=np.float64)
+                return np.asarray(0.0, dtype=dftype)
         elif np.all(t_a_arr == float(t_b)):
-            return np.zeros_like(t_a_arr, dtype=np.float64)
+            return np.zeros_like(t_a_arr, dtype=dftype)
 
         delta = order * rate * (t_b - t_a_arr)
         if abs(amplitude) > 0.0 and abs(om) > 0.0:
@@ -536,18 +540,20 @@ class sinusoidal_gamma_generator(NESTDevice):
     def _accumulate_lambda_to_time(self, t_ms: float):
         if self._num_trains == 0:
             return
-        t0 = np.asarray(self.t0_ms.value, dtype=np.float64).reshape(-1).copy()
-        lam0 = np.asarray(self.Lambda_t0.value, dtype=np.float64).reshape(-1).copy()
+        dftype = brainstate.environ.dftype()
+        t0 = np.asarray(self.t0_ms.value, dtype=dftype).reshape(-1).copy()
+        lam0 = np.asarray(self.Lambda_t0.value, dtype=dftype).reshape(-1).copy()
 
-        lam0 += np.asarray(self._delta_lambda(self._proc_params_prev, t0, t_ms), dtype=np.float64)
+        lam0 += np.asarray(self._delta_lambda(self._proc_params_prev, t0, t_ms), dtype=dftype)
         t0.fill(t_ms)
 
         self.t0_ms.value = t0
         self.Lambda_t0.value = lam0
 
     def _resize_train_state(self, now_ms: float, new_num_trains: int):
-        old_t0 = np.asarray(self.t0_ms.value, dtype=np.float64).reshape(-1)
-        old_lam = np.asarray(self.Lambda_t0.value, dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        old_t0 = np.asarray(self.t0_ms.value, dtype=dftype).reshape(-1)
+        old_lam = np.asarray(self.Lambda_t0.value, dtype=dftype).reshape(-1)
         old_n = old_t0.size
 
         if new_num_trains == old_n:
@@ -559,10 +565,10 @@ class sinusoidal_gamma_generator(NESTDevice):
 
         add_n = new_num_trains - old_n
         self.t0_ms.value = np.concatenate(
-            [old_t0, np.full(add_n, now_ms, dtype=np.float64)]
+            [old_t0, np.full(add_n, now_ms, dtype=dftype)]
         )
         self.Lambda_t0.value = np.concatenate(
-            [old_lam, np.zeros(add_n, dtype=np.float64)]
+            [old_lam, np.zeros(add_n, dtype=dftype)]
         )
 
     def init_state(self, batch_size: int = None, **kwargs):
@@ -599,13 +605,14 @@ class sinusoidal_gamma_generator(NESTDevice):
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
 
         curr_t_ms = self._current_time_ms()
+        dftype = brainstate.environ.dftype()
         self.t0_ms = brainstate.ShortTermState(
-            np.full(self._num_trains, curr_t_ms, dtype=np.float64)
+            np.full(self._num_trains, curr_t_ms, dtype=dftype)
         )
         self.Lambda_t0 = brainstate.ShortTermState(
-            np.zeros(self._num_trains, dtype=np.float64)
+            np.zeros(self._num_trains, dtype=dftype)
         )
-        self._recorded_rate_hz = brainstate.ShortTermState(jnp.asarray(0.0, dtype=jnp.float64))
+        self._recorded_rate_hz = brainstate.ShortTermState(jnp.asarray(0.0, dtype=dftype))
         self._proc_params_prev = self._proc_params
 
         dt_ms = self._maybe_dt_ms()
@@ -786,15 +793,18 @@ class sinusoidal_gamma_generator(NESTDevice):
         """
         if not hasattr(self, '_recorded_rate_hz'):
             return 0.0
-        return float(np.asarray(self._recorded_rate_hz.value, dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        return float(np.asarray(self._recorded_rate_hz.value, dtype=dftype).reshape(()))
 
     def _sample_uniform(self, shape=()):
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
-        return jax.random.uniform(subkey, shape=shape, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        return jax.random.uniform(subkey, shape=shape, dtype=dftype)
 
     def _compute_hazard(self, lambda_val: np.ndarray, rate_per_ms: float, dt_ms: float) -> np.ndarray:
-        hazard = np.zeros_like(lambda_val, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        hazard = np.zeros_like(lambda_val, dtype=dftype)
 
         # Guard tiny negative values caused by floating-point roundoff only.
         tiny_neg = np.logical_and(lambda_val < 0.0, lambda_val > -1e-15)
@@ -809,10 +819,10 @@ class sinusoidal_gamma_generator(NESTDevice):
         lam = lambda_val[valid]
         q = np.asarray(
             jax.lax.igammac(
-                jnp.asarray(self.order, dtype=jnp.float64),
-                jnp.asarray(lam, dtype=jnp.float64),
+                jnp.asarray(self.order, dtype=dftype),
+                jnp.asarray(lam, dtype=dftype),
             ),
-            dtype=np.float64,
+            dtype=dftype,
         )
         denom = math.gamma(self.order) * q
         numer = (
@@ -825,7 +835,7 @@ class sinusoidal_gamma_generator(NESTDevice):
         hazard_valid = np.divide(
             numer,
             denom,
-            out=np.zeros_like(numer, dtype=np.float64),
+            out=np.zeros_like(numer, dtype=dftype),
             where=denom > 0.0,
         )
         hazard[valid] = hazard_valid
@@ -877,9 +887,10 @@ class sinusoidal_gamma_generator(NESTDevice):
         rate_per_ms = self._rate_per_ms + self._amplitude_per_ms * math.sin(
             self._om_rad_per_ms * t_eval_ms + self._phi_rad
         )
+        dftype = brainstate.environ.dftype()
         self._recorded_rate_hz.value = jnp.asarray(
             rate_per_ms * 1000.0,
-            dtype=jnp.float64,
+            dtype=dftype,
         )
 
         if (
@@ -887,13 +898,14 @@ class sinusoidal_gamma_generator(NESTDevice):
             or rate_per_ms <= 0.0
             or (not self._is_active(curr_step))
         ):
-            return jnp.zeros(self.varshape, dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            return jnp.zeros(self.varshape, dtype=ditype)
 
-        t0 = np.asarray(self.t0_ms.value, dtype=np.float64).reshape(-1).copy()
-        lam0 = np.asarray(self.Lambda_t0.value, dtype=np.float64).reshape(-1).copy()
+        t0 = np.asarray(self.t0_ms.value, dtype=dftype).reshape(-1).copy()
+        lam0 = np.asarray(self.Lambda_t0.value, dtype=dftype).reshape(-1).copy()
         lambda_eval = lam0 + np.asarray(
             self._delta_lambda(self._proc_params, t0, t_eval_ms),
-            dtype=np.float64,
+            dtype=dftype,
         )
 
         hazard = self._compute_hazard(lambda_eval, rate_per_ms, dt_ms)
@@ -901,7 +913,7 @@ class sinusoidal_gamma_generator(NESTDevice):
         if self.individual_spike_trains:
             draws = np.asarray(
                 self._sample_uniform(shape=(self._num_trains,)),
-                dtype=np.float64,
+                dtype=dftype,
             )
             spikes = draws < hazard
             if np.any(spikes):
@@ -909,13 +921,13 @@ class sinusoidal_gamma_generator(NESTDevice):
                 lam0[spikes] = 0.0
             self.t0_ms.value = t0
             self.Lambda_t0.value = lam0
-            return jnp.asarray(spikes.reshape(self.varshape), dtype=jnp.int64)
+            return jnp.asarray(spikes.reshape(self.varshape), dtype=ditype)
 
-        draw = float(np.asarray(self._sample_uniform(shape=()), dtype=np.float64).reshape(()))
+        draw = float(np.asarray(self._sample_uniform(shape=()), dtype=dftype).reshape(()))
         spike = int(draw < float(hazard[0]))
         if spike:
             t0[0] = t_eval_ms
             lam0[0] = 0.0
             self.t0_ms.value = t0
             self.Lambda_t0.value = lam0
-        return jnp.full(self.varshape, spike, dtype=jnp.int64)
+        return jnp.full(self.varshape, spike, dtype=ditype)

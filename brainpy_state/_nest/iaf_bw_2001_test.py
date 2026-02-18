@@ -39,9 +39,10 @@ def _nmda_jump_constants_ref(alpha, tau_rise, tau_decay):
 
     a = 1.0 - tau_ratio
     x = alpha_tau
+    dftype = brainstate.environ.dftype()
     lower_gamma = float(
-        jsp.special.gammainc(jnp.asarray(a, dtype=jnp.float64), jnp.asarray(x, dtype=jnp.float64))
-        * jnp.exp(jsp.special.gammaln(jnp.asarray(a, dtype=jnp.float64)))
+        jsp.special.gammainc(jnp.asarray(a, dtype=dftype), jnp.asarray(x, dtype=dftype))
+        * jnp.exp(jsp.special.gammaln(jnp.asarray(a, dtype=dftype)))
     )
     k0 = (alpha_tau ** tau_ratio) * lower_gamma
     return k0, k1
@@ -64,14 +65,16 @@ def _dynamics_ref(y, i_stim, p):
     ds_ampa = -s_ampa / p['tau_AMPA']
     ds_gaba = -s_gaba / p['tau_GABA']
     ds_nmda = -s_nmda / p['tau_decay_NMDA']
-    return np.asarray([dv, ds_ampa, ds_gaba, ds_nmda], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray([dv, ds_ampa, ds_gaba, ds_nmda], dtype=dftype)
 
 
 def _rkf45_ref_step(y0, i_stim, dt, h0, p, atol):
     min_h = 1e-8
     t = 0.0
     h = max(h0, min_h)
-    y = np.asarray(y0, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.asarray(y0, dtype=dftype)
 
     while t < dt:
         h = max(min_h, min(h, dt - t))
@@ -105,8 +108,9 @@ def _rkf45_ref_step(y0, i_stim, dt, h0, p, atol):
 
 
 def _reference_step(state, p, x_next, step_events, dt, t_step):
+    dftype = brainstate.environ.dftype()
     y, h, i_ampa, i_gaba, i_nmda = _rkf45_ref_step(
-        np.asarray([state['v'], state['s_ampa'], state['s_gaba'], state['s_nmda']], dtype=np.float64),
+        np.asarray([state['v'], state['s_ampa'], state['s_gaba'], state['s_nmda']], dtype=dftype),
         state['i_stim'],
         dt,
         state['h'],
@@ -175,7 +179,8 @@ class TestIAFBW2001(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64).reshape(-1)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)[0] > 0.0)
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None):
         with brainstate.environ.context(t=k * self.dt):

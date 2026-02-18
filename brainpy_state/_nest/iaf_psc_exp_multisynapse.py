@@ -419,7 +419,8 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         self.V_th = braintools.init.param(V_th, self.varshape)
         self.V_reset = braintools.init.param(V_reset, self.varshape)
         self.I_e = braintools.init.param(I_e, self.varshape)
-        self.tau_syn = np.asarray(u.math.asarray(tau_syn / u.ms), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        self.tau_syn = np.asarray(u.math.asarray(tau_syn / u.ms), dtype=dftype).reshape(-1)
         self.V_initializer = V_initializer
         self.ref_var = ref_var
 
@@ -458,7 +459,8 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         TypeError
             If ``x`` is not unit-compatible with ``unit``.
         """
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -538,14 +540,16 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
             numeric/unit conversions.
         """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        zeros = np.zeros(V.shape + (self.n_receptors,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        zeros = np.zeros(V.shape + (self.n_receptors,), dtype=dftype)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
 
         self.V = brainstate.HiddenState(V)
         self.i_syn = brainstate.ShortTermState(zeros * u.pA)
-        self.i_const = brainstate.ShortTermState(np.zeros(V.shape, dtype=np.float64) * u.pA)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        self.i_const = brainstate.ShortTermState(np.zeros(V.shape, dtype=dftype) * u.pA)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         if self.ref_var:
@@ -609,7 +613,8 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
             If ``t_ref`` and ``dt`` are not unit-compatible for division.
         """
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _parse_spike_events(self, spike_events: Iterable, v_shape):
         r"""Parse spike event descriptors into a per-receptor weight array.
@@ -647,7 +652,8 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         TypeError
             If a weight value is not unit-compatible with pA.
         """
-        out = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        out = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
         if spike_events is None:
             return out
         for ev in spike_events:
@@ -659,7 +665,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
                 receptor = int(receptor)
             if receptor < 1 or receptor > self.n_receptors:
                 raise ValueError(f'Receptor type {receptor} out of range [1, {self.n_receptors}].')
-            w_np = np.asarray(u.math.asarray(weight / u.pA), dtype=np.float64)
+            w_np = np.asarray(u.math.asarray(weight / u.pA), dtype=dftype)
             out[..., receptor - 1] += np.broadcast_to(w_np, v_shape)
         return out
 
@@ -734,10 +740,12 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         theta = self._broadcast_to_state(self._to_numpy(self.V_th - self.E_L, u.mV), v_shape)
         V_reset_rel = self._broadcast_to_state(self._to_numpy(self.V_reset - self.E_L, u.mV), v_shape)
 
-        i_syn = np.asarray(u.math.asarray(self.i_syn.value / u.pA), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        i_syn = np.asarray(u.math.asarray(self.i_syn.value / u.pA), dtype=dftype)
         i_const = self._broadcast_to_state(self._to_numpy(self.i_const.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         )
 
         P22 = np.exp(-h / tau_m)
@@ -763,7 +771,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
 
         spike_cond = V_rel >= theta
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
         )
         r = np.where(spike_cond, refr_counts, r)
         V_before_reset = V_rel
@@ -772,7 +780,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         self.V.value = (V_rel + E_L) * u.mV
         self.i_syn.value = i_syn * u.pA
         self.i_const.value = i_const_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
         )

@@ -54,13 +54,15 @@ def _rhs(y, is_refractory, is_clamped, i_stim, p):
     du_minus = (-u_minus + v_eff) / p['tau_u_bar_minus']
     du_bar = (-u_bar + u_minus) / p['tau_u_bar_bar']
 
-    return np.asarray([dv, dw, dz, dv_th, du_plus, du_minus, du_bar], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray([dv, dw, dz, dv_th, du_plus, du_minus, du_bar], dtype=dftype)
 
 
 def _reference_step(state, p, x_next, delta_step, dt_ms):
     min_h = 1e-8
     t = 0.0
     h = max(state['h'], min_h)
+    dftype = brainstate.environ.dftype()
     y = np.asarray([
         state['v'],
         state['w'],
@@ -69,7 +71,7 @@ def _reference_step(state, p, x_next, delta_step, dt_ms):
         state['u_plus'],
         state['u_minus'],
         state['u_bar'],
-    ], dtype=np.float64)
+    ], dtype=dftype)
 
     r = int(state['r'])
     clamp = int(state['clamp'])
@@ -218,7 +220,8 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype)[0] > 0.0)
 
     @staticmethod
     def _is_nest_available():
@@ -412,6 +415,7 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
                 'clamp_counts': int(math.ceil(0.2 / dt_ms)),
             }
 
+            dftype = brainstate.environ.dftype()
             ref_state = {
                 'v': -68.0,
                 'w': 5.0,
@@ -426,8 +430,8 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
                 'i_stim': 0.0,
                 'delay_steps': delay_steps,
                 'delay_idx': 0,
-                'delay_plus': np.zeros(delay_steps, dtype=np.float64),
-                'delay_minus': np.zeros(delay_steps, dtype=np.float64),
+                'delay_plus': np.zeros(delay_steps, dtype=dftype),
+                'delay_minus': np.zeros(delay_steps, dtype=dftype),
                 'last_ltd_dw': 0.0,
                 'last_ltp_dw': 0.0,
             }
@@ -460,16 +464,17 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
                 self.assertEqual(int(neuron.clamp_step_count.value[0]), ref_state['clamp'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=3e-6)
 
-                self.assertEqual(int(np.asarray(neuron.delayed_u_bars_idx.value, dtype=np.int32)),
+                ditype = brainstate.environ.ditype()
+                self.assertEqual(int(np.asarray(neuron.delayed_u_bars_idx.value, dtype=ditype)),
                                  ref_state['delay_idx'])
                 npt.assert_allclose(
-                    np.asarray(neuron.delayed_u_bar_plus_buffer.value, dtype=np.float64)[:, 0],
+                    np.asarray(neuron.delayed_u_bar_plus_buffer.value, dtype=dftype)[:, 0],
                     ref_state['delay_plus'],
                     atol=3e-6,
                     rtol=0.0,
                 )
                 npt.assert_allclose(
-                    np.asarray(neuron.delayed_u_bar_minus_buffer.value, dtype=np.float64)[:, 0],
+                    np.asarray(neuron.delayed_u_bar_minus_buffer.value, dtype=dftype)[:, 0],
                     ref_state['delay_minus'],
                     atol=3e-6,
                     rtol=0.0,
@@ -541,14 +546,15 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
         nest.Simulate(n_steps * dt_ms)
 
         events = mm.get('events')
-        nest_v = np.asarray(events['V_m'], dtype=np.float64)
-        nest_w = np.asarray(events['w'], dtype=np.float64)
-        nest_z = np.asarray(events['z'], dtype=np.float64)
-        nest_v_th = np.asarray(events['V_th'], dtype=np.float64)
-        nest_u_plus = np.asarray(events['u_bar_plus'], dtype=np.float64)
-        nest_u_minus = np.asarray(events['u_bar_minus'], dtype=np.float64)
-        nest_u_bar = np.asarray(events['u_bar_bar'], dtype=np.float64)
-        nest_times = np.asarray(events['times'], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        nest_v = np.asarray(events['V_m'], dtype=dftype)
+        nest_w = np.asarray(events['w'], dtype=dftype)
+        nest_z = np.asarray(events['z'], dtype=dftype)
+        nest_v_th = np.asarray(events['V_th'], dtype=dftype)
+        nest_u_plus = np.asarray(events['u_bar_plus'], dtype=dftype)
+        nest_u_minus = np.asarray(events['u_bar_minus'], dtype=dftype)
+        nest_u_bar = np.asarray(events['u_bar_bar'], dtype=dftype)
+        nest_times = np.asarray(events['times'], dtype=dftype)
 
         with brainstate.environ.context(dt=dt_ms * u.ms):
             neuron = aeif_psc_delta_clopath(
@@ -587,13 +593,13 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
             )
             neuron.init_state()
 
-            bp_v = np.empty(n_steps, dtype=np.float64)
-            bp_w = np.empty(n_steps, dtype=np.float64)
-            bp_z = np.empty(n_steps, dtype=np.float64)
-            bp_v_th = np.empty(n_steps, dtype=np.float64)
-            bp_u_plus = np.empty(n_steps, dtype=np.float64)
-            bp_u_minus = np.empty(n_steps, dtype=np.float64)
-            bp_u_bar = np.empty(n_steps, dtype=np.float64)
+            bp_v = np.empty(n_steps, dtype=dftype)
+            bp_w = np.empty(n_steps, dtype=dftype)
+            bp_z = np.empty(n_steps, dtype=dftype)
+            bp_v_th = np.empty(n_steps, dtype=dftype)
+            bp_u_plus = np.empty(n_steps, dtype=dftype)
+            bp_u_minus = np.empty(n_steps, dtype=dftype)
+            bp_u_bar = np.empty(n_steps, dtype=dftype)
 
             for k in range(n_steps):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):

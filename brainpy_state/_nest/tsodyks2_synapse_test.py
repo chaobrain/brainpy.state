@@ -93,8 +93,9 @@ def _run_tsodyks2_weight_trace(
             with brainstate.environ.context(t=step * dt):
                 syn.update(pre_spike=pre_spike)
 
+    dftype = brainstate.environ.dftype()
     return [
-        float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+        float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
         for _key, value, _label in recv.delta_events
     ]
 
@@ -217,7 +218,8 @@ class TestTsodyks2SynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), len(spike_steps))
         for idx, (_key, value, label) in enumerate(recv.delta_events):
-            value_f = float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+            dftype = brainstate.environ.dftype()
+            value_f = float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
             self.assertAlmostEqual(value_f, payloads_ref[idx], delta=1e-12)
             self.assertEqual(label, 'receptor_2')
 
@@ -229,7 +231,8 @@ class TestTsodyks2SynapseDynamics(unittest.TestCase):
     def test_weight_drift_matches_independent_reference(self):
         # Mirrors NEST testsuite/pytests/test_tsodyks2_synapse.py logic,
         # with deterministic presynaptic spike times.
-        pre_spikes = np.asarray([5.0, 8.6, 14.2, 24.0, 31.1, 47.7, 70.3], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([5.0, 8.6, 14.2, 24.0, 31.1, 47.7, 70.3], dtype=dftype)
         dt_ms = 0.1
         sim_duration_ms = 100.0
 
@@ -269,8 +272,8 @@ class TestTsodyks2SynapseDynamics(unittest.TestCase):
                     expected_weights.append(w_eff_ref)
 
                 np.testing.assert_allclose(
-                    np.asarray(simulated_weights, dtype=np.float64),
-                    np.asarray(expected_weights, dtype=np.float64),
+                    np.asarray(simulated_weights, dtype=dftype),
+                    np.asarray(expected_weights, dtype=dftype),
                     atol=1e-12,
                     rtol=0.0,
                 )

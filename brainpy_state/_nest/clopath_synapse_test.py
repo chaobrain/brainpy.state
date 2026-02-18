@@ -79,7 +79,8 @@ def _reference_weight_trace(spike_times_ms, target, params):
     t_last = float(params['t_last_spike_ms'])
     delay = float(params['delay'])
 
-    weights = np.empty((len(spike_times_ms),), dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    weights = np.empty((len(spike_times_ms),), dtype=dftype)
 
     for i, t_spike in enumerate(spike_times_ms):
         t_spike = float(t_spike)
@@ -101,15 +102,16 @@ def _reference_weight_trace(spike_times_ms, target, params):
 
 
 def _build_histories_from_nest_multimeter(events, resolution_ms, params):
-    times = np.asarray(events['times'], dtype=np.float64)
-    vm = np.asarray(events['V_m'], dtype=np.float64)
-    u_plus = np.asarray(events['u_bar_plus'], dtype=np.float64)
-    u_minus = np.asarray(events['u_bar_minus'], dtype=np.float64)
-    u_bar = np.asarray(events['u_bar_bar'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    times = np.asarray(events['times'], dtype=dftype)
+    vm = np.asarray(events['V_m'], dtype=dftype)
+    u_plus = np.asarray(events['u_bar_plus'], dtype=dftype)
+    u_minus = np.asarray(events['u_bar_minus'], dtype=dftype)
+    u_bar = np.asarray(events['u_bar_bar'], dtype=dftype)
 
     delay_steps = int(np.rint(float(params['delay_u_bars']) / float(resolution_ms))) + 1
-    plus_buf = np.zeros((delay_steps,), dtype=np.float64)
-    minus_buf = np.zeros((delay_steps,), dtype=np.float64)
+    plus_buf = np.zeros((delay_steps,), dtype=dftype)
+    minus_buf = np.zeros((delay_steps,), dtype=dftype)
     idx = 0
 
     ltp_hist = []
@@ -199,8 +201,9 @@ def _run_nest_clopath_pairing(spike_times_pre, spike_times_post):
     wr_events = nest.GetStatus(wr)[0]['events']
     mm_events = nest.GetStatus(mm)[0]['events']
 
-    wr_times = np.asarray(wr_events['times'], dtype=np.float64)
-    wr_weights = np.asarray(wr_events['weights'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    wr_times = np.asarray(wr_events['times'], dtype=dftype)
+    wr_weights = np.asarray(wr_events['weights'], dtype=dftype)
 
     return {
         'resolution': resolution,
@@ -313,10 +316,11 @@ class TestClopathSynapse(unittest.TestCase):
             t_last_spike_ms=0.0,
         )
 
-        spike_times = np.asarray([11.0, 18.0, 25.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        spike_times = np.asarray([11.0, 18.0, 25.0], dtype=dftype)
 
         events = syn.simulate_pre_spike_train(spike_times, target=target)
-        got_weights = np.asarray([ev['weight'] for ev in events], dtype=np.float64)
+        got_weights = np.asarray([ev['weight'] for ev in events], dtype=dftype)
 
         ref_weights, ref_x, ref_t_last = _reference_weight_trace(
             spike_times,
@@ -372,7 +376,8 @@ class TestClopathSynapse(unittest.TestCase):
                 ev = syn.send(t_spike_ms=float(t_spike), target=target)
                 local_weights.append(ev['weight'])
 
-            local_weights = np.asarray(local_weights, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            local_weights = np.asarray(local_weights, dtype=dftype)
 
             self.assertEqual(local_weights.shape, run['wr_weights'].shape)
             npt.assert_allclose(local_weights, run['wr_weights'], atol=5e-9, rtol=0.0)

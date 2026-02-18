@@ -34,12 +34,13 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 _STDP_EPS = 1.0e-6
-_DEFAULT_LUT_0 = np.asarray([2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15], dtype=np.int64)
-_DEFAULT_LUT_1 = np.asarray([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13], dtype=np.int64)
-_DEFAULT_LUT_2 = np.arange(16, dtype=np.int64)
-_DEFAULT_CONFIG_0 = np.asarray([0, 0, 1, 0], dtype=np.int64)
-_DEFAULT_CONFIG_1 = np.asarray([0, 1, 0, 0], dtype=np.int64)
-_DEFAULT_RESET_PATTERN = np.asarray([1, 1, 1, 1, 1, 1], dtype=np.int64)
+ditype = brainstate.environ.ditype()
+_DEFAULT_LUT_0 = np.asarray([2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15], dtype=ditype)
+_DEFAULT_LUT_1 = np.asarray([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13], dtype=ditype)
+_DEFAULT_LUT_2 = np.arange(16, dtype=ditype)
+_DEFAULT_CONFIG_0 = np.asarray([0, 0, 1, 0], dtype=ditype)
+_DEFAULT_CONFIG_1 = np.asarray([0, 1, 0, 0], dtype=ditype)
+_DEFAULT_RESET_PATTERN = np.asarray([1, 1, 1, 1, 1, 1], dtype=ditype)
 
 
 class _MockReceiver:
@@ -51,7 +52,8 @@ class _MockReceiver:
 
 
 def _spike_step_counts_from_times(spike_times_ms, dt_ms):
-    spike_times = np.asarray(spike_times_ms, dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    spike_times = np.asarray(spike_times_ms, dtype=dftype).reshape(-1)
     counts = {}
     for t_spike in spike_times:
         step = int(round((float(t_spike) - dt_ms) / dt_ms))
@@ -195,12 +197,13 @@ def _run_bp_trace(
                 a_causal_trace.append(float(syn.a_causal))
                 a_acausal_trace.append(float(syn.a_acausal))
 
+    dftype = brainstate.environ.dftype()
     return (
-        np.asarray(send_times, dtype=np.float64),
-        np.asarray(payloads, dtype=np.float64),
-        np.asarray(weight_trace, dtype=np.float64),
-        np.asarray(a_causal_trace, dtype=np.float64),
-        np.asarray(a_acausal_trace, dtype=np.float64),
+        np.asarray(send_times, dtype=dftype),
+        np.asarray(payloads, dtype=dftype),
+        np.asarray(weight_trace, dtype=dftype),
+        np.asarray(a_causal_trace, dtype=dftype),
+        np.asarray(a_acausal_trace, dtype=dftype),
     )
 
 
@@ -282,12 +285,13 @@ def _run_reference_trace(
             a_causal_trace.append(float(state['a_causal']))
             a_acausal_trace.append(float(state['a_acausal']))
 
+    dftype = brainstate.environ.dftype()
     return (
-        np.asarray(send_times, dtype=np.float64),
-        np.asarray(payloads, dtype=np.float64),
-        np.asarray(weight_trace, dtype=np.float64),
-        np.asarray(a_causal_trace, dtype=np.float64),
-        np.asarray(a_acausal_trace, dtype=np.float64),
+        np.asarray(send_times, dtype=dftype),
+        np.asarray(payloads, dtype=dftype),
+        np.asarray(weight_trace, dtype=dftype),
+        np.asarray(a_causal_trace, dtype=dftype),
+        np.asarray(a_acausal_trace, dtype=dftype),
     )
 
 
@@ -413,8 +417,9 @@ class TestSTDPFACETSHWSynapseHomOrdering(unittest.TestCase):
             weight=0.0,
         )
 
-        pre_spikes = np.asarray([2.0, 4.5, 6.2, 9.0, 14.2, 20.6, 31.0], dtype=np.float64)
-        post_spikes = np.asarray([1.2, 3.7, 5.1, 8.8, 12.0, 19.2, 28.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([2.0, 4.5, 6.2, 9.0, 14.2, 20.6, 31.0], dtype=dftype)
+        post_spikes = np.asarray([1.2, 3.7, 5.1, 8.8, 12.0, 19.2, 28.0], dtype=dftype)
 
         ref = _run_reference_trace(
             pre_spikes_ms=pre_spikes,
@@ -451,7 +456,8 @@ class TestSTDPFACETSHWSynapseHomDynamics(unittest.TestCase):
         start_weight_index = 0
         start_weight = float(start_weight_index) / 15.0 * Wmax
 
-        spikes_in = np.arange(10.0, 7600.0, time_between_pairs, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        spikes_in = np.arange(10.0, 7600.0, time_between_pairs, dtype=dftype)
         pre_spikes = spikes_in
         post_spikes = spikes_in + delay
         sim_duration_ms = float(np.max(post_spikes) + 10.0)
@@ -544,13 +550,14 @@ class TestSTDPFACETSHWSynapseHomVsNEST(unittest.TestCase):
 
         pre = nest.Create('parrot_neuron')
         post = nest.Create('parrot_neuron')
+        dftype = brainstate.environ.dftype()
         sg_pre = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(pre_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(pre_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         sg_post = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(post_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(post_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         wr = nest.Create('weight_recorder')
 
@@ -587,8 +594,8 @@ class TestSTDPFACETSHWSynapseHomVsNEST(unittest.TestCase):
 
         events = wr.get('events')
         return (
-            np.asarray(events['times'], dtype=np.float64),
-            np.asarray(events['weights'], dtype=np.float64),
+            np.asarray(events['times'], dtype=dftype),
+            np.asarray(events['weights'], dtype=dftype),
         )
 
     def test_weight_trace_matches_nest(self):
@@ -614,7 +621,8 @@ class TestSTDPFACETSHWSynapseHomVsNEST(unittest.TestCase):
 
         dt_ms = 0.1
         delay_ms = 5.0
-        pre_spikes = np.arange(10.0, 3610.0, 100.0, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.arange(10.0, 3610.0, 100.0, dtype=dftype)
         post_spikes = pre_spikes + delay_ms
 
         nest_times, nest_weights = self._run_nest_weight_trace(

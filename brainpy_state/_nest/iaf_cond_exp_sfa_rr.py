@@ -412,7 +412,8 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         np.ndarray
             Float64 array with unit removed.
         """
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -503,7 +504,8 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -544,7 +546,8 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
@@ -600,7 +603,8 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         * Called during each update to get refractory duration in discrete steps
         """
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _sum_signed_delta_inputs(self):
         r"""Accumulate delta inputs from synaptic projections into excitatory and inhibitory conductances.
@@ -744,15 +748,17 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         """
         t = 0.0
         h = max(h0, self._MIN_H)
-        y = np.asarray([v0, ge0, gi0, gsfa0, grr0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        y = np.asarray([v0, ge0, gi0, gsfa0, grr0], dtype=dftype)
         iters = 0
 
         def f(y_):
+            dftype = brainstate.environ.dftype()
             return np.asarray(
                 self._dynamics_scalar(
                     y_[0], y_[1], y_[2], y_[3], y_[4], is_refractory, i_stim, p
                 ),
-                dtype=np.float64
+                dtype=dftype
             )
 
         while t < dt and iters < self._MAX_ITERS:
@@ -837,8 +843,9 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
         g_sfa = self._broadcast_to_state(self._to_numpy(self.g_sfa.value, u.nS), v_shape)
         g_rr = self._broadcast_to_state(self._to_numpy(self.g_rr.value, u.nS), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape,
         )
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
@@ -861,7 +868,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
             'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
         }
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
 
@@ -925,7 +932,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         self.g_in.value = gi_next * u.nS
         self.g_sfa.value = gsfa_next * u.nS
         self.g_rr.value = grr_next * u.nS
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
@@ -935,4 +942,5 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float64) * u.mV)
+        dftype = brainstate.environ.dftype()
+        return self.get_spike(u.math.asarray(v_for_spike, dtype=dftype) * u.mV)

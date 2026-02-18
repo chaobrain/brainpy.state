@@ -327,7 +327,8 @@ class iaf_cond_exp(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -378,7 +379,8 @@ class iaf_cond_exp(NESTNeuron):
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -419,7 +421,8 @@ class iaf_cond_exp(NESTNeuron):
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
@@ -466,7 +469,8 @@ class iaf_cond_exp(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _sum_signed_delta_inputs(self):
         g_ex = u.math.zeros_like(self.g_ex.value)
@@ -746,8 +750,9 @@ class iaf_cond_exp(NESTNeuron):
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
         ge = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
         gi = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         )
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
         h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape)
@@ -765,7 +770,7 @@ class iaf_cond_exp(NESTNeuron):
             'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
         }
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
         )
 
         dg_ex_q, dg_in_q = self._sum_signed_delta_inputs()
@@ -814,7 +819,7 @@ class iaf_cond_exp(NESTNeuron):
         self.V.value = V_next * u.mV
         self.g_ex.value = ge_next * u.nS
         self.g_in.value = gi_next * u.nS
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
@@ -824,4 +829,5 @@ class iaf_cond_exp(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float64) * u.mV)
+        dftype = brainstate.environ.dftype()
+        return self.get_spike(u.math.asarray(v_for_spike, dtype=dftype) * u.mV)

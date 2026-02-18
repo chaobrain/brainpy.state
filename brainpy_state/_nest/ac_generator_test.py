@@ -227,8 +227,9 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            ac_trace = np.empty(n_steps, dtype=np.float64)
-            manual_trace = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            ac_trace = np.empty(n_steps, dtype=dftype)
+            manual_trace = np.empty(n_steps, dtype=dftype)
 
             for step in range(n_steps):
                 t = step * dt_ms
@@ -342,7 +343,8 @@ class TestACGeneratorVsNEST(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            I_bp = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            I_bp = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 t = step * self.dt_ms
                 with brainstate.environ.context(t=t * u.ms):
@@ -396,7 +398,8 @@ class TestACGeneratorVsNEST(unittest.TestCase):
             neuron = iaf_psc_alpha(1)
             neuron.init_state()
 
-            v_bp = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            v_bp = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 t = step * self.dt_ms
                 with brainstate.environ.context(t=t * u.ms):

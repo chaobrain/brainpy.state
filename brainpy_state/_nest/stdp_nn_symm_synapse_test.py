@@ -45,7 +45,8 @@ class _MockReceiver:
 
 
 def _spike_step_counts_from_times(spike_times_ms, dt_ms):
-    spike_times = np.asarray(spike_times_ms, dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    spike_times = np.asarray(spike_times_ms, dtype=dftype).reshape(-1)
     counts = {}
     for t_spike in spike_times:
         step = int(round((float(t_spike) - dt_ms) / dt_ms))
@@ -169,15 +170,16 @@ def _run_bp_weight_trace(
             if pre_count > 0:
                 send_times.append((step + 1) * dt_ms)
 
+    dftype = brainstate.environ.dftype()
     payloads = np.asarray(
         [
-            float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+            float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
             for _key, value, _label in recv.delta_events
         ],
-        dtype=np.float64,
+        dtype=dftype,
     )
     labels = [label for _key, _value, label in recv.delta_events]
-    return np.asarray(send_times, dtype=np.float64), payloads, labels
+    return np.asarray(send_times, dtype=dftype), payloads, labels
 
 
 def _run_reference_weight_trace(
@@ -235,7 +237,8 @@ def _run_reference_weight_trace(
             send_times.append(t_spike)
             payloads.append(payload)
 
-    return np.asarray(send_times, dtype=np.float64), np.asarray(payloads, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(send_times, dtype=dftype), np.asarray(payloads, dtype=dftype)
 
 
 class TestSTDPNNSymmSynapseParameters(unittest.TestCase):
@@ -299,8 +302,9 @@ class TestSTDPNNSymmSynapseOrdering(unittest.TestCase):
             Wmax=1.0,
         )
 
-        pre_spikes = np.asarray([1.0, 2.5, 3.0, 5.2, 7.4], dtype=np.float64)
-        post_spikes = np.asarray([0.7, 1.6, 2.2, 2.9, 4.7, 7.1], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([1.0, 2.5, 3.0, 5.2, 7.4], dtype=dftype)
+        post_spikes = np.asarray([0.7, 1.6, 2.2, 2.9, 4.7, 7.1], dtype=dftype)
 
         send_t_ref, payload_ref = _run_reference_weight_trace(
             pre_spikes_ms=pre_spikes,
@@ -331,8 +335,9 @@ class TestSTDPNNSymmSynapseDynamics(unittest.TestCase):
     def test_dynamics_match_nest_reference_logic(self):
         # Mirrors hardcoded edge-case trains from
         # testsuite/pytests/test_stdp_nn_synapses.py in NEST.
-        pre_spikes = np.asarray([1.0, 5.0, 6.0, 7.0, 9.0, 11.0, 12.0, 13.0], dtype=np.float64)
-        post_spikes = np.asarray([2.0, 3.0, 4.0, 8.0, 9.0, 10.0, 12.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([1.0, 5.0, 6.0, 7.0, 9.0, 11.0, 12.0, 13.0], dtype=dftype)
+        post_spikes = np.asarray([2.0, 3.0, 4.0, 8.0, 9.0, 10.0, 12.0], dtype=dftype)
 
         dt_ms = 0.1
         sim_duration_ms = 20.0
@@ -372,8 +377,9 @@ class TestSTDPNNSymmSynapseDynamics(unittest.TestCase):
     def test_coincident_delta_t_pairs_are_discarded(self):
         # With delay=0.1 ms, post spikes at 19.9 and 29.9 coincide with
         # pre spikes at 20.0 and 30.0 at the synapse (post + delay == pre).
-        pre_spikes = np.asarray([10.0, 20.0, 30.0], dtype=np.float64)
-        post_spikes = np.asarray([9.9, 19.9, 29.9], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([10.0, 20.0, 30.0], dtype=dftype)
+        post_spikes = np.asarray([9.9, 19.9, 29.9], dtype=dftype)
 
         params = dict(
             tau_plus=20.0,
@@ -450,13 +456,14 @@ class TestSTDPNNSymmSynapseVsNEST(unittest.TestCase):
 
         pre = nest.Create('parrot_neuron')
         post = nest.Create('parrot_neuron', params={'tau_minus': float(tau_minus)})
+        dftype = brainstate.environ.dftype()
         sg_pre = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(pre_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(pre_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         sg_post = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(post_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(post_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         wr = nest.Create('weight_recorder')
 
@@ -488,8 +495,8 @@ class TestSTDPNNSymmSynapseVsNEST(unittest.TestCase):
 
         events = wr.get('events')
         return (
-            np.asarray(events['times'], dtype=np.float64),
-            np.asarray(events['weights'], dtype=np.float64),
+            np.asarray(events['times'], dtype=dftype),
+            np.asarray(events['weights'], dtype=dftype),
         )
 
     def test_weight_trace_matches_nest(self):
@@ -509,8 +516,9 @@ class TestSTDPNNSymmSynapseVsNEST(unittest.TestCase):
             Wmax=1.0,
         )
 
-        pre_spikes = np.asarray([10.0, 30.0, 41.0, 57.0, 90.0], dtype=np.float64)
-        post_spikes = np.asarray([15.0, 26.0, 50.0, 73.0, 88.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([10.0, 30.0, 41.0, 57.0, 90.0], dtype=dftype)
+        post_spikes = np.asarray([15.0, 26.0, 50.0, 73.0, 88.0], dtype=dftype)
 
         nest_times, nest_weights = self._run_nest_weight_trace(
             pre_spikes_ms=pre_spikes,

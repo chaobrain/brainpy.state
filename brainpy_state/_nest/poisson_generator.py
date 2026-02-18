@@ -253,9 +253,10 @@ class poisson_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -263,9 +264,10 @@ class poisson_generator(NESTDevice):
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=np.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
@@ -555,10 +557,11 @@ class poisson_generator(NESTDevice):
             self._refresh_timing_cache(dt_ms)
 
         if self.rate <= 0.0:
-            return jax.numpy.zeros(self.varshape, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            return jax.numpy.zeros(self.varshape, dtype=ditype)
 
         curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
         if self._is_active(curr_step):
             lam = self.rate * dt_ms / 1000.0
             return self._sample_poisson(lam)
-        return jax.numpy.zeros(self.varshape, dtype=np.int64)
+        return jax.numpy.zeros(self.varshape, dtype=ditype)

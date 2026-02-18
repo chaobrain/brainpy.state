@@ -44,14 +44,16 @@ def _rhs(y, is_refractory, i_stim, p):
     dI_ex = -I_ex / p['tau_syn_ex']
     dI_in = -I_in / p['tau_syn_in']
     dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
-    return np.asarray([dv, dI_ex, dI_in, dw], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray([dv, dI_ex, dI_in, dw], dtype=dftype)
 
 
 def _reference_step(state, p, x_next, w_step, dt_ms):
     min_h = 1e-8
     t = 0.0
     h = max(state['h'], min_h)
-    y = np.asarray([state['v'], state['I_ex'], state['I_in'], state['w']], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.asarray([state['v'], state['I_ex'], state['I_in'], state['w']], dtype=dftype)
     r = int(state['r'])
     spike_count = 0
     iters = 0
@@ -142,7 +144,8 @@ class TestAEIFPscExp(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype)[0] > 0.0)
 
     @staticmethod
     def _is_nest_available():
@@ -402,11 +405,12 @@ class TestAEIFPscExp(unittest.TestCase):
         nest.Simulate(n_steps * dt_ms)
 
         events = mm.get('events')
-        nest_v = np.asarray(events['V_m'], dtype=np.float64)
-        nest_w = np.asarray(events['w'], dtype=np.float64)
-        nest_i_ex = np.asarray(events['I_syn_ex'], dtype=np.float64)
-        nest_i_in = np.asarray(events['I_syn_in'], dtype=np.float64)
-        nest_times = np.asarray(events['times'], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        nest_v = np.asarray(events['V_m'], dtype=dftype)
+        nest_w = np.asarray(events['w'], dtype=dftype)
+        nest_i_ex = np.asarray(events['I_syn_ex'], dtype=dftype)
+        nest_i_in = np.asarray(events['I_syn_in'], dtype=dftype)
+        nest_times = np.asarray(events['times'], dtype=dftype)
 
         with brainstate.environ.context(dt=dt_ms * u.ms):
             neuron = aeif_psc_exp(
@@ -433,10 +437,10 @@ class TestAEIFPscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            bp_v = np.empty(n_steps, dtype=np.float64)
-            bp_w = np.empty(n_steps, dtype=np.float64)
-            bp_i_ex = np.empty(n_steps, dtype=np.float64)
-            bp_i_in = np.empty(n_steps, dtype=np.float64)
+            bp_v = np.empty(n_steps, dtype=dftype)
+            bp_w = np.empty(n_steps, dtype=dftype)
+            bp_i_ex = np.empty(n_steps, dtype=dftype)
+            bp_i_in = np.empty(n_steps, dtype=dftype)
 
             for k in range(n_steps):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):

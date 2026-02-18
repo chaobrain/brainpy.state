@@ -97,7 +97,8 @@ class TestBernoulliSynapseParameters(unittest.TestCase):
 
     def test_p_transmit_must_be_scalar(self):
         with self.assertRaisesRegex(ValueError, 'p_transmit must be scalar'):
-            bernoulli_synapse(p_transmit=np.asarray([0.1, 0.2], dtype=np.float64))
+            dftype = brainstate.environ.dftype()
+            bernoulli_synapse(p_transmit=np.asarray([0.1, 0.2], dtype=dftype))
 
 
 class TestBernoulliSynapseOrdering(unittest.TestCase):
@@ -131,8 +132,9 @@ class TestBernoulliSynapseOrdering(unittest.TestCase):
 
         _, val0, lbl0 = recv.delta_events[0]
         _, val1, lbl1 = recv.delta_events[1]
-        val0_f = float(np.asarray(u.math.asarray(val0), dtype=np.float64).reshape(()))
-        val1_f = float(np.asarray(u.math.asarray(val1), dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        val0_f = float(np.asarray(u.math.asarray(val0), dtype=dftype).reshape(()))
+        val1_f = float(np.asarray(u.math.asarray(val1), dtype=dftype).reshape(()))
         self.assertAlmostEqual(val0_f, 2.5, delta=1e-12)
         self.assertAlmostEqual(val1_f, 2.5, delta=1e-12)
         self.assertEqual(lbl0, 'receptor_7')
@@ -151,7 +153,8 @@ class TestBernoulliSynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), 1)
         _, value, _ = recv.delta_events[0]
-        value_f = float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        value_f = float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
         self.assertAlmostEqual(value_f, 4.5, delta=1e-12)
 
 
@@ -200,9 +203,10 @@ class TestBernoulliSynapseVsNEST(unittest.TestCase):
             nest.local_num_threads = 1
             nest.rng_seed = int(seed)
 
+        dftype = brainstate.environ.dftype()
         sg = nest.Create(
             'spike_generator',
-            {'spike_times': np.arange(1.0, float(n_spikes) + 1.0, 1.0, dtype=np.float64)},
+            {'spike_times': np.arange(1.0, float(n_spikes) + 1.0, 1.0, dtype=dftype)},
         )
         pre = nest.Create('parrot_neuron')
         post = nest.Create('parrot_neuron')
@@ -214,7 +218,7 @@ class TestBernoulliSynapseVsNEST(unittest.TestCase):
         nest.Simulate(float(n_spikes + 2))
 
         events = sr.get('events')
-        return int(np.asarray(events['times'], dtype=np.float64).size)
+        return int(np.asarray(events['times'], dtype=dftype).size)
 
     def test_population_statistics_match_nest(self):
         if not self._is_nest_available():
@@ -224,6 +228,7 @@ class TestBernoulliSynapseVsNEST(unittest.TestCase):
         p_transmit = 0.25
         seeds = range(123, 133)
 
+        dftype = brainstate.environ.dftype()
         nest_counts = np.asarray(
             [
                 self._run_nest_transmitted_count(
@@ -233,7 +238,7 @@ class TestBernoulliSynapseVsNEST(unittest.TestCase):
                 )
                 for seed in seeds
             ],
-            dtype=np.float64,
+            dtype=dftype,
         )
         bp_counts = np.asarray(
             [
@@ -244,7 +249,7 @@ class TestBernoulliSynapseVsNEST(unittest.TestCase):
                 )
                 for seed in seeds
             ],
-            dtype=np.float64,
+            dtype=dftype,
         )
 
         expected = n_spikes * p_transmit

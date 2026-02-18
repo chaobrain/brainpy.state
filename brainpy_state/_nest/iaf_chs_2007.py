@@ -413,18 +413,21 @@ class iaf_chs_2007(NESTNeuron):
         self.V_reset = braintools.init.param(V_reset, self.varshape)
         self.V_noise = braintools.init.param(V_noise, self.varshape)
 
-        self.noise = np.asarray([] if noise is None else u.math.asarray(noise), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        self.noise = np.asarray([] if noise is None else u.math.asarray(noise), dtype=dftype).reshape(-1)
         self.V_initializer = V_initializer
 
         self._validate_parameters()
 
     @staticmethod
     def _to_numpy(x):
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_ms(x):
-        return np.asarray(u.math.asarray(x / u.ms), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -439,7 +442,8 @@ class iaf_chs_2007(NESTNeuron):
             raise ValueError('All time constants must be strictly positive.')
 
     def _sum_excitatory_delta_inputs(self, state_shape):
-        w_ex = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        w_ex = np.zeros(state_shape, dtype=dftype)
         if self.delta_inputs is None:
             return w_ex
 
@@ -486,14 +490,16 @@ class iaf_chs_2007(NESTNeuron):
         ``Constant(0.0)`` (normalized resting potential).
         """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        zeros = np.zeros_like(np.asarray(u.math.asarray(V), dtype=np.float64))
-        idx0 = np.zeros_like(zeros, dtype=np.int64)
+        dftype = brainstate.environ.dftype()
+        zeros = np.zeros_like(np.asarray(u.math.asarray(V), dtype=dftype))
+        ditype = brainstate.environ.ditype()
+        idx0 = np.zeros_like(zeros, dtype=ditype)
 
-        self.i_syn_ex = brainstate.ShortTermState(jnp.asarray(zeros, dtype=jnp.float64))
-        self.V_syn = brainstate.ShortTermState(jnp.asarray(zeros, dtype=jnp.float64))
-        self.V_spike = brainstate.ShortTermState(jnp.asarray(zeros, dtype=jnp.float64))
-        self.V = brainstate.HiddenState(jnp.asarray(u.math.asarray(V), dtype=jnp.float64))
-        self.position = brainstate.ShortTermState(jnp.asarray(idx0, dtype=jnp.int64))
+        self.i_syn_ex = brainstate.ShortTermState(jnp.asarray(zeros, dtype=dftype))
+        self.V_syn = brainstate.ShortTermState(jnp.asarray(zeros, dtype=dftype))
+        self.V_spike = brainstate.ShortTermState(jnp.asarray(zeros, dtype=dftype))
+        self.V = brainstate.HiddenState(jnp.asarray(u.math.asarray(V), dtype=dftype))
+        self.position = brainstate.ShortTermState(jnp.asarray(idx0, dtype=ditype))
 
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
@@ -523,14 +529,16 @@ class iaf_chs_2007(NESTNeuron):
         calling this method.
         """
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        zeros = np.zeros_like(np.asarray(u.math.asarray(V), dtype=np.float64))
-        idx0 = np.zeros_like(zeros, dtype=np.int64)
+        dftype = brainstate.environ.dftype()
+        zeros = np.zeros_like(np.asarray(u.math.asarray(V), dtype=dftype))
+        ditype = brainstate.environ.ditype()
+        idx0 = np.zeros_like(zeros, dtype=ditype)
 
-        self.i_syn_ex.value = jnp.asarray(zeros, dtype=jnp.float64)
-        self.V_syn.value = jnp.asarray(zeros, dtype=jnp.float64)
-        self.V_spike.value = jnp.asarray(zeros, dtype=jnp.float64)
-        self.V.value = jnp.asarray(u.math.asarray(V), dtype=jnp.float64)
-        self.position.value = jnp.asarray(idx0, dtype=jnp.int64)
+        self.i_syn_ex.value = jnp.asarray(zeros, dtype=dftype)
+        self.V_syn.value = jnp.asarray(zeros, dtype=dftype)
+        self.V_spike.value = jnp.asarray(zeros, dtype=dftype)
+        self.V.value = jnp.asarray(u.math.asarray(V), dtype=dftype)
+        self.position.value = jnp.asarray(idx0, dtype=ditype)
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
@@ -661,7 +669,8 @@ class iaf_chs_2007(NESTNeuron):
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value), state_shape).copy()
         V_syn = self._broadcast_to_state(self._to_numpy(self.V_syn.value), state_shape).copy()
         V_spike = self._broadcast_to_state(self._to_numpy(self.V_spike.value), state_shape).copy()
-        pos = self._broadcast_to_state(np.asarray(u.math.asarray(self.position.value), dtype=np.int64),
+        ditype = brainstate.environ.ditype()
+        pos = self._broadcast_to_state(np.asarray(u.math.asarray(self.position.value), dtype=ditype),
                                        state_shape).copy()
 
         tau_epsp = self._broadcast_to_state(self._to_numpy_ms(self.tau_epsp), state_shape)
@@ -685,7 +694,8 @@ class iaf_chs_2007(NESTNeuron):
         i_syn_ex = i_syn_ex + w_ex
         V_spike = V_spike * P30
 
-        noise_term = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        noise_term = np.zeros(state_shape, dtype=dftype)
         if self.noise.size > 0:
             use_noise = U_noise > 0.0
             if np.any(use_noise):
@@ -694,7 +704,7 @@ class iaf_chs_2007(NESTNeuron):
                         'Noise signal exhausted before end of simulation. '
                         'Provide a noise vector at least as long as all simulated steps.'
                     )
-                sampled_noise = np.zeros(state_shape, dtype=np.float64)
+                sampled_noise = np.zeros(state_shape, dtype=dftype)
                 sampled_noise[use_noise] = self.noise[pos[use_noise]]
                 noise_term = U_noise * sampled_noise
                 pos = np.where(use_noise, pos + 1, pos)
@@ -710,11 +720,11 @@ class iaf_chs_2007(NESTNeuron):
             u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
         )
 
-        self.i_syn_ex.value = jnp.asarray(i_syn_ex, dtype=jnp.float64)
-        self.V_syn.value = jnp.asarray(V_syn, dtype=jnp.float64)
-        self.V_spike.value = jnp.asarray(V_spike, dtype=jnp.float64)
-        self.V.value = jnp.asarray(V_m, dtype=jnp.float64)
-        self.position.value = jnp.asarray(pos, dtype=jnp.int64)
+        self.i_syn_ex.value = jnp.asarray(i_syn_ex, dtype=dftype)
+        self.V_syn.value = jnp.asarray(V_syn, dtype=dftype)
+        self.V_spike.value = jnp.asarray(V_spike, dtype=dftype)
+        self.V.value = jnp.asarray(V_m, dtype=dftype)
+        self.position.value = jnp.asarray(pos, dtype=ditype)
 
         V_out = np.where(spike_cond, self._U_TH + 1e-12, V_for_spike)
-        return self.get_spike(jnp.asarray(V_out, dtype=jnp.float64))
+        return self.get_spike(jnp.asarray(V_out, dtype=dftype))

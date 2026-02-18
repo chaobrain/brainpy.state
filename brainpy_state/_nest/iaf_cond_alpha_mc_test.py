@@ -47,7 +47,8 @@ def _idx(comp, elem):
 
 
 def _dynamics_ref(y, is_refractory, i_stim, p):
-    f = np.zeros_like(y, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    f = np.zeros_like(y, dtype=dftype)
 
     for n in range(NCOMP):
         if n == SOMA:
@@ -81,7 +82,8 @@ def _rkf45_ref_step(y0, is_refractory, i_stim, dt, h0, p, atol=1e-3):
     min_h = 1e-8
     t = 0.0
     h = max(h0, min_h)
-    y = np.asarray(y0, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.asarray(y0, dtype=dftype)
 
     while t < dt:
         h = max(min_h, min(h, dt - t))
@@ -155,7 +157,8 @@ def _reference_step(state, p, x_next, w_step, dt):
     state['y'] = y
     state['r'] = r
     state['h'] = h
-    state['i_stim'] = np.asarray(x_next, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    state['i_stim'] = np.asarray(x_next, dtype=dftype)
     return spk
 
 
@@ -166,7 +169,8 @@ class TestIAFCondAlphaMC(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64).reshape(-1)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)[0] > 0.0)
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA, spike_events=None, current_events=None):
         with brainstate.environ.context(t=step_idx * self.dt):
@@ -262,11 +266,12 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                 0,
                 x={'soma': 100.0 * u.pA, 'proximal': 50.0 * u.pA, 'distal': -20.0 * u.pA},
             )
-            v0 = np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=np.float64).reshape(-1, 3)[0]
+            dftype = brainstate.environ.dftype()
+            v0 = np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=dftype).reshape(-1, 3)[0]
             self.assertTrue(np.allclose(v0, [0.0, 0.0, 0.0]))
 
             self._step(neuron, 1, x=0.0 * u.pA)
-            v = np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=np.float64).reshape(-1, 3)[0]
+            v = np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=dftype).reshape(-1, 3)[0]
             self.assertAlmostEqual(v[0], 0.1, delta=1e-10)
             self.assertAlmostEqual(v[1], 0.05, delta=1e-10)
             self.assertAlmostEqual(v[2], -0.02, delta=1e-10)
@@ -286,8 +291,9 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                 ],
             )
 
-            dg_ex = np.asarray(neuron.dg_ex.value, dtype=np.float64).reshape(-1, 3)[0]
-            dg_in = np.asarray(neuron.dg_in.value, dtype=np.float64).reshape(-1, 3)[0]
+            dftype = brainstate.environ.dftype()
+            dg_ex = np.asarray(neuron.dg_ex.value, dtype=dftype).reshape(-1, 3)[0]
+            dg_in = np.asarray(neuron.dg_in.value, dtype=dftype).reshape(-1, 3)[0]
 
             self.assertAlmostEqual(dg_ex[SOMA], math.e / 0.5 * 2.0, delta=1e-12)
             self.assertAlmostEqual(dg_in[PROX], math.e / 2.0 * 3.0, delta=1e-12)
@@ -346,7 +352,8 @@ class TestIAFCondAlphaMC(unittest.TestCase):
             x_seq = []
             w_seq = []
             for k in range(80):
-                x_k = np.zeros(3, dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                x_k = np.zeros(3, dtype=dftype)
                 if 10 <= k < 20:
                     x_k[DIST] += 80.0
                 if 25 <= k < 35:
@@ -357,7 +364,7 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                     x_k[SOMA] -= 30.0
                 x_seq.append(x_k)
 
-                w_k = np.zeros(6, dtype=np.float64)
+                w_k = np.zeros(6, dtype=dftype)
                 if k in (12, 28, 45):
                     w_k[4] = 1.2  # distal_exc
                 if k in (30, 46):
@@ -374,17 +381,17 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                 't_ref': 0.3,
                 'g_sp': 4.0,
                 'g_pd': 1.5,
-                'g_L': np.asarray([12.0, 5.0, 10.0], dtype=np.float64),
-                'C_m': np.asarray([150.0, 75.0, 150.0], dtype=np.float64),
-                'E_ex': np.asarray([0.0, 0.0, 0.0], dtype=np.float64),
-                'E_in': np.asarray([-85.0, -85.0, -85.0], dtype=np.float64),
-                'E_L': np.asarray([-70.0, -70.0, -70.0], dtype=np.float64),
-                'tau_syn_ex': np.asarray([0.5, 0.5, 0.5], dtype=np.float64),
-                'tau_syn_in': np.asarray([2.0, 2.0, 2.0], dtype=np.float64),
-                'I_e': np.asarray([1500.0, 0.0, 0.0], dtype=np.float64),
+                'g_L': np.asarray([12.0, 5.0, 10.0], dtype=dftype),
+                'C_m': np.asarray([150.0, 75.0, 150.0], dtype=dftype),
+                'E_ex': np.asarray([0.0, 0.0, 0.0], dtype=dftype),
+                'E_in': np.asarray([-85.0, -85.0, -85.0], dtype=dftype),
+                'E_L': np.asarray([-70.0, -70.0, -70.0], dtype=dftype),
+                'tau_syn_ex': np.asarray([0.5, 0.5, 0.5], dtype=dftype),
+                'tau_syn_in': np.asarray([2.0, 2.0, 2.0], dtype=dftype),
+                'I_e': np.asarray([1500.0, 0.0, 0.0], dtype=dftype),
             }
 
-            y0 = np.zeros(NCOMP * NSTATE_COMP, dtype=np.float64)
+            y0 = np.zeros(NCOMP * NSTATE_COMP, dtype=dftype)
             y0[_idx(SOMA, V_M)] = -69.0
             y0[_idx(PROX, V_M)] = -70.0
             y0[_idx(DIST, V_M)] = -71.0
@@ -392,7 +399,7 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                 'y': y0,
                 'r': 0,
                 'h': 0.1,
-                'i_stim': np.zeros(3, dtype=np.float64),
+                'i_stim': np.zeros(3, dtype=dftype),
             }
 
             spikes_model = []
@@ -413,11 +420,11 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                 spikes_model.append(self._is_spike(spk))
                 spikes_ref.append(_reference_step(ref_state, p, x_seq[k], w_seq[k], 0.1))
 
-                v_m = np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=np.float64).reshape(-1, 3)[0]
-                dg_ex = np.asarray(neuron.dg_ex.value, dtype=np.float64).reshape(-1, 3)[0]
-                g_ex = np.asarray(u.math.asarray(neuron.g_ex.value / u.nS), dtype=np.float64).reshape(-1, 3)[0]
-                dg_in = np.asarray(neuron.dg_in.value, dtype=np.float64).reshape(-1, 3)[0]
-                g_in = np.asarray(u.math.asarray(neuron.g_in.value / u.nS), dtype=np.float64).reshape(-1, 3)[0]
+                v_m = np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=dftype).reshape(-1, 3)[0]
+                dg_ex = np.asarray(neuron.dg_ex.value, dtype=dftype).reshape(-1, 3)[0]
+                g_ex = np.asarray(u.math.asarray(neuron.g_ex.value / u.nS), dtype=dftype).reshape(-1, 3)[0]
+                dg_in = np.asarray(neuron.dg_in.value, dtype=dftype).reshape(-1, 3)[0]
+                g_in = np.asarray(u.math.asarray(neuron.g_in.value / u.nS), dtype=dftype).reshape(-1, 3)[0]
 
                 for c in range(NCOMP):
                     self.assertAlmostEqual(v_m[c], ref_state['y'][_idx(c, V_M)], delta=3e-6)
@@ -426,11 +433,12 @@ class TestIAFCondAlphaMC(unittest.TestCase):
                     self.assertAlmostEqual(dg_in[c], ref_state['y'][_idx(c, DG_IN)], delta=3e-6)
                     self.assertAlmostEqual(g_in[c], ref_state['y'][_idx(c, G_IN)], delta=3e-6)
 
-                self.assertEqual(int(np.asarray(neuron.refractory_step_count.value, dtype=np.int32).reshape(-1)[0]),
+                ditype = brainstate.environ.ditype()
+                self.assertEqual(int(np.asarray(neuron.refractory_step_count.value, dtype=ditype).reshape(-1)[0]),
                                  ref_state['r'])
                 self.assertAlmostEqual(
                     float(
-                        np.asarray(u.math.asarray(neuron.integration_step.value / u.ms), dtype=np.float64).reshape(-1)[
+                        np.asarray(u.math.asarray(neuron.integration_step.value / u.ms), dtype=dftype).reshape(-1)[
                             0]),
                     ref_state['h'],
                     delta=3e-6,

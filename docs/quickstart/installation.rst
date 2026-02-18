@@ -150,7 +150,7 @@ Getting Help
 If you encounter issues:
 
 - Check the `GitHub Issues <https://github.com/chaobrain/brainpy.state/issues>`_
-- Read the documentation at `https://brainpy.readthedocs.io/projects/state/ <https://brainpy.readthedocs.io/projects/state/>`_
+- Read the documentation at `https://brainpy-state.readthedocs.io/ <https://brainpy-state.readthedocs.io/>`_
 - Join our community discussions
 
 Next Steps

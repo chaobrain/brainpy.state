@@ -62,9 +62,10 @@ class TestIAFPscExpMultisynapse(unittest.TestCase):
             iaf_psc_exp_multisynapse(1, tau_syn=[-1.0] * u.ms)
 
     def test_simulation_against_analytical_solution(self):
-        tau_syns = np.asarray([2.0, 20.0, 60.0, 100.0], dtype=np.float64)
-        delays = np.asarray([7.0, 5.0, 2.0, 1.0], dtype=np.float64)
-        weights = np.asarray([30.0, 50.0, 20.0, 10.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        tau_syns = np.asarray([2.0, 20.0, 60.0, 100.0], dtype=dftype)
+        delays = np.asarray([7.0, 5.0, 2.0, 1.0], dtype=dftype)
+        weights = np.asarray([30.0, 50.0, 20.0, 10.0], dtype=dftype)
         c_m = 250.0
         tau_m = 15.0
         spike_time = 0.1
@@ -99,19 +100,19 @@ class TestIAFPscExpMultisynapse(unittest.TestCase):
                 ev = step_events.get(k, None)
                 self._step(neuron, k, spike_events=ev)
                 times.append((k + 1) * 0.1)
-                i_syn_trace.append(np.asarray(u.math.asarray(neuron.i_syn.value[0] / u.pA), dtype=np.float64))
+                i_syn_trace.append(np.asarray(u.math.asarray(neuron.i_syn.value[0] / u.pA), dtype=dftype))
                 v_trace.append(float((neuron.V.value / u.mV)[0]))
 
-            times = np.asarray(times, dtype=np.float64)
-            i_syn_trace = np.asarray(i_syn_trace, dtype=np.float64)
-            v_trace = np.asarray(v_trace, dtype=np.float64)
+            times = np.asarray(times, dtype=dftype)
+            i_syn_trace = np.asarray(i_syn_trace, dtype=dftype)
+            v_trace = np.asarray(v_trace, dtype=dftype)
 
             i_syn_ref = []
             v_ref = np.zeros_like(times)
             for w, dly, tau_s in zip(weights, delays, tau_syns):
                 i_syn_ref.append(exp_psc_fn(times - dly - spike_time, tau_s) * w)
                 v_ref += exp_psc_voltage_response(times - dly - spike_time, tau_s, tau_m, c_m, w)
-            i_syn_ref = np.asarray(i_syn_ref, dtype=np.float64).T
+            i_syn_ref = np.asarray(i_syn_ref, dtype=dftype).T
 
             self.assertTrue(np.allclose(i_syn_trace, i_syn_ref, atol=2e-10, rtol=1e-10))
             self.assertTrue(np.allclose(v_trace, v_ref, atol=5e-10, rtol=1e-10))

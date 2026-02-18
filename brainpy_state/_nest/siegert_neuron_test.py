@@ -64,7 +64,8 @@ def _run_nest_siegert_trace(dt_ms, simtime_ms, model_params, drift_factor, diffu
     nest.Connect(mm, target, syn_spec={'delay': dt_ms})
 
     nest.Simulate(simtime_ms)
-    return np.asarray(mm.events['rate'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(mm.events['rate'], dtype=dftype)
 
 
 class TestSiegertNeuron(unittest.TestCase):
@@ -113,8 +114,9 @@ class TestSiegertNeuron(unittest.TestCase):
             rate0=0.25,
         )
 
-        drift_direct = np.asarray([14.0, 14.5, 15.0, 15.5, 14.3, 13.7], dtype=np.float64)
-        diffusion_direct = np.asarray([1.8, 1.5, 2.2, 1.9, 1.3, 1.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        drift_direct = np.asarray([14.0, 14.5, 15.0, 15.5, 14.3, 13.7], dtype=dftype)
+        diffusion_direct = np.asarray([1.8, 1.5, 2.2, 1.9, 1.3, 1.0], dtype=dftype)
 
         instant_events_seq = [
             [{'coeff': 1.0, 'drift_factor': 0.3, 'diffusion_factor': 0.2}],
@@ -291,7 +293,8 @@ class TestSiegertNeuron(unittest.TestCase):
             )
             nrn.init_state()
 
-            bp_rate = np.zeros((replay_steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            bp_rate = np.zeros((replay_steps,), dtype=dftype)
             for k in range(replay_steps):
                 self._step(
                     nrn,

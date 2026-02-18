@@ -53,7 +53,8 @@ def _run_bp_counts(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    totals = np.zeros(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = inhomogeneous_poisson_generator(
@@ -70,7 +71,7 @@ def _run_bp_counts(
 
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                totals[step] = float(np.asarray(gen.update(), dtype=np.float64).sum())
+                totals[step] = float(np.asarray(gen.update(), dtype=dftype).sum())
 
     return totals
 
@@ -176,7 +177,8 @@ class TestInhomogeneousPoissonGeneratorOrdering(unittest.TestCase):
                 rng_seed=1,
             )
             gen.init_state()
-            gen._sample_poisson = lambda lam: jnp.asarray([int(round(float(lam)))], dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            gen._sample_poisson = lambda lam: jnp.asarray([int(round(float(lam)))], dtype=ditype)
 
             trace = self._run_trace(gen, n_steps=11)
             expected = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2]
@@ -193,7 +195,8 @@ class TestInhomogeneousPoissonGeneratorOrdering(unittest.TestCase):
                 rng_seed=2,
             )
             gen.init_state()
-            gen._sample_poisson = lambda lam: jnp.asarray([int(round(float(lam)))], dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            gen._sample_poisson = lambda lam: jnp.asarray([int(round(float(lam)))], dtype=ditype)
 
             trace = self._run_trace(gen, n_steps=7)
             expected = [0, 0, 0, 1, 1, 1, 0]
@@ -263,7 +266,8 @@ class TestInhomogeneousPoissonGeneratorVsNEST(unittest.TestCase):
         nest.Simulate(simtime_ms)
 
         events = sr.get('events')
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / self.dt_ms).astype(np.int64)
+        dftype = brainstate.environ.dftype()
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / self.dt_ms).astype(np.int64)
         counts = np.bincount(steps, minlength=n_steps + 2).astype(np.float64)
 
         # Recorder timestamps include one-step transmission delay.

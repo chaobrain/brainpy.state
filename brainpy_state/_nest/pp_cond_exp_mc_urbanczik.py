@@ -683,7 +683,8 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -721,25 +722,27 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         )
 
         # Somatic conductances
-        self.g_ex_s = brainstate.HiddenState(np.zeros(v_shape, dtype=np.float64) * u.nS)
-        self.g_in_s = brainstate.HiddenState(np.zeros(v_shape, dtype=np.float64) * u.nS)
+        dftype = brainstate.environ.dftype()
+        self.g_ex_s = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.nS)
+        self.g_in_s = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.nS)
 
         # Dendritic currents
-        self.I_ex_d = brainstate.HiddenState(np.zeros(v_shape, dtype=np.float64) * u.pA)
-        self.I_in_d = brainstate.HiddenState(np.zeros(v_shape, dtype=np.float64) * u.pA)
+        self.I_ex_d = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.pA)
+        self.I_in_d = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.pA)
 
         # Refractory counter
+        ditype = brainstate.environ.ditype()
         self.refractory_step_count = brainstate.ShortTermState(
-            jnp.zeros(v_shape, dtype=jnp.int32)
+            jnp.zeros(v_shape, dtype=ditype)
         )
 
         # Buffered stimulus currents (per compartment)
-        self.I_stim_soma = brainstate.ShortTermState(np.zeros(v_shape, dtype=np.float64) * u.pA)
-        self.I_stim_dend = brainstate.ShortTermState(np.zeros(v_shape, dtype=np.float64) * u.pA)
+        self.I_stim_soma = brainstate.ShortTermState(np.zeros(v_shape, dtype=dftype) * u.pA)
+        self.I_stim_dend = brainstate.ShortTermState(np.zeros(v_shape, dtype=dftype) * u.pA)
 
         # Last spike time
         self.last_spike_time = brainstate.ShortTermState(
-            np.full(v_shape, -1e7, dtype=np.float64) * u.ms
+            np.full(v_shape, -1e7, dtype=dftype) * u.ms
         )
 
         # Urbanczik history: list of (t_ms, dPI) tuples per neuron element
@@ -759,14 +762,16 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         self.V_s.value = np.broadcast_to(soma_E_L, v_shape).copy() * u.mV
         self.V_d.value = np.broadcast_to(dend_E_L, v_shape).copy() * u.mV
-        self.g_ex_s.value = np.zeros(v_shape, dtype=np.float64) * u.nS
-        self.g_in_s.value = np.zeros(v_shape, dtype=np.float64) * u.nS
-        self.I_ex_d.value = np.zeros(v_shape, dtype=np.float64) * u.pA
-        self.I_in_d.value = np.zeros(v_shape, dtype=np.float64) * u.pA
-        self.refractory_step_count.value = jnp.zeros(v_shape, dtype=jnp.int32)
-        self.I_stim_soma.value = np.zeros(v_shape, dtype=np.float64) * u.pA
-        self.I_stim_dend.value = np.zeros(v_shape, dtype=np.float64) * u.pA
-        self.last_spike_time.value = np.full(v_shape, -1e7, dtype=np.float64) * u.ms
+        dftype = brainstate.environ.dftype()
+        self.g_ex_s.value = np.zeros(v_shape, dtype=dftype) * u.nS
+        self.g_in_s.value = np.zeros(v_shape, dtype=dftype) * u.nS
+        self.I_ex_d.value = np.zeros(v_shape, dtype=dftype) * u.pA
+        self.I_in_d.value = np.zeros(v_shape, dtype=dftype) * u.pA
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = jnp.zeros(v_shape, dtype=ditype)
+        self.I_stim_soma.value = np.zeros(v_shape, dtype=dftype) * u.pA
+        self.I_stim_dend.value = np.zeros(v_shape, dtype=dftype) * u.pA
+        self.last_spike_time.value = np.full(v_shape, -1e7, dtype=dftype) * u.ms
         self._urbanczik_history = {}
 
         if self._rng_key is not None:
@@ -781,7 +786,8 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.round(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.round(self.t_ref / dt), dtype=ditype)
 
     def _collect_receptor_delta_inputs(self):
         r"""Collect delta inputs labeled by receptor type.
@@ -1090,8 +1096,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         g_in_s = self._broadcast_to_state(self._to_numpy(self.g_in_s.value, u.nS), v_shape).copy()
         I_ex_d = self._broadcast_to_state(self._to_numpy(self.I_ex_d.value, u.pA), v_shape).copy()
         I_in_d = self._broadcast_to_state(self._to_numpy(self.I_in_d.value, u.pA), v_shape).copy()
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         ).copy()
         i_stim_soma = self._broadcast_to_state(
             self._to_numpy(self.I_stim_soma.value, u.pA), v_shape
@@ -1120,7 +1127,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         }
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
         )
 
         # Collect synaptic spike inputs
@@ -1135,11 +1142,12 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
             self._to_numpy(self.sum_current_inputs(x, self.V_s.value), u.pA), v_shape
         )
         # Note: dendritic current inputs are zero by default unless explicitly provided
-        new_i_stim_dend = np.zeros(v_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        new_i_stim_dend = np.zeros(v_shape, dtype=dftype)
 
         # Advance RNG
         self._rng_state, subkey = jax.random.split(self._rng_state)
-        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=np.float64)
+        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=dftype)
 
         spike_mask = np.zeros(v_shape, dtype=bool)
 
@@ -1249,7 +1257,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         self.g_in_s.value = g_in_s * u.nS
         self.I_ex_d.value = I_ex_d * u.pA
         self.I_in_d.value = I_in_d * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.I_stim_soma.value = new_i_stim_soma * u.pA
         self.I_stim_dend.value = new_i_stim_dend * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(

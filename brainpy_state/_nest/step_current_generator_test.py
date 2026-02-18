@@ -202,7 +202,8 @@ class TestStepCurrentGeneratorWithNeuron(unittest.TestCase):
             neuron = iaf_psc_delta(1)
             neuron.init_state()
 
-            vm_bp = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            vm_bp = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 t = step * dt_ms
                 with brainstate.environ.context(t=t * u.ms):
@@ -213,7 +214,7 @@ class TestStepCurrentGeneratorWithNeuron(unittest.TestCase):
         # Analytical trace
         V = E_L
         ref_count = 0
-        vm_ref = np.empty(n_steps, dtype=np.float64)
+        vm_ref = np.empty(n_steps, dtype=dftype)
         for step in range(n_steps):
             t = step * dt_ms
             # Determine current
@@ -289,7 +290,8 @@ class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
             neuron = iaf_psc_delta(1)
             neuron.init_state()
 
-            v_bp = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            v_bp = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 t = step * self.dt_ms
                 with brainstate.environ.context(t=t * u.ms):

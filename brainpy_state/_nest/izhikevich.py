@@ -482,7 +482,8 @@ class izhikevich(NESTNeuron):
           spike detection and reset.
         """
         dt_q = brainstate.environ.get_dt()
-        h = u.math.asarray(dt_q / u.ms, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        h = u.math.asarray(dt_q / u.ms, dtype=dftype)
 
         # Read current state
         v_old = self.V.value
@@ -491,15 +492,15 @@ class izhikevich(NESTNeuron):
 
         # Strip units for the integration (NEST uses dimensionless arithmetic
         # internally; the quantities are in mV and pA with R=1)
-        v = u.math.asarray(v_old / u.mV, dtype=jnp.float64)
-        um = u.math.asarray(u_old / u.mV, dtype=jnp.float64)
-        I_val = u.math.asarray((I_buf + self.I_e) / u.pA, dtype=jnp.float64)
-        a = u.math.asarray(self.a, dtype=jnp.float64)
-        b = u.math.asarray(self.b, dtype=jnp.float64)
+        v = u.math.asarray(v_old / u.mV, dtype=dftype)
+        um = u.math.asarray(u_old / u.mV, dtype=dftype)
+        I_val = u.math.asarray((I_buf + self.I_e) / u.pA, dtype=dftype)
+        a = u.math.asarray(self.a, dtype=dftype)
+        b = u.math.asarray(self.b, dtype=dftype)
 
         # Delta (spike) input — added directly to V
         delta_v = self.sum_delta_inputs(u.math.zeros_like(v_old))
-        delta_v_raw = u.math.asarray(delta_v / u.mV, dtype=jnp.float64)
+        delta_v_raw = u.math.asarray(delta_v / u.mV, dtype=dftype)
 
         if self.consistent_integration:
             # Standard forward Euler
@@ -515,7 +516,7 @@ class izhikevich(NESTNeuron):
 
         # Lower bound on membrane potential
         if self.V_min is not None:
-            v_min = u.math.asarray(self.V_min / u.mV, dtype=jnp.float64)
+            v_min = u.math.asarray(self.V_min / u.mV, dtype=dftype)
             v_new = jnp.maximum(v_new, v_min)
 
         # Convert back to quantities with units for spike detection

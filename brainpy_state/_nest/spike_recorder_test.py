@@ -35,7 +35,8 @@ def _to_ms_scalar(value):
         return None
     if isinstance(value, u.Quantity):
         value = value / u.ms
-    arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
     if arr.size != 1:
         raise ValueError('Expected scalar time value.')
     return float(arr[0])
@@ -53,8 +54,10 @@ def _run_bp_iaf_trace(simtime_ms, dt_ms, sr_params, i_e_pA):
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
                 spk = neuron.update()
-                spk_np = np.asarray(u.math.asarray(spk), dtype=np.float64).reshape(-1)
-                sr.update(spikes=spk_np, senders=np.array([1], dtype=np.int64))
+                dftype = brainstate.environ.dftype()
+                spk_np = np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)
+                ditype = brainstate.environ.ditype()
+                sr.update(spikes=spk_np, senders=np.array([1], dtype=ditype))
 
     return sr.events
 
@@ -84,19 +87,22 @@ def _run_nest_iaf_trace(simtime_ms, dt_ms, sr_params, i_e_pA):
     nest.Simulate(simtime_ms)
 
     ev = sr.events
+    ditype = brainstate.environ.ditype()
     out = {
-        'senders': np.asarray(ev['senders'], dtype=np.int64),
+        'senders': np.asarray(ev['senders'], dtype=ditype),
     }
     if nest_sr_params['time_in_steps']:
-        out['times'] = np.asarray(ev['times'], dtype=np.int64)
-        out['offsets'] = np.asarray(ev['offsets'], dtype=np.float64)
+        out['times'] = np.asarray(ev['times'], dtype=ditype)
+        dftype = brainstate.environ.dftype()
+        out['offsets'] = np.asarray(ev['offsets'], dtype=dftype)
     else:
-        out['times'] = np.asarray(ev['times'], dtype=np.float64)
+        out['times'] = np.asarray(ev['times'], dtype=dftype)
     return out
 
 
 def _run_bp_precise_source(spike_times_ms, simtime_ms, dt_ms, sr_params):
-    spike_times_ms = np.asarray(spike_times_ms, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    spike_times_ms = np.asarray(spike_times_ms, dtype=dftype)
     n_steps = int(round(simtime_ms / dt_ms))
     dt = dt_ms * u.ms
     eps = 1e-12
@@ -119,10 +125,11 @@ def _run_bp_precise_source(spike_times_ms, simtime_ms, dt_ms, sr_params):
             with brainstate.environ.context(t=step * dt):
                 if step_offsets:
                     n_ev = len(step_offsets)
+                    ditype = brainstate.environ.ditype()
                     sr.update(
-                        spikes=np.ones((n_ev,), dtype=np.float64),
-                        senders=np.ones((n_ev,), dtype=np.int64),
-                        offsets=np.asarray(step_offsets, dtype=np.float64) * u.ms,
+                        spikes=np.ones((n_ev,), dtype=dftype),
+                        senders=np.ones((n_ev,), dtype=ditype),
+                        offsets=np.asarray(step_offsets, dtype=dftype) * u.ms,
                     )
                 else:
                     sr.update()
@@ -136,8 +143,9 @@ def _run_nest_precise_source(spike_times_ms, simtime_ms, dt_ms, sr_params):
     nest.ResetKernel()
     nest.resolution = dt_ms
 
+    dftype = brainstate.environ.dftype()
     sgen = nest.Create('spike_generator', params={
-        'spike_times': list(np.asarray(spike_times_ms, dtype=np.float64)),
+        'spike_times': list(np.asarray(spike_times_ms, dtype=dftype)),
         'precise_times': True,
     })
 
@@ -155,14 +163,15 @@ def _run_nest_precise_source(spike_times_ms, simtime_ms, dt_ms, sr_params):
     nest.Simulate(simtime_ms)
 
     ev = sr.events
+    ditype = brainstate.environ.ditype()
     out = {
-        'senders': np.asarray(ev['senders'], dtype=np.int64),
+        'senders': np.asarray(ev['senders'], dtype=ditype),
     }
     if nest_sr_params['time_in_steps']:
-        out['times'] = np.asarray(ev['times'], dtype=np.int64)
-        out['offsets'] = np.asarray(ev['offsets'], dtype=np.float64)
+        out['times'] = np.asarray(ev['times'], dtype=ditype)
+        out['offsets'] = np.asarray(ev['offsets'], dtype=dftype)
     else:
-        out['times'] = np.asarray(ev['times'], dtype=np.float64)
+        out['times'] = np.asarray(ev['times'], dtype=dftype)
     return out
 
 
@@ -194,19 +203,23 @@ class TestSpikeRecorder(unittest.TestCase):
             sr = spike_recorder(start=0.5 * u.ms, stop=1.0 * u.ms)
             for step in range(12):
                 with brainstate.environ.context(t=step * self.dt):
-                    sr.update(spikes=np.array([1.0], dtype=np.float64), senders=np.array([9], dtype=np.int64))
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
+                    sr.update(spikes=np.array([1.0], dtype=dftype), senders=np.array([9], dtype=ditype))
 
         ev = sr.events
-        expected_times = np.array([0.6, 0.7, 0.8, 0.9, 1.0], dtype=np.float64)
+        expected_times = np.array([0.6, 0.7, 0.8, 0.9, 1.0], dtype=dftype)
         npt.assert_allclose(ev['times'], expected_times, atol=1e-12)
-        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 9, dtype=np.int64))
+        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 9, dtype=ditype))
 
     def test_n_events_can_only_be_set_to_zero(self):
         with brainstate.environ.context(dt=self.dt):
             sr = spike_recorder()
             for step in range(3):
                 with brainstate.environ.context(t=step * self.dt):
-                    sr.update(spikes=np.array([1.0], dtype=np.float64), senders=np.array([1], dtype=np.int64))
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
+                    sr.update(spikes=np.array([1.0], dtype=dftype), senders=np.array([1], dtype=ditype))
 
         self.assertEqual(sr.n_events, 3)
         sr.n_events = 0
@@ -220,16 +233,18 @@ class TestSpikeRecorder(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             sr = spike_recorder(time_in_steps=True)
             with brainstate.environ.context(t=0.0 * u.ms):
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
                 sr.update(
-                    spikes=np.array([1.0], dtype=np.float64),
-                    senders=np.array([5], dtype=np.int64),
-                    offsets=np.array([0.03], dtype=np.float64) * u.ms,
+                    spikes=np.array([1.0], dtype=dftype),
+                    senders=np.array([5], dtype=ditype),
+                    offsets=np.array([0.03], dtype=dftype) * u.ms,
                 )
 
         ev = sr.events
-        npt.assert_array_equal(ev['senders'], np.array([5], dtype=np.int64))
-        npt.assert_array_equal(ev['times'], np.array([1], dtype=np.int64))
-        npt.assert_allclose(ev['offsets'], np.array([0.03], dtype=np.float64), atol=1e-12)
+        npt.assert_array_equal(ev['senders'], np.array([5], dtype=ditype))
+        npt.assert_array_equal(ev['times'], np.array([1], dtype=ditype))
+        npt.assert_allclose(ev['offsets'], np.array([0.03], dtype=dftype), atol=1e-12)
 
         with self.assertRaises(ValueError):
             sr.time_in_steps = False
@@ -238,16 +253,18 @@ class TestSpikeRecorder(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             sr = spike_recorder()
             with brainstate.environ.context(t=0.0 * u.ms):
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
                 sr.update(
-                    spikes=np.array([1.0], dtype=np.float64),
-                    senders=np.array([7], dtype=np.int64),
-                    offsets=np.array([0.01], dtype=np.float64) * u.ms,
-                    multiplicities=np.array([3], dtype=np.int64),
+                    spikes=np.array([1.0], dtype=dftype),
+                    senders=np.array([7], dtype=ditype),
+                    offsets=np.array([0.01], dtype=dftype) * u.ms,
+                    multiplicities=np.array([3], dtype=ditype),
                 )
 
         ev = sr.events
-        npt.assert_array_equal(ev['senders'], np.array([7, 7, 7], dtype=np.int64))
-        npt.assert_allclose(ev['times'], np.array([0.09, 0.09, 0.09], dtype=np.float64), atol=1e-12)
+        npt.assert_array_equal(ev['senders'], np.array([7, 7, 7], dtype=ditype))
+        npt.assert_allclose(ev['times'], np.array([0.09, 0.09, 0.09], dtype=dftype), atol=1e-12)
 
     def test_matches_nest_iaf_trace(self):
         if not self._is_nest_available():
@@ -308,7 +325,8 @@ class TestSpikeRecorder(unittest.TestCase):
         if not self._is_nest_available():
             self.skipTest('NEST simulator not available')
 
-        spike_times = np.array([0.1, 5.0, 5.3, 5.33, 5.4, 5.9, 6.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        spike_times = np.array([0.1, 5.0, 5.3, 5.33, 5.4, 5.9, 6.0], dtype=dftype)
         for resolution in (1.0, 0.1, 0.02, 0.01, 0.001):
             sr_params = {'time_in_steps': False}
             bp_events = _run_bp_precise_source(
@@ -332,7 +350,8 @@ class TestSpikeRecorder(unittest.TestCase):
             self.skipTest('NEST simulator not available')
 
         dt_ms = 0.1
-        spike_times = np.array([0.1, 5.0, 5.3, 5.33, 5.4, 5.9, 6.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        spike_times = np.array([0.1, 5.0, 5.3, 5.33, 5.4, 5.9, 6.0], dtype=dftype)
         sr_params = {'time_in_steps': True}
 
         bp_events = _run_bp_precise_source(

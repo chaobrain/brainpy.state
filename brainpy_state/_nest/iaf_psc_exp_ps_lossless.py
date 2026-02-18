@@ -431,7 +431,8 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -498,7 +499,8 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
         self.I_syn_in = brainstate.ShortTermState(zeros * u.pA)
         self.y0 = brainstate.ShortTermState(zeros * u.pA)
         self.is_refractory = brainstate.ShortTermState(np.zeros(V.shape, dtype=bool))
-        self.last_spike_step = brainstate.ShortTermState(u.math.asarray(last_step, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.last_spike_step = brainstate.ShortTermState(u.math.asarray(last_step, dtype=ditype))
         self.last_spike_offset = brainstate.ShortTermState(zeros * u.ms)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
@@ -580,7 +582,8 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
             else:
                 offs, w = ev
             off_ms = float(u.math.asarray(offs / u.ms))
-            w_np = np.asarray(u.math.asarray(w / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            w_np = np.asarray(u.math.asarray(w / u.pA), dtype=dftype)
             events.append((off_ms, np.broadcast_to(w_np, v_shape)))
         return events
 
@@ -759,8 +762,9 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
 
         is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
                                                  v_shape)
+        ditype = brainstate.environ.ditype()
         last_spike_step = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=np.int32), v_shape)
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=ditype), v_shape)
         last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
         last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
 
@@ -771,12 +775,13 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
         i_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
         u_th = self._broadcast_to_state(self._to_numpy(self.V_th - self.E_L, u.mV), v_shape)
         u_reset = self._broadcast_to_state(self._to_numpy(self.V_reset - self.E_L, u.mV), v_shape)
-        u_min = -np.inf * np.ones(v_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        u_min = -np.inf * np.ones(v_shape, dtype=dftype)
         if self.V_min is not None:
             u_min = self._broadcast_to_state(self._to_numpy(self.V_min - self.E_L, u.mV), v_shape)
 
         refr_steps = self._broadcast_to_state(
-            np.asarray(np.ceil(self._to_numpy(self.t_ref, u.ms) / h), dtype=np.int64),
+            np.asarray(np.ceil(self._to_numpy(self.t_ref, u.ms) / h), dtype=ditype),
             v_shape,
         )
         if np.any(refr_steps < 0):
@@ -979,7 +984,7 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
         self.I_syn_in.value = y1_in_new * u.pA
         self.V.value = (y2_new + E_L) * u.mV
         self.is_refractory.value = jnp.asarray(refr_new, dtype=bool)
-        self.last_spike_step.value = jnp.asarray(last_step_new, dtype=jnp.int32)
+        self.last_spike_step.value = jnp.asarray(last_step_new, dtype=ditype)
         self.last_spike_offset.value = last_offset_new * u.ms
         self.last_spike_time.value = jax.lax.stop_gradient(last_time_new * u.ms)
         if self.ref_var:

@@ -34,9 +34,10 @@ def _is_nest_available():
 
 
 def _nest_gap_current_reference(sumj_g_ij, interpolation_coefficients, lag, interpolation_order, v_m, t):
-    v = np.asarray(v_m, dtype=np.float64)
-    tt = np.asarray(t, dtype=np.float64)
-    coeff = np.asarray(interpolation_coefficients, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    v = np.asarray(v_m, dtype=dftype)
+    tt = np.asarray(t, dtype=dftype)
+    coeff = np.asarray(interpolation_coefficients, dtype=dftype)
     base = -float(sumj_g_ij) * v
 
     if interpolation_order == 0:
@@ -82,8 +83,9 @@ class TestGapJunction(unittest.TestCase):
         syn = gap_junction(weight=9.0)
         syn.begin_wfr_cycle(min_delay_steps=3, interpolation_order=1)
 
-        c0 = np.asarray([0.2, -0.3, 1.2, 0.7, -0.6, 0.9], dtype=np.float64)
-        c1 = np.asarray([-0.5, 0.4, -0.1, 2.0, 0.2, -1.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        c0 = np.asarray([0.2, -0.3, 1.2, 0.7, -0.6, 0.9], dtype=dftype)
+        c1 = np.asarray([-0.5, 0.4, -0.1, 2.0, 0.2, -1.0], dtype=dftype)
 
         syn.handle_gap_event(c0, weight=0.5)
         syn.handle_gap_event(c1, weight=1.2)
@@ -95,7 +97,7 @@ class TestGapJunction(unittest.TestCase):
         npt.assert_allclose(syn.interpolation_coefficients, expected_coeff, atol=1e-15, rtol=0.0)
 
         with self.assertRaisesRegex(ValueError, 'Coefficient size mismatch'):
-            syn.handle_gap_event(np.asarray([1.0, 2.0], dtype=np.float64), weight=1.0)
+            syn.handle_gap_event(np.asarray([1.0, 2.0], dtype=dftype), weight=1.0)
 
     def test_evaluate_gap_current_orders(self):
         v_m = -61.3
@@ -103,10 +105,11 @@ class TestGapJunction(unittest.TestCase):
         t = 0.37
         sumj_g_ij = 2.4
 
+        dftype = brainstate.environ.dftype()
         for order, coeff in [
-            (0, np.asarray([0.5, -0.2], dtype=np.float64)),
-            (1, np.asarray([0.1, 0.7, -0.3, 0.2], dtype=np.float64)),
-            (3, np.asarray([1.0, 0.1, -0.2, 0.3, 0.5, -0.4, 0.2, -0.1], dtype=np.float64)),
+            (0, np.asarray([0.5, -0.2], dtype=dftype)),
+            (1, np.asarray([0.1, 0.7, -0.3, 0.2], dtype=dftype)),
+            (3, np.asarray([1.0, 0.1, -0.2, 0.3, 0.5, -0.4, 0.2, -0.1], dtype=dftype)),
         ]:
             syn = gap_junction()
             syn.begin_wfr_cycle(min_delay_steps=2, interpolation_order=order)
@@ -128,17 +131,18 @@ class TestGapJunction(unittest.TestCase):
         min_delay_steps = 2
         n_coeff = min_delay_steps * (order + 1)
 
+        dftype = brainstate.environ.dftype()
         events_by_cycle = [
             [
-                (0.8, np.asarray([0.2, -0.1, 0.3, 0.5, -0.4, 0.1, 0.2, -0.2], dtype=np.float64)),
-                (1.1, np.asarray([-0.3, 0.2, 0.1, -0.5, 0.7, -0.2, 0.1, 0.3], dtype=np.float64)),
+                (0.8, np.asarray([0.2, -0.1, 0.3, 0.5, -0.4, 0.1, 0.2, -0.2], dtype=dftype)),
+                (1.1, np.asarray([-0.3, 0.2, 0.1, -0.5, 0.7, -0.2, 0.1, 0.3], dtype=dftype)),
             ],
             [
-                (0.4, np.asarray([0.6, 0.0, -0.2, 0.4, 0.2, -0.3, 0.1, -0.1], dtype=np.float64)),
+                (0.4, np.asarray([0.6, 0.0, -0.2, 0.4, 0.2, -0.3, 0.1, -0.1], dtype=dftype)),
             ],
             [
-                (1.5, np.asarray([-0.5, 0.7, -0.3, 0.2, -0.1, 0.6, -0.4, 0.3], dtype=np.float64)),
-                (0.3, np.asarray([0.1, -0.1, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4], dtype=np.float64)),
+                (1.5, np.asarray([-0.5, 0.7, -0.3, 0.2, -0.1, 0.6, -0.4, 0.3], dtype=dftype)),
+                (0.3, np.asarray([0.1, -0.1, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4], dtype=dftype)),
             ],
         ]
         vm_by_cycle_lag = np.asarray(
@@ -147,16 +151,16 @@ class TestGapJunction(unittest.TestCase):
                 [-64.2, -62.8],
                 [-61.0, -59.7],
             ],
-            dtype=np.float64,
+            dtype=dftype,
         )
-        t_values = np.asarray([0.0, 0.25, 0.5, 0.9], dtype=np.float64)
+        t_values = np.asarray([0.0, 0.25, 0.5, 0.9], dtype=dftype)
 
         syn = gap_junction(weight=1.0)
 
         for cycle, events in enumerate(events_by_cycle):
             syn.begin_wfr_cycle(min_delay_steps=min_delay_steps, interpolation_order=order)
             expected_sum = 0.0
-            expected_coeff = np.zeros((n_coeff,), dtype=np.float64)
+            expected_coeff = np.zeros((n_coeff,), dtype=dftype)
 
             for w, coeff in events:
                 syn.handle_gap_event(coeff, weight=w)

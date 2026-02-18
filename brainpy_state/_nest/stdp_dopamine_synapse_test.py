@@ -45,7 +45,8 @@ class _MockReceiver:
 
 
 def _spike_step_counts_from_times(spike_times_ms, dt_ms):
-    spike_times = np.asarray(spike_times_ms, dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    spike_times = np.asarray(spike_times_ms, dtype=dftype).reshape(-1)
     counts = {}
     for t_spike in spike_times:
         step = int(round((float(t_spike) - dt_ms) / dt_ms))
@@ -403,9 +404,10 @@ def _run_reference_trace(
             weight=current_weight,
         )
 
+    dftype = brainstate.environ.dftype()
     return (
-        np.asarray(send_times, dtype=np.float64),
-        np.asarray(payloads, dtype=np.float64),
+        np.asarray(send_times, dtype=dftype),
+        np.asarray(payloads, dtype=dftype),
         dict(weight=float(current_weight), Kplus=float(Kplus), c=float(c), n=float(n)),
     )
 
@@ -469,16 +471,17 @@ def _run_bp_trace(
             if pre_count > 0:
                 send_times.append((step + 1) * dt_ms)
 
+    dftype = brainstate.environ.dftype()
     payloads = np.asarray(
         [
-            float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+            float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
             for _key, value, _label in recv.delta_events
         ],
-        dtype=np.float64,
+        dtype=dftype,
     )
     labels = [label for _key, _value, label in recv.delta_events]
     return (
-        np.asarray(send_times, dtype=np.float64),
+        np.asarray(send_times, dtype=dftype),
         payloads,
         labels,
         dict(weight=float(syn.weight), Kplus=float(syn.Kplus), c=float(syn.c), n=float(syn.n)),
@@ -569,9 +572,10 @@ class TestSTDPDopamineSynapseDynamics(unittest.TestCase):
             Wmax=200.0,
             weight=10.0,
         )
-        pre_spikes = np.asarray([1.0, 2.5, 4.0, 7.2, 9.4], dtype=np.float64)
-        post_spikes = np.asarray([0.8, 1.6, 3.1, 5.3, 8.5], dtype=np.float64)
-        dopa_spikes = np.asarray([0.9, 2.2, 2.7, 5.0, 8.0, 9.1], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([1.0, 2.5, 4.0, 7.2, 9.4], dtype=dftype)
+        post_spikes = np.asarray([0.8, 1.6, 3.1, 5.3, 8.5], dtype=dftype)
+        dopa_spikes = np.asarray([0.9, 2.2, 2.7, 5.0, 8.0, 9.1], dtype=dftype)
 
         sim_duration_ms = 12.0
         send_t_ref, payload_ref, state_ref = _run_reference_trace(
@@ -612,9 +616,10 @@ class TestSTDPDopamineSynapseDynamics(unittest.TestCase):
             Wmax=200.0,
             weight=1.0,
         )
-        pre_spikes = np.asarray([], dtype=np.float64)
-        post_spikes = np.asarray([0.5, 1.1, 3.4], dtype=np.float64)
-        dopa_spikes = np.asarray([1.4, 2.3, 4.6], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([], dtype=dftype)
+        post_spikes = np.asarray([0.5, 1.1, 3.4], dtype=dftype)
+        dopa_spikes = np.asarray([1.4, 2.3, 4.6], dtype=dftype)
 
         _send_t_ref, _payload_ref, state_ref = _run_reference_trace(
             pre_spikes_ms=pre_spikes,
@@ -685,17 +690,18 @@ class TestSTDPDopamineSynapseVsNEST(unittest.TestCase):
         post = nest.Create('parrot_neuron', params={'tau_minus': float(tau_minus)})
         dopa = nest.Create('parrot_neuron')
         vt = nest.Create('volume_transmitter')
+        dftype = brainstate.environ.dftype()
         sg_pre = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(pre_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(pre_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         sg_post = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(post_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(post_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         sg_dopa = nest.Create(
             'spike_generator',
-            params={'spike_times': list(np.asarray(dopa_spikes_ms, dtype=np.float64)), 'precise_times': False},
+            params={'spike_times': list(np.asarray(dopa_spikes_ms, dtype=dftype)), 'precise_times': False},
         )
         wr = nest.Create('weight_recorder')
 
@@ -734,8 +740,8 @@ class TestSTDPDopamineSynapseVsNEST(unittest.TestCase):
 
         events = wr.get('events')
         return (
-            np.asarray(events['times'], dtype=np.float64),
-            np.asarray(events['weights'], dtype=np.float64),
+            np.asarray(events['times'], dtype=dftype),
+            np.asarray(events['weights'], dtype=dftype),
         )
 
     def test_weight_trace_matches_nest(self):
@@ -757,9 +763,10 @@ class TestSTDPDopamineSynapseVsNEST(unittest.TestCase):
             weight=500.0,
         )
 
-        pre_spikes = np.asarray([10.0, 30.0, 41.0, 57.0, 90.0], dtype=np.float64)
-        post_spikes = np.asarray([15.0, 26.0, 50.0, 73.0, 88.0], dtype=np.float64)
-        dopa_spikes = np.asarray([12.0, 32.0, 43.0, 67.0, 92.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([10.0, 30.0, 41.0, 57.0, 90.0], dtype=dftype)
+        post_spikes = np.asarray([15.0, 26.0, 50.0, 73.0, 88.0], dtype=dftype)
+        dopa_spikes = np.asarray([12.0, 32.0, 43.0, 67.0, 92.0], dtype=dftype)
 
         nest_times, nest_weights = self._run_nest_weight_trace(
             pre_spikes_ms=pre_spikes,

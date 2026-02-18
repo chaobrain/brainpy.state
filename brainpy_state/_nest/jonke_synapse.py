@@ -948,7 +948,8 @@ class jonke_synapse(NESTSynapse):
         --------
         send : Single spike processing (core method).
         """
-        times = np.asarray(u.math.asarray(pre_spike_times_ms), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(u.math.asarray(pre_spike_times_ms), dtype=dftype).reshape(-1)
         events = []
         for t in times:
             events.append(
@@ -1157,7 +1158,8 @@ class jonke_synapse(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])
@@ -1193,7 +1195,8 @@ class jonke_synapse(NESTSynapse):
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])

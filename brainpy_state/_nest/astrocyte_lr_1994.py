@@ -524,15 +524,16 @@ class astrocyte_lr_1994(NESTNeuron):
         if batch_size is not None:
             shape = (batch_size,) + shape
 
-        ip3 = np.full(shape, self._IP3_init, dtype=np.float64)
-        ca = np.full(shape, self._Ca_init, dtype=np.float64)
-        h = np.full(shape, self._h_IP3R_init, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ip3 = np.full(shape, self._IP3_init, dtype=dftype)
+        ca = np.full(shape, self._Ca_init, dtype=dftype)
+        h = np.full(shape, self._h_IP3R_init, dtype=dftype)
 
         self.IP3 = brainstate.HiddenState(jnp.asarray(ip3))
         self.Ca = brainstate.HiddenState(jnp.asarray(ca))
         self.h_IP3R = brainstate.HiddenState(jnp.asarray(h))
-        self.SIC = brainstate.ShortTermState(jnp.zeros(shape, dtype=jnp.float64))
-        self.J_noise = brainstate.ShortTermState(jnp.zeros(shape, dtype=jnp.float64))
+        self.SIC = brainstate.ShortTermState(jnp.zeros(shape, dtype=dftype))
+        self.J_noise = brainstate.ShortTermState(jnp.zeros(shape, dtype=dftype))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         r"""Reset astrocyte state variables to initial values.
@@ -559,11 +560,12 @@ class astrocyte_lr_1994(NESTNeuron):
         if batch_size is not None:
             shape = (batch_size,) + shape
 
-        self.IP3.value = jnp.full(shape, self._IP3_init, dtype=jnp.float64)
-        self.Ca.value = jnp.full(shape, self._Ca_init, dtype=jnp.float64)
-        self.h_IP3R.value = jnp.full(shape, self._h_IP3R_init, dtype=jnp.float64)
-        self.SIC.value = jnp.zeros(shape, dtype=jnp.float64)
-        self.J_noise.value = jnp.zeros(shape, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        self.IP3.value = jnp.full(shape, self._IP3_init, dtype=dftype)
+        self.Ca.value = jnp.full(shape, self._Ca_init, dtype=dftype)
+        self.h_IP3R.value = jnp.full(shape, self._h_IP3R_init, dtype=dftype)
+        self.SIC.value = jnp.zeros(shape, dtype=dftype)
+        self.J_noise.value = jnp.zeros(shape, dtype=dftype)
 
     def _dynamics(self, ip3, ca, h_ip3r, J_noise):
         r"""Compute time derivatives of the IP3-calcium ODE system.
@@ -726,36 +728,37 @@ class astrocyte_lr_1994(NESTNeuron):
           cost where :math:`k` is the average substep count (typically 5–20).
         """
         dt_q = brainstate.environ.get_dt()
-        dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=dftype))
 
         v_shape = self.IP3.value.shape
 
         ip3 = np.broadcast_to(
-            np.asarray(self.IP3.value, dtype=np.float64), v_shape
+            np.asarray(self.IP3.value, dtype=dftype), v_shape
         ).copy()
         ca = np.broadcast_to(
-            np.asarray(self.Ca.value, dtype=np.float64), v_shape
+            np.asarray(self.Ca.value, dtype=dftype), v_shape
         ).copy()
         h = np.broadcast_to(
-            np.asarray(self.h_IP3R.value, dtype=np.float64), v_shape
+            np.asarray(self.h_IP3R.value, dtype=dftype), v_shape
         ).copy()
         j_noise_arr = np.broadcast_to(
-            np.asarray(self.J_noise.value, dtype=np.float64), v_shape
+            np.asarray(self.J_noise.value, dtype=dftype), v_shape
         ).copy()
-        sic_out = np.zeros(v_shape, dtype=np.float64)
+        sic_out = np.zeros(v_shape, dtype=dftype)
 
         # Convert spike_weights and J_ext to arrays
         sw = np.broadcast_to(
-            np.asarray(spike_weights, dtype=np.float64), v_shape
+            np.asarray(spike_weights, dtype=dftype), v_shape
         )
         j_ext = np.broadcast_to(
-            np.asarray(J_ext, dtype=np.float64), v_shape
+            np.asarray(J_ext, dtype=dftype), v_shape
         )
 
         atol = self.gsl_error_tol
 
         for idx in np.ndindex(v_shape):
-            y = np.array([ip3[idx], ca[idx], h[idx]], dtype=np.float64)
+            y = np.array([ip3[idx], ca[idx], h[idx]], dtype=dftype)
             j_noise_local = j_noise_arr[idx]
 
             # RKF45 adaptive integration over (0, dt]
@@ -769,7 +772,8 @@ class astrocyte_lr_1994(NESTNeuron):
 
                 def f(y_):
                     d = self._dynamics(y_[0], y_[1], y_[2], j_noise_local)
-                    return np.array(d, dtype=np.float64)
+                    dftype = brainstate.environ.dftype()
+                    return np.array(d, dtype=dftype)
 
                 k1 = f(y)
                 k2 = f(y + h_step * (1.0 / 4.0) * k1)
@@ -832,7 +836,7 @@ class astrocyte_lr_1994(NESTNeuron):
         self.SIC.value = jnp.asarray(sic_out)
         # Store new external current for next step (one-step delay, NEST semantics)
         self.J_noise.value = jnp.asarray(
-            np.broadcast_to(np.asarray(j_ext, dtype=np.float64), v_shape)
+            np.broadcast_to(np.asarray(j_ext, dtype=dftype), v_shape)
         )
 
         return jnp.asarray(sic_out)

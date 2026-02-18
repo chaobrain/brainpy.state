@@ -35,7 +35,8 @@ def _as_pairs(spikes):
 def _to_float_1d(x):
     if isinstance(x, u.Quantity):
         x = u.get_mantissa(x)
-    return np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
 
 
 def _to_int_1d(x):
@@ -71,7 +72,8 @@ def _schedule_reference(pending, spikes, multiplicities, stamp_steps, stamp_now)
         counts = np.where(spike_arr > 0.0, mult, 0)
 
     if stamp_steps is None:
-        stamps = np.full((n_items,), stamp_now, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        stamps = np.full((n_items,), stamp_now, dtype=ditype)
     else:
         stamps = _to_int_1d(stamp_steps)
         if stamps.size != n_items:
@@ -176,23 +178,25 @@ class TestVolumeTransmitter(unittest.TestCase):
         self.assertEqual(vt.local_device_id, 7)
 
     def test_step_dynamics_match_nest_cpp_update_order(self):
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         per_step_payload = {
             0: {
-                'spikes': np.array([1.0, 1.0], dtype=np.float64),
-                'multiplicities': np.array([1, 2], dtype=np.int64),
+                'spikes': np.array([1.0, 1.0], dtype=dftype),
+                'multiplicities': np.array([1, 2], dtype=ditype),
             },
             1: {
-                'spikes': np.array([1.0], dtype=np.float64),
-                'multiplicities': np.array([2], dtype=np.int64),
-                'stamp_steps': np.array([4], dtype=np.int64),
+                'spikes': np.array([1.0], dtype=dftype),
+                'multiplicities': np.array([2], dtype=ditype),
+                'stamp_steps': np.array([4], dtype=ditype),
             },
             3: {
-                'spikes': np.array([1.0], dtype=np.float64),
-                'multiplicities': np.array([1], dtype=np.int64),
+                'spikes': np.array([1.0], dtype=dftype),
+                'multiplicities': np.array([1], dtype=ditype),
             },
             5: {
-                'spikes': np.array([1.0], dtype=np.float64),
-                'multiplicities': np.array([5], dtype=np.int64),
+                'spikes': np.array([1.0], dtype=dftype),
+                'multiplicities': np.array([5], dtype=ditype),
             },
         }
 
@@ -227,10 +231,12 @@ class TestVolumeTransmitter(unittest.TestCase):
             vt.init_state()
 
             with brainstate.environ.context(t=0.0 * u.ms):
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
                 vt.update(
-                    spikes=np.array([1.0, 1.0, 1.0], dtype=np.float64),
-                    multiplicities=np.array([2, 3, 4], dtype=np.int64),
-                    stamp_steps=np.array([2, 2, 1], dtype=np.int64),
+                    spikes=np.array([1.0, 1.0, 1.0], dtype=dftype),
+                    multiplicities=np.array([2, 3, 4], dtype=ditype),
+                    stamp_steps=np.array([2, 2, 1], dtype=ditype),
                 )
 
             with brainstate.environ.context(t=0.1 * u.ms):
@@ -242,14 +248,14 @@ class TestVolumeTransmitter(unittest.TestCase):
             with brainstate.environ.context(t=0.2 * u.ms):
                 with self.assertRaises(ValueError):
                     vt.update(
-                        spikes=np.array([1.0], dtype=np.float64),
-                        stamp_steps=np.array([2], dtype=np.int64),
+                        spikes=np.array([1.0], dtype=dftype),
+                        stamp_steps=np.array([2], dtype=ditype),
                     )
 
                 with self.assertRaises(ValueError):
                     vt.update(
-                        spikes=np.array([1.0], dtype=np.float64),
-                        multiplicities=np.array([-1], dtype=np.int64),
+                        spikes=np.array([1.0], dtype=dftype),
+                        multiplicities=np.array([-1], dtype=ditype),
                     )
 
         with self.assertRaises(ValueError):

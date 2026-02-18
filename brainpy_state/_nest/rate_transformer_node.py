@@ -87,6 +87,8 @@ class rate_transformer_node(NESTNeuron):
 
     **4. Update Algorithm**
 
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
     The update sequence (matching NEST's ``rate_transformer_node_impl.h``) is:
 
     1. **Store delayed output**: Copy current ``rate`` → ``delayed_rate`` for outgoing delayed connections
@@ -373,7 +375,7 @@ class rate_transformer_node(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x):
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -381,7 +383,7 @@ class rate_transformer_node(NESTNeuron):
 
     @staticmethod
     def _to_int_scalar(x, name: str):
-        arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])
@@ -471,16 +473,16 @@ class rate_transformer_node(NESTNeuron):
         if step_idx in queue:
             queue[step_idx] = queue[step_idx] + value
         else:
-            queue[step_idx] = np.array(value, dtype=np.float64, copy=True)
+            queue[step_idx] = np.array(value, dtype=dftype, copy=True)
 
     def _drain_delayed_queue(self, step_idx: int, state_shape):
         value = self._delayed_queue.pop(step_idx, None)
         if value is None:
-            return np.zeros(state_shape, dtype=np.float64)
-        return np.array(self._broadcast_to_state(np.asarray(value, dtype=np.float64), state_shape), copy=True)
+            return np.zeros(state_shape, dtype=dftype)
+        return np.array(self._broadcast_to_state(np.asarray(value, dtype=dftype), state_shape), copy=True)
 
     def _accumulate_instant_events(self, events, state_shape):
-        total = np.zeros(state_shape, dtype=np.float64)
+        total = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             value, delay_steps = self._event_to_weighted_value(
                 ev,
@@ -493,7 +495,7 @@ class rate_transformer_node(NESTNeuron):
         return total
 
     def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        total_now = np.zeros(state_shape, dtype=np.float64)
+        total_now = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             value, delay_steps = self._event_to_weighted_value(
                 ev,
@@ -536,9 +538,9 @@ class rate_transformer_node(NESTNeuron):
         rate_np = self._to_numpy(rate)
 
         self.rate = brainstate.ShortTermState(rate_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_queue = {}
 
@@ -638,7 +640,7 @@ class rate_transformer_node(NESTNeuron):
         del x  # NEST rate transformer has no intrinsic current input.
 
         state_shape = self.rate.value.shape
-        step_idx = int(np.asarray(self._step_count.value, dtype=np.int64).reshape(-1)[0])
+        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_total = self._drain_delayed_queue(step_idx, state_shape)
         delayed_total += self._schedule_delayed_events(
@@ -660,5 +662,5 @@ class rate_transformer_node(NESTNeuron):
         self.rate.value = rate_new
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

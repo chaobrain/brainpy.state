@@ -283,7 +283,8 @@ class bernoulli_synapse(static_synapse):
         ValueError
             If input is not scalar (size != 1).
         """
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('p_transmit must be scalar.')
         return float(arr.reshape(()))

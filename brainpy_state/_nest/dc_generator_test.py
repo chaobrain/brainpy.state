@@ -85,7 +85,8 @@ def _run_bp_simulation(dt_ms, simtime_ms, amplitude_pA, start_ms=0.0,
         neuron = iaf_psc_delta(1, **neuron_params)
         neuron.init_state()
 
-        vm = np.empty(n_steps, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        vm = np.empty(n_steps, dtype=dftype)
         for step in range(n_steps):
             t = step * dt
             with brainstate.environ.context(t=t):
@@ -128,7 +129,8 @@ def _analytical_vm_trace(dt_ms, n_steps, amplitude_pA, start_ms=0.0,
 
     V = E_L  # initial V_m = E_L (NEST default)
     ref_count = 0
-    vm = np.empty(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    vm = np.empty(n_steps, dtype=dftype)
     spk_steps = []
 
     for step in range(n_steps):
@@ -328,7 +330,8 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             neuron = iaf_psc_delta(1, I_e=amplitude * u.pA)
             neuron.init_state()
-            vm_ie = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            vm_ie = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 with brainstate.environ.context(t=step * self.dt):
                     neuron.update()
@@ -355,7 +358,8 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             neuron = iaf_psc_delta(1, I_e=amplitude * u.pA)
             neuron.init_state()
-            vm_ie = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            vm_ie = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 with brainstate.environ.context(t=step * self.dt):
                     neuron.update()
@@ -498,7 +502,8 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
             neuron = iaf_psc_delta(1)
             neuron.init_state()
 
-            vm = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            vm = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 t = step * self.dt
                 with brainstate.environ.context(t=t):
@@ -511,7 +516,7 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
         P33 = math.exp(-self.dt_ms / self.tau_m)
         P30 = (self.tau_m / self.C_m) * (1.0 - P33)
         V = self.E_L
-        ref_vm = np.empty(n_steps, dtype=np.float64)
+        ref_vm = np.empty(n_steps, dtype=dftype)
         ref_count = 0
         for step in range(n_steps):
             t = step * self.dt_ms

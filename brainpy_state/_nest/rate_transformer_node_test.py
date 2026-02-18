@@ -52,9 +52,10 @@ def _run_nest_trace(model_name, params, record_from, simtime_ms, dt_ms):
     nest.Simulate(simtime_ms)
 
     ev = mm.events
-    out = {'times': np.asarray(ev['times'], dtype=np.float64)}
+    dftype = brainstate.environ.dftype()
+    out = {'times': np.asarray(ev['times'], dtype=dftype)}
     for key in record_from:
-        out[key] = np.asarray(ev[key], dtype=np.float64)
+        out[key] = np.asarray(ev[key], dtype=dftype)
     return out
 
 
@@ -88,7 +89,8 @@ def _run_nest_tanh_transformer_driven_trace(linear_summation, dt_ms, simtime_ms,
     )
 
     nest.Simulate(simtime_ms)
-    return np.asarray(mm.events['rate'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(mm.events['rate'], dtype=dftype)
 
 
 class TestRateTransformerNode(unittest.TestCase):
@@ -277,7 +279,8 @@ class TestRateTransformerNode(unittest.TestCase):
                 rate_initializer=braintools.init.Constant(-0.3),
             )
             node.init_state()
-            bp_rate = np.zeros((steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            bp_rate = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(node, k)
                 bp_rate[k] = float(np.asarray(node.rate.value).reshape(-1)[0])
@@ -329,8 +332,9 @@ class TestRateTransformerNode(unittest.TestCase):
             bp_linear_sum.init_state()
             bp_event_sum.init_state()
 
-            y_linear_sum = np.zeros((steps,), dtype=np.float64)
-            y_event_sum = np.zeros((steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            y_linear_sum = np.zeros((steps,), dtype=dftype)
+            y_event_sum = np.zeros((steps,), dtype=dftype)
             for k in range(steps):
                 self._step(
                     bp_linear_sum,

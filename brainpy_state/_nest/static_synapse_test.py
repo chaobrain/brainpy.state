@@ -84,7 +84,8 @@ def _run_bp_trace(spike_times_ms, dt_ms, sim_steps):
                 spike_times_out.append((step + 1) * dt_ms)
             v_trace.append(float((neuron.V.value / u.mV)[0]))
 
-    return np.asarray(spike_times_out, dtype=np.float64), np.asarray(v_trace, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(spike_times_out, dtype=dftype), np.asarray(v_trace, dtype=dftype)
 
 
 class TestStaticSynapseParameters(unittest.TestCase):
@@ -128,7 +129,8 @@ class TestStaticSynapseParameters(unittest.TestCase):
 
     def test_parameter_validation(self):
         with self.assertRaisesRegex(ValueError, 'weight must be scalar'):
-            static_synapse(weight=np.asarray([1.0, 2.0], dtype=np.float64))
+            dftype = brainstate.environ.dftype()
+            static_synapse(weight=np.asarray([1.0, 2.0], dtype=dftype))
 
         with self.assertRaisesRegex(ValueError, 'delay must be scalar'):
             static_synapse(delay=np.asarray([1.0, 2.0]) * u.ms)
@@ -165,7 +167,8 @@ class TestStaticSynapseOrdering(unittest.TestCase):
         self.assertEqual(delivered_per_step, [0, 0, 0, 0, 0, 1])
         self.assertEqual(len(recv.delta_events), 1)
         _, value, label = recv.delta_events[0]
-        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), 2.5, delta=1e-12)
+        dftype = brainstate.environ.dftype()
+        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(())), 2.5, delta=1e-12)
         self.assertEqual(label, 'receptor_7')
 
     def test_multiplicity_scales_weight(self):
@@ -181,7 +184,8 @@ class TestStaticSynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), 1)
         _, value, _ = recv.delta_events[0]
-        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), -3.6,
+        dftype = brainstate.environ.dftype()
+        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(())), -3.6,
                                delta=1e-12)
 
     def test_current_and_delta_inputs_are_summed_before_send(self):
@@ -201,7 +205,8 @@ class TestStaticSynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), 1)
         _, value, _ = recv.delta_events[0]
-        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), 8.0, delta=1e-12)
+        dftype = brainstate.environ.dftype()
+        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(())), 8.0, delta=1e-12)
 
     def test_current_event_uses_current_input_channel(self):
         recv = _MockReceiver()
@@ -216,7 +221,8 @@ class TestStaticSynapseOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.current_events), 1)
         _, value, _ = recv.current_events[0]
-        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(())), 3.0, delta=1e-12)
+        dftype = brainstate.environ.dftype()
+        self.assertAlmostEqual(float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(())), 3.0, delta=1e-12)
         self.assertEqual(len(recv.delta_events), 0)
 
 
@@ -264,12 +270,13 @@ class TestStaticSynapseDynamics(unittest.TestCase):
                 ref_spikes.append((step + 1) * dt_ms)
             ref_v.append(V)
 
-        ref_spikes = np.asarray(ref_spikes, dtype=np.float64)
-        ref_v = np.asarray(ref_v, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ref_spikes = np.asarray(ref_spikes, dtype=dftype)
+        ref_v = np.asarray(ref_v, dtype=dftype)
 
         np.testing.assert_allclose(model_spikes, ref_spikes, atol=1e-12, rtol=0.0)
         np.testing.assert_allclose(model_v, ref_v, atol=1e-12, rtol=0.0)
-        np.testing.assert_allclose(model_spikes, np.asarray([4.1], dtype=np.float64), atol=1e-12, rtol=0.0)
+        np.testing.assert_allclose(model_spikes, np.asarray([4.1], dtype=dftype), atol=1e-12, rtol=0.0)
 
 
 class TestStaticSynapseVsNEST(unittest.TestCase):
@@ -303,10 +310,11 @@ class TestStaticSynapseVsNEST(unittest.TestCase):
                 't_ref': 5.0,
             },
         )
+        dftype = brainstate.environ.dftype()
         sg = nest.Create(
             'spike_generator',
             params={
-                'spike_times': list(np.asarray(spike_times_ms, dtype=np.float64)),
+                'spike_times': list(np.asarray(spike_times_ms, dtype=dftype)),
                 'precise_times': False,
             },
         )
@@ -325,7 +333,7 @@ class TestStaticSynapseVsNEST(unittest.TestCase):
         nest.Simulate(float(sim_ms))
 
         events = sr.get('events')
-        times = np.asarray(events['times'], dtype=np.float64)
+        times = np.asarray(events['times'], dtype=dftype)
         return np.sort(times)
 
     def test_spike_times_match_nest(self):

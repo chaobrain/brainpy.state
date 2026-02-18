@@ -210,6 +210,8 @@ class iaf_bw_2001(NESTNeuron):
         Extracellular magnesium concentration for NMDA voltage-dependent block.
         Must be strictly positive. Default: 1 mM.
     gsl_error_tol : float, optional
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         RKF45 local error tolerance (analog to NEST's ``gsl_error_tol``).
         Smaller values increase integration accuracy but decrease performance.
         Must be strictly positive. Default: 1e-3.
@@ -486,11 +488,11 @@ class iaf_bw_2001(NESTNeuron):
     @staticmethod
     def _value_to_float(x, unit=None):
         if unit is None:
-            return np.asarray(u.math.asarray(x), dtype=np.float64)
+            return np.asarray(u.math.asarray(x), dtype=dftype)
         try:
-            return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+            return np.asarray(u.math.asarray(x / unit), dtype=dftype)
         except Exception:
-            return np.asarray(u.math.asarray(x), dtype=np.float64)
+            return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -568,7 +570,7 @@ class iaf_bw_2001(NESTNeuron):
         self.s_GABA = brainstate.HiddenState(s_gaba)
         self.s_NMDA = brainstate.HiddenState(s_nmda)
 
-        zeros = np.zeros(self.V.value.shape, dtype=np.float64)
+        zeros = np.zeros(self.V.value.shape, dtype=dftype)
         self.I_NMDA = brainstate.ShortTermState(zeros * u.pA)
         self.I_AMPA = brainstate.ShortTermState(zeros * u.pA)
         self.I_GABA = brainstate.ShortTermState(zeros * u.pA)
@@ -580,7 +582,7 @@ class iaf_bw_2001(NESTNeuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -619,7 +621,7 @@ class iaf_bw_2001(NESTNeuron):
         self.s_GABA.value = braintools.init.param(self.s_GABA_initializer, self.varshape, batch_size)
         self.s_NMDA.value = braintools.init.param(self.s_NMDA_initializer, self.varshape, batch_size)
 
-        zeros = np.zeros(self.V.value.shape, dtype=np.float64)
+        zeros = np.zeros(self.V.value.shape, dtype=dftype)
         self.I_NMDA.value = zeros * u.pA
         self.I_AMPA.value = zeros * u.pA
         self.I_GABA.value = zeros * u.pA
@@ -632,7 +634,7 @@ class iaf_bw_2001(NESTNeuron):
         )
 
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
 
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
@@ -680,12 +682,12 @@ class iaf_bw_2001(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _parse_spike_events(self, spike_events: Iterable, state_shape):
-        s_ampa = np.zeros(state_shape, dtype=np.float64)
-        s_gaba = np.zeros(state_shape, dtype=np.float64)
-        s_nmda = np.zeros(state_shape, dtype=np.float64)
+        s_ampa = np.zeros(state_shape, dtype=dftype)
+        s_gaba = np.zeros(state_shape, dtype=dftype)
+        s_nmda = np.zeros(state_shape, dtype=dftype)
 
         if spike_events is None:
             return s_ampa, s_gaba, s_nmda
@@ -729,9 +731,9 @@ class iaf_bw_2001(NESTNeuron):
         return s_ampa, s_gaba, s_nmda
 
     def _parse_registered_spike_inputs(self, state_shape):
-        s_ampa = np.zeros(state_shape, dtype=np.float64)
-        s_gaba = np.zeros(state_shape, dtype=np.float64)
-        s_nmda = np.zeros(state_shape, dtype=np.float64)
+        s_ampa = np.zeros(state_shape, dtype=dftype)
+        s_gaba = np.zeros(state_shape, dtype=dftype)
+        s_nmda = np.zeros(state_shape, dtype=dftype)
 
         if self.delta_inputs is None:
             return s_ampa, s_gaba, s_nmda
@@ -834,7 +836,7 @@ class iaf_bw_2001(NESTNeuron):
         ds_ampa = -s_ampa / p['tau_AMPA']
         ds_gaba = -s_gaba / p['tau_GABA']
         ds_nmda = -s_nmda / p['tau_decay_NMDA']
-        return np.asarray([dv, ds_ampa, ds_gaba, ds_nmda], dtype=np.float64)
+        return np.asarray([dv, ds_ampa, ds_gaba, ds_nmda], dtype=dftype)
 
     def _rkf45_integrate_scalar(self, y0, i_stim, h0, dt, p, atol):
         r"""Integrate ODEs for one timestep using adaptive RKF45 (scalar implementation).
@@ -893,7 +895,7 @@ class iaf_bw_2001(NESTNeuron):
         """
         t = 0.0
         h = max(h0, self._MIN_H)
-        y = np.asarray(y0, dtype=np.float64)
+        y = np.asarray(y0, dtype=dftype)
         iters = 0
 
         while t < dt and iters < self._MAX_ITERS:
@@ -987,11 +989,11 @@ class iaf_bw_2001(NESTNeuron):
 
         a = 1.0 - tau_ratio
         x = alpha_tau
-        a_j = jnp.asarray(a, dtype=jnp.float64)
-        x_j = jnp.asarray(x, dtype=jnp.float64)
+        a_j = jnp.asarray(a, dtype=dftype)
+        x_j = jnp.asarray(x, dtype=dftype)
         lower_gamma = np.asarray(
             jsp.special.gammainc(a_j, x_j) * jnp.exp(jsp.special.gammaln(a_j)),
-            dtype=np.float64,
+            dtype=dftype,
         )
         k0 = np.power(alpha_tau, tau_ratio) * lower_gamma
         return k0, k1
@@ -1108,13 +1110,13 @@ class iaf_bw_2001(NESTNeuron):
         i_nmda_prev = self._broadcast_to_state(self._value_to_float(self.I_NMDA.value, u.pA), state_shape)
 
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             state_shape,
         )
         i_stim = self._broadcast_to_state(self._value_to_float(self.I_stim.value, u.pA), state_shape)
         h_int = self._broadcast_to_state(self._value_to_float(self.integration_step.value, u.ms), state_shape)
 
-        s_nmda_pre = self._broadcast_to_state(np.asarray(self.s_NMDA_pre.value, dtype=np.float64), state_shape)
+        s_nmda_pre = self._broadcast_to_state(np.asarray(self.s_NMDA_pre.value, dtype=dftype), state_shape)
         last_spike = self._broadcast_to_state(self._value_to_float(self.last_spike_time.value, u.ms), state_shape)
 
         p = {
@@ -1137,7 +1139,7 @@ class iaf_bw_2001(NESTNeuron):
         k0, k1 = self._nmda_jump_constants(p['alpha'], p['tau_rise_NMDA'], p['tau_decay_NMDA'])
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             state_shape,
         )
 
@@ -1234,7 +1236,7 @@ class iaf_bw_2001(NESTNeuron):
         self.I_GABA.value = i_gaba_next * u.pA
         self.I_NMDA.value = i_nmda_next * u.pA
 
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
 
@@ -1245,4 +1247,4 @@ class iaf_bw_2001(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float64) * u.mV)
+        return self.get_spike(u.math.asarray(v_for_spike, dtype=dftype) * u.mV)

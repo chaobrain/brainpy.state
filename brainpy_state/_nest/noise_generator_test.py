@@ -129,7 +129,8 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
             )
             ng.init_state()
 
-            samples = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            samples = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 with brainstate.environ.context(t=step * dt_ms * u.ms):
                     out = ng.update()
@@ -163,7 +164,8 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
             )
             ng.init_state()
 
-            samples = np.empty(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            samples = np.empty(n_steps, dtype=dftype)
             for step in range(n_steps):
                 with brainstate.environ.context(t=step * dt_ms * u.ms):
                     out = ng.update()

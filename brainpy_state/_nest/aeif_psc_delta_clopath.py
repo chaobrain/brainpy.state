@@ -537,18 +537,21 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _to_numpy_unitless(x):
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_time_ms(x):
         try:
-            return np.asarray(u.math.asarray(x / u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
         except Exception:
-            return np.asarray(u.math.asarray(x), dtype=np.float64)
+            return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -609,7 +612,8 @@ class aeif_psc_delta_clopath(NESTNeuron):
     def _delay_u_bars_steps(self, dt_q):
         dt_ms = float(u.math.asarray(dt_q / u.ms))
         delay_ms = self._to_numpy_time_ms(self.delay_u_bars)
-        delay_steps = np.asarray(np.rint(delay_ms / dt_ms), dtype=np.int64) + 1
+        ditype = brainstate.environ.ditype()
+        delay_steps = np.asarray(np.rint(delay_ms / dt_ms), dtype=ditype) + 1
 
         if np.any(delay_steps < 1):
             raise ValueError('delay_u_bars must map to at least one delay-buffer entry.')
@@ -621,20 +625,24 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _clamp_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_clamp / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_clamp / dt), dtype=ditype)
 
     def _allocate_clopath_delay_buffers(self, state_shape, dt_q):
         delay_steps = self._delay_u_bars_steps(dt_q)
-        self.delayed_u_bars_steps = brainstate.ShortTermState(np.asarray(delay_steps, dtype=np.int32))
-        self.delayed_u_bars_idx = brainstate.ShortTermState(np.asarray(0, dtype=np.int32))
+        ditype = brainstate.environ.ditype()
+        self.delayed_u_bars_steps = brainstate.ShortTermState(np.asarray(delay_steps, dtype=ditype))
+        self.delayed_u_bars_idx = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         buf_shape = (delay_steps,) + tuple(state_shape)
-        self.delayed_u_bar_plus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=np.float64))
-        self.delayed_u_bar_minus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        self.delayed_u_bar_plus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=dftype))
+        self.delayed_u_bar_minus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=dftype))
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize all state variables.
@@ -684,8 +692,9 @@ class aeif_psc_delta_clopath(NESTNeuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
-        self.clamp_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
+        self.clamp_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -695,7 +704,8 @@ class aeif_psc_delta_clopath(NESTNeuron):
             braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
         )
 
-        v_shape = np.asarray(u.math.asarray(V / u.mV), dtype=np.float64).shape
+        dftype = brainstate.environ.dftype()
+        v_shape = np.asarray(u.math.asarray(V / u.mV), dtype=dftype).shape
         self._allocate_clopath_delay_buffers(v_shape, dt)
 
         if self.ref_var:
@@ -741,8 +751,9 @@ class aeif_psc_delta_clopath(NESTNeuron):
         )
 
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
-        self.clamp_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
+        self.clamp_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
 
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
@@ -752,7 +763,8 @@ class aeif_psc_delta_clopath(NESTNeuron):
             braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
         )
 
-        v_shape = np.asarray(u.math.asarray(self.V.value / u.mV), dtype=np.float64).shape
+        dftype = brainstate.environ.dftype()
+        v_shape = np.asarray(u.math.asarray(self.V.value / u.mV), dtype=dftype).shape
         self._allocate_clopath_delay_buffers(v_shape, dt)
 
         if self.ref_var:
@@ -840,11 +852,13 @@ class aeif_psc_delta_clopath(NESTNeuron):
         return dv, dw, dz, dv_th, du_plus, du_minus, du_bar
 
     def _write_clopath_history(self, V_m, u_plus, u_minus, u_bar, p):
-        plus_buf = np.asarray(self.delayed_u_bar_plus_buffer.value, dtype=np.float64)
-        minus_buf = np.asarray(self.delayed_u_bar_minus_buffer.value, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        plus_buf = np.asarray(self.delayed_u_bar_plus_buffer.value, dtype=dftype)
+        minus_buf = np.asarray(self.delayed_u_bar_minus_buffer.value, dtype=dftype)
 
-        delay_steps = int(np.asarray(self.delayed_u_bars_steps.value, dtype=np.int32))
-        idx = int(np.asarray(self.delayed_u_bars_idx.value, dtype=np.int32))
+        ditype = brainstate.environ.ditype()
+        delay_steps = int(np.asarray(self.delayed_u_bars_steps.value, dtype=ditype))
+        idx = int(np.asarray(self.delayed_u_bars_idx.value, dtype=ditype))
 
         plus_buf[idx] = u_plus
         minus_buf[idx] = u_minus
@@ -877,7 +891,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
         self.delayed_u_bar_plus_buffer.value = plus_buf
         self.delayed_u_bar_minus_buffer.value = minus_buf
-        self.delayed_u_bars_idx.value = np.asarray(idx, dtype=np.int32)
+        self.delayed_u_bars_idx.value = np.asarray(idx, dtype=ditype)
 
     def update(self, x=0.0 * u.pA):
         r"""Advance neuron state by one time step using adaptive RKF45 integration.
@@ -971,18 +985,20 @@ class aeif_psc_delta_clopath(NESTNeuron):
         u_minus = self._broadcast_to_state(self._to_numpy(self.u_bar_minus.value, u.mV), v_shape)
         u_bar = self._broadcast_to_state(self._to_numpy(self.u_bar_bar.value, u.mV), v_shape)
 
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape,
         )
         clamp_r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.clamp_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.clamp_step_count.value), dtype=ditype),
             v_shape,
         )
 
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
         h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape)
 
+        dftype = brainstate.environ.dftype()
         p = {
             'V_peak_rhs': self._broadcast_to_state(self._to_numpy(self.V_peak, u.mV), v_shape),
             'V_reset': self._broadcast_to_state(self._to_numpy(self.V_reset, u.mV), v_shape),
@@ -1009,15 +1025,15 @@ class aeif_psc_delta_clopath(NESTNeuron):
             'A_LTP': self._broadcast_to_state(self._to_numpy_unitless(self.A_LTP), v_shape),
             'u_ref_squared': self._broadcast_to_state(self._to_numpy_unitless(self.u_ref_squared), v_shape),
             'atol': self._broadcast_to_state(self._to_numpy_unitless(self.gsl_error_tol), v_shape),
-            'dt': self._broadcast_to_state(np.asarray(dt, dtype=np.float64), v_shape),
+            'dt': self._broadcast_to_state(np.asarray(dt, dtype=dftype), v_shape),
         }
 
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
         clamp_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._clamp_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._clamp_counts()), dtype=ditype),
             v_shape,
         )
 
@@ -1045,7 +1061,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
             local_p = {k: p[k][idx] for k in p}
             y = np.asarray([
                 V[idx], w[idx], z[idx], v_th[idx], u_plus[idx], u_minus[idx], u_bar[idx]
-            ], dtype=np.float64)
+            ], dtype=dftype)
 
             r_i = int(r[idx])
             clamp_i = int(clamp_r[idx])
@@ -1064,6 +1080,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
                 is_clamped = clamp_i > 0
 
                 def f(y_):
+                    dftype = brainstate.environ.dftype()
                     return np.asarray(
                         self._dynamics_scalar(
                             y_[0],
@@ -1078,7 +1095,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
                             i_stim[idx],
                             local_p,
                         ),
-                        dtype=np.float64,
+                        dtype=dftype,
                     )
 
                 k1 = f(y)
@@ -1187,8 +1204,8 @@ class aeif_psc_delta_clopath(NESTNeuron):
         self.u_bar_minus.value = u_minus_next * u.mV
         self.u_bar_bar.value = u_bar_next * u.mV
 
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
-        self.clamp_step_count.value = jnp.asarray(clamp_r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
+        self.clamp_step_count.value = jnp.asarray(clamp_r_next, dtype=ditype)
 
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
@@ -1202,4 +1219,4 @@ class aeif_psc_delta_clopath(NESTNeuron):
                 (self.refractory_step_count.value > 0) | (self.clamp_step_count.value > 0)
             )
 
-        return u.math.asarray(spike_mask, dtype=jnp.float64)
+        return u.math.asarray(spike_mask, dtype=dftype)

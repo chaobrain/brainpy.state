@@ -264,6 +264,9 @@ from ._nest import (
     rate_connection_delayed,
     rate_connection_instantaneous,
     sic_connection,
+
+    # Multi-compartment models
+    cm_default,
 )
 
 __all__ = [
@@ -482,4 +485,7 @@ __all__ = [
     'rate_connection_delayed',
     'rate_connection_instantaneous',
     'sic_connection',
+
+    # multi-compartment models
+    'cm_default',
 ]

@@ -50,7 +50,8 @@ def _dynamics_ref(y, i_stim, p, nmda_weights):
     i_ampa, i_gaba, i_nmda = _nmda_currents_ref(v, s_ampa, s_gaba, s_nmda_sum, p)
     i_syn = i_ampa + i_gaba + i_nmda
 
-    dy = np.zeros_like(y, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    dy = np.zeros_like(y, dtype=dftype)
     dy[0] = (-p['g_L'] * (v - p['E_L']) - i_syn + i_stim) / p['C_m']
     dy[1] = -s_ampa / p['tau_AMPA']
     dy[2] = -s_gaba / p['tau_GABA']
@@ -64,7 +65,8 @@ def _rkf45_ref_step(y0, i_stim, dt, h0, p, nmda_weights, atol):
     min_h = 1e-8
     t = 0.0
     h = max(h0, min_h)
-    y = np.asarray(y0, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.asarray(y0, dtype=dftype)
 
     while t < dt:
         h = max(min_h, min(h, dt - t))
@@ -112,8 +114,9 @@ def _rkf45_ref_step(y0, i_stim, dt, h0, p, nmda_weights, atol):
 
 
 def _reference_step(state, p, x_next, events, dt, t_step):
+    dftype = brainstate.environ.dftype()
     y0 = np.concatenate([
-        np.asarray([state['v'], state['s_ampa'], state['s_gaba']], dtype=np.float64),
+        np.asarray([state['v'], state['s_ampa'], state['s_gaba']], dtype=dftype),
         state['x_nmda'].astype(np.float64),
         state['s_nmda'].astype(np.float64),
     ])
@@ -194,7 +197,8 @@ class TestIAFBW2001Exact(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64).reshape(-1)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)[0] > 0.0)
 
     def _step(self, neuron, k, x=0.0 * u.pA, spike_events=None):
         with brainstate.environ.context(t=k * self.dt):
@@ -373,14 +377,15 @@ class TestIAFBW2001Exact(unittest.TestCase):
                 'conc_Mg2': 1.0,
                 'gsl_error_tol': 1e-3,
             }
+            dftype = brainstate.environ.dftype()
             ref = {
                 'v': -70.0,
                 's_ampa': 0.0,
                 's_gaba': 0.0,
-                'x_nmda': np.zeros((2,), dtype=np.float64),
-                's_nmda': np.zeros((2,), dtype=np.float64),
+                'x_nmda': np.zeros((2,), dtype=dftype),
+                's_nmda': np.zeros((2,), dtype=dftype),
                 's_nmda_sum': 0.0,
-                'nmda_weights': np.asarray([25.0, 12.0], dtype=np.float64),
+                'nmda_weights': np.asarray([25.0, 12.0], dtype=dftype),
                 'port_to_idx': {'p0': 0, 'p1': 1},
                 'i_ampa': 0.0,
                 'i_gaba': 0.0,
@@ -448,9 +453,9 @@ class TestIAFBW2001Exact(unittest.TestCase):
                 self.assertAlmostEqual(float((neuron.last_spike_time.value / u.ms)[0]), ref['last_spike_time'],
                                        delta=1e-5)
                 self.assertTrue(
-                    np.allclose(np.asarray(neuron.x_NMDA.value[0], dtype=np.float64), ref['x_nmda'], atol=1e-5))
+                    np.allclose(np.asarray(neuron.x_NMDA.value[0], dtype=dftype), ref['x_nmda'], atol=1e-5))
                 self.assertTrue(
-                    np.allclose(np.asarray(neuron.s_NMDA_components.value[0], dtype=np.float64), ref['s_nmda'],
+                    np.allclose(np.asarray(neuron.s_NMDA_components.value[0], dtype=dftype), ref['s_nmda'],
                                 atol=1e-5))
 
             self.assertEqual(spk_model, spk_ref)

@@ -303,12 +303,13 @@ class mcculloch_pitts_neuron(NESTNeuron):
         """
         # Binary output state y (0.0 or 1.0)
         y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
-        self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=jnp.float64))
+        dftype = brainstate.environ.dftype()
+        self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
 
         # Total synaptic input h
         self.h = brainstate.ShortTermState(
             u.math.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape),
-                         dtype=jnp.float64) * u.mV
+                         dtype=dftype) * u.mV
         )
 
         # Next update time for stochastic mode
@@ -317,7 +318,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
                 u.math.full(
                     self.varshape if batch_size is None else (batch_size, *self.varshape),
                     -1e7,
-                    dtype=jnp.float64
+                    dtype=dftype
                 ) * u.ms
             )
 
@@ -355,7 +356,8 @@ class mcculloch_pitts_neuron(NESTNeuron):
           internal state variables.
         - The strict inequality means :math:`h = \theta` yields 0.0 (inactive state).
         """
-        return u.math.asarray(h > self.theta, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        return u.math.asarray(h > self.theta, dtype=dftype)
 
     def update(self, x=0. * u.mV):
         r"""Update the neuron state for one simulation time step.
@@ -398,6 +400,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
         -----
         - **Delta inputs**: Inputs registered via ``add_delta_input()`` are accumulated into
           :math:`h` before the activation check. These represent discrete spike-like events
+          dftype = brainstate.environ.dftype()
           from other binary neurons (analogous to NEST's ``spikes_`` ring buffer).
         - **Current inputs**: Inputs registered via ``add_current_input()`` plus the ``x``
           argument are summed into :math:`c` and added to :math:`h` for the activation
@@ -442,7 +445,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
             key = brainstate.environ.get('key', default=None)
             if key is not None:
                 exp_sample = jax.random.exponential(key, shape=self.y.value.shape)
-                next_interval = exp_sample * u.math.asarray(self.tau_m / u.ms, dtype=jnp.float64) * u.ms
+                next_interval = exp_sample * u.math.asarray(self.tau_m / u.ms, dtype=dftype) * u.ms
                 self.t_next.value = u.math.where(
                     should_update,
                     self.t_next.value + next_interval,

@@ -485,7 +485,8 @@ class aeif_psc_alpha(NESTNeuron):
         np.ndarray
             Unitless float64 array with numerical values in the specified unit.
         """
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _to_numpy_unitless(x):
@@ -501,7 +502,8 @@ class aeif_psc_alpha(NESTNeuron):
         np.ndarray
             Float64 array.
         """
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -617,16 +619,18 @@ class aeif_psc_alpha(NESTNeuron):
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
 
         self.V = brainstate.HiddenState(V)
-        self.dI_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        self.dI_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.I_ex = brainstate.HiddenState(I_ex)
-        self.dI_in = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        self.dI_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.I_in = brainstate.HiddenState(I_in)
         self.w = brainstate.HiddenState(w)
 
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -665,13 +669,15 @@ class aeif_psc_alpha(NESTNeuron):
         self.I_in.value = braintools.init.param(self.I_in_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         zeros = u.math.zeros_like(u.math.asarray(self.V.value / u.mV))
-        self.dI_ex.value = np.asarray(zeros, dtype=np.float64)
-        self.dI_in.value = np.asarray(zeros, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self.dI_ex.value = np.asarray(zeros, dtype=dftype)
+        self.dI_in.value = np.asarray(zeros, dtype=dftype)
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
@@ -736,7 +742,8 @@ class aeif_psc_alpha(NESTNeuron):
         :math:`t_{ref} = 2.5` ms and :math:`dt = 1.0` ms, the result is 3 steps.
         """
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _sum_signed_delta_inputs(self):
         r"""Collect and split synaptic spike inputs by sign.
@@ -957,13 +964,15 @@ class aeif_psc_alpha(NESTNeuron):
         v_shape = self.V.value.shape
 
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        dI_ex = self._broadcast_to_state(np.asarray(self.dI_ex.value, dtype=np.float64), v_shape)
+        dftype = brainstate.environ.dftype()
+        dI_ex = self._broadcast_to_state(np.asarray(self.dI_ex.value, dtype=dftype), v_shape)
         I_ex = self._broadcast_to_state(self._to_numpy(self.I_ex.value, u.pA), v_shape)
-        dI_in = self._broadcast_to_state(np.asarray(self.dI_in.value, dtype=np.float64), v_shape)
+        dI_in = self._broadcast_to_state(np.asarray(self.dI_in.value, dtype=dftype), v_shape)
         I_in = self._broadcast_to_state(self._to_numpy(self.I_in.value, u.pA), v_shape)
         w = self._broadcast_to_state(self._to_numpy(self.w.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape,
         )
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
@@ -992,7 +1001,7 @@ class aeif_psc_alpha(NESTNeuron):
             p['V_th'],
         )
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
 
@@ -1016,7 +1025,7 @@ class aeif_psc_alpha(NESTNeuron):
 
         for idx in np.ndindex(v_shape):
             local_p = {k: p[k][idx] for k in p}
-            y = np.asarray([V[idx], dI_ex[idx], I_ex[idx], dI_in[idx], I_in[idx], w[idx]], dtype=np.float64)
+            y = np.asarray([V[idx], dI_ex[idx], I_ex[idx], dI_in[idx], I_in[idx], w[idx]], dtype=dftype)
             r_i = int(r[idx])
             h_i = float(max(h_int[idx], self._MIN_H))
             t_local = 0.0
@@ -1029,11 +1038,12 @@ class aeif_psc_alpha(NESTNeuron):
                 is_refractory = r_i > 0
 
                 def f(y_):
+                    dftype = brainstate.environ.dftype()
                     return np.asarray(
                         self._dynamics_scalar(
                             y_[0], y_[1], y_[2], y_[3], y_[4], y_[5], is_refractory, i_stim[idx], local_p
                         ),
-                        dtype=np.float64,
+                        dtype=dftype,
                     )
 
                 k1 = f(y)
@@ -1106,7 +1116,7 @@ class aeif_psc_alpha(NESTNeuron):
         self.dI_in.value = dI_in_next
         self.I_in.value = I_in_next * u.pA
         self.w.value = w_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
@@ -1116,4 +1126,4 @@ class aeif_psc_alpha(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return u.math.asarray(spike_mask, dtype=jnp.float64)
+        return u.math.asarray(spike_mask, dtype=dftype)

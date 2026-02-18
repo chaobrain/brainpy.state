@@ -57,9 +57,10 @@ def _run_nest_trace(model_name, params, record_from, simtime_ms, dt_ms):
     nest.Simulate(simtime_ms)
 
     ev = mm.events
-    out = {'times': np.asarray(ev['times'], dtype=np.float64)}
+    dftype = brainstate.environ.dftype()
+    out = {'times': np.asarray(ev['times'], dtype=dftype)}
     for key in record_from:
-        out[key] = np.asarray(ev[key], dtype=np.float64)
+        out[key] = np.asarray(ev[key], dtype=dftype)
     return out
 
 
@@ -96,9 +97,10 @@ def _run_nest_gauss_driven_trace(linear_summation, dt_ms, simtime_ms, drive, wei
     )
 
     nest.Simulate(simtime_ms)
+    dftype = brainstate.environ.dftype()
     return {
-        'rate': np.asarray(mm.events['rate'], dtype=np.float64),
-        'noise': np.asarray(mm.events['noise'], dtype=np.float64),
+        'rate': np.asarray(mm.events['rate'], dtype=dftype),
+        'noise': np.asarray(mm.events['noise'], dtype=dftype),
     }
 
 
@@ -149,7 +151,8 @@ class TestGaussRate(unittest.TestCase):
             rate0=0.4,
         )
 
-        noise_seq = np.asarray([0.2, -1.0, 0.4, -0.3, 1.1, 0.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        noise_seq = np.asarray([0.2, -1.0, 0.4, -0.3, 1.1, 0.0], dtype=dftype)
         instant_events_seq = [
             [{'rate': 1.0, 'weight': 0.7}, {'rate': 0.5, 'weight': -0.4}],
             [{'rate': 0.2, 'weight': 0.1}],
@@ -283,8 +286,9 @@ class TestGaussRate(unittest.TestCase):
             n0.init_state()
             n1.init_state()
 
-            y0 = np.zeros(steps, dtype=np.float64)
-            y1 = np.zeros(steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            y0 = np.zeros(steps, dtype=dftype)
+            y1 = np.zeros(steps, dtype=dftype)
             for k in range(steps):
                 self._step(n0, k, instant_rate_events=event, noise=0.0)
                 self._step(n1, k, instant_rate_events=event, noise=0.0)
@@ -327,8 +331,9 @@ class TestGaussRate(unittest.TestCase):
                 rate_initializer=braintools.init.Constant(-0.3),
             )
             ipn_bp.init_state()
-            bp_rate = np.zeros((replay_steps,), dtype=np.float64)
-            bp_noise = np.zeros((replay_steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            bp_rate = np.zeros((replay_steps,), dtype=dftype)
+            bp_noise = np.zeros((replay_steps,), dtype=dftype)
             for k in range(replay_steps):
                 self._step(ipn_bp, k, noise=nest_out['noise'][k] / sigma)
                 bp_rate[k] = float(np.asarray(ipn_bp.rate.value).reshape(-1)[0])
@@ -394,10 +399,11 @@ class TestGaussRate(unittest.TestCase):
             bp_linear_sum.init_state()
             bp_event_sum.init_state()
 
-            y_linear_sum = np.zeros((replay_steps,), dtype=np.float64)
-            y_event_sum = np.zeros((replay_steps,), dtype=np.float64)
-            n_linear_sum = np.zeros((replay_steps,), dtype=np.float64)
-            n_event_sum = np.zeros((replay_steps,), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            y_linear_sum = np.zeros((replay_steps,), dtype=dftype)
+            y_event_sum = np.zeros((replay_steps,), dtype=dftype)
+            n_linear_sum = np.zeros((replay_steps,), dtype=dftype)
+            n_event_sum = np.zeros((replay_steps,), dtype=dftype)
             for k in range(replay_steps):
                 self._step(
                     bp_linear_sum,

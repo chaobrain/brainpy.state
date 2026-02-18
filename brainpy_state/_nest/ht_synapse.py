@@ -84,6 +84,7 @@ class ht_synapse(NESTSynapse):
     **3. Implementation Notes**
 
     - **Timing precision**: Uses grid-aligned spike times; sub-grid offsets are
+      dftype = brainstate.environ.dftype()
       ignored (consistent with NEST's non-precise-timing variant).
     - **Initial state**: Pool starts at :math:`P = 1.0`, last spike time at 0.0 ms.
     - **Delay handling**: Connections store ``delay_steps ≥ 1``; both ``delay``
@@ -956,7 +957,7 @@ class ht_synapse(NESTSynapse):
         send : Process individual spike with full control.
         reset_state : Reset internal state between simulations.
         """
-        times = np.asarray(u.math.asarray(spike_times_ms), dtype=np.float64).reshape(-1)
+        times = np.asarray(u.math.asarray(spike_times_ms), dtype=dftype).reshape(-1)
         events = []
         for t in times:
             events.append(
@@ -973,7 +974,7 @@ class ht_synapse(NESTSynapse):
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])
@@ -985,7 +986,7 @@ class ht_synapse(NESTSynapse):
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])

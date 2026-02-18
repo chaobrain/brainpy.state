@@ -73,11 +73,13 @@ class _lin_rate_base(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x):
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_ms(x):
-        return np.asarray(u.math.asarray(x / u.ms), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -85,7 +87,8 @@ class _lin_rate_base(NESTNeuron):
 
     @staticmethod
     def _to_int_scalar(x, name: str):
-        arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])
@@ -127,7 +130,8 @@ class _lin_rate_base(NESTNeuron):
             weight = ev.get('weight', 1.0)
             multiplicity = ev.get('multiplicity', 1.0)
             delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
-            weight_sign = np.asarray(u.math.asarray(weight), dtype=np.float64) >= 0.0
+            dftype = brainstate.environ.dftype()
+            weight_sign = np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0
         elif isinstance(ev, (tuple, list)):
             if len(ev) == 2:
                 rate, weight = ev
@@ -140,7 +144,7 @@ class _lin_rate_base(NESTNeuron):
                 rate, weight, delay_steps, multiplicity = ev
             else:
                 raise ValueError('Rate event tuples must have length 2, 3, or 4.')
-            weight_sign = np.asarray(u.math.asarray(weight), dtype=np.float64) >= 0.0
+            weight_sign = np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0
         else:
             rate = ev
             weight = 1.0
@@ -161,24 +165,27 @@ class _lin_rate_base(NESTNeuron):
         if step_idx in queue:
             queue[step_idx] = queue[step_idx] + value
         else:
-            queue[step_idx] = np.array(value, dtype=np.float64, copy=True)
+            dftype = brainstate.environ.dftype()
+            queue[step_idx] = np.array(value, dtype=dftype, copy=True)
 
     def _drain_delayed_queue(self, step_idx: int, state_shape):
         ex = self._delayed_ex_queue.pop(step_idx, None)
         inh = self._delayed_in_queue.pop(step_idx, None)
         if ex is None:
-            ex = np.zeros(state_shape, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            ex = np.zeros(state_shape, dtype=dftype)
         else:
-            ex = np.array(self._broadcast_to_state(np.asarray(ex, dtype=np.float64), state_shape), copy=True)
+            ex = np.array(self._broadcast_to_state(np.asarray(ex, dtype=dftype), state_shape), copy=True)
         if inh is None:
-            inh = np.zeros(state_shape, dtype=np.float64)
+            inh = np.zeros(state_shape, dtype=dftype)
         else:
-            inh = np.array(self._broadcast_to_state(np.asarray(inh, dtype=np.float64), state_shape), copy=True)
+            inh = np.array(self._broadcast_to_state(np.asarray(inh, dtype=dftype), state_shape), copy=True)
         return ex, inh
 
     def _accumulate_instant_events(self, events, state_shape):
-        ex = np.zeros(state_shape, dtype=np.float64)
-        inh = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex = np.zeros(state_shape, dtype=dftype)
+        inh = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._parse_event(ev, default_delay_steps=0)
             if delay_steps != 0:
@@ -188,8 +195,9 @@ class _lin_rate_base(NESTNeuron):
         return ex, inh
 
     def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        ex_now = np.zeros(state_shape, dtype=np.float64)
-        inh_now = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        ex_now = np.zeros(state_shape, dtype=dftype)
+        inh_now = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             ex_i, inh_i, delay_steps = self._parse_event(ev, default_delay_steps=1)
             if delay_steps < 0:
@@ -207,7 +215,8 @@ class _lin_rate_base(NESTNeuron):
 
     def _common_inputs(self, x, instant_rate_events, delayed_rate_events):
         state_shape = self.rate.value.shape
-        step_idx = int(np.asarray(self._step_count.value, dtype=np.int64).reshape(-1)[0])
+        ditype = brainstate.environ.ditype()
+        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events(
@@ -392,9 +401,11 @@ class lin_rate_ipn(_lin_rate_base):
 
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        dftype = brainstate.environ.dftype()
+        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        ditype = brainstate.environ.ditype()
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -461,7 +472,8 @@ class lin_rate_ipn(_lin_rate_base):
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new
 
 
@@ -563,9 +575,11 @@ class lin_rate_opn(_lin_rate_base):
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
         self.noisy_rate = brainstate.ShortTermState(noisy_rate_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        dftype = brainstate.environ.dftype()
+        self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
+        ditype = brainstate.environ.ditype()
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -617,5 +631,6 @@ class lin_rate_opn(_lin_rate_base):
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        ditype = brainstate.environ.ditype()
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

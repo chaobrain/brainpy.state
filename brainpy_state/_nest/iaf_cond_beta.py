@@ -411,7 +411,8 @@ class iaf_cond_beta(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -482,15 +483,17 @@ class iaf_cond_beta(NESTNeuron):
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
 
         self.V = brainstate.HiddenState(V)
-        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_ex = brainstate.HiddenState(g_ex)
-        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_in = brainstate.HiddenState(g_in)
 
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -531,13 +534,15 @@ class iaf_cond_beta(NESTNeuron):
         self.g_ex.value = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
         self.g_in.value = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
         zeros = u.math.zeros_like(u.math.asarray(self.V.value / u.mV))
-        self.dg_ex.value = np.asarray(zeros, dtype=np.float64)
-        self.dg_in.value = np.asarray(zeros, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self.dg_ex.value = np.asarray(zeros, dtype=dftype)
+        self.dg_in.value = np.asarray(zeros, dtype=dftype)
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
             braintools.init.Constant(dt), self.varshape, batch_size
@@ -591,7 +596,8 @@ class iaf_cond_beta(NESTNeuron):
 
     def _refractory_counts(self):
         dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=jnp.int32)
+        ditype = brainstate.environ.ditype()
+        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _sum_signed_delta_inputs(self):
         w_ex = u.math.zeros_like(self.g_ex.value)
@@ -631,15 +637,17 @@ class iaf_cond_beta(NESTNeuron):
     def _rkf45_integrate_scalar(self, v0, dg_ex0, g_ex0, dg_in0, g_in0, is_refractory, i_stim, h0, dt, p):
         t = 0.0
         h = max(h0, self._MIN_H)
-        y = np.asarray([v0, dg_ex0, g_ex0, dg_in0, g_in0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        y = np.asarray([v0, dg_ex0, g_ex0, dg_in0, g_in0], dtype=dftype)
         iters = 0
 
         def f(y_):
+            dftype = brainstate.environ.dftype()
             return np.asarray(
                 self._dynamics_scalar(
                     y_[0], y_[1], y_[2], y_[3], y_[4], is_refractory, i_stim, p
                 ),
-                dtype=np.float64
+                dtype=dftype
             )
 
         while t < dt and iters < self._MAX_ITERS:
@@ -771,12 +779,14 @@ class iaf_cond_beta(NESTNeuron):
         v_shape = self.V.value.shape
 
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=np.float64), v_shape)
+        dftype = brainstate.environ.dftype()
+        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=dftype), v_shape)
         g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
-        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=np.float64), v_shape)
+        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=dftype), v_shape)
         g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32),
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape
         )
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
@@ -802,7 +812,7 @@ class iaf_cond_beta(NESTNeuron):
             'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
         }
         refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=np.int32),
+            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
         )
 
@@ -867,7 +877,7 @@ class iaf_cond_beta(NESTNeuron):
         self.g_ex.value = g_ex_next * u.nS
         self.dg_in.value = dg_in_next
         self.g_in.value = g_in_next * u.nS
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(

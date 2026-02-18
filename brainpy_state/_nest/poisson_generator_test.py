@@ -48,7 +48,8 @@ def _run_bp_counts(
 ):
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
-    totals = np.zeros(n_steps, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = poisson_generator(
@@ -63,7 +64,7 @@ def _run_bp_counts(
 
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                totals[step] = float(np.asarray(gen.update(), dtype=np.float64).sum())
+                totals[step] = float(np.asarray(gen.update(), dtype=dftype).sum())
 
     return totals
 
@@ -120,7 +121,8 @@ class TestPoissonGeneratorOrdering(unittest.TestCase):
                 rng_seed=1,
             )
             gen.init_state()
-            gen._sample_poisson = lambda lam: jnp.asarray([int(round(float(lam)))], dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            gen._sample_poisson = lambda lam: jnp.asarray([int(round(float(lam)))], dtype=ditype)
 
             trace = self._run_trace(gen, 7)
             # Active timestamps are t in (2, 5] ms -> 3,4,5 ms.
@@ -187,9 +189,10 @@ class TestPoissonGeneratorVsNEST(unittest.TestCase):
 
         events = sr.get('events')
         if len(events['times']) == 0:
-            return np.zeros(n_steps, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            return np.zeros(n_steps, dtype=dftype)
 
-        steps = np.rint(np.asarray(events['times'], dtype=np.float64) / dt_ms).astype(np.int64)
+        steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)
         counts = np.bincount(steps, minlength=n_steps + 2).astype(np.float64)
 
         # Spike recorder timestamps include one-step transmission delay.

@@ -66,7 +66,8 @@ class TestGinzburgNeuron(unittest.TestCase):
                 c_3=1.2 / u.mV,
             )
             neuron.init_state()
-            h = jnp.array([0.7], dtype=jnp.float64) * u.mV
+            dftype = brainstate.environ.dftype()
+            h = jnp.array([0.7], dtype=dftype) * u.mV
 
             got = neuron._gain_probability(h)
             expected = (
@@ -138,7 +139,8 @@ class TestGinzburgNeuron(unittest.TestCase):
                 rng_seed=7,
             )
             neuron.init_state()
-            neuron.t_next.value = jnp.array([0.375], dtype=jnp.float64) * u.ms
+            dftype = brainstate.environ.dftype()
+            neuron.t_next.value = jnp.array([0.375], dtype=dftype) * u.ms
 
             # t=0.125 -> t+dt=0.25 <= 0.375: no update
             out = self._step(neuron, 1)
@@ -168,16 +170,17 @@ class TestGinzburgNeuron(unittest.TestCase):
             )
 
             # First exponential draw initializes t_next. Later draws are for updates.
+            dftype = brainstate.environ.dftype()
             exp_samples = iter([
-                jnp.array([1.0], dtype=jnp.float64),
-                jnp.array([2.0], dtype=jnp.float64),
-                jnp.array([1.0], dtype=jnp.float64),
-                jnp.array([1.0], dtype=jnp.float64),
+                jnp.array([1.0], dtype=dftype),
+                jnp.array([2.0], dtype=dftype),
+                jnp.array([1.0], dtype=dftype),
+                jnp.array([1.0], dtype=dftype),
             ])
             uni_samples = iter([
-                jnp.array([0.2], dtype=jnp.float64),
-                jnp.array([0.9], dtype=jnp.float64),
-                jnp.array([0.1], dtype=jnp.float64),
+                jnp.array([0.2], dtype=dftype),
+                jnp.array([0.9], dtype=dftype),
+                jnp.array([0.1], dtype=dftype),
             ])
             neuron._sample_exponential = lambda shape: next(exp_samples)
             neuron._sample_uniform = lambda shape: next(uni_samples)

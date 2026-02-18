@@ -521,7 +521,8 @@ class iaf_chxk_2008(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _to_bool_numpy(x):
@@ -547,23 +548,24 @@ class iaf_chxk_2008(NESTNeuron):
         g_in = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
         g_ahp = braintools.init.param(self.g_ahp_initializer, self.varshape, batch_size)
 
-        zeros = np.zeros_like(np.asarray(u.math.asarray(V / u.mV), dtype=np.float64))
+        dftype = brainstate.environ.dftype()
+        zeros = np.zeros_like(np.asarray(u.math.asarray(V / u.mV), dtype=dftype))
 
         self.V = brainstate.HiddenState(V)
-        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_ex = brainstate.HiddenState(g_ex)
-        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_in = brainstate.HiddenState(g_in)
-        self.dg_ahp = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64))
+        self.dg_ahp = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_ahp_state = brainstate.HiddenState(g_ahp)
 
-        self.I_syn_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64) * u.pA)
-        self.I_syn_in = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64) * u.pA)
-        self.I_ahp = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64) * u.pA)
+        self.I_syn_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.pA)
+        self.I_syn_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.pA)
+        self.I_ahp = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.pA)
 
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
-        self.last_spike_offset = brainstate.ShortTermState(np.asarray(zeros, dtype=np.float64) * u.ms)
+        self.last_spike_offset = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.ms)
 
         dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState(
@@ -579,19 +581,20 @@ class iaf_chxk_2008(NESTNeuron):
         self.g_in.value = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
         self.g_ahp_state.value = braintools.init.param(self.g_ahp_initializer, self.varshape, batch_size)
 
-        zeros = np.zeros_like(np.asarray(u.math.asarray(self.V.value / u.mV), dtype=np.float64))
-        self.dg_ex.value = np.asarray(zeros, dtype=np.float64)
-        self.dg_in.value = np.asarray(zeros, dtype=np.float64)
-        self.dg_ahp.value = np.asarray(zeros, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        zeros = np.zeros_like(np.asarray(u.math.asarray(self.V.value / u.mV), dtype=dftype))
+        self.dg_ex.value = np.asarray(zeros, dtype=dftype)
+        self.dg_in.value = np.asarray(zeros, dtype=dftype)
+        self.dg_ahp.value = np.asarray(zeros, dtype=dftype)
 
-        self.I_syn_ex.value = np.asarray(zeros, dtype=np.float64) * u.pA
-        self.I_syn_in.value = np.asarray(zeros, dtype=np.float64) * u.pA
-        self.I_ahp.value = np.asarray(zeros, dtype=np.float64) * u.pA
+        self.I_syn_ex.value = np.asarray(zeros, dtype=dftype) * u.pA
+        self.I_syn_in.value = np.asarray(zeros, dtype=dftype) * u.pA
+        self.I_ahp.value = np.asarray(zeros, dtype=dftype) * u.pA
 
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
-        self.last_spike_offset.value = np.asarray(zeros, dtype=np.float64) * u.ms
+        self.last_spike_offset.value = np.asarray(zeros, dtype=dftype) * u.ms
 
         dt = brainstate.environ.get_dt()
         self.integration_step.value = braintools.init.param(
@@ -644,15 +647,17 @@ class iaf_chxk_2008(NESTNeuron):
     def _rkf45_integrate_scalar(self, v0, dg_ex0, g_ex0, dg_in0, g_in0, dg_ahp0, g_ahp0, i_stim, h0, dt, p):
         t = 0.0
         h = max(h0, self._MIN_H)
-        y = np.asarray([v0, dg_ex0, g_ex0, dg_in0, g_in0, dg_ahp0, g_ahp0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        y = np.asarray([v0, dg_ex0, g_ex0, dg_in0, g_in0, dg_ahp0, g_ahp0], dtype=dftype)
         iters = 0
 
         def f(y_):
+            dftype = brainstate.environ.dftype()
             return np.asarray(
                 self._dynamics_scalar(
                     y_[0], y_[1], y_[2], y_[3], y_[4], y_[5], y_[6], i_stim, p
                 ),
-                dtype=np.float64
+                dtype=dftype
             )
 
         while t < dt and iters < self._MAX_ITERS:
@@ -692,11 +697,12 @@ class iaf_chxk_2008(NESTNeuron):
         v_shape = self.V.value.shape
 
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=np.float64), v_shape)
+        dftype = brainstate.environ.dftype()
+        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=dftype), v_shape)
         g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
-        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=np.float64), v_shape)
+        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=dftype), v_shape)
         g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
-        dg_ahp = self._broadcast_to_state(np.asarray(self.dg_ahp.value, dtype=np.float64), v_shape)
+        dg_ahp = self._broadcast_to_state(np.asarray(self.dg_ahp.value, dtype=dftype), v_shape)
         g_ahp_state = self._broadcast_to_state(self._to_numpy(self.g_ahp_state.value, u.nS), v_shape)
 
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
@@ -838,4 +844,4 @@ class iaf_chxk_2008(NESTNeuron):
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time_next * u.ms)
         self.last_spike_offset.value = jax.lax.stop_gradient(last_spike_offset_next * u.ms)
 
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float64) * u.mV)
+        return self.get_spike(u.math.asarray(v_for_spike, dtype=dftype) * u.mV)

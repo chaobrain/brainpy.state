@@ -265,16 +265,18 @@ class weight_recorder(NESTDevice):
        >>> import brainunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+       ditype = brainstate.environ.ditype()
        ...     wr = brainpy.state.weight_recorder(
-       ...         senders=np.array([10, 11], dtype=np.int64),
+       ...         senders=np.array([10, 11], dtype=ditype),
        ...         start=0.0 * u.ms,
        ...         stop=1.0 * u.ms,
        ...     )
        ...     with brainstate.environ.context(t=0.0 * u.ms):
+       dftype = brainstate.environ.dftype()
        ...         _ = wr.update(
-       ...             weights=np.array([0.5, 0.7], dtype=np.float64),
-       ...             senders=np.array([10, 12], dtype=np.int64),
-       ...             targets=np.array([3, 4], dtype=np.int64),
+       ...             weights=np.array([0.5, 0.7], dtype=dftype),
+       ...             senders=np.array([10, 12], dtype=ditype),
+       ...             targets=np.array([3, 4], dtype=ditype),
        ...         )
        ...     ev = wr.flush()
        ...     _ = ev['weights'].shape
@@ -292,11 +294,11 @@ class weight_recorder(NESTDevice):
        ...     wr = brainpy.state.weight_recorder(time_in_steps=True)
        ...     with brainstate.environ.context(t=1.0 * u.ms):
        ...         _ = wr.update(
-       ...             weights=np.array([1.2], dtype=np.float64),
-       ...             senders=np.array([5], dtype=np.int64),
-       ...             targets=np.array([6], dtype=np.int64),
-       ...             offsets=np.array([0.03], dtype=np.float64) * u.ms,
-       ...             stamp_steps=np.array([12], dtype=np.int64),
+       ...             weights=np.array([1.2], dtype=dftype),
+       ...             senders=np.array([5], dtype=ditype),
+       ...             targets=np.array([6], dtype=ditype),
+       ...             offsets=np.array([0.03], dtype=dftype) * u.ms,
+       ...             stamp_steps=np.array([12], dtype=ditype),
        ...         )
        ...     ev = wr.events
        ...     _ = (ev['times'][0], ev['offsets'][0])
@@ -381,18 +383,20 @@ class weight_recorder(NESTDevice):
 
     @property
     def events(self) -> dict[str, np.ndarray]:
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         out = {
-            'senders': np.asarray(self._events_senders, dtype=np.int64),
-            'targets': np.asarray(self._events_targets, dtype=np.int64),
-            'weights': np.asarray(self._events_weights, dtype=np.float64),
-            'receptors': np.asarray(self._events_receptors, dtype=np.int64),
-            'ports': np.asarray(self._events_ports, dtype=np.int64),
+            'senders': np.asarray(self._events_senders, dtype=ditype),
+            'targets': np.asarray(self._events_targets, dtype=ditype),
+            'weights': np.asarray(self._events_weights, dtype=dftype),
+            'receptors': np.asarray(self._events_receptors, dtype=ditype),
+            'ports': np.asarray(self._events_ports, dtype=ditype),
         }
         if self.time_in_steps:
-            out['times'] = np.asarray(self._events_times_steps, dtype=np.int64)
-            out['offsets'] = np.asarray(self._events_offsets, dtype=np.float64)
+            out['times'] = np.asarray(self._events_times_steps, dtype=ditype)
+            out['offsets'] = np.asarray(self._events_offsets, dtype=dftype)
         else:
-            out['times'] = np.asarray(self._events_times_ms, dtype=np.float64)
+            out['times'] = np.asarray(self._events_times_ms, dtype=dftype)
         return out
 
     def get(self, key: str = 'events'):
@@ -425,9 +429,10 @@ class weight_recorder(NESTDevice):
         if key == 'time_in_steps':
             return self.time_in_steps
         if key == 'senders':
-            return np.asarray(self.senders, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            return np.asarray(self.senders, dtype=ditype)
         if key == 'targets':
-            return np.asarray(self.targets, dtype=np.int64)
+            return np.asarray(self.targets, dtype=ditype)
         raise KeyError(f'Unsupported key "{key}" for weight_recorder.get().')
 
     def clear_events(self):
@@ -557,7 +562,8 @@ class weight_recorder(NESTDevice):
         offset_arr = self._to_float_array(offsets, name='offsets', default=0.0, size=n_items, unit=u.ms)
 
         if stamp_steps is None:
-            stamp_arr = np.full((n_items,), step_now + 1, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            stamp_arr = np.full((n_items,), step_now + 1, dtype=ditype)
         else:
             stamp_arr = self._to_int_array(stamp_steps, name='stamp_steps', size=n_items)
 
@@ -597,7 +603,8 @@ class weight_recorder(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -672,7 +679,8 @@ class weight_recorder(NESTDevice):
             return ()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=np.int64).reshape(-1)
+        ditype = brainstate.environ.ditype()
+        arr = np.asarray(u.math.asarray(value), dtype=ditype).reshape(-1)
         if arr.size == 0:
             return ()
         if np.any(arr <= 0):
@@ -690,16 +698,17 @@ class weight_recorder(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
                 x = x / unit
             elif isinstance(x, u.Quantity):
                 x = u.get_mantissa(x)
-            arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
 
         if arr.size == 0 and size is not None:
-            return np.zeros((0,), dtype=np.float64)
+            return np.zeros((0,), dtype=dftype)
 
         if not np.all(np.isfinite(arr)):
             raise ValueError(f'{name} must contain finite values.')
@@ -708,7 +717,7 @@ class weight_recorder(NESTDevice):
             return arr
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), arr[0], dtype=np.float64)
+            return np.full((size,), arr[0], dtype=dftype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match weights size ({size}).')
         return arr.astype(np.float64, copy=False)
@@ -723,15 +732,16 @@ class weight_recorder(NESTDevice):
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            arr = np.asarray([default], dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            arr = np.asarray([default], dtype=ditype)
         else:
-            arr = np.asarray(u.math.asarray(x), dtype=np.int64).reshape(-1)
+            arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)
 
         if size is None:
             return arr.astype(np.int64, copy=False)
 
         if arr.size == 1 and size > 1:
-            return np.full((size,), int(arr[0]), dtype=np.int64)
+            return np.full((size,), int(arr[0]), dtype=ditype)
         if arr.size != size:
             raise ValueError(f'{name} size ({arr.size}) does not match weights size ({size}).')
         return arr.astype(np.int64, copy=False)

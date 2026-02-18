@@ -68,7 +68,8 @@ def _run_tsodyks_vm_trace(
     # NEST reference test routes spikes through parrot_neuron because devices
     # cannot project to plastic synapses. With default synapse settings this
     # adds 1.0 ms before spikes reach tsodyks_synapse_hom.
-    synapse_spike_times = np.asarray(input_train, dtype=np.float64) + float(source_to_synapse_delay_ms)
+    dftype = brainstate.environ.dftype()
+    synapse_spike_times = np.asarray(input_train, dtype=dftype) + float(source_to_synapse_delay_ms)
     spike_steps = _spike_steps_from_times(synapse_spike_times, h_ms)
     sim_steps = int(round(T_sim / h_ms))
     C = Tau
@@ -121,7 +122,7 @@ def _run_tsodyks_vm_trace(
                 times.append(t_sample)
                 vm.append(float((neuron.V.value / u.mV)[0]))
 
-    return np.vstack([np.asarray(times, dtype=np.float64), np.asarray(vm, dtype=np.float64)]).T
+    return np.vstack([np.asarray(times, dtype=dftype), np.asarray(vm, dtype=dftype)]).T
 
 
 def _tsodyks_hom_reference_step(*, x, y, u_state, t_last, t_spike, tau_psc, tau_fac, tau_rec, U):
@@ -277,7 +278,8 @@ class TestTsodyksSynapseHomOrdering(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), len(spike_steps))
         for idx, (_key, value, label) in enumerate(recv.delta_events):
-            value_f = float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+            dftype = brainstate.environ.dftype()
+            value_f = float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
             self.assertAlmostEqual(value_f, payloads_ref[idx], delta=1e-12)
             self.assertEqual(label, 'receptor_2')
 
@@ -287,6 +289,7 @@ class TestTsodyksSynapseHomDynamics(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_depressing_trace_matches_nest_reference(self):
+        dftype = brainstate.environ.dftype()
         times_vm_sim = _run_tsodyks_vm_trace(
             h_ms=0.1,
             Tau=40.0,
@@ -298,7 +301,7 @@ class TestTsodyksSynapseHomDynamics(unittest.TestCase):
             Tau_fac=0.0,
             U=0.5,
             A=250.0,
-            input_train=np.arange(98.0, 1048.1, 50.0, dtype=np.float64),
+            input_train=np.arange(98.0, 1048.1, 50.0, dtype=dftype),
             T_sim=1200.0,
         )
 
@@ -352,12 +355,13 @@ class TestTsodyksSynapseHomDynamics(unittest.TestCase):
                 [1150, 1.298230000000000e-01],
                 [1175, 6.948920000000000e-02],
             ],
-            dtype=np.float64,
+            dtype=dftype,
         )
 
         np.testing.assert_allclose(times_vm_sim, times_vm_expected, atol=1e-5, rtol=0.0)
 
     def test_facilitating_trace_matches_nest_reference(self):
+        dftype = brainstate.environ.dftype()
         times_vm_sim = _run_tsodyks_vm_trace(
             h_ms=0.1,
             Tau=60.0,
@@ -369,7 +373,7 @@ class TestTsodyksSynapseHomDynamics(unittest.TestCase):
             Tau_fac=530.0,
             U=0.03,
             A=1540.0,
-            input_train=np.arange(98.1, 1051.0, 50.1, dtype=np.float64),
+            input_train=np.arange(98.1, 1051.0, 50.1, dtype=dftype),
             T_sim=1200.0,
         )
 
@@ -423,7 +427,7 @@ class TestTsodyksSynapseHomDynamics(unittest.TestCase):
                 [1150, 2.099830000000000e00],
                 [1175, 1.384290000000000e00],
             ],
-            dtype=np.float64,
+            dtype=dftype,
         )
 
         np.testing.assert_allclose(times_vm_sim, times_vm_expected, atol=1e-5, rtol=0.0)

@@ -113,7 +113,8 @@ class TestIAFCondExp(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype)[0] > 0.0)
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:

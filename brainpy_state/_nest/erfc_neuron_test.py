@@ -65,7 +65,8 @@ class TestErfcNeuron(unittest.TestCase):
             )
             neuron.init_state()
 
-            h = jnp.array([0.7], dtype=jnp.float64) * u.mV
+            dftype = brainstate.environ.dftype()
+            h = jnp.array([0.7], dtype=dftype) * u.mV
             got = neuron._gain_probability(h)
             expected = 0.5 * math.erfc(-(0.7 - 0.4) / (math.sqrt(2.0) * 1.3))
             self.assertAlmostEqual(float(got[0]), expected, places=12)
@@ -110,7 +111,8 @@ class TestErfcNeuron(unittest.TestCase):
                 rng_seed=5,
             )
             neuron.init_state()
-            neuron.t_next.value = jnp.array([0.375], dtype=jnp.float64) * u.ms
+            dftype = brainstate.environ.dftype()
+            neuron.t_next.value = jnp.array([0.375], dtype=dftype) * u.ms
 
             out = self._step(neuron, 1)
             self.assertEqual(float(out[0]), 0.0)
@@ -134,16 +136,17 @@ class TestErfcNeuron(unittest.TestCase):
                 rng_seed=0,
             )
 
+            dftype = brainstate.environ.dftype()
             exp_samples = iter([
-                jnp.array([1.0], dtype=jnp.float64),
-                jnp.array([2.0], dtype=jnp.float64),
-                jnp.array([1.0], dtype=jnp.float64),
-                jnp.array([1.0], dtype=jnp.float64),
+                jnp.array([1.0], dtype=dftype),
+                jnp.array([2.0], dtype=dftype),
+                jnp.array([1.0], dtype=dftype),
+                jnp.array([1.0], dtype=dftype),
             ])
             uni_samples = iter([
-                jnp.array([0.2], dtype=jnp.float64),
-                jnp.array([0.9], dtype=jnp.float64),
-                jnp.array([0.1], dtype=jnp.float64),
+                jnp.array([0.2], dtype=dftype),
+                jnp.array([0.9], dtype=dftype),
+                jnp.array([0.1], dtype=dftype),
             ])
             neuron._sample_exponential = lambda shape: next(exp_samples)
             neuron._sample_uniform = lambda shape: next(uni_samples)
@@ -174,8 +177,9 @@ class TestErfcNeuron(unittest.TestCase):
         r"""Long-run mean activity at h=0 follows NEST theory."""
         dt = 0.1 * u.ms
         with brainstate.environ.context(dt=dt):
-            sigma_vals = np.logspace(-1.0, 1.0, 3, dtype=np.float64)
-            theta_vals = np.linspace(-4.0, 4.0, 5, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            sigma_vals = np.logspace(-1.0, 1.0, 3, dtype=dftype)
+            theta_vals = np.linspace(-4.0, 4.0, 5, dtype=dftype)
             sigma_grid, theta_grid = np.meshgrid(sigma_vals, theta_vals)
             sigma = sigma_grid.reshape(-1)
             theta = theta_grid.reshape(-1)
@@ -192,11 +196,11 @@ class TestErfcNeuron(unittest.TestCase):
             neuron.init_state()
 
             n_steps = 6000
-            y_sum = np.zeros(n, dtype=np.float64)
+            y_sum = np.zeros(n, dtype=dftype)
 
             for step in range(n_steps):
                 out = self._step(neuron, step, x=0.0 * u.mV)
-                y_sum += np.asarray(out, dtype=np.float64)
+                y_sum += np.asarray(out, dtype=dftype)
 
             mean_activity = y_sum / float(n_steps)
             theory = np.array(
@@ -204,7 +208,7 @@ class TestErfcNeuron(unittest.TestCase):
                     0.5 * math.erfc(th / (math.sqrt(2.0) * sg))
                     for sg, th in zip(sigma, theta)
                 ],
-                dtype=np.float64,
+                dtype=dftype,
             )
             delta = np.maximum(2e-1 * theory * (1.0 - theory), 1e-2)
             np.testing.assert_array_less(np.abs(mean_activity - theory), delta)

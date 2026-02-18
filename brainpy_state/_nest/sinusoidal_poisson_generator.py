@@ -374,9 +374,10 @@ class sinusoidal_poisson_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -384,16 +385,18 @@ class sinusoidal_poisson_generator(NESTDevice):
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.Hz), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Rate parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return float(arr.reshape(()))
@@ -446,9 +449,10 @@ class sinusoidal_poisson_generator(NESTDevice):
     def _reset_oscillator_state(self, t_ms: float):
         y0 = self._amplitude_per_ms * math.cos(self._om_rad_per_ms * t_ms + self._phi_rad)
         y1 = self._amplitude_per_ms * math.sin(self._om_rad_per_ms * t_ms + self._phi_rad)
-        self.y_0.value = jnp.asarray(y0, dtype=jnp.float64)
-        self.y_1.value = jnp.asarray(y1, dtype=jnp.float64)
-        self._recorded_rate_hz.value = jnp.asarray(0.0, dtype=jnp.float64)
+        dftype = brainstate.environ.dftype()
+        self.y_0.value = jnp.asarray(y0, dtype=dftype)
+        self.y_1.value = jnp.asarray(y1, dtype=dftype)
+        self._recorded_rate_hz.value = jnp.asarray(0.0, dtype=dftype)
 
     def _is_active(self, curr_step: int) -> bool:
         # Match NEST's current-generator activity handling for this model:
@@ -471,9 +475,10 @@ class sinusoidal_poisson_generator(NESTDevice):
         """
         del batch_size, kwargs
         self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
-        self.y_0 = brainstate.ShortTermState(jnp.asarray(0.0, dtype=jnp.float64))
-        self.y_1 = brainstate.ShortTermState(jnp.asarray(0.0, dtype=jnp.float64))
-        self._recorded_rate_hz = brainstate.ShortTermState(jnp.asarray(0.0, dtype=jnp.float64))
+        dftype = brainstate.environ.dftype()
+        self.y_0 = brainstate.ShortTermState(jnp.asarray(0.0, dtype=dftype))
+        self.y_1 = brainstate.ShortTermState(jnp.asarray(0.0, dtype=dftype))
+        self._recorded_rate_hz = brainstate.ShortTermState(jnp.asarray(0.0, dtype=dftype))
 
         dt_ms = self._maybe_dt_ms()
         if dt_ms is not None:
@@ -585,8 +590,9 @@ class sinusoidal_poisson_generator(NESTDevice):
         y0 = 0.0
         y1 = 0.0
         if hasattr(self, 'y_0'):
-            y0 = float(np.asarray(self.y_0.value, dtype=np.float64).reshape(()))
-            y1 = float(np.asarray(self.y_1.value, dtype=np.float64).reshape(()))
+            dftype = brainstate.environ.dftype()
+            y0 = float(np.asarray(self.y_0.value, dtype=dftype).reshape(()))
+            y1 = float(np.asarray(self.y_1.value, dtype=dftype).reshape(()))
 
         return {
             'rate': float(self.rate),
@@ -612,26 +618,30 @@ class sinusoidal_poisson_generator(NESTDevice):
         """
         if not hasattr(self, '_recorded_rate_hz'):
             return 0.0
-        return float(np.asarray(self._recorded_rate_hz.value, dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        return float(np.asarray(self._recorded_rate_hz.value, dtype=dftype).reshape(()))
 
     def _sample_poisson_individual(self, lam: float) -> jax.Array:
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
+        dftype = brainstate.environ.dftype()
         return jax.random.poisson(
             subkey,
-            lam=jnp.asarray(lam, dtype=jnp.float64),
+            lam=jnp.asarray(lam, dtype=dftype),
             shape=self.varshape,
         ).astype(jnp.int64)
 
     def _sample_poisson_shared(self, lam: float) -> int:
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
+        dftype = brainstate.environ.dftype()
         sample = jax.random.poisson(
             subkey,
-            lam=jnp.asarray(lam, dtype=jnp.float64),
+            lam=jnp.asarray(lam, dtype=dftype),
             shape=(),
         ).astype(jnp.int64)
-        return int(np.asarray(sample, dtype=np.int64).reshape(()))
+        ditype = brainstate.environ.ditype()
+        return int(np.asarray(sample, dtype=ditype).reshape(()))
 
     def update(self):
         r"""Advance generator by one simulation step and emit spike counts.
@@ -667,8 +677,9 @@ class sinusoidal_poisson_generator(NESTDevice):
         curr_step = self._time_to_step(curr_t_ms, dt_ms)
 
         # Update oscillator blocks in NEST ordering.
-        y0 = float(np.asarray(self.y_0.value, dtype=np.float64).reshape(()))
-        y1 = float(np.asarray(self.y_1.value, dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        y0 = float(np.asarray(self.y_0.value, dtype=dftype).reshape(()))
+        y1 = float(np.asarray(self.y_1.value, dtype=dftype).reshape(()))
 
         rate_per_ms = self._rate_per_ms
         new_y0 = self._cos_step * y0 - self._sin_step * y1
@@ -678,9 +689,9 @@ class sinusoidal_poisson_generator(NESTDevice):
         if rate_per_ms < 0.0:
             rate_per_ms = 0.0
 
-        self.y_0.value = jnp.asarray(y0, dtype=jnp.float64)
-        self.y_1.value = jnp.asarray(y1, dtype=jnp.float64)
-        self._recorded_rate_hz.value = jnp.asarray(rate_per_ms * 1000.0, dtype=jnp.float64)
+        self.y_0.value = jnp.asarray(y0, dtype=dftype)
+        self.y_1.value = jnp.asarray(y1, dtype=dftype)
+        self._recorded_rate_hz.value = jnp.asarray(rate_per_ms * 1000.0, dtype=dftype)
 
         if rate_per_ms > 0.0 and self._is_active(curr_step):
             lam = rate_per_ms * dt_ms
@@ -688,6 +699,7 @@ class sinusoidal_poisson_generator(NESTDevice):
                 return self._sample_poisson_individual(lam)
 
             n_spikes = self._sample_poisson_shared(lam)
-            return jnp.full(self.varshape, n_spikes, dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            return jnp.full(self.varshape, n_spikes, dtype=ditype)
 
-        return jnp.zeros(self.varshape, dtype=jnp.int64)
+        return jnp.zeros(self.varshape, dtype=ditype)

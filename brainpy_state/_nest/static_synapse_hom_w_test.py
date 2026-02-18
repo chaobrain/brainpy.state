@@ -34,6 +34,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 # Reference from NEST testsuite/pytests/sli2py_synapses/test_syn_hom_w.py
 # Columns: [time_step, V_m], where time_step must be multiplied by dt (0.1 ms).
+dftype = brainstate.environ.dftype()
 REFERENCE_DATA = np.array(
     [
         [1, -70.0],
@@ -62,7 +63,7 @@ REFERENCE_DATA = np.array(
         [55, -6.930080e01],
         [60, -6.915080e01],
     ],
-    dtype=np.float64,
+    dtype=dftype,
 )
 
 
@@ -106,7 +107,8 @@ def _run_bp_vm_trace(*, dt_ms, delay_ms, weight_pA, spike_times_ms, sim_steps):
                 neuron.update(x=0.0 * u.pA)
             vm_trace.append(float((neuron.V.value / u.mV)[0]))
 
-    return np.asarray(vm_trace, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    return np.asarray(vm_trace, dtype=dftype)
 
 
 class TestStaticSynapseHomWParameters(unittest.TestCase):
@@ -153,7 +155,8 @@ class TestStaticSynapseHomWParameters(unittest.TestCase):
 
         self.assertEqual(len(recv.delta_events), 1)
         _, value, _ = recv.delta_events[0]
-        value_f = float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        value_f = float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
         self.assertAlmostEqual(value_f, 2.5, delta=1e-12)
 
 
@@ -182,7 +185,8 @@ class TestStaticSynapseHomWDynamics(unittest.TestCase):
         self.assertEqual(delivered_per_step, [0, 0, 0, 0, 0, 1])
         self.assertEqual(len(recv.delta_events), 1)
         _, value, label = recv.delta_events[0]
-        value_f = float(np.asarray(u.math.asarray(value), dtype=np.float64).reshape(()))
+        dftype = brainstate.environ.dftype()
+        value_f = float(np.asarray(u.math.asarray(value), dtype=dftype).reshape(()))
         self.assertAlmostEqual(value_f, 2.5, delta=1e-12)
         self.assertEqual(label, 'receptor_7')
 
@@ -242,8 +246,9 @@ class TestStaticSynapseHomWVsNEST(unittest.TestCase):
         nest.Simulate(float(sim_ms))
 
         events = vm.get('events')
-        times = np.asarray(events['times'], dtype=np.float64)
-        voltages = np.asarray(events['V_m'], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(events['times'], dtype=dftype)
+        voltages = np.asarray(events['V_m'], dtype=dftype)
         return times, voltages
 
     def test_vm_trace_matches_nest(self):

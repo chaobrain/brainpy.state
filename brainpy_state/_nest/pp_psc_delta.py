@@ -203,6 +203,8 @@ class pp_psc_delta(NESTNeuron):
     By adjusting ``c_1``, ``c_2``, and ``c_3``, the transfer function can be:
 
     - Linear: Set ``c_3 = 0``, ``c_1 > 0`` -- :math:`\text{rate} = c_1 V' + c_2`
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
     - Exponential: Set ``c_1 = 0`` -- :math:`\text{rate} = c_2 \exp(c_3 V')`
     - Mixed: All coefficients nonzero -- linear + exponential
 
@@ -508,7 +510,7 @@ class pp_psc_delta(NESTNeuron):
         This method strips units and converts to float64 for use in NumPy-based
         numerical integration loops where brainunit operations would be too slow.
         """
-        return np.asarray(u.math.asarray(x / unit), dtype=np.float64)
+        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -601,7 +603,7 @@ class pp_psc_delta(NESTNeuron):
         self.last_spike_time = brainstate.ShortTermState(spk_time)
 
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=jnp.int32))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
         self.I_stim = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
@@ -610,16 +612,16 @@ class pp_psc_delta(NESTNeuron):
         # Adaptation state: q_elems array
         n_sfa = len(self.tau_sfa)
         v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        self._q_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
-        self._q_val = np.zeros(v_shape, dtype=np.float64)  # total E_sfa
+        self._q_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
+        self._q_val = np.zeros(v_shape, dtype=dftype)  # total E_sfa
 
         # Initialize remaining dead time from parameter
         if self.t_ref_remaining > 0.0:
             dt_q = brainstate.environ.get_dt()
             h = float(u.math.asarray(dt_q / u.ms))
             r_init = int(round(self.t_ref_remaining / h))
-            r_arr = np.full(v_shape, r_init, dtype=np.int32)
-            self.refractory_step_count.value = jnp.asarray(r_arr, dtype=jnp.int32)
+            r_arr = np.full(v_shape, r_init, dtype=ditype)
+            self.refractory_step_count.value = jnp.asarray(r_arr, dtype=ditype)
 
         # RNG state
         if self._rng_key is not None:
@@ -653,22 +655,22 @@ class pp_psc_delta(NESTNeuron):
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=jnp.int32)
+        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
         self.I_stim.value = braintools.init.param(
             braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
         )
 
         n_sfa = len(self.tau_sfa)
         v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        self._q_elems = np.zeros((n_sfa, *v_shape), dtype=np.float64) if n_sfa > 0 else None
-        self._q_val = np.zeros(v_shape, dtype=np.float64)
+        self._q_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
+        self._q_val = np.zeros(v_shape, dtype=dftype)
 
         if self.t_ref_remaining > 0.0:
             dt_q = brainstate.environ.get_dt()
             h = float(u.math.asarray(dt_q / u.ms))
             r_init = int(round(self.t_ref_remaining / h))
-            r_arr = np.full(v_shape, r_init, dtype=np.int32)
-            self.refractory_step_count.value = jnp.asarray(r_arr, dtype=jnp.int32)
+            r_arr = np.full(v_shape, r_init, dtype=ditype)
+            self.refractory_step_count.value = jnp.asarray(r_arr, dtype=ditype)
 
         if self._rng_key is not None:
             self._rng_state = self._rng_key
@@ -786,7 +788,7 @@ class pp_psc_delta(NESTNeuron):
         # Extract state variables as numpy arrays (V_m is relative to resting potential)
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape).copy()
         r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=np.int32), v_shape
+            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         ).copy()
         i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape).copy()
 
@@ -831,13 +833,13 @@ class pp_psc_delta(NESTNeuron):
 
         # Advance RNG state for this step
         self._rng_state, subkey = jax.random.split(self._rng_state)
-        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=np.float64)
+        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=dftype)
 
         # For Poisson mode (dead_time == 0), we need Poisson random draws
         # We'll compute them per-element in the loop if needed
 
         spike_mask = np.zeros(v_shape, dtype=bool)
-        n_spikes_arr = np.zeros(v_shape, dtype=np.int64)
+        n_spikes_arr = np.zeros(v_shape, dtype=ditype)
 
         for idx in np.ndindex(v_shape):
             # ---- Step 1: Update membrane potential via exact propagator ----
@@ -903,7 +905,7 @@ class pp_psc_delta(NESTNeuron):
 
         # ---- Step 4: Update state ----
         self.V.value = V * u.mV
-        self.refractory_step_count.value = jnp.asarray(r, dtype=jnp.int32)
+        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)

@@ -33,7 +33,8 @@ def _rkf45_ref_step(v, g_ex, g_in, g_sfa, g_rr, is_refractory, i_stim, dt, h0, p
     min_h = 1e-8
     t = 0.0
     h = max(h0, min_h)
-    y = np.asarray([v, g_ex, g_in, g_sfa, g_rr], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.asarray([v, g_ex, g_in, g_sfa, g_rr], dtype=dftype)
 
     def f(y_):
         v_ = y_[0]
@@ -58,7 +59,8 @@ def _rkf45_ref_step(v, g_ex, g_in, g_sfa, g_rr, is_refractory, i_stim, dt, h0, p
         dg_in = -g_in_ / p['tau_syn_in']
         dg_sfa = -g_sfa_ / p['tau_sfa']
         dg_rr = -g_rr_ / p['tau_rr']
-        return np.asarray([dv, dg_ex, dg_in, dg_sfa, dg_rr], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray([dv, dg_ex, dg_in, dg_sfa, dg_rr], dtype=dftype)
 
     while t < dt:
         h = max(min_h, min(h, dt - t))
@@ -141,7 +143,8 @@ class TestIAFCondExpSfaRr(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype)[0] > 0.0)
 
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:

@@ -350,11 +350,13 @@ class siegert_neuron(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x):
-        return np.asarray(u.math.asarray(x), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_ms(x):
-        return np.asarray(u.math.asarray(x / u.ms), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -362,7 +364,8 @@ class siegert_neuron(NESTNeuron):
 
     @staticmethod
     def _to_int_scalar(x, name: str):
-        arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])
@@ -392,22 +395,24 @@ class siegert_neuron(NESTNeuron):
         if step_idx in queue:
             queue[step_idx] = queue[step_idx] + value
         else:
-            queue[step_idx] = np.array(value, dtype=np.float64, copy=True)
+            dftype = brainstate.environ.dftype()
+            queue[step_idx] = np.array(value, dtype=dftype, copy=True)
 
     def _drain_delayed_queue(self, step_idx: int, state_shape):
         drift = self._delayed_drift_queue.pop(step_idx, None)
         diffusion = self._delayed_diffusion_queue.pop(step_idx, None)
 
         if drift is None:
-            drift = np.zeros(state_shape, dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            drift = np.zeros(state_shape, dtype=dftype)
         else:
-            drift = np.array(self._broadcast_to_state(np.asarray(drift, dtype=np.float64), state_shape), copy=True)
+            drift = np.array(self._broadcast_to_state(np.asarray(drift, dtype=dftype), state_shape), copy=True)
 
         if diffusion is None:
-            diffusion = np.zeros(state_shape, dtype=np.float64)
+            diffusion = np.zeros(state_shape, dtype=dftype)
         else:
             diffusion = np.array(
-                self._broadcast_to_state(np.asarray(diffusion, dtype=np.float64), state_shape),
+                self._broadcast_to_state(np.asarray(diffusion, dtype=dftype), state_shape),
                 copy=True,
             )
 
@@ -481,8 +486,9 @@ class siegert_neuron(NESTNeuron):
         return drift, diffusion, delay_steps
 
     def _accumulate_instant_events(self, events, state_shape):
-        drift = np.zeros(state_shape, dtype=np.float64)
-        diffusion = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        drift = np.zeros(state_shape, dtype=dftype)
+        diffusion = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             d_i, s_i, delay_steps = self._event_to_drift_diffusion(
                 ev,
@@ -496,8 +502,9 @@ class siegert_neuron(NESTNeuron):
         return drift, diffusion
 
     def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        drift_now = np.zeros(state_shape, dtype=np.float64)
-        diffusion_now = np.zeros(state_shape, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        drift_now = np.zeros(state_shape, dtype=dftype)
+        diffusion_now = np.zeros(state_shape, dtype=dftype)
 
         for ev in self._coerce_events(events):
             d_i, s_i, delay_steps = self._event_to_drift_diffusion(
@@ -534,9 +541,11 @@ class siegert_neuron(NESTNeuron):
         rate_np = self._to_numpy(rate)
 
         self.rate = brainstate.ShortTermState(rate_np)
-        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=np.float64, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=np.int64))
+        dftype = brainstate.environ.dftype()
+        self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
+        ditype = brainstate.environ.ditype()
+        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
 
         self._delayed_drift_queue = {}
         self._delayed_diffusion_queue = {}
@@ -546,7 +555,8 @@ class siegert_neuron(NESTNeuron):
         mid = 0.5 * (a + b)
         half = 0.5 * (b - a)
         pts = mid + half * _GAUSS_NODES
-        vals = np.asarray([func(float(x)) for x in pts], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        vals = np.asarray([func(float(x)) for x in pts], dtype=dftype)
         return float(half * np.sum(_GAUSS_WEIGHTS * vals))
 
     @staticmethod
@@ -718,7 +728,8 @@ class siegert_neuron(NESTNeuron):
         theta: np.ndarray,
         v_reset: np.ndarray,
     ):
-        out = np.empty_like(mu, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        out = np.empty_like(mu, dtype=dftype)
         for idx in np.ndindex(mu.shape):
             out[idx] = cls._siegert_scalar(
                 float(mu[idx]),
@@ -954,6 +965,8 @@ class siegert_neuron(NESTNeuron):
 
         - Delayed events use integer step delays (not continuous time).
         - Outgoing diffusion coefficients are updated post-integration (not mid-step).
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         - No iterative waveform relaxation (NEST's WFR mode is not implemented).
 
         Examples
@@ -1011,7 +1024,7 @@ class siegert_neuron(NESTNeuron):
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
 
         state_shape = self.rate.value.shape
-        step_idx = int(np.asarray(self._step_count.value, dtype=np.int64).reshape(-1)[0])
+        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         drift_delayed, diffusion_delayed = self._drain_delayed_queue(step_idx, state_shape)
         d_now, s_now = self._schedule_delayed_events(
@@ -1056,8 +1069,8 @@ class siegert_neuron(NESTNeuron):
         self.rate.value = rate_new
 
         # NEST non-WFR update emits coefficient arrays overwritten by final rate.
-        self.delayed_rate.value = np.array(rate_new, dtype=np.float64, copy=True)
-        self.instant_rate.value = np.array(rate_new, dtype=np.float64, copy=True)
+        self.delayed_rate.value = np.array(rate_new, dtype=dftype, copy=True)
+        self.instant_rate.value = np.array(rate_new, dtype=dftype, copy=True)
 
-        self._step_count.value = np.asarray(step_idx + 1, dtype=np.int64)
+        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

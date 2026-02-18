@@ -35,7 +35,8 @@ def _to_ms_scalar(value):
         return None
     if isinstance(value, u.Quantity):
         value = value / u.ms
-    arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
     if arr.size != 1:
         raise ValueError('Expected scalar time value.')
     return float(arr[0])
@@ -54,7 +55,9 @@ def _run_bp_vm_trace(simtime_ms, dt_ms, mm_params, i_e_pA):
             with brainstate.environ.context(t=step * dt):
                 neuron.update()
                 vm = float(neuron.V.value[0] / u.mV)
-                mm.update({'V_m': np.array([vm], dtype=np.float64)}, senders=np.array([1], dtype=np.int64))
+                dftype = brainstate.environ.dftype()
+                ditype = brainstate.environ.ditype()
+                mm.update({'V_m': np.array([vm], dtype=dftype)}, senders=np.array([1], dtype=ditype))
 
     return mm.events
 
@@ -83,10 +86,12 @@ def _run_nest_vm_trace(simtime_ms, dt_ms, mm_params, i_e_pA):
     nest.Simulate(simtime_ms)
 
     ev = mm.events
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
     return {
-        'times': np.asarray(ev['times'], dtype=np.float64),
-        'senders': np.asarray(ev['senders'], dtype=np.int64),
-        'V_m': np.asarray(ev['V_m'], dtype=np.float64),
+        'times': np.asarray(ev['times'], dtype=dftype),
+        'senders': np.asarray(ev['senders'], dtype=ditype),
+        'V_m': np.asarray(ev['V_m'], dtype=dftype),
     }
 
 
@@ -106,7 +111,9 @@ class TestMultimeter(unittest.TestCase):
             for step in range(n_steps):
                 stamp = (step + 1) * self.dt_ms
                 with brainstate.environ.context(t=step * self.dt):
-                    mm.update({'x': np.array([stamp], dtype=np.float64)}, senders=np.array([sender], dtype=np.int64))
+                    dftype = brainstate.environ.dftype()
+                    ditype = brainstate.environ.ditype()
+                    mm.update({'x': np.array([stamp], dtype=dftype)}, senders=np.array([sender], dtype=ditype))
 
     def test_default_parameters(self):
         mm = multimeter()
@@ -130,10 +137,12 @@ class TestMultimeter(unittest.TestCase):
         self._run_signal(mm, simtime_ms=3.1, sender=7)
         ev = mm.events
 
-        expected_times = np.array([0.8, 1.1, 1.4, 1.7, 2.0, 2.3, 2.6], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        expected_times = np.array([0.8, 1.1, 1.4, 1.7, 2.0, 2.3, 2.6], dtype=dftype)
         npt.assert_allclose(ev['times'], expected_times, atol=1e-12)
         npt.assert_allclose(ev['x'], expected_times, atol=1e-12)
-        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 7, dtype=np.int64))
+        ditype = brainstate.environ.ditype()
+        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 7, dtype=ditype))
 
     def test_origin_shifts_window_not_sampling_grid(self):
         mm = multimeter(
@@ -147,23 +156,26 @@ class TestMultimeter(unittest.TestCase):
         self._run_signal(mm, simtime_ms=3.1, sender=9)
         ev = mm.events
 
-        expected_times = np.array([1.7, 2.0, 2.3, 2.6, 2.9], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        expected_times = np.array([1.7, 2.0, 2.3, 2.6, 2.9], dtype=dftype)
         npt.assert_allclose(ev['times'], expected_times, atol=1e-12)
         npt.assert_allclose(ev['x'], expected_times, atol=1e-12)
-        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 9, dtype=np.int64))
+        ditype = brainstate.environ.ditype()
+        npt.assert_array_equal(ev['senders'], np.full(expected_times.shape, 9, dtype=ditype))
 
     def test_one_step_delivery_lag_and_flush(self):
         mm = multimeter(record_from=['x'], interval=0.1 * u.ms)
         self._run_signal(mm, simtime_ms=1.0)
 
         no_flush = mm.events
-        expected_no_flush = np.arange(0.1, 1.0, 0.1, dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        expected_no_flush = np.arange(0.1, 1.0, 0.1, dtype=dftype)
         npt.assert_allclose(no_flush['times'], expected_no_flush, atol=1e-12)
         npt.assert_allclose(no_flush['x'], expected_no_flush, atol=1e-12)
 
         with brainstate.environ.context(dt=self.dt):
             flushed = mm.flush()
-        expected_flush = np.arange(0.1, 1.1, 0.1, dtype=np.float64)
+        expected_flush = np.arange(0.1, 1.1, 0.1, dtype=dftype)
         npt.assert_allclose(flushed['times'], expected_flush, atol=1e-12)
         npt.assert_allclose(flushed['x'], expected_flush, atol=1e-12)
 
@@ -171,7 +183,8 @@ class TestMultimeter(unittest.TestCase):
         mm = multimeter(record_from=['x'], interval=0.1 * u.ms, offset=0.0 * u.ms)
         with brainstate.environ.context(dt=self.dt):
             with brainstate.environ.context(t=0.0 * u.ms):
-                mm.update({'x': np.array([0.1], dtype=np.float64)})
+                dftype = brainstate.environ.dftype()
+                mm.update({'x': np.array([0.1], dtype=dftype)})
 
         with self.assertRaises(ValueError):
             mm.interval = 0.2 * u.ms

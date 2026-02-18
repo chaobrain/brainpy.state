@@ -118,8 +118,9 @@ def _reference_urbanczik_weight_trace(spike_times_ms, history_entries, params, t
     tau_syn_in = float(target_params['tau_syn_in'])
     stdp_eps = float(target_params['stdp_eps'])
 
-    weights = np.empty((len(spike_times_ms),), dtype=np.float64)
-    tau_s_used = np.empty((len(spike_times_ms),), dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    weights = np.empty((len(spike_times_ms),), dtype=dftype)
+    tau_s_used = np.empty((len(spike_times_ms),), dtype=dftype)
 
     hist = list(history_entries)
     for i, t_spike in enumerate(spike_times_ms):
@@ -203,7 +204,8 @@ def _run_nest_urbanczik_case():
         'theta': -55.0,
     }
 
-    pre_syn_spike_times = np.array([1.0, 98.0], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    pre_syn_spike_times = np.array([1.0, 98.0], dtype=dftype)
     init_w = 100.0
 
     nest.set_verbosity('M_WARNING')
@@ -263,9 +265,9 @@ def _run_nest_urbanczik_case():
         'init_weight': float(init_w),
         'pre_syn_spike_times': pre_syn_spike_times,
         'mm_events': mm_events,
-        'wr_times': np.asarray(wr_events['times'], dtype=np.float64),
-        'wr_weights': np.asarray(wr_events['weights'], dtype=np.float64),
-        'soma_spike_times': np.asarray(sr_events['times'], dtype=np.float64),
+        'wr_times': np.asarray(wr_events['times'], dtype=dftype),
+        'wr_weights': np.asarray(wr_events['weights'], dtype=dftype),
+        'soma_spike_times': np.asarray(sr_events['times'], dtype=dftype),
     }
 
 
@@ -274,8 +276,9 @@ def _build_history_from_nest_trace(run):
     nrn_params = run['nrn_params']
     mm_events = run['mm_events']
 
-    t = np.asarray(mm_events['times'], dtype=np.float64)
-    v_w = np.asarray(mm_events['V_m.p'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    t = np.asarray(mm_events['times'], dtype=dftype)
+    v_w = np.asarray(mm_events['V_m.p'], dtype=dftype)
 
     g_D = float(nrn_params['g_sp'])
     g_L_soma = float(nrn_params['soma']['g_L'])
@@ -290,8 +293,8 @@ def _build_history_from_nest_trace(run):
     rate = phi_max / (1.0 + k * np.exp(beta * (theta - v_w_star)))
     h = 15.0 * beta / (1.0 + np.exp(-beta * (theta - v_w_star)) / k)
 
-    n_spikes = np.zeros_like(t, dtype=np.float64)
-    soma_spike_times = np.asarray(run['soma_spike_times'], dtype=np.float64)
+    n_spikes = np.zeros_like(t, dtype=dftype)
+    soma_spike_times = np.asarray(run['soma_spike_times'], dtype=dftype)
     if soma_spike_times.size > 0:
         idx = np.nonzero(np.isin(np.around(t, 4), np.around(soma_spike_times, 4)))[0]
         np.add.at(n_spikes, idx, 1.0)
@@ -437,7 +440,8 @@ class TestUrbanczikSynapse(unittest.TestCase):
             'tau_syn_in': 6.5,
             'stdp_eps': 1.0e-6,
         }
-        pre_spikes = np.asarray([2.0, 5.5, 9.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([2.0, 5.5, 9.0], dtype=dftype)
 
         syn = urbanczik_synapse(
             weight=params['weight'],
@@ -455,8 +459,8 @@ class TestUrbanczikSynapse(unittest.TestCase):
         )
 
         events = syn.simulate_pre_spike_train(pre_spikes, target=target)
-        got_weights = np.asarray([ev['weight'] for ev in events], dtype=np.float64)
-        got_tau_s = np.asarray([ev['tau_s_ms'] for ev in events], dtype=np.float64)
+        got_weights = np.asarray([ev['weight'] for ev in events], dtype=dftype)
+        got_tau_s = np.asarray([ev['tau_s_ms'] for ev in events], dtype=dftype)
 
         ref = _reference_urbanczik_weight_trace(pre_spikes, target_ref_hist, params, target_params)
 
@@ -517,7 +521,8 @@ class TestUrbanczikSynapse(unittest.TestCase):
         )
 
         local_events = syn.simulate_pre_spike_train(run['wr_times'], target=target)
-        local_weights = np.asarray([e['weight'] for e in local_events], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        local_weights = np.asarray([e['weight'] for e in local_events], dtype=dftype)
 
         self.assertEqual(local_weights.shape, run['wr_weights'].shape)
         npt.assert_allclose(local_weights, run['wr_weights'], atol=1e-12, rtol=0.0)

@@ -360,7 +360,8 @@ class TestSubthresholdDynamics(unittest.TestCase):
                 (2, -3.0 * u.pA),
             ])
 
-            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
             # After step 0: i_syn[0] should be 10 (decayed from 0 + 10)
             # i_syn[1] should be -3
             self.assertAlmostEqual(i_syn[0, 0], 10.0, places=8)
@@ -389,7 +390,8 @@ class TestSubthresholdDynamics(unittest.TestCase):
             for k in range(1, 11):
                 self._step(neuron, k)
 
-            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
 
             expected_0 = 10.0 * math.exp(-1.0 / tau_syn[0])
             expected_1 = 8.0 * math.exp(-1.0 / tau_syn[1])
@@ -411,7 +413,8 @@ class TestSubthresholdDynamics(unittest.TestCase):
             # Use add_delta_input (not spike_events)
             self._step(neuron, 0, delta=7.0 * u.pA)
 
-            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
             # delta input should go to receptor 1 (index 0)
             self.assertAlmostEqual(i_syn[0, 0], 7.0, places=8)
             self.assertAlmostEqual(i_syn[0, 1], 0.0, places=8)
@@ -834,7 +837,8 @@ class TestReferenceTrace(unittest.TestCase):
                     se = [(rec, w * u.pA) for rec, w in w_seq[k]]
                 self._step(neuron, k, x=x_pA * u.pA, spike_events=se)
                 v_model.append(float((neuron.V.value / u.mV)[0]))
-                isyn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                isyn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
                 isyn_model.append(isyn[0, 0])
 
         for k in range(n_steps):
@@ -894,7 +898,8 @@ class TestReferenceTrace(unittest.TestCase):
                     se = [(rec, w * u.pA) for rec, w in w_seq[k]]
                 self._step(neuron, k, x=x_pA * u.pA, spike_events=se)
                 v_model.append(float((neuron.V.value / u.mV)[0]))
-                isyn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                isyn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
                 isyn_model_0.append(isyn[0, 0])
                 isyn_model_1.append(isyn[0, 1])
 
@@ -1212,7 +1217,8 @@ class TestMultisynapseSpecific(unittest.TestCase):
             # Only inject to receptor 2
             self._step(neuron, 0, spike_events=[(2, 15.0 * u.pA)])
 
-            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
             self.assertAlmostEqual(i_syn[0, 0], 0.0, places=10,
                                    msg="Receptor 1 should have zero current")
             self.assertAlmostEqual(i_syn[0, 1], 15.0, places=8,
@@ -1242,7 +1248,8 @@ class TestMultisynapseSpecific(unittest.TestCase):
             for k in range(1, 21):
                 self._step(neuron, k)
 
-            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
 
             for j, tau in enumerate(tau_syn):
                 expected = 100.0 * math.exp(-2.0 / tau)
@@ -1274,8 +1281,9 @@ class TestMultisynapseSpecific(unittest.TestCase):
                 {'receptor_type': 2, 'weight': 5.0 * u.pA},
             ])
 
-            i_tuple = np.asarray(u.math.asarray(n_tuple.i_syn.value / u.pA), dtype=np.float64)
-            i_dict = np.asarray(u.math.asarray(n_dict.i_syn.value / u.pA), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            i_tuple = np.asarray(u.math.asarray(n_tuple.i_syn.value / u.pA), dtype=dftype)
+            i_dict = np.asarray(u.math.asarray(n_dict.i_syn.value / u.pA), dtype=dftype)
 
             np.testing.assert_allclose(i_tuple, i_dict, atol=1e-12)
 

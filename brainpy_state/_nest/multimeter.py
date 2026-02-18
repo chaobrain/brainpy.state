@@ -270,8 +270,9 @@ class multimeter(NESTDevice):
        ...         with brainstate.environ.context(t=k * 0.1 * u.ms):
        ...             neuron.update()
        ...             vm = float(neuron.V.value[0] / u.mV)
+       dftype = brainstate.environ.dftype()
        ...             _ = mm.update(
-       ...                 {'V_m': np.array([vm], dtype=np.float64)},
+       ...                 {'V_m': np.array([vm], dtype=dftype)},
        ...                 senders=np.array([1]),
        ...             )
        ...     events = mm.flush()
@@ -361,14 +362,16 @@ class multimeter(NESTDevice):
 
     @property
     def events(self) -> dict[str, np.ndarray]:
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         out = {
-            'times': np.asarray(self._events_times, dtype=np.float64),
-            'senders': np.asarray(self._events_senders, dtype=np.int64),
+            'times': np.asarray(self._events_times, dtype=dftype),
+            'senders': np.asarray(self._events_senders, dtype=ditype),
         }
         if self.time_in_steps:
-            out['offsets'] = np.zeros(out['times'].shape, dtype=np.float64)
+            out['offsets'] = np.zeros(out['times'].shape, dtype=dftype)
         for key in self._record_from:
-            out[key] = np.asarray(self._events_values[key], dtype=np.float64)
+            out[key] = np.asarray(self._events_values[key], dtype=dftype)
         return out
 
     def get(self, key: str = 'events'):
@@ -492,7 +495,8 @@ class multimeter(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -583,7 +587,8 @@ class multimeter(NESTDevice):
     def _to_float_array(x, name: str) -> np.ndarray:
         if isinstance(x, u.Quantity):
             x = u.get_mantissa(x)
-        arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
         if arr.size == 0:
             raise ValueError(f'Recordable "{name}" must contain at least one value.')
         return arr
@@ -606,7 +611,8 @@ class multimeter(NESTDevice):
             if n_items is None:
                 n_items = arr.size
             elif arr.size == 1 and n_items > 1:
-                arr = np.full((n_items,), arr[0], dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                arr = np.full((n_items,), arr[0], dtype=dftype)
             elif arr.size != n_items:
                 raise ValueError(f'All recordables must have the same size, got "{key}" with size {arr.size}.')
             values[key] = arr
@@ -615,11 +621,12 @@ class multimeter(NESTDevice):
             n_items = 0
 
         if senders is None:
-            sender_arr = np.ones((n_items,), dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            sender_arr = np.ones((n_items,), dtype=ditype)
         else:
-            sender_arr = np.asarray(u.math.asarray(senders), dtype=np.int64).reshape(-1)
+            sender_arr = np.asarray(u.math.asarray(senders), dtype=ditype).reshape(-1)
             if sender_arr.size == 1 and n_items > 1:
-                sender_arr = np.full((n_items,), sender_arr[0], dtype=np.int64)
+                sender_arr = np.full((n_items,), sender_arr[0], dtype=ditype)
             elif sender_arr.size != n_items:
                 raise ValueError(
                     f'senders size ({sender_arr.size}) does not match recordable size ({n_items}).'

@@ -734,7 +734,8 @@ class volume_transmitter(NESTDevice):
             counts = np.where(spike_arr > 0.0, mult_arr, 0)
 
         if stamp_steps is None:
-            stamp_arr = np.full((n_items,), stamp_now, dtype=np.int64)
+            ditype = brainstate.environ.ditype()
+            stamp_arr = np.full((n_items,), stamp_now, dtype=ditype)
         else:
             stamp_arr = self._to_int_array(stamp_steps, name='stamp_steps', size=n_items)
             if np.any(stamp_arr < stamp_now):
@@ -751,7 +752,8 @@ class volume_transmitter(NESTDevice):
     def _to_ms_scalar(value, name: str, allow_inf: bool = False) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value / u.ms)
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar time value.')
         val = float(arr[0])
@@ -761,7 +763,8 @@ class volume_transmitter(NESTDevice):
 
     @staticmethod
     def _to_int_scalar(value, name: str) -> int:
-        arr = np.asarray(u.math.asarray(value), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be a scalar integer value.')
         val = float(arr[0])
@@ -815,7 +818,8 @@ class volume_transmitter(NESTDevice):
     def _to_float_array(x, name: str) -> np.ndarray:
         if isinstance(x, u.Quantity):
             x = u.get_mantissa(x)
-        arr = np.asarray(u.math.asarray(x), dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
         if arr.ndim != 1:
             raise ValueError(f'{name} must be a scalar or 1D array.')
         return arr

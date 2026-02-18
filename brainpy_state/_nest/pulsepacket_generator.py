@@ -324,7 +324,8 @@ class pulsepacket_generator(NESTDevice):
         if self.sdev_tolerance <= 0.0:
             raise ValueError('sdev_tolerance must be positive.')
 
-        self._pulse_times_ms = np.asarray([], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        self._pulse_times_ms = np.asarray([], dtype=dftype)
         if pulse_times is not None:
             self._pulse_times_ms = np.sort(self._to_time_array_ms(pulse_times))
 
@@ -349,9 +350,10 @@ class pulsepacket_generator(NESTDevice):
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
         if isinstance(value, u.Quantity):
-            arr = np.asarray(value.to_decimal(u.ms), dtype=np.float64)
+            dftype = brainstate.environ.dftype()
+            arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
@@ -361,16 +363,18 @@ class pulsepacket_generator(NESTDevice):
         if not isinstance(values, u.Quantity):
             arr0 = np.asarray(values)
             if arr0.size == 0:
-                return np.asarray([], dtype=np.float64)
+                dftype = brainstate.environ.dftype()
+                return np.asarray([], dtype=dftype)
         if isinstance(values, u.Quantity):
             arr = values.to_decimal(u.ms)
         else:
-            arr = u.math.asarray(values, dtype=jnp.float64)
-        return np.asarray(arr, dtype=np.float64).reshape(-1)
+            arr = u.math.asarray(values, dtype=dftype)
+        return np.asarray(arr, dtype=dftype).reshape(-1)
 
     @staticmethod
     def _to_scalar_int(value: ArrayLike, *, name: str) -> int:
-        arr = np.asarray(u.math.asarray(value, dtype=jnp.float64), dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         scalar = float(arr.reshape(()))
@@ -608,7 +612,8 @@ class pulsepacket_generator(NESTDevice):
             new_pulse_times = self._to_time_array_ms(pulse_times)
 
         if pulse_times is not _UNSET or need_new_pulse:
-            new_pulse_times = np.sort(np.asarray(new_pulse_times, dtype=np.float64).reshape(-1))
+            dftype = brainstate.environ.dftype()
+            new_pulse_times = np.sort(np.asarray(new_pulse_times, dtype=dftype).reshape(-1))
             self._pulse_times_ms = new_pulse_times
             self._clear_spike_queues()
 
@@ -662,7 +667,8 @@ class pulsepacket_generator(NESTDevice):
         TypeError
             If payload cannot be cast to numeric ``float64`` values.
         """
-        data = np.asarray(input_param, dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        data = np.asarray(input_param, dtype=dftype).reshape(-1)
         if data.size == 0:
             return
         if data.size < 3:
@@ -692,10 +698,11 @@ class pulsepacket_generator(NESTDevice):
                     size=(self._num_generators, self.activity),
                 )
             else:
+                dftype = brainstate.environ.dftype()
                 sampled = np.full(
                     (self._num_generators, self.activity),
                     center,
-                    dtype=np.float64,
+                    dtype=dftype,
                 )
 
             for i in range(self._num_generators):
@@ -757,7 +764,8 @@ class pulsepacket_generator(NESTDevice):
             (self._start_center_idx == self._pulse_times_ms.size and self._all_queues_empty())
             or (not self._is_active(curr_step))
         ):
-            return jnp.zeros(self.varshape, dtype=jnp.int64)
+            ditype = brainstate.environ.ditype()
+            return jnp.zeros(self.varshape, dtype=ditype)
 
         curr_tic = self._ms_to_tics(curr_t_ms)
 
@@ -771,7 +779,7 @@ class pulsepacket_generator(NESTDevice):
         self._generate_new_pulses(curr_tic)
 
         step_limit = curr_step + 1
-        counts = np.zeros(self._num_generators, dtype=np.int64)
+        counts = np.zeros(self._num_generators, dtype=ditype)
         for i in range(self._num_generators):
             q = self._spike_queues[i]
             n = 0
@@ -780,4 +788,4 @@ class pulsepacket_generator(NESTDevice):
                 n += 1
             counts[i] = n
 
-        return jnp.asarray(counts.reshape(self.varshape), dtype=jnp.int64)
+        return jnp.asarray(counts.reshape(self.varshape), dtype=ditype)

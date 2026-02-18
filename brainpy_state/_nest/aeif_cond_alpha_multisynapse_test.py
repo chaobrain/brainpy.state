@@ -46,7 +46,8 @@ def _rhs(y, is_refractory, i_stim, p):
                                    ) / p['C_m']
     dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
 
-    dy = np.empty_like(y, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    dy = np.empty_like(y, dtype=dftype)
     dy[0] = dv
     dy[1] = dw
     dy[2::2] = -dg / p['tau_syn']
@@ -58,7 +59,8 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
     min_h = 1e-8
     t = 0.0
     h = max(state['h'], min_h)
-    y = np.asarray(state['y'], dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    y = np.asarray(state['y'], dtype=dftype)
     r = int(state['r'])
     spike_count = 0
     iters = 0
@@ -142,7 +144,8 @@ def _reference_step(state, p, x_next, w_step, dt_ms):
 
 
 def _parse_event_weights(events, n_receptors):
-    out = np.zeros(n_receptors, dtype=np.float64)
+    dftype = brainstate.environ.dftype()
+    out = np.zeros(n_receptors, dtype=dftype)
     if events is None:
         return out
 
@@ -156,7 +159,7 @@ def _parse_event_weights(events, n_receptors):
         else:
             receptor, weight = ev
             receptor = int(receptor)
-        out[receptor - 1] += float(np.asarray(u.math.asarray(weight / u.nS), dtype=np.float64))
+        out[receptor - 1] += float(np.asarray(u.math.asarray(weight / u.nS), dtype=dftype))
     return out
 
 
@@ -167,7 +170,8 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
 
     @staticmethod
     def _is_spike(spk):
-        return bool(np.asarray(u.math.asarray(spk), dtype=np.float64).reshape(-1)[0] > 0.0)
+        dftype = brainstate.environ.dftype()
+        return bool(np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)[0] > 0.0)
 
     @staticmethod
     def _is_nest_available():
@@ -249,7 +253,8 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
                     (3, 1.5 * u.nS),
                 ],
             )
-            dg = np.asarray(neuron.dg.value, dtype=np.float64)[0]
+            dftype = brainstate.environ.dftype()
+            dg = np.asarray(neuron.dg.value, dtype=dftype)[0]
             self.assertAlmostEqual(dg[0], math.e / 2.0 * 2.0, delta=1e-12)
             self.assertAlmostEqual(dg[1], math.e / 5.0 * 0.5, delta=1e-12)
             self.assertAlmostEqual(dg[2], math.e / 10.0 * 1.5, delta=1e-12)
@@ -290,8 +295,9 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.V.value, 0.1 * u.mV, atol=1e-11 * u.mV))
 
     def test_reference_trace_matches_nest_update_logic(self):
-        tau_syn = np.asarray([0.2, 0.5, 2.0, 10.0], dtype=np.float64)
-        E_rev = np.asarray([0.0, 0.0, -85.0, 20.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        tau_syn = np.asarray([0.2, 0.5, 2.0, 10.0], dtype=dftype)
+        E_rev = np.asarray([0.0, 0.0, -85.0, 20.0], dtype=dftype)
 
         with brainstate.environ.context(dt=self.dt):
             neuron = aeif_cond_alpha_multisynapse(
@@ -315,12 +321,12 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
                 w_initializer=braintools.init.Constant(5.0 * u.pA),
             )
             neuron.init_state()
-            neuron.dg.value = np.asarray([[0.20, 0.01, 0.05, 0.03]], dtype=np.float64)
-            neuron.g.value = np.asarray([[0.10, 0.20, 0.30, 0.00]], dtype=np.float64) * u.nS
+            neuron.dg.value = np.asarray([[0.20, 0.01, 0.05, 0.03]], dtype=dftype)
+            neuron.g.value = np.asarray([[0.10, 0.20, 0.30, 0.00]], dtype=dftype) * u.nS
 
             n_steps = 80
-            x_seq = np.zeros(n_steps, dtype=np.float64)
-            x_seq[[1, 5, 9, 16, 30, 45]] = np.asarray([25.0, -30.0, 40.0, -10.0, 50.0, -20.0], dtype=np.float64)
+            x_seq = np.zeros(n_steps, dtype=dftype)
+            x_seq[[1, 5, 9, 16, 30, 45]] = np.asarray([25.0, -30.0, 40.0, -10.0, 50.0, -20.0], dtype=dftype)
 
             step_events = {
                 0: [(1, 1.5 * u.nS), (3, 0.8 * u.nS)],
@@ -352,7 +358,7 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
                 'g0': math.e / tau_syn,
             }
             ref_state = {
-                'y': np.asarray([-68.0, 5.0, 0.20, 0.10, 0.01, 0.20, 0.05, 0.30, 0.03, 0.00], dtype=np.float64),
+                'y': np.asarray([-68.0, 5.0, 0.20, 0.10, 0.01, 0.20, 0.05, 0.30, 0.03, 0.00], dtype=dftype),
                 'r': 0,
                 'h': float(self.dt / u.ms),
                 'i_stim': 0.0,
@@ -371,9 +377,9 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
 
                 self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['y'][0], delta=2e-6)
                 self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['y'][1], delta=2e-6)
-                npt.assert_allclose(np.asarray(neuron.dg.value, dtype=np.float64)[0], ref_state['y'][2::2], atol=2e-6,
+                npt.assert_allclose(np.asarray(neuron.dg.value, dtype=dftype)[0], ref_state['y'][2::2], atol=2e-6,
                                     rtol=0.0)
-                npt.assert_allclose(np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=np.float64)[0],
+                npt.assert_allclose(np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=dftype)[0],
                                     ref_state['y'][3::2], atol=2e-6, rtol=0.0)
                 self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=2e-6)
@@ -392,10 +398,11 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
 
         dt_ms = 0.1
         n_steps = 300
-        tau_syn = np.asarray([0.2, 2.0, 10.0], dtype=np.float64)
-        e_rev = np.asarray([0.0, -85.0, 20.0], dtype=np.float64)
-        delays = np.asarray([2.0, 5.0, 12.0], dtype=np.float64)
-        weights = np.asarray([1.0, 0.7, 1.2], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        tau_syn = np.asarray([0.2, 2.0, 10.0], dtype=dftype)
+        e_rev = np.asarray([0.0, -85.0, 20.0], dtype=dftype)
+        delays = np.asarray([2.0, 5.0, 12.0], dtype=dftype)
+        weights = np.asarray([1.0, 0.7, 1.2], dtype=dftype)
 
         params = {
             'V_peak': 1000.0,
@@ -433,12 +440,12 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
         nest.Simulate(n_steps * dt_ms)
 
         events = mm.get('events')
-        nest_v = np.asarray(events['V_m'], dtype=np.float64)
-        nest_w = np.asarray(events['w'], dtype=np.float64)
-        nest_g1 = np.asarray(events['g_1'], dtype=np.float64)
-        nest_g2 = np.asarray(events['g_2'], dtype=np.float64)
-        nest_g3 = np.asarray(events['g_3'], dtype=np.float64)
-        nest_times = np.asarray(events['times'], dtype=np.float64)
+        nest_v = np.asarray(events['V_m'], dtype=dftype)
+        nest_w = np.asarray(events['w'], dtype=dftype)
+        nest_g1 = np.asarray(events['g_1'], dtype=dftype)
+        nest_g2 = np.asarray(events['g_2'], dtype=dftype)
+        nest_g3 = np.asarray(events['g_3'], dtype=dftype)
+        nest_times = np.asarray(events['times'], dtype=dftype)
 
         step_events = {}
         for ridx, (dly, w) in enumerate(zip(delays, weights), start=1):
@@ -469,16 +476,16 @@ class TestAEIFCondAlphaMultisynapse(unittest.TestCase):
             )
             neuron.init_state()
 
-            bp_v = np.empty(n_steps, dtype=np.float64)
-            bp_w = np.empty(n_steps, dtype=np.float64)
-            bp_g = np.empty((n_steps, 3), dtype=np.float64)
+            bp_v = np.empty(n_steps, dtype=dftype)
+            bp_w = np.empty(n_steps, dtype=dftype)
+            bp_g = np.empty((n_steps, 3), dtype=dftype)
 
             for k in range(n_steps):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):
                     neuron.update(x=0.0 * u.pA, spike_events=step_events.get(k, None))
                 bp_v[k] = float((neuron.V.value / u.mV)[0])
                 bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_g[k, :] = np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=np.float64)[0]
+                bp_g[k, :] = np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=dftype)[0]
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         self.assertTrue(np.all(bp_indices >= 0))

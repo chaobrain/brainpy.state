@@ -39,7 +39,8 @@ class _HistEntry:
 
 class _FakeJonkeTarget:
     def __init__(self, post_spike_times_ms, tau_minus, stdp_eps=1.0e-6):
-        times = np.asarray(post_spike_times_ms, dtype=np.float64).reshape(-1)
+        dftype = brainstate.environ.dftype()
+        times = np.asarray(post_spike_times_ms, dtype=dftype).reshape(-1)
         self.history = [_HistEntry(float(t), 0) for t in np.sort(times)]
         self.tau_minus = float(tau_minus)
         self.stdp_eps = float(stdp_eps)
@@ -88,8 +89,9 @@ def _depress_ref(w, kminus, p):
 
 
 def _jonke_reference_weight_trace(pre_spike_times_ms, post_spike_times_ms, params, stdp_eps=1.0e-6):
-    pre = np.asarray(pre_spike_times_ms, dtype=np.float64).reshape(-1)
-    post = np.asarray(post_spike_times_ms, dtype=np.float64).reshape(-1)
+    dftype = brainstate.environ.dftype()
+    pre = np.asarray(pre_spike_times_ms, dtype=dftype).reshape(-1)
+    post = np.asarray(post_spike_times_ms, dtype=dftype).reshape(-1)
 
     w = float(params['weight'])
     kplus = float(params['Kplus'])
@@ -107,8 +109,8 @@ def _jonke_reference_weight_trace(pre_spike_times_ms, post_spike_times_ms, param
         'Wmax': float(params['Wmax']),
     }
 
-    weights = np.empty((pre.size,), dtype=np.float64)
-    kplus_state = np.empty((pre.size,), dtype=np.float64)
+    weights = np.empty((pre.size,), dtype=dftype)
+    kplus_state = np.empty((pre.size,), dtype=dftype)
 
     for i, t_pre in enumerate(pre):
         t_hist_lo = t_last - delay
@@ -239,8 +241,9 @@ class TestJonkeSynapse(unittest.TestCase):
             syn.send(t_spike_ms=11.0, target=target, multiplicity=-1.0)
 
     def test_send_ordering_matches_reference_trace(self):
-        pre = np.asarray([10.0, 18.0, 25.0, 37.0, 50.0], dtype=np.float64)
-        post = np.asarray([5.0, 12.0, 20.0, 23.0, 40.0], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre = np.asarray([10.0, 18.0, 25.0, 37.0, 50.0], dtype=dftype)
+        post = np.asarray([5.0, 12.0, 20.0, 23.0, 40.0], dtype=dftype)
 
         params = {
             'weight': 2.0,
@@ -275,8 +278,8 @@ class TestJonkeSynapse(unittest.TestCase):
         target = _FakeJonkeTarget(post, tau_minus=params['tau_minus'])
 
         events = syn.simulate_pre_spike_train(pre, target=target)
-        got_weights = np.asarray([e['weight'] for e in events], dtype=np.float64)
-        got_kplus = np.asarray([e['Kplus_post'] for e in events], dtype=np.float64)
+        got_weights = np.asarray([e['weight'] for e in events], dtype=dftype)
+        got_kplus = np.asarray([e['Kplus_post'] for e in events], dtype=dftype)
 
         ref_w, ref_kplus, ref_t_last, ref_kplus_trace = _jonke_reference_weight_trace(pre, post, params)
 
@@ -338,11 +341,12 @@ class TestJonkeSynapse(unittest.TestCase):
         all_spikes = spike_recorder.events
         pre_gid = pre_neuron.tolist()[0]
         post_gid = post_neuron.tolist()[0]
-        pre_spikes = np.asarray(all_spikes['times'][all_spikes['senders'] == pre_gid], dtype=np.float64)
-        post_spikes = np.asarray(all_spikes['times'][all_spikes['senders'] == post_gid], dtype=np.float64)
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray(all_spikes['times'][all_spikes['senders'] == pre_gid], dtype=dftype)
+        post_spikes = np.asarray(all_spikes['times'][all_spikes['senders'] == post_gid], dtype=dftype)
 
         wr_events = nest.GetStatus(weight_recorder)[0]['events']
-        nest_weights = np.asarray(wr_events['weights'], dtype=np.float64)
+        nest_weights = np.asarray(wr_events['weights'], dtype=dftype)
 
         syn = jonke_synapse(
             weight=synapse_parameters['weight'],
@@ -360,13 +364,13 @@ class TestJonkeSynapse(unittest.TestCase):
         )
         target = _FakeJonkeTarget(post_spikes, tau_minus=neuron_parameters['tau_minus'])
         local_events = syn.simulate_pre_spike_train(pre_spikes, target=target)
-        local_weights = np.asarray([e['weight'] for e in local_events], dtype=np.float64)
+        local_weights = np.asarray([e['weight'] for e in local_events], dtype=dftype)
 
         self.assertEqual(local_weights.shape, nest_weights.shape)
         npt.assert_allclose(local_weights, nest_weights, atol=1e-12, rtol=0.0)
 
         conn = nest.GetConnections(source=pre_neuron, target=post_neuron, synapse_model='jonke_synapse')
-        nest_final_weight = float(np.asarray(conn.get('weight'), dtype=np.float64).reshape(-1)[0])
+        nest_final_weight = float(np.asarray(conn.get('weight'), dtype=dftype).reshape(-1)[0])
         self.assertAlmostEqual(syn.weight, nest_final_weight, delta=1e-12)
 
 

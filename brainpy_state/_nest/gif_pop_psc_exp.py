@@ -195,6 +195,7 @@ class gif_pop_psc_exp(NESTNeuron):
     - The computational cost of this model is largely independent of the
       number N of neurons represented.
     - Defaults follow NEST C++ source for ``gif_pop_psc_exp``.
+    dftype = brainstate.environ.dftype()
     - ``lambda_0`` is specified in 1/s (as in NEST's Python interface); the
       conversion factor of 0.001 to 1/ms is applied in the update equations
       exactly as in NEST (the factor 0.0005 in the trapezoidal escape rate).
@@ -473,15 +474,15 @@ class gif_pop_psc_exp(NESTNeuron):
         self._lambda_free = 0.0
 
         # History buffers (rotating), length = len_kernel
-        self._n = np.zeros(len_kernel, dtype=np.float64)  # spike counts
-        self._m = np.zeros(len_kernel, dtype=np.float64)  # survival
-        self._v_buf = np.zeros(len_kernel, dtype=np.float64)  # variance of survivors
-        self._u = np.zeros(len_kernel, dtype=np.float64)  # mean of survivors
-        self._lambda_buf = np.zeros(len_kernel, dtype=np.float64)  # escape rates
+        self._n = np.zeros(len_kernel, dtype=dftype)  # spike counts
+        self._m = np.zeros(len_kernel, dtype=dftype)  # survival
+        self._v_buf = np.zeros(len_kernel, dtype=dftype)  # variance of survivors
+        self._u = np.zeros(len_kernel, dtype=dftype)  # mean of survivors
+        self._lambda_buf = np.zeros(len_kernel, dtype=dftype)  # escape rates
 
         # Adaptation kernel values
-        self._theta = np.zeros(len_kernel, dtype=np.float64)
-        self._theta_tld = np.zeros(len_kernel, dtype=np.float64)
+        self._theta = np.zeros(len_kernel, dtype=dftype)
+        self._theta_tld = np.zeros(len_kernel, dtype=dftype)
 
         # Procedure InitPopulations, see Fig. 11 of [1]
         for k in range(len_kernel):
@@ -502,12 +503,12 @@ class gif_pop_psc_exp(NESTNeuron):
         self._k0 = 0  # rotating index
 
         # Adaptation variables
-        self._Q30 = np.array([math.exp(-h / tau) for tau in self.tau_sfa], dtype=np.float64)
+        self._Q30 = np.array([math.exp(-h / tau) for tau in self.tau_sfa], dtype=dftype)
         self._Q30K = np.array([
             self.q_sfa[j] * self.tau_sfa[j] * math.exp(-h * len_kernel / self.tau_sfa[j])
             for j in range(len(self.tau_sfa))
-        ], dtype=np.float64)
-        self._g = np.zeros(len(self.tau_sfa), dtype=np.float64)
+        ], dtype=dftype)
+        self._g = np.zeros(len(self.tau_sfa), dtype=dftype)
 
         # Observable state variables
         self._V_m = 0.0  # mV
