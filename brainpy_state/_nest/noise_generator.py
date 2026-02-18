@@ -15,6 +15,9 @@
 
 # -*- coding: utf-8 -*-
 
+
+from typing import Optional
+
 import brainstate
 import braintools
 import brainunit as u
@@ -273,8 +276,8 @@ class noise_generator(brainstate.nn.Dynamics):
         start: ArrayLike = 0. * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0. * u.ms,
-        seed: int = None,
-        name: str = None,
+        seed: Optional[int] = None,
+        name: Optional[str] = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
