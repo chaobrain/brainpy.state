@@ -164,6 +164,8 @@ class DualExpon(Synapse, AlignPost):
         Time constant of rise phase.
     tau_decay : Parameter
         Time constant of decay phase.
+    normalize: Parameter
+        Whether normalization is enabled.
     a : Parameter
         Normalization factor calculated from tau_rise, tau_decay, and A.
 
@@ -219,6 +221,7 @@ class DualExpon(Synapse, AlignPost):
         name: Optional[str] = None,
         tau_decay: ArrayLike = 10.0 * u.ms,
         tau_rise: ArrayLike = 1.0 * u.ms,
+        normalize: bool = True,
         A: Optional[ArrayLike] = None,
         g_initializer: ArrayLike | Callable = braintools.init.Constant(0. * u.mS),
     ):
@@ -227,17 +230,23 @@ class DualExpon(Synapse, AlignPost):
         # parameters
         self.tau_decay = braintools.init.param(tau_decay, self.varshape)
         self.tau_rise = braintools.init.param(tau_rise, self.varshape)
+        self.normalize = normalize
         self.a = self._format_dual_exp_A(A)     # Peak-normalization factor (dimensionless)
         self.g_initializer = g_initializer
 
     def _format_dual_exp_A(self, A):
         A = braintools.init.param(A, sizes=self.varshape, allow_none=True)
         if A is None:
-            A = (
-                self.tau_decay / (self.tau_decay - self.tau_rise) *
-                u.math.float_power(self.tau_rise / self.tau_decay,
-                                   self.tau_rise / (self.tau_rise - self.tau_decay))
-            )
+            if self.normalize:
+                A = (
+                    self.tau_decay / (self.tau_decay - self.tau_rise) *
+                    u.math.float_power(
+                        self.tau_rise / self.tau_decay,
+                        self.tau_rise / (self.tau_rise - self.tau_decay)
+                    )
+                )
+            else:
+                A = braintools.init.param(1.0, sizes=self.varshape)
         return A
 
     def init_state(self, batch_size: int = None, **kwargs):
