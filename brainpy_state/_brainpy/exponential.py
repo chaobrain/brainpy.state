@@ -148,6 +148,8 @@ class DualExpon(Synapse, AlignPost):
         Time constant of decay in milliseconds.
     tau_rise : ArrayLike, default=1.0*u.ms
         Time constant of rise in milliseconds.
+    normalize : bool, default=True
+        Whether to use peak normalization for the dual-exponential waveform.
     A : ArrayLike, optional
         Amplitude scaling factor. If None, a scaling factor is automatically
         calculated to normalize the peak amplitude.
@@ -167,7 +169,7 @@ class DualExpon(Synapse, AlignPost):
     normalize: Parameter
         Whether normalization is enabled.
     a : Parameter
-        Normalization factor calculated from tau_rise, tau_decay, and A.
+        Normalization factor.
 
     See Also
     --------
@@ -200,18 +202,16 @@ class DualExpon(Synapse, AlignPost):
         >>> import brainstate
         >>> import brainunit as u
         >>> import brainpy
-        >>> import matplotlib.pyplot as plt
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
-        >>>     syn = brainpy.state.DualExpon(in_size=1, tau_rise=0.5 * u.ms, tau_decay=5.0 * u.ms)
-        >>>     syn.init_state()
-        >>>     T, t0 = 300, 50
-        >>>     g = []
-        >>>     for t in range(T):
-        >>>         x = (1.0 * u.mS if t == t0 else 0.0 * u.mS)
-        >>>         y = u.get_magnitude(syn.update(x=x) / u.mS)
-        >>>         g.append(float(y[0]))
-        >>>     plt.plot(g)
-        >>>     plt.show()
+        ...     syn = brainpy.state.DualExpon(in_size=1, tau_rise=0.5 * u.ms, tau_decay=5.0 * u.ms)
+        ...     syn.init_state()
+        ...     T, t0 = 300, 50
+        ...     g = []
+        ...     for t in range(T):
+        ...         x = (1.0 * u.mS if t == t0 else 0.0 * u.mS)
+        ...         y = u.get_magnitude(syn.update(x=x) / u.mS)
+        ...         g.append(float(y[0]))
+        
     """
     __module__ = 'brainpy.state'
 
@@ -250,8 +250,8 @@ class DualExpon(Synapse, AlignPost):
         return A
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g_rise = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
-        self.g_decay = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g_rise = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
+        self.g_decay = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.g_rise.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
