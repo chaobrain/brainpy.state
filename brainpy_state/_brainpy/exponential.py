@@ -195,14 +195,21 @@ class DualExpon(Synapse, AlignPost):
     --------
     .. code-block:: python
 
-        >>> import brainpy
         >>> import brainstate
         >>> import brainunit as u
-        >>> # Create a dual-exponential synapse
-        >>> syn = brainpy.state.DualExpon(100, tau_rise=1.*u.ms, tau_decay=10.*u.ms)
-        >>> syn.init_state(batch_size=1)
-        >>> # Step the synapse
-        >>> g = syn.update()
+        >>> import brainpy
+        >>> import matplotlib.pyplot as plt
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        >>>     syn = brainpy.state.DualExpon(in_size=1, tau_rise=0.5 * u.ms, tau_decay=5.0 * u.ms)
+        >>>     syn.init_state()
+        >>>     T, t0 = 300, 50
+        >>>     g = []
+        >>>     for t in range(T):
+        >>>         x = (1.0 * u.mS if t == t0 else 0.0 * u.mS)
+        >>>         y = u.get_magnitude(syn.update(x=x) / u.mS)
+        >>>         g.append(float(y[0]))
+        >>>     plt.plot(g)
+        >>>     plt.show()
     """
     __module__ = 'brainpy.state'
 
@@ -220,24 +227,22 @@ class DualExpon(Synapse, AlignPost):
         # parameters
         self.tau_decay = braintools.init.param(tau_decay, self.varshape)
         self.tau_rise = braintools.init.param(tau_rise, self.varshape)
-        A = self._format_dual_exp_A(A)
-        self.a = (self.tau_decay - self.tau_rise) / self.tau_rise / self.tau_decay * A
+        self.a = self._format_dual_exp_A(A)     # Peak-normalization factor (dimensionless)
         self.g_initializer = g_initializer
 
     def _format_dual_exp_A(self, A):
         A = braintools.init.param(A, sizes=self.varshape, allow_none=True)
         if A is None:
             A = (
-                self.tau_decay /
-                (self.tau_decay - self.tau_rise) *
+                self.tau_decay / (self.tau_decay - self.tau_rise) *
                 u.math.float_power(self.tau_rise / self.tau_decay,
                                    self.tau_rise / (self.tau_rise - self.tau_decay))
             )
         return A
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g_rise = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
-        self.g_decay = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
+        self.g_rise = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g_decay = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.g_rise.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
@@ -246,9 +251,15 @@ class DualExpon(Synapse, AlignPost):
     def update(self, x=None):
         g_rise = brainstate.nn.exp_euler_step(lambda h: -h / self.tau_rise, self.g_rise.value)
         g_decay = brainstate.nn.exp_euler_step(lambda g: -g / self.tau_decay, self.g_decay.value)
-        self.g_rise.value = self.sum_delta_inputs(g_rise)
-        self.g_decay.value = self.sum_delta_inputs(g_decay)
+
+        delta0 = u.math.zeros_like(self.g_rise.value)
+        delta = self.sum_delta_inputs(delta0)
+
+        self.g_rise.value = g_rise + delta
+        self.g_decay.value = g_decay + delta
+
         if x is not None:
             self.g_rise.value += x
             self.g_decay.value += x
+            
         return self.a * (self.g_decay.value - self.g_rise.value)
