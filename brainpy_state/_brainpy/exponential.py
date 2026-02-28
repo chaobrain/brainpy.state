@@ -135,8 +135,7 @@ class DualExpon(Synapse, AlignPost):
     dg_decay/dt = -g_decay/tau_decay
     g = a * (g_decay - g_rise)
 
-    where $a$ is a normalization factor that ensures the peak conductance reaches
-    the desired amplitude.
+    where $a$ is a scaling factor for the output waveform.
 
     Parameters
     ----------
@@ -148,11 +147,12 @@ class DualExpon(Synapse, AlignPost):
         Time constant of decay in milliseconds.
     tau_rise : ArrayLike, default=1.0*u.ms
         Time constant of rise in milliseconds.
-    A : ArrayLike, optional
-        Amplitude scaling factor. If provided, it is used directly as the output
-        scaling factor. If None, the scaling factor is determined by `normalize`.
     normalize : bool, default=True
-        Whether to use peak normalization when `A` is None.
+        Whether to use peak normalization for the dual-exponential waveform.
+    amplitude : ArrayLike, default=1.
+        Output amplitude scaling factor. When ``normalize=True``, the waveform is
+        peak-normalized to 1 and then scaled by ``amplitude``. When ``normalize=False``,
+        the raw difference waveform is scaled directly by ``amplitude``.
     g_initializer : ArrayLike or Callable, default=init.Constant(0. * u.mS)
         Initial value or initializer for synaptic conductance.
 
@@ -167,9 +167,9 @@ class DualExpon(Synapse, AlignPost):
     tau_decay : Parameter
         Time constant of decay phase.
     normalize : bool
-        Whether peak normalization is enabled when `A` is not provided.
-    A : Parameter
-        Scaling factor used for the output waveform.
+        Whether peak normalization is enabled.
+    amplitude : Parameter
+        Output amplitude scaling factor.
 
     See Also
     --------
@@ -184,15 +184,14 @@ class DualExpon(Synapse, AlignPost):
 
     The implementation uses an exponential Euler integration method.
     The output of this synapse is the difference between decay and rise components,
-    optionally scaled by a user-provided or automatically computed factor.
+    optionally peak-normalized and scaled by ``amplitude``.
+
+    If ``normalize=True``, the peak of the waveform is normalized to ``amplitude``.
+    If ``normalize=False``, the raw waveform is scaled directly by ``amplitude``.
 
     This class inherits from :py:class:`AlignPost`, which means it can be used in projection patterns
     where synaptic variables are aligned with post-synaptic neurons, enabling event-driven
     computation and more efficient handling of sparse connectivity patterns.
-
-    If `A` is provided, it is used directly as the output scaling factor.
-    Otherwise, the waveform is peak-normalized when ``normalize=True``, and left
-    unscaled when ``normalize=False``.
 
     References
     ----------
@@ -226,7 +225,7 @@ class DualExpon(Synapse, AlignPost):
         name: Optional[str] = None,
         tau_decay: ArrayLike = 10.0 * u.ms,
         tau_rise: ArrayLike = 1.0 * u.ms,
-        A: Optional[ArrayLike] = None,
+        amplitude: ArrayLike = 1.0,
         normalize: bool = True,
         g_initializer: ArrayLike | Callable = braintools.init.Constant(0. * u.mS),
     ):
@@ -235,23 +234,18 @@ class DualExpon(Synapse, AlignPost):
         # parameters
         self.tau_decay = braintools.init.param(tau_decay, self.varshape)
         self.tau_rise = braintools.init.param(tau_rise, self.varshape)
+        self.amplitude = braintools.init.param(amplitude, self.varshape)
         self.normalize = normalize
-        self.A = self._format_dual_exp_A(A)     # Peak-normalization factor (dimensionless)
         self.g_initializer = g_initializer
 
-    def _format_dual_exp_A(self, A):
-        A = braintools.init.param(A, sizes=self.varshape, allow_none=True)
-        if A is not None:
-            return A
-        if self.normalize:
-            return (
-                self.tau_decay / (self.tau_decay - self.tau_rise) *
-                u.math.float_power(
-                    self.tau_rise / self.tau_decay,
-                    self.tau_rise / (self.tau_rise - self.tau_decay)
-                )
+    def _dual_exp_normalization(self):
+        return (
+            self.tau_decay / (self.tau_decay - self.tau_rise) *
+            u.math.float_power(
+                self.tau_rise / self.tau_decay,
+                self.tau_rise / (self.tau_rise - self.tau_decay)
             )
-        return braintools.init.param(1.0, sizes=self.varshape)
+        )
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.g_rise = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
@@ -274,5 +268,9 @@ class DualExpon(Synapse, AlignPost):
         if x is not None:
             self.g_rise.value += x
             self.g_decay.value += x
-            
-        return self.A * (self.g_decay.value - self.g_rise.value)
+
+        scale = self.amplitude
+        if self.normalize:
+            scale = scale * self._dual_exp_normalization()
+
+        return scale * (self.g_decay.value - self.g_rise.value)

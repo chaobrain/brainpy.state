@@ -38,12 +38,10 @@ class TestExponentialSynapse(unittest.TestCase):
         synapse = Expon(self.in_size, tau=tau)
         inputs = self.generate_input()
 
-        # Test initialization
         self.assertEqual(synapse.in_size, (self.in_size,))
         self.assertEqual(synapse.out_size, (self.in_size,))
         self.assertEqual(synapse.tau, tau)
 
-        # Test forward pass
         synapse.init_state(self.batch_size)
         call = brainstate.transform.jit(synapse)
         with brainstate.environ.context(dt=0.1 * u.ms):
@@ -51,7 +49,6 @@ class TestExponentialSynapse(unittest.TestCase):
                 out = call(inputs[t])
                 self.assertEqual(out.shape, (self.batch_size, self.in_size))
 
-        # Test exponential accumulation under constant input
         constant_input = jnp.ones((self.batch_size, self.in_size)) * u.mS
         out1 = call(constant_input)
         out2 = call(constant_input)
@@ -62,14 +59,12 @@ class TestExponentialSynapse(unittest.TestCase):
         tau_decay = 10.0 * u.ms
         synapse = DualExpon(self.in_size, tau_rise=tau_rise, tau_decay=tau_decay)
 
-        # Test initialization
         self.assertEqual(synapse.in_size, (self.in_size,))
         self.assertEqual(synapse.out_size, (self.in_size,))
         self.assertEqual(synapse.tau_rise, tau_rise)
         self.assertEqual(synapse.tau_decay, tau_decay)
         self.assertTrue(synapse.normalize)
 
-        # Test forward pass
         synapse.init_state(self.batch_size)
         call = brainstate.transform.jit(synapse)
         inputs = self.generate_input()
@@ -96,8 +91,6 @@ class TestExponentialSynapse(unittest.TestCase):
             for _ in range(20):
                 outputs.append(call(zero_input))
 
-            # For difference-form DualExpon, the output at the spike step is zero,
-            # then becomes positive afterwards.
             self.assertTrue(jnp.allclose(out0[0, 0].to_decimal(u.mS), 0.0))
             self.assertTrue(jnp.any(outputs[1][0, 0] > 0.0 * u.mS))
             self.assertTrue(jnp.any(outputs[-1][0, 0] >= 0.0 * u.mS))
@@ -108,12 +101,14 @@ class TestExponentialSynapse(unittest.TestCase):
             tau_rise=1.0 * u.ms,
             tau_decay=10.0 * u.ms,
             normalize=True,
+            amplitude=1.0,
         )
         syn_raw = DualExpon(
             self.in_size,
             tau_rise=1.0 * u.ms,
             tau_decay=10.0 * u.ms,
             normalize=False,
+            amplitude=1.0,
         )
 
         syn_norm.init_state(self.batch_size)
@@ -136,45 +131,83 @@ class TestExponentialSynapse(unittest.TestCase):
             peak_norm = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs_norm]))
             peak_raw = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs_raw]))
 
-            # Peak-normalized response should have a larger peak than the unnormalized one.
             self.assertTrue(peak_norm > peak_raw)
 
-    def test_dualexpon_manual_A_overrides_default(self):
-        syn_default = DualExpon(
+    def test_dualexpon_amplitude_with_normalization(self):
+        syn1 = DualExpon(
             self.in_size,
             tau_rise=1.0 * u.ms,
             tau_decay=10.0 * u.ms,
-            normalize=False,
+            normalize=True,
+            amplitude=1.0,
         )
-        syn_scaled = DualExpon(
+        syn2 = DualExpon(
             self.in_size,
             tau_rise=1.0 * u.ms,
             tau_decay=10.0 * u.ms,
-            A=2.0,
-            normalize=False,
+            normalize=True,
+            amplitude=2.0,
         )
 
-        syn_default.init_state(self.batch_size)
-        syn_scaled.init_state(self.batch_size)
+        syn1.init_state(self.batch_size)
+        syn2.init_state(self.batch_size)
 
-        call_default = brainstate.transform.jit(syn_default)
-        call_scaled = brainstate.transform.jit(syn_scaled)
+        call1 = brainstate.transform.jit(syn1)
+        call2 = brainstate.transform.jit(syn2)
 
         with brainstate.environ.context(dt=0.1 * u.ms):
             spike_input = jnp.zeros((self.batch_size, self.in_size)) * u.mS
             spike_input = spike_input.at[0, 0].set(1.0 * u.mS)
             zero_input = jnp.zeros((self.batch_size, self.in_size)) * u.mS
 
-            outs_default = [call_default(spike_input)]
-            outs_scaled = [call_scaled(spike_input)]
+            outs1 = [call1(spike_input)]
+            outs2 = [call2(spike_input)]
             for _ in range(40):
-                outs_default.append(call_default(zero_input))
-                outs_scaled.append(call_scaled(zero_input))
+                outs1.append(call1(zero_input))
+                outs2.append(call2(zero_input))
 
-            peak_default = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs_default]))
-            peak_scaled = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs_scaled]))
+            peak1 = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs1]))
+            peak2 = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs2]))
 
-            self.assertTrue(peak_scaled > peak_default)
+            self.assertTrue(peak2 > peak1)
+
+    def test_dualexpon_amplitude_without_normalization(self):
+        syn1 = DualExpon(
+            self.in_size,
+            tau_rise=1.0 * u.ms,
+            tau_decay=10.0 * u.ms,
+            normalize=False,
+            amplitude=1.0,
+        )
+        syn2 = DualExpon(
+            self.in_size,
+            tau_rise=1.0 * u.ms,
+            tau_decay=10.0 * u.ms,
+            normalize=False,
+            amplitude=2.0,
+        )
+
+        syn1.init_state(self.batch_size)
+        syn2.init_state(self.batch_size)
+
+        call1 = brainstate.transform.jit(syn1)
+        call2 = brainstate.transform.jit(syn2)
+
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            spike_input = jnp.zeros((self.batch_size, self.in_size)) * u.mS
+            spike_input = spike_input.at[0, 0].set(1.0 * u.mS)
+            zero_input = jnp.zeros((self.batch_size, self.in_size)) * u.mS
+
+            outs1 = [call1(spike_input)]
+            outs2 = [call2(spike_input)]
+            for _ in range(40):
+                outs1.append(call1(zero_input))
+                outs2.append(call2(zero_input))
+
+            peak1 = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs1]))
+            peak2 = jnp.max(jnp.asarray([x[0, 0].to_decimal(u.mS) for x in outs2]))
+
+            self.assertTrue(peak2 > peak1)
 
     def test_dualexpon_non_callable_delta_input(self):
         synapse = DualExpon(self.in_size, tau_rise=1.0 * u.ms, tau_decay=10.0 * u.ms)
@@ -185,15 +218,11 @@ class TestExponentialSynapse(unittest.TestCase):
             delta = jnp.zeros((self.batch_size, self.in_size)) * u.mS
             delta = delta.at[0, 0].set(1.0 * u.mS)
 
-            # Add a non-callable delta input directly
             synapse.add_delta_input('test_delta', delta)
 
             out0 = call()
             out1 = call()
 
-            # With the fixed implementation, the same delta is applied to both
-            # g_rise and g_decay at the spike step, so the immediate output is zero,
-            # and the next step becomes positive.
             self.assertTrue(jnp.allclose(out0[0, 0].to_decimal(u.mS), 0.0))
             self.assertTrue(out1[0, 0] > 0.0 * u.mS)
 
