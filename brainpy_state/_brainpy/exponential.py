@@ -135,8 +135,7 @@ class DualExpon(Synapse, AlignPost):
     dg_decay/dt = -g_decay/tau_decay
     g = a * (g_decay - g_rise)
 
-    where $a$ is a normalization factor that ensures the peak conductance reaches
-    the desired amplitude.
+    where $a$ is a scaling factor for the output waveform.
 
     Parameters
     ----------
@@ -148,9 +147,12 @@ class DualExpon(Synapse, AlignPost):
         Time constant of decay in milliseconds.
     tau_rise : ArrayLike, default=1.0*u.ms
         Time constant of rise in milliseconds.
-    A : ArrayLike, optional
-        Amplitude scaling factor. If None, a scaling factor is automatically
-        calculated to normalize the peak amplitude.
+    normalize : bool, default=True
+        Whether to use peak normalization for the dual-exponential waveform.
+    amplitude : ArrayLike, default=1.
+        Output amplitude scaling factor. When ``normalize=True``, the waveform is
+        peak-normalized to 1 and then scaled by ``amplitude``. When ``normalize=False``,
+        the raw difference waveform is scaled directly by ``amplitude``.
     g_initializer : ArrayLike or Callable, default=init.Constant(0. * u.mS)
         Initial value or initializer for synaptic conductance.
 
@@ -164,8 +166,10 @@ class DualExpon(Synapse, AlignPost):
         Time constant of rise phase.
     tau_decay : Parameter
         Time constant of decay phase.
-    a : Parameter
-        Normalization factor calculated from tau_rise, tau_decay, and A.
+    normalize : bool
+        Whether peak normalization is enabled.
+    amplitude : Parameter
+        Output amplitude scaling factor.
 
     See Also
     --------
@@ -179,7 +183,11 @@ class DualExpon(Synapse, AlignPost):
     rise time followed by a slower decay.
 
     The implementation uses an exponential Euler integration method.
-    The output of this synapse is the normalized difference between decay and rise components.
+    The output of this synapse is the difference between decay and rise components,
+    optionally peak-normalized and scaled by ``amplitude``.
+
+    If ``normalize=True``, the peak of the waveform is normalized to ``amplitude``.
+    If ``normalize=False``, the raw waveform is scaled directly by ``amplitude``.
 
     This class inherits from :py:class:`AlignPost`, which means it can be used in projection patterns
     where synaptic variables are aligned with post-synaptic neurons, enabling event-driven
@@ -195,14 +203,19 @@ class DualExpon(Synapse, AlignPost):
     --------
     .. code-block:: python
 
-        >>> import brainpy
         >>> import brainstate
         >>> import brainunit as u
-        >>> # Create a dual-exponential synapse
-        >>> syn = brainpy.state.DualExpon(100, tau_rise=1.*u.ms, tau_decay=10.*u.ms)
-        >>> syn.init_state(batch_size=1)
-        >>> # Step the synapse
-        >>> g = syn.update()
+        >>> import brainpy
+        >>> with brainstate.environ.context(dt=0.1 * u.ms):
+        ...     syn = brainpy.state.DualExpon(in_size=1, tau_rise=0.5 * u.ms, tau_decay=5.0 * u.ms)
+        ...     syn.init_state()
+        ...     T, t0 = 300, 50
+        ...     g = []
+        ...     for t in range(T):
+        ...         x = (1.0 * u.mS if t == t0 else 0.0 * u.mS)
+        ...         y = u.get_magnitude(syn.update(x=x) / u.mS)
+        ...         g.append(float(y[0]))
+        
     """
     __module__ = 'brainpy.state'
 
@@ -212,7 +225,8 @@ class DualExpon(Synapse, AlignPost):
         name: Optional[str] = None,
         tau_decay: ArrayLike = 10.0 * u.ms,
         tau_rise: ArrayLike = 1.0 * u.ms,
-        A: Optional[ArrayLike] = None,
+        amplitude: ArrayLike = 1.0,
+        normalize: bool = True,
         g_initializer: ArrayLike | Callable = braintools.init.Constant(0. * u.mS),
     ):
         super().__init__(name=name, in_size=in_size)
@@ -220,20 +234,18 @@ class DualExpon(Synapse, AlignPost):
         # parameters
         self.tau_decay = braintools.init.param(tau_decay, self.varshape)
         self.tau_rise = braintools.init.param(tau_rise, self.varshape)
-        A = self._format_dual_exp_A(A)
-        self.a = (self.tau_decay - self.tau_rise) / self.tau_rise / self.tau_decay * A
+        self.amplitude = braintools.init.param(amplitude, self.varshape)
+        self.normalize = normalize
         self.g_initializer = g_initializer
 
-    def _format_dual_exp_A(self, A):
-        A = braintools.init.param(A, sizes=self.varshape, allow_none=True)
-        if A is None:
-            A = (
-                self.tau_decay /
-                (self.tau_decay - self.tau_rise) *
-                u.math.float_power(self.tau_rise / self.tau_decay,
-                                   self.tau_rise / (self.tau_rise - self.tau_decay))
+    def _dual_exp_normalization(self):
+        return (
+            self.tau_decay / (self.tau_decay - self.tau_rise) *
+            u.math.float_power(
+                self.tau_rise / self.tau_decay,
+                self.tau_rise / (self.tau_rise - self.tau_decay)
             )
-        return A
+        )
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.g_rise = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
@@ -246,9 +258,19 @@ class DualExpon(Synapse, AlignPost):
     def update(self, x=None):
         g_rise = brainstate.nn.exp_euler_step(lambda h: -h / self.tau_rise, self.g_rise.value)
         g_decay = brainstate.nn.exp_euler_step(lambda g: -g / self.tau_decay, self.g_decay.value)
-        self.g_rise.value = self.sum_delta_inputs(g_rise)
-        self.g_decay.value = self.sum_delta_inputs(g_decay)
+
+        delta0 = u.math.zeros_like(self.g_rise.value)
+        delta = self.sum_delta_inputs(delta0)
+
+        self.g_rise.value = g_rise + delta
+        self.g_decay.value = g_decay + delta
+
         if x is not None:
             self.g_rise.value += x
             self.g_decay.value += x
-        return self.a * (self.g_decay.value - self.g_rise.value)
+
+        scale = self.amplitude
+        if self.normalize:
+            scale = scale * self._dual_exp_normalization()
+
+        return scale * (self.g_decay.value - self.g_rise.value)
