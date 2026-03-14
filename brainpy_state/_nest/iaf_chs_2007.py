@@ -27,6 +27,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'iaf_chs_2007',
@@ -434,11 +435,15 @@ class iaf_chs_2007(NESTNeuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.V_epsp) < 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_epsp, self.V_reset, self.tau_epsp)):
+            return
+
+        if np.any(self.V_epsp < 0.0):
             raise ValueError('EPSP amplitude V_epsp cannot be negative.')
-        if np.any(self._to_numpy(self.V_reset) < 0.0):
+        if np.any(self.V_reset < 0.0):
             raise ValueError('Reset magnitude V_reset cannot be negative.')
-        if np.any(self._to_numpy_ms(self.tau_epsp) <= 0.0) or np.any(self._to_numpy_ms(self.tau_reset) <= 0.0):
+        if np.any(self.tau_epsp <= 0.0 * u.ms) or np.any(self.tau_reset <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
 
     def _sum_excitatory_delta_inputs(self, state_shape):

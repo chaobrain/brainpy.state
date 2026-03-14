@@ -24,6 +24,7 @@ import numpy as np
 from brainstate.typing import Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'gif_pop_psc_exp',
@@ -311,6 +312,9 @@ class gif_pop_psc_exp(NESTNeuron):
             and q_sfa; non-positive capacitance, time constants, N, or Delta_V;
             negative lambda_0 or t_ref.
         """
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.tau_m, self.Delta_V)):
+            return
         if len(self.tau_sfa) != len(self.q_sfa):
             raise ValueError(
                 f"'tau_sfa' and 'q_sfa' must have the same length. "

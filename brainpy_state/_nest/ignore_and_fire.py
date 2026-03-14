@@ -23,6 +23,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'ignore_and_fire',
@@ -261,15 +262,15 @@ class ignore_and_fire(NESTNeuron):
         :func:`saiunit.get_magnitude` before validation. ``phase`` is
         validated as a unitless scalar or array.
         """
-        phase = self.phase
-        rate = self.rate
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.phase, self.rate)):
+            return
 
-        # Convert to raw values for comparison
-        phase_val = np.asarray(phase)
+        phase_val = np.asarray(self.phase)
         if np.any(phase_val <= 0.0) or np.any(phase_val > 1.0):
             raise ValueError("Phase must be > 0 and <= 1.")
 
-        rate_val = np.asarray(u.get_magnitude(rate))
+        rate_val = np.asarray(u.get_magnitude(self.rate))
         if np.any(rate_val <= 0.0):
             raise ValueError("Firing rate must be > 0.")
 

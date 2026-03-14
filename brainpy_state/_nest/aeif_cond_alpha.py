@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
-from ._utils import is_tracer
+from ._utils import is_tracer, validate_aeif_overflow
 from ._base import NESTNeuron
 
 __all__ = [
@@ -360,7 +360,7 @@ class aeif_cond_alpha(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
-    _MIN_H = 1e-8  # ms
+    _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 100000
 
     def __init__(
@@ -474,21 +474,7 @@ class aeif_cond_alpha(NESTNeuron):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
         # Mirror NEST overflow guard for exponential term at spike time.
-        positive_dt = delta_t > 0.0
-        if np.any(positive_dt):
-            dftype = brainstate.environ.dftype()
-            finfo = np.finfo(dtype=dftype)
-            # Use a safety margin appropriate for the dtype's dynamic range.
-            safety_margin = 1e20 if finfo.bits >= 64 else 1e10
-            max_exp_arg = np.log(finfo.max / safety_margin)
-            ratio = (v_peak - v_th) / np.where(positive_dt, delta_t, 1.0)
-            if np.any(ratio[positive_dt] >= max_exp_arg):
-                raise ValueError(
-                    'The current combination of V_peak, V_th and Delta_T will '
-                    'lead to numerical overflow at spike '
-                    'time; try for instance to increase Delta_T or to reduce '
-                    'V_peak to avoid this problem.'
-                )
+        validate_aeif_overflow(v_peak, v_th, delta_t)
 
     def init_state(self, batch_size: int = None, **kwargs):
         r"""Initialize persistent and short-term state variables.
@@ -639,19 +625,18 @@ class aeif_cond_alpha(NESTNeuron):
         spike/reset/adaptation events and optional multiple spikes per step.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        dt = float(u.math.asarray(dt_q / u.ms))
+        dt = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
 
         v_shape = self.V.value.shape
 
         V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        dftype = brainstate.environ.dftype()
         dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=dftype), v_shape)
         g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
         dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=dftype), v_shape)
         g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
         w = self._broadcast_to_state(self._to_numpy(self.w.value, u.pA), v_shape)
-        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
             np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
             v_shape,
@@ -682,7 +667,7 @@ class aeif_cond_alpha(NESTNeuron):
             p['Delta_T'] > 0.0,
             p['V_peak_rhs'],
             p['V_th'],
-        )
+            )
         refr_counts = self._broadcast_to_state(
             np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
@@ -694,6 +679,7 @@ class aeif_cond_alpha(NESTNeuron):
         pscon_ex = self._broadcast_to_state(np.e / self._to_numpy(self.tau_syn_ex, u.ms), v_shape)
         pscon_in = self._broadcast_to_state(np.e / self._to_numpy(self.tau_syn_in, u.ms), v_shape)
         new_i_stim_q = self.sum_current_inputs(x, self.V.value)
+        dftype = brainstate.environ.dftype()
         new_i_stim = self._broadcast_to_state(self._to_numpy(new_i_stim_q, u.pA), v_shape)
 
         spike_mask = np.zeros(v_shape, dtype=bool)
@@ -710,8 +696,8 @@ class aeif_cond_alpha(NESTNeuron):
             local_p = {k: p[k][idx] for k in p}
             y = np.asarray([V[idx], dg_ex[idx], g_ex[idx], dg_in[idx], g_in[idx], w[idx]], dtype=dftype)
             r_i = int(r[idx])
-            h_i = float(max(h_int[idx], self._MIN_H))
-            t_local = 0.0
+            h_i = max(h_int[idx], self._MIN_H)
+            t_local = 0.0 * u.ms
             iters = 0
             local_spike = False
 
@@ -721,11 +707,9 @@ class aeif_cond_alpha(NESTNeuron):
                 is_refractory = r_i > 0
 
                 def f(y_):
-                    dftype = brainstate.environ.dftype()
                     return np.asarray(
-                        self._dynamics_scalar(
-                            y_[0], y_[1], y_[2], y_[3], y_[4], y_[5], is_refractory, i_stim[idx], local_p
-                        ),
+                        self._dynamics_scalar(y_[0], y_[1], y_[2], y_[3], y_[4], y_[5],
+                                              is_refractory, i_stim[idx], local_p),
                         dtype=dftype,
                     )
 
@@ -803,7 +787,7 @@ class aeif_cond_alpha(NESTNeuron):
         self.integration_step.value = h_next * u.ms
         self.I_stim.value = new_i_stim * u.pA
         self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
+            u.math.where(spike_mask, t + dt, self.last_spike_time.value)
         )
 
         if self.ref_var:

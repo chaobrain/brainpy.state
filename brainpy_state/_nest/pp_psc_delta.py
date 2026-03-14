@@ -27,6 +27,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'pp_psc_delta',
@@ -556,9 +557,13 @@ class pp_psc_delta(NESTNeuron):
         - All elements of ``tau_sfa > 0`` (adaptation time constants must be positive)
         - ``len(tau_sfa) == len(q_sfa)`` (adaptation parameter lists must match)
         """
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
+            return
+
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_m, u.ms) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
         if self.dead_time < 0.0:
             raise ValueError('Dead time must not be negative.')

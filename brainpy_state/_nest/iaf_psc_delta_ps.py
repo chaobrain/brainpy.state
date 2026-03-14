@@ -27,6 +27,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'iaf_psc_delta_ps',
@@ -434,20 +435,19 @@ class iaf_psc_delta_ps(NESTNeuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        v_reset = self._to_numpy(self.V_reset, u.mV)
-        v_th = self._to_numpy(self.V_th, u.mV)
-        c_m = self._to_numpy(self.C_m, u.pF)
-        tau_m = self._to_numpy(self.tau_m, u.ms)
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
+            return
 
-        if np.any(v_reset >= v_th):
+        if np.any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if self.V_min is not None and np.any(v_reset < self._to_numpy(self.V_min, u.mV)):
+        if self.V_min is not None and np.any(self.V_reset < self.V_min):
             raise ValueError('Reset potential must be greater or equal to minimum potential.')
-        if np.any(c_m <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(tau_m <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
 
     def init_state(self, batch_size: int = None, **kwargs):

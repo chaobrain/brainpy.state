@@ -48,6 +48,7 @@ from brainstate.typing import ArrayLike, Size
 from scipy.integrate import solve_ivp
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'ht_neuron',
@@ -1062,6 +1063,10 @@ class ht_neuron(NESTNeuron):
         This validation is called automatically during ``__init__`` to catch
         configuration errors early.
         """
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.g_peak_AMPA, self.tau_m, self.S_act_NMDA, self.t_ref)):
+            return
+
         # Non-negative peak conductances
         for name in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A', 'g_peak_GABA_B',
                      'g_peak_NaP', 'g_peak_KNa', 'g_peak_T', 'g_peak_h',

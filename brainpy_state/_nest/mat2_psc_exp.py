@@ -26,6 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'mat2_psc_exp',
@@ -423,20 +424,21 @@ class mat2_psc_exp(NESTNeuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
+            return
+
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_m, u.ms) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
+        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('Synaptic time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) <= 0.0):
+        if np.any(self.t_ref <= 0.0 * u.ms):
             raise ValueError('Refractory time must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_1, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_2, u.ms) <= 0.0):
+        if np.any(self.tau_1 <= 0.0 * u.ms) or np.any(self.tau_2 <= 0.0 * u.ms):
             raise ValueError('Adaptive threshold time constants must be strictly positive.')
-        tau_m_np = self._to_numpy(self.tau_m, u.ms)
-        tau_ex_np = self._to_numpy(self.tau_syn_ex, u.ms)
-        tau_in_np = self._to_numpy(self.tau_syn_in, u.ms)
-        if np.any(tau_m_np == tau_ex_np) or np.any(tau_m_np == tau_in_np):
+        if np.any(self.tau_m == self.tau_syn_ex) or np.any(self.tau_m == self.tau_syn_in):
             raise ValueError(
                 'Membrane and synapse time constant(s) must differ. '
                 'See note in documentation.'

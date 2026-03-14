@@ -24,6 +24,7 @@ import numpy as np
 from brainstate.typing import Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'astrocyte_lr_1994',
@@ -452,6 +453,10 @@ class astrocyte_lr_1994(NESTNeuron):
         self._validate_parameters()
 
     def _validate_parameters(self):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.Ca_tot, self.IP3_0, self.Kd_act, self.tau_IP3)):
+            return
+
         if self.Ca_tot <= 0:
             raise ValueError("Ca_tot must be positive.")
         if self.IP3_0 < 0:

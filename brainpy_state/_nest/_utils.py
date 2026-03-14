@@ -39,6 +39,7 @@ __all__ = [
     'check_positive',
     'check_non_negative',
     'check_reset_below_threshold',
+    'validate_aeif_overflow',
     'propagator_exp',
     'alpha_propagator_p31_p32',
     'rkf45_integrate',
@@ -174,13 +175,13 @@ def check_positive(value, unit, name):
     Parameters
     ----------
     value : ArrayLike
-        Parameter value with units.
+        Parameter value with units (compared directly via ``value <= 0 * unit``).
     unit : saiunit.Unit
-        Unit for conversion.
+        Unit for the zero comparison threshold.
     name : str
         Human-readable parameter name for the error message.
     """
-    if np.any(to_numpy(value, unit) <= 0.0):
+    if np.any(value <= 0.0 * unit):
         raise ValueError(f'{name} must be strictly positive.')
 
 
@@ -190,13 +191,13 @@ def check_non_negative(value, unit, name):
     Parameters
     ----------
     value : ArrayLike
-        Parameter value with units.
+        Parameter value with units (compared directly via ``value < 0 * unit``).
     unit : saiunit.Unit
-        Unit for conversion.
+        Unit for the zero comparison threshold.
     name : str
         Human-readable parameter name for the error message.
     """
-    if np.any(to_numpy(value, unit) < 0.0):
+    if np.any(value < 0.0 * unit):
         raise ValueError(f'{name} must not be negative.')
 
 
@@ -206,12 +207,42 @@ def check_reset_below_threshold(V_reset, V_th):
     Parameters
     ----------
     V_reset : ArrayLike
-        Reset potential (mV).
+        Reset potential (with units).
     V_th : ArrayLike
-        Threshold potential (mV).
+        Threshold potential (same units as V_reset).
     """
-    if np.any(to_numpy(V_reset, u.mV) >= to_numpy(V_th, u.mV)):
+    if np.any(V_reset >= V_th):
         raise ValueError('Reset potential must be smaller than threshold.')
+
+
+def validate_aeif_overflow(v_peak, v_th, delta_t):
+    """Check exponential term overflow for adaptive exponential models.
+
+    Mirrors the NEST overflow guard for the exponential term at spike time.
+    Call after stripping units from ``Delta_T`` (e.g. ``delta_t = self.Delta_T / u.ms``).
+
+    Parameters
+    ----------
+    v_peak : ArrayLike
+        Peak voltage (with units, e.g. mV).
+    v_th : ArrayLike
+        Threshold voltage (same units as *v_peak*).
+    delta_t : ArrayLike
+        Slope factor, unitless (already divided by unit).
+    """
+    positive_dt = delta_t > 0.0
+    if np.any(positive_dt):
+        dftype = brainstate.environ.dftype()
+        finfo = np.finfo(dtype=dftype)
+        safety_margin = 1e20 if finfo.bits >= 64 else 1e10
+        max_exp_arg = np.log(finfo.max / safety_margin)
+        ratio = (v_peak - v_th) / np.where(positive_dt, delta_t, 1.0)
+        if np.any(ratio[positive_dt] >= max_exp_arg):
+            raise ValueError(
+                'The current combination of V_peak, V_th and Delta_T will '
+                'lead to numerical overflow at spike time; try for instance '
+                'to increase Delta_T or to reduce V_peak to avoid this problem.'
+            )
 
 
 # ---------------------------------------------------------------------------

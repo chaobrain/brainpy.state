@@ -27,6 +27,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'gif_cond_exp_multisynapse',
@@ -467,13 +468,16 @@ class gif_cond_exp_multisynapse(NESTNeuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.g_L, self.Delta_V)):
+            return
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.g_L, u.nS) <= 0.0):
+        if np.any(self.g_L <= 0.0 * u.nS):
             raise ValueError('Membrane conductance must be strictly positive.')
-        if np.any(self._to_numpy(self.Delta_V, u.mV) <= 0.0):
+        if np.any(self.Delta_V <= 0.0 * u.mV):
             raise ValueError('Delta_V must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
         if self.lambda_0 < 0.0:
             raise ValueError('lambda_0 must not be negative.')

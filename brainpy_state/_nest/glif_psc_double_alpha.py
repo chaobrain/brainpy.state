@@ -52,6 +52,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'glif_psc_double_alpha',
@@ -805,18 +806,22 @@ class glif_psc_double_alpha(NESTNeuron):
                 "after_spike_currents=%s, adapting_threshold=%s." % (s, a, v)
             )
 
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m)):
+            return
+
         # V_reset (relative) < V_th (relative) — both relative to E_L
-        E_L_mV = self._to_numpy(self.E_L, u.mV)
-        V_reset_rel = self._to_numpy(self.V_reset, u.mV) - E_L_mV
-        V_th_rel = self._to_numpy(self.V_th, u.mV) - E_L_mV
+        E_L_val = self.E_L
+        V_reset_rel = self.V_reset - E_L_val
+        V_th_rel = self.V_th - E_L_val
         if np.any(V_reset_rel >= V_th_rel):
             raise ValueError("Reset potential must be smaller than threshold.")
 
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError("Capacitance must be strictly positive.")
-        if np.any(self._to_numpy(self.g_m, u.nS) <= 0.0):
+        if np.any(self.g_m <= 0.0 * u.nS):
             raise ValueError("Membrane conductance must be strictly positive.")
-        if np.any(self._to_numpy(self.t_ref, u.ms) <= 0.0):
+        if np.any(self.t_ref <= 0.0 * u.ms):
             raise ValueError("Refractory time constant must be strictly positive.")
 
         if self.has_theta_spike:

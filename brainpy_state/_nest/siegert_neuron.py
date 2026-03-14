@@ -26,6 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'siegert_neuron',
@@ -525,15 +526,19 @@ class siegert_neuron(NESTNeuron):
         return drift_now, diffusion_now
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy_ms(self.tau) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.tau, self.tau_m, self.tau_syn, self.t_ref, self.V_reset, self.theta)):
+            return
+
+        if np.any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self._to_numpy_ms(self.tau_m) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant tau_m must be > 0.')
-        if np.any(self._to_numpy_ms(self.tau_syn) < 0.0):
+        if np.any(self.tau_syn < 0.0 * u.ms):
             raise ValueError('Synaptic time constant tau_syn must be >= 0.')
-        if np.any(self._to_numpy_ms(self.t_ref) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory period t_ref must be >= 0.')
-        if np.any(self._to_numpy(self.V_reset) >= self._to_numpy(self.theta)):
+        if np.any(self.V_reset >= self.theta):
             raise ValueError('Reset potential V_reset must be smaller than threshold theta.')
 
     def init_state(self, batch_size: int = None, **kwargs):

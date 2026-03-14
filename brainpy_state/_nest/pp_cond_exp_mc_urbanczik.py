@@ -28,6 +28,7 @@ from brainstate.typing import ArrayLike, Size
 from scipy.integrate import solve_ivp
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
@@ -691,20 +692,24 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.soma_C_m, self.t_ref)):
+            return
+
         if self.rate_slope < 0:
             raise ValueError('Rate slope cannot be negative.')
         if self.phi_max < 0:
             raise ValueError('Maximum rate cannot be negative.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
         for label, C_m in [('soma', self.soma_C_m), ('dendritic', self.dend_C_m)]:
-            if np.any(self._to_numpy(C_m, u.pF) <= 0.0):
+            if np.any(C_m <= 0.0 * u.pF):
                 raise ValueError(f'Capacitance ({label}) must be strictly positive.')
         for label, tse, tsi in [
             ('soma', self.soma_tau_syn_ex, self.soma_tau_syn_in),
             ('dendritic', self.dend_tau_syn_ex, self.dend_tau_syn_in),
         ]:
-            if np.any(self._to_numpy(tse, u.ms) <= 0.0) or np.any(self._to_numpy(tsi, u.ms) <= 0.0):
+            if np.any(tse <= 0.0 * u.ms) or np.any(tsi <= 0.0 * u.ms):
                 raise ValueError('All time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):

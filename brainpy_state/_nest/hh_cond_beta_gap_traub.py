@@ -28,6 +28,7 @@ from brainstate.typing import ArrayLike, Size
 from scipy.integrate import solve_ivp
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'hh_cond_beta_gap_traub',
@@ -662,21 +663,24 @@ class hh_cond_beta_gap_traub(NESTNeuron):
             - Any time constant ``<= 0`` (must be strictly positive)
             - Any conductance ``< 0`` (must be non-negative)
         """
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.t_ref, self.g_Na)):
+            return
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
         if (
-            np.any(self._to_numpy(self.tau_rise_ex, u.ms) <= 0.0)
-            or np.any(self._to_numpy(self.tau_decay_ex, u.ms) <= 0.0)
-            or np.any(self._to_numpy(self.tau_rise_in, u.ms) <= 0.0)
-            or np.any(self._to_numpy(self.tau_decay_in, u.ms) <= 0.0)
+            np.any(self.tau_rise_ex <= 0.0 * u.ms)
+            or np.any(self.tau_decay_ex <= 0.0 * u.ms)
+            or np.any(self.tau_rise_in <= 0.0 * u.ms)
+            or np.any(self.tau_decay_in <= 0.0 * u.ms)
         ):
             raise ValueError('All time constants must be strictly positive.')
         if (
-            np.any(self._to_numpy(self.g_Na, u.nS) < 0.0)
-            or np.any(self._to_numpy(self.g_K, u.nS) < 0.0)
-            or np.any(self._to_numpy(self.g_L, u.nS) < 0.0)
+            np.any(self.g_Na < 0.0 * u.nS)
+            or np.any(self.g_K < 0.0 * u.nS)
+            or np.any(self.g_L < 0.0 * u.nS)
         ):
             raise ValueError('All conductances must be non-negative.')
 

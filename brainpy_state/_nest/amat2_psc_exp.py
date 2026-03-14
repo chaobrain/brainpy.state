@@ -26,6 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'amat2_psc_exp',
@@ -511,28 +512,30 @@ class amat2_psc_exp(NESTNeuron):
             If ``tau_v`` equals ``tau_syn_ex`` or ``tau_syn_in``
             (causes singularities in propagator matrix).
         """
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
+            return
+
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        tau_m_np = self._to_numpy(self.tau_m, u.ms)
-        tau_ex_np = self._to_numpy(self.tau_syn_ex, u.ms)
-        tau_in_np = self._to_numpy(self.tau_syn_in, u.ms)
-        tau_v_np = self._to_numpy(self.tau_v, u.ms)
-        if np.any(tau_m_np <= 0.0) or np.any(tau_ex_np <= 0.0) or np.any(tau_in_np <= 0.0):
+        tau_m_val = self.tau_m
+        tau_ex_val = self.tau_syn_ex
+        tau_in_val = self.tau_syn_in
+        tau_v_val = self.tau_v
+        if np.any(tau_m_val <= 0.0 * u.ms) or np.any(tau_ex_val <= 0.0 * u.ms) or np.any(tau_in_val <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) <= 0.0):
+        if np.any(self.t_ref <= 0.0 * u.ms):
             raise ValueError('Refractory time must be strictly positive.')
-        tau_1_np = self._to_numpy(self.tau_1, u.ms)
-        tau_2_np = self._to_numpy(self.tau_2, u.ms)
-        if np.any(tau_1_np <= 0.0) or np.any(tau_2_np <= 0.0):
+        if np.any(self.tau_1 <= 0.0 * u.ms) or np.any(self.tau_2 <= 0.0 * u.ms):
             raise ValueError('Adaptive threshold time constants must be strictly positive.')
-        if np.any(tau_v_np <= 0.0):
+        if np.any(tau_v_val <= 0.0 * u.ms):
             raise ValueError('tau_v must be strictly positive.')
-        if np.any(tau_m_np == tau_ex_np) or np.any(tau_m_np == tau_in_np) or np.any(tau_m_np == tau_v_np):
+        if np.any(tau_m_val == tau_ex_val) or np.any(tau_m_val == tau_in_val) or np.any(tau_m_val == tau_v_val):
             raise ValueError(
                 'tau_m must differ from tau_syn_ex, tau_syn_in and tau_v. '
                 'See note in documentation.'
             )
-        if np.any(tau_v_np == tau_ex_np) or np.any(tau_v_np == tau_in_np):
+        if np.any(tau_v_val == tau_ex_val) or np.any(tau_v_val == tau_in_val):
             raise ValueError(
                 'tau_v must differ from tau_syn_ex, tau_syn_in and tau_m. '
                 'See note in documentation.'

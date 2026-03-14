@@ -26,6 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 from .iaf_psc_exp import iaf_psc_exp
 
 __all__ = [
@@ -368,17 +369,20 @@ class iaf_psc_exp_htum(NESTNeuron):
         return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.V_reset, u.mV) >= self._to_numpy(self.V_th, u.mV)):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m)):
+            return
+        if np.any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if np.any(self._to_numpy(self.t_ref_abs, u.ms) <= 0.0) or np.any(self._to_numpy(self.t_ref_tot, u.ms) <= 0.0):
+        if np.any(self.t_ref_abs <= 0.0 * u.ms) or np.any(self.t_ref_tot <= 0.0 * u.ms):
             raise ValueError('All refractory time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref_abs, u.ms) > self._to_numpy(self.t_ref_tot, u.ms)):
+        if np.any(self.t_ref_abs > self.t_ref_tot):
             raise ValueError('Total refractory period must be >= absolute refractory period.')
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_m, u.ms) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
+        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('Synaptic time constants must be strictly positive.')
 
     def init_state(self, batch_size: int = None, **kwargs):
