@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 from brainstate.typing import ArrayLike, Size
 
@@ -104,7 +104,7 @@ class IF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an IF neuron layer with 10 neurons
         >>> if_neuron = brainpy.state.IF(10, tau=8*u.ms, V_th=1.2*u.mV)
         >>> # Initialize the state
@@ -236,7 +236,7 @@ class LIF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a LIF neuron layer with 10 neurons
         >>> lif = brainpy.state.LIF(10, tau=10*u.ms, V_th=0.8*u.mV)
         >>> # Initialize the state
@@ -385,7 +385,7 @@ class ExpIF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an ExpIF neuron layer with 10 neurons
         >>> expif = brainpy.state.ExpIF(10, tau=10*u.ms, V_th=-30*u.mV)
         >>> # Initialize the state
@@ -521,7 +521,7 @@ class ExpIFRef(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an ExpIFRef neuron layer with 10 neurons
         >>> expif = brainpy.state.ExpIFRef(10, tau=10*u.ms, tau_ref=1.7*u.ms)
         >>> expif.init_state(batch_size=1)
@@ -703,7 +703,7 @@ class AdExIF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an AdExIF neuron layer with 10 neurons
         >>> adexif = brainpy.state.AdExIF(10, tau=10*u.ms)
         >>> # Initialize the state
@@ -889,7 +889,7 @@ class AdExIFRef(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an AdExIFRef neuron layer with 10 neurons
         >>> adexif_ref = brainpy.state.AdExIFRef(10, tau=10*u.ms, tau_ref=2*u.ms)
         >>> # Initialize the state
@@ -1092,7 +1092,7 @@ class LIFRef(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a LIFRef neuron layer with 10 neurons
         >>> lifref = brainpy.state.LIFRef(10, tau=10*u.ms, tau_ref=5*u.ms,
         ...                               V_th=0.8*u.mV)
@@ -1262,7 +1262,7 @@ class ALIF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an ALIF neuron layer with 10 neurons
         >>> alif = brainpy.state.ALIF(10, tau=10*u.ms, tau_a=200*u.ms,
         ...                           beta=0.2*u.mV)
@@ -1408,7 +1408,7 @@ class QuaIF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a QuaIF neuron layer with 10 neurons
         >>> quaif = brainpy.state.QuaIF(10, tau=10*u.ms, V_th=-30*u.mV,
         ...                             V_c=-50*u.mV)
@@ -1563,7 +1563,7 @@ class AdQuaIF(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an AdQuaIF neuron layer with 10 neurons
         >>> adquaif = brainpy.state.AdQuaIF(10, tau=10*u.ms, tau_w=100*u.ms,
         ...                                 a=1.0*u.siemens, b=0.1*u.mA)
@@ -1728,7 +1728,7 @@ class AdQuaIFRef(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an AdQuaIFRef neuron layer with refractory period
         >>> adquaif_ref = brainpy.state.AdQuaIFRef(10, tau=10*u.ms,
         ...     tau_w=100*u.ms, tau_ref=2.0*u.ms, ref_var=True)
@@ -1959,7 +1959,7 @@ class Gif(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a Gif neuron layer with dynamic threshold
         >>> gif = brainpy.state.Gif(10, tau=20*u.ms, k1=0.2/u.ms,
         ...                         k2=0.02/u.ms, a=0.005/u.ms, b=0.01/u.ms)
@@ -2174,7 +2174,7 @@ class GifRef(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a GifRef neuron layer with refractory period
         >>> gif_ref = brainpy.state.GifRef(10, tau=20*u.ms, tau_ref=2.0*u.ms,
         ...     k1=0.2/u.ms, k2=0.02/u.ms, ref_var=True)

@@ -18,8 +18,7 @@ import unittest
 
 import brainpy.state
 import brainstate
-import braintools
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 
 
@@ -40,6 +39,86 @@ class TestReadoutModels(unittest.TestCase):
             output = model.update(self.x)
             self.assertEqual(output.shape, (self.batch_size, self.out_size))
 
+    def test_LeakyRateReadout_init_params(self):
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(in_size=5, out_size=3, tau=10.0)
+            self.assertEqual(model.in_size, (5,))
+            self.assertEqual(model.out_size, (3,))
+
+    def test_LeakyRateReadout_weight_shape(self):
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(in_size=8, out_size=4, tau=5.0)
+            self.assertEqual(model.weight.value.shape, (8, 4))
+
+    def test_LeakyRateReadout_decay_factor(self):
+        """Decay factor should be exp(-dt/tau), between 0 and 1."""
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(in_size=5, out_size=3, tau=5.0)
+            decay = model.decay
+            self.assertTrue(jnp.all(decay > 0))
+            self.assertTrue(jnp.all(decay < 1))
+
+    def test_LeakyRateReadout_accumulation(self):
+        """With constant input, output should grow toward a steady state."""
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(
+                in_size=self.in_size, out_size=self.out_size, tau=self.tau
+            )
+            model.init_state(batch_size=self.batch_size)
+            outputs = []
+            for _ in range(20):
+                out = model.update(self.x)
+                outputs.append(jnp.mean(jnp.abs(out)).item())
+            # Output magnitude should increase (accumulation)
+            self.assertGreater(outputs[-1], outputs[0])
+
+    def test_LeakyRateReadout_decay_no_input(self):
+        """Without input, output should decay toward zero."""
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(
+                in_size=self.in_size, out_size=self.out_size, tau=self.tau
+            )
+            model.init_state(batch_size=self.batch_size)
+            # First give some input
+            model.update(self.x)
+            r_after_input = jnp.mean(jnp.abs(model.r.value)).item()
+            # Then give zero input
+            zero_x = jnp.zeros_like(self.x)
+            model.update(zero_x)
+            r_after_zero = jnp.mean(jnp.abs(model.r.value)).item()
+            self.assertLess(r_after_zero, r_after_input)
+
+    def test_LeakyRateReadout_reset_state(self):
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(
+                in_size=self.in_size, out_size=self.out_size, tau=self.tau
+            )
+            model.init_state(batch_size=self.batch_size)
+            model.update(self.x)
+            self.assertFalse(jnp.allclose(model.r.value, 0.0))
+            model.reset_state(batch_size=self.batch_size)
+            self.assertTrue(jnp.allclose(model.r.value, 0.0))
+
+    def test_LeakyRateReadout_jit(self):
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(
+                in_size=self.in_size, out_size=self.out_size, tau=self.tau
+            )
+            model.init_state(batch_size=self.batch_size)
+            call = brainstate.transform.jit(model)
+            output = call(self.x)
+            self.assertEqual(output.shape, (self.batch_size, self.out_size))
+
+    def test_LeakyRateReadout_multiple_steps_jit(self):
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(
+                in_size=self.in_size, out_size=self.out_size, tau=self.tau
+            )
+            model.init_state(batch_size=self.batch_size)
+            call = brainstate.transform.jit(model)
+            for _ in range(50):
+                out = call(self.x)
+                self.assertEqual(out.shape, (self.batch_size, self.out_size))
 
 
 if __name__ == '__main__':

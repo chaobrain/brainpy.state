@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainpy.state import HH, MorrisLecar, WangBuzsakiHH

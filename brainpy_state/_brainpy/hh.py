@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._base import Neuron
@@ -148,7 +148,7 @@ class HH(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an HH neuron layer with 10 neurons
         >>> hh = brainpy.state.HH(10)
         >>> # Initialize the state
@@ -394,7 +394,7 @@ class MorrisLecar(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a Morris-Lecar neuron layer with 10 neurons
         >>> ml = brainpy.state.MorrisLecar(10)
         >>> # Initialize the state
@@ -602,7 +602,7 @@ class WangBuzsakiHH(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a WangBuzsakiHH neuron layer with 10 neurons
         >>> wb = brainpy.state.WangBuzsakiHH(10)
         >>> # Initialize the state

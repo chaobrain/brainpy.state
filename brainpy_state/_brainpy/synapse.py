@@ -20,7 +20,7 @@ from typing import Optional, Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import Size, ArrayLike
 
 from brainpy_state._base import Synapse
@@ -91,7 +91,7 @@ class Alpha(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an alpha synapse with 8 ms time constant
         >>> syn = brainpy.state.Alpha(100, tau=8.*u.ms)
         >>> syn.init_state(batch_size=1)
@@ -217,7 +217,7 @@ class AMPA(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an AMPA synapse
         >>> ampa = brainpy.state.AMPA(100)
         >>> ampa.init_state(batch_size=1)
@@ -346,7 +346,7 @@ class GABAa(AMPA):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a GABAa synapse
         >>> gabaa = brainpy.state.GABAa(100)
         >>> gabaa.init_state(batch_size=1)
@@ -486,7 +486,7 @@ class BioNMDA(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an NMDA synapse
         >>> nmda = brainpy.state.BioNMDA(100)
         >>> nmda.init_state(batch_size=1)

@@ -17,9 +17,10 @@
 
 from typing import Callable, Union, Tuple
 
+import jax.numpy as jnp
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike
 
 from brainpy_state._misc import set_module_as
@@ -94,7 +95,7 @@ class SymmetryGapJunction(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create two neuron populations
         >>> neurons = brainpy.state.HH(100)
         >>> neurons.init_state(batch_size=1)
@@ -224,26 +225,29 @@ def symmetry_gap_junction_projection(
     # Use `...` indexing to support both batched (batch, neurons) and unbatched (neurons,) values
     diff = (pre_value[..., pre_ids] - post_value[..., post_ids]) * weight
 
+    # Decompose into mantissa and unit for scatter-add
+    # (diff has current units, e.g. μA, while value arrays have voltage units)
+    diff_mantissa = diff.mantissa if hasattr(diff, 'mantissa') else diff
+    diff_unit = diff.unit if hasattr(diff, 'unit') else None
+    post_shape = post_value.mantissa.shape if hasattr(post_value, 'mantissa') else post_value.shape
+    pre_shape = pre_value.mantissa.shape if hasattr(pre_value, 'mantissa') else pre_value.shape
+
     # add to post-synaptic neuron group
-    # Initialize the input currents for the post-synaptic neuron group
-    inputs = u.math.zeros_like(post_value)
-    # Add the calculated current to the corresponding post-synaptic neurons
-    inputs = inputs.at[..., post_ids].add(diff)
-    # Generate a unique key for the post-synaptic input currents
+    post_inputs = jnp.zeros(post_shape)
+    post_inputs = post_inputs.at[..., post_ids].add(diff_mantissa)
+    if diff_unit is not None:
+        post_inputs = post_inputs * diff_unit
     key = get_gap_junction_post_key(0 if post.current_inputs is None else len(post.current_inputs))
-    # Add the input currents to the post-synaptic neuron group
-    post.add_current_input(key, inputs)
+    post.add_current_input(key, post_inputs)
 
     # add to pre-synaptic neuron group
-    # Initialize the input currents for the pre-synaptic neuron group
-    inputs = u.math.zeros_like(pre_value)
-    # Add the calculated current to the corresponding pre-synaptic neurons
-    inputs = inputs.at[..., pre_ids].add(diff)
-    # Generate a unique key for the pre-synaptic input currents
+    pre_inputs = jnp.zeros(pre_shape)
+    pre_inputs = pre_inputs.at[..., pre_ids].add(diff_mantissa)
+    if diff_unit is not None:
+        pre_inputs = pre_inputs * diff_unit
     key = get_gap_junction_pre_key(0 if pre.current_inputs is None else len(pre.current_inputs))
-    # Add the input currents to the pre-synaptic neuron group with opposite polarity
-    pre.add_current_input(key, -inputs)
-    return inputs
+    pre.add_current_input(key, -pre_inputs)
+    return pre_inputs
 
 
 class AsymmetryGapJunction(Projection):
@@ -298,7 +302,7 @@ class AsymmetryGapJunction(Projection):
     .. code-block:: python
 
         >>> import brainpy.state as brainpy
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create two neuron populations
@@ -444,23 +448,26 @@ def asymmetry_gap_junction_projection(
     pre2post_current = diff * pre_weight
     post2pre_current = diff * post_weight
 
+    # Decompose into mantissa and unit for scatter-add
+    pre2post_mantissa = pre2post_current.mantissa if hasattr(pre2post_current, 'mantissa') else pre2post_current
+    post2pre_mantissa = post2pre_current.mantissa if hasattr(post2pre_current, 'mantissa') else post2pre_current
+    current_unit = pre2post_current.unit if hasattr(pre2post_current, 'unit') else None
+    post_shape = post_value.mantissa.shape if hasattr(post_value, 'mantissa') else post_value.shape
+    pre_shape = pre_value.mantissa.shape if hasattr(pre_value, 'mantissa') else pre_value.shape
+
     # add to post-synaptic neuron group
-    # Initialize the input currents for the post-synaptic neuron group
-    inputs = u.math.zeros_like(post_value)
-    # Add the calculated current to the corresponding post-synaptic neurons
-    inputs = inputs.at[..., post_ids].add(pre2post_current)
-    # Generate a unique key for the post-synaptic input currents
+    post_inputs = jnp.zeros(post_shape)
+    post_inputs = post_inputs.at[..., post_ids].add(pre2post_mantissa)
+    if current_unit is not None:
+        post_inputs = post_inputs * current_unit
     key = get_gap_junction_post_key(0 if post.current_inputs is None else len(post.current_inputs))
-    # Add the input currents to the post-synaptic neuron group
-    post.add_current_input(key, inputs)
+    post.add_current_input(key, post_inputs)
 
     # add to pre-synaptic neuron group
-    # Initialize the input currents for the pre-synaptic neuron group
-    inputs = u.math.zeros_like(pre_value)
-    # Add the calculated current to the corresponding pre-synaptic neurons
-    inputs = inputs.at[..., pre_ids].add(post2pre_current)
-    # Generate a unique key for the pre-synaptic input currents
+    pre_inputs = jnp.zeros(pre_shape)
+    pre_inputs = pre_inputs.at[..., pre_ids].add(post2pre_mantissa)
+    if current_unit is not None:
+        pre_inputs = pre_inputs * current_unit
     key = get_gap_junction_pre_key(0 if pre.current_inputs is None else len(pre.current_inputs))
-    # Add the input currents to the pre-synaptic neuron group with opposite polarity
-    pre.add_current_input(key, -inputs)
-    return inputs
+    pre.add_current_input(key, -pre_inputs)
+    return pre_inputs

@@ -20,7 +20,7 @@ from typing import Optional, Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import Size, ArrayLike
 
 from brainpy_state._base import Synapse
@@ -88,7 +88,7 @@ class Expon(Synapse, AlignPost):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a simple exponential synapse with 8 ms decay
         >>> syn = brainpy.state.Expon(100, tau=8.*u.ms)
         >>> syn.init_state(batch_size=1)
@@ -204,7 +204,7 @@ class DualExpon(Synapse, AlignPost):
     .. code-block:: python
 
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainpy
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
         ...     syn = brainpy.state.DualExpon(in_size=1, tau_rise=0.5 * u.ms, tau_decay=5.0 * u.ms)

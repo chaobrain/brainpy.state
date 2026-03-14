@@ -17,7 +17,7 @@ from typing import Union, Optional, Sequence, Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -265,7 +265,7 @@ class PoissonSpike(brainstate.nn.Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create 100 Poisson neurons firing at 50 Hz
         >>> poisson = brainpy.state.PoissonSpike(100, freqs=50.*u.Hz)
         >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -350,7 +350,7 @@ class PoissonEncoder(brainstate.nn.Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create a Poisson encoder for 10 neurons
@@ -433,7 +433,7 @@ class PoissonInput(brainstate.nn.Module):
         The number of independent Poisson input sources.
     freq : Union[int, float]
         The firing frequency of each input source in Hz.
-    weight :  ndarray, float, or brainunit.Quantity
+    weight :  ndarray, float, or saiunit.Quantity
         The synaptic weight of each input spike.
     name : Optional[str], optional
         The name of this brainstate.nn.Module.
@@ -460,7 +460,7 @@ class PoissonInput(brainstate.nn.Module):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create a neuron group with membrane potential
@@ -606,7 +606,7 @@ def poisson_input(
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create a membrane potential state
