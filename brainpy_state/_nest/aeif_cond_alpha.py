@@ -26,7 +26,7 @@ import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, validate_aeif_overflow
+from ._utils import is_tracer, validate_aeif_overflow, rkf45_jax_integrate
 
 __all__ = [
     'aeif_cond_alpha',
@@ -485,7 +485,7 @@ class aeif_cond_alpha(NESTNeuron):
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape)
         g_in = braintools.init.param(self.g_in_initializer, self.varshape)
         V = braintools.init.param(self.V_initializer, self.varshape)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
+        zeros = u.math.zeros_like(u.math.asarray(V / u.mV), unit=u.nS / u.ms)
         w = braintools.init.param(self.w_initializer, self.varshape)
 
         self.dg_ex = brainstate.ShortTermState(zeros)
@@ -626,11 +626,10 @@ class aeif_cond_alpha(NESTNeuron):
         ditype = brainstate.environ.ditype()
 
         # Read state variables with their natural units.
-        dg_rate_unit = u.nS / u.ms
         V = self.V.value  # mV
-        dg_ex = self.dg_ex.value * dg_rate_unit  # dimensionless -> nS/ms
+        dg_ex = self.dg_ex.value  # nS/ms
         g_ex = self.g_ex.value  # nS
-        dg_in = self.dg_in.value * dg_rate_unit  # dimensionless -> nS/ms
+        dg_in = self.dg_in.value  # nS/ms
         g_in = self.g_in.value  # nS
         w = self.w.value  # pA
         r = self.refractory_step_count.value  # int
@@ -651,162 +650,54 @@ class aeif_cond_alpha(NESTNeuron):
         # Current input for next step (one-step delay).
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
-        # Adaptive RKF45 integration via jax.lax.while_loop.
-        MIN_H = self._MIN_H  # 1e-8 ms
-        t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
-        h = u.math.maximum(h, MIN_H)
+        # Adaptive RKF45 integration via generic integrator.
         spike_mask = jnp.zeros(v_shape, dtype=jnp.bool_)
-        atol = self.gsl_error_tol
+        unstable = jnp.array(False)
+        ode_state = (V, dg_ex, g_ex, dg_in, g_in, w)
+        extra = (spike_mask, r, unstable)
 
-        init_carry = (
-            (V, dg_ex, g_ex, dg_in, g_in, w),  # state tuple
-            t_local, h, spike_mask, r,
-            jnp.array(0, dtype=jnp.int32),  # n_iters
-            jnp.array(False),  # unstable flag
-        )
-
-        def _cond_fn(carry):
-            _, t_loc, _, _, _, n_iters, unstable = carry
-            return (jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt))
-                    & (n_iters < self._MAX_ITERS) & ~unstable)
-
-        def _body_fn(carry):
-            state, t_loc, h, spk_mask, r, n_iters, unstable = carry
-
-            active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
-
-            # Clamp step size to remaining integration time.
-            h = u.math.where(
-                active,
-                u.math.maximum(MIN_H, u.math.minimum(h, dt - t_loc)),
-                h,
-            )
+        def _vector_field(state, extra):
+            _, r, _ = extra
             is_refractory = r > 0
+            return self._dynamics_vector(*state, is_refractory, i_stim)
 
-            # RKF45 stages (coefficient ordering matches NEST reference).
-            k1 = list(self._dynamics_vector(*state, is_refractory, i_stim))
+        def _event_fn(state, extra, accept):
+            spike_mask, r, unstable = extra
 
-            k2 = list(self._dynamics_vector(
-                *[s + h * (1.0 / 4.0 * ki)
-                  for s, ki in zip(state, k1)],
-                is_refractory, i_stim,
-            ))
-
-            k3 = list(self._dynamics_vector(
-                *[s + h * (3.0 * k1i / 32.0 + 9.0 * k2i / 32.0)
-                  for s, k1i, k2i in zip(state, k1, k2)],
-                is_refractory, i_stim,
-            ))
-
-            k4 = list(self._dynamics_vector(
-                *[s + h * (1932.0 * k1i / 2197.0 - 7200.0 * k2i / 2197.0
-                           + 7296.0 * k3i / 2197.0)
-                  for s, k1i, k2i, k3i in zip(state, k1, k2, k3)],
-                is_refractory, i_stim,
-            ))
-
-            k5 = list(self._dynamics_vector(
-                *[s + h * (439.0 * k1i / 216.0 - 8.0 * k2i
-                           + 3680.0 * k3i / 513.0
-                           - 845.0 * k4i / 4104.0)
-                  for s, k1i, k2i, k3i, k4i
-                  in zip(state, k1, k2, k3, k4)],
-                is_refractory, i_stim,
-            ))
-
-            k6 = list(self._dynamics_vector(
-                *[s + h * (-8.0 * k1i / 27.0 + 2.0 * k2i
-                           - 3544.0 * k3i / 2565.0
-                           + 1859.0 * k4i / 4104.0
-                           - 11.0 * k5i / 40.0)
-                  for s, k1i, k2i, k3i, k4i, k5i
-                  in zip(state, k1, k2, k3, k4, k5)],
-                is_refractory, i_stim,
-            ))
-
-            # 4th and 5th order solutions.
-            y4 = [s + h * (25.0 * k1i / 216.0 + 1408.0 * k3i / 2565.0
-                           + 2197.0 * k4i / 4104.0 - k5i / 5.0)
-                  for s, k1i, k3i, k4i, k5i
-                  in zip(state, k1, k3, k4, k5)]
-            y5 = [s + h * (16.0 * k1i / 135.0 + 6656.0 * k3i / 12825.0
-                           + 28561.0 * k4i / 56430.0 - 9.0 * k5i / 50.0
-                           + 2.0 * k6i / 55.0)
-                  for s, k1i, k3i, k4i, k5i, k6i
-                  in zip(state, k1, k3, k4, k5, k6)]
-
-            # Error: max absolute difference across state dims (unitless).
-            err_components = [u.get_mantissa(u.math.abs(y5i - y4i))
-                              for y5i, y4i in zip(y5, y4)]
-            err = err_components[0]
-            for ec in err_components[1:]:
-                err = jnp.maximum(err, ec)
-
-            # Accept where error within tolerance or step at minimum.
-            accept = active & (
-                (err <= atol)
-                | (u.get_mantissa(h) <= u.get_mantissa(MIN_H))
-            )
-            reject = active & ~accept
-
-            # Update state for accepted neurons.
-            new_state = tuple(
-                u.math.where(accept, y5i, si)
-                for y5i, si in zip(y5, state)
-            )
-            t_loc = u.math.where(accept, t_loc + h, t_loc)
-
-            # Stability guard (deferred to post-loop check).
-            V_m = u.get_mantissa(new_state[0])
-            w_m = u.get_mantissa(new_state[5])
+            # Stability guard.
+            V_m = u.get_mantissa(state[0])
+            w_m = u.get_mantissa(state[5])
             unstable = unstable | jnp.any(
                 accept & ((V_m < -1e3) | (w_m < -1e6) | (w_m > 1e6))
             )
 
             # Refractory voltage clamp.
             refr_accept = accept & (r > 0)
-            new_V = u.math.where(
-                refr_accept, self.V_reset, new_state[0],
-            )
+            new_V = u.math.where(refr_accept, self.V_reset, state[0])
 
             # Spike detection: accepted, non-refractory, V >= threshold.
             spike_now = accept & (r <= 0) & (new_V >= v_peak_detect)
-            spk_mask = spk_mask | spike_now
+            spike_mask = spike_mask | spike_now
             new_V = u.math.where(spike_now, self.V_reset, new_V)
-            new_w = u.math.where(
-                spike_now, new_state[5] + self.b, new_state[5],
-            )
-            r = u.math.where(
-                spike_now & (refr_counts > 0), refr_counts + 1, r,
-            )
+            new_w = u.math.where(spike_now, state[5] + self.b, state[5])
+            r = u.math.where(spike_now & (refr_counts > 0), refr_counts + 1, r)
 
-            # Adaptive step size.
-            err_safe = jnp.maximum(err, 1e-30)
-            fac_accept = jnp.where(
-                err == 0.0, 5.0,
-                jnp.minimum(5.0, jnp.maximum(
-                    0.2, 0.9 * (atol / err_safe) ** 0.2)),
-            )
-            fac_reject = jnp.minimum(
-                1.0, jnp.maximum(
-                    0.2, 0.9 * (atol / err_safe) ** 0.25),
-            )
-            h = u.math.where(
-                accept, u.math.maximum(MIN_H, h * fac_accept), h,
-            )
-            h = u.math.where(
-                reject, u.math.maximum(MIN_H, h * fac_reject), h,
-            )
+            new_state = (new_V, state[1], state[2], state[3], state[4], new_w)
+            return new_state, (spike_mask, r, unstable)
 
-            final_state = (
-                new_V, new_state[1], new_state[2],
-                new_state[3], new_state[4], new_w,
-            )
-            return (final_state, t_loc, h, spk_mask, r, n_iters + 1, unstable)
-
-        carry_out = jax.lax.while_loop(_cond_fn, _body_fn, init_carry)
-        state, _, h, spike_mask, r, _, unstable = carry_out
-        V, dg_ex, g_ex, dg_in, g_in, w = state
+        ode_state, h, extra = rkf45_jax_integrate(
+            f=_vector_field,
+            state=ode_state,
+            dt=dt,
+            h=h,
+            extra=extra,
+            atol=self.gsl_error_tol,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            event_fn=_event_fn,
+        )
+        V, dg_ex, g_ex, dg_in, g_in, w = ode_state
+        spike_mask, r, unstable = extra
 
         # Post-loop stability check.
         brainstate.transform.jit_error_if(
@@ -822,12 +713,12 @@ class aeif_cond_alpha(NESTNeuron):
 
         # Write back state.
         self.V.value = V
-        self.dg_ex.value = u.get_mantissa(dg_ex / dg_rate_unit)
+        self.dg_ex.value = dg_ex
         self.g_ex.value = g_ex
-        self.dg_in.value = u.get_mantissa(dg_in / dg_rate_unit)
+        self.dg_in.value = dg_in
         self.g_in.value = g_in
         self.w.value = w
-        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.refractory_step_count.value = r
         self.integration_step.value = h
         self.I_stim.value = new_i_stim
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)

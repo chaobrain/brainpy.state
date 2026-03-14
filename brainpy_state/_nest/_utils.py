@@ -43,6 +43,7 @@ __all__ = [
     'propagator_exp',
     'alpha_propagator_p31_p32',
     'rkf45_integrate',
+    'rkf45_jax_integrate',
     'sum_signed_delta_inputs',
     'time_window_gate',
     'stack_schedule_values',
@@ -451,6 +452,174 @@ def rkf45_integrate(dynamics_fn, y0, dt, h0, atol=1e-3, min_h=1e-8, max_iters=10
             h = max(min_h, h * fac)
 
     return tuple(y), h
+
+
+def rkf45_jax_integrate(f, state, dt, h, extra=None, atol=1e-6, min_h=None,
+                        max_iters=100000, event_fn=None):
+    r"""JAX-based adaptive RKF45 ODE integrator with event handling.
+
+    Implements Runge-Kutta-Fehlberg 4(5) using ``jax.lax.while_loop`` for
+    JIT-compatible adaptive step-size integration.  Supports unit-aware
+    Quantities via saiunit and optional per-substep event callbacks for
+    spike detection, refractory clamping, etc.
+
+    Parameters
+    ----------
+    f : callable
+        Vector field ``f(state, extra) -> derivatives``.
+        ``state`` is a tuple of Quantities; ``derivatives`` must be a tuple
+        of matching length with compatible rate units.
+    state : tuple
+        Initial state as a tuple of Quantities (ODE variables).
+    dt : Quantity
+        Total integration interval (e.g. simulation timestep in ms).
+    h : Quantity
+        Initial adaptive step size.
+    extra : pytree, optional
+        Model-specific mutable data passed through the loop and to
+        ``f`` and ``event_fn``.  Must be a valid JAX pytree.
+    atol : float, optional
+        Absolute error tolerance (unitless). Default: 1e-6.
+    min_h : Quantity, optional
+        Minimum step size. Defaults to ``1e-8 * u.ms``.
+    max_iters : int, optional
+        Maximum number of integration substeps. Default: 100000.
+    event_fn : callable, optional
+        ``event_fn(state, extra, accept) -> (state, extra)``
+        Called after each accepted RKF45 substep.  Can modify state
+        (e.g. reset voltage on spike) and extra (e.g. accumulate spike
+        mask).  ``accept`` is a boolean mask indicating which elements
+        were accepted on this substep.
+
+    Returns
+    -------
+    state : tuple
+        Final state after integration.
+    h : Quantity
+        Final adaptive step size (for warm-starting the next call).
+    extra : pytree
+        Final extra data.
+    """
+    if min_h is None:
+        min_h = 1e-8 * u.ms
+
+    v_shape = state[0].shape
+    dftype = brainstate.environ.dftype()
+
+    t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
+    h = u.math.maximum(h, min_h)
+
+    init_carry = (state, t_local, h, extra, jnp.array(0, dtype=jnp.int32))
+
+    def _cond_fn(carry):
+        _, t_loc, _, _, n_iters = carry
+        return (jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt)) & (n_iters < max_iters))
+
+    def _body_fn(carry):
+        state, t_loc, h, extra, n_iters = carry
+
+        active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
+
+        # Clamp step size to remaining integration time.
+        h = u.math.where(
+            active,
+            u.math.maximum(min_h, u.math.minimum(h, dt - t_loc)),
+            h,
+        )
+
+        # RKF45 stages (coefficient ordering matches NEST reference).
+        k1 = f(state, extra)
+
+        k2 = f(
+            tuple(s + h * (1.0 / 4.0 * ki) for s, ki in zip(state, k1)),
+            extra,
+        )
+
+        k3 = f(
+            tuple(s + h * (3.0 * k1i / 32.0 + 9.0 * k2i / 32.0)
+                  for s, k1i, k2i in zip(state, k1, k2)),
+            extra,
+        )
+
+        k4 = f(
+            tuple(s + h * (1932.0 * k1i / 2197.0 - 7200.0 * k2i / 2197.0
+                           + 7296.0 * k3i / 2197.0)
+                  for s, k1i, k2i, k3i in zip(state, k1, k2, k3)),
+            extra,
+        )
+
+        k5 = f(
+            tuple(s + h * (439.0 * k1i / 216.0 - 8.0 * k2i
+                           + 3680.0 * k3i / 513.0
+                           - 845.0 * k4i / 4104.0)
+                  for s, k1i, k2i, k3i, k4i
+                  in zip(state, k1, k2, k3, k4)),
+            extra,
+        )
+
+        k6 = f(
+            tuple(s + h * (-8.0 * k1i / 27.0 + 2.0 * k2i
+                           - 3544.0 * k3i / 2565.0
+                           + 1859.0 * k4i / 4104.0
+                           - 11.0 * k5i / 40.0)
+                  for s, k1i, k2i, k3i, k4i, k5i
+                  in zip(state, k1, k2, k3, k4, k5)),
+            extra,
+        )
+
+        # 4th and 5th order solutions.
+        y4 = tuple(s + h * (25.0 * k1i / 216.0 + 1408.0 * k3i / 2565.0
+                            + 2197.0 * k4i / 4104.0 - k5i / 5.0)
+                   for s, k1i, k3i, k4i, k5i
+                   in zip(state, k1, k3, k4, k5))
+        y5 = tuple(s + h * (16.0 * k1i / 135.0 + 6656.0 * k3i / 12825.0
+                            + 28561.0 * k4i / 56430.0 - 9.0 * k5i / 50.0
+                            + 2.0 * k6i / 55.0)
+                   for s, k1i, k3i, k4i, k5i, k6i
+                   in zip(state, k1, k3, k4, k5, k6))
+
+        # Error: max absolute difference across state dims (unitless).
+        err_components = [u.get_mantissa(u.math.abs(y5i - y4i))
+                          for y5i, y4i in zip(y5, y4)]
+        err = err_components[0]
+        for ec in err_components[1:]:
+            err = jnp.maximum(err, ec)
+
+        # Accept where error within tolerance or step at minimum.
+        accept = active & (
+            (err <= atol)
+            | (u.get_mantissa(h) <= u.get_mantissa(min_h))
+        )
+        reject = active & ~accept
+
+        # Update state for accepted elements.
+        new_state = tuple(
+            u.math.where(accept, y5i, si)
+            for y5i, si in zip(y5, state)
+        )
+        t_loc = u.math.where(accept, t_loc + h, t_loc)
+
+        # Apply event function if provided.
+        if event_fn is not None:
+            new_state, extra = event_fn(new_state, extra, accept)
+
+        # Adaptive step size.
+        err_safe = jnp.maximum(err, 1e-30)
+        fac_accept = jnp.where(
+            err == 0.0,
+            5.0,
+            jnp.minimum(5.0, jnp.maximum(0.2, 0.9 * (atol / err_safe) ** 0.2)),
+        )
+        fac_reject = jnp.minimum(1.0, jnp.maximum(0.2, 0.9 * (atol / err_safe) ** 0.25))
+        h = u.math.where(accept, u.math.maximum(min_h, h * fac_accept), h)
+        h = u.math.where(reject, u.math.maximum(min_h, h * fac_reject), h)
+
+        return (new_state, t_loc, h, extra, n_iters + 1)
+
+    carry_out = jax.lax.while_loop(_cond_fn, _body_fn, init_carry)
+    state, _, h, extra, _ = carry_out
+
+    return state, h, extra
 
 
 # ---------------------------------------------------------------------------
