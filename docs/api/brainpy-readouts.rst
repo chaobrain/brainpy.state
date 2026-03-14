@@ -11,4 +11,3 @@ Readout modules for converting spiking or rate-coded outputs.
     :template: classtemplate.rst
 
     LeakyRateReadout
-    LeakySpikeReadout

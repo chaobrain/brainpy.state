@@ -55,7 +55,7 @@ Organization
    .. grid-item-card:: :material-regular:`sensors;2em` Readouts
       :link: brainpy-readouts.html
 
-      Readout layers (LeakyRateReadout, LeakySpikeReadout)
+      Readout layers (LeakyRateReadout)
 
    .. grid-item-card:: :material-regular:`input;2em` Input Generators
       :link: brainpy-inputs.html

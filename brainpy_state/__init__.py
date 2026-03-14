@@ -83,7 +83,7 @@ from ._brainpy import (
     SymmetryGapJunction, AsymmetryGapJunction,
 
     # Readouts
-    LeakyRateReadout, LeakySpikeReadout,
+    LeakyRateReadout,
 
     # Input generators
     SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input,
@@ -308,7 +308,7 @@ __all__ = [
     'SymmetryGapJunction', 'AsymmetryGapJunction',
 
     # Readouts
-    'LeakyRateReadout', 'LeakySpikeReadout',
+    'LeakyRateReadout',
 
     # Input generators
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
