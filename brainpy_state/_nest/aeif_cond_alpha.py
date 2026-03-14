@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
 
 import brainstate
@@ -421,20 +420,6 @@ class aeif_cond_alpha(NESTNeuron):
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _to_numpy_unitless(x):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
-
     def _validate_parameters(self):
         r"""Validate model parameters against NEST constraints.
 
@@ -449,7 +434,7 @@ class aeif_cond_alpha(NESTNeuron):
         v_reset = self.V_reset
         v_peak = self.V_peak
         v_th = self.V_th
-        delta_t = self.Delta_T / u.ms
+        delta_t = self.Delta_T / u.mV
 
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (v_reset, v_peak, v_th, delta_t)):
@@ -562,30 +547,46 @@ class aeif_cond_alpha(NESTNeuron):
             w_in = w_in + u.math.maximum(-out, zero)
         return w_ex, w_in
 
-    @staticmethod
-    def _dynamics_scalar(v, dg_ex, g_ex, dg_in, g_in, w, is_refractory, i_stim, p):
-        v_eff = p['V_reset'] if is_refractory else min(v, p['V_peak_rhs'])
+    def _dynamics_vector(self, V, dg_ex, g_ex, dg_in, g_in, w, is_refractory, i_stim):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
 
-        i_syn_exc = g_ex * (v_eff - p['E_ex'])
-        i_syn_inh = g_in * (v_eff - p['E_in'])
-        i_spike = 0.0 if p['Delta_T'] == 0.0 else (
-            p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
-        )
+        Parameters
+        ----------
+        V : Quantity, mV
+        dg_ex : Quantity, nS/ms
+        g_ex : Quantity, nS
+        dg_in : Quantity, nS/ms
+        g_in : Quantity, nS
+        w : Quantity, pA
+        is_refractory : array, bool
+        i_stim : Quantity, pA
 
-        dv = (
-            0.0 if is_refractory else
-            (
-                -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p[
-                'I_e'] + i_stim
-            ) / p['C_m']
-        )
+        Returns
+        -------
+        tuple of 6 Quantities (dV, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw)
+        """
+        v_eff = u.math.where(is_refractory, self.V_reset, u.math.minimum(V, self.V_peak))
 
-        ddg_ex = -dg_ex / p['tau_syn_ex']
-        dg_ex_dt = dg_ex - (g_ex / p['tau_syn_ex'])
-        ddg_in = -dg_in / p['tau_syn_in']
-        dg_in_dt = dg_in - (g_in / p['tau_syn_in'])
-        dw = (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
-        return dv, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw
+        i_syn_exc = g_ex * (v_eff - self.E_ex)
+        i_syn_inh = g_in * (v_eff - self.E_in)
+
+        delta_t_safe = u.math.where(self.Delta_T == 0.0 * u.mV, 1.0 * u.mV, self.Delta_T)
+        exp_arg = u.math.clip((v_eff - self.V_th) / delta_t_safe, -500.0, 500.0)
+        i_spike = self.g_L * self.Delta_T * u.math.exp(exp_arg)
+
+        dV_raw = (
+                     -self.g_L * (v_eff - self.E_L) + i_spike
+                     - i_syn_exc - i_syn_inh - w + self.I_e + i_stim
+                 ) / self.C_m
+        dV = u.math.where(is_refractory, u.math.zeros_like(dV_raw), dV_raw)
+
+        ddg_ex = -dg_ex / self.tau_syn_ex
+        dg_ex_dt = dg_ex - g_ex / self.tau_syn_ex
+        ddg_in = -dg_in / self.tau_syn_in
+        dg_in_dt = dg_in - g_in / self.tau_syn_in
+        dw = (self.a * (v_eff - self.E_L) - w) / self.tau_w
+
+        return dV, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw
 
     def update(self, x=0.0 * u.pA):
         r"""Advance the neuron by one simulation step.
@@ -614,175 +615,223 @@ class aeif_cond_alpha(NESTNeuron):
 
         Notes
         -----
-        Integration is performed with an adaptive scalar RKF45 loop per neuron
-        index to preserve NEST update ordering, including in-loop
-        spike/reset/adaptation events and optional multiple spikes per step.
+        Integration is performed with an adaptive vectorized RKF45 loop,
+        including in-loop spike/reset/adaptation events and optional
+        multiple spikes per step. All arithmetic is unit-aware via
+        ``saiunit.math``.
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
 
-        v_shape = self.V.value.shape
+        # Read state variables with their natural units.
+        dg_rate_unit = u.nS / u.ms
+        V = self.V.value  # mV
+        dg_ex = self.dg_ex.value * dg_rate_unit  # dimensionless -> nS/ms
+        g_ex = self.g_ex.value  # nS
+        dg_in = self.dg_in.value * dg_rate_unit  # dimensionless -> nS/ms
+        g_in = self.g_in.value  # nS
+        w = self.w.value  # pA
+        r = self.refractory_step_count.value  # int
+        i_stim = self.I_stim.value  # pA
+        h = self.integration_step.value  # ms
 
-        V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=dftype), v_shape)
-        g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
-        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=dftype), v_shape)
-        g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
-        w = self._broadcast_to_state(self._to_numpy(self.w.value, u.pA), v_shape)
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
-            v_shape,
-        )
-        i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
-        h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape)
+        v_shape = u.get_mantissa(V).shape
 
-        p = {
-            'V_peak_rhs': self._broadcast_to_state(self._to_numpy(self.V_peak, u.mV), v_shape),
-            'V_reset': self._broadcast_to_state(self._to_numpy(self.V_reset, u.mV), v_shape),
-            'E_L': self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape),
-            'E_ex': self._broadcast_to_state(self._to_numpy(self.E_ex, u.mV), v_shape),
-            'E_in': self._broadcast_to_state(self._to_numpy(self.E_in, u.mV), v_shape),
-            'C_m': self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape),
-            'g_L': self._broadcast_to_state(self._to_numpy(self.g_L, u.nS), v_shape),
-            'Delta_T': self._broadcast_to_state(self._to_numpy(self.Delta_T, u.mV), v_shape),
-            'tau_w': self._broadcast_to_state(self._to_numpy(self.tau_w, u.ms), v_shape),
-            'a': self._broadcast_to_state(self._to_numpy(self.a, u.nS), v_shape),
-            'b': self._broadcast_to_state(self._to_numpy(self.b, u.pA), v_shape),
-            'V_th': self._broadcast_to_state(self._to_numpy(self.V_th, u.mV), v_shape),
-            'tau_syn_ex': self._broadcast_to_state(self._to_numpy(self.tau_syn_ex, u.ms), v_shape),
-            'tau_syn_in': self._broadcast_to_state(self._to_numpy(self.tau_syn_in, u.ms), v_shape),
-            'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
-            'atol': self._broadcast_to_state(self._to_numpy_unitless(self.gsl_error_tol), v_shape),
-        }
+        # Spike detection threshold: V_peak if Delta_T > 0, else V_th.
+        v_peak_detect = u.math.where(self.Delta_T > 0.0 * u.mV, self.V_peak, self.V_th)
+        refr_counts = self._refractory_counts()
 
-        v_peak_detect = np.where(
-            p['Delta_T'] > 0.0,
-            p['V_peak_rhs'],
-            p['V_th'],
-        )
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
-            v_shape,
+        # Synaptic spike inputs (applied after integration).
+        w_ex, w_in = self._sum_signed_delta_inputs()  # nS, nS
+        pscon_ex = np.e / self.tau_syn_ex  # 1/ms
+        pscon_in = np.e / self.tau_syn_in  # 1/ms
+
+        # Current input for next step (one-step delay).
+        new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
+
+        # Adaptive RKF45 integration via jax.lax.while_loop.
+        MIN_H = self._MIN_H  # 1e-8 ms
+        t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
+        h = u.math.maximum(h, MIN_H)
+        spike_mask = jnp.zeros(v_shape, dtype=jnp.bool_)
+        atol = self.gsl_error_tol
+
+        init_carry = (
+            (V, dg_ex, g_ex, dg_in, g_in, w),  # state tuple
+            t_local, h, spike_mask, r,
+            jnp.array(0, dtype=jnp.int32),  # n_iters
+            jnp.array(False),  # unstable flag
         )
 
-        w_ex_q, w_in_q = self._sum_signed_delta_inputs()
-        w_ex = self._broadcast_to_state(self._to_numpy(w_ex_q, u.nS), v_shape)
-        w_in = self._broadcast_to_state(self._to_numpy(w_in_q, u.nS), v_shape)
-        pscon_ex = self._broadcast_to_state(np.e / self._to_numpy(self.tau_syn_ex, u.ms), v_shape)
-        pscon_in = self._broadcast_to_state(np.e / self._to_numpy(self.tau_syn_in, u.ms), v_shape)
-        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
-        dftype = brainstate.environ.dftype()
-        new_i_stim = self._broadcast_to_state(self._to_numpy(new_i_stim_q, u.pA), v_shape)
+        def _cond_fn(carry):
+            _, t_loc, _, _, _, n_iters, unstable = carry
+            return (jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt))
+                    & (n_iters < self._MAX_ITERS) & ~unstable)
 
-        spike_mask = np.zeros(v_shape, dtype=bool)
-        V_next = np.empty_like(V)
-        dg_ex_next = np.empty_like(dg_ex)
-        g_ex_next = np.empty_like(g_ex)
-        dg_in_next = np.empty_like(dg_in)
-        g_in_next = np.empty_like(g_in)
-        w_next = np.empty_like(w)
-        r_next = np.empty_like(r)
-        h_next = np.empty_like(h_int)
+        def _body_fn(carry):
+            state, t_loc, h, spk_mask, r, n_iters, unstable = carry
 
-        for idx in np.ndindex(v_shape):
-            local_p = {k: p[k][idx] for k in p}
-            y = np.asarray([V[idx], dg_ex[idx], g_ex[idx], dg_in[idx], g_in[idx], w[idx]], dtype=dftype)
-            r_i = int(r[idx])
-            h_i = max(h_int[idx], self._MIN_H)
-            t_local = 0.0 * u.ms
-            iters = 0
-            local_spike = False
+            active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
 
-            while t_local < dt and iters < self._MAX_ITERS:
-                iters += 1
-                h_i = max(self._MIN_H, min(h_i, dt - t_local))
-                is_refractory = r_i > 0
+            # Clamp step size to remaining integration time.
+            h = u.math.where(
+                active,
+                u.math.maximum(MIN_H, u.math.minimum(h, dt - t_loc)),
+                h,
+            )
+            is_refractory = r > 0
 
-                def f(y_):
-                    return np.asarray(
-                        self._dynamics_scalar(y_[0], y_[1], y_[2], y_[3], y_[4], y_[5],
-                                              is_refractory, i_stim[idx], local_p),
-                        dtype=dftype,
-                    )
+            # RKF45 stages (coefficient ordering matches NEST reference).
+            k1 = list(self._dynamics_vector(*state, is_refractory, i_stim))
 
-                k1 = f(y)
-                k2 = f(y + h_i * (1.0 / 4.0) * k1)
-                k3 = f(y + h_i * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
-                k4 = f(y + h_i * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
-                k5 = f(y + h_i * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-                k6 = f(
-                    y
-                    + h_i
-                    * (
-                        -8.0 * k1 / 27.0
-                        + 2.0 * k2
-                        - 3544.0 * k3 / 2565.0
-                        + 1859.0 * k4 / 4104.0
-                        - 11.0 * k5 / 40.0
-                    )
-                )
+            k2 = list(self._dynamics_vector(
+                *[s + h * (1.0 / 4.0 * ki)
+                  for s, ki in zip(state, k1)],
+                is_refractory, i_stim,
+            ))
 
-                y4 = y + h_i * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-                y5 = y + h_i * (
-                    16.0 * k1 / 135.0
-                    + 6656.0 * k3 / 12825.0
-                    + 28561.0 * k4 / 56430.0
-                    - 9.0 * k5 / 50.0
-                    + 2.0 * k6 / 55.0
-                )
-                err = float(np.max(np.abs(y5 - y4)))
-                atol = float(local_p['atol'])
+            k3 = list(self._dynamics_vector(
+                *[s + h * (3.0 * k1i / 32.0 + 9.0 * k2i / 32.0)
+                  for s, k1i, k2i in zip(state, k1, k2)],
+                is_refractory, i_stim,
+            ))
 
-                if err <= atol or h_i <= self._MIN_H:
-                    y = y5
-                    t_local += h_i
-                    fac = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * (atol / err) ** 0.2))
-                    h_i = u.math.maximum(self._MIN_H, h_i * fac)
+            k4 = list(self._dynamics_vector(
+                *[s + h * (1932.0 * k1i / 2197.0 - 7200.0 * k2i / 2197.0
+                           + 7296.0 * k3i / 2197.0)
+                  for s, k1i, k2i, k3i in zip(state, k1, k2, k3)],
+                is_refractory, i_stim,
+            ))
 
-                    if y[0] < -1e3 or y[5] < -1e6 or y[5] > 1e6:
-                        raise ValueError('Numerical instability in aeif_cond_alpha dynamics.')
+            k5 = list(self._dynamics_vector(
+                *[s + h * (439.0 * k1i / 216.0 - 8.0 * k2i
+                           + 3680.0 * k3i / 513.0
+                           - 845.0 * k4i / 4104.0)
+                  for s, k1i, k2i, k3i, k4i
+                  in zip(state, k1, k2, k3, k4)],
+                is_refractory, i_stim,
+            ))
 
-                    if r_i > 0:
-                        y[0] = local_p['V_reset']
-                    elif y[0] >= v_peak_detect[idx]:
-                        local_spike = True
-                        y[0] = local_p['V_reset']
-                        y[5] += local_p['b']
-                        r_i = int(refr_counts[idx]) + 1 if int(refr_counts[idx]) > 0 else 0
-                else:
-                    fac = min(1.0, max(0.2, 0.9 * (atol / err) ** 0.25))
-                    h_i = u.math.maximum(self._MIN_H, h_i * fac)
+            k6 = list(self._dynamics_vector(
+                *[s + h * (-8.0 * k1i / 27.0 + 2.0 * k2i
+                           - 3544.0 * k3i / 2565.0
+                           + 1859.0 * k4i / 4104.0
+                           - 11.0 * k5i / 40.0)
+                  for s, k1i, k2i, k3i, k4i, k5i
+                  in zip(state, k1, k2, k3, k4, k5)],
+                is_refractory, i_stim,
+            ))
 
-            if r_i > 0:
-                r_i -= 1
+            # 4th and 5th order solutions.
+            y4 = [s + h * (25.0 * k1i / 216.0 + 1408.0 * k3i / 2565.0
+                           + 2197.0 * k4i / 4104.0 - k5i / 5.0)
+                  for s, k1i, k3i, k4i, k5i
+                  in zip(state, k1, k3, k4, k5)]
+            y5 = [s + h * (16.0 * k1i / 135.0 + 6656.0 * k3i / 12825.0
+                           + 28561.0 * k4i / 56430.0 - 9.0 * k5i / 50.0
+                           + 2.0 * k6i / 55.0)
+                  for s, k1i, k3i, k4i, k5i, k6i
+                  in zip(state, k1, k3, k4, k5, k6)]
 
-            y[1] += pscon_ex[idx] * w_ex[idx]
-            y[3] += pscon_in[idx] * w_in[idx]
+            # Error: max absolute difference across state dims (unitless).
+            err_components = [u.get_mantissa(u.math.abs(y5i - y4i))
+                              for y5i, y4i in zip(y5, y4)]
+            err = err_components[0]
+            for ec in err_components[1:]:
+                err = jnp.maximum(err, ec)
 
-            spike_mask[idx] = local_spike
-            V_next[idx] = y[0]
-            dg_ex_next[idx] = y[1]
-            g_ex_next[idx] = y[2]
-            dg_in_next[idx] = y[3]
-            g_in_next[idx] = y[4]
-            w_next[idx] = y[5]
-            r_next[idx] = r_i
-            h_next[idx] = h_i
+            # Accept where error within tolerance or step at minimum.
+            accept = active & (
+                (err <= atol)
+                | (u.get_mantissa(h) <= u.get_mantissa(MIN_H))
+            )
+            reject = active & ~accept
 
-        self.V.value = V_next * u.mV
-        self.dg_ex.value = dg_ex_next
-        self.g_ex.value = g_ex_next * u.nS
-        self.dg_in.value = dg_in_next
-        self.g_in.value = g_in_next * u.nS
-        self.w.value = w_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
-        self.integration_step.value = h_next * u.ms
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+            # Update state for accepted neurons.
+            new_state = tuple(
+                u.math.where(accept, y5i, si)
+                for y5i, si in zip(y5, state)
+            )
+            t_loc = u.math.where(accept, t_loc + h, t_loc)
+
+            # Stability guard (deferred to post-loop check).
+            V_m = u.get_mantissa(new_state[0])
+            w_m = u.get_mantissa(new_state[5])
+            unstable = unstable | jnp.any(
+                accept & ((V_m < -1e3) | (w_m < -1e6) | (w_m > 1e6))
+            )
+
+            # Refractory voltage clamp.
+            refr_accept = accept & (r > 0)
+            new_V = u.math.where(
+                refr_accept, self.V_reset, new_state[0],
+            )
+
+            # Spike detection: accepted, non-refractory, V >= threshold.
+            spike_now = accept & (r <= 0) & (new_V >= v_peak_detect)
+            spk_mask = spk_mask | spike_now
+            new_V = u.math.where(spike_now, self.V_reset, new_V)
+            new_w = u.math.where(
+                spike_now, new_state[5] + self.b, new_state[5],
+            )
+            r = u.math.where(
+                spike_now & (refr_counts > 0), refr_counts + 1, r,
+            )
+
+            # Adaptive step size.
+            err_safe = jnp.maximum(err, 1e-30)
+            fac_accept = jnp.where(
+                err == 0.0, 5.0,
+                jnp.minimum(5.0, jnp.maximum(
+                    0.2, 0.9 * (atol / err_safe) ** 0.2)),
+            )
+            fac_reject = jnp.minimum(
+                1.0, jnp.maximum(
+                    0.2, 0.9 * (atol / err_safe) ** 0.25),
+            )
+            h = u.math.where(
+                accept, u.math.maximum(MIN_H, h * fac_accept), h,
+            )
+            h = u.math.where(
+                reject, u.math.maximum(MIN_H, h * fac_reject), h,
+            )
+
+            final_state = (
+                new_V, new_state[1], new_state[2],
+                new_state[3], new_state[4], new_w,
+            )
+            return (final_state, t_loc, h, spk_mask, r, n_iters + 1, unstable)
+
+        carry_out = jax.lax.while_loop(_cond_fn, _body_fn, init_carry)
+        state, _, h, spike_mask, r, _, unstable = carry_out
+        V, dg_ex, g_ex, dg_in, g_in, w = state
+
+        # Post-loop stability check.
+        brainstate.transform.jit_error_if(
+            jnp.any(unstable), 'Numerical instability in aeif_cond_alpha dynamics.'
         )
+
+        # Decrement refractory counter.
+        r = u.math.where(r > 0, r - 1, r)
+
+        # Apply synaptic spike inputs.
+        dg_ex = dg_ex + pscon_ex * w_ex  # nS/ms + 1/ms * nS = nS/ms
+        dg_in = dg_in + pscon_in * w_in  # nS/ms + 1/ms * nS = nS/ms
+
+        # Write back state.
+        self.V.value = V
+        self.dg_ex.value = u.get_mantissa(dg_ex / dg_rate_unit)
+        self.g_ex.value = g_ex
+        self.dg_in.value = u.get_mantissa(dg_in / dg_rate_unit)
+        self.g_in.value = g_in
+        self.w.value = w
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)

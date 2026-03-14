@@ -219,7 +219,8 @@ def validate_aeif_overflow(v_peak, v_th, delta_t):
     """Check exponential term overflow for adaptive exponential models.
 
     Mirrors the NEST overflow guard for the exponential term at spike time.
-    Call after stripping units from ``Delta_T`` (e.g. ``delta_t = self.Delta_T / u.ms``).
+    All three arguments should carry the same voltage unit (e.g. mV) so that
+    ``(v_peak - v_th) / delta_t`` is dimensionless.
 
     Parameters
     ----------
@@ -228,8 +229,14 @@ def validate_aeif_overflow(v_peak, v_th, delta_t):
     v_th : ArrayLike
         Threshold voltage (same units as *v_peak*).
     delta_t : ArrayLike
-        Slope factor, unitless (already divided by unit).
+        Slope factor (same units as *v_peak*).
     """
+    # Compute the dimensionless ratio; units cancel in (v_peak - v_th) / delta_t.
+    # Extract mantissa values for plain numpy comparison.
+    v_peak = np.asarray(u.get_mantissa(v_peak))
+    v_th = np.asarray(u.get_mantissa(v_th))
+    delta_t = np.asarray(u.get_mantissa(delta_t))
+
     positive_dt = delta_t > 0.0
     if np.any(positive_dt):
         dftype = brainstate.environ.dftype()
