@@ -20,13 +20,14 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
-from ._utils import is_tracer, validate_aeif_overflow
+
 from ._base import NESTNeuron
+from ._utils import is_tracer, validate_aeif_overflow
 
 __all__ = [
     'aeif_cond_alpha',
@@ -476,15 +477,11 @@ class aeif_cond_alpha(NESTNeuron):
         # Mirror NEST overflow guard for exponential term at spike time.
         validate_aeif_overflow(v_peak, v_th, delta_t)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize persistent and short-term state variables.
 
         Parameters
         ----------
-        batch_size : int, optional
-            If provided, state tensors are created with leading batch axis
-            ``(batch_size, *self.varshape)``. Otherwise shapes are
-            ``self.varshape``.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
 
@@ -500,29 +497,26 @@ class aeif_cond_alpha(NESTNeuron):
         ditype = brainstate.environ.ditype()
         dt = brainstate.environ.get_dt()
 
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
-        g_in = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
-        w = braintools.init.param(self.w_initializer, self.varshape, batch_size)
+        g_ex = braintools.init.param(self.g_ex_initializer, self.varshape)
+        g_in = braintools.init.param(self.g_in_initializer, self.varshape)
+        V = braintools.init.param(self.V_initializer, self.varshape)
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
+        w = braintools.init.param(self.w_initializer, self.varshape)
 
-        self.V = brainstate.HiddenState(V)
-        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
+        self.dg_ex = brainstate.ShortTermState(zeros)
+        self.dg_in = brainstate.ShortTermState(zeros)
         self.g_ex = brainstate.HiddenState(g_ex)
-        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_in = brainstate.HiddenState(g_in)
+        self.V = brainstate.HiddenState(V)
         self.w = brainstate.HiddenState(w)
 
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-
-        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape, batch_size)
-        self.I_stim = brainstate.ShortTermState.init(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
+        self.I_stim = brainstate.ShortTermState.init(braintools.init.Constant(0.0 * u.pA), self.varshape)
 
         if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None):
@@ -667,7 +661,7 @@ class aeif_cond_alpha(NESTNeuron):
             p['Delta_T'] > 0.0,
             p['V_peak_rhs'],
             p['V_th'],
-            )
+        )
         refr_counts = self._broadcast_to_state(
             np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
             v_shape,
@@ -745,7 +739,7 @@ class aeif_cond_alpha(NESTNeuron):
                     y = y5
                     t_local += h_i
                     fac = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * (atol / err) ** 0.2))
-                    h_i = max(self._MIN_H, h_i * fac)
+                    h_i = u.math.maximum(self._MIN_H, h_i * fac)
 
                     if y[0] < -1e3 or y[5] < -1e6 or y[5] > 1e6:
                         raise ValueError('Numerical instability in aeif_cond_alpha dynamics.')
@@ -759,7 +753,7 @@ class aeif_cond_alpha(NESTNeuron):
                         r_i = int(refr_counts[idx]) + 1 if int(refr_counts[idx]) > 0 else 0
                 else:
                     fac = min(1.0, max(0.2, 0.9 * (atol / err) ** 0.25))
-                    h_i = max(self._MIN_H, h_i * fac)
+                    h_i = u.math.maximum(self._MIN_H, h_i * fac)
 
             if r_i > 0:
                 r_i -= 1
