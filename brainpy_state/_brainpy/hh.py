@@ -264,14 +264,18 @@ class HH(Neuron):
         last_h = self.h.value
         last_n = self.n.value
 
-        # Ionic currents
-        I_Na = (self.gNa * last_m ** 3 * last_h) * (last_V - self.ENa)
-        I_K = (self.gK * last_n ** 4) * (last_V - self.EK)
-        I_leak = self.gL * (last_V - self.EL)
+        # Pre-compute gating-dependent conductances (fixed during this step)
+        g_Na = self.gNa * last_m ** 3 * last_h
+        g_K = self.gK * last_n ** 4
 
-        # Voltage dynamics
+        # Voltage dynamics — express as f(V) so exp_euler_step can extract the linear term
         I_total = self.sum_current_inputs(x, last_V)
-        dV = lambda V: (-I_Na - I_K - I_leak + I_total) / self.C
+
+        def dV(V):
+            I_Na = g_Na * (V - self.ENa)
+            I_K = g_K * (V - self.EK)
+            I_leak = self.gL * (V - self.EL)
+            return (-I_Na - I_K - I_leak + I_total) / self.C
 
         # Gating variable dynamics
         dm = lambda m: self.m_alpha(last_V) * (1. - m) - self.m_beta(last_V) * m
@@ -461,19 +465,24 @@ class MorrisLecar(Neuron):
         last_V = self.V.value
         last_W = self.W.value
 
-        # Steady states
+        # Steady states (computed at last_V, fixed during this step)
         M_inf = 0.5 * (1. + u.math.tanh((last_V - self.V1) / self.V2))
         W_inf = 0.5 * (1. + u.math.tanh((last_V - self.V3) / self.V4))
         tau_W = 1. / (self.phi * u.math.cosh((last_V - self.V3) / (2. * self.V4)))
 
-        # Ionic currents
-        I_Ca = self.g_Ca * M_inf * (last_V - self.V_Ca)
-        I_K = self.g_K * last_W * (last_V - self.V_K)
-        I_leak = self.g_leak * (last_V - self.V_leak)
+        # Pre-compute gating-dependent conductances (fixed during this step)
+        g_Ca_eff = self.g_Ca * M_inf
+        g_K_eff = self.g_K * last_W
 
-        # Dynamics
+        # Voltage dynamics — express as f(V) so exp_euler_step can extract the linear term
         I_total = self.sum_current_inputs(x, last_V)
-        dV = lambda V: (-I_Ca - I_K - I_leak + I_total) / self.C
+
+        def dV(V):
+            I_Ca = g_Ca_eff * (V - self.V_Ca)
+            I_K = g_K_eff * (V - self.V_K)
+            I_leak = self.g_leak * (V - self.V_leak)
+            return (-I_Ca - I_K - I_leak + I_total) / self.C
+
         dW = lambda W: (W_inf - W) / tau_W
 
         V = brainstate.nn.exp_euler_step(dV, last_V)
@@ -666,15 +675,19 @@ class WangBuzsakiHH(Neuron):
         last_h = self.h.value
         last_n = self.n.value
 
-        # Ionic currents
+        # Pre-compute gating-dependent conductances (fixed during this step)
         m_inf_val = self.m_inf(last_V)
-        I_Na = self.gNa * m_inf_val ** 3 * last_h * (last_V - self.ENa)
-        I_K = self.gK * last_n ** 4 * (last_V - self.EK)
-        I_L = self.gL * (last_V - self.EL)
+        g_Na = self.gNa * m_inf_val ** 3 * last_h
+        g_K = self.gK * last_n ** 4
 
-        # Voltage dynamics
+        # Voltage dynamics — express as f(V) so exp_euler_step can extract the linear term
         I_total = self.sum_current_inputs(x, last_V)
-        dV = lambda V: (-I_Na - I_K - I_L + I_total) / self.C
+
+        def dV(V):
+            I_Na = g_Na * (V - self.ENa)
+            I_K = g_K * (V - self.EK)
+            I_L = self.gL * (V - self.EL)
+            return (-I_Na - I_K - I_L + I_total) / self.C
 
         # Gating variable dynamics
         h_alpha = 0.07 / u.ms * u.math.exp(-(last_V + 58. * u.mV) / (20. * u.mV))

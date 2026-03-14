@@ -238,6 +238,14 @@ class DualExpon(Synapse, AlignPost):
         self.normalize = normalize
         self.g_initializer = g_initializer
 
+        # validate tau_rise != tau_decay when normalize is enabled
+        if self.normalize:
+            brainstate.transform.jit_error_if(
+                u.math.any(u.get_magnitude(self.tau_decay - self.tau_rise) == 0.),
+                'tau_decay must differ from tau_rise when normalize=True. '
+                'Use Alpha synapse for equal time constants.'
+            )
+
     def _dual_exp_normalization(self):
         return (
             self.tau_decay / (self.tau_decay - self.tau_rise) *

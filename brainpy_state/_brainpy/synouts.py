@@ -17,7 +17,6 @@
 
 import brainstate
 import brainunit as u
-import jax.numpy as jnp
 
 from brainpy_state._mixin import BindCondData
 
@@ -298,5 +297,5 @@ class MgBlock(SynOut):
         self.beta = beta
 
     def update(self, conductance, potential):
-        norm = (1 + self.cc_Mg / self.beta * jnp.exp(self.alpha * (self.V_offset - potential)))
+        norm = (1 + self.cc_Mg / self.beta * u.math.exp(self.alpha * (self.V_offset - potential)))
         return conductance * (self.E - potential) / norm

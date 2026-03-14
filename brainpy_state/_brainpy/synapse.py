@@ -243,16 +243,16 @@ class AMPA(Synapse):
         self.T_duration = braintools.init.param(T_dur, self.varshape)
         self.g_initializer = g_initializer
 
-    def init_state(self, batch_size=None):
+    def init_state(self, batch_size=None, **kwargs):
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
         self.spike_arrival_time = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_or_mode=None, **kwargs):
-        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_or_mode)
+    def reset_state(self, batch_size=None, **kwargs):
+        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
         self.spike_arrival_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_or_mode
+            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
 
     def update(self, pre_spike):
@@ -518,18 +518,18 @@ class BioNMDA(Synapse):
         self.g_initializer = g_initializer
         self.x_initializer = x_initializer
 
-    def init_state(self, batch_size=None):
+    def init_state(self, batch_size=None, **kwargs):
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
         self.x = brainstate.HiddenState(braintools.init.param(self.x_initializer, self.varshape, batch_size))
         self.spike_arrival_time = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_or_mode=None, **kwargs):
-        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_or_mode)
-        self.x.value = braintools.init.param(self.x_initializer, self.varshape, batch_or_mode)
+    def reset_state(self, batch_size=None, **kwargs):
+        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
+        self.x.value = braintools.init.param(self.x_initializer, self.varshape, batch_size)
         self.spike_arrival_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_or_mode
+            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
 
     def update(self, pre_spike):

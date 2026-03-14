@@ -221,13 +221,14 @@ def symmetry_gap_junction_projection(
     assert len(pre_ids) == len(post_ids), "pre_ids and post_ids must have the same length"
     # Calculate the voltage difference between connected pre-synaptic and post-synaptic neurons
     # and multiply by the connection weights
-    diff = (pre_value[pre_ids] - post_value[post_ids]) * weight
+    # Use `...` indexing to support both batched (batch, neurons) and unbatched (neurons,) values
+    diff = (pre_value[..., pre_ids] - post_value[..., post_ids]) * weight
 
     # add to post-synaptic neuron group
     # Initialize the input currents for the post-synaptic neuron group
-    inputs = u.math.zeros(post.out_size, unit=u.get_unit(diff))
+    inputs = u.math.zeros_like(post_value)
     # Add the calculated current to the corresponding post-synaptic neurons
-    inputs = inputs.at[post_ids].add(diff)
+    inputs = inputs.at[..., post_ids].add(diff)
     # Generate a unique key for the post-synaptic input currents
     key = get_gap_junction_post_key(0 if post.current_inputs is None else len(post.current_inputs))
     # Add the input currents to the post-synaptic neuron group
@@ -235,9 +236,9 @@ def symmetry_gap_junction_projection(
 
     # add to pre-synaptic neuron group
     # Initialize the input currents for the pre-synaptic neuron group
-    inputs = u.math.zeros(pre.out_size, unit=u.get_unit(diff))
+    inputs = u.math.zeros_like(pre_value)
     # Add the calculated current to the corresponding pre-synaptic neurons
-    inputs = inputs.at[pre_ids].add(diff)
+    inputs = inputs.at[..., pre_ids].add(diff)
     # Generate a unique key for the pre-synaptic input currents
     key = get_gap_junction_pre_key(0 if pre.current_inputs is None else len(pre.current_inputs))
     # Add the input currents to the pre-synaptic neuron group with opposite polarity
@@ -438,15 +439,16 @@ def asymmetry_gap_junction_projection(
 
     # Calculate the voltage difference between connected pre-synaptic and post-synaptic neurons
     # and multiply by the connection weights
-    diff = pre_value[pre_ids] - post_value[post_ids]
+    # Use `...` indexing to support both batched (batch, neurons) and unbatched (neurons,) values
+    diff = pre_value[..., pre_ids] - post_value[..., post_ids]
     pre2post_current = diff * pre_weight
     post2pre_current = diff * post_weight
 
     # add to post-synaptic neuron group
     # Initialize the input currents for the post-synaptic neuron group
-    inputs = u.math.zeros(post.out_size, unit=u.get_unit(pre2post_current))
+    inputs = u.math.zeros_like(post_value)
     # Add the calculated current to the corresponding post-synaptic neurons
-    inputs = inputs.at[post_ids].add(pre2post_current)
+    inputs = inputs.at[..., post_ids].add(pre2post_current)
     # Generate a unique key for the post-synaptic input currents
     key = get_gap_junction_post_key(0 if post.current_inputs is None else len(post.current_inputs))
     # Add the input currents to the post-synaptic neuron group
@@ -454,9 +456,9 @@ def asymmetry_gap_junction_projection(
 
     # add to pre-synaptic neuron group
     # Initialize the input currents for the pre-synaptic neuron group
-    inputs = u.math.zeros(pre.out_size, unit=u.get_unit(post2pre_current))
+    inputs = u.math.zeros_like(pre_value)
     # Add the calculated current to the corresponding pre-synaptic neurons
-    inputs = inputs.at[pre_ids].add(post2pre_current)
+    inputs = inputs.at[..., pre_ids].add(post2pre_current)
     # Generate a unique key for the pre-synaptic input currents
     key = get_gap_junction_pre_key(0 if pre.current_inputs is None else len(pre.current_inputs))
     # Add the input currents to the pre-synaptic neuron group with opposite polarity

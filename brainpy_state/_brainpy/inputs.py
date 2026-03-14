@@ -110,9 +110,7 @@ class SpikeTime(brainstate.nn.Dynamics):
         if len(indices) != len(times):
             raise ValueError(f'The length of "indices" and "times" must be the same. '
                              f'However, we got {len(indices)} != {len(times)}.')
-        if callable(time_as_step):
-            self.time_as_step = time_as_step
-        else:
+        if not callable(time_as_step):
             if time_as_step not in ('floor', 'round', 'ceil'):
                 raise ValueError(f'"time_as_step" must be one of "floor", "round", "ceil". '
                                  f'Got {time_as_step!r}.')
@@ -653,13 +651,14 @@ def poisson_input(
     b = num_input * (1 - p)
     tar_val = target.value
     cond = u.math.logical_and(a > 5, b > 5)
+    std = u.math.sqrt(b * p)  # std = sqrt(n * p * (1-p))
 
     if indices is None:
         # generate Poisson input
         branch1 = jax.tree.map(
             lambda tar: brainstate.random.normal(
                 a,
-                b * p,
+                std,
                 tar.shape,
                 dtype=tar.dtype
             ),
@@ -698,7 +697,7 @@ def poisson_input(
         branch1 = jax.tree.map(
             lambda tar: brainstate.random.normal(
                 a,
-                b * p,
+                std,
                 tar[indices].shape,
                 dtype=tar.dtype
             ),
