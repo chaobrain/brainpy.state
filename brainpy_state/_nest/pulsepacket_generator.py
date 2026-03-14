@@ -21,7 +21,7 @@ from collections import deque
 from typing import Sequence
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -138,7 +138,7 @@ class pulsepacket_generator(NESTDevice):
     pulse_times : Sequence[ArrayLike] or ArrayLike or None, optional
         Pulse center times in ms. Accepted inputs are any array-like values
         flattenable to shape ``(K,)`` after conversion, or a
-        :class:`brainunit.Quantity` convertible to ``u.ms``.
+        :class:`saiunit.Quantity` convertible to ``u.ms``.
         ``None`` creates an empty schedule. Values are sorted internally in
         ascending order. Default is ``None``.
     activity : ArrayLike, optional
@@ -262,7 +262,7 @@ class pulsepacket_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.pulsepacket_generator(
        ...         in_size=(2, 3),
@@ -280,7 +280,7 @@ class pulsepacket_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.pulsepacket_generator(activity=3, sdev=0.5 * u.ms)
        >>> gen.set_data_from_stimulation_backend([4.0, 0.8, 5.0, 15.0, 25.0])
        >>> params = gen.get()

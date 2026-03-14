@@ -43,7 +43,7 @@ os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['JAX_ENABLE_X64'] = 'True'
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np

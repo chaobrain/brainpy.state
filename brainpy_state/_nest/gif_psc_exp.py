@@ -20,7 +20,7 @@ from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -323,7 +323,7 @@ class gif_psc_exp(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate as bs
         >>> bs.environ.set(dt=0.1 * u.ms)
         >>> neuron = bst.gif_psc_exp(in_size=1)

@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -249,7 +249,7 @@ class iaf_cond_exp(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> neurons = bst.iaf_cond_exp(100, V_th=-50*u.mV, t_ref=5*u.ms)
 
     Simulate with external current input:

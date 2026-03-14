@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -142,13 +142,13 @@ class ppd_sup_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar component-process rate in spikes/s (Hz), shape ``()`` after
         conversion. Accepts a single-element numeric ``ArrayLike`` or a
-        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        :class:`saiunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``1000 / rate > dead_time`` when ``rate > 0``.
         Default is ``0.0 * u.Hz``.
     dead_time : ArrayLike, optional
         Scalar absolute refractory time in ms, shape ``()`` after conversion.
         Accepts a single-element numeric ``ArrayLike`` or a
-        :class:`brainunit.Quantity` convertible to ``u.ms``.
+        :class:`saiunit.Quantity` convertible to ``u.ms``.
         Must satisfy ``dead_time >= 0``. Default is ``0.0 * u.ms``.
     n_proc : ArrayLike, optional
         Scalar integer number of independent component processes per output
@@ -268,7 +268,7 @@ class ppd_sup_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.ppd_sup_generator(
        ...         in_size=(2, 2),
@@ -288,7 +288,7 @@ class ppd_sup_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.ppd_sup_generator(rate=15.0 * u.Hz, n_proc=30)
        >>> gen.set(dead_time=1.5 * u.ms, stop=None, origin=2.0 * u.ms)
        >>> params = gen.get()

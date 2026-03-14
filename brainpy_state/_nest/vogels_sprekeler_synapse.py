@@ -1,7 +1,7 @@
 import math
 from typing import Any
 
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 

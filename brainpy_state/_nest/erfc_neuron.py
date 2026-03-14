@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import jax.scipy.special as jspecial
@@ -237,7 +237,7 @@ class erfc_neuron(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.erfc_neuron(in_size=10, tau_m=5.0 * u.ms)
        ...     neu.init_state(batch_size=1)
@@ -249,7 +249,7 @@ class erfc_neuron(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.erfc_neuron(
        ...         in_size=(2, 3),

@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -365,7 +365,7 @@ class hh_cond_exp_traub(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy_state import hh_cond_exp_traub
        >>>
        >>> # Create a population of 100 Traub HH neurons
@@ -461,13 +461,13 @@ class hh_cond_exp_traub(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        r"""Convert brainunit quantity to numpy float64 array.
+        r"""Convert saiunit quantity to numpy float64 array.
 
         Parameters
         ----------
         x : ArrayLike
-            Input value with brainunit units.
-        unit : brainunit.Unit
+            Input value with saiunit units.
+        unit : saiunit.Unit
             Unit to divide by for conversion.
 
         Returns
@@ -479,7 +479,7 @@ class hh_cond_exp_traub(NESTNeuron):
         --------
         .. code-block:: python
 
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy_state._nest.hh_cond_exp_traub import hh_cond_exp_traub
            >>> result = hh_cond_exp_traub._to_numpy(200*u.pF, u.pF)
            >>> print(result)
@@ -553,7 +553,7 @@ class hh_cond_exp_traub(NESTNeuron):
         .. code-block:: python
 
            >>> import brainstate as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy_state import hh_cond_exp_traub
            >>>
            >>> neurons = hh_cond_exp_traub(10, t_ref=2.0*u.ms)
@@ -607,7 +607,7 @@ class hh_cond_exp_traub(NESTNeuron):
         .. code-block:: python
 
            >>> import brainstate as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy_state import hh_cond_exp_traub
            >>>
            >>> # Initialize with default rest state
@@ -716,7 +716,7 @@ class hh_cond_exp_traub(NESTNeuron):
         --------
         .. code-block:: python
 
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> import jax.numpy as jnp
            >>> from brainpy_state import hh_cond_exp_traub
            >>>
@@ -781,7 +781,7 @@ class hh_cond_exp_traub(NESTNeuron):
         --------
         .. code-block:: python
 
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy_state import hh_cond_exp_traub
            >>>
            >>> neurons = hh_cond_exp_traub(10)

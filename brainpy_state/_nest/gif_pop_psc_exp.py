@@ -19,7 +19,7 @@ import math
 from typing import Sequence
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import Size
 
@@ -227,7 +227,7 @@ class gif_pop_psc_exp(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> pop = bp.gif_pop_psc_exp(1, N=100)
         >>> pop.init_all_states()
 

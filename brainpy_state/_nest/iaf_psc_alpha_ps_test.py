@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 from brainpy.state import iaf_psc_alpha_ps
 

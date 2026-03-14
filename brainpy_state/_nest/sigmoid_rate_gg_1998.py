@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -637,7 +637,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import brainstate as bs
        >>> pop = bst.sigmoid_rate_gg_1998_ipn(
        ...     in_size=100, tau=20*u.ms, lambda_=0.5, sigma=0.1, g=2.0

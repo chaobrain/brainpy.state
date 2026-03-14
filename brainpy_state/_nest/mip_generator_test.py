@@ -26,7 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 
 from brainpy_state._nest.mip_generator import mip_generator

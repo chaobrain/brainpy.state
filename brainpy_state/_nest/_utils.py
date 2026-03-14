@@ -20,11 +20,11 @@ Shared utilities for NEST-compatible neuron and device models.
 
 This module extracts common helper functions used across 60+ model files in the
 ``brainpy_state._nest`` package.  All functions are stateless (no ``self``
-parameter) and operate on plain NumPy / JAX arrays or brainunit quantities.
+parameter) and operate on plain NumPy / JAX arrays or saiunit quantities.
 """
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 
@@ -51,13 +51,13 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 def to_numpy(x, unit):
-    """Convert a brainunit quantity to a unitless float64 NumPy array.
+    """Convert a saiunit quantity to a unitless float64 NumPy array.
 
     Parameters
     ----------
     x : ArrayLike
         Quantity with units (e.g. ``V_th`` in mV).
-    unit : brainunit.Unit
+    unit : saiunit.Unit
         Unit to divide by before stripping (e.g. ``u.mV``).
 
     Returns
@@ -169,7 +169,7 @@ def check_positive(value, unit, name):
     ----------
     value : ArrayLike
         Parameter value with units.
-    unit : brainunit.Unit
+    unit : saiunit.Unit
         Unit for conversion.
     name : str
         Human-readable parameter name for the error message.
@@ -185,7 +185,7 @@ def check_non_negative(value, unit, name):
     ----------
     value : ArrayLike
         Parameter value with units.
-    unit : brainunit.Unit
+    unit : saiunit.Unit
         Unit for conversion.
     name : str
         Human-readable parameter name for the error message.

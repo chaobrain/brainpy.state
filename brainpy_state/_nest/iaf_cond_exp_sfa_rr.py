@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -277,7 +277,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
     .. code-block:: python
 
         >>> import brainstate as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainpy.state as bp
         >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=1)
         >>> with bst.environ.context(dt=0.1 * u.ms):
@@ -398,13 +398,13 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        r"""Convert brainunit quantity to plain NumPy array.
+        r"""Convert saiunit quantity to plain NumPy array.
 
         Parameters
         ----------
         x : ArrayLike
             Input value with or without units.
-        unit : brainunit.Unit
+        unit : saiunit.Unit
             Target unit for conversion (e.g., ``u.mV``, ``u.nS``).
 
         Returns

@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -297,7 +297,7 @@ class iaf_cond_alpha_mc(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> neuron = bst.iaf_cond_alpha_mc(in_size=10)
         >>> neuron.init_state()
         >>> spike = neuron.update(x=100. * u.pA)

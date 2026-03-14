@@ -19,7 +19,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import brainunit as bu
+import saiunit as bu
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -406,7 +406,7 @@ class iaf_tum_2000(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as bu
+       >>> import saiunit as bu
        >>> from brainpy_state._nest.iaf_tum_2000 import iaf_tum_2000
        >>> brainstate.environ.set(dt=0.1 * bu.ms, t=0.0 * bu.ms)
        >>> neu = iaf_tum_2000(
@@ -534,13 +534,13 @@ class iaf_tum_2000(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit=None):
-        r"""Convert brainunit quantity or array to NumPy float64 array.
+        r"""Convert saiunit quantity or array to NumPy float64 array.
 
         Parameters
         ----------
         x : ArrayLike
-            Input value, optionally with brainunit units.
-        unit : brainunit quantity or None, optional
+            Input value, optionally with saiunit units.
+        unit : saiunit quantity or None, optional
             Expected unit for conversion. If provided, divides ``x`` by ``unit``
             before conversion. If ``None``, converts ``x`` directly. Default is
             ``None``.

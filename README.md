@@ -22,19 +22,19 @@ The library ships **167+ models** organized in three tiers:
 - **Base classes**: `Dynamics`, `Neuron`, `Synapse`, the abstract foundation every model inherits from.
 - **BrainPy-style models (45+)**: high-level, composable neurons (LIF, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, NMDA, …), projections, readouts, and input generators previously designed in [BrainPy](https://brainpy.readthedocs.io/).
 - **NEST-compatible models (119+)**: faithful JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neuron, synapse, plasticity (STDP, STP), and device models.
-- All parameters carry **physical units** via [brainunit](https://github.com/chaobrain/brainunit), and every neuron supports surrogate-gradient-based training out of the box.
+- All parameters carry **physical units** via [saiunit](https://github.com/chaobrain/saiunit), and every neuron supports surrogate-gradient-based training out of the box.
 
 Compared to `brainpy.dyn`, `brainpy.state` has the following characteristics:
 
 - **Ecosystem compatability**: `brainpy.state` is built on [brainstate](https://github.com/chaobrain/brainstate) and fully compatible with [BrainX ecosystem](https://brainmodeling.readthedocs.io).
 - **Model scope**: `brainpy.state` implements much more models including BrainPy-style models plus a large NEST-compatible model set.
-- **Scientific ergonomics**: `brainpy.state` uses physical units via `brainunit` by default and is designed for surrogate-gradient training.
+- **Scientific ergonomics**: `brainpy.state` uses physical units via `saiunit` by default and is designed for surrogate-gradient training.
 
 
 ## Features
 
 - **Comprehensive model library** — 18 neuron families, 6 synapse types, 9 STDP rules, 17 generators, and more.
-- **Physical units everywhere** — parameters use `brainunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors.
+- **Physical units everywhere** — parameters use `saiunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors.
 - **Differentiable** — surrogate gradients enable backpropagation through spiking networks for training with gradient descent.
 - **NEST compatibility** — benchmarked against [NEST](https://nest-simulator.readthedocs.io/) for numerical accuracy; uses NEST-compatible parameter names.
 - **Hardware-accelerated** — JAX backend with JIT compilation for CPU, GPU, and TPU.
@@ -46,7 +46,7 @@ Compared to `brainpy.dyn`, `brainpy.state` has the following characteristics:
 ```python
 import brainpy
 import brainstate
-import brainunit as u
+import saiunit as u
 
 # Create neuron populations
 E = brainpy.state.LIF(3200, V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
@@ -94,7 +94,7 @@ pip install BrainX -U
 | Package | Description |
 |---------|-------------|
 | [brainstate](https://github.com/chaobrain/brainstate) | State management for JAX-based brain modeling |
-| [brainunit](https://github.com/chaobrain/brainunit) | Physical units for neuroscience |
+| [saiunit](https://github.com/chaobrain/saiunit) | Physical units for neuroscience |
 | [brainevent](https://github.com/chaobrain/brainevent) | Event-driven sparse operators |
 | [braintools](https://github.com/chaobrain/braintools) | Surrogate gradients, analysis, and utilities |
 

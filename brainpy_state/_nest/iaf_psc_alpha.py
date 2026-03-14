@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -305,7 +305,7 @@ class iaf_psc_alpha(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_alpha(in_size=(2,), I_e=220.0 * u.pA)
        ...     neu.init_state()
@@ -317,7 +317,7 @@ class iaf_psc_alpha(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_alpha(in_size=1, tau_syn_ex=1.5 * u.ms)
        ...     neu.init_state()

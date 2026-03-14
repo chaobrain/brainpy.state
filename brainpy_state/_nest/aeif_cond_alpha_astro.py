@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -372,7 +372,7 @@ class aeif_cond_alpha_astro(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> neuron = brainpy.state.aeif_cond_alpha_astro(in_size=2)
        >>> neuron.init_state()
        >>> sic = {'weight': 20.0 * u.pA, 'coefficients': [1.0, 0.5], 'delay_steps': 2}

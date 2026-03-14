@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -127,7 +127,7 @@ class gamma_sup_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar component-process rate in spikes/s (Hz), shape ``()`` after
         conversion. Accepts a single-element numeric ``ArrayLike`` or a
-        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        :class:`saiunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     gamma_shape : ArrayLike, optional
         Scalar integer gamma shape :math:`k`, shape ``()`` after conversion.
@@ -235,7 +235,7 @@ class gamma_sup_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.gamma_sup_generator(
        ...         in_size=(2, 3),
@@ -253,7 +253,7 @@ class gamma_sup_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.gamma_sup_generator(rate=15.0 * u.Hz, gamma_shape=2)
        >>> gen.set(n_proc=20, stop=None, origin=1.0 * u.ms)
        >>> params = gen.get()

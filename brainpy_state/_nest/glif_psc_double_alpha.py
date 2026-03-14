@@ -45,7 +45,7 @@ from typing import Callable, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -604,7 +604,7 @@ class glif_psc_double_alpha(NESTNeuron):
 
         >>> import brainpy.state as st
         >>> import brainstate as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
         >>> neurons = st.glif_psc_double_alpha(
         ...     in_size=100,
@@ -878,14 +878,14 @@ class glif_psc_double_alpha(NESTNeuron):
 
         **State Variables Created**
 
-        - ``self.V``: Membrane potential (HiddenState, brainunit.mV)
-        - ``self.y1_fast[k]``: Fast alpha-function derivative state for receptor k (HiddenState, brainunit.pA)
-        - ``self.y2_fast[k]``: Fast alpha-function current for receptor k (HiddenState, brainunit.pA)
-        - ``self.y1_slow[k]``: Slow alpha-function derivative state for receptor k (HiddenState, brainunit.pA)
-        - ``self.y2_slow[k]``: Slow alpha-function current for receptor k (HiddenState, brainunit.pA)
-        - ``self.last_spike_time``: Last spike time (ShortTermState, brainunit.ms)
+        - ``self.V``: Membrane potential (HiddenState, saiunit.mV)
+        - ``self.y1_fast[k]``: Fast alpha-function derivative state for receptor k (HiddenState, saiunit.pA)
+        - ``self.y2_fast[k]``: Fast alpha-function current for receptor k (HiddenState, saiunit.pA)
+        - ``self.y1_slow[k]``: Slow alpha-function derivative state for receptor k (HiddenState, saiunit.pA)
+        - ``self.y2_slow[k]``: Slow alpha-function current for receptor k (HiddenState, saiunit.pA)
+        - ``self.last_spike_time``: Last spike time (ShortTermState, saiunit.ms)
         - ``self.refractory_step_count``: Remaining refractory steps (ShortTermState, int32)
-        - ``self.I_stim``: Buffered external current (ShortTermState, brainunit.pA)
+        - ``self.I_stim``: Buffered external current (ShortTermState, saiunit.pA)
         - ``self._ASCurrents``: After-spike current values (NumPy array, pA)
         - ``self._ASCurrents_sum``: Sum of after-spike currents (NumPy array, pA)
         - ``self._threshold_spike``: Spike component of threshold (NumPy array, mV relative to E_L)
@@ -1087,7 +1087,7 @@ class glif_psc_double_alpha(NESTNeuron):
             Membrane potential (absolute, in mV). If ``None`` (default), uses
             the current state ``self.V.value``. If provided, should have shape
             compatible with ``self.varshape`` (or ``(batch_size, *self.varshape)``).
-            Unit: ``brainunit.mV`` or dimensionless (interpreted as mV).
+            Unit: ``saiunit.mV`` or dimensionless (interpreted as mV).
 
         Returns
         -------
@@ -1262,7 +1262,7 @@ class glif_psc_double_alpha(NESTNeuron):
             External current input (picoamperes). Default: 0.0 pA.
             Applied with **one-step delay** (buffered in ``self.I_stim``).
             Shape: scalar or broadcastable to population shape (excluding batch dimension).
-            Unit: ``brainunit.pA`` or dimensionless (interpreted as pA).
+            Unit: ``saiunit.pA`` or dimensionless (interpreted as pA).
 
         Returns
         -------
@@ -1568,7 +1568,7 @@ class glif_psc_double_alpha(NESTNeuron):
         I_syn : jax.Array
             Total synaptic current across all receptors (fast + slow).
             Shape: same as ``self.V.value.shape`` (including batch dimension if present).
-            Unit: ``brainunit.pA`` (picoamperes).
+            Unit: ``saiunit.pA`` (picoamperes).
 
         Notes
         -----
@@ -1602,7 +1602,7 @@ class glif_psc_double_alpha(NESTNeuron):
         I_syn_fast : jax.Array
             Fast synaptic current across all receptors.
             Shape: same as ``self.V.value.shape`` (including batch dimension if present).
-            Unit: ``brainunit.pA`` (picoamperes).
+            Unit: ``saiunit.pA`` (picoamperes).
 
         Notes
         -----
@@ -1635,7 +1635,7 @@ class glif_psc_double_alpha(NESTNeuron):
         I_syn_slow : jax.Array
             Slow synaptic current across all receptors.
             Shape: same as ``self.V.value.shape`` (including batch dimension if present).
-            Unit: ``brainunit.pA`` (picoamperes).
+            Unit: ``saiunit.pA`` (picoamperes).
 
         Notes
         -----

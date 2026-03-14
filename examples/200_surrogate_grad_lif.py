@@ -23,7 +23,7 @@ Reproduce the results of the``spytorch`` tutorial 1:
 
 import time
 
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np

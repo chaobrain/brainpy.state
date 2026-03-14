@@ -30,7 +30,7 @@ Validates the brainpy.state ``spike_generator`` against:
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy.testing as npt
 
 brainstate.environ.set(precision=64, platform='cpu')

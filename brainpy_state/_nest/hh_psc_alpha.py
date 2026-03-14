@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -45,7 +45,7 @@ def _hh_psc_alpha_equilibrium(V):
     Parameters
     ----------
     V : float
-        Membrane potential in mV (unitless, not a ``brainunit`` quantity).
+        Membrane potential in mV (unitless, not a ``saiunit`` quantity).
 
     Returns
     -------
@@ -465,7 +465,7 @@ class hh_psc_alpha(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import brainpy.state as bps
        >>> import matplotlib.pyplot as plt
        >>> # Initialize simulation context
@@ -544,7 +544,7 @@ class hh_psc_alpha(NESTNeuron):
         ----------
         x : ArrayLike
             BrainUnit quantity or scalar.
-        unit : brainunit.Unit
+        unit : saiunit.Unit
             Unit to divide by before conversion.
 
         Returns

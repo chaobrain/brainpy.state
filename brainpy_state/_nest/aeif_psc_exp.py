@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -287,7 +287,7 @@ class aeif_psc_exp(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>>
         >>> # Create population of 100 AdEx neurons
@@ -400,7 +400,7 @@ class aeif_psc_exp(NESTNeuron):
         ----------
         x : ArrayLike
             Input quantity with units.
-        unit : brainunit.Unit
+        unit : saiunit.Unit
             Unit to divide by before conversion.
 
         Returns

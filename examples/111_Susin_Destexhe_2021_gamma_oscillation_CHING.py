@@ -22,7 +22,7 @@
 # CHING Network for Generating Gamma Oscillation
 
 
-import brainunit as u
+import saiunit as u
 
 import brainpy.state
 import brainstate

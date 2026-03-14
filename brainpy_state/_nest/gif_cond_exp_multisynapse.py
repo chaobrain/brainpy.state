@@ -20,7 +20,7 @@ from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -343,7 +343,7 @@ class gif_cond_exp_multisynapse(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # AMPA: fast excitatory, NMDA: slow excitatory, GABA_A: fast inhibitory
         >>> neuron = bst.gif_cond_exp_multisynapse(
         ...     in_size=100,

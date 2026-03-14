@@ -140,7 +140,7 @@ class static_synapse_hom_w(static_synapse):
         Default: ``1.0`` (dimensionless).
     delay : float, array-like, or Quantity, optional
         Synaptic transmission delay. Can be connection-specific despite homogeneous
-        weight. Must be positive scalar with time units (recommended: ``brainunit.ms``).
+        weight. Must be positive scalar with time units (recommended: ``saiunit.ms``).
         Will be discretized to integer time steps according to simulation resolution.
         Default: ``1.0 * u.ms``.
     receptor_type : int, optional
@@ -247,7 +247,7 @@ class static_synapse_hom_w(static_synapse):
     .. code-block:: python
 
         >>> import brainpy.state as bs
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
         ...     # Create postsynaptic population
@@ -407,7 +407,7 @@ class static_synapse_hom_w(static_synapse):
         .. code-block:: python
 
             >>> import brainpy.state as bs
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms):
             ...     syn = bs.static_synapse_hom_w(weight=1.5, delay=2.0*u.ms, receptor_type=1)

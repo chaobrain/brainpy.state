@@ -315,7 +315,7 @@ class stdp_synapse_hom(stdp_synapse):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy_state._nest import stdp_synapse_hom
        >>> # Create STDP model with common properties
        >>> stdp = stdp_synapse_hom(
@@ -475,7 +475,7 @@ class stdp_synapse_hom(stdp_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy_state._nest import stdp_synapse_hom
            >>> stdp = stdp_synapse_hom(
            ...     weight=5.0,
@@ -551,7 +551,7 @@ class stdp_synapse_hom(stdp_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy_state._nest import stdp_synapse_hom
            >>> stdp = stdp_synapse_hom(
            ...     weight=1.0,

@@ -20,7 +20,7 @@ from typing import Callable, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -411,7 +411,7 @@ class glif_cond(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate as bts
         >>> # Create GLIF1 neuron (all mechanisms disabled)
         >>> neuron = bst.glif_cond(

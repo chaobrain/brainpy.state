@@ -1,6 +1,6 @@
 numpy
 brainstate>=0.2.0
-brainunit
+saiunit
 brainevent>=0.0.4
 braintools>=0.1.0
 brainpy>=2.7.6

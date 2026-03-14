@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -471,7 +471,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import brainstate
        >>> import matplotlib.pyplot as plt
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
@@ -615,13 +615,13 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        r"""Convert brainunit quantity to NumPy float64 array in specified unit.
+        r"""Convert saiunit quantity to NumPy float64 array in specified unit.
 
         Parameters
         ----------
-        x : ArrayLike with brainunit
+        x : ArrayLike with saiunit
             Quantity to convert (e.g., ``50 * u.mV``).
-        unit : brainunit.Unit
+        unit : saiunit.Unit
             Target unit for conversion (e.g., ``u.mV``).
 
         Returns
@@ -947,7 +947,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         .. code-block:: python
 
            >>> import brainpy.state as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> neuron = bst.hh_cond_beta_gap_traub(1)
            >>> neuron.init_all_states()
            >>> # Manually set voltage above threshold

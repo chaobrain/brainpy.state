@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -217,7 +217,7 @@ class spike_dilutor(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sd = brainpy.state.spike_dilutor(
        ...         in_size=4,
@@ -237,7 +237,7 @@ class spike_dilutor(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sd = brainpy.state.spike_dilutor(p_copy=1.0, in_size=(2, 2))
        ...     sd.init_state()
@@ -438,7 +438,7 @@ class spike_dilutor(NESTDevice):
 
            >>> import brainpy
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     sd = brainpy.state.spike_dilutor(p_copy=0.5)
            ...     sd.set(p_copy=0.8, stop=10.0 * u.ms)
@@ -493,7 +493,7 @@ class spike_dilutor(NESTDevice):
 
            >>> import brainpy
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     sd = brainpy.state.spike_dilutor(p_copy=0.3, stop=5.0 * u.ms)
            ...     params = sd.get()

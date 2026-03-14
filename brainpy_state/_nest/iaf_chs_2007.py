@@ -20,7 +20,7 @@ from typing import Callable, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -346,7 +346,7 @@ class iaf_chs_2007(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate as bs
         >>> import brainevent as be
         >>> import numpy as np

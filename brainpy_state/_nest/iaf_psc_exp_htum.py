@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -305,7 +305,7 @@ class iaf_psc_exp_htum(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy_state._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
        >>> brainstate.environ.set(dt=0.1 * u.ms, t=0.0 * u.ms)
        >>> neu = iaf_psc_exp_htum(

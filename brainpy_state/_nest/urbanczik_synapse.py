@@ -1,7 +1,7 @@
 import math
 from typing import Any
 
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -1139,7 +1139,7 @@ class urbanczik_synapse(NESTSynapse):
         Parameters
         ----------
         value : ArrayLike
-            Input value (scalar, array, or brainunit Quantity).
+            Input value (scalar, array, or saiunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -1155,7 +1155,7 @@ class urbanczik_synapse(NESTSynapse):
 
         Notes
         -----
-        Handles brainunit Quantity objects by extracting mantissa. Flattens arrays to check
+        Handles saiunit Quantity objects by extracting mantissa. Flattens arrays to check
         for single-element constraint.
         """
         if isinstance(value, u.Quantity):
@@ -1175,7 +1175,7 @@ class urbanczik_synapse(NESTSynapse):
         Parameters
         ----------
         value : ArrayLike
-            Input value (scalar, array, or brainunit Quantity).
+            Input value (scalar, array, or saiunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -1193,7 +1193,7 @@ class urbanczik_synapse(NESTSynapse):
         Notes
         -----
         Converts to float first, validates finiteness, then rounds and checks integer constraint
-        with 1e-12 absolute tolerance. Handles brainunit Quantity objects.
+        with 1e-12 absolute tolerance. Handles saiunit Quantity objects.
         """
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)

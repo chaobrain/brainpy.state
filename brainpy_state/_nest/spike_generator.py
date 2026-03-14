@@ -19,7 +19,7 @@ from typing import Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest._base import NESTDevice
@@ -210,7 +210,7 @@ class spike_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sg = brainpy.state.spike_generator(
        ...         spike_times=[5.0 * u.ms, 10.0 * u.ms, 15.0 * u.ms],
@@ -223,7 +223,7 @@ class spike_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sg = brainpy.state.spike_generator(
        ...         spike_times=[5.0 * u.ms, 5.0 * u.ms, 10.0 * u.ms],

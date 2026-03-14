@@ -19,7 +19,7 @@
 # - Diesmann, Markus, Marc-Oliver Gewaltig, and Ad Aertsen. “Stable propagation of synchronous spiking in cortical neural networks.” Nature 402.6761 (1999): 529-533.
 #
 
-import brainunit as u
+import saiunit as u
 import jax
 import matplotlib.pyplot as plt
 

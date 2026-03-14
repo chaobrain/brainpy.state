@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -242,7 +242,7 @@ class izhikevich(NESTNeuron):
 
        >>> import brainpy.state as bp
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>>
        >>> # Create a regular spiking neuron
        >>> neuron = bp.izhikevich(1, a=0.02, b=0.2, c=-65*u.mV, d=8*u.mV)

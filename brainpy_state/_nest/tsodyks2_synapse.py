@@ -18,7 +18,7 @@
 
 import math
 
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -226,7 +226,7 @@ class tsodyks2_synapse(static_synapse):
         Default: ``1.0``.
     delay : float or Quantity, optional
         Synaptic transmission delay. Must be a positive time value in
-        milliseconds. Accepts ``brainunit.Quantity`` with time units or
+        milliseconds. Accepts ``saiunit.Quantity`` with time units or
         float (interpreted as ms). Default: ``1.0 * u.ms``.
     receptor_type : int, optional
         Receiver port/receptor identifier for multi-receptor postsynaptic
@@ -246,12 +246,12 @@ class tsodyks2_synapse(static_synapse):
     tau_rec : float or Quantity, optional
         Recovery (depression) time constant :math:`\tau_{rec}`. Must be
         strictly positive (``> 0``). Controls the timescale of resource
-        replenishment. Accepts ``brainunit.Quantity`` with time units or
+        replenishment. Accepts ``saiunit.Quantity`` with time units or
         float (interpreted as ms). Default: ``800.0 * u.ms``.
     tau_fac : float or Quantity, optional
         Facilitation time constant :math:`\tau_{fac}`. Must be non-negative
         (``>= 0``). When zero, facilitation is disabled and :math:`u` remains
-        constant at :math:`U`. Accepts ``brainunit.Quantity`` with time units
+        constant at :math:`U`. Accepts ``saiunit.Quantity`` with time units
         or float (interpreted as ms). Default: ``0.0 * u.ms``.
     post : object, optional
         Default postsynaptic receiver object. If provided, this receiver will
@@ -351,7 +351,7 @@ class tsodyks2_synapse(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bst.tsodyks2_synapse(
        ...     weight=1.0,
        ...     delay=1.5 * u.ms,
@@ -551,7 +551,7 @@ class tsodyks2_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> syn = bst.tsodyks2_synapse(weight=2.0, U=0.4, tau_rec=500*u.ms)
            >>> syn.init_state()
            >>> params = syn.get()
@@ -639,7 +639,7 @@ class tsodyks2_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> syn = bst.tsodyks2_synapse(weight=1.0, U=0.5)
            >>> syn.init_state()
            >>> # Modify parameters
@@ -751,7 +751,7 @@ class tsodyks2_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> # Create synapse with target
            >>> class Target(bst.nn.Dynamics):
            ...     def __init__(self):
@@ -868,7 +868,7 @@ class tsodyks2_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> # Create synapse with target
            >>> class Target(bst.nn.Dynamics):
            ...     def __init__(self):

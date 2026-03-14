@@ -18,7 +18,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import Size
@@ -356,7 +356,7 @@ class astrocyte_lr_1994(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import brainpy_state as bps
        >>> with bst.environ.context(dt=0.1 * u.ms):
        ...     astro = bps.astrocyte_lr_1994(in_size=10)

@@ -1,7 +1,7 @@
 import math
 from typing import Any
 
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -1115,13 +1115,13 @@ class clopath_synapse(NESTSynapse):
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
         r"""Convert array-like value to scalar float with validation.
 
-        Strips brainunit Quantity wrapper if present, converts to float64 array, and validates
+        Strips saiunit Quantity wrapper if present, converts to float64 array, and validates
         scalar shape and finite value.
 
         Parameters
         ----------
         value : array-like
-            Input value (may be brainunit Quantity, NumPy array, JAX array, or Python scalar).
+            Input value (may be saiunit Quantity, NumPy array, JAX array, or Python scalar).
         name : str
             Parameter name for error messages.
 
@@ -1150,13 +1150,13 @@ class clopath_synapse(NESTSynapse):
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
         r"""Convert array-like value to scalar integer with validation.
 
-        Strips brainunit Quantity wrapper if present, converts to float64, validates scalar shape
+        Strips saiunit Quantity wrapper if present, converts to float64, validates scalar shape
         and finite value, then rounds to nearest integer and checks for integer-valued input.
 
         Parameters
         ----------
         value : array-like
-            Input value (may be brainunit Quantity, array, or scalar).
+            Input value (may be saiunit Quantity, array, or scalar).
         name : str
             Parameter name for error messages.
 

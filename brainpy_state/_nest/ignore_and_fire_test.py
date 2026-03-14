@@ -33,7 +33,7 @@ os.environ.setdefault('JAX_ENABLE_X64', 'True')
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt

@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -424,7 +424,7 @@ class iaf_chxk_2008(NESTNeuron):
     .. code-block:: python
 
         >>> import brainstate as bs
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainpy.state as bps
         >>> neuron = bps.iaf_chxk_2008(1)
         >>> with bs.environ.context(dt=0.1 * u.ms):

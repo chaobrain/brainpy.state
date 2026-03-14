@@ -20,7 +20,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -332,7 +332,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainpy.state as bp
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> neuron = bp.aeif_cond_beta_multisynapse(
        ...     in_size=10,
        ...     tau_rise=(2.0, 0.5) * u.ms,
@@ -464,7 +464,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         ----------
         x : ArrayLike
             Quantity with units.
-        unit : brainunit.Unit
+        unit : saiunit.Unit
             Target unit for conversion.
 
         Returns

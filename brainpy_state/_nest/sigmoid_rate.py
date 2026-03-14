@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 

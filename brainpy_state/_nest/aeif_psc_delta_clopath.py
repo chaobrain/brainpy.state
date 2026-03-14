@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -394,7 +394,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
        >>> import brainpy.state as bst
        >>> import brainstate as bs
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import matplotlib.pyplot as plt
        >>>
        >>> # Create neuron population
@@ -421,7 +421,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
        >>> import brainpy.state as bst
        >>> import brainstate as bs
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>>
        >>> # Create excitatory and inhibitory populations
        >>> exc = bst.aeif_psc_delta_clopath(in_size=100, I_e=200*u.pA)

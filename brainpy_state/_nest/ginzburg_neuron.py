@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -250,7 +250,7 @@ class ginzburg_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>>
         >>> # Create population of 100 binary neurons with sigmoidal gain

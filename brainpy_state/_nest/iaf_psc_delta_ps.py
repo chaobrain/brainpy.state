@@ -20,7 +20,7 @@ from typing import Callable, Iterable, Optional, Sequence, Tuple, Union
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -342,7 +342,7 @@ class iaf_psc_delta_ps(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_delta_ps(in_size=2, t_ref=2.0 * u.ms)
        ...     neu.init_state()
@@ -356,7 +356,7 @@ class iaf_psc_delta_ps(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_delta_ps(in_size=1, refractory_input=True)
        ...     neu.init_state()

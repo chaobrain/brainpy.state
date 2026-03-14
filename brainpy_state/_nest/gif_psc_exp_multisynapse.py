@@ -89,7 +89,7 @@ from typing import Callable, Iterable, Optional, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -449,9 +449,9 @@ class gif_psc_exp_multisynapse(NESTNeuron):
 
     * **Parameter units**: Following NEST's C++ implementation,
       ``tau_syn``, ``tau_sfa``, ``q_sfa``, ``tau_stc``, and ``q_stc`` are
-      specified as **bare floats** (not brainunit Quantities) in their
+      specified as **bare floats** (not saiunit Quantities) in their
       respective natural units (ms, mV, nA). All other parameters use
-      brainunit Quantities for dimensional safety.
+      saiunit Quantities for dimensional safety.
 
     * **Exact integration**: The model uses analytic propagator
       coefficients for exact integration of linear ODEs, matching NEST's
@@ -498,7 +498,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> # Create a small population
        >>> neurons = bst.gif_psc_exp_multisynapse(10, tau_syn=(2.0,))
        >>> neurons.init_state()

@@ -20,7 +20,7 @@ from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -362,7 +362,7 @@ class pp_psc_delta(NESTNeuron):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> neurons = bst.pp_psc_delta(100)
        >>> neurons.init_all_states()
 
@@ -491,7 +491,7 @@ class pp_psc_delta(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x, unit):
-        r"""Convert brainunit quantity to NumPy array in specified units.
+        r"""Convert saiunit quantity to NumPy array in specified units.
 
         Parameters
         ----------
@@ -508,7 +508,7 @@ class pp_psc_delta(NESTNeuron):
         Notes
         -----
         This method strips units and converts to float64 for use in NumPy-based
-        numerical integration loops where brainunit operations would be too slow.
+        numerical integration loops where saiunit operations would be too slow.
         """
         return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 

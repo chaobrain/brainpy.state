@@ -19,7 +19,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -335,7 +335,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy_state._nest.iaf_psc_exp_multisynapse import (
        ...     iaf_psc_exp_multisynapse,
        ... )
@@ -355,7 +355,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy_state._nest.iaf_psc_exp_multisynapse import (
        ...     iaf_psc_exp_multisynapse,
        ... )
@@ -446,7 +446,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         ----------
         x : ArrayLike
             Input value with units compatible with ``unit``.
-        unit : brainunit.Unit
+        unit : saiunit.Unit
             Physical unit to divide out (e.g. ``u.mV``, ``u.ms``, ``u.pA``).
 
         Returns

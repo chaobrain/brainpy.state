@@ -1,6 +1,6 @@
 from typing import Any
 
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -180,7 +180,7 @@ class diffusion_connection(NESTSynapse):
        :meth:`project_coeffarray` provide explicit event construction APIs not
        directly exposed in NEST's C++ interface.
 
-    3. **Unit handling**: Supports ``brainunit.Quantity`` inputs (mantissa extracted
+    3. **Unit handling**: Supports ``saiunit.Quantity`` inputs (mantissa extracted
        automatically). NEST is unit-agnostic at the connection level.
 
     **Error message compatibility:**
@@ -707,7 +707,7 @@ class diffusion_connection(NESTSynapse):
         Parameters
         ----------
         drift_factor : float, array-like, or Quantity
-            New drift scaling factor. Must be scalar. If ``brainunit.Quantity``,
+            New drift scaling factor. Must be scalar. If ``saiunit.Quantity``,
             mantissa is extracted (assumed dimensionless).
 
         Raises
@@ -740,7 +740,7 @@ class diffusion_connection(NESTSynapse):
         Parameters
         ----------
         diffusion_factor : float, array-like, or Quantity
-            New diffusion scaling factor. Must be scalar. If ``brainunit.Quantity``,
+            New diffusion scaling factor. Must be scalar. If ``saiunit.Quantity``,
             mantissa is extracted (assumed dimensionless).
 
         Raises
@@ -856,7 +856,7 @@ class diffusion_connection(NESTSynapse):
             Presynaptic rate coefficient array, typically representing interpolated
             firing rates across multiple time lags. Shape: ``(n_lags,)`` where
             ``n_lags`` is the number of WFR substeps per iteration window. If
-            ``brainunit.Quantity``, mantissa is extracted (assumed Hz or dimensionless).
+            ``saiunit.Quantity``, mantissa is extracted (assumed Hz or dimensionless).
             Must be non-empty 1D array after conversion.
 
         Returns
@@ -887,7 +887,7 @@ class diffusion_connection(NESTSynapse):
 
         **Conversion and validation:**
 
-        1. Extract mantissa if ``brainunit.Quantity``
+        1. Extract mantissa if ``saiunit.Quantity``
         2. Convert to NumPy ``float64`` array via ``u.math.asarray``
         3. Flatten to 1D (``reshape(-1)``)
         4. Validate non-empty (``size > 0``)
@@ -924,11 +924,11 @@ class diffusion_connection(NESTSynapse):
             >>> print(event['drift_factor'])
             0.8
 
-        **Event with brainunit Quantity:**
+        **Event with saiunit Quantity:**
 
         .. code-block:: python
 
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> rate_Hz = np.array([20.0, 25.0, 22.5]) * u.Hz
             >>> event = conn.prepare_secondary_event(rate_Hz)
             >>> # Mantissa extracted, units stripped
@@ -963,7 +963,7 @@ class diffusion_connection(NESTSynapse):
         ----------
         coeffarray : array-like or Quantity
             Presynaptic rate coefficient array. Shape: ``(n_lags,)`` where ``n_lags``
-            is the number of time substeps in the WFR window. If ``brainunit.Quantity``,
+            is the number of time substeps in the WFR window. If ``saiunit.Quantity``,
             mantissa is extracted. Must be non-empty 1D array after conversion.
 
         Returns
@@ -1089,7 +1089,7 @@ class diffusion_connection(NESTSynapse):
         ----------
         coeff : float, array-like, or Quantity
             Single rate coefficient value (typically Hz or dimensionless). Must be
-            scalar. If ``brainunit.Quantity``, mantissa is extracted.
+            scalar. If ``saiunit.Quantity``, mantissa is extracted.
         delay_steps : int, array-like, or Quantity, optional
             Number of simulation time steps until event delivery. Must be scalar
             non-negative integer. Note: Unlike standard ``diffusion_connection``
@@ -1241,7 +1241,7 @@ class diffusion_connection(NESTSynapse):
         coeffarray : array-like or Quantity
             Multi-lag coefficient array representing rate values at sequential time
             substeps. Shape: ``(n_lags,)`` where ``n_lags`` is the number of events
-            to generate. If ``brainunit.Quantity``, mantissa is extracted. Must be
+            to generate. If ``saiunit.Quantity``, mantissa is extracted. Must be
             non-empty 1D array.
         first_delay_steps : int, array-like, or Quantity, optional
             Time step offset for the first event (lag 0). Subsequent events are

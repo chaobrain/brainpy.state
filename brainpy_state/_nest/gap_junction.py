@@ -1,6 +1,6 @@
 from typing import Any
 
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -181,7 +181,7 @@ class gap_junction(NESTSynapse):
     .. code-block:: python
 
         >>> import brainpy_state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> # Create gap junction with 10 nS conductance
         >>> gap = bp.nest.gap_junction(weight=10.0)
@@ -894,7 +894,7 @@ class gap_junction(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be a brainunit Quantity, ndarray, or scalar).
+            Input value (may be a saiunit Quantity, ndarray, or scalar).
 
         Returns
         -------
@@ -921,7 +921,7 @@ class gap_junction(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be a brainunit Quantity, ndarray, or scalar).
+            Input value (may be a saiunit Quantity, ndarray, or scalar).
         name : str
             Parameter name for error messages.
 
@@ -950,7 +950,7 @@ class gap_junction(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be a brainunit Quantity, ndarray, or scalar).
+            Input value (may be a saiunit Quantity, ndarray, or scalar).
         name : str
             Parameter name for error messages.
 

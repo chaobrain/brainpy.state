@@ -18,7 +18,7 @@
 
 import math
 
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike
 
 from .stdp_synapse import _STDP_EPS, stdp_synapse
@@ -131,17 +131,17 @@ class stdp_nn_restr_synapse(stdp_synapse):
         Initial synaptic weight (scalar, float). Must have same sign as
         ``Wmax``. Default: ``1.0``.
     delay : ArrayLike, optional
-        Synaptic delay (scalar, brainunit time). Dendritic delay for spike
+        Synaptic delay (scalar, saiunit time). Dendritic delay for spike
         transmission. Default: ``1.0 * u.ms``.
     receptor_type : int, optional
         Receiver port/receptor id (non-negative integer). Identifies which
         input channel of the postsynaptic neuron this synapse targets.
         Default: ``0``.
     tau_plus : ArrayLike, optional
-        Potentiation time constant (scalar, brainunit time, positive).
+        Potentiation time constant (scalar, saiunit time, positive).
         Controls the temporal window for LTP. Default: ``20.0 * u.ms``.
     tau_minus : ArrayLike, optional
-        Depression trace time constant (scalar, brainunit time, positive).
+        Depression trace time constant (scalar, saiunit time, positive).
         Controls the temporal window for LTD. In NEST this belongs to the
         postsynaptic archiving neuron; here it is stored on the synapse for
         standalone compatibility. Default: ``20.0 * u.ms``.
@@ -207,7 +207,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bst.nn.stdp_nn_restr_synapse(
        ...     weight=0.5,
        ...     delay=1.5 * u.ms,

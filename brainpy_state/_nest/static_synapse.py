@@ -20,7 +20,7 @@ import math
 from collections import defaultdict
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -154,7 +154,7 @@ class static_synapse(NESTSynapse):
         Default: ``1.0`` (dimensionless).
     delay : float, array-like, or Quantity, optional
         Synaptic transmission delay. Must be a positive scalar with time units
-        (recommended: ``brainunit.ms``). Will be discretized to integer time
+        (recommended: ``saiunit.ms``). Will be discretized to integer time
         steps according to simulation resolution ``dt``.
         Default: ``1.0 * u.ms``.
     receptor_type : int, optional
@@ -216,7 +216,7 @@ class static_synapse(NESTSynapse):
        delivery system.
 
     3. **Weight units**: NEST is unit-agnostic at the connection level. This
-       implementation supports ``brainunit`` quantities, allowing type-safe
+       implementation supports ``saiunit`` quantities, allowing type-safe
        dimensional analysis.
 
     4. **Delay caching**: The delay is recomputed whenever ``dt`` changes. NEST
@@ -258,7 +258,7 @@ class static_synapse(NESTSynapse):
     .. code-block:: python
 
         >>> import brainpy.state as bs
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
         ...     # Create postsynaptic neuron
@@ -687,7 +687,7 @@ class static_synapse(NESTSynapse):
         .. code-block:: python
 
             >>> import brainpy.state as bs
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms)
             >>> syn.set(weight=2.5)  # Only weight changes
             >>> assert syn.weight == 2.5
@@ -778,7 +778,7 @@ class static_synapse(NESTSynapse):
 
         **Weight units:**
 
-        If ``weight`` was initialized as a ``brainunit.Quantity``, the returned value
+        If ``weight`` was initialized as a ``saiunit.Quantity``, the returned value
         is the dimensionless magnitude in the original units. To preserve units, access
         ``synapse.weight`` directly.
 
@@ -794,7 +794,7 @@ class static_synapse(NESTSynapse):
         .. code-block:: python
 
             >>> import brainpy.state as bs
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms):
             ...     syn = bs.static_synapse(weight=1.5, delay=2.0*u.ms, receptor_type=1)
@@ -964,7 +964,7 @@ class static_synapse(NESTSynapse):
         .. code-block:: python
 
             >>> import brainpy.state as bs
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
             ...     post = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)
@@ -1169,7 +1169,7 @@ class static_synapse(NESTSynapse):
         .. code-block:: python
 
             >>> import brainpy.state as bs
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
             ...     post = bs.LIF(1, V_rest=-65*u.mV, V_th=-50*u.mV, tau=20*u.ms)

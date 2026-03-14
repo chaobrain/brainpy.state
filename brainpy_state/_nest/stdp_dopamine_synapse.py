@@ -19,7 +19,7 @@
 import math
 from collections.abc import Mapping
 
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -249,7 +249,7 @@ class stdp_dopamine_synapse(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bp
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> # Create synapse with volume transmitter placeholder
        >>> syn = bp.stdp_dopamine_synapse(
        ...     weight=1.0,
@@ -795,7 +795,7 @@ class stdp_dopamine_synapse(static_synapse):
         Notes
         -----
         Time constants are returned in milliseconds (internal representation), not as
-        ``brainunit.Quantity`` objects.
+        ``saiunit.Quantity`` objects.
 
         Examples
         --------
@@ -1099,7 +1099,7 @@ class stdp_dopamine_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bp
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> # Create postsynaptic neuron and synapse
            >>> post_neuron = bp.LIF(1)
            >>> syn = bp.stdp_dopamine_synapse(
@@ -1354,7 +1354,7 @@ class stdp_dopamine_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bp
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> import brainstate as bs
            >>> # Setup
            >>> post_neuron = bp.LIF(1)

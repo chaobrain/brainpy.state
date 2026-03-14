@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -483,7 +483,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> model = bst.threshold_lin_rate_ipn(
        ...     in_size=10, tau=20*u.ms, sigma=0.5, g=2.0, theta=1.0
        ... )
@@ -1129,7 +1129,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> model = bst.threshold_lin_rate_opn(
        ...     in_size=10, tau=20*u.ms, sigma=0.5, g=2.0, theta=1.0
        ... )

@@ -18,7 +18,7 @@
 
 import math
 
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -338,7 +338,7 @@ class stdp_synapse(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bst.stdp_synapse(weight=0.5, delay=1.0 * u.ms)
        >>> syn.get()
        {'weight': 0.5, 'delay': 1.0, 'receptor_type': 0, 'tau_plus': 20.0,
@@ -582,7 +582,7 @@ class stdp_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     syn = bst.stdp_synapse(weight=1.0)
            ...     syn.init_state()
@@ -954,7 +954,7 @@ class stdp_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     post_neuron = bst.LIF(1)
            ...     syn = bst.stdp_synapse(weight=1.0, post=post_neuron)
@@ -1109,7 +1109,7 @@ class stdp_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     pre = bst.LIF(1)
            ...     post = bst.LIF(1)

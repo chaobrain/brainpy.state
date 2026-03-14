@@ -20,7 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -160,7 +160,7 @@ class correlation_detector(NESTDevice):
         is retained for API consistency and does not affect histogram shape.
         Default is ``1``.
     delta_tau : quantity (ms) or float or None, optional
-        Bin width :math:`\Delta_\tau`. Unitful ``brainunit`` quantities are
+        Bin width :math:`\Delta_\tau`. Unitful ``saiunit`` quantities are
         accepted and converted to ms; bare floats are interpreted as ms.
         Must be finite, strictly positive, and an integer multiple of
         simulation ``dt``. ``None`` auto-selects ``5 * dt``.
@@ -270,7 +270,7 @@ class correlation_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlation_detector(
@@ -293,7 +293,7 @@ class correlation_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlation_detector()
        ...     with brainstate.environ.context(t=0.0 * u.ms):

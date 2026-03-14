@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -345,7 +345,7 @@ class aeif_cond_alpha(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> neuron = brainpy.state.aeif_cond_alpha(
        ...     in_size=3,
        ...     V_peak=0.0 * u.mV,
@@ -410,7 +410,7 @@ class aeif_cond_alpha(NESTNeuron):
         self.tau_syn_ex = braintools.init.param(tau_syn_ex, self.varshape)
         self.tau_syn_in = braintools.init.param(tau_syn_in, self.varshape)
         self.I_e = braintools.init.param(I_e, self.varshape)
-        self.gsl_error_tol = braintools.init.param(gsl_error_tol, self.varshape)
+        self.gsl_error_tol = gsl_error_tol
 
         self.V_initializer = V_initializer
         self.g_ex_initializer = g_ex_initializer
@@ -444,39 +444,44 @@ class aeif_cond_alpha(NESTNeuron):
             or if the exponential term can overflow at spike time for the
             configured ``V_peak``, ``V_th``, and ``Delta_T``.
         """
-        v_reset = self._to_numpy(self.V_reset, u.mV)
-        v_peak = self._to_numpy(self.V_peak, u.mV)
-        v_th = self._to_numpy(self.V_th, u.mV)
-        delta_t = self._to_numpy(self.Delta_T, u.mV)
 
-        if np.any(v_reset >= v_peak):
+        v_reset = self.V_reset
+        v_peak = self.V_peak
+        v_th = self.V_th
+        delta_t = self.Delta_T / u.ms
+
+        # TODO: if any of above variables are jax tracer, return
+
+        if u.math.any(v_reset >= v_peak):
             raise ValueError('Ensure that: V_reset < V_peak .')
-        if np.any(delta_t < 0.0):
+        if u.math.any(delta_t < 0.0):
             raise ValueError('Delta_T must be positive.')
-        if np.any(v_peak < v_th):
+        if u.math.any(v_peak < v_th):
             raise ValueError('V_peak >= V_th required.')
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        if u.math.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if u.math.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0):
+        if u.math.any(self.tau_syn_ex <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
+        if u.math.any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_w, u.ms) <= 0.0):
+        if u.math.any(self.tau_w <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy_unitless(self.gsl_error_tol) <= 0.0):
+        if u.math.any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
         # Mirror NEST overflow guard for exponential term at spike time.
         positive_dt = delta_t > 0.0
         if np.any(positive_dt):
-            max_exp_arg = np.log(np.finfo(np.float64).max / 1e20)
+            max_exp_arg = np.log(np.finfo(dtype=brainstate.environ.dftype()).max / 1e20)
             ratio = (v_peak - v_th) / np.where(positive_dt, delta_t, 1.0)
             if np.any(ratio[positive_dt] >= max_exp_arg):
                 raise ValueError(
-                    'The current combination of V_peak, V_th and Delta_T will lead to numerical overflow at spike '
-                    'time; try for instance to increase Delta_T or to reduce V_peak to avoid this problem.'
+                    'The current combination of V_peak, V_th and Delta_T will '
+                    'lead to numerical overflow at spike '
+                    'time; try for instance to increase Delta_T or to reduce '
+                    'V_peak to avoid this problem.'
                 )
 
     def init_state(self, batch_size: int = None, **kwargs):
@@ -499,6 +504,10 @@ class aeif_cond_alpha(NESTNeuron):
             If initializer outputs have incompatible units/dtypes for the
             corresponding state variables.
         """
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
         g_in = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
@@ -506,7 +515,6 @@ class aeif_cond_alpha(NESTNeuron):
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
 
         self.V = brainstate.HiddenState(V)
-        dftype = brainstate.environ.dftype()
         self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_ex = brainstate.HiddenState(g_ex)
         self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
@@ -516,56 +524,14 @@ class aeif_cond_alpha(NESTNeuron):
         spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         self.last_spike_time = brainstate.ShortTermState(spk_time)
         ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
         self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
 
-        dt = brainstate.environ.get_dt()
         self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape, batch_size)
         self.I_stim = brainstate.ShortTermState.init(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
 
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             self.refractory = brainstate.ShortTermState(refractory)
-
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset model state to initial conditions.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            Optional batch size used to rebuild values with shape
-            ``(batch_size, *self.varshape)``. If omitted, keeps non-batched
-            ``self.varshape`` layout.
-        **kwargs
-            Unused compatibility parameters accepted by the base-state API.
-
-        Raises
-        ------
-        ValueError
-            If initializer outputs cannot be broadcast to state shape.
-        TypeError
-            If unit arithmetic fails while constructing reset values.
-        """
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        self.g_ex.value = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
-        self.g_in.value = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
-        self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
-        zeros = u.math.zeros_like(u.math.asarray(self.V.value / u.mV))
-        dftype = brainstate.environ.dftype()
-        self.dg_ex.value = np.asarray(zeros, dtype=dftype)
-        self.dg_in.value = np.asarray(zeros, dtype=dftype)
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
-        )
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
-        dt = brainstate.environ.get_dt()
-        self.integration_step.value = braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
-        self.I_stim.value = braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
-        if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
-            self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
         r"""Evaluate surrogate spike output from membrane voltage.
@@ -620,10 +586,13 @@ class aeif_cond_alpha(NESTNeuron):
             p['g_L'] * p['Delta_T'] * math.exp((v_eff - p['V_th']) / p['Delta_T'])
         )
 
-        dv = 0.0 if is_refractory else (
-                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p[
-                                           'I_e'] + i_stim
-                                       ) / p['C_m']
+        dv = (
+            0.0 if is_refractory else
+            (
+                -p['g_L'] * (v_eff - p['E_L']) + i_spike - i_syn_exc - i_syn_inh - w + p[
+                'I_e'] + i_stim
+            ) / p['C_m']
+        )
 
         ddg_ex = -dg_ex / p['tau_syn_ex']
         dg_ex_dt = dg_ex - (g_ex / p['tau_syn_ex'])

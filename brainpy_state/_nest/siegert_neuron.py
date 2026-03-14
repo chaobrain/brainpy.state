@@ -21,7 +21,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -268,7 +268,7 @@ class siegert_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms, tau_m=10*u.ms)
         >>> model.init_all_states()
@@ -801,7 +801,7 @@ class siegert_neuron(NESTNeuron):
 
             >>> import brainpy.state as bp
             >>> import numpy as np
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> model = bp.siegert_neuron(in_size=1, tau_m=10*u.ms, t_ref=2*u.ms, theta=15.0)
             >>> mu_vals = np.linspace(0, 25, 50)
             >>> rates = model.siegert_rate(mu=mu_vals, sigma_square=2.0)
@@ -976,7 +976,7 @@ class siegert_neuron(NESTNeuron):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate
             >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms)
             >>> model.init_all_states()

@@ -20,7 +20,7 @@ import math
 import warnings
 from collections.abc import Mapping, Sequence
 
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike
 
 from .static_synapse import static_synapse
@@ -250,7 +250,7 @@ class cont_delay_synapse(static_synapse):
 
         >>> import brainpy.state as bst
         >>> import brainstate as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> with bst.environ.context(dt=0.1 * u.ms):
         ...     syn = bst.nest.cont_delay_synapse(
         ...         weight=2.5,

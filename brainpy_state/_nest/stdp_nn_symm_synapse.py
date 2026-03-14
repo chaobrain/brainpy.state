@@ -18,7 +18,7 @@
 
 import math
 
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike
 
 from .stdp_synapse import _STDP_EPS, stdp_synapse
@@ -166,7 +166,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bp
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bp.stdp_nn_symm_synapse(
        ...     weight=0.5,
        ...     delay=1.5 * u.ms,
@@ -335,7 +335,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bp
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> syn = bp.stdp_nn_symm_synapse(weight=1.0)
            >>> syn.set(lambda_=0.02, tau_plus=15.0 * u.ms)
            >>> syn.get()['lambda']
@@ -425,7 +425,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bp
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> syn = bp.stdp_nn_symm_synapse(
            ...     weight=1.0, delay=1.0 * u.ms, tau_plus=20.0 * u.ms
            ... )

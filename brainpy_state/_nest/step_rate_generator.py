@@ -19,7 +19,7 @@ from typing import Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTDevice
@@ -198,7 +198,7 @@ class step_rate_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.step_rate_generator(
        ...         amplitude_times=[10.0 * u.ms, 110.0 * u.ms, 210.0 * u.ms],
@@ -213,7 +213,7 @@ class step_rate_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen1 = brainpy.state.step_rate_generator(
        ...     amplitude_times=[0.0 * u.ms, 100.0 * u.ms, 200.0 * u.ms],
        ...     amplitude_values=[50.0, 0.0, 80.0],

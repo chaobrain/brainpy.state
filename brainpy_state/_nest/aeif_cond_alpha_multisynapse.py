@@ -20,7 +20,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -361,7 +361,7 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy_state._nest.aeif_cond_alpha_multisynapse import (
        ...     aeif_cond_alpha_multisynapse,
        ... )

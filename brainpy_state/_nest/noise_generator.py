@@ -20,7 +20,7 @@ from typing import Optional
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -229,7 +229,7 @@ class noise_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     stim = brainpy.state.noise_generator(
        ...         in_size=1,
@@ -250,7 +250,7 @@ class noise_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.noise_generator(
        ...     in_size=4,
        ...     mean=50.0 * u.pA,
@@ -339,7 +339,7 @@ class noise_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy.state import noise_generator
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     gen = noise_generator(

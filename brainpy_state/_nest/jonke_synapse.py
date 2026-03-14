@@ -1,7 +1,7 @@
 import math
 from typing import Any
 
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -1135,7 +1135,7 @@ class jonke_synapse(NESTSynapse):
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
         r"""Convert array-like input to validated float scalar.
 
-        Handles brainunit Quantities, NumPy arrays, and Python scalars. Ensures result is
+        Handles saiunit Quantities, NumPy arrays, and Python scalars. Ensures result is
         single finite value.
 
         Parameters
