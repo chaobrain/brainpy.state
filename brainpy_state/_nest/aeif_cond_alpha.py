@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
-
+from ._utils import is_tracer
 from ._base import NESTNeuron
 
 __all__ = [
@@ -450,31 +450,37 @@ class aeif_cond_alpha(NESTNeuron):
         v_th = self.V_th
         delta_t = self.Delta_T / u.ms
 
-        # TODO: if any of above variables are jax tracer, return
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (v_reset, v_peak, v_th, delta_t)):
+            return
 
-        if u.math.any(v_reset >= v_peak):
+        if np.any(v_reset >= v_peak):
             raise ValueError('Ensure that: V_reset < V_peak .')
-        if u.math.any(delta_t < 0.0):
+        if np.any(delta_t < 0.0):
             raise ValueError('Delta_T must be positive.')
-        if u.math.any(v_peak < v_th):
+        if np.any(v_peak < v_th):
             raise ValueError('V_peak >= V_th required.')
-        if u.math.any(self.C_m <= 0.0 * u.pF):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if u.math.any(self.t_ref < 0.0 * u.ms):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if u.math.any(self.tau_syn_ex <= 0.0 * u.ms):
+        if np.any(self.tau_syn_ex <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if u.math.any(self.tau_syn_in <= 0.0 * u.ms):
+        if np.any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if u.math.any(self.tau_w <= 0.0 * u.ms):
+        if np.any(self.tau_w <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if u.math.any(self.gsl_error_tol <= 0.0):
+        if np.any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
         # Mirror NEST overflow guard for exponential term at spike time.
         positive_dt = delta_t > 0.0
         if np.any(positive_dt):
-            max_exp_arg = np.log(np.finfo(dtype=brainstate.environ.dftype()).max / 1e20)
+            dftype = brainstate.environ.dftype()
+            finfo = np.finfo(dtype=dftype)
+            # Use a safety margin appropriate for the dtype's dynamic range.
+            safety_margin = 1e20 if finfo.bits >= 64 else 1e10
+            max_exp_arg = np.log(finfo.max / safety_margin)
             ratio = (v_peak - v_th) / np.where(positive_dt, delta_t, 1.0)
             if np.any(ratio[positive_dt] >= max_exp_arg):
                 raise ValueError(

@@ -24,9 +24,11 @@ parameter) and operate on plain NumPy / JAX arrays or saiunit quantities.
 """
 
 import brainstate
-import saiunit as u
+import jax
 import jax.numpy as jnp
 import numpy as np
+import saiunit as u
+from jax.interpreters.partial_eval import DynamicJaxprTracer
 
 __all__ = [
     'to_numpy',
@@ -44,6 +46,10 @@ __all__ = [
     'time_window_gate',
     'stack_schedule_values',
 ]
+
+
+def is_tracer(x):
+    return isinstance(x, (jax.ShapeDtypeStruct, jax.core.ShapedArray, DynamicJaxprTracer, jax.core.Tracer))
 
 
 # ---------------------------------------------------------------------------
