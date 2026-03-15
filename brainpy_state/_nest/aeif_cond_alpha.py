@@ -702,7 +702,7 @@ class aeif_cond_alpha(NESTNeuron):
         self.w.value = w
         self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
         self.integration_step.value = h
-        self.I_stim.value = new_i_stim
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
