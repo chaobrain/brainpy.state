@@ -478,14 +478,13 @@ class aeif_cond_alpha(NESTNeuron):
             If initializer outputs have incompatible units/dtypes for the
             corresponding state variables.
         """
-        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
         dt = brainstate.environ.get_dt()
 
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape)
         g_in = braintools.init.param(self.g_in_initializer, self.varshape)
         V = braintools.init.param(self.V_initializer, self.varshape)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV), unit=u.nS / u.ms)
+        zeros = u.math.zeros(self.varshape, dtype=V.dtype) * (u.nS / u.ms)
         w = braintools.init.param(self.w_initializer, self.varshape)
 
         self.dg_ex = brainstate.ShortTermState(zeros)
@@ -499,6 +498,8 @@ class aeif_cond_alpha(NESTNeuron):
         self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
         self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
         self.I_stim = brainstate.ShortTermState.init(braintools.init.Constant(0.0 * u.pA), self.varshape)
+
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
@@ -524,47 +525,25 @@ class aeif_cond_alpha(NESTNeuron):
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
-
-    def _sum_signed_delta_inputs(self):
-        w_ex = u.math.zeros_like(self.g_ex.value)
-        w_in = u.math.zeros_like(self.g_in.value)
-        if self.delta_inputs is None:
-            return w_ex, w_in
-
-        for key in tuple(self.delta_inputs.keys()):
-            out = self.delta_inputs[key]
-            if callable(out):
-                out = out()
-            else:
-                self.delta_inputs.pop(key)
-
-            zero = u.math.zeros_like(out)
-            w_ex = w_ex + u.math.maximum(out, zero)
-            w_in = w_in + u.math.maximum(-out, zero)
-        return w_ex, w_in
-
-    def _dynamics_vector(self, V, dg_ex, g_ex, dg_in, g_in, w, is_refractory, i_stim):
+    def _vector_field(self, state, extra):
         """Unit-aware vectorized RHS for all neurons simultaneously.
 
         Parameters
         ----------
-        V : Quantity, mV
-        dg_ex : Quantity, nS/ms
-        g_ex : Quantity, nS
-        dg_in : Quantity, nS/ms
-        g_in : Quantity, nS
-        w : Quantity, pA
-        is_refractory : array, bool
-        i_stim : Quantity, pA
+        state : tuple
+            (V, dg_ex, g_ex, dg_in, g_in, w) — ODE state variables.
+        extra : tuple
+            (spike_mask, r, unstable, i_stim, v_peak_detect) — mutable
+            auxiliary data carried through the integrator.
 
         Returns
         -------
         tuple of 6 Quantities (dV, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw)
         """
+        V, dg_ex, g_ex, dg_in, g_in, w = state
+        _, r, _, i_stim, _ = extra
+        is_refractory = r > 0
+
         v_eff = u.math.where(is_refractory, self.V_reset, u.math.minimum(V, self.V_peak))
 
         i_syn_exc = g_ex * (v_eff - self.E_ex)
@@ -587,6 +566,40 @@ class aeif_cond_alpha(NESTNeuron):
         dw = (self.a * (v_eff - self.E_L) - w) / self.tau_w
 
         return dV, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw
+
+    def _event_fn(self, state, extra, accept):
+        """In-loop spike detection, reset, and refractory handling.
+
+        Parameters
+        ----------
+        state : tuple
+            (V, dg_ex, g_ex, dg_in, g_in, w) — ODE state variables.
+        extra : tuple
+            (spike_mask, r, unstable, i_stim, v_peak_detect).
+        accept : array, bool
+            Mask of neurons whose RKF45 substep was accepted.
+
+        Returns
+        -------
+        (new_state, new_extra) with updated spike/reset/refractory info.
+        """
+        spike_mask, r, unstable, i_stim, v_peak_detect = extra
+
+        V_m = state[0]
+        w_m = state[5]
+        unstable = unstable | jnp.any(accept & ((V_m < -1e3 * u.mV) | (w_m < -1e6 * u.pA) | (w_m > 1e6 * u.pA)))
+
+        refr_accept = accept & (r > 0)
+        new_V = u.math.where(refr_accept, self.V_reset, V_m)
+
+        spike_now = accept & (r <= 0) & (new_V >= v_peak_detect)
+        spike_mask = spike_mask | spike_now
+        new_V = u.math.where(spike_now, self.V_reset, new_V)
+        new_w = u.math.where(spike_now, w_m + self.b, w_m)
+        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, r)
+
+        new_state = (new_V, state[1], state[2], state[3], state[4], new_w)
+        return new_state, (spike_mask, r, unstable, i_stim, v_peak_detect)
 
     def update(self, x=0.0 * u.pA):
         r"""Advance the neuron by one simulation step.
@@ -636,57 +649,20 @@ class aeif_cond_alpha(NESTNeuron):
         i_stim = self.I_stim.value  # pA
         h = self.integration_step.value  # ms
 
-        v_shape = u.get_mantissa(V).shape
-
         # Spike detection threshold: V_peak if Delta_T > 0, else V_th.
         v_peak_detect = u.math.where(self.Delta_T > 0.0 * u.mV, self.V_peak, self.V_th)
-        refr_counts = self._refractory_counts()
-
-        # Synaptic spike inputs (applied after integration).
-        w_ex, w_in = self._sum_signed_delta_inputs()  # nS, nS
-        pscon_ex = np.e / self.tau_syn_ex  # 1/ms
-        pscon_in = np.e / self.tau_syn_in  # 1/ms
 
         # Current input for next step (one-step delay).
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
         # Adaptive RKF45 integration via generic integrator.
-        spike_mask = jnp.zeros(v_shape, dtype=jnp.bool_)
+        spike_mask = jnp.zeros(self.varshape, dtype=jnp.bool_)
         unstable = jnp.array(False)
         ode_state = (V, dg_ex, g_ex, dg_in, g_in, w)
-        extra = (spike_mask, r, unstable)
-
-        def _vector_field(state, extra):
-            _, r, _ = extra
-            is_refractory = r > 0
-            return self._dynamics_vector(*state, is_refractory, i_stim)
-
-        def _event_fn(state, extra, accept):
-            spike_mask, r, unstable = extra
-
-            # Stability guard.
-            V_m = u.get_mantissa(state[0])
-            w_m = u.get_mantissa(state[5])
-            unstable = unstable | jnp.any(
-                accept & ((V_m < -1e3) | (w_m < -1e6) | (w_m > 1e6))
-            )
-
-            # Refractory voltage clamp.
-            refr_accept = accept & (r > 0)
-            new_V = u.math.where(refr_accept, self.V_reset, state[0])
-
-            # Spike detection: accepted, non-refractory, V >= threshold.
-            spike_now = accept & (r <= 0) & (new_V >= v_peak_detect)
-            spike_mask = spike_mask | spike_now
-            new_V = u.math.where(spike_now, self.V_reset, new_V)
-            new_w = u.math.where(spike_now, state[5] + self.b, state[5])
-            r = u.math.where(spike_now & (refr_counts > 0), refr_counts + 1, r)
-
-            new_state = (new_V, state[1], state[2], state[3], state[4], new_w)
-            return new_state, (spike_mask, r, unstable)
+        extra = (spike_mask, r, unstable, i_stim, v_peak_detect)
 
         ode_state, h, extra = rkf45_jax_integrate(
-            f=_vector_field,
+            f=self._vector_field,
             state=ode_state,
             dt=dt,
             h=h,
@@ -694,10 +670,10 @@ class aeif_cond_alpha(NESTNeuron):
             atol=self.gsl_error_tol,
             min_h=self._MIN_H,
             max_iters=self._MAX_ITERS,
-            event_fn=_event_fn,
+            event_fn=self._event_fn,
         )
         V, dg_ex, g_ex, dg_in, g_in, w = ode_state
-        spike_mask, r, unstable = extra
+        spike_mask, r, unstable, _, _ = extra
 
         # Post-loop stability check.
         brainstate.transform.jit_error_if(
@@ -706,6 +682,12 @@ class aeif_cond_alpha(NESTNeuron):
 
         # Decrement refractory counter.
         r = u.math.where(r > 0, r - 1, r)
+
+        # Synaptic spike inputs (applied after integration).
+        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
+        w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
+        pscon_ex = np.e / self.tau_syn_ex  # 1/ms
+        pscon_in = np.e / self.tau_syn_in  # 1/ms
 
         # Apply synaptic spike inputs.
         dg_ex = dg_ex + pscon_ex * w_ex  # nS/ms + 1/ms * nS = nS/ms
@@ -718,7 +700,7 @@ class aeif_cond_alpha(NESTNeuron):
         self.dg_in.value = dg_in
         self.g_in.value = g_in
         self.w.value = w
-        self.refractory_step_count.value = r
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
         self.integration_step.value = h
         self.I_stim.value = new_i_stim
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)

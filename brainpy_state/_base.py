@@ -243,6 +243,7 @@ class Dynamics(brainstate.nn.Dynamics):
         init: Any,
         *args,
         label: Optional[str] = None,
+        pop: bool = True,
         **kwargs
     ):
         r"""
@@ -303,7 +304,8 @@ class Dynamics(brainstate.nn.Dynamics):
                             f'Error in current input value {key}: {out}\n'
                             f'Error: {e}'
                         ) from e
-                    self._current_inputs.pop(key)
+                    if pop:
+                        self._current_inputs.pop(key)
         return init
 
     def sum_delta_inputs(
@@ -311,6 +313,7 @@ class Dynamics(brainstate.nn.Dynamics):
         init: Any,
         *args,
         label: Optional[str] = None,
+        pop: bool = True,
         **kwargs
     ):
         r"""
@@ -371,7 +374,8 @@ class Dynamics(brainstate.nn.Dynamics):
                             f'Error in delta input value {key}: {out}\n'
                             f'Error: {e}'
                         ) from e
-                    self._delta_inputs.pop(key)
+                    if pop:
+                        self._delta_inputs.pop(key)
         return init
 
     def align_pre(self, dyn: Union[ParamDescriber[T], T]) -> T:
