@@ -25,7 +25,7 @@ import jax
 import numpy as np
 from brainpy.state import iaf_psc_exp_htum
 
-from brainpy_state._nest.iaf_psc_exp import iaf_psc_exp
+from brainpy_state._nest._utils import propagator_exp as _propagator_exp
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -135,9 +135,9 @@ class TestIAFPscExpHtum(unittest.TestCase):
             p11in = math.exp(-0.1 / p['tau_in'])
             p22 = math.exp(-0.1 / p['tau_m'])
             p20 = p['tau_m'] / p['C_m'] * (1.0 - p22)
-            p21ex = iaf_psc_exp._propagator_exp(np.asarray(p['tau_ex']), np.asarray(p['tau_m']), np.asarray(p['C_m']),
+            p21ex = _propagator_exp(np.asarray(p['tau_ex']), np.asarray(p['tau_m']), np.asarray(p['C_m']),
                                                 0.1)
-            p21in = iaf_psc_exp._propagator_exp(np.asarray(p['tau_in']), np.asarray(p['tau_m']), np.asarray(p['C_m']),
+            p21in = _propagator_exp(np.asarray(p['tau_in']), np.asarray(p['tau_m']), np.asarray(p['C_m']),
                                                 0.1)
             ref_abs = int(math.ceil(p['t_ref_abs'] / 0.1))
             ref_tot = int(math.ceil(p['t_ref_tot'] / 0.1))

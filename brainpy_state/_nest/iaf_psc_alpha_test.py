@@ -286,8 +286,8 @@ class TestIAFPscAlpha(unittest.TestCase):
                 self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['y3'] + params['E_L'], delta=1e-12)
                 self.assertAlmostEqual(float((neuron.I_syn_ex.value / u.pA)[0]), ref_state['I_ex'], delta=1e-12)
                 self.assertAlmostEqual(float((neuron.I_syn_in.value / u.pA)[0]), ref_state['I_in'], delta=1e-12)
-                self.assertAlmostEqual(float(neuron.dI_syn_ex.value[0]), ref_state['dI_ex'], delta=1e-12)
-                self.assertAlmostEqual(float(neuron.dI_syn_in.value[0]), ref_state['dI_in'], delta=1e-12)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dI_syn_ex.value)[0]), ref_state['dI_ex'], delta=1e-12)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dI_syn_in.value)[0]), ref_state['dI_in'], delta=1e-12)
                 self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
 
     def test_spike_refractory_trace_matches_reference_equations(self):

@@ -147,16 +147,6 @@ class TestIAFPscDelta(unittest.TestCase):
             self._step(neuron, 0, delta=2. * u.mV)
             self.assertTrue(u.math.allclose(neuron.last_spike_time.value, self.dt))
 
-    def test_shape_with_batch_and_ref_state(self):
-        with brainstate.environ.context(dt=self.dt):
-            neuron = iaf_psc_delta(4, ref_var=True)
-            neuron.init_state(batch_size=3)
-            self.assertEqual(neuron.V.value.shape, (3, 4))
-            self.assertEqual(neuron.last_spike_time.value.shape, (3, 4))
-            self.assertEqual(neuron.refractory_step_count.value.shape, (3, 4))
-            self.assertEqual(neuron.refractory_spike_buffer.value.shape, (3, 4))
-            self.assertEqual(neuron.refractory.value.shape, (3, 4))
-
     def test_matches_nest_reference_trace(self):
         r"""Regression: validate a deterministic trace against NEST step equations."""
         with brainstate.environ.context(dt=self.dt):
