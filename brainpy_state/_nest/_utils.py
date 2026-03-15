@@ -767,15 +767,12 @@ class AdaptiveRungeKuttaStep:
 
         def _cond_fn(carry):
             _, t_loc, _, _, n_iters = carry
-            return (
-                jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt))
-                & (n_iters < self.max_iters)
-            )
+            return jnp.any(t_loc < dt) & (n_iters < self.max_iters)
 
         def _body_fn(carry):
             state, t_loc, h, extra, n_iters = carry
 
-            active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
+            active = t_loc < dt
 
             h = u.math.where(
                 active,
@@ -796,10 +793,7 @@ class AdaptiveRungeKuttaStep:
 
             err = _rk_max_error(y_high, y_low)
 
-            accept = active & (
-                (err <= atol)
-                | (u.get_mantissa(h) <= u.get_mantissa(min_h))
-            )
+            accept = active & ((err <= atol) | (h <= min_h))
             reject = active & ~accept
 
             new_state = jax.tree.map(
