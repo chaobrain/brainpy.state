@@ -24,9 +24,10 @@ import jax.numpy as jnp
 import numpy as np
 import saiunit as u
 from brainstate.typing import ArrayLike, Size
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, validate_aeif_overflow, rkf45_jax_integrate
+from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep
 
 __all__ = [
     'aeif_cond_alpha',
@@ -420,6 +421,16 @@ class aeif_cond_alpha(NESTNeuron):
 
         self._validate_parameters()
 
+        self.interator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
+
     def _validate_parameters(self):
         r"""Validate model parameters against NEST constraints.
 
@@ -530,24 +541,22 @@ class aeif_cond_alpha(NESTNeuron):
 
         Parameters
         ----------
-        state : tuple
-            (V, dg_ex, g_ex, dg_in, g_in, w) — ODE state variables.
-        extra : tuple
-            (spike_mask, r, unstable, i_stim, v_peak_detect) — mutable
+        state : DotDict
+            Keys: V, dg_ex, g_ex, dg_in, g_in, w — ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim, v_peak_detect — mutable
             auxiliary data carried through the integrator.
 
         Returns
         -------
-        tuple of 6 Quantities (dV, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw)
+        DotDict with same keys as ``state``, containing time derivatives.
         """
-        V, dg_ex, g_ex, dg_in, g_in, w = state
-        _, r, _, i_stim, _ = extra
-        is_refractory = r > 0
+        is_refractory = extra.r > 0
 
-        v_eff = u.math.where(is_refractory, self.V_reset, u.math.minimum(V, self.V_peak))
+        v_eff = u.math.where(is_refractory, self.V_reset, u.math.minimum(state.V, self.V_peak))
 
-        i_syn_exc = g_ex * (v_eff - self.E_ex)
-        i_syn_inh = g_in * (v_eff - self.E_in)
+        i_syn_exc = state.g_ex * (v_eff - self.E_ex)
+        i_syn_inh = state.g_in * (v_eff - self.E_in)
 
         delta_t_safe = u.math.where(self.Delta_T == 0.0 * u.mV, 1.0 * u.mV, self.Delta_T)
         exp_arg = u.math.clip((v_eff - self.V_th) / delta_t_safe, -500.0, 500.0)
@@ -555,51 +564,50 @@ class aeif_cond_alpha(NESTNeuron):
 
         dV_raw = (
                      -self.g_L * (v_eff - self.E_L) + i_spike
-                     - i_syn_exc - i_syn_inh - w + self.I_e + i_stim
+                     - i_syn_exc - i_syn_inh - state.w + self.I_e + extra.i_stim
                  ) / self.C_m
         dV = u.math.where(is_refractory, u.math.zeros_like(dV_raw), dV_raw)
 
-        ddg_ex = -dg_ex / self.tau_syn_ex
-        dg_ex_dt = dg_ex - g_ex / self.tau_syn_ex
-        ddg_in = -dg_in / self.tau_syn_in
-        dg_in_dt = dg_in - g_in / self.tau_syn_in
-        dw = (self.a * (v_eff - self.E_L) - w) / self.tau_w
+        ddg_ex = -state.dg_ex / self.tau_syn_ex
+        dg_ex_dt = state.dg_ex - state.g_ex / self.tau_syn_ex
+        ddg_in = -state.dg_in / self.tau_syn_in
+        dg_in_dt = state.dg_in - state.g_in / self.tau_syn_in
+        dw = (self.a * (v_eff - self.E_L) - state.w) / self.tau_w
 
-        return dV, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, dw
+        return DotDict(V=dV, dg_ex=ddg_ex, g_ex=dg_ex_dt, dg_in=ddg_in, g_in=dg_in_dt, w=dw)
 
     def _event_fn(self, state, extra, accept):
         """In-loop spike detection, reset, and refractory handling.
 
         Parameters
         ----------
-        state : tuple
-            (V, dg_ex, g_ex, dg_in, g_in, w) — ODE state variables.
-        extra : tuple
-            (spike_mask, r, unstable, i_stim, v_peak_detect).
+        state : DotDict
+            Keys: V, dg_ex, g_ex, dg_in, g_in, w — ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim, v_peak_detect.
         accept : array, bool
-            Mask of neurons whose RKF45 substep was accepted.
+            Mask of neurons whose RK substep was accepted.
 
         Returns
         -------
-        (new_state, new_extra) with updated spike/reset/refractory info.
+        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
         """
-        spike_mask, r, unstable, i_stim, v_peak_detect = extra
+        unstable = extra.unstable | jnp.any(
+            accept & ((state.V < -1e3 * u.mV) | (state.w < -1e6 * u.pA) | (state.w > 1e6 * u.pA))
+        )
 
-        V_m = state[0]
-        w_m = state[5]
-        unstable = unstable | jnp.any(accept & ((V_m < -1e3 * u.mV) | (w_m < -1e6 * u.pA) | (w_m > 1e6 * u.pA)))
+        refr_accept = accept & (extra.r > 0)
+        new_V = u.math.where(refr_accept, self.V_reset, state.V)
 
-        refr_accept = accept & (r > 0)
-        new_V = u.math.where(refr_accept, self.V_reset, V_m)
-
-        spike_now = accept & (r <= 0) & (new_V >= v_peak_detect)
-        spike_mask = spike_mask | spike_now
+        spike_now = accept & (extra.r <= 0) & (new_V >= extra.v_peak_detect)
+        spike_mask = extra.spike_mask | spike_now
         new_V = u.math.where(spike_now, self.V_reset, new_V)
-        new_w = u.math.where(spike_now, w_m + self.b, w_m)
-        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, r)
+        new_w = u.math.where(spike_now, state.w + self.b, state.w)
+        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, extra.r)
 
-        new_state = (new_V, state[1], state[2], state[3], state[4], new_w)
-        return new_state, (spike_mask, r, unstable, i_stim, v_peak_detect)
+        new_state = DotDict({**state, 'V': new_V, 'w': new_w})
+        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
+        return new_state, new_extra
 
     def update(self, x=0.0 * u.pA):
         r"""Advance the neuron by one simulation step.
@@ -656,24 +664,19 @@ class aeif_cond_alpha(NESTNeuron):
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
         # Adaptive RKF45 integration via generic integrator.
-        spike_mask = jnp.zeros(self.varshape, dtype=jnp.bool_)
-        unstable = jnp.array(False)
-        ode_state = (V, dg_ex, g_ex, dg_in, g_in, w)
-        extra = (spike_mask, r, unstable, i_stim, v_peak_detect)
-
-        ode_state, h, extra = rkf45_jax_integrate(
-            f=self._vector_field,
-            state=ode_state,
-            dt=dt,
-            h=h,
-            extra=extra,
-            atol=self.gsl_error_tol,
-            min_h=self._MIN_H,
-            max_iters=self._MAX_ITERS,
-            event_fn=self._event_fn,
+        ode_state = DotDict(V=V, dg_ex=dg_ex, g_ex=g_ex, dg_in=dg_in, g_in=g_in, w=w)
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            r=r,
+            unstable=jnp.array(False),
+            i_stim=i_stim,
+            v_peak_detect=v_peak_detect,
         )
-        V, dg_ex, g_ex, dg_in, g_in, w = ode_state
-        spike_mask, r, unstable, _, _ = extra
+
+        ode_state, h, extra = self.interator(state=ode_state, h=h, extra=extra)
+        V, dg_ex, g_ex = ode_state.V, ode_state.dg_ex, ode_state.g_ex
+        dg_in, g_in, w = ode_state.dg_in, ode_state.g_in, ode_state.w
+        spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable
 
         # Post-loop stability check.
         brainstate.transform.jit_error_if(

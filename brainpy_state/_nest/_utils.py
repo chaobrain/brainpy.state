@@ -23,6 +23,8 @@ This module extracts common helper functions used across 60+ model files in the
 parameter) and operate on plain NumPy / JAX arrays or saiunit quantities.
 """
 
+from typing import Callable, NamedTuple, Optional
+
 import brainstate
 import jax
 import jax.numpy as jnp
@@ -43,7 +45,9 @@ __all__ = [
     'propagator_exp',
     'alpha_propagator_p31_p32',
     'rkf45_integrate',
-    'rkf45_jax_integrate',
+    'ButcherTableau',
+    'AdaptiveRungeKutta',
+    'AdaptiveRungeKuttaStep',
     'sum_signed_delta_inputs',
     'time_window_gate',
     'stack_schedule_values',
@@ -354,8 +358,95 @@ def alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h_ms):
 
 
 # ---------------------------------------------------------------------------
-# F. RKF45 adaptive integrator
+# F. Adaptive Runge-Kutta integrators
 # ---------------------------------------------------------------------------
+
+
+class ButcherTableau(NamedTuple):
+    """Coefficients for an embedded explicit Runge-Kutta method.
+
+    An *s*-stage embedded pair uses the higher-order weights ``b`` for the
+    solution and the lower-order weights ``b_hat`` for error estimation.
+
+    Attributes
+    ----------
+    c : tuple of float
+        Nodes (abscissae), length ``s``.
+    A : tuple of tuples
+        Stage coefficient matrix (ragged lower-triangular).
+        ``A[0] = ()``, ``A[i]`` has ``i`` entries for ``i >= 1``.
+    b : tuple of float
+        Higher-order solution weights, length ``s``.
+    b_hat : tuple of float
+        Lower-order weights for error estimation, length ``s``.
+    error_order : int
+        Order of the lower-order method (controls step-size exponents).
+    """
+    c: tuple
+    A: tuple
+    b: tuple
+    b_hat: tuple
+    error_order: int
+
+
+# --- Preset Butcher tableaux ------------------------------------------------
+
+RKF45 = ButcherTableau(
+    c=(0.0, 1 / 4, 3 / 8, 12 / 13, 1.0, 1 / 2),
+    A=(
+        (),
+        (1 / 4,),
+        (3 / 32, 9 / 32),
+        (1932 / 2197, -7200 / 2197, 7296 / 2197),
+        (439 / 216, -8.0, 3680 / 513, -845 / 4104),
+        (-8 / 27, 2.0, -3544 / 2565, 1859 / 4104, -11 / 40),
+    ),
+    b=(16 / 135, 0.0, 6656 / 12825, 28561 / 56430, -9 / 50, 2 / 55),
+    b_hat=(25 / 216, 0.0, 1408 / 2565, 2197 / 4104, -1 / 5, 0.0),
+    error_order=4,
+)
+
+DOPRI5 = ButcherTableau(
+    c=(0.0, 1 / 5, 3 / 10, 4 / 5, 8 / 9, 1.0, 1.0),
+    A=(
+        (),
+        (1 / 5,),
+        (3 / 40, 9 / 40),
+        (44 / 45, -56 / 15, 32 / 9),
+        (19372 / 6561, -25360 / 2187, 64448 / 6561, -212 / 729),
+        (9017 / 3168, -355 / 33, 46732 / 5247, 49 / 176, -5103 / 18656),
+        (35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84),
+    ),
+    b=(35 / 384, 0.0, 500 / 1113, 125 / 192, -2187 / 6784, 11 / 84, 0.0),
+    b_hat=(5179 / 57600, 0.0, 7571 / 16695, 393 / 640,
+           -92097 / 339200, 187 / 2100, 1 / 40),
+    error_order=4,
+)
+
+BOGACKI_SHAMPINE = ButcherTableau(
+    c=(0.0, 1 / 2, 3 / 4, 1.0),
+    A=(
+        (),
+        (1 / 2,),
+        (0.0, 3 / 4),
+        (2 / 9, 1 / 3, 4 / 9),
+    ),
+    b=(2 / 9, 1 / 3, 4 / 9, 0.0),
+    b_hat=(7 / 24, 1 / 4, 1 / 3, 1 / 8),
+    error_order=2,
+)
+
+HEUN_EULER = ButcherTableau(
+    c=(0.0, 1.0),
+    A=(
+        (),
+        (1.0,),
+    ),
+    b=(1 / 2, 1 / 2),
+    b_hat=(1.0, 0.0),
+    error_order=1,
+)
+
 
 def rkf45_integrate(dynamics_fn, y0, dt, h0, atol=1e-3, min_h=1e-8, max_iters=10000):
     r"""Integrate an ODE system for one simulation timestep using RKF45.
@@ -454,172 +545,256 @@ def rkf45_integrate(dynamics_fn, y0, dt, h0, atol=1e-3, min_h=1e-8, max_iters=10
     return tuple(y), h
 
 
-def rkf45_jax_integrate(f, state, dt, h, extra=None, atol=1e-6, min_h=None,
-                        max_iters=100000, event_fn=None):
-    r"""JAX-based adaptive RKF45 ODE integrator with event handling.
+def _is_quantity(x):
+    """Check if *x* is a saiunit Quantity (used as ``is_leaf`` for tree ops)."""
+    return isinstance(x, u.Quantity)
 
-    Implements Runge-Kutta-Fehlberg 4(5) using ``jax.lax.while_loop`` for
-    JIT-compatible adaptive step-size integration.  Supports unit-aware
-    Quantities via saiunit and optional per-substep event callbacks for
-    spike detection, refractory clamping, etc.
+
+def _rk_weighted_sum(state, h, coeffs, k_stages):
+    """Compute ``state + h * sum(c_j * k_j)`` over a JAX pytree.
+
+    Skips zero coefficients to avoid unnecessary computation.
+    Uses ``is_leaf=_is_quantity`` so that Quantities with different unit
+    representations (e.g. state in pA vs derivative in pA/ms) are treated
+    as opaque leaves and do not trigger a pytree structure mismatch.
+    """
+    nonzero = [(c, k) for c, k in zip(coeffs, k_stages) if c != 0.0]
+    if not nonzero:
+        return state
+    cs, ks = zip(*nonzero)
+
+    def _leaf_fn(s, *k_vals):
+        acc = cs[0] * k_vals[0]
+        for c, k in zip(cs[1:], k_vals[1:]):
+            acc = acc + c * k
+        return s + h * acc
+
+    return jax.tree.map(_leaf_fn, state, *ks, is_leaf=_is_quantity)
+
+
+def _rk_max_error(y_high, y_low):
+    """Max absolute error across all pytree leaves (unitless)."""
+
+    def _leaf_err(yh, yl):
+        return u.get_mantissa(u.math.abs(yh - yl))
+
+    err_tree = jax.tree.map(_leaf_err, y_high, y_low, is_leaf=_is_quantity)
+    err_leaves = jax.tree.leaves(err_tree)
+    err = err_leaves[0]
+    for e in err_leaves[1:]:
+        err = jnp.maximum(err, e)
+    return err
+
+
+class AdaptiveRungeKutta:
+    """JAX-based adaptive embedded Runge-Kutta ODE integrator.
+
+    Supports arbitrary Butcher tableaux, JAX pytree state/extra,
+    unit-aware Quantities via saiunit, and optional per-substep
+    event callbacks for spike detection, refractory clamping, etc.
 
     Parameters
     ----------
-    f : callable
-        Vector field ``f(state, extra) -> derivatives``.
-        ``state`` is a tuple of Quantities; ``derivatives`` must be a tuple
-        of matching length with compatible rate units.
-    state : tuple
-        Initial state as a tuple of Quantities (ODE variables).
-    dt : Quantity
-        Total integration interval (e.g. simulation timestep in ms).
-    h : Quantity
-        Initial adaptive step size.
-    extra : pytree, optional
-        Model-specific mutable data passed through the loop and to
-        ``f`` and ``event_fn``.  Must be a valid JAX pytree.
-    atol : float, optional
-        Absolute error tolerance (unitless). Default: 1e-6.
-    min_h : Quantity, optional
-        Minimum step size. Defaults to ``1e-8 * u.ms``.
-    max_iters : int, optional
-        Maximum number of integration substeps. Default: 100000.
-    event_fn : callable, optional
-        ``event_fn(state, extra, accept) -> (state, extra)``
-        Called after each accepted RKF45 substep.  Can modify state
-        (e.g. reset voltage on spike) and extra (e.g. accumulate spike
-        mask).  ``accept`` is a boolean mask indicating which elements
-        were accepted on this substep.
+    tableau : ButcherTableau
+        Embedded RK method coefficients.  Predefined options:
+        ``RKF45``, ``DOPRI5``, ``BOGACKI_SHAMPINE``, ``HEUN_EULER``.
 
-    Returns
-    -------
-    state : tuple
-        Final state after integration.
-    h : Quantity
-        Final adaptive step size (for warm-starting the next call).
-    extra : pytree
-        Final extra data.
+    Examples
+    --------
+    >>> integrator = AdaptiveRungeKutta(DOPRI5)
+    >>> state, h, extra = integrator(f, state, dt, h, extra=extra)
     """
-    if min_h is None:
-        min_h = 1e-8 * u.ms
 
-    v_shape = state[0].shape
-    dftype = brainstate.environ.dftype()
+    def __init__(self, tableau: ButcherTableau = RKF45):
+        self.tableau = tableau
 
-    t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
-    h = u.math.maximum(h, min_h)
+    def __call__(
+        self,
+        f: Callable,
+        state,
+        dt,
+        h,
+        extra=None,
+        atol: float = 1e-6,
+        min_h=None,
+        max_iters: int = 100000,
+        event_fn: Optional[Callable] = None,
+    ):
+        """Integrate an ODE system over one simulation timestep.
 
-    init_carry = (state, t_local, h, extra, jnp.array(0, dtype=jnp.int32))
+        Parameters
+        ----------
+        f : callable
+            Vector field ``f(state, extra) -> derivatives``.
+            Both input and output must be pytrees with the same structure
+            as ``state``.
+        state : pytree
+            Initial ODE state.  Any JAX-compatible pytree of Quantities.
+        dt : Quantity
+            Total integration interval.
+        h : Quantity
+            Initial adaptive step size (per-element or scalar).
+        extra : pytree, optional
+            Mutable auxiliary data passed through the loop.
+        atol : float, optional
+            Absolute error tolerance (unitless).  Default: 1e-6.
+        min_h : Quantity, optional
+            Minimum step size.  Defaults to ``1e-8 * u.ms``.
+        max_iters : int, optional
+            Maximum substep count.  Default: 100000.
+        event_fn : callable, optional
+            ``event_fn(state, extra, accept) -> (state, extra)``
+            Called after each accepted substep.
 
-    def _cond_fn(carry):
-        _, t_loc, _, _, n_iters = carry
-        return (jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt)) & (n_iters < max_iters))
+        Returns
+        -------
+        state : pytree
+            Final integrated state.
+        h : Quantity
+            Final adaptive step size.
+        extra : pytree
+            Final auxiliary data.
+        """
+        if min_h is None:
+            min_h = 1e-8 * u.ms
 
-    def _body_fn(carry):
-        state, t_loc, h, extra, n_iters = carry
+        tableau = self.tableau
+        s = len(tableau.c)
+        accept_exp = 1.0 / (tableau.error_order + 1)
+        reject_exp = 1.0 / tableau.error_order
 
-        active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
+        first_leaf = jax.tree.leaves(state)[0]
+        v_shape = first_leaf.shape
+        dftype = brainstate.environ.dftype()
 
-        # Clamp step size to remaining integration time.
-        h = u.math.where(
-            active,
-            u.math.maximum(min_h, u.math.minimum(h, dt - t_loc)),
+        t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
+        h = u.math.maximum(h, min_h)
+
+        init_carry = (state, t_local, h, extra, jnp.array(0, dtype=jnp.int32))
+
+        def _cond_fn(carry):
+            _, t_loc, _, _, n_iters = carry
+            return (
+                jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt))
+                & (n_iters < max_iters)
+            )
+
+        def _body_fn(carry):
+            state, t_loc, h, extra, n_iters = carry
+
+            active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
+
+            # Clamp step size to remaining integration time.
+            h = u.math.where(
+                active,
+                u.math.maximum(min_h, u.math.minimum(h, dt - t_loc)),
+                h,
+            )
+
+            # Compute RK stages (loop unrolled at trace time).
+            k = []
+            for i in range(s):
+                if i == 0:
+                    y_i = state
+                else:
+                    y_i = _rk_weighted_sum(state, h, tableau.A[i], k)
+                k.append(f(y_i, extra))
+
+            # Higher-order solution (used) and lower-order (error).
+            y_high = _rk_weighted_sum(state, h, tableau.b, k)
+            y_low = _rk_weighted_sum(state, h, tableau.b_hat, k)
+
+            # Per-element error: max across all state leaves.
+            err = _rk_max_error(y_high, y_low)
+
+            # Accept where error within tolerance or step at minimum.
+            accept = active & (
+                (err <= atol)
+                | (u.get_mantissa(h) <= u.get_mantissa(min_h))
+            )
+            reject = active & ~accept
+
+            # Update accepted elements.
+            new_state = jax.tree.map(
+                lambda yh, si: u.math.where(accept, yh, si),
+                y_high, state,
+                is_leaf=_is_quantity,
+            )
+            t_loc = u.math.where(accept, t_loc + h, t_loc)
+
+            # Event callback.
+            if event_fn is not None:
+                new_state, extra = event_fn(new_state, extra, accept)
+
+            # Adaptive step-size control.
+            err_safe = jnp.maximum(err, 1e-30)
+            fac_accept = jnp.where(
+                err == 0.0,
+                5.0,
+                jnp.minimum(5.0, jnp.maximum(
+                    0.2, 0.9 * (atol / err_safe) ** accept_exp
+                )),
+            )
+            fac_reject = jnp.minimum(
+                1.0, jnp.maximum(0.2, 0.9 * (atol / err_safe) ** reject_exp)
+            )
+            h = u.math.where(
+                accept, u.math.maximum(min_h, h * fac_accept), h
+            )
+            h = u.math.where(
+                reject, u.math.maximum(min_h, h * fac_reject), h
+            )
+
+            return (new_state, t_loc, h, extra, n_iters + 1)
+
+        carry_out = jax.lax.while_loop(_cond_fn, _body_fn, init_carry)
+        state, _, h, extra, _ = carry_out
+
+        return state, h, extra
+
+
+# Backward-compatible alias.
+tableau_mapping = {
+    'RKF45': RKF45,
+    'DOPRI5': DOPRI5,
+    'BOGACKI_SHAMPINE': BOGACKI_SHAMPINE,
+    'HEUN_EULER': HEUN_EULER,
+}
+
+
+class AdaptiveRungeKuttaStep:
+    def __init__(
+        self,
+        method: str,
+        vf: Callable,
+        dt,
+        atol: float = 1e-6,
+        min_h: Optional[u.Quantity['time']] = None,
+        max_iters: int = 100000,
+        event_fn: Optional[Callable] = None,
+    ):
+        if min_h is None:
+            min_h = 1e-8 * u.ms
+        self.integrator = AdaptiveRungeKutta(tableau_mapping[method])
+        self.vf = vf
+        self.dt = dt
+        self.atol = atol
+        self.min_h = min_h
+        self.max_iters = max_iters
+        self.event_fn = event_fn
+
+    def __call__(self, state, h, extra=None):
+        return self.integrator(
+            self.vf,
+            state,
+            self.dt,
             h,
+            extra=extra,
+            atol=self.atol,
+            min_h=self.min_h,
+            max_iters=self.max_iters,
+            event_fn=self.event_fn,
         )
-
-        # RKF45 stages (coefficient ordering matches NEST reference).
-        k1 = f(state, extra)
-
-        k2 = f(
-            tuple(s + h * (1.0 / 4.0 * ki) for s, ki in zip(state, k1)),
-            extra,
-        )
-
-        k3 = f(
-            tuple(s + h * (3.0 * k1i / 32.0 + 9.0 * k2i / 32.0)
-                  for s, k1i, k2i in zip(state, k1, k2)),
-            extra,
-        )
-
-        k4 = f(
-            tuple(s + h * (1932.0 * k1i / 2197.0 - 7200.0 * k2i / 2197.0
-                           + 7296.0 * k3i / 2197.0)
-                  for s, k1i, k2i, k3i in zip(state, k1, k2, k3)),
-            extra,
-        )
-
-        k5 = f(
-            tuple(s + h * (439.0 * k1i / 216.0 - 8.0 * k2i
-                           + 3680.0 * k3i / 513.0
-                           - 845.0 * k4i / 4104.0)
-                  for s, k1i, k2i, k3i, k4i
-                  in zip(state, k1, k2, k3, k4)),
-            extra,
-        )
-
-        k6 = f(
-            tuple(s + h * (-8.0 * k1i / 27.0 + 2.0 * k2i
-                           - 3544.0 * k3i / 2565.0
-                           + 1859.0 * k4i / 4104.0
-                           - 11.0 * k5i / 40.0)
-                  for s, k1i, k2i, k3i, k4i, k5i
-                  in zip(state, k1, k2, k3, k4, k5)),
-            extra,
-        )
-
-        # 4th and 5th order solutions.
-        y4 = tuple(s + h * (25.0 * k1i / 216.0 + 1408.0 * k3i / 2565.0
-                            + 2197.0 * k4i / 4104.0 - k5i / 5.0)
-                   for s, k1i, k3i, k4i, k5i
-                   in zip(state, k1, k3, k4, k5))
-        y5 = tuple(s + h * (16.0 * k1i / 135.0 + 6656.0 * k3i / 12825.0
-                            + 28561.0 * k4i / 56430.0 - 9.0 * k5i / 50.0
-                            + 2.0 * k6i / 55.0)
-                   for s, k1i, k3i, k4i, k5i, k6i
-                   in zip(state, k1, k3, k4, k5, k6))
-
-        # Error: max absolute difference across state dims (unitless).
-        err_components = [u.get_mantissa(u.math.abs(y5i - y4i))
-                          for y5i, y4i in zip(y5, y4)]
-        err = err_components[0]
-        for ec in err_components[1:]:
-            err = jnp.maximum(err, ec)
-
-        # Accept where error within tolerance or step at minimum.
-        accept = active & (
-            (err <= atol)
-            | (u.get_mantissa(h) <= u.get_mantissa(min_h))
-        )
-        reject = active & ~accept
-
-        # Update state for accepted elements.
-        new_state = tuple(
-            u.math.where(accept, y5i, si)
-            for y5i, si in zip(y5, state)
-        )
-        t_loc = u.math.where(accept, t_loc + h, t_loc)
-
-        # Apply event function if provided.
-        if event_fn is not None:
-            new_state, extra = event_fn(new_state, extra, accept)
-
-        # Adaptive step size.
-        err_safe = jnp.maximum(err, 1e-30)
-        fac_accept = jnp.where(
-            err == 0.0,
-            5.0,
-            jnp.minimum(5.0, jnp.maximum(0.2, 0.9 * (atol / err_safe) ** 0.2)),
-        )
-        fac_reject = jnp.minimum(1.0, jnp.maximum(0.2, 0.9 * (atol / err_safe) ** 0.25))
-        h = u.math.where(accept, u.math.maximum(min_h, h * fac_accept), h)
-        h = u.math.where(reject, u.math.maximum(min_h, h * fac_reject), h)
-
-        return (new_state, t_loc, h, extra, n_iters + 1)
-
-    carry_out = jax.lax.while_loop(_cond_fn, _body_fn, init_carry)
-    state, _, h, extra, _ = carry_out
-
-    return state, h, extra
 
 
 # ---------------------------------------------------------------------------
