@@ -48,13 +48,66 @@ from brainpy_state._nest.ht_neuron import (
     _m_eq_T,
     _D_eq_KNa,
     _m_eq_NMDA,
-    _m_NMDA,
-    _STATE_VEC_SIZE,
-    _V_M, _THETA, _DG_AMPA, _G_AMPA, _DG_NMDA_TIMECOURSE,
-    _G_NMDA_TIMECOURSE, _DG_GABA_A, _G_GABA_A, _DG_GABA_B,
-    _G_GABA_B, _m_fast_NMDA, _m_slow_NMDA, _m_Ih, _D_IKNa,
-    _m_IT, _h_IT,
 )
+
+# ---------------------------------------------------------------------------
+# State vector index constants for the reference dynamics solver.
+#
+# The refactored ht_neuron model uses DotDict named attributes (e.g.,
+# state.V_m, state.theta) instead of integer indices into a flat array.
+# These constants are defined here solely for the standalone reference ODE
+# solver (_nest_ht_dynamics) used in regression tests.
+# ---------------------------------------------------------------------------
+_V_M = 0
+_THETA = 1
+_DG_AMPA = 2
+_G_AMPA = 3
+_DG_NMDA_TIMECOURSE = 4
+_G_NMDA_TIMECOURSE = 5
+_DG_GABA_A = 6
+_G_GABA_A = 7
+_DG_GABA_B = 8
+_G_GABA_B = 9
+_m_fast_NMDA = 10
+_m_slow_NMDA = 11
+_m_Ih = 12
+_D_IKNa = 13
+_m_IT = 14
+_h_IT = 15
+_STATE_VEC_SIZE = 16
+
+
+def _m_NMDA(V, m_eq, m_fast, m_slow, instant_unblock_NMDA=False):
+    r"""Compute effective NMDA unblocking variable.
+
+    This helper was previously a module-level function in ht_neuron.py but has
+    been inlined into the model's _vector_field method. It is retained here for
+    the standalone reference solver and direct unit tests.
+
+    Parameters
+    ----------
+    V : float
+        Membrane potential in mV.
+    m_eq : float
+        Equilibrium NMDA unblocking value at voltage V.
+    m_fast : float
+        Fast NMDA unblocking variable.
+    m_slow : float
+        Slow NMDA unblocking variable.
+    instant_unblock_NMDA : bool
+        If True, return m_eq directly. Otherwise, return weighted mix of
+        fast and slow components.
+
+    Returns
+    -------
+    float
+        Effective NMDA unblocking fraction.
+    """
+    if instant_unblock_NMDA:
+        return m_eq
+    A1 = 0.51 - 0.0028 * V
+    A2 = 1.0 - A1
+    return A1 * m_fast + A2 * m_slow
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')

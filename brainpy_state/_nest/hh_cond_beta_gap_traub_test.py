@@ -42,10 +42,6 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from brainpy_state import hh_cond_beta_gap_traub
-from brainpy_state._nest.hh_cond_beta_gap_traub import (
-    _hh_cond_beta_gap_traub_equilibrium,
-    _beta_normalization_factor,
-)
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -129,13 +125,13 @@ class TestBetaNormalizationFactor(unittest.TestCase):
         t_peak = tau_d * tau_r * math.log(tau_d / tau_r) / (tau_d - tau_r)
         peak_val = math.exp(-t_peak / tau_d) - math.exp(-t_peak / tau_r)
         expected = (1.0 / tau_r - 1.0 / tau_d) / peak_val
-        result = _beta_normalization_factor(tau_r, tau_d)
+        result = hh_cond_beta_gap_traub._beta_normalization_factor_scalar(tau_r, tau_d)
         self.assertAlmostEqual(result, expected, places=10)
 
     def test_equal_tau_falls_back_to_alpha(self):
         r"""When tau_rise == tau_decay, should use alpha function fallback."""
         tau = 5.0
-        result = _beta_normalization_factor(tau, tau)
+        result = hh_cond_beta_gap_traub._beta_normalization_factor_scalar(tau, tau)
         expected = math.e / tau
         self.assertAlmostEqual(result, expected, places=10)
 
@@ -144,13 +140,13 @@ class TestBetaNormalizationFactor(unittest.TestCase):
         test_cases = [(0.1, 1.0), (0.5, 5.0), (1.0, 10.0), (2.0, 2.0)]
         for tau_r, tau_d in test_cases:
             with self.subTest(tau_rise=tau_r, tau_decay=tau_d):
-                result = _beta_normalization_factor(tau_r, tau_d)
+                result = hh_cond_beta_gap_traub._beta_normalization_factor_scalar(tau_r, tau_d)
                 self.assertGreater(result, 0.0)
 
     def test_symmetry_tau_swap(self):
         r"""Swapping tau_rise and tau_decay should give a different (valid) result."""
-        result1 = _beta_normalization_factor(0.5, 5.0)
-        result2 = _beta_normalization_factor(5.0, 0.5)
+        result1 = hh_cond_beta_gap_traub._beta_normalization_factor_scalar(0.5, 5.0)
+        result2 = hh_cond_beta_gap_traub._beta_normalization_factor_scalar(5.0, 0.5)
         self.assertGreater(result1, 0.0)
         self.assertGreater(result2, 0.0)
 
@@ -214,7 +210,7 @@ class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
 
     def test_equilibrium_function(self):
         r"""Test the equilibrium function directly."""
-        m_inf, h_inf, n_inf = _hh_cond_beta_gap_traub_equilibrium(-60.0)
+        m_inf, h_inf, n_inf = hh_cond_beta_gap_traub._hh_equilibrium(-60.0)
         self.assertGreater(m_inf, 0.0)
         self.assertLess(m_inf, 1.0)
         self.assertGreater(h_inf, 0.0)
@@ -313,7 +309,7 @@ class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
 
             # Reference integration
             V0 = -60.0
-            m_eq, h_eq, n_eq = _hh_cond_beta_gap_traub_equilibrium(V0)
+            m_eq, h_eq, n_eq = hh_cond_beta_gap_traub._hh_equilibrium(V0)
 
             y0 = np.array([V0, m_eq, h_eq, n_eq, 0., 0., 0., 0.])
             sol = solve_ivp(
@@ -607,7 +603,7 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
 
             # Reference integration
             V0 = -60.0
-            m_eq, h_eq, n_eq = _hh_cond_beta_gap_traub_equilibrium(V0)
+            m_eq, h_eq, n_eq = hh_cond_beta_gap_traub._hh_equilibrium(V0)
 
             y = np.array([V0, m_eq, h_eq, n_eq, 0., 0., 0., 0.])
             V_ref = []
@@ -872,7 +868,7 @@ class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
         r"""Test that synapse ODE integration matches reference solve_ivp."""
         tau_rise = 0.5
         tau_decay = 5.0
-        pscon = _beta_normalization_factor(tau_rise, tau_decay)
+        pscon = hh_cond_beta_gap_traub._beta_normalization_factor_scalar(tau_rise, tau_decay)
 
         with brainstate.environ.context(dt=self.dt):
             neuron = hh_cond_beta_gap_traub(

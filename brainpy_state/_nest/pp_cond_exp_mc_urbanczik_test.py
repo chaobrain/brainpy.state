@@ -51,12 +51,44 @@ from scipy.integrate import solve_ivp
 
 from brainpy_state._nest.pp_cond_exp_mc_urbanczik import (
     pp_cond_exp_mc_urbanczik,
-    _phi,
-    _h_func,
-    _idx,
     SOMA, DEND,
-    _V_M, _G_EXC, _G_INH, _I_EXC, _I_INH,
 )
+
+# ---------------------------------------------------------------------------
+# Local helper functions that were previously module-level in the source but
+# are now inlined within the class.  We re-define them here for test use.
+# ---------------------------------------------------------------------------
+
+# State-vector index constants for the 10-element reference ODE vector.
+# Layout: [SOMA: V_M, G_EXC, G_INH, I_EXC, I_INH,
+#           DEND: V_M, G_EXC, G_INH, I_EXC, I_INH]
+_V_M = 0
+_G_EXC = 1
+_G_INH = 2
+_I_EXC = 3
+_I_INH = 4
+_VARS_PER_COMP = 5
+
+
+def _idx(comp, var):
+    r"""Map (compartment, variable) to a flat index in the 10-element state vector."""
+    return comp * _VARS_PER_COMP + var
+
+
+def _phi(V_m, phi_max, rate_slope, beta, theta):
+    r"""Rate function phi(V_m).
+
+    phi(u) = phi_max / (1 + rate_slope * exp(beta * (theta - u)))
+    """
+    return phi_max / (1.0 + rate_slope * math.exp(beta * (theta - V_m)))
+
+
+def _h_func(V_m, rate_slope, beta, theta):
+    r"""Learning modulation function h(u).
+
+    h(u) = 15 * beta / (1 + (1/rate_slope) * exp(-beta * (theta - u)))
+    """
+    return 15.0 * beta / (1.0 + (1.0 / rate_slope) * math.exp(-beta * (theta - V_m)))
 
 
 def _get_scalar(x):

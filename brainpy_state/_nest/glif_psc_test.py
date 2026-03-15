@@ -49,7 +49,8 @@ import saiunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 
-from brainpy_state._nest.glif_psc import glif_psc, _iaf_propagator_alpha
+from brainpy_state._nest.glif_psc import glif_psc
+from brainpy_state._nest._utils import alpha_propagator_p31_p32
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +75,7 @@ def _compute_propagators(tau_syn_list, tau_m, c_m, dt):
         P11.append(p11)
         P22.append(p11)
         P21.append(dt * p11)
-        p31, p32 = _iaf_propagator_alpha(tau_syn_list[i], tau_m, c_m, dt)
+        p31, p32 = alpha_propagator_p31_p32(tau_syn_list[i], tau_m, c_m, dt)
         P31.append(p31)
         P32.append(p32)
         PSCInitialValues.append(math.e / tau_syn_list[i])
@@ -400,7 +401,7 @@ class TestGlifPsc(unittest.TestCase):
         c_m = 58.72
         h = 0.01
 
-        P31, P32 = _iaf_propagator_alpha(tau_syn, tau_m, c_m, h)
+        P31, P32 = alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h)
 
         # Both should be finite and positive for these params
         self.assertTrue(math.isfinite(P31))
@@ -414,7 +415,7 @@ class TestGlifPsc(unittest.TestCase):
         c_m = 58.72
         h = 0.01
 
-        P31, P32 = _iaf_propagator_alpha(tau_syn, tau_m, c_m, h)
+        P31, P32 = alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h)
 
         # Should fall back to singular formula: P32 = h/c_m * exp(-h/tau_m)
         expected_P32 = h / c_m * math.exp(-h / tau_m)

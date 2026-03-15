@@ -53,7 +53,8 @@ import saiunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 
-from brainpy_state._nest.glif_psc_double_alpha import glif_psc_double_alpha, _iaf_propagator_alpha
+from brainpy_state._nest.glif_psc_double_alpha import glif_psc_double_alpha
+from brainpy_state._nest._utils import alpha_propagator_p31_p32
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ def _compute_propagators_double(tau_syn_fast_list, tau_syn_slow_list, amp_slow_l
         P11_fast.append(p11_fast)
         P22_fast.append(p11_fast)
         P21_fast.append(dt * p11_fast)
-        p31_fast, p32_fast = _iaf_propagator_alpha(tau_syn_fast_list[i], tau_m, c_m, dt)
+        p31_fast, p32_fast = alpha_propagator_p31_p32(tau_syn_fast_list[i], tau_m, c_m, dt)
         P31_fast.append(p31_fast)
         P32_fast.append(p32_fast)
         PSCInitialValues_fast.append(math.e / tau_syn_fast_list[i])
@@ -99,7 +100,7 @@ def _compute_propagators_double(tau_syn_fast_list, tau_syn_slow_list, amp_slow_l
         P11_slow.append(p11_slow)
         P22_slow.append(p11_slow)
         P21_slow.append(dt * p11_slow)
-        p31_slow, p32_slow = _iaf_propagator_alpha(tau_syn_slow_list[i], tau_m, c_m, dt)
+        p31_slow, p32_slow = alpha_propagator_p31_p32(tau_syn_slow_list[i], tau_m, c_m, dt)
         P31_slow.append(p31_slow)
         P32_slow.append(p32_slow)
         PSCInitialValues_slow.append(math.e / tau_syn_slow_list[i] * amp_slow_list[i])
@@ -474,7 +475,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         c_m = 58.72
         h = 0.01
 
-        P31, P32 = _iaf_propagator_alpha(tau_syn, tau_m, c_m, h)
+        P31, P32 = alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h)
 
         self.assertTrue(math.isfinite(P31))
         self.assertTrue(math.isfinite(P32))
@@ -487,7 +488,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         c_m = 58.72
         h = 0.01
 
-        P31, P32 = _iaf_propagator_alpha(tau_syn, tau_m, c_m, h)
+        P31, P32 = alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h)
 
         expected_P32 = h / c_m * math.exp(-h / tau_m)
         expected_P31 = 0.5 * h * h / c_m * math.exp(-h / tau_m)
