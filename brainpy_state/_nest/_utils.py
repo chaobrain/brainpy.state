@@ -34,10 +34,6 @@ from brainstate.typing import PyTree
 from jax.interpreters.partial_eval import DynamicJaxprTracer
 
 __all__ = [
-    'to_numpy',
-    'to_numpy_unitless',
-    'broadcast_to_state',
-    'refractory_counts',
     'validate_aeif_overflow',
     'propagator_exp',
     'alpha_propagator_p31_p32',
@@ -48,88 +44,6 @@ __all__ = [
 
 def is_tracer(x):
     return isinstance(x, (jax.ShapeDtypeStruct, jax.core.ShapedArray, DynamicJaxprTracer, jax.core.Tracer))
-
-
-# ---------------------------------------------------------------------------
-# A. Conversion helpers
-# ---------------------------------------------------------------------------
-
-def to_numpy(x, unit):
-    """Convert a saiunit quantity to a unitless float64 NumPy array.
-
-    Parameters
-    ----------
-    x : ArrayLike
-        Quantity with units (e.g. ``V_th`` in mV).
-    unit : saiunit.Unit
-        Unit to divide by before stripping (e.g. ``u.mV``).
-
-    Returns
-    -------
-    np.ndarray
-        Unitless float64 array.
-    """
-    dftype = brainstate.environ.dftype()
-    return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-
-def to_numpy_unitless(x):
-    """Convert an array-like to a unitless float64 NumPy array (no unit division).
-
-    Parameters
-    ----------
-    x : ArrayLike
-        Value to convert (already unitless or with units stripped).
-
-    Returns
-    -------
-    np.ndarray
-        Float64 array.
-    """
-    dftype = brainstate.environ.dftype()
-    return np.asarray(u.math.asarray(x), dtype=dftype)
-
-
-def broadcast_to_state(x_np, shape):
-    """Broadcast a NumPy array to the target state shape.
-
-    Parameters
-    ----------
-    x_np : np.ndarray
-        Source array.
-    shape : tuple
-        Target shape (typically ``self.V.value.shape``).
-
-    Returns
-    -------
-    np.ndarray
-        Broadcast view with the given shape.
-    """
-    return np.broadcast_to(x_np, shape)
-
-
-# ---------------------------------------------------------------------------
-# B. Refractory computation
-# ---------------------------------------------------------------------------
-
-def refractory_counts(t_ref):
-    """Convert refractory duration to integer simulation-step counts.
-
-    Computes ``ceil(t_ref / dt)`` using the current environment ``dt``.
-
-    Parameters
-    ----------
-    t_ref : ArrayLike
-        Refractory period with time units.
-
-    Returns
-    -------
-    jnp.ndarray
-        Integer step count (int32).
-    """
-    dt = brainstate.environ.get_dt()
-    ditype = brainstate.environ.ditype()
-    return u.math.asarray(u.math.ceil(t_ref / dt), dtype=ditype)
 
 
 # ---------------------------------------------------------------------------

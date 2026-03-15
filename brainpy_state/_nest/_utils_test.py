@@ -24,58 +24,9 @@ import numpy as np
 import numpy.testing as npt
 
 from ._utils import (
-    to_numpy,
-    broadcast_to_state,
-    refractory_counts,
     propagator_exp,
     alpha_propagator_p31_p32,
 )
-
-
-class TestToNumpy(unittest.TestCase):
-    def test_scalar(self):
-        result = to_numpy(-70.0 * u.mV, u.mV)
-        npt.assert_allclose(result, -70.0)
-        self.assertEqual(result.dtype, np.float64)
-
-    def test_array(self):
-        x = np.array([-70.0, -55.0]) * u.mV
-        result = to_numpy(x, u.mV)
-        npt.assert_allclose(result, [-70.0, -55.0])
-
-    def test_unit_conversion(self):
-        result = to_numpy(250.0 * u.pF, u.pF)
-        npt.assert_allclose(result, 250.0)
-
-
-class TestBroadcastToState(unittest.TestCase):
-    def test_scalar_to_shape(self):
-        x = np.array(1.0)
-        result = broadcast_to_state(x, (3,))
-        self.assertEqual(result.shape, (3,))
-        npt.assert_allclose(result, [1.0, 1.0, 1.0])
-
-    def test_already_correct_shape(self):
-        x = np.array([1.0, 2.0, 3.0])
-        result = broadcast_to_state(x, (3,))
-        npt.assert_allclose(result, x)
-
-
-class TestRefractoryCounts(unittest.TestCase):
-    def setUp(self):
-        brainstate.environ.set(dt=0.1 * u.ms)
-
-    def test_exact_division(self):
-        result = refractory_counts(2.0 * u.ms)
-        self.assertEqual(int(result), 20)
-
-    def test_ceil_rounding(self):
-        result = refractory_counts(2.05 * u.ms)
-        self.assertEqual(int(result), 21)
-
-    def test_zero(self):
-        result = refractory_counts(0.0 * u.ms)
-        self.assertEqual(int(result), 0)
 
 
 class TestPropagatorExp(unittest.TestCase):
