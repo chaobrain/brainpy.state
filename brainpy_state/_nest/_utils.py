@@ -697,7 +697,7 @@ class AdaptiveRungeKuttaStep:
         self,
         method: str,
         vf: Callable,
-        dt=None,
+        dt: Optional[u.Quantity['time']] = None,
         atol: float = 1e-6,
         min_h: Optional[u.Quantity] = None,
         max_iters: int = 100000,
