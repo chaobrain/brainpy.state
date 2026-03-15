@@ -46,7 +46,6 @@ __all__ = [
     'alpha_propagator_p31_p32',
     'rkf45_integrate',
     'ButcherTableau',
-    'AdaptiveRungeKutta',
     'AdaptiveRungeKuttaStep',
     'sum_signed_delta_inputs',
     'time_window_gate',
@@ -447,6 +446,66 @@ HEUN_EULER = ButcherTableau(
     error_order=1,
 )
 
+CASH_KARP = ButcherTableau(
+    c=(0.0, 1 / 5, 3 / 10, 3 / 5, 1.0, 7 / 8),
+    A=(
+        (),
+        (1 / 5,),
+        (3 / 40, 9 / 40),
+        (3 / 10, -9 / 10, 6 / 5),
+        (-11 / 54, 5 / 2, -70 / 27, 35 / 27),
+        (1631 / 55296, 175 / 512, 575 / 13824, 44275 / 110592, 253 / 4096),
+    ),
+    b=(37 / 378, 0.0, 250 / 621, 125 / 594, 0.0, 512 / 1771),
+    b_hat=(2825 / 27648, 0.0, 18575 / 48384, 13525 / 55296, 277 / 14336, 1 / 4),
+    error_order=4,
+)
+
+TSIT5 = ButcherTableau(
+    c=(0.0, 0.161, 0.327, 0.9, 0.9800255409045097, 1.0, 1.0),
+    A=(
+        (),
+        (0.161,),
+        (-0.008480655492356989, 0.335480655492357),
+        (2.8971530571054935, -6.359448489975075, 4.3622954328695815),
+        (5.325864828439257, -11.748883564062828, 7.4955393428898365,
+         -0.09249506636175525),
+        (5.86145544294642, -12.92096931784711, 8.159367898576159,
+         -0.071584973281401, -0.028269050394068616),
+        (0.09646076681806523, 0.01, 0.4798896504144996,
+         1.379008574103742, -3.290069515436081, 2.324710524099774),
+    ),
+    b=(0.09646076681806523, 0.01, 0.4798896504144996,
+       1.379008574103742, -3.290069515436081, 2.324710524099774, 0.0),
+    b_hat=(0.001780011052226, 0.000816434459657, -0.007880878010262,
+           0.144711007173263, -0.582357165452555, 0.458082105929187,
+           1.0 / 66.0),
+    error_order=4,
+)
+
+MIDPOINT_EULER = ButcherTableau(
+    c=(0.0, 1 / 2),
+    A=(
+        (),
+        (1 / 2,),
+    ),
+    b=(0.0, 1.0),
+    b_hat=(1.0, 0.0),
+    error_order=1,
+)
+
+FEHLBERG2 = ButcherTableau(
+    c=(0.0, 1 / 2, 1.0),
+    A=(
+        (),
+        (1 / 2,),
+        (1 / 256, 255 / 256),
+    ),
+    b=(1 / 512, 255 / 256, 1 / 512),
+    b_hat=(1 / 256, 255 / 256, 0.0),
+    error_order=1,
+)
+
 
 def rkf45_integrate(dynamics_fn, y0, dt, h0, atol=1e-3, min_h=1e-8, max_iters=10000):
     r"""Integrate an ODE system for one simulation timestep using RKF45.
@@ -586,65 +645,96 @@ def _rk_max_error(y_high, y_low):
     return err
 
 
-class AdaptiveRungeKutta:
+tableau_mapping = {
+    'RKF45': RKF45,
+    'DOPRI5': DOPRI5,
+    'BOGACKI_SHAMPINE': BOGACKI_SHAMPINE,
+    'HEUN_EULER': HEUN_EULER,
+    'CASH_KARP': CASH_KARP,
+    'TSIT5': TSIT5,
+    'MIDPOINT_EULER': MIDPOINT_EULER,
+    'FEHLBERG2': FEHLBERG2,
+}
+
+
+class AdaptiveRungeKuttaStep:
     """JAX-based adaptive embedded Runge-Kutta ODE integrator.
 
     Supports arbitrary Butcher tableaux, JAX pytree state/extra,
     unit-aware Quantities via saiunit, and optional per-substep
     event callbacks for spike detection, refractory clamping, etc.
 
+    Available methods: ``'RKF45'``, ``'DOPRI5'``, ``'BOGACKI_SHAMPINE'``,
+    ``'HEUN_EULER'``, ``'CASH_KARP'``, ``'TSIT5'``, ``'MIDPOINT_EULER'``,
+    ``'FEHLBERG2'``.
+
     Parameters
     ----------
-    tableau : ButcherTableau
-        Embedded RK method coefficients.  Predefined options:
-        ``RKF45``, ``DOPRI5``, ``BOGACKI_SHAMPINE``, ``HEUN_EULER``.
+    method : str
+        Name of the embedded RK method (key in ``tableau_mapping``).
+    vf : callable
+        Vector field ``vf(state, extra) -> derivatives``.
+    dt : Quantity or float, optional
+        Total integration interval.  Defaults to ``brainstate.environ.get_dt()``.
+    atol : float, optional
+        Absolute error tolerance (unitless).  Default: 1e-6.
+    min_h : Quantity, optional
+        Minimum step size.  Defaults to ``1e-8 * u.ms``.
+    max_iters : int, optional
+        Maximum substep count.  Default: 100000.
+    event_fn : callable, optional
+        ``event_fn(state, extra, accept) -> (state, extra)``
+        Called after each accepted substep.
 
     Examples
     --------
-    >>> integrator = AdaptiveRungeKutta(DOPRI5)
-    >>> state, h, extra = integrator(f, state, dt, h, extra=extra)
+    >>> step = AdaptiveRungeKuttaStep('DOPRI5', vf=my_vector_field)
+    >>> state, h, extra = step(state, h, extra=extra)
     """
 
-    def __init__(self, tableau: ButcherTableau = RKF45):
-        self.tableau = tableau
-
-    def __call__(
+    def __init__(
         self,
-        f: Callable,
-        state,
-        dt,
-        h,
-        extra=None,
+        method: str,
+        vf: Callable,
+        dt=None,
         atol: float = 1e-6,
-        min_h=None,
+        min_h: Optional[u.Quantity] = None,
         max_iters: int = 100000,
         event_fn: Optional[Callable] = None,
     ):
-        """Integrate an ODE system over one simulation timestep.
+        if method not in tableau_mapping:
+            raise ValueError(
+                f'Unknown method {method!r}. '
+                f'Available: {", ".join(tableau_mapping)}'
+            )
+        if min_h is None:
+            min_h = 1e-8 * u.ms
+        if dt is None:
+            dt = brainstate.environ.get_dt()
+        self.tableau = tableau_mapping[method]
+        self.vf = vf
+        self.dt = dt
+        self.atol = atol
+        self.min_h = min_h
+        self.max_iters = max_iters
+        self.event_fn = event_fn
+
+    @classmethod
+    def available_method(cls):
+        """Return a list of available method names."""
+        return list(tableau_mapping.keys())
+
+    def __call__(self, state, h, extra=None):
+        """Integrate over one simulation timestep.
 
         Parameters
         ----------
-        f : callable
-            Vector field ``f(state, extra) -> derivatives``.
-            Both input and output must be pytrees with the same structure
-            as ``state``.
         state : pytree
-            Initial ODE state.  Any JAX-compatible pytree of Quantities.
-        dt : Quantity
-            Total integration interval.
+            Initial ODE state.
         h : Quantity
-            Initial adaptive step size (per-element or scalar).
+            Adaptive step size (updated across calls).
         extra : pytree, optional
             Mutable auxiliary data passed through the loop.
-        atol : float, optional
-            Absolute error tolerance (unitless).  Default: 1e-6.
-        min_h : Quantity, optional
-            Minimum step size.  Defaults to ``1e-8 * u.ms``.
-        max_iters : int, optional
-            Maximum substep count.  Default: 100000.
-        event_fn : callable, optional
-            ``event_fn(state, extra, accept) -> (state, extra)``
-            Called after each accepted substep.
 
         Returns
         -------
@@ -655,8 +745,11 @@ class AdaptiveRungeKutta:
         extra : pytree
             Final auxiliary data.
         """
-        if min_h is None:
-            min_h = 1e-8 * u.ms
+        vf = self.vf
+        dt = self.dt
+        atol = self.atol
+        min_h = self.min_h
+        event_fn = self.event_fn
 
         tableau = self.tableau
         s = len(tableau.c)
@@ -676,7 +769,7 @@ class AdaptiveRungeKutta:
             _, t_loc, _, _, n_iters = carry
             return (
                 jnp.any(u.get_mantissa(t_loc) < u.get_mantissa(dt))
-                & (n_iters < max_iters)
+                & (n_iters < self.max_iters)
             )
 
         def _body_fn(carry):
@@ -684,37 +777,31 @@ class AdaptiveRungeKutta:
 
             active = u.get_mantissa(t_loc) < u.get_mantissa(dt)
 
-            # Clamp step size to remaining integration time.
             h = u.math.where(
                 active,
                 u.math.maximum(min_h, u.math.minimum(h, dt - t_loc)),
                 h,
             )
 
-            # Compute RK stages (loop unrolled at trace time).
             k = []
             for i in range(s):
                 if i == 0:
                     y_i = state
                 else:
                     y_i = _rk_weighted_sum(state, h, tableau.A[i], k)
-                k.append(f(y_i, extra))
+                k.append(vf(y_i, extra))
 
-            # Higher-order solution (used) and lower-order (error).
             y_high = _rk_weighted_sum(state, h, tableau.b, k)
             y_low = _rk_weighted_sum(state, h, tableau.b_hat, k)
 
-            # Per-element error: max across all state leaves.
             err = _rk_max_error(y_high, y_low)
 
-            # Accept where error within tolerance or step at minimum.
             accept = active & (
                 (err <= atol)
                 | (u.get_mantissa(h) <= u.get_mantissa(min_h))
             )
             reject = active & ~accept
 
-            # Update accepted elements.
             new_state = jax.tree.map(
                 lambda yh, si: u.math.where(accept, yh, si),
                 y_high, state,
@@ -722,11 +809,9 @@ class AdaptiveRungeKutta:
             )
             t_loc = u.math.where(accept, t_loc + h, t_loc)
 
-            # Event callback.
             if event_fn is not None:
                 new_state, extra = event_fn(new_state, extra, accept)
 
-            # Adaptive step-size control.
             err_safe = jnp.maximum(err, 1e-30)
             fac_accept = jnp.where(
                 err == 0.0,
@@ -751,50 +836,6 @@ class AdaptiveRungeKutta:
         state, _, h, extra, _ = carry_out
 
         return state, h, extra
-
-
-# Backward-compatible alias.
-tableau_mapping = {
-    'RKF45': RKF45,
-    'DOPRI5': DOPRI5,
-    'BOGACKI_SHAMPINE': BOGACKI_SHAMPINE,
-    'HEUN_EULER': HEUN_EULER,
-}
-
-
-class AdaptiveRungeKuttaStep:
-    def __init__(
-        self,
-        method: str,
-        vf: Callable,
-        dt,
-        atol: float = 1e-6,
-        min_h: Optional[u.Quantity['time']] = None,
-        max_iters: int = 100000,
-        event_fn: Optional[Callable] = None,
-    ):
-        if min_h is None:
-            min_h = 1e-8 * u.ms
-        self.integrator = AdaptiveRungeKutta(tableau_mapping[method])
-        self.vf = vf
-        self.dt = dt
-        self.atol = atol
-        self.min_h = min_h
-        self.max_iters = max_iters
-        self.event_fn = event_fn
-
-    def __call__(self, state, h, extra=None):
-        return self.integrator(
-            self.vf,
-            state,
-            self.dt,
-            h,
-            extra=extra,
-            atol=self.atol,
-            min_h=self.min_h,
-            max_iters=self.max_iters,
-            event_fn=self.event_fn,
-        )
 
 
 # ---------------------------------------------------------------------------

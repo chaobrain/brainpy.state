@@ -431,6 +431,11 @@ class aeif_cond_alpha(NESTNeuron):
             dt=brainstate.environ.get_dt()
         )
 
+        # other variable
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+
     def _validate_parameters(self):
         r"""Validate model parameters against NEST constraints.
 
@@ -490,6 +495,7 @@ class aeif_cond_alpha(NESTNeuron):
             corresponding state variables.
         """
         ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         dt = brainstate.environ.get_dt()
 
         g_ex = braintools.init.param(self.g_ex_initializer, self.varshape)
@@ -508,9 +514,7 @@ class aeif_cond_alpha(NESTNeuron):
         self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
         self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
         self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
-        self.I_stim = brainstate.ShortTermState.init(braintools.init.Constant(0.0 * u.pA), self.varshape)
-
-        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
