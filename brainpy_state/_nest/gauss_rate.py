@@ -608,7 +608,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables and internal delay queues.
 
         Creates and initializes firing rate, noise, and auxiliary state variables
@@ -616,21 +616,15 @@ class gauss_rate_ipn(_gauss_rate_base):
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension for parallel simulation of multiple independent populations.
-            When ``None``, no batch dimension is added (state shape is ``self.varshape``).
-            When an integer, state variables have shape ``(batch_size,) + self.varshape``.
-            Default ``None``.
         **kwargs
-            Additional keyword arguments (ignored, reserved for future extensions).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
         This method initializes:
 
-        - ``self.rate``: Current firing rate, shape ``(batch_size,) + self.varshape`` or
-          ``self.varshape``, initialized via ``rate_initializer``.
-        - ``self.noise``: Last noise sample, same shape, initialized via ``noise_initializer``.
+        - ``self.rate``: Current firing rate, initialized via ``rate_initializer``.
+        - ``self.noise``: Last noise sample, initialized via ``noise_initializer``.
         - ``self.instant_rate``: Copy of ``rate`` for zero-delay transmission.
         - ``self.delayed_rate``: Copy of ``rate`` for delayed transmission.
         - ``self._step_count``: Internal step counter (int64 scalar).
@@ -646,19 +640,12 @@ class gauss_rate_ipn(_gauss_rate_base):
         .. code-block:: python
 
             >>> neuron = bpst.gauss_rate_ipn(in_size=100)
-            >>> neuron.init_state()  # Single population
+            >>> neuron.init_state()
             >>> neuron.rate.value.shape
             (100,)
-
-        .. code-block:: python
-
-            >>> neuron = bpst.gauss_rate_ipn(in_size=(10, 10))
-            >>> neuron.init_state(batch_size=32)  # Batched simulation
-            >>> neuron.rate.value.shape
-            (32, 10, 10)
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 

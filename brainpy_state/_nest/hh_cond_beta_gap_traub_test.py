@@ -159,23 +159,24 @@ class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
     r"""Test that default parameter values match NEST hh_cond_beta_gap_traub."""
 
     def test_default_parameters(self):
-        neuron = hh_cond_beta_gap_traub(1)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_L / u.mV)), -60.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.C_m / u.pF)), 200.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.g_Na / u.nS)), 20000.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.g_K / u.nS)), 6000.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.g_L / u.nS)), 10.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_Na / u.mV)), 50.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_K / u.mV)), -90.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.V_T / u.mV)), -50.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_ex / u.mV)), 0.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_in / u.mV)), -80.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 2.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_rise_ex / u.ms)), 0.5, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_decay_ex / u.ms)), 5.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_rise_in / u.ms)), 0.5, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_decay_in / u.ms)), 10.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = hh_cond_beta_gap_traub(1)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_L / u.mV)), -60.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.C_m / u.pF)), 200.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.g_Na / u.nS)), 20000.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.g_K / u.nS)), 6000.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.g_L / u.nS)), 10.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_Na / u.mV)), 50.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_K / u.mV)), -90.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.V_T / u.mV)), -50.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_ex / u.mV)), 0.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_in / u.mV)), -80.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 2.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_rise_ex / u.ms)), 0.5, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_decay_ex / u.ms)), 5.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_rise_in / u.ms)), 0.5, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_decay_in / u.ms)), 10.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
 
     def test_initial_state_values(self):
         r"""Initial V should be E_L; gating at equilibrium for V=E_L."""
@@ -226,40 +227,47 @@ class TestHHCondBetaGapTraubValidation(unittest.TestCase):
     r"""Test parameter validation."""
 
     def test_negative_capacitance(self):
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, C_m=-100. * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, C_m=-100. * u.pF)
 
     def test_zero_capacitance(self):
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, C_m=0. * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, C_m=0. * u.pF)
 
     def test_negative_refractory(self):
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, t_ref=-1. * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, t_ref=-1. * u.ms)
 
     def test_zero_refractory_ok(self):
-        neuron = hh_cond_beta_gap_traub(1, t_ref=0. * u.ms)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 0.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = hh_cond_beta_gap_traub(1, t_ref=0. * u.ms)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 0.0)
 
     def test_zero_tau_rise(self):
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, tau_rise_ex=0. * u.ms)
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, tau_rise_in=0. * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, tau_rise_ex=0. * u.ms)
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, tau_rise_in=0. * u.ms)
 
     def test_zero_tau_decay(self):
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, tau_decay_ex=0. * u.ms)
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, tau_decay_in=0. * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, tau_decay_ex=0. * u.ms)
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, tau_decay_in=0. * u.ms)
 
     def test_negative_conductance(self):
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, g_Na=-1. * u.nS)
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, g_K=-1. * u.nS)
-        with self.assertRaises(ValueError):
-            hh_cond_beta_gap_traub(1, g_L=-1. * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, g_Na=-1. * u.nS)
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, g_K=-1. * u.nS)
+            with self.assertRaises(ValueError):
+                hh_cond_beta_gap_traub(1, g_L=-1. * u.nS)
 
 
 class TestHHCondBetaGapTraubSubthreshold(unittest.TestCase):
@@ -841,9 +849,10 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
                             "Inhibitory input should hyperpolarize (V > E_in)")
 
     def test_different_V_T_default_from_hh_cond_exp_traub(self):
-        r"""Verify V_T default is -50 mV (different from hh_cond_exp_traub's -63 mV)."""
-        neuron = hh_cond_beta_gap_traub(1)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.V_T / u.mV)), -50.0, places=10)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Verify V_T default is -50 mV (different from hh_cond_exp_traub's -63 mV)."""
+            neuron = hh_cond_beta_gap_traub(1)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.V_T / u.mV)), -50.0, places=10)
 
 
 class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):

@@ -15,15 +15,14 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable, Iterable, Optional, Sequence, Tuple, Union
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -425,16 +424,19 @@ class iaf_psc_delta_ps(NESTNeuron):
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
+        # Precompute refractory step count (uses floor, matching NEST iaf_psc_delta_ps).
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.refr_steps = u.math.asarray(u.math.floor(self.t_ref / dt), dtype=ditype)
 
     def _validate_parameters(self):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated.
+        """
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
             return
@@ -450,18 +452,13 @@ class iaf_psc_delta_ps(NESTNeuron):
         if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize membrane, timing, and refractory runtime states.
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Optional leading batch dimension. If ``None``, states use
-            ``self.varshape``; otherwise they use
-            ``(batch_size,) + self.varshape``.
-        **kwargs : Any
-            Unused compatibility arguments.
-
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Raises
         ------
@@ -470,24 +467,24 @@ class iaf_psc_delta_ps(NESTNeuron):
         TypeError
             If initializer values are not unit-compatible with mV/pA/ms states.
         """
-        V0 = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        zeros = u.math.zeros_like(u.math.asarray(V0 / u.mV))
-
-        self.V = brainstate.HiddenState(V0)
-        self.I_stim = brainstate.ShortTermState(zeros * u.pA)
-        self.last_spike_time = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        )
-        last_step = braintools.init.param(braintools.init.Constant(-1), self.varshape, batch_size)
         ditype = brainstate.environ.ditype()
-        self.last_spike_step = brainstate.ShortTermState(u.math.asarray(last_step, dtype=ditype))
-        self.last_spike_offset = brainstate.ShortTermState(zeros * u.ms)
-        is_refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
-        self.is_refractory = brainstate.ShortTermState(is_refractory)
-        self.refractory_spike_buffer = brainstate.ShortTermState(u.math.zeros_like(V0))
+        dftype = brainstate.environ.dftype()
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
+
+        self.V = brainstate.HiddenState(V)
+        self.I_stim = brainstate.ShortTermState(u.math.zeros(self.varshape, dtype=dftype) * u.pA)
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.last_spike_step = brainstate.ShortTermState(u.math.full(self.varshape, -1, dtype=ditype))
+        self.last_spike_offset = brainstate.ShortTermState(u.math.zeros(self.varshape, dtype=dftype) * u.ms)
+        self.is_refractory = brainstate.ShortTermState(
+            braintools.init.param(braintools.init.Constant(False), self.varshape)
+        )
+        self.refractory_spike_buffer = brainstate.ShortTermState(u.math.zeros_like(V))
 
         if self.ref_var:
-            self.refractory = brainstate.ShortTermState(is_refractory)
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
+            self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Evaluate surrogate spike activation for a voltage tensor.
@@ -573,6 +570,7 @@ class iaf_psc_delta_ps(NESTNeuron):
         TypeError
             If offsets/weights are not convertible to ms/mV-compatible arrays.
         """
+        dftype = brainstate.environ.dftype()
         parsed = []
         for ev in self._canonicalize_spike_events(spike_events):
             if isinstance(ev, dict):
@@ -587,7 +585,9 @@ class iaf_psc_delta_ps(NESTNeuron):
             offset_ms = float(
                 u.math.asarray((offset if not isinstance(offset, (int, float)) else offset * u.ms) / u.ms))
             weight_q = weight if not isinstance(weight, (int, float)) else weight * u.mV
-            weight_np = self._broadcast_to_state(self._to_numpy(weight_q, u.mV), shape)
+            weight_np = np.broadcast_to(
+                np.asarray(u.math.asarray(weight_q / u.mV), dtype=dftype), shape
+            )
             parsed.append((offset_ms, weight_np))
         return parsed
 
@@ -639,42 +639,53 @@ class iaf_psc_delta_ps(NESTNeuron):
         if dt_ms <= 0.0:
             raise ValueError('Simulation time step must be positive.')
 
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         v_shape = self.V.value.shape
 
-        E_L = self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape)
-        V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
+        # Convert all parameters to unitless numpy arrays.
+        E_L = np.broadcast_to(np.asarray(u.math.asarray(self.E_L / u.mV), dtype=dftype), v_shape)
+        V = np.broadcast_to(np.asarray(u.math.asarray(self.V.value / u.mV), dtype=dftype), v_shape)
         U = V - E_L
-        C_m = self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape)
-        tau_m = self._broadcast_to_state(self._to_numpy(self.tau_m, u.ms), v_shape)
-        t_ref = self._broadcast_to_state(self._to_numpy(self.t_ref, u.ms), v_shape)
-        U_th = self._broadcast_to_state(self._to_numpy(self.V_th - self.E_L, u.mV), v_shape)
-        U_reset = self._broadcast_to_state(self._to_numpy(self.V_reset - self.E_L, u.mV), v_shape)
-        dftype = brainstate.environ.dftype()
+        C_m = np.broadcast_to(np.asarray(u.math.asarray(self.C_m / u.pF), dtype=dftype), v_shape)
+        tau_m = np.broadcast_to(np.asarray(u.math.asarray(self.tau_m / u.ms), dtype=dftype), v_shape)
+        t_ref = np.broadcast_to(np.asarray(u.math.asarray(self.t_ref / u.ms), dtype=dftype), v_shape)
+        U_th = np.broadcast_to(np.asarray(u.math.asarray((self.V_th - self.E_L) / u.mV), dtype=dftype), v_shape)
+        U_reset = np.broadcast_to(np.asarray(u.math.asarray((self.V_reset - self.E_L) / u.mV), dtype=dftype), v_shape)
         U_min = -np.inf * np.ones(v_shape, dtype=dftype)
         if self.V_min is not None:
-            U_min = self._broadcast_to_state(self._to_numpy(self.V_min - self.E_L, u.mV), v_shape)
-        I_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
+            U_min = np.broadcast_to(
+                np.asarray(u.math.asarray((self.V_min - self.E_L) / u.mV), dtype=dftype), v_shape
+            )
+        I_e = np.broadcast_to(np.asarray(u.math.asarray(self.I_e / u.pA), dtype=dftype), v_shape)
 
-        I_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
-        ditype = brainstate.environ.ditype()
-        last_step = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=ditype),
-            v_shape,
+        I_stim = np.broadcast_to(np.asarray(u.math.asarray(self.I_stim.value / u.pA), dtype=dftype), v_shape)
+        last_step = np.broadcast_to(
+            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=ditype), v_shape
         )
-        last_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
-        is_refractory = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
-            v_shape,
+        last_offset = np.broadcast_to(
+            np.asarray(u.math.asarray(self.last_spike_offset.value / u.ms), dtype=dftype), v_shape
         )
-        refr_buffer = self._broadcast_to_state(self._to_numpy(self.refractory_spike_buffer.value, u.mV), v_shape)
-        last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
+        is_refractory = np.broadcast_to(
+            np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool), v_shape
+        )
+        refr_buffer = np.broadcast_to(
+            np.asarray(u.math.asarray(self.refractory_spike_buffer.value / u.mV), dtype=dftype), v_shape
+        )
+        last_spike_time_prev = np.broadcast_to(
+            np.asarray(u.math.asarray(self.last_spike_time.value / u.ms), dtype=dftype), v_shape
+        )
 
         refr_steps = np.floor(t_ref / dt_ms).astype(np.int64)
         if np.any(refr_steps < 1):
             raise ValueError('Refractory time must be at least one time step.')
 
-        on_grid_delta = self._broadcast_to_state(self._to_numpy(self.sum_delta_inputs(0. * u.mV), u.mV), v_shape)
-        new_i_stim = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.V.value), u.pA), v_shape)
+        on_grid_delta = np.broadcast_to(
+            np.asarray(u.math.asarray(self.sum_delta_inputs(0. * u.mV) / u.mV), dtype=dftype), v_shape
+        )
+        new_i_stim = np.broadcast_to(
+            np.asarray(u.math.asarray(self.sum_current_inputs(x, self.V.value) / u.pA), dtype=dftype), v_shape
+        )
         parsed_events = self._parse_spike_events(spike_events, v_shape)
         parsed_events.append((0.0, on_grid_delta))
         parsed_events = sorted(parsed_events, key=lambda z: z[0], reverse=True)
@@ -692,6 +703,8 @@ class iaf_psc_delta_ps(NESTNeuron):
         last_spike_time_next = np.empty_like(last_spike_time_prev)
         spike_mask = np.zeros_like(V, dtype=bool)
         V_for_spike = np.empty_like(V)
+
+        import math
 
         for idx in np.ndindex(v_shape):
             u_i = U[idx]

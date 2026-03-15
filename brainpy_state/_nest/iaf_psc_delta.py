@@ -19,9 +19,10 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -320,7 +321,7 @@ class iaf_psc_delta(NESTNeuron):
        >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_delta(in_size=10, t_ref=2.0 * u.ms)
-       ...     neu.init_state(batch_size=1)
+       ...     neu.init_state()
        ...     with brainstate.environ.context(t=0.0 * u.ms):
        ...         spk = neu.update(x=500.0 * u.pA)
        ...     _ = spk.shape
@@ -386,18 +387,18 @@ class iaf_psc_delta(NESTNeuron):
         self.refractory_input = refractory_input
         self.ref_var = ref_var
 
-    def init_state(self, batch_size: int = None, **kwargs):
+        # other variable
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+
+    def init_state(self, **kwargs):
         r"""Initialize membrane and refractory runtime states.
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Optional leading batch dimension. If ``None``, states are created
-            with shape ``self.varshape``; otherwise with
-            ``(batch_size,) + self.varshape``.
-        **kwargs : Any
-            Unused compatibility arguments.
-
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Raises
         ------
@@ -407,16 +408,17 @@ class iaf_psc_delta(NESTNeuron):
             If initializer values are incompatible with required numeric/unit
             conversions.
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        self.V = brainstate.HiddenState(V)
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
         ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
+        self.V = brainstate.HiddenState(V)
+
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
         self.refractory_spike_buffer = brainstate.ShortTermState(u.math.zeros_like(V))
+
         if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None):
@@ -443,28 +445,6 @@ class iaf_psc_delta(NESTNeuron):
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
-
-    def _refractory_counts(self):
-        r"""Convert refractory duration to integer simulation-step counts.
-
-        Returns
-        -------
-        out : Any
-            Integer array (``jnp.int32``) with shape broadcast-compatible to
-            ``self.varshape``; computed as ``ceil(self.t_ref / dt)``.
-
-        Raises
-        ------
-        KeyError
-            If simulation context does not provide ``dt``.
-        TypeError
-            If ``t_ref`` and ``dt`` are not unit-compatible for division.
-        """
-        dt = brainstate.environ.get_dt()
-        # NEST converts refractory duration to grid steps by rounding up to the
-        # next simulation step.
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def update(self, x=0. * u.pA):
         r"""Advance the neuron by one simulation step.
@@ -528,7 +508,7 @@ class iaf_psc_delta(NESTNeuron):
 
         spike_cond = v_post >= self.V_th
         self.refractory_step_count.value = jax.lax.stop_gradient(
-            u.math.where(spike_cond, self._refractory_counts(), ref_steps)
+            u.math.where(spike_cond, self.ref_count, ref_steps)
         )
         self.V.value = u.math.where(spike_cond, self.V_reset, v_post)
         self.last_spike_time.value = jax.lax.stop_gradient(

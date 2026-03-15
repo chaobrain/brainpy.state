@@ -194,71 +194,73 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_nest_cpp_default_parameters_and_recordables(self):
-        neuron = aeif_cond_beta_multisynapse(1)
-        self.assertEqual(neuron.V_peak, 0.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 0.0 * u.ms)
-        self.assertEqual(neuron.g_L, 30.0 * u.nS)
-        self.assertEqual(neuron.C_m, 281.0 * u.pF)
-        self.assertEqual(neuron.E_L, -70.6 * u.mV)
-        self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
-        self.assertEqual(neuron.tau_w, 144.0 * u.ms)
-        self.assertEqual(neuron.a, 4.0 * u.nS)
-        self.assertEqual(neuron.b, 80.5 * u.pA)
-        self.assertEqual(neuron.V_th, -50.4 * u.mV)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        self.assertTrue(np.allclose(neuron.tau_rise, [2.0]))
-        self.assertTrue(np.allclose(neuron.tau_decay, [20.0]))
-        self.assertTrue(np.allclose(neuron.E_rev, [0.0]))
-        self.assertEqual(neuron.n_receptors, 1)
-        self.assertEqual(neuron.recordables, ['V_m', 'w', 'g_1'])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = aeif_cond_beta_multisynapse(1)
+            self.assertEqual(neuron.V_peak, 0.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 0.0 * u.ms)
+            self.assertEqual(neuron.g_L, 30.0 * u.nS)
+            self.assertEqual(neuron.C_m, 281.0 * u.pF)
+            self.assertEqual(neuron.E_L, -70.6 * u.mV)
+            self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
+            self.assertEqual(neuron.tau_w, 144.0 * u.ms)
+            self.assertEqual(neuron.a, 4.0 * u.nS)
+            self.assertEqual(neuron.b, 80.5 * u.pA)
+            self.assertEqual(neuron.V_th, -50.4 * u.mV)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertTrue(np.allclose(neuron.tau_rise, [2.0]))
+            self.assertTrue(np.allclose(neuron.tau_decay, [20.0]))
+            self.assertTrue(np.allclose(neuron.E_rev, [0.0]))
+            self.assertEqual(neuron.n_receptors, 1)
+            self.assertEqual(neuron.recordables, ['V_m', 'w', 'g_1'])
 
-        neuron3 = aeif_cond_beta_multisynapse(
-            1,
-            tau_rise=[0.2, 0.5, 1.0] * u.ms,
-            tau_decay=[0.8, 2.0, 4.0] * u.ms,
-            E_rev=[0.0, -85.0, 20.0] * u.mV,
-        )
-        self.assertEqual(neuron3.recordables, ['V_m', 'w', 'g_1', 'g_2', 'g_3'])
+            neuron3 = aeif_cond_beta_multisynapse(
+                1,
+                tau_rise=[0.2, 0.5, 1.0] * u.ms,
+                tau_decay=[0.8, 2.0, 4.0] * u.ms,
+                E_rev=[0.0, -85.0, 20.0] * u.mV,
+            )
+            self.assertEqual(neuron3.recordables, ['V_m', 'w', 'g_1', 'g_2', 'g_3'])
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(
-                1,
-                E_rev=[0.0, -85.0] * u.mV,
-                tau_rise=[2.0] * u.ms,
-                tau_decay=[20.0] * u.ms,
-            )
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(
-                1,
-                E_rev=[0.0] * u.mV,
-                tau_rise=[2.0] * u.ms,
-                tau_decay=[0.0] * u.ms,
-            )
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(
-                1,
-                E_rev=[0.0] * u.mV,
-                tau_rise=[2.0] * u.ms,
-                tau_decay=[1.0] * u.ms,
-            )
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, Delta_T=-1.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, tau_w=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, gsl_error_tol=0.0)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(
+                    1,
+                    E_rev=[0.0, -85.0] * u.mV,
+                    tau_rise=[2.0] * u.ms,
+                    tau_decay=[20.0] * u.ms,
+                )
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(
+                    1,
+                    E_rev=[0.0] * u.mV,
+                    tau_rise=[2.0] * u.ms,
+                    tau_decay=[0.0] * u.ms,
+                )
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(
+                    1,
+                    E_rev=[0.0] * u.mV,
+                    tau_rise=[2.0] * u.ms,
+                    tau_decay=[1.0] * u.ms,
+                )
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, Delta_T=-1.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, tau_w=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, gsl_error_tol=0.0)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
 
     def test_spike_receptor_routing_and_nonnegative_weight_constraint(self):
         with brainstate.environ.context(dt=self.dt):

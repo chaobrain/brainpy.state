@@ -252,40 +252,49 @@ class TestParameterValidation(unittest.TestCase):
     r"""Test parameter validation matches NEST checks."""
 
     def test_negative_rate_slope(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, rate_slope=-1.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, rate_slope=-1.0)
 
     def test_negative_phi_max(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, phi_max=-0.1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, phi_max=-0.1)
 
     def test_negative_t_ref(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, t_ref=-1.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, t_ref=-1.0 * u.ms)
 
     def test_negative_soma_capacitance(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_C_m=-100.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_C_m=-100.0 * u.pF)
 
     def test_zero_soma_capacitance(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_C_m=0.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_C_m=0.0 * u.pF)
 
     def test_negative_dend_capacitance(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, dend_C_m=-100.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, dend_C_m=-100.0 * u.pF)
 
     def test_negative_soma_tau_syn_ex(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_tau_syn_ex=-1.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_tau_syn_ex=-1.0 * u.ms)
 
     def test_negative_dend_tau_syn_in(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, dend_tau_syn_in=-1.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, dend_tau_syn_in=-1.0 * u.ms)
 
     def test_zero_soma_tau_syn_in(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_tau_syn_in=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_tau_syn_in=0.0 * u.ms)
 
 
 class TestStateInitialization(unittest.TestCase):

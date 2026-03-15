@@ -336,24 +336,18 @@ class ignore_and_fire(NESTNeuron):
 
         return firing_period_steps, phase_steps
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize internal state variables for simulation.
 
         Computes and stores ``firing_period_steps`` and ``phase_steps`` as
         :class:`brainstate.ShortTermState` arrays. Both are derived from
         the ``rate`` and ``phase`` parameters via
-        :meth:`_calc_initial_variables`, then broadcast to batch shape if
-        ``batch_size`` is provided.
+        :meth:`_calc_initial_variables`.
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension size. When provided, state arrays are broadcast to
-            shape ``(batch_size, *varshape)``. When ``None``, state shape is
-            ``varshape``. Default is ``None``.
-        **kwargs : dict
-            Additional keyword arguments passed to parent
-            :meth:`brainstate.nn.Dynamics.init_state` (currently unused).
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Raises
         ------
@@ -375,11 +369,7 @@ class ignore_and_fire(NESTNeuron):
         typically via ``neuron.init_state()`` or automatically through
         higher-level APIs like ``brainstate.nn.Module.init_all_states()``.
         """
-        firing_period_steps, phase_steps = self._calc_initial_variables(batch_size)
-
-        if batch_size is not None:
-            firing_period_steps = np.broadcast_to(firing_period_steps, (batch_size,) + self.varshape)
-            phase_steps = np.broadcast_to(phase_steps, (batch_size,) + self.varshape)
+        firing_period_steps, phase_steps = self._calc_initial_variables()
 
         ditype = brainstate.environ.ditype()
         self.firing_period_steps = brainstate.ShortTermState(

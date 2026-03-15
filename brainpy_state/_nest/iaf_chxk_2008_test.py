@@ -178,34 +178,36 @@ class TestIAFChxk2008(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters_and_metadata(self):
-        neuron = iaf_chxk_2008(1)
-        self.assertEqual(neuron.V_th, -45.0 * u.mV)
-        self.assertEqual(neuron.g_L, 100.0 * u.nS)
-        self.assertEqual(neuron.C_m, 1000.0 * u.pF)
-        self.assertEqual(neuron.E_ex, 20.0 * u.mV)
-        self.assertEqual(neuron.E_in, -90.0 * u.mV)
-        self.assertEqual(neuron.E_L, -60.0 * u.mV)
-        self.assertEqual(neuron.tau_syn_ex, 1.0 * u.ms)
-        self.assertEqual(neuron.tau_syn_in, 1.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        self.assertEqual(neuron.tau_ahp, 0.5 * u.ms)
-        self.assertEqual(neuron.E_ahp, -95.0 * u.mV)
-        self.assertEqual(neuron.g_ahp, 443.8 * u.nS)
-        self.assertFalse(bool(np.asarray(u.math.asarray(neuron.ahp_bug)).reshape(-1)[0]))
-        self.assertEqual(
-            neuron.recordables,
-            ['V_m', 'g_ex', 'g_in', 'g_ahp', 'I_syn_ex', 'I_syn_in', 'I_ahp'],
-        )
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_chxk_2008(1)
+            self.assertEqual(neuron.V_th, -45.0 * u.mV)
+            self.assertEqual(neuron.g_L, 100.0 * u.nS)
+            self.assertEqual(neuron.C_m, 1000.0 * u.pF)
+            self.assertEqual(neuron.E_ex, 20.0 * u.mV)
+            self.assertEqual(neuron.E_in, -90.0 * u.mV)
+            self.assertEqual(neuron.E_L, -60.0 * u.mV)
+            self.assertEqual(neuron.tau_syn_ex, 1.0 * u.ms)
+            self.assertEqual(neuron.tau_syn_in, 1.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertEqual(neuron.tau_ahp, 0.5 * u.ms)
+            self.assertEqual(neuron.E_ahp, -95.0 * u.mV)
+            self.assertEqual(neuron.g_ahp, 443.8 * u.nS)
+            self.assertFalse(bool(np.asarray(u.math.asarray(neuron.ahp_bug)).reshape(-1)[0]))
+            self.assertEqual(
+                neuron.recordables,
+                ['V_m', 'g_ex', 'g_in', 'g_ahp', 'I_syn_ex', 'I_syn_in', 'I_ahp'],
+            )
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_chxk_2008(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            iaf_chxk_2008(1, tau_syn_ex=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_chxk_2008(1, tau_syn_in=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_chxk_2008(1, tau_ahp=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_chxk_2008(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                iaf_chxk_2008(1, tau_syn_ex=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_chxk_2008(1, tau_syn_in=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_chxk_2008(1, tau_ahp=0.0 * u.ms)
 
     def test_current_input_has_one_step_delay_like_nest(self):
         with brainstate.environ.context(dt=self.dt):

@@ -88,24 +88,26 @@ class TestIAFChs2007(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters(self):
-        neuron = iaf_chs_2007(1)
-        self.assertAlmostEqual(self._scalar(neuron.tau_epsp / u.ms), 8.5, delta=0.0)
-        self.assertAlmostEqual(self._scalar(neuron.tau_reset / u.ms), 15.4, delta=0.0)
-        self.assertAlmostEqual(self._scalar(neuron.V_epsp), 0.77, delta=0.0)
-        self.assertAlmostEqual(self._scalar(neuron.V_reset), 2.31, delta=0.0)
-        self.assertAlmostEqual(self._scalar(neuron.V_noise), 0.0, delta=0.0)
-        self.assertEqual(neuron.noise.size, 0)
-        self.assertEqual(neuron.spk_reset, 'hard')
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_chs_2007(1)
+            self.assertAlmostEqual(self._scalar(neuron.tau_epsp / u.ms), 8.5, delta=0.0)
+            self.assertAlmostEqual(self._scalar(neuron.tau_reset / u.ms), 15.4, delta=0.0)
+            self.assertAlmostEqual(self._scalar(neuron.V_epsp), 0.77, delta=0.0)
+            self.assertAlmostEqual(self._scalar(neuron.V_reset), 2.31, delta=0.0)
+            self.assertAlmostEqual(self._scalar(neuron.V_noise), 0.0, delta=0.0)
+            self.assertEqual(neuron.noise.size, 0)
+            self.assertEqual(neuron.spk_reset, 'hard')
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_chs_2007(1, V_epsp=-1e-3)
-        with self.assertRaises(ValueError):
-            iaf_chs_2007(1, V_reset=-1e-3)
-        with self.assertRaises(ValueError):
-            iaf_chs_2007(1, tau_epsp=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_chs_2007(1, tau_reset=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_chs_2007(1, V_epsp=-1e-3)
+            with self.assertRaises(ValueError):
+                iaf_chs_2007(1, V_reset=-1e-3)
+            with self.assertRaises(ValueError):
+                iaf_chs_2007(1, tau_epsp=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_chs_2007(1, tau_reset=0.0 * u.ms)
 
     def test_positive_spike_weights_only_and_one_step_delay_to_vm(self):
         with brainstate.environ.context(dt=self.dt):

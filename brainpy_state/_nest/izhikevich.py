@@ -333,7 +333,7 @@ class izhikevich(NESTNeuron):
         self.V_initializer = V_initializer
         self.U_initializer = U_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize state variables for the Izhikevich neuron.
 
         This method initializes the membrane potential :math:`V_{\text{m}}`,
@@ -345,13 +345,8 @@ class izhikevich(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension for parallel simulation of independent neuron
-            populations. If provided, all state variables will have shape
-            ``(batch_size, *varshape)``. Default: None (no batch dimension).
-        **kwargs : dict, optional
-            Additional keyword arguments (currently unused, reserved for
-            future extensions).
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -362,9 +357,9 @@ class izhikevich(NESTNeuron):
         - The buffered current ``I`` is always initialized to zero with units
           of pA, implementing NEST's ring buffer semantic (one-step delay).
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        V = braintools.init.param(self.V_initializer, self.varshape)
         if self.U_initializer is not None:
-            U = braintools.init.param(self.U_initializer, self.varshape, batch_size)
+            U = braintools.init.param(self.U_initializer, self.varshape)
         else:
             # NEST default: u_ = b * v_  (dimensionless b times V in mV)
             U = self.b * V

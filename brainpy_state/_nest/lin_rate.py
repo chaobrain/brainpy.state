@@ -172,8 +172,8 @@ class _lin_rate_base(NESTNeuron):
     def _drain_delayed_queue(self, step_idx: int, state_shape):
         ex = self._delayed_ex_queue.pop(step_idx, None)
         inh = self._delayed_in_queue.pop(step_idx, None)
+        dftype = brainstate.environ.dftype()
         if ex is None:
-            dftype = brainstate.environ.dftype()
             ex = np.zeros(state_shape, dtype=dftype)
         else:
             ex = np.array(self._broadcast_to_state(np.asarray(ex, dtype=dftype), state_shape), copy=True)
@@ -397,9 +397,9 @@ class lin_rate_ipn(_lin_rate_base):
         if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -571,10 +571,10 @@ class lin_rate_opn(_lin_rate_base):
         if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
-        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
+        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
         noisy_rate_np = self._to_numpy(noisy_rate)

@@ -541,8 +541,8 @@ class siegert_neuron(NESTNeuron):
         if np.any(self.V_reset >= self.theta):
             raise ValueError('Reset potential V_reset must be smaller than threshold theta.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
 
         self.rate = brainstate.ShortTermState(rate_np)
@@ -970,8 +970,6 @@ class siegert_neuron(NESTNeuron):
 
         - Delayed events use integer step delays (not continuous time).
         - Outgoing diffusion coefficients are updated post-integration (not mid-step).
-        ditype = brainstate.environ.ditype()
-        dftype = brainstate.environ.dftype()
         - No iterative waveform relaxation (NEST's WFR mode is not implemented).
 
         Examples
@@ -1026,6 +1024,8 @@ class siegert_neuron(NESTNeuron):
             ...     rate = model.update(instant_diffusion_events=events)
             >>> print(f"Combined event effect: {rate.mean():.2f} Hz")
         """
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
 
         state_shape = self.rate.value.shape

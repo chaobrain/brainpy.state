@@ -15,16 +15,14 @@
 
 # -*- coding: utf-8 -*-
 
-import math
-
 import brainstate
-import saiunit as u
 import jax.numpy as jnp
-import numpy as np
+import saiunit as u
 from brainstate.typing import Size
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'astrocyte_lr_1994',
@@ -394,7 +392,7 @@ class astrocyte_lr_1994(NESTNeuron):
         'SIC',
     )
 
-    _MIN_H = 1e-8  # ms – minimum integration step
+    _MIN_H = 1e-8 * u.ms  # ms – minimum integration step
     _MAX_ITERS = 100000
 
     def __init__(
@@ -452,7 +450,24 @@ class astrocyte_lr_1994(NESTNeuron):
 
         self._validate_parameters()
 
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
+
     def _validate_parameters(self):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated.
+        """
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.Ca_tot, self.IP3_0, self.Kd_act, self.tau_IP3)):
             return
@@ -501,21 +516,18 @@ class astrocyte_lr_1994(NESTNeuron):
         """
         return list(self.RECORDABLES)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize astrocyte state variables.
 
         Creates state arrays for IP3 concentration, cytosolic calcium concentration,
-        IP3R inactivation gate, SIC output, and external current buffer. All states
-        are initialized to constructor-specified values.
+        IP3R inactivation gate, SIC output, external current buffer, and the
+        adaptive integration step size. All states are initialized to
+        constructor-specified values.
 
         Parameters
         ----------
-        batch_size : int, optional
-            If provided, prepends an additional batch dimension to the state shape,
-            resulting in shape ``(batch_size,) + self.varshape``. Useful for parallel
-            simulation of multiple independent trials.
         **kwargs : dict, optional
-            Reserved for future extensions; currently unused.
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -525,55 +537,24 @@ class astrocyte_lr_1994(NESTNeuron):
           (defaults to ``IP3_0``), ``Ca_initializer``, and ``h_IP3R_initializer``.
         - SIC output and external current buffer are initialized to zero.
         """
-        shape = self.varshape
-        if batch_size is not None:
-            shape = (batch_size,) + shape
-
         dftype = brainstate.environ.dftype()
-        ip3 = np.full(shape, self._IP3_init, dtype=dftype)
-        ca = np.full(shape, self._Ca_init, dtype=dftype)
-        h = np.full(shape, self._h_IP3R_init, dtype=dftype)
+        dt = brainstate.environ.get_dt()
 
-        self.IP3 = brainstate.HiddenState(jnp.asarray(ip3))
-        self.Ca = brainstate.HiddenState(jnp.asarray(ca))
-        self.h_IP3R = brainstate.HiddenState(jnp.asarray(h))
-        self.SIC = brainstate.ShortTermState(jnp.zeros(shape, dtype=dftype))
-        self.J_noise = brainstate.ShortTermState(jnp.zeros(shape, dtype=dftype))
+        ip3 = jnp.full(self.varshape, self._IP3_init, dtype=dftype)
+        ca = jnp.full(self.varshape, self._Ca_init, dtype=dftype)
+        h = jnp.full(self.varshape, self._h_IP3R_init, dtype=dftype)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset astrocyte state variables to initial values.
+        self.IP3 = brainstate.HiddenState(ip3)
+        self.Ca = brainstate.HiddenState(ca)
+        self.h_IP3R = brainstate.HiddenState(h)
+        self.SIC = brainstate.ShortTermState(jnp.zeros(self.varshape, dtype=dftype))
+        self.J_noise = brainstate.ShortTermState(jnp.zeros(self.varshape, dtype=dftype))
+        self.integration_step = brainstate.ShortTermState(
+            jnp.full(self.varshape, u.get_mantissa(dt), dtype=dftype) * u.ms
+        )
 
-        Restores all state variables to their constructor-specified initial values,
-        clearing any accumulated dynamics. Useful for resetting simulations or
-        initializing new batches without recreating the model instance.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            If provided, reshapes state arrays to ``(batch_size,) + self.varshape``.
-            Must match the batch size used during ``init_state`` if states already exist.
-        **kwargs : dict, optional
-            Reserved for future extensions; currently unused.
-
-        Notes
-        -----
-        - This method modifies existing state arrays in-place via ``.value`` assignment.
-        - If ``init_state`` has not been called, this method will raise an ``AttributeError``.
-        - All states (IP3, Ca, h_IP3R, SIC, J_noise) are reset simultaneously.
-        """
-        shape = self.varshape
-        if batch_size is not None:
-            shape = (batch_size,) + shape
-
-        dftype = brainstate.environ.dftype()
-        self.IP3.value = jnp.full(shape, self._IP3_init, dtype=dftype)
-        self.Ca.value = jnp.full(shape, self._Ca_init, dtype=dftype)
-        self.h_IP3R.value = jnp.full(shape, self._h_IP3R_init, dtype=dftype)
-        self.SIC.value = jnp.zeros(shape, dtype=dftype)
-        self.J_noise.value = jnp.zeros(shape, dtype=dftype)
-
-    def _dynamics(self, ip3, ca, h_ip3r, J_noise):
-        r"""Compute time derivatives of the IP3-calcium ODE system.
+    def _vector_field(self, state, extra):
+        r"""Vectorized RHS for the IP3-calcium ODE system.
 
         Evaluates the right-hand side of the three coupled differential equations
         governing IP3 concentration, cytosolic calcium concentration, and IP3R
@@ -581,107 +562,82 @@ class astrocyte_lr_1994(NESTNeuron):
 
         Parameters
         ----------
-        ip3 : float
-            Current IP3 concentration in µM.
-        ca : float
-            Current cytosolic calcium concentration in µM, pre-clamped to :math:`[0, C_{\mathrm{tot}}]`.
-        h_ip3r : float
-            Current fraction of non-inactivated IP3 receptors (dimensionless, 0–1).
-        J_noise : float
-            External calcium flux from noise or external input in µM/ms. Added directly
-            to :math:`d[\mathrm{Ca}]/dt`.
+        state : DotDict
+            Keys: IP3, Ca, h_IP3R — ODE state variables.
+        extra : DotDict
+            Keys: j_noise — mutable auxiliary data carried through the integrator.
 
         Returns
         -------
-        dip3 : float
-            Time derivative of IP3 concentration in µM/ms. Includes exponential decay
-            to baseline and synaptic input (synaptic term not included here; applied
-            separately as discrete event).
-        dca : float
-            Time derivative of cytosolic calcium concentration in µM/ms. Sums IP3R
-            channel release, SERCA pump uptake, passive leak, and external input.
-        dh : float
-            Time derivative of IP3R inactivation gate in 1/ms. Balances
-            calcium-independent activation and calcium-dependent inactivation.
+        DotDict with same keys as ``state``, containing time derivatives.
 
         Notes
         -----
-        - ``ca`` is clamped before calling this function to ensure ER calcium
-          :math:`[\mathrm{Ca}]_{\mathrm{ER}}` remains positive.
+        - Calcium is clamped to ``[0, Ca_tot]`` before computing the RHS to ensure
+          ER calcium remains positive.
         - Synaptic IP3 input is handled separately via instantaneous jumps after
           integration, not within this ODE function.
         - All steady-state gates (:math:`m_\infty`, :math:`n_\infty`) are computed
           on-the-fly without storing intermediate states.
         """
-        calc = max(0.0, min(ca, self.Ca_tot))
+        ip3 = state.IP3
+        ca = jnp.clip(state.Ca, 0.0, self.Ca_tot)
+        h_ip3r = state.h_IP3R
+        j_noise = extra.j_noise
 
         alpha_h = (self.k_IP3R * self.Kd_inh
                    * (ip3 + self.Kd_IP3_1) / (ip3 + self.Kd_IP3_2))
-        beta_h = self.k_IP3R * calc
+        beta_h = self.k_IP3R * ca
 
-        J_pump = (self.rate_SERCA * calc ** 2
-                  / (self.Km_SERCA ** 2 + calc ** 2))
+        J_pump = (self.rate_SERCA * ca ** 2
+                  / (self.Km_SERCA ** 2 + ca ** 2))
 
         m_inf = ip3 / (ip3 + self.Kd_IP3_1)
-        n_inf = calc / (calc + self.Kd_act)
-        calc_ER = (self.Ca_tot - calc) / self.ratio_ER_cyt
+        n_inf = ca / (ca + self.Kd_act)
+        calc_ER = (self.Ca_tot - ca) / self.ratio_ER_cyt
 
-        J_leak = self.ratio_ER_cyt * self.rate_L * (calc_ER - calc)
+        J_leak = self.ratio_ER_cyt * self.rate_L * (calc_ER - ca)
         J_channel = (self.ratio_ER_cyt * self.rate_IP3R
                      * m_inf ** 3 * n_inf ** 3 * h_ip3r ** 3
-                     * (calc_ER - calc))
+                     * (calc_ER - ca))
 
         dip3 = (self.IP3_0 - ip3) / self.tau_IP3
-        dca = J_channel - J_pump + J_leak + J_noise
+        dca = J_channel - J_pump + J_leak + j_noise
         dh = alpha_h * (1.0 - h_ip3r) - beta_h * h_ip3r
 
-        return dip3, dca, dh
+        # The integrator multiplies derivatives by h (which carries ms units).
+        # State variables are unitless, so derivatives must be in 1/ms for
+        # dimensional consistency: state + h[ms] * deriv[1/ms] = unitless.
+        inv_ms = 1.0 / u.ms
+        return DotDict(IP3=dip3 * inv_ms, Ca=dca * inv_ms, h_IP3R=dh * inv_ms)
 
-    @staticmethod
-    def _compute_sic(ca, SIC_th, SIC_scale):
-        r"""Compute slow inward current (SIC) from cytosolic calcium concentration.
+    def _event_fn(self, state, extra, accept):
+        r"""Post-substep calcium clamping to enforce conservation.
 
-        Transforms calcium concentration above threshold into a logarithmic SIC output
-        signal. Matches NEST's implementation exactly.
+        After each accepted RKF45 substep, clamps cytosolic calcium to
+        :math:`[0, C_{\mathrm{tot}}]` to prevent numerical drift beyond
+        physical bounds.
 
         Parameters
         ----------
-        ca : float
-            Current cytosolic calcium concentration in µM.
-        SIC_th : float
-            Calcium threshold for SIC generation in µM. No SIC is produced below this value.
-        SIC_scale : float
-            Dimensionless scaling factor multiplying the logarithmic response.
+        state : DotDict
+            Keys: IP3, Ca, h_IP3R — ODE state variables.
+        extra : DotDict
+            Keys: j_noise — auxiliary data.
+        accept : array, bool
+            Mask of elements whose RK substep was accepted.
 
         Returns
         -------
-        sic : float
-            Slow inward current output in pA (or dimensionless units, depending on
-            ``SIC_scale`` parameterization). Returns 0 if :math:`[\mathrm{Ca}] \leq \mathrm{SIC_{th}}`
-            or if the log argument is :math:`\leq 1` (nM basis).
-
-        Notes
-        -----
-        The SIC is computed as:
-
-        .. math::
-
-           y = ([\mathrm{Ca}] - \mathrm{SIC_{th}}) \times 1000
-
-           \mathrm{SIC} =
-           \begin{cases}
-             \mathrm{SIC_{scale}} \cdot \ln y & \text{if } y > 1 \\
-             0 & \text{otherwise}
-           \end{cases}
-
-        where the factor 1000 converts µM to nM. The logarithmic form produces a
-        graded response that grows slowly with calcium elevation, consistent with
-        experimental observations of astrocyte-mediated slow currents.
+        (new_state, extra) DotDicts with clamped calcium values.
         """
-        calc_thr = (ca - SIC_th) * 1000.0  # µM -> nM
-        if calc_thr > 1.0:
-            return math.log(calc_thr) * SIC_scale
-        return 0.0
+        clamped_ca = jnp.where(
+            accept,
+            jnp.clip(state.Ca, 0.0, self.Ca_tot),
+            state.Ca,
+        )
+        new_state = DotDict({**state, 'Ca': clamped_ca})
+        return new_state, extra
 
     def update(self, spike_weights=0.0, J_ext=0.0):
         r"""Advance astrocyte state by one simulation time step using RKF45 integration.
@@ -728,120 +684,52 @@ class astrocyte_lr_1994(NESTNeuron):
           4. Compute SIC output from updated calcium
           5. Store ``J_ext`` for use in the *next* update call
 
-        - **Performance**: Integration is performed per-element in a NumPy loop (not
-          vectorized). For :math:`N` astrocytes, expect :math:`\mathcal{O}(N \times k)`
-          cost where :math:`k` is the average substep count (typically 5–20).
+        - **Performance**: Integration is fully vectorized via the JAX-based
+          ``AdaptiveRungeKuttaStep`` integrator, enabling efficient parallel
+          computation across the entire astrocyte population.
         """
-        dt_q = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
-        dt = float(np.asarray(u.math.asarray(dt_q / u.ms), dtype=dftype))
 
-        v_shape = self.IP3.value.shape
+        # Read state variables.
+        ip3 = self.IP3.value
+        ca = self.Ca.value
+        h_ip3r = self.h_IP3R.value
+        j_noise = self.J_noise.value
+        h = self.integration_step.value
 
-        ip3 = np.broadcast_to(
-            np.asarray(self.IP3.value, dtype=dftype), v_shape
-        ).copy()
-        ca = np.broadcast_to(
-            np.asarray(self.Ca.value, dtype=dftype), v_shape
-        ).copy()
-        h = np.broadcast_to(
-            np.asarray(self.h_IP3R.value, dtype=dftype), v_shape
-        ).copy()
-        j_noise_arr = np.broadcast_to(
-            np.asarray(self.J_noise.value, dtype=dftype), v_shape
-        ).copy()
-        sic_out = np.zeros(v_shape, dtype=dftype)
+        # Build ODE state and extra data for the integrator.
+        ode_state = DotDict(IP3=ip3, Ca=ca, h_IP3R=h_ip3r)
+        extra = DotDict(j_noise=j_noise)
 
-        # Convert spike_weights and J_ext to arrays
-        sw = np.broadcast_to(
-            np.asarray(spike_weights, dtype=dftype), v_shape
+        # Adaptive RKF45 integration via generic integrator.
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        ip3, ca, h_ip3r = ode_state.IP3, ode_state.Ca, ode_state.h_IP3R
+
+        # Final clamp of calcium to [0, Ca_tot] (matches NEST).
+        ca = jnp.clip(ca, 0.0, self.Ca_tot)
+
+        # Apply spike input: IP3 += delta_IP3 * spike_weight.
+        sw = jnp.broadcast_to(jnp.asarray(spike_weights, dtype=dftype), self.varshape)
+        ip3 = ip3 + self.delta_IP3 * sw
+
+        # Compute SIC output.
+        calc_thr = (ca - self.SIC_th) * 1000.0  # µM -> nM
+        sic_out = jnp.where(
+            calc_thr > 1.0,
+            jnp.log(jnp.maximum(calc_thr, 1.0)) * self.SIC_scale,
+            0.0,
         )
-        j_ext = np.broadcast_to(
-            np.asarray(J_ext, dtype=dftype), v_shape
-        )
+        sic_out = jnp.asarray(sic_out, dtype=dftype)
 
-        atol = self.gsl_error_tol
+        # Write back state.
+        self.IP3.value = ip3
+        self.Ca.value = ca
+        self.h_IP3R.value = h_ip3r
+        self.SIC.value = sic_out
+        self.integration_step.value = h
 
-        for idx in np.ndindex(v_shape):
-            y = np.array([ip3[idx], ca[idx], h[idx]], dtype=dftype)
-            j_noise_local = j_noise_arr[idx]
+        # Store new external current for next step (one-step delay, NEST semantics).
+        j_ext = jnp.broadcast_to(jnp.asarray(J_ext, dtype=dftype), self.varshape)
+        self.J_noise.value = j_ext
 
-            # RKF45 adaptive integration over (0, dt]
-            t_local = 0.0
-            h_step = dt  # initial integration step
-            iters = 0
-
-            while t_local < dt and iters < self._MAX_ITERS:
-                iters += 1
-                h_step = max(self._MIN_H, min(h_step, dt - t_local))
-
-                def f(y_):
-                    d = self._dynamics(y_[0], y_[1], y_[2], j_noise_local)
-                    dftype = brainstate.environ.dftype()
-                    return np.array(d, dtype=dftype)
-
-                k1 = f(y)
-                k2 = f(y + h_step * (1.0 / 4.0) * k1)
-                k3 = f(y + h_step * (3.0 / 32.0 * k1 + 9.0 / 32.0 * k2))
-                k4 = f(y + h_step * (1932.0 / 2197.0 * k1
-                                     - 7200.0 / 2197.0 * k2
-                                     + 7296.0 / 2197.0 * k3))
-                k5 = f(y + h_step * (439.0 / 216.0 * k1
-                                     - 8.0 * k2
-                                     + 3680.0 / 513.0 * k3
-                                     - 845.0 / 4104.0 * k4))
-                k6 = f(y + h_step * (-8.0 / 27.0 * k1
-                                     + 2.0 * k2
-                                     - 3544.0 / 2565.0 * k3
-                                     + 1859.0 / 4104.0 * k4
-                                     - 11.0 / 40.0 * k5))
-
-                # 4th-order solution
-                y4 = y + h_step * (25.0 / 216.0 * k1
-                                   + 1408.0 / 2565.0 * k3
-                                   + 2197.0 / 4104.0 * k4
-                                   - 1.0 / 5.0 * k5)
-                # 5th-order solution
-                y5 = y + h_step * (16.0 / 135.0 * k1
-                                   + 6656.0 / 12825.0 * k3
-                                   + 28561.0 / 56430.0 * k4
-                                   - 9.0 / 50.0 * k5
-                                   + 2.0 / 55.0 * k6)
-
-                err = float(np.max(np.abs(y5 - y4)))
-
-                if err <= atol or h_step <= self._MIN_H:
-                    y = y5
-                    t_local += h_step
-                    fac = (5.0 if err == 0.0
-                           else min(5.0, max(0.2, 0.9 * (atol / err) ** 0.2)))
-                    h_step = max(self._MIN_H, h_step * fac)
-                else:
-                    fac = min(1.0, max(0.2, 0.9 * (atol / err) ** 0.25))
-                    h_step = max(self._MIN_H, h_step * fac)
-
-            # Clamp calcium to [0, Ca_tot] (matches NEST)
-            y[1] = max(0.0, min(y[1], self.Ca_tot))
-
-            # Apply spike input: IP3 += delta_IP3 * spike_weight
-            y[0] += self.delta_IP3 * sw[idx]
-
-            # Compute SIC output
-            sic_out[idx] = self._compute_sic(y[1], self.SIC_th, self.SIC_scale)
-
-            # Store updated state
-            ip3[idx] = y[0]
-            ca[idx] = y[1]
-            h[idx] = y[2]
-
-        # Write back state
-        self.IP3.value = jnp.asarray(ip3)
-        self.Ca.value = jnp.asarray(ca)
-        self.h_IP3R.value = jnp.asarray(h)
-        self.SIC.value = jnp.asarray(sic_out)
-        # Store new external current for next step (one-step delay, NEST semantics)
-        self.J_noise.value = jnp.asarray(
-            np.broadcast_to(np.asarray(j_ext, dtype=dftype), v_shape)
-        )
-
-        return jnp.asarray(sic_out)
+        return sic_out

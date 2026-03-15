@@ -187,51 +187,53 @@ class TestIAFBW2001(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_nest_cpp_default_parameters_and_metadata(self):
-        neuron = iaf_bw_2001(1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_bw_2001(1)
 
-        self.assertEqual(neuron.E_L, -70.0 * u.mV)
-        self.assertEqual(neuron.E_ex, 0.0 * u.mV)
-        self.assertEqual(neuron.E_in, -70.0 * u.mV)
-        self.assertEqual(neuron.V_th, -55.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.C_m, 500.0 * u.pF)
-        self.assertEqual(neuron.g_L, 25.0 * u.nS)
-        self.assertEqual(neuron.t_ref, 2.0 * u.ms)
-        self.assertEqual(neuron.tau_AMPA, 2.0 * u.ms)
-        self.assertEqual(neuron.tau_GABA, 5.0 * u.ms)
-        self.assertEqual(neuron.tau_decay_NMDA, 100.0 * u.ms)
-        self.assertEqual(neuron.tau_rise_NMDA, 2.0 * u.ms)
-        self.assertEqual(neuron.alpha, 0.5 / u.ms)
-        self.assertEqual(neuron.conc_Mg2, 1.0 * u.mM)
-        self.assertEqual(neuron.gsl_error_tol, 1e-3)
+            self.assertEqual(neuron.E_L, -70.0 * u.mV)
+            self.assertEqual(neuron.E_ex, 0.0 * u.mV)
+            self.assertEqual(neuron.E_in, -70.0 * u.mV)
+            self.assertEqual(neuron.V_th, -55.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.C_m, 500.0 * u.pF)
+            self.assertEqual(neuron.g_L, 25.0 * u.nS)
+            self.assertEqual(neuron.t_ref, 2.0 * u.ms)
+            self.assertEqual(neuron.tau_AMPA, 2.0 * u.ms)
+            self.assertEqual(neuron.tau_GABA, 5.0 * u.ms)
+            self.assertEqual(neuron.tau_decay_NMDA, 100.0 * u.ms)
+            self.assertEqual(neuron.tau_rise_NMDA, 2.0 * u.ms)
+            self.assertEqual(neuron.alpha, 0.5 / u.ms)
+            self.assertEqual(neuron.conc_Mg2, 1.0 * u.mM)
+            self.assertEqual(neuron.gsl_error_tol, 1e-3)
 
-        self.assertEqual(neuron.receptor_types, {'AMPA': 1, 'GABA': 2, 'NMDA': 3})
-        self.assertEqual(
-            neuron.recordables,
-            ['V_m', 's_AMPA', 's_GABA', 's_NMDA', 'I_NMDA', 'I_AMPA', 'I_GABA'],
-        )
+            self.assertEqual(neuron.receptor_types, {'AMPA': 1, 'GABA': 2, 'NMDA': 3})
+            self.assertEqual(
+                neuron.recordables,
+                ['V_m', 's_AMPA', 's_GABA', 's_NMDA', 'I_NMDA', 'I_AMPA', 'I_GABA'],
+            )
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, tau_AMPA=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, tau_GABA=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, tau_decay_NMDA=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, tau_rise_NMDA=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, alpha=0.0 / u.ms)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, conc_Mg2=0.0 * u.mM)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, gsl_error_tol=0.0)
-        with self.assertRaises(ValueError):
-            iaf_bw_2001(1, V_reset=-55.0 * u.mV, V_th=-55.0 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, tau_AMPA=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, tau_GABA=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, tau_decay_NMDA=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, tau_rise_NMDA=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, alpha=0.0 / u.ms)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, conc_Mg2=0.0 * u.mM)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, gsl_error_tol=0.0)
+            with self.assertRaises(ValueError):
+                iaf_bw_2001(1, V_reset=-55.0 * u.mV, V_th=-55.0 * u.mV)
 
     def test_current_input_has_one_step_delay_like_nest(self):
         with brainstate.environ.context(dt=self.dt):

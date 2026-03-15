@@ -127,25 +127,27 @@ class TestHHClopathDefaults(unittest.TestCase):
     r"""Test that default parameter values match NEST hh_psc_alpha_clopath."""
 
     def test_default_parameters(self):
-        neuron = hh_psc_alpha_clopath(1)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_L / u.mV)), -54.402, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.C_m / u.pF)), 100.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.g_Na / u.nS)), 12000.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.g_K / u.nS)), 3600.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.g_L / u.nS)), 30.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_Na / u.mV)), 50.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.E_K / u.mV)), -77.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 2.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_syn_ex / u.ms)), 0.2, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_syn_in / u.ms)), 2.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = hh_psc_alpha_clopath(1)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_L / u.mV)), -54.402, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.C_m / u.pF)), 100.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.g_Na / u.nS)), 12000.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.g_K / u.nS)), 3600.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.g_L / u.nS)), 30.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_Na / u.mV)), 50.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.E_K / u.mV)), -77.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 2.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_syn_ex / u.ms)), 0.2, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_syn_in / u.ms)), 2.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.I_e / u.pA)), 0.0, places=10)
 
     def test_default_clopath_time_constants(self):
-        r"""Clopath time constants should match NEST defaults."""
-        neuron = hh_psc_alpha_clopath(1)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_u_bar_plus / u.ms)), 114.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_u_bar_minus / u.ms)), 10.0, places=10)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.tau_u_bar_bar / u.ms)), 500.0, places=10)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Clopath time constants should match NEST defaults."""
+            neuron = hh_psc_alpha_clopath(1)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_u_bar_plus / u.ms)), 114.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_u_bar_minus / u.ms)), 10.0, places=10)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.tau_u_bar_bar / u.ms)), 500.0, places=10)
 
     def test_initial_state_values(self):
         r"""Initial V should be -65 mV; gating at equilibrium for V=-65."""
@@ -192,43 +194,50 @@ class TestHHClopathValidation(unittest.TestCase):
     r"""Test parameter validation."""
 
     def test_negative_capacitance(self):
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, C_m=-100. * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, C_m=-100. * u.pF)
 
     def test_zero_capacitance(self):
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, C_m=0. * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, C_m=0. * u.pF)
 
     def test_negative_refractory(self):
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, t_ref=-1. * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, t_ref=-1. * u.ms)
 
     def test_zero_refractory_ok(self):
-        neuron = hh_psc_alpha_clopath(1, t_ref=0. * u.ms)
-        self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 0.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = hh_psc_alpha_clopath(1, t_ref=0. * u.ms)
+            self.assertAlmostEqual(float(u.math.asarray(neuron.t_ref / u.ms)), 0.0)
 
     def test_zero_tau_syn(self):
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, tau_syn_ex=0. * u.ms)
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, tau_syn_in=0. * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, tau_syn_ex=0. * u.ms)
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, tau_syn_in=0. * u.ms)
 
     def test_negative_conductance(self):
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, g_Na=-1. * u.nS)
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, g_K=-1. * u.nS)
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, g_L=-1. * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, g_Na=-1. * u.nS)
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, g_K=-1. * u.nS)
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, g_L=-1. * u.nS)
 
     def test_zero_clopath_time_constants(self):
-        r"""All Clopath time constants must be strictly positive."""
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, tau_u_bar_plus=0. * u.ms)
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, tau_u_bar_minus=0. * u.ms)
-        with self.assertRaises(ValueError):
-            hh_psc_alpha_clopath(1, tau_u_bar_bar=0. * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""All Clopath time constants must be strictly positive."""
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, tau_u_bar_plus=0. * u.ms)
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, tau_u_bar_minus=0. * u.ms)
+            with self.assertRaises(ValueError):
+                hh_psc_alpha_clopath(1, tau_u_bar_bar=0. * u.ms)
 
 
 class TestHHClopathSubthreshold(unittest.TestCase):

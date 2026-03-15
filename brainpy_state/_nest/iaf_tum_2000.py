@@ -26,8 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
-from .iaf_psc_exp import iaf_psc_exp
+from ._utils import is_tracer, propagator_exp
 
 __all__ = [
     'iaf_tum_2000',
@@ -177,9 +176,6 @@ class iaf_tum_2000(NESTNeuron):
     For receptor 1, the ``sender_model`` field must be ``"iaf_tum_2000"``
     (default assumption if not provided); otherwise a ``ValueError`` is raised,
     mirroring NEST's connection constraints.
-
-    Effective weights are routed by sign: positive to excitatory channel,
-    non-positive to inhibitory channel.
 
     **6. Stability constraints and computational implications**
 
@@ -425,7 +421,7 @@ class iaf_tum_2000(NESTNeuron):
     Notes
     -----
     - Shares the exact exponential propagator implementation with
-      :class:`iaf_psc_exp` (via :meth:`iaf_psc_exp._propagator_exp`).
+      :class:`iaf_psc_exp` (via :func:`propagator_exp` from ``_utils``).
     - The Tsodyks update order matches NEST ``iaf_tum_2000.cpp`` exactly to
       ensure identical dynamics in network simulations.
     - Receptor-1 connections require both presynaptic and postsynaptic neurons
@@ -507,6 +503,11 @@ class iaf_tum_2000(NESTNeuron):
 
         self._validate_parameters()
 
+        # Precompute refractory step count
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = bu.math.asarray(bu.math.ceil(self.t_ref / dt), dtype=ditype)
+
     @property
     def receptor_types(self):
         r"""Return a dictionary of available receptor type labels.
@@ -532,57 +533,6 @@ class iaf_tum_2000(NESTNeuron):
             ``self.V``.
         """
         return list(self.RECORDABLES)
-
-    @staticmethod
-    def _to_numpy(x, unit=None):
-        r"""Convert saiunit quantity or array to NumPy float64 array.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            Input value, optionally with saiunit units.
-        unit : saiunit quantity or None, optional
-            Expected unit for conversion. If provided, divides ``x`` by ``unit``
-            before conversion. If ``None``, converts ``x`` directly. Default is
-            ``None``.
-
-        Returns
-        -------
-        np.ndarray
-            NumPy array with dtype ``float64``, containing the numeric values of
-            ``x`` (divided by ``unit`` if specified).
-
-        Notes
-        -----
-        Falls back to direct conversion if unit division fails (e.g., if ``x``
-        is already dimensionless).
-        """
-        if unit is None:
-            dftype = brainstate.environ.dftype()
-            return np.asarray(bu.math.asarray(x), dtype=dftype)
-        try:
-            return np.asarray(bu.math.asarray(x / unit), dtype=dftype)
-        except Exception:
-            return np.asarray(bu.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        r"""Broadcast NumPy array to the specified shape.
-
-        Parameters
-        ----------
-        x_np : np.ndarray
-            Input array to broadcast.
-        shape : tuple of int
-            Target shape.
-
-        Returns
-        -------
-        np.ndarray
-            Broadcasted array with shape ``shape``, sharing memory with ``x_np``
-            if possible.
-        """
-        return np.broadcast_to(x_np, shape)
 
     @classmethod
     def _normalize_spike_receptor(cls, receptor):
@@ -685,22 +635,18 @@ class iaf_tum_2000(NESTNeuron):
         if np.any(self.u_init < 0.0) or np.any(self.u_init > 1.0):
             raise ValueError("'u' must be in [0,1].")
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all neuron state variables.
 
         Creates and allocates state variables for membrane potential, synaptic
         currents, refractory counter, Tsodyks-Markram plasticity states, and
         buffered inputs. All states are allocated as ``brainstate.HiddenState``
-        or ``brainstate.ShortTermState`` with shape ``self.varshape`` (or
-        ``(batch_size,) + self.varshape`` if ``batch_size`` is provided).
+        or ``brainstate.ShortTermState`` with shape ``self.varshape``.
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            If provided, prepends an additional batch dimension to all states.
-            Default is ``None`` (no batch dimension).
         **kwargs
-            Reserved for future extensions; currently unused.
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -731,33 +677,33 @@ class iaf_tum_2000(NESTNeuron):
         - ``refractory`` : :class:`~brainstate.ShortTermState` (bool), optional
             Boolean refractory flag, allocated only if ``ref_var=True``.
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        state_shape = V.shape
+        ditype = brainstate.environ.ditype()
         dftype = brainstate.environ.dftype()
-        zeros = np.zeros(state_shape, dtype=dftype)
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * bu.ms), self.varshape, batch_size)
 
-        x0 = np.broadcast_to(self._to_numpy(self.x_init, None), state_shape).copy()
-        y0 = np.broadcast_to(self._to_numpy(self.y_init, None), state_shape).copy()
-        u0 = np.broadcast_to(self._to_numpy(self.u_init, None), state_shape).copy()
+        V = braintools.init.param(self.V_initializer, self.varshape)
 
         self.V = brainstate.HiddenState(V)
-        self.i_syn_ex = brainstate.ShortTermState(zeros * bu.pA)
-        self.i_syn_in = brainstate.ShortTermState(zeros * bu.pA)
-        self.i_0 = brainstate.ShortTermState(zeros * bu.pA)
-        self.i_1 = brainstate.ShortTermState(zeros * bu.pA)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(bu.math.asarray(ref_steps, dtype=ditype))
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.i_syn_ex = brainstate.ShortTermState(bu.math.zeros(self.varshape, dtype=dftype) * bu.pA)
+        self.i_syn_in = brainstate.ShortTermState(bu.math.zeros(self.varshape, dtype=dftype) * bu.pA)
+        self.i_0 = brainstate.ShortTermState(bu.math.zeros(self.varshape, dtype=dftype) * bu.pA)
+        self.i_1 = brainstate.ShortTermState(bu.math.zeros(self.varshape, dtype=dftype) * bu.pA)
+        self.refractory_step_count = brainstate.ShortTermState(bu.math.full(self.varshape, 0, dtype=ditype))
+        self.last_spike_time = brainstate.ShortTermState(bu.math.full(self.varshape, -1e7 * bu.ms))
 
-        self.x = brainstate.ShortTermState(x0)
-        self.y = brainstate.ShortTermState(y0)
-        self.u = brainstate.ShortTermState(u0)
-        self.spike_offset = brainstate.ShortTermState(zeros.copy())
+        self.x = brainstate.ShortTermState(
+            bu.math.asarray(np.broadcast_to(np.asarray(self.x_init, dtype=dftype), self.varshape).copy())
+        )
+        self.y = brainstate.ShortTermState(
+            bu.math.asarray(np.broadcast_to(np.asarray(self.y_init, dtype=dftype), self.varshape).copy())
+        )
+        self.u = brainstate.ShortTermState(
+            bu.math.asarray(np.broadcast_to(np.asarray(self.u_init, dtype=dftype), self.varshape).copy())
+        )
+        self.spike_offset = brainstate.ShortTermState(bu.math.zeros(self.varshape, dtype=dftype))
 
         if self.ref_var:
-            self.refractory = brainstate.ShortTermState(bu.math.asarray(ref_steps > 0, dtype=bool))
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
+            self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute surrogate spike output given membrane potential.
@@ -796,22 +742,6 @@ class iaf_tum_2000(NESTNeuron):
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
-
-    def _refractory_counts(self):
-        r"""Compute refractory period duration in integer simulation steps.
-
-        Converts the continuous-time refractory duration ``self.t_ref`` into the
-        number of discrete simulation steps via ``ceil(t_ref / dt)``.
-
-        Returns
-        -------
-        jnp.ndarray
-            Integer array (dtype ``int32``) with shape matching ``self.varshape``,
-            containing the number of refractory steps for each neuron.
-        """
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return bu.math.asarray(bu.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _parse_spike_events(self, spike_events: Iterable, state_shape):
         r"""Parse external spike events into excitatory and inhibitory weights.
@@ -881,15 +811,15 @@ class iaf_tum_2000(NESTNeuron):
                     raise ValueError('Spike event tuples must have length 2, 3, 4, or 5.')
 
             receptor_id = self._normalize_spike_receptor(receptor)
-            s = np.broadcast_to(self._to_numpy(weight, bu.pA), state_shape)
-            s = s * np.broadcast_to(self._to_numpy(multiplicity, None), state_shape)
+            s = np.broadcast_to(np.asarray(bu.math.asarray(weight / bu.pA), dtype=dftype), state_shape)
+            s = s * np.broadcast_to(np.asarray(bu.math.asarray(multiplicity), dtype=dftype), state_shape)
 
             if receptor_id == 1:
                 if sender_model != 'iaf_tum_2000':
                     raise ValueError(
                         'For receptor_type 1 in iaf_tum_2000, pre-synaptic neuron must also be of type iaf_tum_2000.'
                     )
-                s = s * np.broadcast_to(self._to_numpy(offset, None), state_shape)
+                s = s * np.broadcast_to(np.asarray(bu.math.asarray(offset), dtype=dftype), state_shape)
 
             w_ex += np.where(s > 0.0, s, 0.0)
             w_in += np.where(s > 0.0, 0.0, s)
@@ -945,7 +875,7 @@ class iaf_tum_2000(NESTNeuron):
                 label, _ = key.split(' // ', maxsplit=1)
             receptor = 0 if label is None else self._normalize_spike_receptor(label)
 
-            s = np.broadcast_to(self._to_numpy(val, bu.pA), state_shape)
+            s = np.broadcast_to(np.asarray(bu.math.asarray(val / bu.pA), dtype=dftype), state_shape)
             if receptor == 0:
                 w_ex += np.where(s > 0.0, s, 0.0)
                 w_in += np.where(s > 0.0, 0.0, s)
@@ -1080,44 +1010,45 @@ class iaf_tum_2000(NESTNeuron):
         t_ms = float(bu.math.asarray(t / bu.ms))
 
         state_shape = self.V.value.shape
-
-        E_L = self._broadcast_to_state(self._to_numpy(self.E_L, bu.mV), state_shape)
-        V_rel = self._broadcast_to_state(self._to_numpy(self.V.value, bu.mV), state_shape) - E_L
-        C_m = self._broadcast_to_state(self._to_numpy(self.C_m, bu.pF), state_shape)
-        tau_m = self._broadcast_to_state(self._to_numpy(self.tau_m, bu.ms), state_shape)
-        tau_ex = self._broadcast_to_state(self._to_numpy(self.tau_syn_ex, bu.ms), state_shape)
-        tau_in = self._broadcast_to_state(self._to_numpy(self.tau_syn_in, bu.ms), state_shape)
-        I_e = self._broadcast_to_state(self._to_numpy(self.I_e, bu.pA), state_shape)
-        theta = self._broadcast_to_state(self._to_numpy(self.V_th - self.E_L, bu.mV), state_shape)
-        V_reset_rel = self._broadcast_to_state(self._to_numpy(self.V_reset - self.E_L, bu.mV), state_shape)
-        rho = self._broadcast_to_state(self._to_numpy(self.rho, 1 / bu.second), state_shape)
-        delta = self._broadcast_to_state(self._to_numpy(self.delta, bu.mV), state_shape)
-
-        tau_fac = self._broadcast_to_state(self._to_numpy(self.tau_fac, bu.ms), state_shape)
-        tau_psc = self._broadcast_to_state(self._to_numpy(self.tau_psc, bu.ms), state_shape)
-        tau_rec = self._broadcast_to_state(self._to_numpy(self.tau_rec, bu.ms), state_shape)
-        U = self._broadcast_to_state(self._to_numpy(self.U, None), state_shape)
-
-        i_0 = self._broadcast_to_state(self._to_numpy(self.i_0.value, bu.pA), state_shape)
-        i_1 = self._broadcast_to_state(self._to_numpy(self.i_1.value, bu.pA), state_shape)
-        i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value, bu.pA), state_shape)
-        i_syn_in = self._broadcast_to_state(self._to_numpy(self.i_syn_in.value, bu.pA), state_shape)
+        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
+
+        E_L = np.broadcast_to(np.asarray(bu.math.asarray(self.E_L / bu.mV), dtype=dftype), state_shape)
+        V_rel = np.broadcast_to(np.asarray(bu.math.asarray(self.V.value / bu.mV), dtype=dftype), state_shape) - E_L
+        C_m = np.broadcast_to(np.asarray(bu.math.asarray(self.C_m / bu.pF), dtype=dftype), state_shape)
+        tau_m = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_m / bu.ms), dtype=dftype), state_shape)
+        tau_ex = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_syn_ex / bu.ms), dtype=dftype), state_shape)
+        tau_in = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_syn_in / bu.ms), dtype=dftype), state_shape)
+        I_e = np.broadcast_to(np.asarray(bu.math.asarray(self.I_e / bu.pA), dtype=dftype), state_shape)
+        theta = np.broadcast_to(np.asarray(bu.math.asarray((self.V_th - self.E_L) / bu.mV), dtype=dftype), state_shape)
+        V_reset_rel = np.broadcast_to(np.asarray(bu.math.asarray((self.V_reset - self.E_L) / bu.mV), dtype=dftype), state_shape)
+        rho = np.broadcast_to(np.asarray(bu.math.asarray(self.rho / (1 / bu.second)), dtype=dftype), state_shape)
+        delta = np.broadcast_to(np.asarray(bu.math.asarray(self.delta / bu.mV), dtype=dftype), state_shape)
+
+        tau_fac = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_fac / bu.ms), dtype=dftype), state_shape)
+        tau_psc = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_psc / bu.ms), dtype=dftype), state_shape)
+        tau_rec = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_rec / bu.ms), dtype=dftype), state_shape)
+        U = np.broadcast_to(np.asarray(bu.math.asarray(self.U), dtype=dftype), state_shape)
+
+        i_0 = np.broadcast_to(np.asarray(bu.math.asarray(self.i_0.value / bu.pA), dtype=dftype), state_shape)
+        i_1 = np.broadcast_to(np.asarray(bu.math.asarray(self.i_1.value / bu.pA), dtype=dftype), state_shape)
+        i_syn_ex = np.broadcast_to(np.asarray(bu.math.asarray(self.i_syn_ex.value / bu.pA), dtype=dftype), state_shape)
+        i_syn_in = np.broadcast_to(np.asarray(bu.math.asarray(self.i_syn_in.value / bu.pA), dtype=dftype), state_shape)
+        r = np.broadcast_to(
             np.asarray(bu.math.asarray(self.refractory_step_count.value), dtype=ditype),
             state_shape,
         )
 
-        x_state = self._broadcast_to_state(self._to_numpy(self.x.value, None), state_shape)
-        y_state = self._broadcast_to_state(self._to_numpy(self.y.value, None), state_shape)
-        u_state = self._broadcast_to_state(self._to_numpy(self.u.value, None), state_shape)
-        last_spike_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, bu.ms), state_shape)
+        x_state = np.broadcast_to(np.asarray(bu.math.asarray(self.x.value), dtype=dftype), state_shape)
+        y_state = np.broadcast_to(np.asarray(bu.math.asarray(self.y.value), dtype=dftype), state_shape)
+        u_state = np.broadcast_to(np.asarray(bu.math.asarray(self.u.value), dtype=dftype), state_shape)
+        last_spike_prev = np.broadcast_to(np.asarray(bu.math.asarray(self.last_spike_time.value / bu.ms), dtype=dftype), state_shape)
 
         P11_ex = np.exp(-h / tau_ex)
         P11_in = np.exp(-h / tau_in)
         P22 = np.exp(-h / tau_m)
-        P21_ex = iaf_psc_exp._propagator_exp(tau_ex, tau_m, C_m, h)
-        P21_in = iaf_psc_exp._propagator_exp(tau_in, tau_m, C_m, h)
+        P21_ex = propagator_exp(tau_ex, tau_m, C_m, h)
+        P21_in = propagator_exp(tau_in, tau_m, C_m, h)
         P20 = tau_m / C_m * (1.0 - P22)
 
         ev_ex, ev_in = self._parse_spike_events(spike_events, state_shape)
@@ -1125,9 +1056,11 @@ class iaf_tum_2000(NESTNeuron):
         w_ex = ev_ex + reg_ex
         w_in = ev_in + reg_in
 
-        i_0_next = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.V.value), bu.pA),
-                                            state_shape)
-        i_1_next = self._broadcast_to_state(self._to_numpy(x_filtered, bu.pA), state_shape)
+        i_0_next = np.broadcast_to(
+            np.asarray(bu.math.asarray(self.sum_current_inputs(x, self.V.value) / bu.pA), dtype=dftype),
+            state_shape,
+        )
+        i_1_next = np.broadcast_to(np.asarray(bu.math.asarray(x_filtered / bu.pA), dtype=dftype), state_shape)
 
         not_refractory = r == 0
         V_candidate = V_rel * P22 + i_syn_ex * P21_ex + i_syn_in * P21_in + (I_e + i_0) * P20
@@ -1146,8 +1079,8 @@ class iaf_tum_2000(NESTNeuron):
         stoch_spike = np.random.random(size=state_shape) < phi * h * 1e-3
         spike_cond = np.where(deterministic, det_spike, stoch_spike)
 
-        refr_counts = self._broadcast_to_state(
-            np.asarray(bu.math.asarray(self._refractory_counts()), dtype=ditype),
+        refr_counts = np.broadcast_to(
+            np.asarray(bu.math.asarray(self.ref_count), dtype=ditype),
             state_shape,
         )
         r = np.where(spike_cond, refr_counts, r)

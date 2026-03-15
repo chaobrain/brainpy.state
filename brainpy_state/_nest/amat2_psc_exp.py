@@ -454,6 +454,11 @@ class amat2_psc_exp(NESTNeuron):
         self.ref_var = ref_var
         self._validate_parameters()
 
+        # Precompute refractory step count
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+
     @staticmethod
     def _to_numpy(x, unit):
         r"""Convert a quantity to a plain NumPy array in specified units.
@@ -470,6 +475,7 @@ class amat2_psc_exp(NESTNeuron):
         ndarray
             Plain float64 NumPy array with units stripped.
         """
+        dftype = brainstate.environ.dftype()
         return np.asarray(u.math.asarray(x / unit), dtype=dftype)
 
     @staticmethod
@@ -541,7 +547,7 @@ class amat2_psc_exp(NESTNeuron):
                 'See note in documentation.'
             )
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables.
 
         Creates and initializes all state variables including membrane potential,
@@ -550,12 +556,8 @@ class amat2_psc_exp(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size for vectorized simulation. If None, no batch
-            dimension is added (shape is ``in_size`` only). If provided, state
-            shape becomes ``(batch_size, *in_size)``.
         **kwargs
-            Additional initialization arguments (unused, for API compatibility).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -569,10 +571,10 @@ class amat2_psc_exp(NESTNeuron):
         - ``last_spike_time``: Last spike time (large negative value)
         - ``refractory`` (if ``ref_var=True``): Boolean refractory state (False)
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        ditype = brainstate.environ.ditype()
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
 
         self.V = brainstate.HiddenState(V)
         self.V_th_1 = brainstate.ShortTermState(zeros * u.mV)
@@ -582,11 +584,12 @@ class amat2_psc_exp(NESTNeuron):
         self.i_syn_ex = brainstate.ShortTermState(zeros * u.pA)
         self.i_syn_in = brainstate.ShortTermState(zeros * u.pA)
         self.i_0 = brainstate.ShortTermState(zeros * u.pA)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
 
         if self.ref_var:
-            self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
+            self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None, V_th: ArrayLike = None):
         r"""Compute spike output using surrogate gradient function.
@@ -627,23 +630,6 @@ class amat2_psc_exp(NESTNeuron):
             V_th = self.omega + self.V_th_1.value + self.V_th_2.value + self.V_th_v.value
         v_scaled = (V - V_th) / u.math.abs(self.omega - self.E_L)
         return self.spk_fun(v_scaled)
-
-    def _refractory_counts(self):
-        r"""Compute refractory period duration in time steps.
-
-        Returns
-        -------
-        int32 array
-            Number of simulation steps corresponding to the refractory period
-            ``t_ref``, computed as ``ceil(t_ref / dt)``. Shape: ``(*varshape,)``.
-
-        Notes
-        -----
-        Uses the current simulation time step from ``brainstate.environ.get_dt()``.
-        The ceiling function ensures at least one step if ``t_ref > 0``.
-        """
-        dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def update(self, x=0. * u.pA):
         r"""Perform one simulation time step.
@@ -852,6 +838,7 @@ class amat2_psc_exp(NESTNeuron):
         i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value, u.pA), v_shape)
         i_syn_in = self._broadcast_to_state(self._to_numpy(self.i_syn_in.value, u.pA), v_shape)
         i_0 = self._broadcast_to_state(self._to_numpy(self.i_0.value, u.pA), v_shape)
+        ditype = brainstate.environ.ditype()
         r = self._broadcast_to_state(
             np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
         )
@@ -948,7 +935,7 @@ class amat2_psc_exp(NESTNeuron):
         r = np.where(
             spike_cond,
             self._broadcast_to_state(
-                np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
+                np.asarray(u.math.asarray(self.ref_count), dtype=ditype), v_shape
             ),
             np.where(not_refractory, r, r - 1),
         )

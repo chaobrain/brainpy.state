@@ -188,46 +188,48 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
             return neuron.update(x=x, sic_events=sic_events)
 
     def test_nest_cpp_default_parameters_and_recordables(self):
-        neuron = aeif_cond_alpha_astro(1)
-        self.assertEqual(neuron.V_peak, 0.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 0.0 * u.ms)
-        self.assertEqual(neuron.g_L, 30.0 * u.nS)
-        self.assertEqual(neuron.C_m, 281.0 * u.pF)
-        self.assertEqual(neuron.E_ex, 0.0 * u.mV)
-        self.assertEqual(neuron.E_in, -85.0 * u.mV)
-        self.assertEqual(neuron.E_L, -70.6 * u.mV)
-        self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
-        self.assertEqual(neuron.tau_w, 144.0 * u.ms)
-        self.assertEqual(neuron.a, 4.0 * u.nS)
-        self.assertEqual(neuron.b, 80.5 * u.pA)
-        self.assertEqual(neuron.V_th, -50.4 * u.mV)
-        self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
-        self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        self.assertEqual(neuron.recordables, ['V_m', 'g_ex', 'g_in', 'w', 'I_SIC'])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = aeif_cond_alpha_astro(1)
+            self.assertEqual(neuron.V_peak, 0.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 0.0 * u.ms)
+            self.assertEqual(neuron.g_L, 30.0 * u.nS)
+            self.assertEqual(neuron.C_m, 281.0 * u.pF)
+            self.assertEqual(neuron.E_ex, 0.0 * u.mV)
+            self.assertEqual(neuron.E_in, -85.0 * u.mV)
+            self.assertEqual(neuron.E_L, -70.6 * u.mV)
+            self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
+            self.assertEqual(neuron.tau_w, 144.0 * u.ms)
+            self.assertEqual(neuron.a, 4.0 * u.nS)
+            self.assertEqual(neuron.b, 80.5 * u.pA)
+            self.assertEqual(neuron.V_th, -50.4 * u.mV)
+            self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
+            self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertEqual(neuron.recordables, ['V_m', 'g_ex', 'g_in', 'w', 'I_SIC'])
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, Delta_T=-1.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, tau_syn_ex=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, tau_syn_in=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, tau_w=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, gsl_error_tol=0.0)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, Delta_T=-1.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, tau_syn_ex=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, tau_syn_in=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, tau_w=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, gsl_error_tol=0.0)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
 
     def test_current_and_sic_inputs_are_delayed_one_step_like_nest(self):
         with brainstate.environ.context(dt=self.dt):

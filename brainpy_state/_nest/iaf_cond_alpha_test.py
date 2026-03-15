@@ -148,30 +148,32 @@ class TestIAFCondAlpha(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters(self):
-        neuron = iaf_cond_alpha(1)
-        self.assertEqual(neuron.E_L, -70. * u.mV)
-        self.assertEqual(neuron.C_m, 250. * u.pF)
-        self.assertEqual(neuron.t_ref, 2. * u.ms)
-        self.assertEqual(neuron.V_th, -55. * u.mV)
-        self.assertEqual(neuron.V_reset, -60. * u.mV)
-        self.assertEqual(neuron.E_ex, 0. * u.mV)
-        self.assertEqual(neuron.E_in, -85. * u.mV)
-        self.assertEqual(neuron.g_L, 16.6667 * u.nS)
-        self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
-        self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0. * u.pA)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_cond_alpha(1)
+            self.assertEqual(neuron.E_L, -70. * u.mV)
+            self.assertEqual(neuron.C_m, 250. * u.pF)
+            self.assertEqual(neuron.t_ref, 2. * u.ms)
+            self.assertEqual(neuron.V_th, -55. * u.mV)
+            self.assertEqual(neuron.V_reset, -60. * u.mV)
+            self.assertEqual(neuron.E_ex, 0. * u.mV)
+            self.assertEqual(neuron.E_in, -85. * u.mV)
+            self.assertEqual(neuron.g_L, 16.6667 * u.nS)
+            self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
+            self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0. * u.pA)
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha(1, tau_syn_ex=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha(1, tau_syn_in=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha(1, V_reset=-55. * u.mV, V_th=-55. * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha(1, tau_syn_ex=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha(1, tau_syn_in=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha(1, V_reset=-55. * u.mV, V_th=-55. * u.mV)
 
     def test_current_input_has_one_step_delay_like_nest(self):
         with brainstate.environ.context(dt=self.dt):

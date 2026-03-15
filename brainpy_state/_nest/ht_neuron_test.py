@@ -306,49 +306,50 @@ class TestHTNeuronDefaults(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_default_parameters(self):
-        neuron = ht_neuron(1)
-        self.assertAlmostEqual(neuron.E_Na, 30.0)
-        self.assertAlmostEqual(neuron.E_K, -90.0)
-        self.assertAlmostEqual(neuron.g_NaL, 0.2)
-        self.assertAlmostEqual(neuron.g_KL, 1.0)
-        self.assertAlmostEqual(neuron.tau_m, 16.0)
-        self.assertAlmostEqual(neuron.theta_eq, -51.0)
-        self.assertAlmostEqual(neuron.tau_theta, 2.0)
-        self.assertAlmostEqual(neuron.tau_spike, 1.75)
-        self.assertAlmostEqual(neuron.t_ref, 2.0)
-        self.assertAlmostEqual(neuron.g_peak_AMPA, 0.1)
-        self.assertAlmostEqual(neuron.tau_rise_AMPA, 0.5)
-        self.assertAlmostEqual(neuron.tau_decay_AMPA, 2.4)
-        self.assertAlmostEqual(neuron.E_rev_AMPA, 0.0)
-        self.assertAlmostEqual(neuron.g_peak_NMDA, 0.075)
-        self.assertAlmostEqual(neuron.tau_rise_NMDA, 4.0)
-        self.assertAlmostEqual(neuron.tau_decay_NMDA, 40.0)
-        self.assertAlmostEqual(neuron.E_rev_NMDA, 0.0)
-        self.assertAlmostEqual(neuron.V_act_NMDA, -25.57)
-        self.assertAlmostEqual(neuron.S_act_NMDA, 0.081)
-        self.assertAlmostEqual(neuron.tau_Mg_slow_NMDA, 22.7)
-        self.assertAlmostEqual(neuron.tau_Mg_fast_NMDA, 0.68)
-        self.assertFalse(neuron.instant_unblock_NMDA)
-        self.assertAlmostEqual(neuron.g_peak_GABA_A, 0.33)
-        self.assertAlmostEqual(neuron.tau_rise_GABA_A, 1.0)
-        self.assertAlmostEqual(neuron.tau_decay_GABA_A, 7.0)
-        self.assertAlmostEqual(neuron.E_rev_GABA_A, -70.0)
-        self.assertAlmostEqual(neuron.g_peak_GABA_B, 0.0132)
-        self.assertAlmostEqual(neuron.tau_rise_GABA_B, 60.0)
-        self.assertAlmostEqual(neuron.tau_decay_GABA_B, 200.0)
-        self.assertAlmostEqual(neuron.E_rev_GABA_B, -90.0)
-        self.assertAlmostEqual(neuron.g_peak_NaP, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_NaP, 30.0)
-        self.assertAlmostEqual(neuron.N_NaP, 3.0)
-        self.assertAlmostEqual(neuron.g_peak_KNa, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_KNa, -90.0)
-        self.assertAlmostEqual(neuron.tau_D_KNa, 1250.0)
-        self.assertAlmostEqual(neuron.g_peak_T, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_T, 0.0)
-        self.assertAlmostEqual(neuron.N_T, 2.0)
-        self.assertAlmostEqual(neuron.g_peak_h, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_h, -40.0)
-        self.assertFalse(neuron.voltage_clamp)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            self.assertAlmostEqual(neuron.E_Na, 30.0)
+            self.assertAlmostEqual(neuron.E_K, -90.0)
+            self.assertAlmostEqual(neuron.g_NaL, 0.2)
+            self.assertAlmostEqual(neuron.g_KL, 1.0)
+            self.assertAlmostEqual(neuron.tau_m, 16.0)
+            self.assertAlmostEqual(neuron.theta_eq, -51.0)
+            self.assertAlmostEqual(neuron.tau_theta, 2.0)
+            self.assertAlmostEqual(neuron.tau_spike, 1.75)
+            self.assertAlmostEqual(neuron.t_ref, 2.0)
+            self.assertAlmostEqual(neuron.g_peak_AMPA, 0.1)
+            self.assertAlmostEqual(neuron.tau_rise_AMPA, 0.5)
+            self.assertAlmostEqual(neuron.tau_decay_AMPA, 2.4)
+            self.assertAlmostEqual(neuron.E_rev_AMPA, 0.0)
+            self.assertAlmostEqual(neuron.g_peak_NMDA, 0.075)
+            self.assertAlmostEqual(neuron.tau_rise_NMDA, 4.0)
+            self.assertAlmostEqual(neuron.tau_decay_NMDA, 40.0)
+            self.assertAlmostEqual(neuron.E_rev_NMDA, 0.0)
+            self.assertAlmostEqual(neuron.V_act_NMDA, -25.57)
+            self.assertAlmostEqual(neuron.S_act_NMDA, 0.081)
+            self.assertAlmostEqual(neuron.tau_Mg_slow_NMDA, 22.7)
+            self.assertAlmostEqual(neuron.tau_Mg_fast_NMDA, 0.68)
+            self.assertFalse(neuron.instant_unblock_NMDA)
+            self.assertAlmostEqual(neuron.g_peak_GABA_A, 0.33)
+            self.assertAlmostEqual(neuron.tau_rise_GABA_A, 1.0)
+            self.assertAlmostEqual(neuron.tau_decay_GABA_A, 7.0)
+            self.assertAlmostEqual(neuron.E_rev_GABA_A, -70.0)
+            self.assertAlmostEqual(neuron.g_peak_GABA_B, 0.0132)
+            self.assertAlmostEqual(neuron.tau_rise_GABA_B, 60.0)
+            self.assertAlmostEqual(neuron.tau_decay_GABA_B, 200.0)
+            self.assertAlmostEqual(neuron.E_rev_GABA_B, -90.0)
+            self.assertAlmostEqual(neuron.g_peak_NaP, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_NaP, 30.0)
+            self.assertAlmostEqual(neuron.N_NaP, 3.0)
+            self.assertAlmostEqual(neuron.g_peak_KNa, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_KNa, -90.0)
+            self.assertAlmostEqual(neuron.tau_D_KNa, 1250.0)
+            self.assertAlmostEqual(neuron.g_peak_T, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_T, 0.0)
+            self.assertAlmostEqual(neuron.N_T, 2.0)
+            self.assertAlmostEqual(neuron.g_peak_h, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_h, -40.0)
+            self.assertFalse(neuron.voltage_clamp)
 
 
 class TestHTNeuronInitialState(unittest.TestCase):
@@ -434,39 +435,44 @@ class TestHTNeuronValidation(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_negative_conductances(self):
-        r"""Negative peak conductances should raise ValueError."""
-        for param in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A',
-                      'g_peak_GABA_B', 'g_peak_NaP', 'g_peak_KNa',
-                      'g_peak_T', 'g_peak_h', 'g_NaL', 'g_KL'):
-            with self.assertRaises(ValueError, msg=f'{param} should not accept negative values'):
-                ht_neuron(1, **{param: -1.0})
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Negative peak conductances should raise ValueError."""
+            for param in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A',
+                          'g_peak_GABA_B', 'g_peak_NaP', 'g_peak_KNa',
+                          'g_peak_T', 'g_peak_h', 'g_NaL', 'g_KL'):
+                with self.assertRaises(ValueError, msg=f'{param} should not accept negative values'):
+                    ht_neuron(1, **{param: -1.0})
 
     def test_negative_tau(self):
-        r"""Zero or negative time constants should raise ValueError."""
-        for param in ('tau_rise_AMPA', 'tau_decay_AMPA', 'tau_rise_NMDA',
-                      'tau_decay_NMDA', 'tau_rise_GABA_A', 'tau_decay_GABA_A',
-                      'tau_rise_GABA_B', 'tau_decay_GABA_B',
-                      'tau_Mg_fast_NMDA', 'tau_Mg_slow_NMDA',
-                      'tau_spike', 'tau_theta', 'tau_m', 'tau_D_KNa'):
-            with self.assertRaises(ValueError, msg=f'{param} should not accept zero'):
-                ht_neuron(1, **{param: 0.0})
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Zero or negative time constants should raise ValueError."""
+            for param in ('tau_rise_AMPA', 'tau_decay_AMPA', 'tau_rise_NMDA',
+                          'tau_decay_NMDA', 'tau_rise_GABA_A', 'tau_decay_GABA_A',
+                          'tau_rise_GABA_B', 'tau_decay_GABA_B',
+                          'tau_Mg_fast_NMDA', 'tau_Mg_slow_NMDA',
+                          'tau_spike', 'tau_theta', 'tau_m', 'tau_D_KNa'):
+                with self.assertRaises(ValueError, msg=f'{param} should not accept zero'):
+                    ht_neuron(1, **{param: 0.0})
 
     def test_rise_greater_than_decay(self):
-        r"""tau_rise >= tau_decay should raise ValueError."""
-        with self.assertRaises(ValueError):
-            ht_neuron(1, tau_rise_AMPA=5.0, tau_decay_AMPA=2.0)
-        with self.assertRaises(ValueError):
-            ht_neuron(1, tau_rise_GABA_A=10.0, tau_decay_GABA_A=7.0)
-        with self.assertRaises(ValueError):
-            ht_neuron(1, tau_Mg_fast_NMDA=30.0, tau_Mg_slow_NMDA=22.7)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""tau_rise >= tau_decay should raise ValueError."""
+            with self.assertRaises(ValueError):
+                ht_neuron(1, tau_rise_AMPA=5.0, tau_decay_AMPA=2.0)
+            with self.assertRaises(ValueError):
+                ht_neuron(1, tau_rise_GABA_A=10.0, tau_decay_GABA_A=7.0)
+            with self.assertRaises(ValueError):
+                ht_neuron(1, tau_Mg_fast_NMDA=30.0, tau_Mg_slow_NMDA=22.7)
 
     def test_negative_t_ref(self):
-        with self.assertRaises(ValueError):
-            ht_neuron(1, t_ref=-1.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                ht_neuron(1, t_ref=-1.0)
 
     def test_negative_S_act_NMDA(self):
-        with self.assertRaises(ValueError):
-            ht_neuron(1, S_act_NMDA=-0.1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                ht_neuron(1, S_act_NMDA=-0.1)
 
 
 class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
@@ -917,25 +923,29 @@ class TestHTNeuronCondSteps(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_cond_step_AMPA(self):
-        r"""AMPA cond_step should equal g_peak * beta_normalization_factor."""
-        neuron = ht_neuron(1)
-        expected = 0.1 * _beta_normalization_factor(0.5, 2.4)
-        self.assertAlmostEqual(neuron._cond_step_AMPA, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""AMPA cond_step should equal g_peak * beta_normalization_factor."""
+            neuron = ht_neuron(1)
+            expected = 0.1 * _beta_normalization_factor(0.5, 2.4)
+            self.assertAlmostEqual(neuron._cond_step_AMPA, expected, places=12)
 
     def test_cond_step_NMDA(self):
-        neuron = ht_neuron(1)
-        expected = 0.075 * _beta_normalization_factor(4.0, 40.0)
-        self.assertAlmostEqual(neuron._cond_step_NMDA, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            expected = 0.075 * _beta_normalization_factor(4.0, 40.0)
+            self.assertAlmostEqual(neuron._cond_step_NMDA, expected, places=12)
 
     def test_cond_step_GABA_A(self):
-        neuron = ht_neuron(1)
-        expected = 0.33 * _beta_normalization_factor(1.0, 7.0)
-        self.assertAlmostEqual(neuron._cond_step_GABA_A, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            expected = 0.33 * _beta_normalization_factor(1.0, 7.0)
+            self.assertAlmostEqual(neuron._cond_step_GABA_A, expected, places=12)
 
     def test_cond_step_GABA_B(self):
-        neuron = ht_neuron(1)
-        expected = 0.0132 * _beta_normalization_factor(60.0, 200.0)
-        self.assertAlmostEqual(neuron._cond_step_GABA_B, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            expected = 0.0132 * _beta_normalization_factor(60.0, 200.0)
+            self.assertAlmostEqual(neuron._cond_step_GABA_B, expected, places=12)
 
 
 class TestHTNeuronReferenceComparison(unittest.TestCase):

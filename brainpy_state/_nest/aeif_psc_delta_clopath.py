@@ -15,19 +15,19 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
+from brainstate.util import DotDict
 
-from ._utils import is_tracer, validate_aeif_overflow
 from ._base import NESTNeuron
+from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep
 
 __all__ = [
     'aeif_psc_delta_clopath',
@@ -283,40 +283,40 @@ class aeif_psc_delta_clopath(NESTNeuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Membrane potential (mV). Shape: ``(*in_size,)``.
     w : brainstate.HiddenState
-        Adaptation current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Adaptation current (pA). Shape: ``(*in_size,)``.
     z : brainstate.HiddenState
-        Spike afterpotential current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Spike afterpotential current (pA). Shape: ``(*in_size,)``.
     V_th : brainstate.HiddenState
-        Adaptive threshold (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Adaptive threshold (mV). Shape: ``(*in_size,)``.
     u_bar_plus : brainstate.HiddenState
-        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)``.
     u_bar_minus : brainstate.HiddenState
-        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Clopath low-pass filtered voltage trace (mV). Shape: ``(*in_size,)``.
     u_bar_bar : brainstate.HiddenState
-        Clopath second-order filtered voltage trace (mV). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Clopath second-order filtered voltage trace (mV). Shape: ``(*in_size,)``.
     refractory_step_count : brainstate.ShortTermState
-        Remaining refractory time steps (int32). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Remaining refractory time steps (int32). Shape: ``(*in_size,)``.
     clamp_step_count : brainstate.ShortTermState
-        Remaining clamping time steps (int32). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Remaining clamping time steps (int32). Shape: ``(*in_size,)``.
     integration_step : brainstate.ShortTermState
-        Current RKF45 adaptive step size (ms). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Current RKF45 adaptive step size (ms). Shape: ``(*in_size,)``.
     I_stim : brainstate.ShortTermState
-        One-step delayed synaptic current (pA). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        One-step delayed synaptic current (pA). Shape: ``(*in_size,)``.
     delayed_u_bar_plus_buffer : brainstate.ShortTermState
-        Ring buffer for delayed ``u_bar_plus`` (mV). Shape: ``(delay_steps, *in_size)`` or ``(delay_steps, *in_size, batch_size)``.
+        Ring buffer for delayed ``u_bar_plus`` (mV). Shape: ``(delay_steps, *in_size)``.
     delayed_u_bar_minus_buffer : brainstate.ShortTermState
-        Ring buffer for delayed ``u_bar_minus`` (mV). Shape: ``(delay_steps, *in_size)`` or ``(delay_steps, *in_size, batch_size)``.
+        Ring buffer for delayed ``u_bar_minus`` (mV). Shape: ``(delay_steps, *in_size)``.
     delayed_u_bars_idx : brainstate.ShortTermState
         Current ring buffer write index (int32). Scalar.
     delayed_u_bars_steps : brainstate.ShortTermState
         Total ring buffer size (int32). Scalar.
     last_spike_time : brainstate.ShortTermState
-        Last spike time (ms). Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Last spike time (ms). Shape: ``(*in_size,)``.
     refractory : brainstate.ShortTermState, optional
         Boolean indicator: True if neuron is refractory or clamped. Only present if ``ref_var=True``.
-        Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+        Shape: ``(*in_size,)``.
 
     Raises
     ------
@@ -357,9 +357,6 @@ class aeif_psc_delta_clopath(NESTNeuron):
     - **Overflow protection:** The exponential term is guarded against overflow when ``Delta_T > 0``. If
       ``(V_peak - V_th_rest) / Delta_T`` would cause ``exp(...)`` to exceed ``max(float64) / 1e20``, an
       error is raised during initialization.
-
-    - **Batch support:** All state variables support an optional batch dimension (via ``batch_size`` in
-      ``init_state``/``reset_state``). Batched states have shape ``(*in_size, batch_size)``.
 
     **Usage:**
 
@@ -443,7 +440,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
-    _MIN_H = 1e-8  # ms
+    _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 100000
 
     def __init__(
@@ -521,7 +518,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
         self.delay_u_bars = braintools.init.param(delay_u_bars, self.varshape)
         self.u_ref_squared = braintools.init.param(u_ref_squared, self.varshape)
 
-        self.gsl_error_tol = braintools.init.param(gsl_error_tol, self.varshape)
+        self.gsl_error_tol = gsl_error_tol
         self.t_clamp = braintools.init.param(t_clamp, self.varshape)
         self.V_clamp = braintools.init.param(V_clamp, self.varshape)
 
@@ -536,34 +533,37 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
 
-    @staticmethod
-    def _to_numpy_unitless(x):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _to_numpy_time_ms(x):
-        try:
-            dftype = brainstate.environ.dftype()
-            return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
-        except Exception:
-            return np.asarray(u.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
+        # other variable
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+        self.clamp_count = u.math.asarray(u.math.ceil(self.t_clamp / dt), dtype=ditype)
 
     def _validate_parameters(self):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated,
+            or if the exponential term can overflow at spike time for the
+            configured ``V_peak``, ``V_th_rest``, and ``Delta_T``.
+        """
         v_reset = self.V_reset
         v_peak = self.V_peak
         v_th_rest = self.V_th_rest
         v_th_max = self.V_th_max
-        delta_t = self.Delta_T / u.ms
+        delta_t = self.Delta_T / u.mV
 
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (v_reset, v_peak, v_th_rest, v_th_max, delta_t)):
@@ -606,42 +606,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
         # Mirror NEST overflow guard for exponential term at spike time.
         validate_aeif_overflow(v_peak, v_th_rest, delta_t)
 
-    def _delay_u_bars_steps(self, dt_q):
-        dt_ms = float(u.math.asarray(dt_q / u.ms))
-        delay_ms = self._to_numpy_time_ms(self.delay_u_bars)
-        ditype = brainstate.environ.ditype()
-        delay_steps = np.asarray(np.rint(delay_ms / dt_ms), dtype=ditype) + 1
-
-        if np.any(delay_steps < 1):
-            raise ValueError('delay_u_bars must map to at least one delay-buffer entry.')
-        if np.any(delay_steps != delay_steps.flat[0]):
-            raise ValueError(
-                'delay_u_bars must map to a uniform number of delay steps across the neuron state shape.'
-            )
-        return int(delay_steps.flat[0])
-
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
-
-    def _clamp_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_clamp / dt), dtype=ditype)
-
-    def _allocate_clopath_delay_buffers(self, state_shape, dt_q):
-        delay_steps = self._delay_u_bars_steps(dt_q)
-        ditype = brainstate.environ.ditype()
-        self.delayed_u_bars_steps = brainstate.ShortTermState(np.asarray(delay_steps, dtype=ditype))
-        self.delayed_u_bars_idx = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
-
-        buf_shape = (delay_steps,) + tuple(state_shape)
-        dftype = brainstate.environ.dftype()
-        self.delayed_u_bar_plus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=dftype))
-        self.delayed_u_bar_minus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=dftype))
-
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables.
 
         Allocates and initializes all neuron state variables using the configured initializers. This includes
@@ -650,11 +615,8 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size. If provided, all states will have shape ``(*in_size, batch_size)``.
-            If None, states have shape ``(*in_size,)``. Default: None.
         **kwargs
-            Reserved for future extensions. Currently unused.
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -664,18 +626,29 @@ class aeif_psc_delta_clopath(NESTNeuron):
         - Clopath delay buffers are allocated with size ``ceil(delay_u_bars / dt) + 1``.
         - If ``ref_var=True``, an additional ``refractory`` boolean state is created.
 
+        Raises
+        ------
+        ValueError
+            If an initializer cannot be broadcast to requested shape.
+        TypeError
+            If initializer outputs have incompatible units/dtypes for the
+            corresponding state variables.
+
         See Also
         --------
         reset_state : Reset existing states to initial values.
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        w = braintools.init.param(self.w_initializer, self.varshape, batch_size)
-        z = braintools.init.param(self.z_initializer, self.varshape, batch_size)
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+        dt = brainstate.environ.get_dt()
 
-        v_th = braintools.init.param(self.V_th_initializer, self.varshape, batch_size)
-        u_plus = braintools.init.param(self.u_bar_plus_initializer, self.varshape, batch_size)
-        u_minus = braintools.init.param(self.u_bar_minus_initializer, self.varshape, batch_size)
-        u_bar = braintools.init.param(self.u_bar_bar_initializer, self.varshape, batch_size)
+        V = braintools.init.param(self.V_initializer, self.varshape)
+        w = braintools.init.param(self.w_initializer, self.varshape)
+        z = braintools.init.param(self.z_initializer, self.varshape)
+        v_th = braintools.init.param(self.V_th_initializer, self.varshape)
+        u_plus = braintools.init.param(self.u_bar_plus_initializer, self.varshape)
+        u_minus = braintools.init.param(self.u_bar_minus_initializer, self.varshape)
+        u_bar = braintools.init.param(self.u_bar_bar_initializer, self.varshape)
 
         self.V = brainstate.HiddenState(V)
         self.w = brainstate.HiddenState(w)
@@ -685,88 +658,41 @@ class aeif_psc_delta_clopath(NESTNeuron):
         self.u_bar_minus = brainstate.HiddenState(u_minus)
         self.u_bar_bar = brainstate.HiddenState(u_bar)
 
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.clamp_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-        self.clamp_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-
-        dt = brainstate.environ.get_dt()
-        self.integration_step = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
-        )
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
-        )
-
-        dftype = brainstate.environ.dftype()
-        v_shape = np.asarray(u.math.asarray(V / u.mV), dtype=dftype).shape
-        self._allocate_clopath_delay_buffers(v_shape, dt)
+        # Clopath delay buffers
+        self._allocate_clopath_delay_buffers(self.varshape, dt)
 
         if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset all state variables to initial values.
-
-        Resets all existing state variables to their initial values using the configured initializers.
-        This is useful for running multiple trials or resetting network state during training.
-        Clopath delay buffers are reallocated and cleared.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            Batch dimension size. If provided, all states will be reset with shape ``(*in_size, batch_size)``.
-            If None, states will have shape ``(*in_size,)``. Default: None.
-        **kwargs
-            Reserved for future extensions. Currently unused.
-
-        Notes
-        -----
-        - All dynamic states (V, w, z, V_th, u_bar_*, counters, buffers) are reset.
-        - Clopath delay buffers are reallocated, clearing all history.
-        - Integration step size is reset to the current simulation ``dt``.
-        - If batch size changes from initialization, state shapes will be updated accordingly.
-
-        See Also
-        --------
-        init_state : Initial state allocation.
-        """
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
-        self.z.value = braintools.init.param(self.z_initializer, self.varshape, batch_size)
-        self.V_th.value = braintools.init.param(self.V_th_initializer, self.varshape, batch_size)
-        self.u_bar_plus.value = braintools.init.param(self.u_bar_plus_initializer, self.varshape, batch_size)
-        self.u_bar_minus.value = braintools.init.param(self.u_bar_minus_initializer, self.varshape, batch_size)
-        self.u_bar_bar.value = braintools.init.param(self.u_bar_bar_initializer, self.varshape, batch_size)
-
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
-        )
-
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
+    def _delay_u_bars_steps(self, dt_q):
+        """Compute the number of delay buffer steps for Clopath u-bar traces."""
+        dt_ms = float(u.math.asarray(dt_q / u.ms))
+        delay_ms = float(u.math.asarray(self.delay_u_bars / u.ms))
         ditype = brainstate.environ.ditype()
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
-        self.clamp_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
+        delay_steps = int(np.rint(delay_ms / dt_ms)) + 1
 
-        dt = brainstate.environ.get_dt()
-        self.integration_step.value = braintools.init.param(
-            braintools.init.Constant(dt), self.varshape, batch_size
-        )
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-        )
+        if delay_steps < 1:
+            raise ValueError('delay_u_bars must map to at least one delay-buffer entry.')
+        return delay_steps
 
+    def _allocate_clopath_delay_buffers(self, state_shape, dt_q):
+        """Allocate ring buffers for delayed Clopath u-bar traces."""
+        delay_steps = self._delay_u_bars_steps(dt_q)
+        ditype = brainstate.environ.ditype()
+        self.delayed_u_bars_steps = brainstate.ShortTermState(np.asarray(delay_steps, dtype=ditype))
+        self.delayed_u_bars_idx = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+
+        buf_shape = (delay_steps,) + tuple(state_shape)
         dftype = brainstate.environ.dftype()
-        v_shape = np.asarray(u.math.asarray(self.V.value / u.mV), dtype=dftype).shape
-        self._allocate_clopath_delay_buffers(v_shape, dt)
-
-        if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
-            self.refractory.value = refractory
+        self.delayed_u_bar_plus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=dftype))
+        self.delayed_u_bar_minus_buffer = brainstate.ShortTermState(np.zeros(buf_shape, dtype=dftype))
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute differentiable spike output using surrogate gradient function.
@@ -778,8 +704,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
         Parameters
         ----------
         V : ArrayLike, optional
-            Membrane potential (mV). If None, uses current ``self.V.value``. Shape: ``(*in_size,)``
-            or ``(*in_size, batch_size)``.
+            Membrane potential (mV). If None, uses current ``self.V.value``. Shape: ``(*in_size,)``.
 
         Returns
         -------
@@ -806,7 +731,115 @@ class aeif_psc_delta_clopath(NESTNeuron):
         v_scaled = (V - v_th) / (v_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, w, z, V_th_adapt, u_plus, u_minus, u_bar -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, clamp_r, unstable, i_stim, v_peak_detect -- mutable
+            auxiliary data carried through the integrator.
+
+        Returns
+        -------
+        DotDict with same keys as ``state``, containing time derivatives.
+        """
+        is_refractory = extra.r > 0
+        is_clamped = extra.clamp_r > 0
+
+        # Effective voltage: V_clamp if clamped, V_reset if refractory, else min(V, V_peak)
+        v_eff = u.math.where(
+            is_clamped,
+            self.V_clamp,
+            u.math.where(is_refractory, self.V_reset, u.math.minimum(state.V, self.V_peak))
+        )
+
+        delta_t_safe = u.math.where(self.Delta_T == 0.0 * u.mV, 1.0 * u.mV, self.Delta_T)
+        exp_arg = u.math.clip((v_eff - state.V_th_adapt) / delta_t_safe, -500.0, 500.0)
+        i_spike = self.g_L * self.Delta_T * u.math.exp(exp_arg)
+
+        dV_raw = (
+            -self.g_L * (v_eff - self.E_L) + i_spike
+            - state.w + state.z + self.I_e + extra.i_stim
+        ) / self.C_m
+        dV = u.math.where(is_refractory | is_clamped, u.math.zeros_like(dV_raw), dV_raw)
+
+        # NEST sets dw/dt = 0 while clamped, but not during pure refractory.
+        dw_raw = (self.a * (v_eff - self.E_L) - state.w) / self.tau_w
+        dw = u.math.where(is_clamped, u.math.zeros_like(dw_raw), dw_raw)
+
+        dz = -state.z / self.tau_z
+        dV_th_adapt = -(state.V_th_adapt - self.V_th_rest) / self.tau_V_th
+
+        du_plus = (-state.u_plus + v_eff) / self.tau_u_bar_plus
+        du_minus = (-state.u_minus + v_eff) / self.tau_u_bar_minus
+        du_bar = (-state.u_bar + state.u_minus) / self.tau_u_bar_bar
+
+        return DotDict(
+            V=dV, w=dw, z=dz, V_th_adapt=dV_th_adapt,
+            u_plus=du_plus, u_minus=du_minus, u_bar=du_bar
+        )
+
+    def _event_fn(self, state, extra, accept):
+        """In-loop spike detection, reset, clamping, and refractory handling.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, w, z, V_th_adapt, u_plus, u_minus, u_bar -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, clamp_r, unstable, i_stim, v_peak_detect.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
+
+        Returns
+        -------
+        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
+        """
+        unstable = extra.unstable | jnp.any(
+            accept & ((state.V < -1e3 * u.mV) | (state.w < -1e6 * u.pA) | (state.w > 1e6 * u.pA))
+        )
+
+        new_V = state.V
+        new_w = state.w
+        new_z = state.z
+        new_V_th_adapt = state.V_th_adapt
+
+        # Spike detection: not clamped, not refractory, voltage >= threshold
+        spike_now = accept & (extra.clamp_r <= 0) & (extra.r <= 0) & (new_V >= extra.v_peak_detect)
+        spike_mask = extra.spike_mask | spike_now
+
+        # Spike-triggered updates
+        new_V = u.math.where(spike_now, self.V_clamp, new_V)
+        new_w = u.math.where(spike_now, state.w + self.b, new_w)
+        new_z = u.math.where(spike_now, self.I_sp, new_z)
+        new_V_th_adapt = u.math.where(spike_now, self.V_th_max, new_V_th_adapt)
+        clamp_r = u.math.where(spike_now & (self.clamp_count > 0), self.clamp_count + 1, extra.clamp_r)
+
+        # Clamp expiry: clamp_r == 1 means clamping ends this substep -> transition to refractory
+        clamp_expiry = accept & (clamp_r == 1)
+        new_V = u.math.where(clamp_expiry, self.V_reset, new_V)
+        clamp_r = u.math.where(clamp_expiry, 0, clamp_r)
+        r = u.math.where(clamp_expiry & (self.ref_count > 0), self.ref_count + 1, extra.r)
+
+        # During refractory (not clamped), clamp voltage to V_reset
+        refr_accept = accept & (r > 0) & (clamp_r <= 0)
+        new_V = u.math.where(refr_accept, self.V_reset, new_V)
+
+        new_state = DotDict({
+            **state,
+            'V': new_V, 'w': new_w, 'z': new_z, 'V_th_adapt': new_V_th_adapt
+        })
+        new_extra = DotDict({
+            **extra,
+            'spike_mask': spike_mask, 'r': r, 'clamp_r': clamp_r, 'unstable': unstable
+        })
+        return new_state, new_extra
+
     def _sum_delta_inputs(self):
+        """Sum all delta (instantaneous voltage jump) inputs."""
         delta_v = u.math.zeros_like(self.V.value)
         if self.delta_inputs is None:
             return delta_v
@@ -821,34 +854,8 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
         return delta_v
 
-    @staticmethod
-    def _dynamics_scalar(v, w, z, v_th, u_plus, u_minus, u_bar, is_refractory, is_clamped, i_stim, p):
-        if is_refractory or is_clamped:
-            v_eff = p['V_clamp'] if is_clamped else p['V_reset']
-        else:
-            v_eff = min(v, p['V_peak_rhs'])
-
-        i_spike = 0.0 if p['Delta_T'] == 0.0 else (
-            p['g_L'] * p['Delta_T'] * math.exp((v_eff - v_th) / p['Delta_T'])
-        )
-
-        dv = 0.0 if (is_refractory or is_clamped) else (
-                                                           -p['g_L'] * (v_eff - p['E_L']) + i_spike - w + z + p[
-                                                           'I_e'] + i_stim
-                                                       ) / p['C_m']
-
-        # NEST sets dw/dt = 0 while clamped, but not during pure refractory.
-        dw = 0.0 if is_clamped else (p['a'] * (v_eff - p['E_L']) - w) / p['tau_w']
-        dz = -z / p['tau_z']
-        dv_th = -(v_th - p['V_th_rest']) / p['tau_V_th']
-
-        du_plus = (-u_plus + v_eff) / p['tau_u_bar_plus']
-        du_minus = (-u_minus + v_eff) / p['tau_u_bar_minus']
-        du_bar = (-u_bar + u_minus) / p['tau_u_bar_bar']
-
-        return dv, dw, dz, dv_th, du_plus, du_minus, du_bar
-
-    def _write_clopath_history(self, V_m, u_plus, u_minus, u_bar, p):
+    def _write_clopath_history(self, V_m, u_plus, u_minus, u_bar):
+        """Update Clopath delayed ring buffers with current u-bar traces."""
         dftype = brainstate.environ.dftype()
         plus_buf = np.asarray(self.delayed_u_bar_plus_buffer.value, dtype=dftype)
         minus_buf = np.asarray(self.delayed_u_bar_minus_buffer.value, dtype=dftype)
@@ -857,34 +864,13 @@ class aeif_psc_delta_clopath(NESTNeuron):
         delay_steps = int(np.asarray(self.delayed_u_bars_steps.value, dtype=ditype))
         idx = int(np.asarray(self.delayed_u_bars_idx.value, dtype=ditype))
 
-        plus_buf[idx] = u_plus
-        minus_buf[idx] = u_minus
+        u_plus_np = np.asarray(u.get_mantissa(u_plus), dtype=dftype)
+        u_minus_np = np.asarray(u.get_mantissa(u_minus), dtype=dftype)
+
+        plus_buf[idx] = u_plus_np
+        minus_buf[idx] = u_minus_np
 
         idx = (idx + 1) % delay_steps
-
-        del_u_plus = plus_buf[idx]
-        del_u_minus = minus_buf[idx]
-
-        # Keep same delayed-buffer and threshold gating behavior as NEST.
-        # The resulting dw traces are used by Clopath synapses in NEST.
-        if self.A_LTD_const:
-            _ = np.where(
-                del_u_minus > p['theta_minus'],
-                p['A_LTD'] * (del_u_minus - p['theta_minus']),
-                0.0,
-            )
-        else:
-            _ = np.where(
-                del_u_minus > p['theta_minus'],
-                p['A_LTD'] * (u_bar * u_bar) * (del_u_minus - p['theta_minus']) / p['u_ref_squared'],
-                0.0,
-            )
-
-        _ = np.where(
-            (V_m > p['theta_plus']) & (del_u_plus > p['theta_minus']),
-            p['A_LTP'] * (V_m - p['theta_plus']) * (del_u_plus - p['theta_minus']) * p['dt'],
-            0.0,
-        )
 
         self.delayed_u_bar_plus_buffer.value = plus_buf
         self.delayed_u_bar_minus_buffer.value = minus_buf
@@ -902,14 +888,13 @@ class aeif_psc_delta_clopath(NESTNeuron):
         ----------
         x : ArrayLike, default: 0.0 * u.pA
             External input current for the current time step (pA). This is combined with synaptic currents
-            from ``current_inputs`` dictionary. Shape: scalar or broadcastable to ``(*in_size,)`` or
-            ``(*in_size, batch_size)``.
+            from ``current_inputs`` dictionary. Shape: scalar or broadcastable to ``(*in_size,)``.
 
         Returns
         -------
         spike : ArrayLike
             Binary spike indicator (1.0 if neuron spiked during this time step, 0.0 otherwise).
-            Shape: ``(*in_size,)`` or ``(*in_size, batch_size)``.
+            Shape: ``(*in_size,)``.
 
         Raises
         ------
@@ -918,298 +903,96 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
         Notes
         -----
-        **Integration algorithm:**
-
-        - Uses Runge-Kutta-Fehlberg 4(5) with adaptive step size control.
-        - Each time step ``dt`` is subdivided into substeps with sizes determined by local error estimates.
-        - Step size is adjusted based on error ratio: ``h_new = h * min(5, max(0.2, 0.9 * (tol/err)^(1/5)))``.
-        - Minimum substep size: 1e-8 ms. Maximum iterations per ``dt``: 100000.
-        - Step size is persisted across time steps (``integration_step``) for stability.
-
-        **Update order within each accepted substep:**
-
-        1. Apply delta voltage jumps (from ``delta_inputs``) if not refractory/clamped.
-        2. Integrate ODEs using RKF45.
-        3. Check for threshold crossing (``V >= V_peak`` or ``V >= V_th``).
-        4. On spike: apply spike-triggered updates (V, w, z, V_th, clamp counter).
-        5. On clamp expiry: transition to refractory (set V to V_reset, start refractory counter).
-        6. During refractory: clamp voltage to V_reset.
-
-        **Update order at the end of full ``dt``:**
-
-        1. Write Clopath delayed-buffer bookkeeping (update ring buffers with current u_bar traces).
-        2. Decrement clamp counter (if > 0).
-        3. Decrement refractory counter (if > 0).
-        4. Store new input current in delayed buffer (``I_stim``), to be used in next time step.
-        5. Update ``last_spike_time`` for neurons that spiked.
-        6. If ``ref_var=True``, update ``refractory`` indicator.
-
-        **Input handling:**
-
-        - Current-based inputs: summed from ``current_inputs`` dictionary and added to external ``x``.
-        - Delta-based inputs: summed from ``delta_inputs`` dictionary as instantaneous voltage jumps.
-        - The combined current input is delayed by one time step (``I_stim``), matching NEST's behavior.
-
-        **Spike timing:**
-
-        - Spikes are detected when voltage crosses threshold within a substep.
-        - ``last_spike_time`` is set to ``t + dt`` (end of current time step), not the exact crossing time.
-        - Multiple spikes within a single ``dt`` are possible if parameters allow (e.g., very short ``t_clamp``).
-
-        **Computational cost:**
-
-        - Integration is performed element-wise using Python loops over ``np.ndindex(in_size)``.
-        - For large populations, this implementation may be slow (O(N) Python-level iterations).
-        - Batch dimension does NOT increase cost (iteration is over spatial dimensions only).
+        Integration is performed with an adaptive vectorized RKF45 loop,
+        including in-loop spike/reset/adaptation events and optional
+        multiple spikes per step. All arithmetic is unit-aware via
+        ``saiunit.math``.
 
         See Also
         --------
         init_state : Initialize state variables before first update.
-        reset_state : Reset states between trials.
         get_spike : Differentiable spike output for training.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        dt = float(u.math.asarray(dt_q / u.ms))
-
-        v_shape = self.V.value.shape
-
-        V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
-        w = self._broadcast_to_state(self._to_numpy(self.w.value, u.pA), v_shape)
-        z = self._broadcast_to_state(self._to_numpy(self.z.value, u.pA), v_shape)
-        v_th = self._broadcast_to_state(self._to_numpy(self.V_th.value, u.mV), v_shape)
-        u_plus = self._broadcast_to_state(self._to_numpy(self.u_bar_plus.value, u.mV), v_shape)
-        u_minus = self._broadcast_to_state(self._to_numpy(self.u_bar_minus.value, u.mV), v_shape)
-        u_bar = self._broadcast_to_state(self._to_numpy(self.u_bar_bar.value, u.mV), v_shape)
-
-        ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
-            v_shape,
-        )
-        clamp_r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.clamp_step_count.value), dtype=ditype),
-            v_shape,
-        )
-
-        i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
-        h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape)
-
+        dt = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
-        p = {
-            'V_peak_rhs': self._broadcast_to_state(self._to_numpy(self.V_peak, u.mV), v_shape),
-            'V_reset': self._broadcast_to_state(self._to_numpy(self.V_reset, u.mV), v_shape),
-            'E_L': self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape),
-            'C_m': self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape),
-            'g_L': self._broadcast_to_state(self._to_numpy(self.g_L, u.nS), v_shape),
-            'Delta_T': self._broadcast_to_state(self._to_numpy(self.Delta_T, u.mV), v_shape),
-            'tau_w': self._broadcast_to_state(self._to_numpy(self.tau_w, u.ms), v_shape),
-            'tau_z': self._broadcast_to_state(self._to_numpy(self.tau_z, u.ms), v_shape),
-            'tau_V_th': self._broadcast_to_state(self._to_numpy(self.tau_V_th, u.ms), v_shape),
-            'V_th_max': self._broadcast_to_state(self._to_numpy(self.V_th_max, u.mV), v_shape),
-            'V_th_rest': self._broadcast_to_state(self._to_numpy(self.V_th_rest, u.mV), v_shape),
-            'tau_u_bar_plus': self._broadcast_to_state(self._to_numpy(self.tau_u_bar_plus, u.ms), v_shape),
-            'tau_u_bar_minus': self._broadcast_to_state(self._to_numpy(self.tau_u_bar_minus, u.ms), v_shape),
-            'tau_u_bar_bar': self._broadcast_to_state(self._to_numpy(self.tau_u_bar_bar, u.ms), v_shape),
-            'a': self._broadcast_to_state(self._to_numpy(self.a, u.nS), v_shape),
-            'b': self._broadcast_to_state(self._to_numpy(self.b, u.pA), v_shape),
-            'I_sp': self._broadcast_to_state(self._to_numpy(self.I_sp, u.pA), v_shape),
-            'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
-            'V_clamp': self._broadcast_to_state(self._to_numpy(self.V_clamp, u.mV), v_shape),
-            'theta_plus': self._broadcast_to_state(self._to_numpy(self.theta_plus, u.mV), v_shape),
-            'theta_minus': self._broadcast_to_state(self._to_numpy(self.theta_minus, u.mV), v_shape),
-            'A_LTD': self._broadcast_to_state(self._to_numpy_unitless(self.A_LTD), v_shape),
-            'A_LTP': self._broadcast_to_state(self._to_numpy_unitless(self.A_LTP), v_shape),
-            'u_ref_squared': self._broadcast_to_state(self._to_numpy_unitless(self.u_ref_squared), v_shape),
-            'atol': self._broadcast_to_state(self._to_numpy_unitless(self.gsl_error_tol), v_shape),
-            'dt': self._broadcast_to_state(np.asarray(dt, dtype=dftype), v_shape),
-        }
+        ditype = brainstate.environ.ditype()
 
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
-            v_shape,
+        # Read state variables with their natural units.
+        V = self.V.value  # mV
+        w = self.w.value  # pA
+        z = self.z.value  # pA
+        V_th_adapt = self.V_th.value  # mV
+        u_plus = self.u_bar_plus.value  # mV
+        u_minus = self.u_bar_minus.value  # mV
+        u_bar = self.u_bar_bar.value  # mV
+        r = self.refractory_step_count.value  # int
+        clamp_r = self.clamp_step_count.value  # int
+        i_stim = self.I_stim.value  # pA
+        h = self.integration_step.value  # ms
+
+        # Spike detection threshold: V_peak if Delta_T > 0, else V_th (dynamic).
+        v_peak_detect = u.math.where(self.Delta_T > 0.0 * u.mV, self.V_peak, V_th_adapt)
+
+        # Current input for next step (one-step delay).
+        new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
+
+        # Adaptive RKF45 integration via generic integrator.
+        ode_state = DotDict(
+            V=V, w=w, z=z, V_th_adapt=V_th_adapt,
+            u_plus=u_plus, u_minus=u_minus, u_bar=u_bar
         )
-        clamp_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._clamp_counts()), dtype=ditype),
-            v_shape,
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            r=r,
+            clamp_r=clamp_r,
+            unstable=jnp.array(False),
+            i_stim=i_stim,
+            v_peak_detect=v_peak_detect,
         )
 
-        delta_v_q = self._sum_delta_inputs()
-        delta_v = self._broadcast_to_state(self._to_numpy(delta_v_q, u.mV), v_shape)
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        V = ode_state.V
+        w = ode_state.w
+        z = ode_state.z
+        V_th_adapt = ode_state.V_th_adapt
+        u_plus = ode_state.u_plus
+        u_minus = ode_state.u_minus
+        u_bar = ode_state.u_bar
+        spike_mask, r, clamp_r, unstable = extra.spike_mask, extra.r, extra.clamp_r, extra.unstable
 
-        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
-        new_i_stim = self._broadcast_to_state(self._to_numpy(new_i_stim_q, u.pA), v_shape)
-
-        spike_mask = np.zeros(v_shape, dtype=bool)
-
-        V_next = np.empty_like(V)
-        w_next = np.empty_like(w)
-        z_next = np.empty_like(z)
-        v_th_next = np.empty_like(v_th)
-        u_plus_next = np.empty_like(u_plus)
-        u_minus_next = np.empty_like(u_minus)
-        u_bar_next = np.empty_like(u_bar)
-
-        r_next = np.empty_like(r)
-        clamp_r_next = np.empty_like(clamp_r)
-        h_next = np.empty_like(h_int)
-
-        for idx in np.ndindex(v_shape):
-            local_p = {k: p[k][idx] for k in p}
-            y = np.asarray([
-                V[idx], w[idx], z[idx], v_th[idx], u_plus[idx], u_minus[idx], u_bar[idx]
-            ], dtype=dftype)
-
-            r_i = int(r[idx])
-            clamp_i = int(clamp_r[idx])
-            h_i = float(max(h_int[idx], self._MIN_H))
-            t_local = 0.0
-            iters = 0
-            local_spike = False
-
-            pending_delta = float(delta_v[idx])
-
-            while t_local < dt and iters < self._MAX_ITERS:
-                iters += 1
-                h_i = max(self._MIN_H, min(h_i, dt - t_local))
-
-                is_refractory = r_i > 0
-                is_clamped = clamp_i > 0
-
-                def f(y_):
-                    dftype = brainstate.environ.dftype()
-                    return np.asarray(
-                        self._dynamics_scalar(
-                            y_[0],
-                            y_[1],
-                            y_[2],
-                            y_[3],
-                            y_[4],
-                            y_[5],
-                            y_[6],
-                            is_refractory,
-                            is_clamped,
-                            i_stim[idx],
-                            local_p,
-                        ),
-                        dtype=dftype,
-                    )
-
-                k1 = f(y)
-                k2 = f(y + h_i * (1.0 / 4.0) * k1)
-                k3 = f(y + h_i * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
-                k4 = f(y + h_i * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
-                k5 = f(y + h_i * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-                k6 = f(
-                    y
-                    + h_i
-                    * (
-                        -8.0 * k1 / 27.0
-                        + 2.0 * k2
-                        - 3544.0 * k3 / 2565.0
-                        + 1859.0 * k4 / 4104.0
-                        - 11.0 * k5 / 40.0
-                    )
-                )
-
-                y4 = y + h_i * (
-                    25.0 * k1 / 216.0
-                    + 1408.0 * k3 / 2565.0
-                    + 2197.0 * k4 / 4104.0
-                    - k5 / 5.0
-                )
-                y5 = y + h_i * (
-                    16.0 * k1 / 135.0
-                    + 6656.0 * k3 / 12825.0
-                    + 28561.0 * k4 / 56430.0
-                    - 9.0 * k5 / 50.0
-                    + 2.0 * k6 / 55.0
-                )
-
-                err = float(np.max(np.abs(y5 - y4)))
-                atol = float(local_p['atol'])
-
-                if err <= atol or h_i <= self._MIN_H:
-                    y = y5
-                    t_local += h_i
-
-                    fac = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * (atol / err) ** 0.2))
-                    h_i = max(self._MIN_H, h_i * fac)
-
-                    if y[0] < -1e3 or y[1] < -1e6 or y[1] > 1e6:
-                        raise ValueError('Numerical instability in aeif_psc_delta_clopath dynamics.')
-
-                    if r_i == 0 and clamp_i == 0:
-                        y[0] += pending_delta
-                    pending_delta = 0.0
-
-                    v_peak_detect_i = local_p['V_peak_rhs'] if local_p['Delta_T'] > 0.0 else y[3]
-
-                    if y[0] >= v_peak_detect_i and clamp_i == 0:
-                        local_spike = True
-
-                        y[0] = local_p['V_clamp']
-                        y[1] += local_p['b']
-                        y[2] = local_p['I_sp']
-                        y[3] = local_p['V_th_max']
-
-                        clamp_i = int(clamp_counts[idx]) + 1 if int(clamp_counts[idx]) > 0 else 0
-                    elif clamp_i == 1:
-                        y[0] = local_p['V_reset']
-                        clamp_i = 0
-                        r_i = int(refr_counts[idx]) + 1 if int(refr_counts[idx]) > 0 else 0
-
-                    if r_i > 0:
-                        y[0] = local_p['V_reset']
-                else:
-                    fac = min(1.0, max(0.2, 0.9 * (atol / err) ** 0.25))
-                    h_i = max(self._MIN_H, h_i * fac)
-
-            # Decrement counters after full dt integration, matching NEST.
-            if clamp_i > 0:
-                clamp_i -= 1
-            if r_i > 0:
-                r_i -= 1
-
-            spike_mask[idx] = local_spike
-
-            V_next[idx] = y[0]
-            w_next[idx] = y[1]
-            z_next[idx] = y[2]
-            v_th_next[idx] = y[3]
-            u_plus_next[idx] = y[4]
-            u_minus_next[idx] = y[5]
-            u_bar_next[idx] = y[6]
-
-            r_next[idx] = r_i
-            clamp_r_next[idx] = clamp_i
-            h_next[idx] = h_i
-
-        self._write_clopath_history(
-            V_next,
-            u_plus_next,
-            u_minus_next,
-            u_bar_next,
-            p,
+        # Post-loop stability check.
+        brainstate.transform.jit_error_if(
+            jnp.any(unstable), 'Numerical instability in aeif_psc_delta_clopath dynamics.'
         )
 
-        self.V.value = V_next * u.mV
-        self.w.value = w_next * u.pA
-        self.z.value = z_next * u.pA
-        self.V_th.value = v_th_next * u.mV
-        self.u_bar_plus.value = u_plus_next * u.mV
-        self.u_bar_minus.value = u_minus_next * u.mV
-        self.u_bar_bar.value = u_bar_next * u.mV
+        # Clopath delay buffer bookkeeping.
+        self._write_clopath_history(V, u_plus, u_minus, u_bar)
 
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
-        self.clamp_step_count.value = jnp.asarray(clamp_r_next, dtype=ditype)
+        # Decrement counters.
+        clamp_r = u.math.where(clamp_r > 0, clamp_r - 1, clamp_r)
+        r = u.math.where(r > 0, r - 1, r)
 
-        self.integration_step.value = h_next * u.ms
-        self.I_stim.value = new_i_stim * u.pA
+        # Delta inputs (applied after integration).
+        delta_v = self._sum_delta_inputs()
+        # Only apply delta inputs when not refractory and not clamped.
+        can_receive = (r <= 0) & (clamp_r <= 0)
+        V = u.math.where(can_receive, V + delta_v, V)
 
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
-        )
+        # Write back state.
+        self.V.value = V
+        self.w.value = w
+        self.z.value = z
+        self.V_th.value = V_th_adapt
+        self.u_bar_plus.value = u_plus
+        self.u_bar_minus.value = u_minus
+        self.u_bar_bar.value = u_bar
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.clamp_step_count.value = jnp.asarray(u.get_mantissa(clamp_r), dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(

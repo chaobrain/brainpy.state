@@ -235,76 +235,78 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters(self):
-        neuron = aeif_psc_delta_clopath(1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = aeif_psc_delta_clopath(1)
 
-        self.assertEqual(neuron.V_peak, 33.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 0.0 * u.ms)
-        self.assertEqual(neuron.g_L, 30.0 * u.nS)
-        self.assertEqual(neuron.C_m, 281.0 * u.pF)
-        self.assertEqual(neuron.E_L, -70.6 * u.mV)
-        self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
+            self.assertEqual(neuron.V_peak, 33.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 0.0 * u.ms)
+            self.assertEqual(neuron.g_L, 30.0 * u.nS)
+            self.assertEqual(neuron.C_m, 281.0 * u.pF)
+            self.assertEqual(neuron.E_L, -70.6 * u.mV)
+            self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
 
-        self.assertEqual(neuron.tau_w, 144.0 * u.ms)
-        self.assertEqual(neuron.tau_z, 40.0 * u.ms)
-        self.assertEqual(neuron.tau_V_th, 50.0 * u.ms)
-        self.assertEqual(neuron.V_th_max, 30.4 * u.mV)
-        self.assertEqual(neuron.V_th_rest, -50.4 * u.mV)
+            self.assertEqual(neuron.tau_w, 144.0 * u.ms)
+            self.assertEqual(neuron.tau_z, 40.0 * u.ms)
+            self.assertEqual(neuron.tau_V_th, 50.0 * u.ms)
+            self.assertEqual(neuron.V_th_max, 30.4 * u.mV)
+            self.assertEqual(neuron.V_th_rest, -50.4 * u.mV)
 
-        self.assertEqual(neuron.tau_u_bar_plus, 7.0 * u.ms)
-        self.assertEqual(neuron.tau_u_bar_minus, 10.0 * u.ms)
-        self.assertEqual(neuron.tau_u_bar_bar, 500.0 * u.ms)
+            self.assertEqual(neuron.tau_u_bar_plus, 7.0 * u.ms)
+            self.assertEqual(neuron.tau_u_bar_minus, 10.0 * u.ms)
+            self.assertEqual(neuron.tau_u_bar_bar, 500.0 * u.ms)
 
-        self.assertEqual(neuron.a, 4.0 * u.nS)
-        self.assertEqual(neuron.b, 80.5 * u.pA)
-        self.assertEqual(neuron.I_sp, 400.0 * u.pA)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertEqual(neuron.a, 4.0 * u.nS)
+            self.assertEqual(neuron.b, 80.5 * u.pA)
+            self.assertEqual(neuron.I_sp, 400.0 * u.pA)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
 
-        self.assertEqual(float(neuron.A_LTD), 14.0e-5)
-        self.assertEqual(float(neuron.A_LTP), 8.0e-5)
-        self.assertEqual(neuron.theta_plus, -45.3 * u.mV)
-        self.assertEqual(neuron.theta_minus, -70.6 * u.mV)
-        self.assertTrue(neuron.A_LTD_const)
+            self.assertEqual(float(neuron.A_LTD), 14.0e-5)
+            self.assertEqual(float(neuron.A_LTP), 8.0e-5)
+            self.assertEqual(neuron.theta_plus, -45.3 * u.mV)
+            self.assertEqual(neuron.theta_minus, -70.6 * u.mV)
+            self.assertTrue(neuron.A_LTD_const)
 
-        self.assertEqual(neuron.delay_u_bars, 5.0 * u.ms)
-        self.assertEqual(float(neuron.u_ref_squared), 60.0)
+            self.assertEqual(neuron.delay_u_bars, 5.0 * u.ms)
+            self.assertEqual(float(neuron.u_ref_squared), 60.0)
 
-        self.assertEqual(neuron.t_clamp, 2.0 * u.ms)
-        self.assertEqual(neuron.V_clamp, 33.0 * u.mV)
+            self.assertEqual(neuron.t_clamp, 2.0 * u.ms)
+            self.assertEqual(neuron.V_clamp, 33.0 * u.mV)
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, V_reset=10.0 * u.mV, V_peak=10.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, Delta_T=-1.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, V_th_max=-60.0 * u.mV, V_th_rest=-50.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, V_peak=-60.0 * u.mV, V_th_rest=-50.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, t_clamp=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, tau_w=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, tau_z=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, tau_V_th=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, tau_u_bar_plus=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, tau_u_bar_minus=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, tau_u_bar_bar=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, u_ref_squared=0.0)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, gsl_error_tol=0.0)
-        with self.assertRaises(ValueError):
-            aeif_psc_delta_clopath(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, V_reset=10.0 * u.mV, V_peak=10.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, Delta_T=-1.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, V_th_max=-60.0 * u.mV, V_th_rest=-50.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, V_peak=-60.0 * u.mV, V_th_rest=-50.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, t_clamp=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, tau_w=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, tau_z=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, tau_V_th=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, tau_u_bar_plus=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, tau_u_bar_minus=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, tau_u_bar_bar=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, u_ref_squared=0.0)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, gsl_error_tol=0.0)
+            with self.assertRaises(ValueError):
+                aeif_psc_delta_clopath(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
 
     def test_current_input_has_one_step_delay_like_nest(self):
         with brainstate.environ.context(dt=self.dt):

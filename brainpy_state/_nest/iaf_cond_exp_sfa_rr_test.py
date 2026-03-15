@@ -154,40 +154,42 @@ class TestIAFCondExpSfaRr(unittest.TestCase):
             return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters(self):
-        neuron = iaf_cond_exp_sfa_rr(1)
-        self.assertEqual(neuron.V_th, -57.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -70.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 0.5 * u.ms)
-        self.assertEqual(neuron.g_L, 28.95 * u.nS)
-        self.assertEqual(neuron.C_m, 289.5 * u.pF)
-        self.assertEqual(neuron.E_ex, 0.0 * u.mV)
-        self.assertEqual(neuron.E_in, -75.0 * u.mV)
-        self.assertEqual(neuron.E_L, -70.0 * u.mV)
-        self.assertEqual(neuron.tau_syn_ex, 1.5 * u.ms)
-        self.assertEqual(neuron.tau_syn_in, 10.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        self.assertEqual(neuron.tau_sfa, 110.0 * u.ms)
-        self.assertEqual(neuron.tau_rr, 1.97 * u.ms)
-        self.assertEqual(neuron.E_sfa, -70.0 * u.mV)
-        self.assertEqual(neuron.E_rr, -70.0 * u.mV)
-        self.assertEqual(neuron.q_sfa, 14.48 * u.nS)
-        self.assertEqual(neuron.q_rr, 3214.0 * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_cond_exp_sfa_rr(1)
+            self.assertEqual(neuron.V_th, -57.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -70.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 0.5 * u.ms)
+            self.assertEqual(neuron.g_L, 28.95 * u.nS)
+            self.assertEqual(neuron.C_m, 289.5 * u.pF)
+            self.assertEqual(neuron.E_ex, 0.0 * u.mV)
+            self.assertEqual(neuron.E_in, -75.0 * u.mV)
+            self.assertEqual(neuron.E_L, -70.0 * u.mV)
+            self.assertEqual(neuron.tau_syn_ex, 1.5 * u.ms)
+            self.assertEqual(neuron.tau_syn_in, 10.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertEqual(neuron.tau_sfa, 110.0 * u.ms)
+            self.assertEqual(neuron.tau_rr, 1.97 * u.ms)
+            self.assertEqual(neuron.E_sfa, -70.0 * u.mV)
+            self.assertEqual(neuron.E_rr, -70.0 * u.mV)
+            self.assertEqual(neuron.q_sfa, 14.48 * u.nS)
+            self.assertEqual(neuron.q_rr, 3214.0 * u.nS)
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, tau_syn_ex=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, tau_syn_in=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, tau_sfa=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, tau_rr=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp_sfa_rr(1, V_reset=-57.0 * u.mV, V_th=-57.0 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, tau_syn_ex=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, tau_syn_in=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, tau_sfa=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, tau_rr=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp_sfa_rr(1, V_reset=-57.0 * u.mV, V_th=-57.0 * u.mV)
 
     def test_signed_spike_weights_split_into_ex_and_in(self):
         with brainstate.environ.context(dt=self.dt):

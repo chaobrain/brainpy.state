@@ -763,7 +763,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize neuron state variables and delayed event queues.
 
         Allocates ``rate``, ``noise``, ``instant_rate``, ``delayed_rate``, internal
@@ -772,12 +772,8 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension for vectorized simulation. If ``None`` (default), no
-            batch dimension is added (shape is ``varshape``). If ``int``, creates
-            states with shape ``varshape + (batch_size,)``.
         **kwargs
-            Ignored. Kept for API compatibility with parent classes.
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -789,8 +785,8 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         - ``_step_count`` : int64 scalar starting at 0
         - ``_delayed_ex_queue``, ``_delayed_in_queue`` : empty dicts
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 

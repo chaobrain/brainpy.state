@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable, Optional
 
 import brainstate
@@ -25,10 +24,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
-from scipy.integrate import solve_ivp
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
@@ -38,142 +37,6 @@ __all__ = [
 SOMA = 0
 DEND = 1
 NCOMP = 2
-
-# State vector element indices (per compartment)
-_V_M = 0
-_G_EXC = 1
-_G_INH = 2
-_I_EXC = 3
-_I_INH = 4
-_STATE_VEC_COMPS = 5
-
-# Total state vector size
-_STATE_VEC_SIZE = _STATE_VEC_COMPS * NCOMP
-
-
-def _idx(comp, elem):
-    r"""Compute linear index into state array from compartment and element."""
-    return comp * _STATE_VEC_COMPS + elem
-
-
-def _phi(u_val, phi_max, rate_slope, beta, theta):
-    r"""Compute the instantaneous firing rate as a sigmoid function of membrane potential.
-
-    This implements the rate function from Urbanczik & Senn (2014) that converts
-    somatic membrane potential to instantaneous firing rate. The function saturates
-    at ``phi_max`` for large potentials and approaches zero for hyperpolarized states.
-
-    Parameters
-    ----------
-    u_val : float
-        Membrane potential value in mV (scalar, unitless numeric).
-    phi_max : float
-        Maximum firing rate in kHz (scalar, dimensionless numeric).
-    rate_slope : float
-        Rate function slope parameter ``k`` (dimensionless). Controls the rate of
-        increase at threshold. Must be non-negative.
-    beta : float
-        Rate function steepness parameter in 1/mV (scalar). Controls the sharpness
-        of the sigmoid transition. Typical value: 1/3 (1/mV).
-    theta : float
-        Rate function threshold potential in mV (scalar). Membrane potential at
-        which the rate is approximately half-maximal.
-
-    Returns
-    -------
-    rate : float
-        Instantaneous firing rate in kHz. Range: [0, ``phi_max``].
-
-    Notes
-    -----
-    **Mathematical Formulation**
-
-
-    The rate function is defined as:
-
-    .. math::
-
-        \phi(u) = \frac{\phi_\mathrm{max}}{1 + k \cdot \exp(\beta \cdot (\theta - u))}
-
-    where:
-
-    * :math:`u` is the membrane potential (mV)
-    * :math:`\phi_\mathrm{max}` is the maximum rate (kHz)
-    * :math:`k` is the slope parameter (dimensionless)
-    * :math:`\beta` is the steepness (1/mV)
-    * :math:`\theta` is the threshold (mV)
-
-    **Properties:**
-
-    * For :math:`u \gg \theta`: :math:`\phi(u) \to \phi_\mathrm{max}`
-    * For :math:`u \ll \theta`: :math:`\phi(u) \to 0`
-    * At :math:`u = \theta`: :math:`\phi(\theta) = \phi_\mathrm{max} / (1 + k)`
-
-    * All inputs are expected as raw numeric values (units already stripped).
-    * The function is monotonically increasing in ``u_val``.
-    * Numerical stability: For large negative ``(theta - u_val)``, ``exp`` approaches
-      zero and the denominator approaches 1, yielding ``phi_max``.
-    """
-    return phi_max / (1.0 + rate_slope * math.exp(beta * (theta - u_val)))
-
-
-def _h_func(u_val, rate_slope, beta, theta):
-    r"""Compute the learning signal modulation function for Urbanczik-Senn plasticity.
-
-    This function modulates the amplitude of the error signal :math:`\delta\Pi` used
-    in the Urbanczik-Senn learning rule. It acts as a voltage-dependent gain that
-    scales the prediction error based on the predicted somatic potential.
-
-    Parameters
-    ----------
-    u_val : float
-        Membrane potential value in mV (scalar, unitless numeric).
-    rate_slope : float
-        Rate function slope parameter ``k`` (dimensionless). Must be non-zero to
-        avoid division by zero.
-    beta : float
-        Rate function steepness parameter in 1/mV (scalar). Controls the sharpness
-        of the modulation. Typical value: 1/3 (1/mV).
-    theta : float
-        Rate function threshold potential in mV (scalar). Center of the sigmoid.
-
-    Returns
-    -------
-    h_value : float
-        Modulation factor (dimensionless). Range: (0, 15*β].
-
-    Mathematical Formulation
-    ------------------------
-    The modulation function is defined as:
-
-    .. math::
-
-        h(u) = \frac{15 \cdot \beta}{1 + \frac{1}{k} \cdot \exp(-\beta \cdot (\theta - u))}
-
-    **Properties:**
-
-    * For :math:`u \gg \theta`: :math:`h(u) \to 15 \beta`
-    * For :math:`u \ll \theta`: :math:`h(u) \to 0`
-    * Monotonically increasing in ``u_val``
-
-    **Role in Urbanczik-Senn Learning:**
-
-    The error signal at each time step is computed as:
-
-    .. math::
-
-        \delta\Pi = \left(n_{\mathrm{spikes}} - \phi(V^*_W) \cdot dt\right) \cdot h(V^*_W)
-
-    where :math:`V^*_W` is the dendritic prediction of the somatic potential.
-    The ``h`` function provides a voltage-dependent learning rate.
-
-    Notes
-    -----
-    * The factor of 15 is a scaling constant from Urbanczik & Senn (2014).
-    * All inputs are expected as raw numeric values (units already stripped).
-    * Division by ``rate_slope`` requires ``rate_slope > 0`` to avoid NaN.
-    """
-    return 15.0 * beta / (1.0 + (1.0 / rate_slope) * math.exp(-beta * (theta - u_val)))
 
 
 class pp_cond_exp_mc_urbanczik(NESTNeuron):
@@ -265,6 +128,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
     dend_I_e : ArrayLike, optional
         Dendritic constant external current (Quantity, default: 0.0 pA). DC bias
         current applied to dendrite at all times.
+    gsl_error_tol : ArrayLike, optional
+        Unitless local RKF45 error tolerance (default: 1e-3). Must be strictly
+        positive.
     rng_key : jax.Array, optional
         JAX PRNG key for stochastic spike generation (default: None). If None, a
         default key (PRNGKey(0)) is used. For reproducibility, provide explicit key.
@@ -438,12 +304,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     **7. Numerical Integration**
 
-    The 10-dimensional ODE system (5 state variables × 2 compartments) is integrated
-    using ``scipy.integrate.solve_ivp`` with method ``'RK45'`` (Runge-Kutta-Fehlberg
-    4th/5th order adaptive solver). Integration tolerances match NEST:
-
-    * Relative tolerance: 0.0 (disabled)
-    * Absolute tolerance: 1e-3
+    The 6-dimensional ODE system (V_s, g_ex_s, g_in_s, V_d, I_ex_d, I_in_d) is
+    integrated using an adaptive RKF45 Runge-Kutta-Fehlberg integrator that is
+    fully JAX-compatible and differentiable.
 
     **Update Order per Time Step:**
 
@@ -483,7 +346,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
     Attributes (State Variables)
     -----------------------------
     V_s : brainstate.HiddenState
-        Somatic membrane potential (Quantity, shape: ``varshape`` or ``(batch_size,) + varshape``).
+        Somatic membrane potential (Quantity, shape: ``varshape``).
         Initialized to ``soma_E_L``. Unit: mV.
     g_ex_s : brainstate.HiddenState
         Somatic excitatory synaptic conductance (Quantity). Initialized to 0. Unit: nS.
@@ -503,6 +366,8 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         Buffered dendrite current for next integration step (Quantity). Unit: pA.
     last_spike_time : brainstate.ShortTermState
         Time of last spike emission (Quantity). Initialized to -1e7 ms. Unit: ms.
+    integration_step : brainstate.ShortTermState
+        Persistent RKF45 substep size estimate (ms).
 
     Raises
     ------
@@ -516,6 +381,8 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         If any capacitance ``C_m`` ≤ 0 (must be strictly positive).
     ValueError
         If any synaptic time constant ≤ 0 (must be strictly positive).
+    ValueError
+        If ``gsl_error_tol`` ≤ 0 (must be strictly positive).
 
     Notes
     -----
@@ -530,8 +397,6 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
     * **Urbanczik History:** The learning signal history is stored in a Python dict
       (``_urbanczik_history``) and grows unbounded. For long simulations, periodically
       clear history or implement custom storage.
-    * **Batch Dimensions:** All state variables support optional batch dimensions for
-      parallel simulation of multiple network instances.
     * **Surrogate Gradients:** The ``spk_fun`` parameter enables gradient-based
       learning through spike discontinuities, but this model is primarily designed
       for the Urbanczik-Senn rule which uses the stored δΠ signals directly.
@@ -611,6 +476,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
     """
     __module__ = 'brainpy.state'
 
+    _MIN_H = 1e-8 * u.ms  # ms
+    _MAX_ITERS = 100000
+
     def __init__(
         self,
         in_size: Size,
@@ -640,6 +508,8 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         dend_tau_syn_ex: ArrayLike = 3.0 * u.ms,
         dend_tau_syn_in: ArrayLike = 3.0 * u.ms,
         dend_I_e: ArrayLike = 0.0 * u.pA,
+        # Integration tolerance
+        gsl_error_tol: ArrayLike = 1e-3,
         # RNG and surrogate
         rng_key: Optional[jax.Array] = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
@@ -677,21 +547,37 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         self.dend_tau_syn_in = braintools.init.param(dend_tau_syn_in, self.varshape)
         self.dend_I_e = braintools.init.param(dend_I_e, self.varshape)
 
+        # Integration tolerance
+        self.gsl_error_tol = gsl_error_tol
+
         # RNG
         self._rng_key = rng_key
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
 
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
+        # Precompute refractory step count
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def _validate_parameters(self):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated.
+        """
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.soma_C_m, self.t_ref)):
             return
@@ -711,47 +597,78 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         ]:
             if np.any(tse <= 0.0 * u.ms) or np.any(tsi <= 0.0 * u.ms):
                 raise ValueError('All time constants must be strictly positive.')
+        if np.any(self.gsl_error_tol <= 0.0):
+            raise ValueError('The gsl_error_tol must be strictly positive.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
+    def init_state(self, **kwargs):
+        r"""Initialize persistent and short-term state variables.
+
+        Parameters
+        ----------
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
+
+        Raises
+        ------
+        ValueError
+            If an initializer cannot be broadcast to requested shape.
+        TypeError
+            If initializer outputs have incompatible units/dtypes for the
+            corresponding state variables.
+        """
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+        dt = brainstate.environ.get_dt()
 
         # Membrane potentials initialized to E_L
-        soma_E_L = self._to_numpy(self.soma_E_L, u.mV)
-        dend_E_L = self._to_numpy(self.dend_E_L, u.mV)
-
         self.V_s = brainstate.HiddenState(
-            np.broadcast_to(soma_E_L, v_shape).copy() * u.mV
+            u.math.ones(self.varshape, dtype=dftype) * self.soma_E_L
         )
         self.V_d = brainstate.HiddenState(
-            np.broadcast_to(dend_E_L, v_shape).copy() * u.mV
+            u.math.ones(self.varshape, dtype=dftype) * self.dend_E_L
         )
 
         # Somatic conductances
-        dftype = brainstate.environ.dftype()
-        self.g_ex_s = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.nS)
-        self.g_in_s = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.nS)
+        self.g_ex_s = brainstate.HiddenState(
+            u.math.zeros(self.varshape, dtype=dftype) * u.nS
+        )
+        self.g_in_s = brainstate.HiddenState(
+            u.math.zeros(self.varshape, dtype=dftype) * u.nS
+        )
 
         # Dendritic currents
-        self.I_ex_d = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.pA)
-        self.I_in_d = brainstate.HiddenState(np.zeros(v_shape, dtype=dftype) * u.pA)
+        self.I_ex_d = brainstate.HiddenState(
+            u.math.zeros(self.varshape, dtype=dftype) * u.pA
+        )
+        self.I_in_d = brainstate.HiddenState(
+            u.math.zeros(self.varshape, dtype=dftype) * u.pA
+        )
 
         # Refractory counter
-        ditype = brainstate.environ.ditype()
         self.refractory_step_count = brainstate.ShortTermState(
-            jnp.zeros(v_shape, dtype=ditype)
+            u.math.full(self.varshape, 0, dtype=ditype)
         )
 
         # Buffered stimulus currents (per compartment)
-        self.I_stim_soma = brainstate.ShortTermState(np.zeros(v_shape, dtype=dftype) * u.pA)
-        self.I_stim_dend = brainstate.ShortTermState(np.zeros(v_shape, dtype=dftype) * u.pA)
+        self.I_stim_soma = brainstate.ShortTermState(
+            u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype)
+        )
+        self.I_stim_dend = brainstate.ShortTermState(
+            u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype)
+        )
 
         # Last spike time
         self.last_spike_time = brainstate.ShortTermState(
-            np.full(v_shape, -1e7, dtype=dftype) * u.ms
+            u.math.full(self.varshape, -1e7 * u.ms)
+        )
+
+        # Integration step size
+        self.integration_step = brainstate.ShortTermState.init(
+            braintools.init.Constant(dt), self.varshape
         )
 
         # Urbanczik history: list of (t_ms, dPI) tuples per neuron element
-        self._urbanczik_history = {}  # key: flat index -> list of (t, dPI)
+        self._urbanczik_history = {}
 
         # RNG state
         if self._rng_key is not None:
@@ -759,40 +676,25 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         else:
             self._rng_state = jax.random.PRNGKey(0)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-
-        soma_E_L = self._to_numpy(self.soma_E_L, u.mV)
-        dend_E_L = self._to_numpy(self.dend_E_L, u.mV)
-
-        self.V_s.value = np.broadcast_to(soma_E_L, v_shape).copy() * u.mV
-        self.V_d.value = np.broadcast_to(dend_E_L, v_shape).copy() * u.mV
-        dftype = brainstate.environ.dftype()
-        self.g_ex_s.value = np.zeros(v_shape, dtype=dftype) * u.nS
-        self.g_in_s.value = np.zeros(v_shape, dtype=dftype) * u.nS
-        self.I_ex_d.value = np.zeros(v_shape, dtype=dftype) * u.pA
-        self.I_in_d.value = np.zeros(v_shape, dtype=dftype) * u.pA
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count.value = jnp.zeros(v_shape, dtype=ditype)
-        self.I_stim_soma.value = np.zeros(v_shape, dtype=dftype) * u.pA
-        self.I_stim_dend.value = np.zeros(v_shape, dtype=dftype) * u.pA
-        self.last_spike_time.value = np.full(v_shape, -1e7, dtype=dftype) * u.ms
-        self._urbanczik_history = {}
-
-        if self._rng_key is not None:
-            self._rng_state = self._rng_key
-        else:
-            self._rng_state = jax.random.PRNGKey(0)
-
     def get_spike(self, V: ArrayLike = None):
+        r"""Evaluate surrogate spike output from membrane voltage.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Voltage values with shape broadcastable to ``self.varshape`` and
+            units compatible with mV. If ``None``, uses current state
+            ``self.V_s.value``.
+
+        Returns
+        -------
+        ArrayLike
+            Surrogate spike activation produced by
+            ``spk_fun(V / (1.0 * u.mV))``.
+        """
         V = self.V_s.value if V is None else V
         v_scaled = V / (1.0 * u.mV)
         return self.spk_fun(v_scaled)
-
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.round(self.t_ref / dt), dtype=ditype)
 
     def _collect_receptor_delta_inputs(self):
         r"""Collect delta inputs labeled by receptor type.
@@ -833,150 +735,86 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         return soma_exc, soma_inh, dend_exc, dend_inh
 
-    @staticmethod
-    def _dynamics(t, y, p):
-        r"""Compute ODE right-hand-side for the two-compartment neuron state vector.
-
-        This static method implements the 10-dimensional ODE system governing the
-        dynamics of the two-compartment model. It is called by the adaptive ODE
-        solver (scipy.integrate.solve_ivp) during numerical integration. The
-        implementation exactly matches NEST's ``pp_cond_exp_mc_urbanczik_dynamics()``
-        C++ function.
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
 
         Parameters
         ----------
-        t : float
-            Current integration time (unused, system is autonomous). Required by
-            scipy ODE solver interface but not used in computation.
-        y : numpy.ndarray
-            State vector of shape (10,), containing 5 variables per compartment:
-            [V_s, g_ex_s, g_in_s, I_ex_s(=0), I_in_s(=0),
-             V_d, g_ex_d(=0), g_in_d(=0), I_ex_d, I_in_d].
-            Units are implicit (mV for voltages, nS for conductances, pA for currents).
-            Note: Soma uses g_ex/g_in (conductances), dendrite uses I_ex/I_in (currents).
-            Unused channels are always zero but maintained for indexing consistency.
-        p : dict
-            Parameter dictionary with keys (all numeric, units stripped):
-            * ``'g_L_soma'``, ``'g_L_dend'`` (nS): Leak conductances
-            * ``'C_m_soma'``, ``'C_m_dend'`` (pF): Membrane capacitances
-            * ``'E_L_soma'``, ``'E_L_dend'`` (mV): Leak reversal potentials
-            * ``'E_ex_soma'``, ``'E_in_soma'`` (mV): Somatic reversal potentials
-            * ``'tau_syn_ex_soma'``, ``'tau_syn_in_soma'`` (ms): Somatic time constants
-            * ``'tau_syn_ex_dend'``, ``'tau_syn_in_dend'`` (ms): Dendritic time constants
-            * ``'g_conn_soma'`` (nS): Dendrite→soma coupling (g_sp)
-            * ``'g_conn_dend'`` (nS): Soma→dendrite coupling (g_ps)
-            * ``'I_stim_soma'`` (pA): External stimulus current to soma
-            * ``'I_e_soma'`` (pA): Constant external current to soma
+        state : DotDict
+            Keys: V_s, g_ex_s, g_in_s, V_d, I_ex_d, I_in_d — ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, i_stim_soma — mutable auxiliary data carried
+            through the integrator.
 
         Returns
         -------
-        f : numpy.ndarray
-            Time derivatives dy/dt of shape (10,), same structure as ``y``.
-            Units: mV/ms for voltages, nS/ms for conductances, pA/ms for currents.
-
-        Mathematical Formulation
-        ------------------------
-        **Soma (compartment 0):**
-
-        .. math::
-
-            \frac{dV^s}{dt} = \frac{1}{C_m^s} \left[
-                -g_L^s (V^s - E_L^s)
-                - g_{ex}^s (V^s - E_{ex}^s)
-                - g_{in}^s (V^s - E_{in}^s)
-                + g_{sp} (V^p - V^s)
-                + I_{stim}^s + I_e^s
-            \right]
-
-        .. math::
-
-            \frac{dg_{ex}^s}{dt} = -\frac{g_{ex}^s}{\tau_{syn,ex}^s}, \quad
-            \frac{dg_{in}^s}{dt} = -\frac{g_{in}^s}{\tau_{syn,in}^s}
-
-        **Dendrite (compartment 1):**
-
-        .. math::
-
-            \frac{dV^p}{dt} = \frac{1}{C_m^p} \left[
-                -g_L^p (V^p - E_L^p)
-                + I_{ex}^p + I_{in}^p
-                + g_{ps} (V^s - V^p)
-            \right]
-
-        .. math::
-
-            \frac{dI_{ex}^p}{dt} = -\frac{I_{ex}^p}{\tau_{syn,ex}^p}, \quad
-            \frac{dI_{in}^p}{dt} = -\frac{I_{in}^p}{\tau_{syn,in}^p}
-
-        Notes
-        -----
-        * This function is called element-wise for each neuron in the population.
-        * The state vector has 10 elements but only 6 are dynamically active:
-          soma uses conductances (g_ex, g_in), dendrite uses currents (I_ex, I_in).
-        * The unused channels (I_ex_s, I_in_s, g_ex_d, g_in_d) are kept at zero
-          for compatibility with NEST's implementation.
-        * Coupling currents flow bidirectionally between compartments via ``g_sp``
-          (dendrite→soma) and ``g_ps`` (soma→dendrite).
+        DotDict with same keys as ``state``, containing time derivatives.
         """
-        f = np.zeros(10)
-
-        # Soma membrane potential
-        V_s = y[_idx(SOMA, _V_M)]
+        # Soma dynamics
+        V_s = state.V_s
+        V_d = state.V_d
 
         # Soma leak current
-        I_L_s = p['g_L_soma'] * (V_s - p['E_L_soma'])
+        I_L_s = self.soma_g_L * (V_s - self.soma_E_L)
 
         # Soma excitatory synaptic current (conductance-based)
-        I_syn_exc = y[_idx(SOMA, _G_EXC)] * (V_s - p['E_ex_soma'])
+        I_syn_exc = state.g_ex_s * (V_s - self.soma_E_ex)
 
         # Soma inhibitory synaptic current (conductance-based)
-        I_syn_inh = y[_idx(SOMA, _G_INH)] * (V_s - p['E_in_soma'])
-
-        # Coupling from dendrites to soma
-        I_conn_d_s = 0.0
-
-        # Dendrite (n=1, DEND)
-        V_d = y[_idx(DEND, _V_M)]
+        I_syn_inh = state.g_in_s * (V_s - self.soma_E_in)
 
         # Coupling current dendrite -> soma
-        I_conn_d_s += p['g_conn_soma'] * (V_d - V_s)
+        I_conn_d_s = self.g_sp * (V_d - V_s)
 
         # Coupling current soma -> dendrite
-        I_conn_s_d = p['g_conn_dend'] * (V_s - V_d)
-
-        # Dendritic synaptic currents (current-based)
-        I_syn_ex_d = y[_idx(DEND, _I_EXC)]
-        I_syn_in_d = y[_idx(DEND, _I_INH)]
-
-        # Dendrite membrane potential derivative
-        f[_idx(DEND, _V_M)] = (
-                                  -p['g_L_dend'] * (V_d - p['E_L_dend'])
-                                  + I_syn_ex_d + I_syn_in_d + I_conn_s_d
-                              ) / p['C_m_dend']
-
-        # Dendrite current derivatives
-        f[_idx(DEND, _I_EXC)] = -I_syn_ex_d / p['tau_syn_ex_dend']
-        f[_idx(DEND, _I_INH)] = -I_syn_in_d / p['tau_syn_in_dend']
-
-        # Dendrite unused channels
-        f[_idx(DEND, _G_EXC)] = 0.0
-        f[_idx(DEND, _G_INH)] = 0.0
+        I_conn_s_d = self.g_ps * (V_s - V_d)
 
         # Soma membrane potential derivative
-        f[_idx(SOMA, _V_M)] = (
-                                  -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
-                                  + p['I_stim_soma'] + p['I_e_soma']
-                              ) / p['C_m_soma']
+        dV_s = (
+            -I_L_s - I_syn_exc - I_syn_inh + I_conn_d_s
+            + extra.i_stim_soma + self.soma_I_e
+        ) / self.soma_C_m
 
         # Soma conductance derivatives
-        f[_idx(SOMA, _G_EXC)] = -y[_idx(SOMA, _G_EXC)] / p['tau_syn_ex_soma']
-        f[_idx(SOMA, _G_INH)] = -y[_idx(SOMA, _G_INH)] / p['tau_syn_in_soma']
+        dg_ex_s = -state.g_ex_s / self.soma_tau_syn_ex
+        dg_in_s = -state.g_in_s / self.soma_tau_syn_in
 
-        # Soma unused channels
-        f[_idx(SOMA, _I_EXC)] = 0.0
-        f[_idx(SOMA, _I_INH)] = 0.0
+        # Dendrite membrane potential derivative
+        dV_d = (
+            -self.dend_g_L * (V_d - self.dend_E_L)
+            + state.I_ex_d + state.I_in_d + I_conn_s_d
+        ) / self.dend_C_m
 
-        return f
+        # Dendrite current derivatives
+        dI_ex_d = -state.I_ex_d / self.dend_tau_syn_ex
+        dI_in_d = -state.I_in_d / self.dend_tau_syn_in
+
+        return DotDict(
+            V_s=dV_s, g_ex_s=dg_ex_s, g_in_s=dg_in_s,
+            V_d=dV_d, I_ex_d=dI_ex_d, I_in_d=dI_in_d,
+        )
+
+    def _event_fn(self, state, extra, accept):
+        """In-loop event callback for the adaptive integrator.
+
+        This model does not perform spike detection or voltage reset inside the
+        integration loop (spikes are stochastic and generated after integration).
+        The event function is a no-op pass-through.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V_s, g_ex_s, g_in_s, V_d, I_ex_d, I_in_d — ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, i_stim_soma.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
+
+        Returns
+        -------
+        (new_state, new_extra) DotDicts unchanged.
+        """
+        return state, extra
 
     def update(self, x=0.0 * u.pA):
         r"""Advance neuron state by one simulation time step with ODE integration and stochastic spiking.
@@ -1011,9 +849,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         **1. ODE Integration**
 
-        Integrate the 10-dimensional state vector over the interval (t, t+dt] using
-        scipy's RK45 adaptive solver with tolerances rtol=0.0, atol=1e-3. The
-        integration uses stimulus currents buffered from the previous time step.
+        Integrate the 6-dimensional state vector over the interval (t, t+dt] using
+        the adaptive RKF45 solver. The integration uses stimulus currents buffered
+        from the previous time step.
 
         **2. Synaptic Input Application**
 
@@ -1068,9 +906,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         * The ODE solver is adaptive and may take variable numbers of internal steps
         * For stiff dynamics or large coupling conductances, integration may require
           more steps, increasing computation time
-        * Absolute tolerance of 1e-3 mV/nS/pA matches NEST but may need adjustment
-          for extreme parameter regimes
-        * Dendritic inhibitory current is **subtracted** (line 758), matching NEST
+        * Dendritic inhibitory current is **subtracted**, matching NEST
           convention for inhibitory synapses
 
         .. warning::
@@ -1089,66 +925,63 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
           reproducibility across different input patterns given the same seed.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        dt = float(u.math.asarray(dt_q / u.ms))  # dt in ms
-
-        v_shape = self.V_s.value.shape
-
-        # Extract state as numpy arrays
-        V_s = self._broadcast_to_state(self._to_numpy(self.V_s.value, u.mV), v_shape).copy()
-        V_d = self._broadcast_to_state(self._to_numpy(self.V_d.value, u.mV), v_shape).copy()
-        g_ex_s = self._broadcast_to_state(self._to_numpy(self.g_ex_s.value, u.nS), v_shape).copy()
-        g_in_s = self._broadcast_to_state(self._to_numpy(self.g_in_s.value, u.nS), v_shape).copy()
-        I_ex_d = self._broadcast_to_state(self._to_numpy(self.I_ex_d.value, u.pA), v_shape).copy()
-        I_in_d = self._broadcast_to_state(self._to_numpy(self.I_in_d.value, u.pA), v_shape).copy()
+        dt = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
-        ).copy()
-        i_stim_soma = self._broadcast_to_state(
-            self._to_numpy(self.I_stim_soma.value, u.pA), v_shape
-        ).copy()
-        i_stim_dend = self._broadcast_to_state(
-            self._to_numpy(self.I_stim_dend.value, u.pA), v_shape
-        ).copy()
 
-        # Extract parameters
-        p_base = {
-            'g_L_soma': self._broadcast_to_state(self._to_numpy(self.soma_g_L, u.nS), v_shape),
-            'C_m_soma': self._broadcast_to_state(self._to_numpy(self.soma_C_m, u.pF), v_shape),
-            'E_L_soma': self._broadcast_to_state(self._to_numpy(self.soma_E_L, u.mV), v_shape),
-            'E_ex_soma': self._broadcast_to_state(self._to_numpy(self.soma_E_ex, u.mV), v_shape),
-            'E_in_soma': self._broadcast_to_state(self._to_numpy(self.soma_E_in, u.mV), v_shape),
-            'tau_syn_ex_soma': self._broadcast_to_state(self._to_numpy(self.soma_tau_syn_ex, u.ms), v_shape),
-            'tau_syn_in_soma': self._broadcast_to_state(self._to_numpy(self.soma_tau_syn_in, u.ms), v_shape),
-            'I_e_soma': self._broadcast_to_state(self._to_numpy(self.soma_I_e, u.pA), v_shape),
-            'g_L_dend': self._broadcast_to_state(self._to_numpy(self.dend_g_L, u.nS), v_shape),
-            'C_m_dend': self._broadcast_to_state(self._to_numpy(self.dend_C_m, u.pF), v_shape),
-            'E_L_dend': self._broadcast_to_state(self._to_numpy(self.dend_E_L, u.mV), v_shape),
-            'tau_syn_ex_dend': self._broadcast_to_state(self._to_numpy(self.dend_tau_syn_ex, u.ms), v_shape),
-            'tau_syn_in_dend': self._broadcast_to_state(self._to_numpy(self.dend_tau_syn_in, u.ms), v_shape),
-            'g_conn_soma': self._broadcast_to_state(self._to_numpy(self.g_sp, u.nS), v_shape),
-            'g_conn_dend': self._broadcast_to_state(self._to_numpy(self.g_ps, u.nS), v_shape),
-        }
+        dt_ms = float(u.math.asarray(dt / u.ms))  # dt in ms
 
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
+        # Read state variables with their natural units.
+        V_s = self.V_s.value  # mV
+        g_ex_s = self.g_ex_s.value  # nS
+        g_in_s = self.g_in_s.value  # nS
+        V_d = self.V_d.value  # mV
+        I_ex_d = self.I_ex_d.value  # pA
+        I_in_d = self.I_in_d.value  # pA
+        r = self.refractory_step_count.value  # int
+        i_stim_soma = self.I_stim_soma.value  # pA
+        h = self.integration_step.value  # ms
+
+        # Current input for next step (one-step delay).
+        new_i_stim_soma = self.sum_current_inputs(x, self.V_s.value)  # pA
+
+        # Adaptive RKF45 integration via generic integrator.
+        ode_state = DotDict(
+            V_s=V_s, g_ex_s=g_ex_s, g_in_s=g_in_s,
+            V_d=V_d, I_ex_d=I_ex_d, I_in_d=I_in_d,
         )
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            r=r,
+            i_stim_soma=i_stim_soma,
+        )
+
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        V_s = ode_state.V_s
+        g_ex_s = ode_state.g_ex_s
+        g_in_s = ode_state.g_in_s
+        V_d = ode_state.V_d
+        I_ex_d = ode_state.I_ex_d
+        I_in_d = ode_state.I_in_d
+        r = extra.r
 
         # Collect synaptic spike inputs
         d_soma_exc, d_soma_inh, d_dend_exc, d_dend_inh = self._collect_receptor_delta_inputs()
-        d_soma_exc_np = self._broadcast_to_state(self._to_numpy(d_soma_exc, u.nS), v_shape)
-        d_soma_inh_np = self._broadcast_to_state(self._to_numpy(d_soma_inh, u.nS), v_shape)
-        d_dend_exc_np = self._broadcast_to_state(self._to_numpy(d_dend_exc, u.pA), v_shape)
-        d_dend_inh_np = self._broadcast_to_state(self._to_numpy(d_dend_inh, u.pA), v_shape)
 
-        # Collect current inputs for next step
-        new_i_stim_soma = self._broadcast_to_state(
-            self._to_numpy(self.sum_current_inputs(x, self.V_s.value), u.pA), v_shape
-        )
-        # Note: dendritic current inputs are zero by default unless explicitly provided
-        dftype = brainstate.environ.dftype()
-        new_i_stim_dend = np.zeros(v_shape, dtype=dftype)
+        # Apply synaptic spike inputs (after integration).
+        g_ex_s = g_ex_s + d_soma_exc
+        g_in_s = g_in_s + d_soma_inh
+        I_ex_d = I_ex_d + d_dend_exc
+        I_in_d = I_in_d - d_dend_inh  # Note: inhibitory is subtracted (NEST convention)
+
+        # --- Stochastic spike generation (per-element, Python loop) ---
+        v_shape = self.varshape
+
+        # Convert state to numpy for per-element spike generation
+        V_s_np = np.asarray(u.math.asarray(V_s / u.mV), dtype=dftype)
+        V_d_np = np.asarray(u.math.asarray(V_d / u.mV), dtype=dftype)
+        r_np = np.asarray(u.get_mantissa(r), dtype=ditype)
+        ref_counts_np = np.asarray(u.get_mantissa(self.ref_count), dtype=ditype)
 
         # Advance RNG
         self._rng_state, subkey = jax.random.split(self._rng_state)
@@ -1157,119 +990,89 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         spike_mask = np.zeros(v_shape, dtype=bool)
 
         # Compute step time for urbanczik history
-        t_ms = float(u.math.asarray(t / u.ms)) + dt
+        t_ms = float(u.math.asarray(t / u.ms)) + dt_ms
+
+        # Precompute scalar parameters for phi/h functions
+        phi_max = self.phi_max
+        rate_slope = self.rate_slope
+        beta = self.beta
+        theta = self.theta
+
+        # Precompute numpy arrays for per-element parameters
+        g_sp_np = np.asarray(u.math.asarray(self.g_sp / u.nS), dtype=dftype)
+        g_L_soma_np = np.asarray(u.math.asarray(self.soma_g_L / u.nS), dtype=dftype)
+        E_L_soma_np = np.asarray(u.math.asarray(self.soma_E_L / u.mV), dtype=dftype)
+        t_ref_np = np.asarray(u.math.asarray(self.t_ref / u.ms), dtype=dftype)
+
+        # Broadcast to v_shape
+        g_sp_np = np.broadcast_to(g_sp_np, v_shape)
+        g_L_soma_np = np.broadcast_to(g_L_soma_np, v_shape)
+        E_L_soma_np = np.broadcast_to(E_L_soma_np, v_shape)
+        t_ref_np = np.broadcast_to(t_ref_np, v_shape)
+        V_s_np = np.broadcast_to(V_s_np, v_shape).copy()
+        V_d_np = np.broadcast_to(V_d_np, v_shape).copy()
+        r_np = np.broadcast_to(r_np, v_shape).copy()
+        ref_counts_np = np.broadcast_to(ref_counts_np, v_shape)
 
         for idx in np.ndindex(v_shape):
-            # Build per-element parameter dict
-            p = {k: p_base[k][idx] for k in p_base}
-            p['I_stim_soma'] = i_stim_soma[idx]
-
-            # Build state vector
-            y0 = np.zeros(_STATE_VEC_SIZE)
-            y0[_idx(SOMA, _V_M)] = V_s[idx]
-            y0[_idx(SOMA, _G_EXC)] = g_ex_s[idx]
-            y0[_idx(SOMA, _G_INH)] = g_in_s[idx]
-            y0[_idx(SOMA, _I_EXC)] = 0.0
-            y0[_idx(SOMA, _I_INH)] = 0.0
-            y0[_idx(DEND, _V_M)] = V_d[idx]
-            y0[_idx(DEND, _G_EXC)] = 0.0
-            y0[_idx(DEND, _G_INH)] = 0.0
-            y0[_idx(DEND, _I_EXC)] = I_ex_d[idx]
-            y0[_idx(DEND, _I_INH)] = I_in_d[idx]
-
-            # ---- Step 1: Integrate ODE ----
-            sol = solve_ivp(
-                lambda t_ode, y_ode: self._dynamics(t_ode, y_ode, p),
-                [0.0, dt],
-                y0,
-                method='RK45',
-                rtol=0.0,
-                atol=1e-3,
-            )
-            yf = sol.y[:, -1]
-
-            # ---- Step 2: Add arriving synaptic spike inputs ----
-            # Soma: conductance jumps
-            yf[_idx(SOMA, _G_EXC)] += d_soma_exc_np[idx]
-            yf[_idx(SOMA, _G_INH)] += d_soma_inh_np[idx]
-
-            # Dendrite: current jumps (note: inhibitory is SUBTRACTED, matching NEST)
-            yf[_idx(DEND, _I_EXC)] += d_dend_exc_np[idx]
-            yf[_idx(DEND, _I_INH)] -= d_dend_inh_np[idx]
-
-            # ---- Step 3: Spike check / refractory ----
             n_spikes = 0
 
-            if r[idx] == 0:
-                # Neuron not refractory
-                # No V_m reset after spike
-                rate = 1000.0 * _phi(
-                    yf[_idx(SOMA, _V_M)],
-                    self.phi_max, self.rate_slope, self.beta, self.theta
-                )
+            if r_np[idx] == 0:
+                # Neuron not refractory — no V_m reset after spike
+                u_val = V_s_np[idx]
+                rate = 1000.0 * phi_max / (1.0 + rate_slope * np.exp(beta * (theta - u_val)))
 
                 if rate > 0.0:
-                    t_ref_val = float(self._to_numpy(self.t_ref, u.ms).flat[0]) if \
-                        np.ndim(self._to_numpy(self.t_ref, u.ms)) > 0 else \
-                        float(self._to_numpy(self.t_ref, u.ms))
+                    t_ref_val = float(t_ref_np[idx])
 
                     if t_ref_val > 0.0:
                         # With dead time: at most 1 spike
-                        if rand_vals[idx] <= -math.expm1(-rate * dt * 1e-3):
+                        if rand_vals[idx] <= -np.expm1(-rate * dt_ms * 1e-3):
                             n_spikes = 1
                     else:
                         # No dead time: Poisson spikes
-                        lam = rate * dt * 1e-3
+                        lam = rate * dt_ms * 1e-3
                         n_spikes = int(np.random.RandomState(
                             int(rand_vals[idx] * 2 ** 31)
                         ).poisson(lam))
 
                     if n_spikes > 0:
                         spike_mask[idx] = True
-                        r[idx] = refr_counts[idx]
+                        r_np[idx] = ref_counts_np[idx]
             else:
                 # Refractory: decrement
-                r[idx] -= 1
+                r_np[idx] -= 1
 
-            # ---- Step 4: Write Urbanczik history ----
-            V_d_current = yf[_idx(DEND, _V_M)]
-            g_D = p['g_conn_soma']  # g_sp
-            g_L_s = p['g_L_soma']
-            E_L_s = p['E_L_soma']
+            # --- Urbanczik learning signal ---
+            V_d_current = V_d_np[idx]
+            g_D = g_sp_np[idx]
+            g_L_s = g_L_soma_np[idx]
+            E_L_s = E_L_soma_np[idx]
             V_W_star = (E_L_s * g_L_s + V_d_current * g_D) / (g_D + g_L_s)
 
-            dPI = (n_spikes - _phi(V_W_star, self.phi_max, self.rate_slope,
-                                   self.beta, self.theta) * dt) * \
-                  _h_func(V_W_star, self.rate_slope, self.beta, self.theta)
+            phi_val = phi_max / (1.0 + rate_slope * np.exp(beta * (theta - V_W_star)))
+            h_val = 15.0 * beta / (1.0 + (1.0 / rate_slope) * np.exp(-beta * (theta - V_W_star)))
+            dPI = (n_spikes - phi_val * dt_ms) * h_val
 
             flat_idx = np.ravel_multi_index(idx, v_shape) if len(idx) > 0 else 0
             if flat_idx not in self._urbanczik_history:
                 self._urbanczik_history[flat_idx] = []
             self._urbanczik_history[flat_idx].append((t_ms, dPI))
 
-            # ---- Write back state ----
-            V_s[idx] = yf[_idx(SOMA, _V_M)]
-            g_ex_s[idx] = yf[_idx(SOMA, _G_EXC)]
-            g_in_s[idx] = yf[_idx(SOMA, _G_INH)]
-            V_d[idx] = yf[_idx(DEND, _V_M)]
-            I_ex_d[idx] = yf[_idx(DEND, _I_EXC)]
-            I_in_d[idx] = yf[_idx(DEND, _I_INH)]
+        # Write back state.
+        self.V_s.value = V_s
+        self.g_ex_s.value = g_ex_s
+        self.g_in_s.value = g_in_s
+        self.V_d.value = V_d
+        self.I_ex_d.value = I_ex_d
+        self.I_in_d.value = I_in_d
+        self.refractory_step_count.value = jnp.asarray(r_np, dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim_soma.value = new_i_stim_soma + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
-        # ---- Step 5: Store new I_stim for next step ----
-        self.V_s.value = V_s * u.mV
-        self.V_d.value = V_d * u.mV
-        self.g_ex_s.value = g_ex_s * u.nS
-        self.g_in_s.value = g_in_s * u.nS
-        self.I_ex_d.value = I_ex_d * u.pA
-        self.I_in_d.value = I_in_d * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
-        self.I_stim_soma.value = new_i_stim_soma * u.pA
-        self.I_stim_dend.value = new_i_stim_dend * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
-        )
-
-        return jnp.asarray(spike_mask, dtype=jnp.float32)
+        return jnp.asarray(spike_mask, dtype=dftype)
 
     def get_urbanczik_history(self, neuron_idx=0):
         r"""Retrieve the Urbanczik-Senn learning signal history for a specific neuron.

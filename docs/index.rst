@@ -18,12 +18,9 @@ The library ships **167+ models** organized in three tiers:
   plasticity (STDP, STP), and device models.
 - All parameters carry **physical units** via `saiunit <https://github.com/chaobrain/saiunit>`_,
   and every neuron supports surrogate-gradient-based training out of the box.
-
-Compared to ``brainpy.dyn``, ``brainpy.state`` has the following characteristics:
-
-- **Ecosystem compatability**: ``brainpy.state`` is built on `brainstate <https://github.com/chaobrain/brainstate>`_ and fully compatible with `BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
-- **Model scope**: ``brainpy.state`` implements much more models including BrainPy-style models plus a large NEST-compatible model set.
-- **Scientific ergonomics**: ``brainpy.state`` uses physical units via ``saiunit`` by default and is designed for surrogate-gradient training.
+- **Ecosystem compatability**: Compared to ``brainpy.dyn``,  ``brainpy.state`` is built on
+  `brainstate <https://github.com/chaobrain/brainstate>`_ and fully compatible with
+  `BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
 
 
 Installation

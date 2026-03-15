@@ -414,6 +414,11 @@ class mat2_psc_exp(NESTNeuron):
         self.ref_var = ref_var
         self._validate_parameters()
 
+        # Precompute refractory step count
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+
     @staticmethod
     def _to_numpy(x, unit):
         dftype = brainstate.environ.dftype()
@@ -444,11 +449,11 @@ class mat2_psc_exp(NESTNeuron):
                 'See note in documentation.'
             )
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        ditype = brainstate.environ.ditype()
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
         zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
 
         self.V = brainstate.HiddenState(V)
         self.V_th_1 = brainstate.ShortTermState(zeros * u.mV)
@@ -456,12 +461,12 @@ class mat2_psc_exp(NESTNeuron):
         self.i_syn_ex = brainstate.ShortTermState(zeros * u.pA)
         self.i_syn_in = brainstate.ShortTermState(zeros * u.pA)
         self.i_0 = brainstate.ShortTermState(zeros * u.pA)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
 
         if self.ref_var:
-            self.refractory = brainstate.ShortTermState(u.math.asarray(ref_steps > 0, dtype=bool))
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
+            self.refractory = brainstate.ShortTermState(refractory)
 
     def get_spike(self, V: ArrayLike = None, V_th: ArrayLike = None):
         r"""Compute surrogate gradient spike signal.
@@ -489,11 +494,6 @@ class mat2_psc_exp(NESTNeuron):
         # Scale relative to the effective adaptive threshold.
         v_scaled = (V - V_th) / u.math.abs(self.omega - self.E_L)
         return self.spk_fun(v_scaled)
-
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     def update(self, x=0. * u.pA):
         r"""Advance the neuron state by one time step.
@@ -615,7 +615,7 @@ class mat2_psc_exp(NESTNeuron):
         r = np.where(
             spike_cond,
             self._broadcast_to_state(
-                np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
+                np.asarray(u.math.asarray(self.ref_count), dtype=ditype), v_shape
             ),
             np.where(not_refractory, r, r - 1),
         )

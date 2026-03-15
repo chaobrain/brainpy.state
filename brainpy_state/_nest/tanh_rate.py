@@ -746,7 +746,7 @@ class tanh_rate_ipn(_tanh_rate_base):
         if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize state variables and internal buffers.
 
         Create ``rate``, ``noise``, ``instant_rate``, ``delayed_rate``, and
@@ -754,11 +754,8 @@ class tanh_rate_ipn(_tanh_rate_base):
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension for state variables. If None, no batch dimension
-            is added.
         **kwargs
-            Additional keyword arguments (unused).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -766,8 +763,8 @@ class tanh_rate_ipn(_tanh_rate_base):
         ``noise_initializer``. Both ``instant_rate`` and ``delayed_rate`` are
         initialized as copies of ``rate``.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -1198,7 +1195,7 @@ class tanh_rate_opn(_tanh_rate_base):
         if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize state variables and internal buffers.
 
         Create ``rate``, ``noise``, ``noisy_rate``, ``instant_rate``,
@@ -1206,11 +1203,8 @@ class tanh_rate_opn(_tanh_rate_base):
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension for state variables. If None, no batch dimension
-            is added.
         **kwargs
-            Additional keyword arguments (unused).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -1219,9 +1213,9 @@ class tanh_rate_opn(_tanh_rate_base):
         ``instant_rate`` and ``delayed_rate`` are initialized as copies of
         ``noisy_rate``.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
-        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
+        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
         noisy_rate_np = self._to_numpy(noisy_rate)

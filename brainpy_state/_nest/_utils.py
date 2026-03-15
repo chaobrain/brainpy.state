@@ -38,18 +38,10 @@ __all__ = [
     'to_numpy_unitless',
     'broadcast_to_state',
     'refractory_counts',
-    'get_spike_scaled',
-    'check_positive',
-    'check_non_negative',
-    'check_reset_below_threshold',
     'validate_aeif_overflow',
     'propagator_exp',
     'alpha_propagator_p31_p32',
-    'rkf45_integrate',
-    'ButcherTableau',
     'AdaptiveRungeKuttaStep',
-    'sum_signed_delta_inputs',
-    'time_window_gate',
     'stack_schedule_values',
 ]
 
@@ -141,84 +133,8 @@ def refractory_counts(t_ref):
 
 
 # ---------------------------------------------------------------------------
-# C. Spike detection
+# C. Parameter validation
 # ---------------------------------------------------------------------------
-
-def get_spike_scaled(V, V_th, V_reset, spk_fun):
-    """Compute differentiable spike output using surrogate gradient.
-
-    Scales the voltage as ``(V - V_th) / (V_th - V_reset)`` and passes
-    the result through the surrogate function.
-
-    Parameters
-    ----------
-    V : ArrayLike
-        Membrane potential (with voltage units).
-    V_th : ArrayLike
-        Spike threshold.
-    V_reset : ArrayLike
-        Reset potential.
-    spk_fun : Callable
-        Surrogate gradient function.
-
-    Returns
-    -------
-    ArrayLike
-        Surrogate spike output.
-    """
-    v_scaled = (V - V_th) / (V_th - V_reset)
-    return spk_fun(v_scaled)
-
-
-# ---------------------------------------------------------------------------
-# D. Parameter validation
-# ---------------------------------------------------------------------------
-
-def check_positive(value, unit, name):
-    """Raise ``ValueError`` if any element of *value* is not strictly positive.
-
-    Parameters
-    ----------
-    value : ArrayLike
-        Parameter value with units (compared directly via ``value <= 0 * unit``).
-    unit : saiunit.Unit
-        Unit for the zero comparison threshold.
-    name : str
-        Human-readable parameter name for the error message.
-    """
-    if np.any(value <= 0.0 * unit):
-        raise ValueError(f'{name} must be strictly positive.')
-
-
-def check_non_negative(value, unit, name):
-    """Raise ``ValueError`` if any element of *value* is negative.
-
-    Parameters
-    ----------
-    value : ArrayLike
-        Parameter value with units (compared directly via ``value < 0 * unit``).
-    unit : saiunit.Unit
-        Unit for the zero comparison threshold.
-    name : str
-        Human-readable parameter name for the error message.
-    """
-    if np.any(value < 0.0 * unit):
-        raise ValueError(f'{name} must not be negative.')
-
-
-def check_reset_below_threshold(V_reset, V_th):
-    """Raise ``ValueError`` if ``V_reset >= V_th`` for any element.
-
-    Parameters
-    ----------
-    V_reset : ArrayLike
-        Reset potential (with units).
-    V_th : ArrayLike
-        Threshold potential (same units as V_reset).
-    """
-    if np.any(V_reset >= V_th):
-        raise ValueError('Reset potential must be smaller than threshold.')
-
 
 def validate_aeif_overflow(v_peak, v_th, delta_t):
     """Check exponential term overflow for adaptive exponential models.
@@ -506,103 +422,6 @@ FEHLBERG2 = ButcherTableau(
     b_hat=(1 / 256, 255 / 256, 0.0),
     error_order=1,
 )
-
-
-def rkf45_integrate(dynamics_fn, y0, dt, h0, atol=1e-3, min_h=1e-8, max_iters=10000):
-    r"""Integrate an ODE system for one simulation timestep using RKF45.
-
-    Implements Runge-Kutta-Fehlberg 4(5) with embedded error estimation and
-    automatic step size control.
-
-    Parameters
-    ----------
-    dynamics_fn : callable
-        Function ``dynamics_fn(*y) -> tuple`` returning time derivatives.
-        Each element of *y* and the return tuple must be a scalar float.
-    y0 : tuple of float
-        Initial state values (e.g. ``(v, ge, gi)``).
-    dt : float
-        Target integration interval in ms.
-    h0 : float
-        Initial / previous adaptive step size in ms.
-    atol : float, optional
-        Absolute error tolerance. Default: 1e-3.
-    min_h : float, optional
-        Minimum step size in ms. Default: 1e-8.
-    max_iters : int, optional
-        Maximum iteration count. Default: 10000.
-
-    Returns
-    -------
-    y_final : tuple of float
-        Final state values after integrating over ``[0, dt]``.
-    h_final : float
-        Final adaptive step size for the next call.
-    """
-    n = len(y0)
-    t = 0.0
-    h = max(h0, min_h)
-    y = list(y0)
-    iters = 0
-
-    while t < dt and iters < max_iters:
-        iters += 1
-        h = min(h, dt - t)
-        h = max(h, min_h)
-
-        k1 = dynamics_fn(*y)
-        y2 = tuple(y[i] + h * k1[i] / 4.0 for i in range(n))
-        k2 = dynamics_fn(*y2)
-        y3 = tuple(y[i] + h * (3.0 * k1[i] / 32.0 + 9.0 * k2[i] / 32.0) for i in range(n))
-        k3 = dynamics_fn(*y3)
-        y4 = tuple(
-            y[i] + h * (1932.0 * k1[i] / 2197.0 - 7200.0 * k2[i] / 2197.0 + 7296.0 * k3[i] / 2197.0)
-            for i in range(n)
-        )
-        k4 = dynamics_fn(*y4)
-        y5 = tuple(
-            y[i] + h * (439.0 * k1[i] / 216.0 - 8.0 * k2[i] + 3680.0 * k3[i] / 513.0 - 845.0 * k4[i] / 4104.0)
-            for i in range(n)
-        )
-        k5 = dynamics_fn(*y5)
-        y6 = tuple(
-            y[i] + h * (
-                -8.0 * k1[i] / 27.0 + 2.0 * k2[i] - 3544.0 * k3[i] / 2565.0
-                + 1859.0 * k4[i] / 4104.0 - 11.0 * k5[i] / 40.0
-            )
-            for i in range(n)
-        )
-        k6 = dynamics_fn(*y6)
-
-        y4_sol = tuple(
-            y[i] + h * (25.0 * k1[i] / 216.0 + 1408.0 * k3[i] / 2565.0 + 2197.0 * k4[i] / 4104.0 - k5[i] / 5.0)
-            for i in range(n)
-        )
-        y5_sol = tuple(
-            y[i] + h * (
-                16.0 * k1[i] / 135.0 + 6656.0 * k3[i] / 12825.0 + 28561.0 * k4[i] / 56430.0
-                - 9.0 * k5[i] / 50.0 + 2.0 * k6[i] / 55.0
-            )
-            for i in range(n)
-        )
-
-        err = max(abs(y5_sol[i] - y4_sol[i]) for i in range(n))
-
-        if err <= atol or h <= min_h:
-            y = list(y5_sol)
-            t += h
-            if err == 0.0:
-                fac = 5.0
-            else:
-                fac = 0.9 * (atol / err) ** 0.2
-                fac = min(5.0, max(0.2, fac))
-            h = max(min_h, h * fac)
-        else:
-            fac = 0.9 * (atol / err) ** 0.25
-            fac = min(1.0, max(0.2, fac))
-            h = max(min_h, h * fac)
-
-    return tuple(y), h
 
 
 def _is_quantity(x):
@@ -921,84 +740,7 @@ class AdaptiveRungeKuttaStep:
 
 
 # ---------------------------------------------------------------------------
-# G. Conductance input splitting
-# ---------------------------------------------------------------------------
-
-def sum_signed_delta_inputs(delta_inputs, zero_ex, zero_in):
-    """Split delta inputs by sign into excitatory and inhibitory components.
-
-    Positive values go to excitatory, negative (absolute) values go to
-    inhibitory.
-
-    Parameters
-    ----------
-    delta_inputs : dict or None
-        Dictionary of delta input labels to values or callables.
-    zero_ex : ArrayLike
-        Zero-valued array matching excitatory conductance shape/units.
-    zero_in : ArrayLike
-        Zero-valued array matching inhibitory conductance shape/units.
-
-    Returns
-    -------
-    g_ex : ArrayLike
-        Sum of positive delta inputs.
-    g_in : ArrayLike
-        Sum of absolute negative delta inputs.
-    """
-    g_ex = zero_ex
-    g_in = zero_in
-    if delta_inputs is None:
-        return g_ex, g_in
-
-    for key in tuple(delta_inputs.keys()):
-        out = delta_inputs[key]
-        if callable(out):
-            out = out()
-        else:
-            delta_inputs.pop(key)
-
-        zero = u.math.zeros_like(out)
-        g_ex = g_ex + u.math.maximum(out, zero)
-        g_in = g_in + u.math.maximum(-out, zero)
-    return g_ex, g_in
-
-
-# ---------------------------------------------------------------------------
-# H. Generator time-window gating
-# ---------------------------------------------------------------------------
-
-def time_window_gate(value, origin, start, stop):
-    """Apply NEST-style half-open ``[start, stop)`` window gating to a value.
-
-    Parameters
-    ----------
-    value : ArrayLike
-        The signal to gate (e.g. current amplitude).
-    origin : ArrayLike
-        Time origin added to start/stop.
-    start : ArrayLike
-        Relative start time (inclusive).
-    stop : ArrayLike or None
-        Relative stop time (exclusive). None means no upper bound.
-
-    Returns
-    -------
-    ArrayLike
-        ``value`` where the window is active, zero elsewhere.
-    """
-    t = brainstate.environ.get('t')
-    t_start = origin + start
-    if stop is not None:
-        t_stop = origin + stop
-        active = u.math.logical_and(t >= t_start, t < t_stop)
-    else:
-        active = t >= t_start
-    return u.math.where(active, value, u.math.zeros_like(value))
-
-
-# ---------------------------------------------------------------------------
-# I. Schedule value stacking
+# F. Schedule value stacking
 # ---------------------------------------------------------------------------
 
 def stack_schedule_values(amplitude_values, varshape):

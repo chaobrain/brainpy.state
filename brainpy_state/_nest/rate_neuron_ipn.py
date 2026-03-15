@@ -887,17 +887,13 @@ class rate_neuron_ipn(_lin_rate_base):
 
         return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables for simulation.
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size. If ``None`` (default), state shape is
-            ``self.varshape``. If ``int``, state shape is
-            ``(batch_size,) + self.varshape``.
         **kwargs
-            Additional keyword arguments (reserved for future use).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -913,8 +909,8 @@ class rate_neuron_ipn(_lin_rate_base):
         All state arrays are initialized as float64 NumPy arrays using the
         provided initializers.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -990,7 +986,6 @@ class rate_neuron_ipn(_lin_rate_base):
            nonlinearity according to ``linear_summation`` mode.
 
         5. Apply optional output rectification:
-           ditype = brainstate.environ.ditype()
            :math:`X_{n+1}\gets\max(X',\,\mathrm{rectify\_rate})`.
 
         6. Update state variables: ``rate``, ``noise``, ``delayed_rate``,
@@ -1068,6 +1063,7 @@ class rate_neuron_ipn(_lin_rate_base):
         if self.rectify_output:
             rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
+        ditype = brainstate.environ.ditype()
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev

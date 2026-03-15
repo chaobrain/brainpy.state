@@ -32,10 +32,9 @@ exactly, including:
   beta-function (difference of exponentials) time course.
 - Voltage-dependent NMDA with instantaneous or two-stage unblocking.
 - Intrinsic currents I_h, I_T, I_Na(p), and I_KNa.
-- GSL RKF45 adaptive ODE integration (mapped to scipy RK45).
+- Adaptive RKF45 ODE integration via AdaptiveRungeKuttaStep.
 """
 
-import math
 from typing import Callable
 
 import brainstate
@@ -45,10 +44,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
-from scipy.integrate import solve_ivp
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'ht_neuron',
@@ -90,7 +89,7 @@ def _m_eq_h(V):
     dependent during simulation (actual dynamics are governed by tau_m_h).
     """
     I_h_Vthreshold = -75.0
-    return 1.0 / (1.0 + math.exp((V - I_h_Vthreshold) / 5.5))
+    return 1.0 / (1.0 + np.exp((V - I_h_Vthreshold) / 5.5))
 
 
 def _h_eq_T(V):
@@ -124,7 +123,7 @@ def _h_eq_T(V):
     This steep voltage dependence ensures that T-channels recover from inactivation
     only after sufficient hyperpolarization, enabling rebound burst firing.
     """
-    return 1.0 / (1.0 + math.exp((V + 83.0) / 4.0))
+    return 1.0 / (1.0 + np.exp((V + 83.0) / 4.0))
 
 
 def _m_eq_T(V):
@@ -158,7 +157,7 @@ def _m_eq_T(V):
     and multiplied by the inactivation variable h_IT, giving the current a transient
     character essential for burst generation.
     """
-    return 1.0 / (1.0 + math.exp(-(V + 59.0) / 6.2))
+    return 1.0 / (1.0 + np.exp(-(V + 59.0) / 6.2))
 
 
 def _D_eq_KNa(V, tau_D_KNa):
@@ -202,7 +201,7 @@ def _D_eq_KNa(V, tau_D_KNa):
     D_thresh = -10.0
     D_slope = 5.0
     D_eq = 0.001
-    D_influx = D_influx_peak / (1.0 + math.exp(-(V - D_thresh) / D_slope))
+    D_influx = D_influx_peak / (1.0 + np.exp(-(V - D_thresh) / D_slope))
     return tau_D_KNa * D_influx + D_eq
 
 
@@ -244,81 +243,7 @@ def _m_eq_NMDA(V, S_act_NMDA, V_act_NMDA):
     kinetics with fast and slow unblocking time constants (tau_Mg_fast_NMDA,
     tau_Mg_slow_NMDA) as described in Vargas-Caballero & Robinson (2003).
     """
-    return 1.0 / (1.0 + math.exp(-S_act_NMDA * (V - V_act_NMDA)))
-
-
-def _m_NMDA(V, m_eq, m_fast, m_slow, instant_unblock_NMDA):
-    r"""Compute effective NMDA channel activation combining fast and slow unblocking kinetics.
-
-    NMDA receptors exhibit two-stage Mg²⁺ unblocking kinetics: a fast component
-    (tau ~0.68 ms) and a slow component (tau ~22.7 ms). The relative contributions
-    of these components are voltage-dependent, with the fast component dominating
-    at more depolarized potentials.
-
-    Parameters
-    ----------
-    V : float
-        Membrane potential in mV. Typical physiological range: -90 to +30 mV.
-    m_eq : float
-        Equilibrium Mg²⁺ unblock fraction ∈ [0, 1] at voltage V, computed from
-        _m_eq_NMDA.
-    m_fast : float
-        Fast unblocking state variable ∈ [0, 1]. Approaches m_eq with time constant
-        tau_Mg_fast_NMDA (~0.68 ms).
-    m_slow : float
-        Slow unblocking state variable ∈ [0, 1]. Approaches m_eq with time constant
-        tau_Mg_slow_NMDA (~22.7 ms).
-    instant_unblock_NMDA : bool
-        If True, assume instantaneous unblocking and return m_eq directly, ignoring
-        the two-stage kinetics. If False, compute weighted average of fast and slow
-        components.
-
-    Returns
-    -------
-    float
-        Effective NMDA channel activation m^NMDA ∈ [0, 1]. This value multiplies the
-        NMDA conductance to give the voltage-dependent NMDA current:
-        I_NMDA = -g_NMDA * m^NMDA * (V - E_NMDA).
-
-    Notes
-    -----
-    **1. Instantaneous Unblocking Mode**
-
-    When ``instant_unblock_NMDA = True``:
-
-    .. math::
-
-        m^{NMDA} = m_\infty^{NMDA}(V)
-
-    **2. Two-Stage Kinetics Mode**
-
-    When ``instant_unblock_NMDA = False``, the effective activation is a weighted
-    sum of fast and slow components with voltage-dependent coefficients:
-
-    .. math::
-
-        A_1(V) &= 0.51 - 0.0028 \cdot V \\
-        A_2(V) &= 1 - A_1(V) \\
-        m^{NMDA} &= A_1(V) \cdot m_{fast} + A_2(V) \cdot m_{slow}
-
-    At rest (V ≈ -70 mV), A₁ ≈ 0.71 and A₂ ≈ 0.29, so the fast component dominates.
-    At depolarized potentials (V = 0 mV), A₁ ≈ 0.51 and A₂ ≈ 0.49, giving more
-    equal weighting.
-
-    This two-stage model is based on Vargas-Caballero & Robinson (2003), who showed
-    that slow Mg²⁺ unblocking limits NMDA contribution to spike generation.
-
-    References
-    ----------
-    Vargas-Caballero M, Robinson HPC (2003). A slow fraction of Mg²⁺ unblock of
-    NMDA receptors limits their contribution to spike generation in cortical
-    pyramidal neurons. Journal of Neurophysiology, 89:2778-2783.
-    """
-    if instant_unblock_NMDA:
-        return m_eq
-    A1 = 0.51 - 0.0028 * V
-    A2 = 1.0 - A1
-    return A1 * m_fast + A2 * m_slow
+    return 1.0 / (1.0 + np.exp(-S_act_NMDA * (V - V_act_NMDA)))
 
 
 def _beta_normalization_factor(tau_rise, tau_decay):
@@ -400,35 +325,13 @@ def _beta_normalization_factor(tau_rise, tau_decay):
     tau_difference = tau_decay - tau_rise
     peak_value = 0.0
     if abs(tau_difference) > eps:
-        t_peak = tau_decay * tau_rise * math.log(tau_decay / tau_rise) / tau_difference
-        peak_value = math.exp(-t_peak / tau_decay) - math.exp(-t_peak / tau_rise)
+        t_peak = tau_decay * tau_rise * np.log(tau_decay / tau_rise) / tau_difference
+        peak_value = np.exp(-t_peak / tau_decay) - np.exp(-t_peak / tau_rise)
     if abs(peak_value) < eps:
         # alpha-function limit
-        return math.e / tau_decay
+        return np.e / tau_decay
     else:
         return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
-
-
-# ---------------------------------------------------------------------------
-# State vector indices (matching NEST enum StateVecElems_)
-# ---------------------------------------------------------------------------
-_V_M = 0
-_THETA = 1
-_DG_AMPA = 2
-_G_AMPA = 3
-_DG_NMDA_TIMECOURSE = 4
-_G_NMDA_TIMECOURSE = 5
-_DG_GABA_A = 6
-_G_GABA_A = 7
-_DG_GABA_B = 8
-_G_GABA_B = 9
-_m_fast_NMDA = 10
-_m_slow_NMDA = 11
-_m_Ih = 12
-_D_IKNa = 13
-_m_IT = 14
-_h_IT = 15
-_STATE_VEC_SIZE = 16
 
 
 class ht_neuron(NESTNeuron):
@@ -441,7 +344,7 @@ class ht_neuron(NESTNeuron):
     that mediate burst firing, adaptation, and oscillatory behavior.
 
     This implementation replicates NEST's ``ht_neuron`` (models/ht_neuron.{h,cpp})
-    using JAX-compatible adaptive ODE integration with scipy RK45.
+    using JAX-compatible adaptive ODE integration with AdaptiveRungeKuttaStep.
 
     Parameters
     ----------
@@ -542,10 +445,8 @@ class ht_neuron(NESTNeuron):
     voltage_clamp : bool, default=False
         If True, clamp membrane potential at its initial value throughout simulation.
         Used for testing intrinsic current dynamics in isolation.
-    rtol : float, default=1e-3
-        Relative tolerance for ODE solver. Matches NEST's GSL RKF45 default.
-    atol : float, default=1e-9
-        Absolute tolerance for ODE solver.
+    gsl_error_tol : float, default=1e-3
+        Absolute error tolerance for the adaptive RKF45 integrator.
     spk_fun : Callable, default=braintools.surrogate.ReluGrad()
         Surrogate gradient function for differentiable spike generation.
     spk_reset : str, default='hard'
@@ -604,8 +505,7 @@ class ht_neuron(NESTNeuron):
     ``g_peak_h``              ``g_peak_h``           1.0      (unitless)
     ``E_rev_h``               ``E_rev_h``            -40.0    mV
     ``voltage_clamp``         ``voltage_clamp``      False    ---
-    ``rtol``                  (GSL tolerance)        1e-3     ---
-    ``atol``                  (GSL tolerance)        0.0      ---
+    ``gsl_error_tol``         (GSL tolerance)        1e-3     ---
     ========================= ====================== ======== ==============
 
     Notes
@@ -758,9 +658,9 @@ class ht_neuron(NESTNeuron):
 
     **8. Numerical Integration**
 
-    The model uses scipy's ``solve_ivp`` with method='RK45' (Dormand-Prince 5(4) adaptive
-    Runge-Kutta). This matches NEST's GSL RKF45 integrator in terms of order and adaptive
-    step-size control. Default tolerances (rtol=1e-3, atol=1e-9) match NEST defaults.
+    The model uses AdaptiveRungeKuttaStep with RKF45 (Runge-Kutta-Fehlberg 4(5)
+    adaptive integration). This matches NEST's GSL RKF45 integrator in terms of order
+    and adaptive step-size control.
 
     **9. Conductance Units**
 
@@ -902,6 +802,9 @@ class ht_neuron(NESTNeuron):
     GABA_A = 3
     GABA_B = 4
 
+    _MIN_H = 1e-8 * u.ms
+    _MAX_ITERS = 100000
+
     def __init__(
         self,
         in_size: Size,
@@ -960,8 +863,7 @@ class ht_neuron(NESTNeuron):
         # Testing
         voltage_clamp: bool = False,
         # Solver
-        rtol: float = 1e-3,
-        atol: float = 1e-9,
+        gsl_error_tol: float = 1e-3,
         # Base class
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
@@ -1021,8 +923,7 @@ class ht_neuron(NESTNeuron):
         self.E_rev_h = E_rev_h
 
         self.voltage_clamp = voltage_clamp
-        self.rtol = rtol
-        self.atol = atol
+        self.gsl_error_tol = gsl_error_tol
 
         self._validate_parameters()
 
@@ -1031,6 +932,26 @@ class ht_neuron(NESTNeuron):
         self._cond_step_NMDA = g_peak_NMDA * _beta_normalization_factor(tau_rise_NMDA, tau_decay_NMDA)
         self._cond_step_GABA_A = g_peak_GABA_A * _beta_normalization_factor(tau_rise_GABA_A, tau_decay_GABA_A)
         self._cond_step_GABA_B = g_peak_GABA_B * _beta_normalization_factor(tau_rise_GABA_B, tau_decay_GABA_B)
+
+        # Adaptive RKF45 integrator
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
+
+        # Pre-compute refractory step count
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        dt_ms = float(u.math.asarray(dt / u.ms))
+        self.ref_count = int(round(self.t_ref / dt_ms))
+
+        # Compute initial membrane potential (leak equilibrium) for voltage clamp
+        self._V_clamp = (self.g_NaL * self.E_Na + self.g_KL * self.E_K) / (self.g_NaL + self.g_KL)
 
     def _validate_parameters(self):
         r"""Validate parameter constraints to ensure physiological consistency.
@@ -1101,37 +1022,7 @@ class ht_neuron(NESTNeuron):
         if self.tau_Mg_fast_NMDA >= self.tau_Mg_slow_NMDA:
             raise ValueError('tau_Mg_fast_NMDA < tau_Mg_slow_NMDA required.')
 
-    def _refractory_counts(self, dt_ms):
-        r"""Convert refractory period from milliseconds to integer step count.
-
-        Computes the number of discrete simulation steps corresponding to the
-        refractory period t_ref. Uses rounding to nearest integer to minimize
-        discretization error.
-
-        Parameters
-        ----------
-        dt_ms : float
-            Simulation time step in ms. Typically obtained from brainstate.environ.get_dt().
-
-        Returns
-        -------
-        int
-            Number of refractory steps (non-negative). If t_ref = 0, returns 0
-            (no refractory period). For t_ref = 2.0 ms and dt = 0.1 ms, returns 20.
-
-        Notes
-        -----
-        The refractory counter is incremented by this value + 1 when a spike occurs,
-        then decremented by 1 each step. During the refractory period (ref_steps > 0),
-        the post-spike potassium current I_spike is active and spike detection is
-        disabled.
-
-        Rounding ensures that fractional steps are handled consistently: e.g., if
-        t_ref=2.0 ms and dt=0.3 ms, we get round(2.0/0.3) = round(6.67) = 7 steps.
-        """
-        return int(round(self.t_ref / dt_ms))
-
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables to physiologically consistent equilibrium values.
 
         Sets the membrane potential to the leak reversal potential (weighted average of
@@ -1141,11 +1032,8 @@ class ht_neuron(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int or None, default=None
-            If provided, creates a batch of independent neuron states with leading
-            dimension batch_size. Useful for batched simulation or data-parallel training.
         **kwargs
-            Additional keyword arguments (currently unused; reserved for future extensions).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -1219,105 +1107,106 @@ class ht_neuron(NESTNeuron):
         # Compute initial membrane potential (leak equilibrium)
         V_init = (self.g_NaL * self.E_Na + self.g_KL * self.E_K) / (self.g_NaL + self.g_KL)
 
-        # Build initial state vector
         dftype = brainstate.environ.dftype()
-        y0 = np.zeros(_STATE_VEC_SIZE, dtype=dftype)
-        y0[_V_M] = V_init
-        y0[_THETA] = self.theta_eq
-        # Synaptic variables: all zero (indices 2-9)
-        # Intrinsic gating at equilibrium
-        y0[_m_fast_NMDA] = _m_eq_NMDA(V_init, self.S_act_NMDA, self.V_act_NMDA)
-        y0[_m_slow_NMDA] = _m_eq_NMDA(V_init, self.S_act_NMDA, self.V_act_NMDA)
-        y0[_m_Ih] = _m_eq_h(V_init)
-        y0[_D_IKNa] = _D_eq_KNa(V_init, self.tau_D_KNa)
-        y0[_m_IT] = _m_eq_T(V_init)
-        y0[_h_IT] = _h_eq_T(V_init)
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
 
-        # Allocate state vectors (shape = varshape, possibly batched)
-        zeros_like = braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7), self.varshape, batch_size)
+        # Compute equilibrium values for intrinsic gating
+        m_nmda_init = _m_eq_NMDA(V_init, self.S_act_NMDA, self.V_act_NMDA)
+        m_ih_init = _m_eq_h(V_init)
+        d_ikna_init = _D_eq_KNa(V_init, self.tau_D_KNa)
+        m_it_init = _m_eq_T(V_init)
+        h_it_init = _h_eq_T(V_init)
 
-        # ODE state: 16-element vector per neuron, stored as HiddenState
-        # We store each component separately for clarity
+        # ODE state variables (unitless, mV)
         self.V = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_V_M]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(V_init), self.varshape)
         )
         self.theta = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_THETA]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(self.theta_eq), self.varshape)
         )
+
+        # Synaptic variables: all zero
         self.DG_AMPA = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.G_AMPA = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.DG_NMDA = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.G_NMDA = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.DG_GABA_A = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.G_GABA_A = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.DG_GABA_B = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.G_GABA_B = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
+
+        # NMDA Mg²⁺ unblocking kinetics
         self.m_fast_NMDA_state = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_m_fast_NMDA]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(m_nmda_init), self.varshape)
         )
         self.m_slow_NMDA_state = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_m_slow_NMDA]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(m_nmda_init), self.varshape)
         )
+
+        # Intrinsic gating variables at equilibrium
         self.m_Ih_state = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_m_Ih]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(m_ih_init), self.varshape)
         )
         self.D_IKNa_state = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_D_IKNa]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(d_ikna_init), self.varshape)
         )
         self.m_IT_state = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_m_IT]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(m_it_init), self.varshape)
         )
         self.h_IT_state = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(y0[_h_IT]), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(h_it_init), self.varshape)
         )
 
         # Intrinsic current values (for recording)
         self.I_NaP_val = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.I_KNa_val = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.I_T_val = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
         self.I_h_val = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(0.0), self.varshape)
         )
 
         # Refractory counter
-        ditype = brainstate.environ.ditype()
         self.ref_steps = brainstate.ShortTermState(
-            np.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape), dtype=ditype)
+            jnp.zeros(self.varshape, dtype=ditype)
         )
 
         # Stimulation current buffer
         self.I_stim = brainstate.ShortTermState(
-            np.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape), dtype=dftype)
+            jnp.zeros(self.varshape, dtype=dftype)
         )
 
         # Spike time tracking
-        self.last_spike_time = brainstate.ShortTermState(spk_time * u.ms)
+        self.last_spike_time = brainstate.ShortTermState(
+            u.math.full(self.varshape, -1e7 * u.ms)
+        )
 
-        # Voltage clamp value
-        self._V_clamp = V_init
+        # Integration step size
+        self.integration_step = brainstate.ShortTermState.init(
+            braintools.init.Constant(dt), self.varshape
+        )
 
     def get_spike(self, V: ArrayLike = None):
         r"""Generate differentiable spike output using surrogate gradient function.
@@ -1406,18 +1295,193 @@ class ht_neuron(NESTNeuron):
             ...     spike = neuron.get_spike()
             ...     print(spike)  # ≈ 1.0 (depends on surrogate function)
         """
-        dftype = brainstate.environ.dftype()
-        V = np.asarray(self.V.value, dtype=dftype) if V is None else V
-        theta = np.asarray(self.theta.value, dtype=dftype)
+        V = self.V.value if V is None else V
+        theta = self.theta.value
         # Scale: positive when V >= theta
         v_scaled = (V - theta) / max(abs(self.theta_eq), 1.0)
-        return self.spk_fun(jnp.asarray(v_scaled))
+        return self.spk_fun(v_scaled)
+
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V_m, theta, DG_AMPA, G_AMPA, DG_NMDA, G_NMDA,
+            DG_GABA_A, G_GABA_A, DG_GABA_B, G_GABA_B,
+            m_fast_NMDA, m_slow_NMDA, m_Ih, D_IKNa, m_IT, h_IT
+            -- ODE state variables (all unitless floats, mV-scale).
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim, V_clamp_val
+            -- mutable auxiliary data carried through the integrator.
+
+        Returns
+        -------
+        DotDict with same keys as ``state``, containing time derivatives.
+        """
+        is_refractory = extra.r > 0
+
+        V = jnp.where(self.voltage_clamp, extra.V_clamp_val, state.V_m)
+
+        # NMDA conductance with instantaneous blocking (clamp m_fast, m_slow to m_eq)
+        m_eq_nmda = 1.0 / (1.0 + jnp.exp(-self.S_act_NMDA * (V - self.V_act_NMDA)))
+        mf = jnp.minimum(m_eq_nmda, state.m_fast_NMDA)
+        ms = jnp.minimum(m_eq_nmda, state.m_slow_NMDA)
+        if self.instant_unblock_NMDA:
+            m_nmda = m_eq_nmda
+        else:
+            A1 = 0.51 - 0.0028 * V
+            A2 = 1.0 - A1
+            m_nmda = A1 * mf + A2 * ms
+
+        # Synaptic currents: I = -g * (V - E)
+        I_syn = (
+            -state.G_AMPA * (V - self.E_rev_AMPA)
+            - state.G_NMDA * m_nmda * (V - self.E_rev_NMDA)
+            - state.G_GABA_A * (V - self.E_rev_GABA_A)
+            - state.G_GABA_B * (V - self.E_rev_GABA_B)
+        )
+
+        # Post-spike K current (only during refractory)
+        I_spike = jnp.where(is_refractory, -(V - self.E_K) / self.tau_spike, 0.0)
+
+        # Leak currents
+        I_Na = -self.g_NaL * (V - self.E_Na)
+        I_K_leak = -self.g_KL * (V - self.E_K)
+
+        # I_NaP (persistent sodium)
+        INaP_thresh = -55.7
+        INaP_slope = 7.7
+        m_inf_NaP = 1.0 / (1.0 + jnp.exp(-(V - INaP_thresh) / INaP_slope))
+        i_NaP = -self.g_peak_NaP * (m_inf_NaP ** self.N_NaP) * (V - self.E_rev_NaP)
+
+        # I_KNa (depolarization-activated K)
+        d_half = 0.25
+        d_val = state.D_IKNa
+        m_inf_KNa = jnp.where(
+            d_val > 0,
+            1.0 / (1.0 + (d_half / jnp.maximum(d_val, 1e-30)) ** 3.5),
+            0.0
+        )
+        i_KNa = -self.g_peak_KNa * m_inf_KNa * (V - self.E_rev_KNa)
+
+        # I_T (low-threshold Ca)
+        i_T = -self.g_peak_T * (state.m_IT ** self.N_T) * state.h_IT * (V - self.E_rev_T)
+
+        # I_h (hyperpolarization-activated)
+        i_h = -self.g_peak_h * state.m_Ih * (V - self.E_rev_h)
+
+        # dV/dt
+        dV_raw = (I_Na + I_K_leak + I_syn + i_NaP + i_KNa + i_T + i_h + extra.i_stim) / self.tau_m + I_spike
+
+        # d(theta)/dt
+        d_theta = -(state.theta - self.theta_eq) / self.tau_theta
+
+        # AMPA synapse
+        d_DG_AMPA = -state.DG_AMPA / self.tau_rise_AMPA
+        d_G_AMPA = state.DG_AMPA - state.G_AMPA / self.tau_decay_AMPA
+
+        # NMDA synapse
+        d_DG_NMDA = -state.DG_NMDA / self.tau_rise_NMDA
+        d_G_NMDA = state.DG_NMDA - state.G_NMDA / self.tau_decay_NMDA
+        d_m_fast_NMDA = (m_eq_nmda - mf) / self.tau_Mg_fast_NMDA
+        d_m_slow_NMDA = (m_eq_nmda - ms) / self.tau_Mg_slow_NMDA
+
+        # GABA_A synapse
+        d_DG_GABA_A = -state.DG_GABA_A / self.tau_rise_GABA_A
+        d_G_GABA_A = state.DG_GABA_A - state.G_GABA_A / self.tau_decay_GABA_A
+
+        # GABA_B synapse
+        d_DG_GABA_B = -state.DG_GABA_B / self.tau_rise_GABA_B
+        d_G_GABA_B = state.DG_GABA_B - state.G_GABA_B / self.tau_decay_GABA_B
+
+        # I_KNa D variable
+        D_influx_peak = 0.025
+        D_thresh = -10.0
+        D_slope = 5.0
+        D_eq = 0.001
+        D_influx = D_influx_peak / (1.0 + jnp.exp(-(V - D_thresh) / D_slope))
+        D_eq_val = self.tau_D_KNa * D_influx + D_eq
+        d_D_IKNa = (D_eq_val - state.D_IKNa) / self.tau_D_KNa
+
+        # I_T gating
+        tau_m_T = 0.22 / (jnp.exp(-(V + 132.0) / 16.7) + jnp.exp((V + 16.8) / 18.2)) + 0.13
+        tau_h_T = 8.2 + (56.6 + 0.27 * jnp.exp((V + 115.2) / 5.0)) / (1.0 + jnp.exp((V + 86.0) / 3.2))
+        m_eq_t = 1.0 / (1.0 + jnp.exp(-(V + 59.0) / 6.2))
+        h_eq_t = 1.0 / (1.0 + jnp.exp((V + 83.0) / 4.0))
+        d_m_IT = (m_eq_t - state.m_IT) / tau_m_T
+        d_h_IT = (h_eq_t - state.h_IT) / tau_h_T
+
+        # I_h gating
+        tau_m_h = 1.0 / (jnp.exp(-14.59 - 0.086 * V) + jnp.exp(-1.87 + 0.0701 * V))
+        I_h_Vthreshold = -75.0
+        m_eq_ih = 1.0 / (1.0 + jnp.exp((V - I_h_Vthreshold) / 5.5))
+        d_m_Ih = (m_eq_ih - state.m_Ih) / tau_m_h
+
+        return DotDict(
+            V_m=dV_raw, theta=d_theta,
+            DG_AMPA=d_DG_AMPA, G_AMPA=d_G_AMPA,
+            DG_NMDA=d_DG_NMDA, G_NMDA=d_G_NMDA,
+            DG_GABA_A=d_DG_GABA_A, G_GABA_A=d_G_GABA_A,
+            DG_GABA_B=d_DG_GABA_B, G_GABA_B=d_G_GABA_B,
+            m_fast_NMDA=d_m_fast_NMDA, m_slow_NMDA=d_m_slow_NMDA,
+            m_Ih=d_m_Ih, D_IKNa=d_D_IKNa,
+            m_IT=d_m_IT, h_IT=d_h_IT,
+        )
+
+    def _event_fn(self, state, extra, accept):
+        """In-loop spike detection, reset, and refractory handling.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V_m, theta, DG_AMPA, G_AMPA, DG_NMDA, G_NMDA,
+            DG_GABA_A, G_GABA_A, DG_GABA_B, G_GABA_B,
+            m_fast_NMDA, m_slow_NMDA, m_Ih, D_IKNa, m_IT, h_IT
+            -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim, V_clamp_val.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
+
+        Returns
+        -------
+        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
+        """
+        unstable = extra.unstable | jnp.any(
+            accept & ((state.V_m < -1e3) | (state.V_m > 1e3))
+        )
+
+        # Enforce voltage clamp after accepted step
+        new_V = jnp.where(self.voltage_clamp & accept, extra.V_clamp_val, state.V_m)
+
+        # Enforce instantaneous NMDA blocking (m_fast, m_slow cannot exceed m_eq)
+        m_eq_nmda_final = 1.0 / (1.0 + jnp.exp(-self.S_act_NMDA * (new_V - self.V_act_NMDA)))
+        new_m_fast = jnp.minimum(m_eq_nmda_final, state.m_fast_NMDA)
+        new_m_slow = jnp.minimum(m_eq_nmda_final, state.m_slow_NMDA)
+
+        # Spike detection: ref_steps == 0 and V >= theta
+        spike_now = accept & (extra.r <= 0) & (new_V >= state.theta)
+        spike_mask = extra.spike_mask | spike_now
+
+        # On spike: V -> E_Na, theta -> E_Na, ref_steps -> ref_count + 1
+        new_V = jnp.where(spike_now, self.E_Na, new_V)
+        new_theta = jnp.where(spike_now, self.E_Na, state.theta)
+        r = jnp.where(spike_now & (self.ref_count > 0), self.ref_count + 1, extra.r)
+
+        new_state = DotDict(
+            {**state,
+             'V_m': new_V, 'theta': new_theta,
+             'm_fast_NMDA': new_m_fast, 'm_slow_NMDA': new_m_slow}
+        )
+        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
+        return new_state, new_extra
 
     def update(self, x=0.0):
         r"""Advance neuron state by one simulation time step with adaptive ODE integration.
 
         Performs a complete update cycle for the ht_neuron model, including: (1) adaptive
-        RK45 integration of the 16-dimensional ODE system, (2) spike detection and reset,
+        RKF45 integration of the 16-dimensional ODE system, (2) spike detection and reset,
         (3) refractory period management, (4) synaptic input processing, and (5) external
         current buffering. The update sequence matches NEST's ``ht_neuron::update()``
         implementation for numerical consistency.
@@ -1450,8 +1514,8 @@ class ht_neuron(NESTNeuron):
 
         **Step 1: ODE Integration**
 
-        Integrate the 16-dimensional state vector from t to t+dt using scipy's RK45
-        (Dormand-Prince 5th order adaptive Runge-Kutta). The state vector contains:
+        Integrate the 16-dimensional state vector from t to t+dt using adaptive RKF45
+        via AdaptiveRungeKuttaStep. The state vector contains:
 
         .. math::
 
@@ -1460,7 +1524,7 @@ class ht_neuron(NESTNeuron):
                           m_{fast}^{NMDA}, m_{slow}^{NMDA}, m_{Ih}, D_{IKNa},
                           m_{IT}, h_{IT}]
 
-        The ODE right-hand side (defined in the inner ``rhs`` function) computes:
+        The ODE right-hand side (defined in ``_vector_field``) computes:
 
         - Membrane potential derivative from leak, synaptic, intrinsic, and stimulation
           currents, plus post-spike repolarization if refractory
@@ -1468,11 +1532,6 @@ class ht_neuron(NESTNeuron):
         - Beta-function synaptic conductance dynamics (4 receptor types)
         - NMDA Mg²⁺ unblocking kinetics (fast and slow components)
         - Intrinsic gating variable dynamics (I_h, I_T, I_KNa)
-
-        dftype = brainstate.environ.dftype()
-        ditype = brainstate.environ.ditype()
-        The solver uses adaptive step-size control with rtol=1e-3, atol=1e-9 (matching
-        NEST's GSL tolerances).
 
         **Step 2: Post-Integration Constraints**
 
@@ -1538,428 +1597,156 @@ class ht_neuron(NESTNeuron):
 
         **4. Numerical Considerations**
 
-        - **Adaptive integration**: The RK45 solver uses variable step sizes to maintain
+        - **Adaptive integration**: The RKF45 solver uses variable step sizes to maintain
           accuracy. Typical internal steps are ~0.01-0.1 ms depending on voltage dynamics.
-        - **Per-neuron integration**: Each neuron in the population is integrated
-          independently to handle heterogeneous parameters or inputs (though this is
-          slower than vectorized fixed-step methods).
+        - **Vectorized integration**: All neurons in the population are integrated
+          simultaneously using JAX vectorized operations via AdaptiveRungeKuttaStep.
         - **Intrinsic current caching**: Intrinsic currents (I_NaP, I_KNa, I_T, I_h) are
-          computed during integration and stored in separate state variables for recording.
+          computed after integration and stored in separate state variables for recording.
 
-        **5. Performance**
+        **5. Gradient Compatibility**
 
-        The per-neuron adaptive integration loop is slower than vectorized Euler methods
-        used in simpler models (e.g., LIF, AdEx). For large networks (>1000 neurons),
-        consider:
-
-        - Using haiku model for this agent if speed is critical
-        - Reducing solver tolerance (rtol=1e-2) for faster but less accurate integration
-        - Implementing a vectorized fixed-step version if adaptive steps are not required
-
-        **6. Gradient Compatibility**
-
-        The integration loop uses numpy/scipy (not JAX) for numerical ODE solving, so
-        automatic differentiation does *not* flow through the integration. However, the
-        surrogate gradient spike output enables backpropagation through the network for
-        learning tasks. For fully differentiable ODE solving, consider using JAX-based
-        ODE solvers (e.g., diffrax), though this requires significant refactoring.
+        The integration uses JAX-based AdaptiveRungeKuttaStep, enabling automatic
+        differentiation through the integration. Combined with surrogate gradient
+        spike output, the model supports end-to-end backpropagation.
 
         Warnings
         --------
-        - **Computational cost**: The per-neuron adaptive integration is significantly
-          slower than vectorized Euler methods. For large populations, this can dominate
-          simulation time.
-        - **No JAX gradients through integration**: The scipy ODE solver is not JAX-
-          differentiable. Only the spike output (via surrogate gradients) supports
-          backpropagation.
         - **Unlabeled inputs default to AMPA**: If you send synaptic inputs without
           specifying a receptor label, they will be routed to AMPA receptors by default.
           This may produce unexpected results if you intended NMDA, GABA_A, or GABA_B.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        h = float(u.math.asarray(dt_q / u.ms))
+        dt = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
 
-        v_shape = self.V.value.shape
-        flat_size = int(np.prod(v_shape)) if len(v_shape) > 0 else 1
+        # Read state variables
+        V_m = self.V.value
+        theta_val = self.theta.value
+        DG_AMPA = self.DG_AMPA.value
+        G_AMPA = self.G_AMPA.value
+        DG_NMDA = self.DG_NMDA.value
+        G_NMDA = self.G_NMDA.value
+        DG_GABA_A = self.DG_GABA_A.value
+        G_GABA_A = self.G_GABA_A.value
+        DG_GABA_B = self.DG_GABA_B.value
+        G_GABA_B = self.G_GABA_B.value
+        m_fast = self.m_fast_NMDA_state.value
+        m_slow = self.m_slow_NMDA_state.value
+        m_Ih = self.m_Ih_state.value
+        D_IKNa = self.D_IKNa_state.value
+        m_IT = self.m_IT_state.value
+        h_IT = self.h_IT_state.value
+        r = self.ref_steps.value
+        i_stim = self.I_stim.value
+        h = self.integration_step.value
 
-        # Collect synaptic spike inputs (via delta inputs)
-        # Spikes arrive as weighted conductance changes to specific receptor types.
-        # In this model, we expect delta inputs formatted as a dict with keys
-        # 'AMPA', 'NMDA', 'GABA_A', 'GABA_B', or a single aggregated value.
-        spk_ampa = np.zeros(v_shape, dtype=dftype)
-        spk_nmda = np.zeros(v_shape, dtype=dftype)
-        spk_gaba_a = np.zeros(v_shape, dtype=dftype)
-        spk_gaba_b = np.zeros(v_shape, dtype=dftype)
-
-        # Handle labeled delta inputs for each receptor type
-        for label, target in [('AMPA', 'ampa'), ('NMDA', 'nmda'),
-                              ('GABA_A', 'gaba_a'), ('GABA_B', 'gaba_b')]:
-            val = self.sum_delta_inputs(0.0, label=label)
-            if isinstance(val, (int, float)):
-                if val != 0.0:
-                    arr = np.broadcast_to(np.float64(val), v_shape).copy()
-                    if target == 'ampa':
-                        spk_ampa = arr
-                    elif target == 'nmda':
-                        spk_nmda = arr
-                    elif target == 'gaba_a':
-                        spk_gaba_a = arr
-                    elif target == 'gaba_b':
-                        spk_gaba_b = arr
-            else:
-                arr = np.broadcast_to(np.asarray(val, dtype=dftype), v_shape).copy()
-                if target == 'ampa':
-                    spk_ampa = arr
-                elif target == 'nmda':
-                    spk_nmda = arr
-                elif target == 'gaba_a':
-                    spk_gaba_a = arr
-                elif target == 'gaba_b':
-                    spk_gaba_b = arr
-
-        # Also collect unlabeled delta inputs (generic spikes go to AMPA by default)
-        unlabeled = self.sum_delta_inputs(0.0)
-        if not isinstance(unlabeled, (int, float)) or unlabeled != 0.0:
-            spk_ampa = spk_ampa + np.broadcast_to(
-                np.asarray(unlabeled, dtype=dftype) if not isinstance(unlabeled, (int, float))
-                else np.full(v_shape, unlabeled, dtype=dftype),
-                v_shape
-            )
-
-        # Collect stimulation current input
-        I_stim_next = float(x) if isinstance(x, (int, float)) else np.asarray(x, dtype=dftype)
-        I_stim_next = np.broadcast_to(
-            np.asarray(I_stim_next, dtype=dftype), v_shape
-        ).copy()
-
-        # Extract current state as flat numpy arrays
-        V_m = np.asarray(self.V.value, dtype=dftype).ravel()
-        theta_val = np.asarray(self.theta.value, dtype=dftype).ravel()
-        DG_AMPA = np.asarray(self.DG_AMPA.value, dtype=dftype).ravel()
-        G_AMPA = np.asarray(self.G_AMPA.value, dtype=dftype).ravel()
-        DG_NMDA = np.asarray(self.DG_NMDA.value, dtype=dftype).ravel()
-        G_NMDA = np.asarray(self.G_NMDA.value, dtype=dftype).ravel()
-        DG_GABA_A = np.asarray(self.DG_GABA_A.value, dtype=dftype).ravel()
-        G_GABA_A = np.asarray(self.G_GABA_A.value, dtype=dftype).ravel()
-        DG_GABA_B = np.asarray(self.DG_GABA_B.value, dtype=dftype).ravel()
-        G_GABA_B = np.asarray(self.G_GABA_B.value, dtype=dftype).ravel()
-        m_fast = np.asarray(self.m_fast_NMDA_state.value, dtype=dftype).ravel()
-        m_slow = np.asarray(self.m_slow_NMDA_state.value, dtype=dftype).ravel()
-        m_Ih = np.asarray(self.m_Ih_state.value, dtype=dftype).ravel()
-        D_IKNa = np.asarray(self.D_IKNa_state.value, dtype=dftype).ravel()
-        m_IT = np.asarray(self.m_IT_state.value, dtype=dftype).ravel()
-        h_IT = np.asarray(self.h_IT_state.value, dtype=dftype).ravel()
-        ref = np.asarray(self.ref_steps.value, dtype=ditype).ravel()
-        I_stim_cur = np.asarray(self.I_stim.value, dtype=dftype).ravel()
-
-        # Pre-compute refractory step count
-        potassium_refr_counts = self._refractory_counts(h)
-
-        # Output arrays
-        V_out = np.empty(flat_size, dtype=dftype)
-        theta_out = np.empty(flat_size, dtype=dftype)
-        ref_out = np.empty(flat_size, dtype=ditype)
-        spike_flags = np.zeros(flat_size, dtype=bool)
-
-        # State output arrays for all 16 variables
-        state_out = np.empty((flat_size, _STATE_VEC_SIZE), dtype=dftype)
-        I_NaP_out = np.empty(flat_size, dtype=dftype)
-        I_KNa_out = np.empty(flat_size, dtype=dftype)
-        I_T_out = np.empty(flat_size, dtype=dftype)
-        I_h_out = np.empty(flat_size, dtype=dftype)
-
-        # Flatten spike inputs
-        spk_ampa_flat = spk_ampa.ravel()
-        spk_nmda_flat = spk_nmda.ravel()
-        spk_gaba_a_flat = spk_gaba_a.ravel()
-        spk_gaba_b_flat = spk_gaba_b.ravel()
-        I_stim_next_flat = I_stim_next.ravel()
-
-        # Cache parameters as local variables for the inner loop
-        _E_Na = self.E_Na
-        _E_K = self.E_K
-        _g_NaL = self.g_NaL
-        _g_KL = self.g_KL
-        _tau_m = self.tau_m
-        _theta_eq = self.theta_eq
-        _tau_theta = self.tau_theta
-        _tau_spike = self.tau_spike
-        _E_rev_AMPA = self.E_rev_AMPA
-        _tau_rise_AMPA = self.tau_rise_AMPA
-        _tau_decay_AMPA = self.tau_decay_AMPA
-        _E_rev_NMDA = self.E_rev_NMDA
-        _tau_rise_NMDA = self.tau_rise_NMDA
-        _tau_decay_NMDA = self.tau_decay_NMDA
-        _S_act_NMDA = self.S_act_NMDA
-        _V_act_NMDA = self.V_act_NMDA
-        _tau_Mg_fast_NMDA = self.tau_Mg_fast_NMDA
-        _tau_Mg_slow_NMDA = self.tau_Mg_slow_NMDA
-        _instant_unblock = self.instant_unblock_NMDA
-        _E_rev_GABA_A = self.E_rev_GABA_A
-        _tau_rise_GABA_A = self.tau_rise_GABA_A
-        _tau_decay_GABA_A = self.tau_decay_GABA_A
-        _E_rev_GABA_B = self.E_rev_GABA_B
-        _tau_rise_GABA_B = self.tau_rise_GABA_B
-        _tau_decay_GABA_B = self.tau_decay_GABA_B
-        _g_peak_NaP = self.g_peak_NaP
-        _E_rev_NaP = self.E_rev_NaP
-        _N_NaP = self.N_NaP
-        _g_peak_KNa = self.g_peak_KNa
-        _E_rev_KNa = self.E_rev_KNa
-        _tau_D_KNa = self.tau_D_KNa
-        _g_peak_T = self.g_peak_T
-        _E_rev_T = self.E_rev_T
-        _N_T = self.N_T
-        _g_peak_h = self.g_peak_h
-        _E_rev_h = self.E_rev_h
-        _voltage_clamp = self.voltage_clamp
-        _V_clamp = self._V_clamp
-        _cond_AMPA = self._cond_step_AMPA
-        _cond_NMDA = self._cond_step_NMDA
-        _cond_GABA_A = self._cond_step_GABA_A
-        _cond_GABA_B = self._cond_step_GABA_B
-
-        for i in range(flat_size):
-            # Build state vector for this neuron
-            y = np.array([
-                V_m[i], theta_val[i],
-                DG_AMPA[i], G_AMPA[i],
-                DG_NMDA[i], G_NMDA[i],
-                DG_GABA_A[i], G_GABA_A[i],
-                DG_GABA_B[i], G_GABA_B[i],
-                m_fast[i], m_slow[i],
-                m_Ih[i], D_IKNa[i],
-                m_IT[i], h_IT[i],
-            ], dtype=dftype)
-
-            _ref_i = int(ref[i])
-            _I_stim_i = I_stim_cur[i]
-
-            # Intrinsic current accumulators (updated inside dynamics)
-            _I_NaP = [0.0]
-            _I_KNa = [0.0]
-            _I_T = [0.0]
-            _I_h = [0.0]
-
-            def rhs(t_local, y,
-                    _ref=_ref_i,
-                    _I_stim=_I_stim_i,
-                    _I_NaP=_I_NaP, _I_KNa=_I_KNa, _I_T=_I_T, _I_h=_I_h):
-                r"""Right-hand side of the ODE system (matches ht_neuron_dynamics)."""
-                V = _V_clamp if _voltage_clamp else y[0]
-
-                # NMDA conductance with instantaneous blocking
-                m_eq_nmda = 1.0 / (1.0 + math.exp(-_S_act_NMDA * (V - _V_act_NMDA)))
-                mf = min(m_eq_nmda, y[10])
-                ms = min(m_eq_nmda, y[11])
-                if _instant_unblock:
-                    m_nmda = m_eq_nmda
-                else:
-                    A1 = 0.51 - 0.0028 * V
-                    A2 = 1.0 - A1
-                    m_nmda = A1 * mf + A2 * ms
-
-                # Synaptic currents: I = -g * (V - E)
-                I_syn = (
-                    -y[3] * (V - _E_rev_AMPA)
-                    - y[5] * m_nmda * (V - _E_rev_NMDA)
-                    - y[7] * (V - _E_rev_GABA_A)
-                    - y[9] * (V - _E_rev_GABA_B)
-                )
-
-                # Post-spike K current (only during refractory)
-                I_spike = -(V - _E_K) / _tau_spike if _ref > 0 else 0.0
-
-                # Leak currents
-                I_Na = -_g_NaL * (V - _E_Na)
-                I_K_leak = -_g_KL * (V - _E_K)
-
-                # I_NaP (persistent sodium)
-                INaP_thresh = -55.7
-                INaP_slope = 7.7
-                m_inf_NaP = 1.0 / (1.0 + math.exp(-(V - INaP_thresh) / INaP_slope))
-                i_NaP = -_g_peak_NaP * (m_inf_NaP ** _N_NaP) * (V - _E_rev_NaP)
-                _I_NaP[0] = i_NaP
-
-                # I_KNa (depolarization-activated K)
-                d_half = 0.25
-                d_val = y[13]
-                if d_val > 0:
-                    m_inf_KNa = 1.0 / (1.0 + (d_half / d_val) ** 3.5)
-                else:
-                    m_inf_KNa = 0.0
-                i_KNa = -_g_peak_KNa * m_inf_KNa * (V - _E_rev_KNa)
-                _I_KNa[0] = i_KNa
-
-                # I_T (low-threshold Ca)
-                i_T = -_g_peak_T * (y[14] ** _N_T) * y[15] * (V - _E_rev_T)
-                _I_T[0] = i_T
-
-                # I_h (hyperpolarization-activated)
-                i_h = -_g_peak_h * y[12] * (V - _E_rev_h)
-                _I_h[0] = i_h
-
-                # Derivatives
-                f = np.empty(16)
-
-                # dV/dt
-                f[0] = (I_Na + I_K_leak + I_syn + i_NaP + i_KNa + i_T + i_h + _I_stim) / _tau_m + I_spike
-
-                # d(theta)/dt
-                f[1] = -(y[1] - _theta_eq) / _tau_theta
-
-                # AMPA synapse
-                f[2] = -y[2] / _tau_rise_AMPA
-                f[3] = y[2] - y[3] / _tau_decay_AMPA
-
-                # NMDA synapse
-                f[4] = -y[4] / _tau_rise_NMDA
-                f[5] = y[4] - y[5] / _tau_decay_NMDA
-                f[10] = (m_eq_nmda - mf) / _tau_Mg_fast_NMDA
-                f[11] = (m_eq_nmda - ms) / _tau_Mg_slow_NMDA
-
-                # GABA_A synapse
-                f[6] = -y[6] / _tau_rise_GABA_A
-                f[7] = y[6] - y[7] / _tau_decay_GABA_A
-
-                # GABA_B synapse
-                f[8] = -y[8] / _tau_rise_GABA_B
-                f[9] = y[8] - y[9] / _tau_decay_GABA_B
-
-                # I_KNa D variable
-                D_influx_peak = 0.025
-                D_thresh = -10.0
-                D_slope = 5.0
-                D_eq = 0.001
-                D_influx = D_influx_peak / (1.0 + math.exp(-(V - D_thresh) / D_slope))
-                D_eq_val = _tau_D_KNa * D_influx + D_eq
-                f[13] = (D_eq_val - y[13]) / _tau_D_KNa
-
-                # I_T gating
-                tau_m_T = 0.22 / (math.exp(-(V + 132.0) / 16.7) + math.exp((V + 16.8) / 18.2)) + 0.13
-                tau_h_T = 8.2 + (56.6 + 0.27 * math.exp((V + 115.2) / 5.0)) / (1.0 + math.exp((V + 86.0) / 3.2))
-                m_eq_t = 1.0 / (1.0 + math.exp(-(V + 59.0) / 6.2))
-                h_eq_t = 1.0 / (1.0 + math.exp((V + 83.0) / 4.0))
-                f[14] = (m_eq_t - y[14]) / tau_m_T
-                f[15] = (h_eq_t - y[15]) / tau_h_T
-
-                # I_h gating
-                tau_m_h = 1.0 / (math.exp(-14.59 - 0.086 * V) + math.exp(-1.87 + 0.0701 * V))
-                I_h_Vthreshold = -75.0
-                m_eq_ih = 1.0 / (1.0 + math.exp((V - I_h_Vthreshold) / 5.5))
-                f[12] = (m_eq_ih - y[12]) / tau_m_h
-
-                return f
-
-            # --- ODE integration ---
-            sol = solve_ivp(
-                rhs,
-                [0.0, h],
-                y,
-                method='RK45',
-                rtol=self.rtol,
-                atol=self.atol,
-                dense_output=False,
-            )
-            yf = sol.y[:, -1]
-
-            # Enforce voltage clamp
-            if _voltage_clamp:
-                yf[_V_M] = _V_clamp
-
-            # Enforce instantaneous NMDA blocking
-            m_eq_nmda_final = _m_eq_NMDA(yf[_V_M], _S_act_NMDA, _V_act_NMDA)
-            yf[_m_fast_NMDA] = min(m_eq_nmda_final, yf[_m_fast_NMDA])
-            yf[_m_slow_NMDA] = min(m_eq_nmda_final, yf[_m_slow_NMDA])
-
-            # --- Spike detection (inside integration loop in NEST) ---
-            # In NEST, spike detection happens at each adaptive sub-step inside
-            # the while loop. Here we check once after the full step, matching
-            # the final-state check.
-            spiked = False
-            if _ref_i == 0 and yf[_V_M] >= yf[_THETA]:
-                # Spike!
-                yf[_V_M] = _E_Na
-                yf[_THETA] = _E_Na
-                _ref_i = potassium_refr_counts + 1
-                spiked = True
-
-            # Decrement refractory counter (after integration loop)
-            if _ref_i > 0:
-                _ref_i -= 1
-
-            # Add arriving spike inputs
-            # Position 2 + 2*j is the DG variable for synapse type j
-            yf[_DG_AMPA] += _cond_AMPA * spk_ampa_flat[i]
-            yf[_DG_NMDA_TIMECOURSE] += _cond_NMDA * spk_nmda_flat[i]
-            yf[_DG_GABA_A] += _cond_GABA_A * spk_gaba_a_flat[i]
-            yf[_DG_GABA_B] += _cond_GABA_B * spk_gaba_b_flat[i]
-
-            # Store results
-            state_out[i, :] = yf
-            ref_out[i] = _ref_i
-            spike_flags[i] = spiked
-            I_NaP_out[i] = _I_NaP[0]
-            I_KNa_out[i] = _I_KNa[0]
-            I_T_out[i] = _I_T[0]
-            I_h_out[i] = _I_h[0]
-
-        # Reshape and write back state
-        state_out = state_out.reshape((*v_shape, _STATE_VEC_SIZE)) if len(v_shape) > 0 else state_out[0]
-        if len(v_shape) > 0:
-            self.V.value = state_out[..., _V_M]
-            self.theta.value = state_out[..., _THETA]
-            self.DG_AMPA.value = state_out[..., _DG_AMPA]
-            self.G_AMPA.value = state_out[..., _G_AMPA]
-            self.DG_NMDA.value = state_out[..., _DG_NMDA_TIMECOURSE]
-            self.G_NMDA.value = state_out[..., _G_NMDA_TIMECOURSE]
-            self.DG_GABA_A.value = state_out[..., _DG_GABA_A]
-            self.G_GABA_A.value = state_out[..., _G_GABA_A]
-            self.DG_GABA_B.value = state_out[..., _DG_GABA_B]
-            self.G_GABA_B.value = state_out[..., _G_GABA_B]
-            self.m_fast_NMDA_state.value = state_out[..., _m_fast_NMDA]
-            self.m_slow_NMDA_state.value = state_out[..., _m_slow_NMDA]
-            self.m_Ih_state.value = state_out[..., _m_Ih]
-            self.D_IKNa_state.value = state_out[..., _D_IKNa]
-            self.m_IT_state.value = state_out[..., _m_IT]
-            self.h_IT_state.value = state_out[..., _h_IT]
-        else:
-            self.V.value = state_out[_V_M]
-            self.theta.value = state_out[_THETA]
-            self.DG_AMPA.value = state_out[_DG_AMPA]
-            self.G_AMPA.value = state_out[_G_AMPA]
-            self.DG_NMDA.value = state_out[_DG_NMDA_TIMECOURSE]
-            self.G_NMDA.value = state_out[_G_NMDA_TIMECOURSE]
-            self.DG_GABA_A.value = state_out[_DG_GABA_A]
-            self.G_GABA_A.value = state_out[_G_GABA_A]
-            self.DG_GABA_B.value = state_out[_DG_GABA_B]
-            self.G_GABA_B.value = state_out[_G_GABA_B]
-            self.m_fast_NMDA_state.value = state_out[_m_fast_NMDA]
-            self.m_slow_NMDA_state.value = state_out[_m_slow_NMDA]
-            self.m_Ih_state.value = state_out[_m_Ih]
-            self.D_IKNa_state.value = state_out[_D_IKNa]
-            self.m_IT_state.value = state_out[_m_IT]
-            self.h_IT_state.value = state_out[_h_IT]
-
-        # Intrinsic currents
-        self.I_NaP_val.value = I_NaP_out.reshape(v_shape)
-        self.I_KNa_val.value = I_KNa_out.reshape(v_shape)
-        self.I_T_val.value = I_T_out.reshape(v_shape)
-        self.I_h_val.value = I_h_out.reshape(v_shape)
-
-        # Refractory counter
-        self.ref_steps.value = jnp.asarray(ref_out.reshape(v_shape), dtype=ditype)
-
-        # Stimulation current for next step
-        self.I_stim.value = I_stim_next
-
-        # Spike time update
-        spike_mask = spike_flags.reshape(v_shape)
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
+        # Build ODE state and extra DotDicts
+        ode_state = DotDict(
+            V_m=V_m, theta=theta_val,
+            DG_AMPA=DG_AMPA, G_AMPA=G_AMPA,
+            DG_NMDA=DG_NMDA, G_NMDA=G_NMDA,
+            DG_GABA_A=DG_GABA_A, G_GABA_A=G_GABA_A,
+            DG_GABA_B=DG_GABA_B, G_GABA_B=G_GABA_B,
+            m_fast_NMDA=m_fast, m_slow_NMDA=m_slow,
+            m_Ih=m_Ih, D_IKNa=D_IKNa,
+            m_IT=m_IT, h_IT=h_IT,
+        )
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            r=r,
+            unstable=jnp.array(False),
+            i_stim=i_stim,
+            V_clamp_val=jnp.full(self.varshape, self._V_clamp, dtype=dftype),
         )
 
-        # Return spike output
-        V_spike = np.where(spike_flags, 1e-12, -1.0).reshape(v_shape)
+        # Adaptive RKF45 integration
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+
+        spike_mask = extra.spike_mask
+        r = extra.r
+        unstable = extra.unstable
+
+        # Post-loop stability check
+        brainstate.transform.jit_error_if(
+            jnp.any(unstable), 'Numerical instability in ht_neuron dynamics.'
+        )
+
+        # Decrement refractory counter
+        r = jnp.where(r > 0, r - 1, r)
+
+        # Collect synaptic spike inputs
+        spk_ampa = self.sum_delta_inputs(jnp.zeros(self.varshape, dtype=dftype), label='AMPA')
+        spk_nmda = self.sum_delta_inputs(jnp.zeros(self.varshape, dtype=dftype), label='NMDA')
+        spk_gaba_a = self.sum_delta_inputs(jnp.zeros(self.varshape, dtype=dftype), label='GABA_A')
+        spk_gaba_b = self.sum_delta_inputs(jnp.zeros(self.varshape, dtype=dftype), label='GABA_B')
+
+        # Also collect unlabeled delta inputs (generic spikes go to AMPA by default)
+        unlabeled = self.sum_delta_inputs(jnp.zeros(self.varshape, dtype=dftype))
+        spk_ampa = spk_ampa + unlabeled
+
+        # Apply synaptic spike inputs to DG variables
+        DG_AMPA_out = ode_state.DG_AMPA + self._cond_step_AMPA * spk_ampa
+        DG_NMDA_out = ode_state.DG_NMDA + self._cond_step_NMDA * spk_nmda
+        DG_GABA_A_out = ode_state.DG_GABA_A + self._cond_step_GABA_A * spk_gaba_a
+        DG_GABA_B_out = ode_state.DG_GABA_B + self._cond_step_GABA_B * spk_gaba_b
+
+        # Compute intrinsic currents for recording (post-integration snapshot)
+        V_final = ode_state.V_m
+        INaP_thresh = -55.7
+        INaP_slope = 7.7
+        m_inf_NaP = 1.0 / (1.0 + jnp.exp(-(V_final - INaP_thresh) / INaP_slope))
+        I_NaP_final = -self.g_peak_NaP * (m_inf_NaP ** self.N_NaP) * (V_final - self.E_rev_NaP)
+
+        d_half = 0.25
+        d_val = ode_state.D_IKNa
+        m_inf_KNa = jnp.where(
+            d_val > 0,
+            1.0 / (1.0 + (d_half / jnp.maximum(d_val, 1e-30)) ** 3.5),
+            0.0
+        )
+        I_KNa_final = -self.g_peak_KNa * m_inf_KNa * (V_final - self.E_rev_KNa)
+
+        I_T_final = -self.g_peak_T * (ode_state.m_IT ** self.N_T) * ode_state.h_IT * (V_final - self.E_rev_T)
+        I_h_final = -self.g_peak_h * ode_state.m_Ih * (V_final - self.E_rev_h)
+
+        # Current input for next step (one-step delay)
+        new_i_stim = jnp.broadcast_to(jnp.asarray(x, dtype=dftype), self.varshape)
+
+        # Write back state
+        self.V.value = ode_state.V_m
+        self.theta.value = ode_state.theta
+        self.DG_AMPA.value = DG_AMPA_out
+        self.G_AMPA.value = ode_state.G_AMPA
+        self.DG_NMDA.value = DG_NMDA_out
+        self.G_NMDA.value = ode_state.G_NMDA
+        self.DG_GABA_A.value = DG_GABA_A_out
+        self.G_GABA_A.value = ode_state.G_GABA_A
+        self.DG_GABA_B.value = DG_GABA_B_out
+        self.G_GABA_B.value = ode_state.G_GABA_B
+        self.m_fast_NMDA_state.value = ode_state.m_fast_NMDA
+        self.m_slow_NMDA_state.value = ode_state.m_slow_NMDA
+        self.m_Ih_state.value = ode_state.m_Ih
+        self.D_IKNa_state.value = ode_state.D_IKNa
+        self.m_IT_state.value = ode_state.m_IT
+        self.h_IT_state.value = ode_state.h_IT
+
+        # Intrinsic currents
+        self.I_NaP_val.value = I_NaP_final
+        self.I_KNa_val.value = I_KNa_final
+        self.I_T_val.value = I_T_final
+        self.I_h_val.value = I_h_final
+
+        # Refractory counter
+        self.ref_steps.value = jnp.asarray(r, dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim
+
+        # Spike time update
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
+
+        # Return spike output via surrogate gradient
+        V_spike = jnp.where(spike_mask, 1e-12, -1.0)
         return self.get_spike(V_spike)

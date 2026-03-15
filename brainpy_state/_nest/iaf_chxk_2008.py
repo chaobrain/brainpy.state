@@ -15,19 +15,19 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'iaf_chxk_2008',
@@ -136,7 +136,7 @@ class iaf_chxk_2008(NESTNeuron):
     :math:`g_\mathrm{state}` variables) are integrated using Runge-Kutta-Fehlberg
     4(5) with adaptive step size control. Local truncation error is estimated
     by comparing 4th and 5th order solutions and step size is adjusted to keep
-    error below ``_ATOL = 1e-3``. Minimum step size is ``_MIN_H = 1e-8`` ms and
+    error below ``gsl_error_tol``. Minimum step size is ``_MIN_H = 1e-8`` ms and
     iteration limit is ``_MAX_ITERS = 10000`` per global step.
 
     **4. Update order matching NEST semantics**
@@ -160,8 +160,9 @@ class iaf_chxk_2008(NESTNeuron):
       voltage remains above threshold.
     - Adaptive integration can fail if ``_MAX_ITERS`` is exceeded; in practice
       this is rare with reasonable parameter values.
-    - Continuous input ``x`` passed to :meth:`update` affects the **next** step
-      due to one-step buffering.
+    - Continuous input ``x`` passed to :meth:`update` is delayed by one step
+      via ``I_stim`` (ring-buffer semantics), while spike events are applied
+      after ODE integration.
     - Per-step complexity is :math:`O(|\mathrm{state}| \cdot K_\mathrm{iter})`
       where :math:`K_\mathrm{iter}` is the number of RKF45 substeps (typically
       1-5 per global step).
@@ -218,10 +219,13 @@ class iaf_chxk_2008(NESTNeuron):
         single-AHP bug mode. If ``True``, each spike replaces existing AHP
         state with new AHP kick. If ``False``, AHP kicks accumulate.
         Default is ``False``.
+    gsl_error_tol : ArrayLike, optional
+        Unitless local RKF45 error tolerance, broadcastable and strictly positive.
+        Default is ``1e-3``.
     V_initializer : Callable, optional
         Initializer used by :meth:`init_state` for membrane potential ``V``.
         Must return mV-compatible values with shape compatible with
-        ``self.varshape`` (and optional batch prefix).
+        ``self.varshape``.
         Default is ``braintools.init.Constant(-60. * u.mV)``.
     g_ex_initializer : Callable, optional
         Initializer for excitatory conductance state ``g_ex`` (nS).
@@ -323,6 +327,11 @@ class iaf_chxk_2008(NESTNeuron):
          - ``False``
          - --
          - Enable single-AHP historical bug mode.
+       * - ``gsl_error_tol``
+         - ArrayLike, broadcastable, unitless, ``> 0``
+         - ``1e-3``
+         - --
+         - Local absolute tolerance for the embedded RKF45 error estimate.
        * - ``V_initializer``
          - Callable returning mV-compatible values
          - ``Constant(-60. * u.mV)``
@@ -363,7 +372,7 @@ class iaf_chxk_2008(NESTNeuron):
     ------
     ValueError
         If validated constraints fail (non-positive capacitance, non-positive
-        time constants).
+        time constants, non-positive gsl_error_tol).
     TypeError
         If provided arguments are incompatible with expected units/callables
         (mV, pA, pF, ms, nS).
@@ -379,31 +388,23 @@ class iaf_chxk_2008(NESTNeuron):
     V : HiddenState
         Membrane potential state in mV.
     dg_ex : ShortTermState
-        Excitatory conductance rate-of-change state (dimensionless).
+        Excitatory conductance rate-of-change state (nS/ms).
     g_ex : HiddenState
         Excitatory conductance state in nS.
     dg_in : ShortTermState
-        Inhibitory conductance rate-of-change state (dimensionless).
+        Inhibitory conductance rate-of-change state (nS/ms).
     g_in : HiddenState
         Inhibitory conductance state in nS.
     dg_ahp : ShortTermState
-        AHP conductance rate-of-change state (dimensionless).
+        AHP conductance rate-of-change state (nS/ms).
     g_ahp_state : HiddenState
         AHP conductance state in nS.
-    I_syn_ex : ShortTermState
-        Excitatory synaptic current in pA.
-    I_syn_in : ShortTermState
-        Inhibitory synaptic current in pA.
-    I_ahp : ShortTermState
-        AHP current in pA.
     I_stim : ShortTermState
         One-step buffered external current in pA.
     integration_step : ShortTermState
         Adaptive RKF45 step size hint in ms.
     last_spike_time : ShortTermState
         Absolute precise spike time in ms.
-    last_spike_offset : ShortTermState
-        Precise offset (ms) from right step boundary for latest spike.
 
     Notes
     -----
@@ -413,7 +414,7 @@ class iaf_chxk_2008(NESTNeuron):
       affects the **next** step (NEST current-event timing).
     - Like NEST, this model provides precise output spike timing via linear
       interpolation but does not process off-grid spike-input offsets.
-    - RKF45 integration is performed in float64 for numerical stability and
+    - RKF45 integration is performed via the adaptive integrator and
       written back into BrainUnit states at step end.
     - ``ahp_bug=True`` reproduces the original Fortran behavior where only one
       AHP is tracked; this is primarily for validation against legacy code.
@@ -465,8 +466,7 @@ class iaf_chxk_2008(NESTNeuron):
         'I_ahp',
     )
 
-    _ATOL = 1e-3
-    _MIN_H = 1e-8  # ms
+    _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 10000
 
     def __init__(
@@ -485,6 +485,7 @@ class iaf_chxk_2008(NESTNeuron):
         E_ahp: ArrayLike = -95.0 * u.mV,
         g_ahp: ArrayLike = 443.8 * u.nS,
         ahp_bug: ArrayLike = False,
+        gsl_error_tol: ArrayLike = 1e-3,
         V_initializer: Callable = braintools.init.Constant(-60.0 * u.mV),
         g_ex_initializer: Callable = braintools.init.Constant(0.0 * u.nS),
         g_in_initializer: Callable = braintools.init.Constant(0.0 * u.nS),
@@ -508,6 +509,7 @@ class iaf_chxk_2008(NESTNeuron):
         self.E_ahp = braintools.init.param(E_ahp, self.varshape)
         self.g_ahp = braintools.init.param(g_ahp, self.varshape)
         self.ahp_bug = braintools.init.param(ahp_bug, self.varshape)
+        self.gsl_error_tol = gsl_error_tol
 
         self.V_initializer = V_initializer
         self.g_ex_initializer = g_ex_initializer
@@ -516,22 +518,23 @@ class iaf_chxk_2008(NESTNeuron):
 
         self._validate_parameters()
 
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
+
+        # other variable
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(0)
+
     @property
     def recordables(self):
         return list(self.RECORDABLES)
-
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _to_bool_numpy(x):
-        return np.asarray(u.math.asarray(x), dtype=bool)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
@@ -546,307 +549,238 @@ class iaf_chxk_2008(NESTNeuron):
             raise ValueError('All time constants must be strictly positive.')
         if np.any(self.tau_ahp <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
+        if np.any(self.gsl_error_tol <= 0.0):
+            raise ValueError('The gsl_error_tol must be strictly positive.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
-        g_in = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
-        g_ahp = braintools.init.param(self.g_ahp_initializer, self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        r"""Initialize persistent and short-term state variables.
 
+        Parameters
+        ----------
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
+
+        Raises
+        ------
+        ValueError
+            If an initializer cannot be broadcast to requested shape.
+        TypeError
+            If initializer outputs have incompatible units/dtypes for the
+            corresponding state variables.
+        """
         dftype = brainstate.environ.dftype()
-        zeros = np.zeros_like(np.asarray(u.math.asarray(V / u.mV), dtype=dftype))
+        dt = brainstate.environ.get_dt()
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
+        g_ex = braintools.init.param(self.g_ex_initializer, self.varshape)
+        g_in = braintools.init.param(self.g_in_initializer, self.varshape)
+        g_ahp_init = braintools.init.param(self.g_ahp_initializer, self.varshape)
+        zeros = u.math.zeros(self.varshape, dtype=V.dtype) * (u.nS / u.ms)
 
         self.V = brainstate.HiddenState(V)
-        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
+        self.dg_ex = brainstate.ShortTermState(zeros)
         self.g_ex = brainstate.HiddenState(g_ex)
-        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
+        self.dg_in = brainstate.ShortTermState(zeros)
         self.g_in = brainstate.HiddenState(g_in)
-        self.dg_ahp = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
-        self.g_ahp_state = brainstate.HiddenState(g_ahp)
+        self.dg_ahp = brainstate.ShortTermState(zeros)
+        self.g_ahp_state = brainstate.HiddenState(g_ahp_init)
 
-        self.I_syn_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.pA)
-        self.I_syn_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.pA)
-        self.I_ahp = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.pA)
-
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        self.last_spike_offset = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype) * u.ms)
-
-        dt = brainstate.environ.get_dt()
-        self.integration_step = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
-        )
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
-        )
-
-    def reset_state(self, batch_size: int = None, **kwargs):
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        self.g_ex.value = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
-        self.g_in.value = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
-        self.g_ahp_state.value = braintools.init.param(self.g_ahp_initializer, self.varshape, batch_size)
-
-        dftype = brainstate.environ.dftype()
-        zeros = np.zeros_like(np.asarray(u.math.asarray(self.V.value / u.mV), dtype=dftype))
-        self.dg_ex.value = np.asarray(zeros, dtype=dftype)
-        self.dg_in.value = np.asarray(zeros, dtype=dftype)
-        self.dg_ahp.value = np.asarray(zeros, dtype=dftype)
-
-        self.I_syn_ex.value = np.asarray(zeros, dtype=dftype) * u.pA
-        self.I_syn_in.value = np.asarray(zeros, dtype=dftype) * u.pA
-        self.I_ahp.value = np.asarray(zeros, dtype=dftype) * u.pA
-
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
-        )
-        self.last_spike_offset.value = np.asarray(zeros, dtype=dftype) * u.ms
-
-        dt = brainstate.environ.get_dt()
-        self.integration_step.value = braintools.init.param(
-            braintools.init.Constant(dt), self.varshape, batch_size
-        )
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-        )
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Evaluate surrogate spike output from membrane voltage.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Voltage values with shape broadcastable to ``self.varshape`` and
+            units compatible with mV. If ``None``, uses current state
+            ``self.V.value``.
+
+        Returns
+        -------
+        ArrayLike
+            Surrogate spike activation produced by
+            ``spk_fun((V - V_th) / |V_th - E_L|)``.
+        """
         V = self.V.value if V is None else V
         denom = u.math.abs(self.V_th - self.E_L) + 1e-12 * u.mV
         v_scaled = (V - self.V_th) / denom
         return self.spk_fun(v_scaled)
 
-    def _sum_signed_delta_inputs(self):
-        w_ex = u.math.zeros_like(self.g_ex.value)
-        w_in = u.math.zeros_like(self.g_in.value)
-        if self.delta_inputs is None:
-            return w_ex, w_in
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
 
-        for key in tuple(self.delta_inputs.keys()):
-            out = self.delta_inputs[key]
-            if callable(out):
-                out = out()
-            else:
-                self.delta_inputs.pop(key)
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, dg_ex, g_ex, dg_in, g_in, dg_ahp, g_ahp_state — ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, V_prev, i_stim — mutable auxiliary data carried
+            through the integrator.
 
-            zero = u.math.zeros_like(out)
-            w_ex = w_ex + u.math.maximum(out, zero)
-            w_in = w_in + u.math.maximum(-out, zero)
-        return w_ex, w_in
+        Returns
+        -------
+        DotDict with same keys as ``state``, containing time derivatives.
+        """
+        i_leak = self.g_L * (state.V - self.E_L)
+        i_syn_exc = state.g_ex * (state.V - self.E_ex)
+        i_syn_inh = state.g_in * (state.V - self.E_in)
+        i_ahp = state.g_ahp_state * (state.V - self.E_ahp)
 
-    @staticmethod
-    def _dynamics_scalar(v, dg_ex, g_ex, dg_in, g_in, dg_ahp, g_ahp_state, i_stim, p):
-        i_syn_exc = g_ex * (v - p['E_ex'])
-        i_syn_inh = g_in * (v - p['E_in'])
-        i_ahp = g_ahp_state * (v - p['E_ahp'])
-        i_leak = p['g_L'] * (v - p['E_L'])
+        dV = (-i_leak - i_syn_exc - i_syn_inh - i_ahp + self.I_e + extra.i_stim) / self.C_m
 
-        dv = (-i_leak - i_syn_exc - i_syn_inh - i_ahp + i_stim + p['I_e']) / p['C_m']
-        ddg_ex = -dg_ex / p['tau_syn_ex']
-        dg_ex_dt = dg_ex - g_ex / p['tau_syn_ex']
-        ddg_in = -dg_in / p['tau_syn_in']
-        dg_in_dt = dg_in - g_in / p['tau_syn_in']
-        ddg_ahp = -dg_ahp / p['tau_ahp']
-        dg_ahp_dt = dg_ahp - g_ahp_state / p['tau_ahp']
-        return dv, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt, ddg_ahp, dg_ahp_dt
+        ddg_ex = -state.dg_ex / self.tau_syn_ex
+        dg_ex_dt = state.dg_ex - state.g_ex / self.tau_syn_ex
+        ddg_in = -state.dg_in / self.tau_syn_in
+        dg_in_dt = state.dg_in - state.g_in / self.tau_syn_in
+        ddg_ahp = -state.dg_ahp / self.tau_ahp
+        dg_ahp_dt = state.dg_ahp - state.g_ahp_state / self.tau_ahp
 
-    def _rkf45_integrate_scalar(self, v0, dg_ex0, g_ex0, dg_in0, g_in0, dg_ahp0, g_ahp0, i_stim, h0, dt, p):
-        t = 0.0
-        h = max(h0, self._MIN_H)
-        dftype = brainstate.environ.dftype()
-        y = np.asarray([v0, dg_ex0, g_ex0, dg_in0, g_in0, dg_ahp0, g_ahp0], dtype=dftype)
-        iters = 0
+        return DotDict(
+            V=dV, dg_ex=ddg_ex, g_ex=dg_ex_dt,
+            dg_in=ddg_in, g_in=dg_in_dt,
+            dg_ahp=ddg_ahp, g_ahp_state=dg_ahp_dt,
+        )
 
-        def f(y_):
-            dftype = brainstate.environ.dftype()
-            return np.asarray(
-                self._dynamics_scalar(
-                    y_[0], y_[1], y_[2], y_[3], y_[4], y_[5], y_[6], i_stim, p
-                ),
-                dtype=dftype
-            )
+    def _event_fn(self, state, extra, accept):
+        """In-loop spike detection with threshold crossing from below, AHP kick.
 
-        while t < dt and iters < self._MAX_ITERS:
-            iters += 1
-            h = max(self._MIN_H, min(h, dt - t))
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, dg_ex, g_ex, dg_in, g_in, dg_ahp, g_ahp_state — ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, V_prev, i_stim.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
 
-            k1 = f(y)
-            k2 = f(y + h * (1.0 / 4.0) * k1)
-            k3 = f(y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
-            k4 = f(y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
-            k5 = f(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-            k6 = f(
-                y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
+        Returns
+        -------
+        (new_state, new_extra) DotDicts with updated spike/AHP info.
+        """
+        # Threshold crossing from below
+        crossed = accept & (extra.V_prev < self.V_th) & (state.V >= self.V_th)
+        spike_mask = extra.spike_mask | crossed
 
-            y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-            y5 = y + h * (
-                    16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
-            err = float(np.max(np.abs(y5 - y4)))
+        # Precise spike timing via linear interpolation
+        denom = state.V - extra.V_prev
+        safe_denom = u.math.where(u.math.abs(denom) < 1e-30 * u.mV, 1.0 * u.mV, denom)
+        dt_spike = extra.h_substep * (state.V - self.V_th) / safe_denom
+        dt_spike = u.math.clip(dt_spike, 0.0 * u.ms, extra.h_substep)
+        dt_spike = u.math.where(crossed, dt_spike, 0.0 * u.ms)
 
-            if err <= self._ATOL or h <= self._MIN_H:
-                y = y5
-                t += h
-                fac = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * (self._ATOL / err) ** 0.2))
-                h = max(self._MIN_H, h * fac)
-            else:
-                fac = min(1.0, max(0.2, 0.9 * (self._ATOL / err) ** 0.25))
-                h = max(self._MIN_H, h * fac)
+        # AHP kick: initialize at spike time and decay forward to step end
+        pscon_ahp = self.g_ahp * np.e / self.tau_ahp  # nS/ms
+        delta_dg = pscon_ahp * u.math.exp(-dt_spike / self.tau_ahp)
+        delta_g = delta_dg * dt_spike
 
-        return y[0], y[1], y[2], y[3], y[4], y[5], y[6], h
+        # ahp_bug mode: replace vs accumulate
+        ahp_bug_mask = crossed & self.ahp_bug
+        ahp_normal_mask = crossed & ~self.ahp_bug
+
+        new_dg_ahp = u.math.where(ahp_bug_mask, delta_dg, state.dg_ahp)
+        new_dg_ahp = u.math.where(ahp_normal_mask, new_dg_ahp + delta_dg, new_dg_ahp)
+
+        new_g_ahp_state = u.math.where(ahp_bug_mask, delta_g, state.g_ahp_state)
+        new_g_ahp_state = u.math.where(ahp_normal_mask, new_g_ahp_state + delta_g, new_g_ahp_state)
+
+        # Update V_prev for next substep crossing detection
+        new_V_prev = u.math.where(accept, state.V, extra.V_prev)
+
+        new_state = DotDict({
+            **state,
+            'dg_ahp': new_dg_ahp,
+            'g_ahp_state': new_g_ahp_state,
+        })
+        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'V_prev': new_V_prev})
+        return new_state, new_extra
 
     def update(self, x=0.0 * u.pA):
-        t_q = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        t_ms = float(u.math.asarray(t_q / u.ms))
-        dt = float(u.math.asarray(dt_q / u.ms))
+        r"""Advance the neuron by one simulation step.
 
-        v_shape = self.V.value.shape
+        Parameters
+        ----------
+        x : ArrayLike, optional
+            Continuous external current input in pA, broadcastable to
+            ``self.varshape``. This value is stored into ``I_stim`` and applied
+            at the next simulation step (one-step delay).
 
-        V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
+        Returns
+        -------
+        jax.Array
+            Binary spike tensor with dtype ``jnp.float64`` and shape
+            ``self.V.value.shape``. A value of ``1.0`` indicates at least one
+            internal spike event occurred during the integrated interval
+            :math:`(t, t+dt]`.
+
+        Notes
+        -----
+        Integration is performed with an adaptive vectorized RKF45 loop,
+        including in-loop spike detection with threshold crossing from below
+        and AHP kicks. All arithmetic is unit-aware via ``saiunit.math``.
+        """
+        t = brainstate.environ.get('t')
+        dt = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
-        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=dftype), v_shape)
-        g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
-        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=dftype), v_shape)
-        g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
-        dg_ahp = self._broadcast_to_state(np.asarray(self.dg_ahp.value, dtype=dftype), v_shape)
-        g_ahp_state = self._broadcast_to_state(self._to_numpy(self.g_ahp_state.value, u.nS), v_shape)
 
-        i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
-        h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape)
-        last_spike_time = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
-        last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
+        # Read state variables with their natural units.
+        V = self.V.value  # mV
+        dg_ex = self.dg_ex.value  # nS/ms
+        g_ex = self.g_ex.value  # nS
+        dg_in = self.dg_in.value  # nS/ms
+        g_in = self.g_in.value  # nS
+        dg_ahp = self.dg_ahp.value  # nS/ms
+        g_ahp_state = self.g_ahp_state.value  # nS
+        i_stim = self.I_stim.value  # pA
+        h = self.integration_step.value  # ms
 
-        p = {
-            'V_th': self._broadcast_to_state(self._to_numpy(self.V_th, u.mV), v_shape),
-            'g_L': self._broadcast_to_state(self._to_numpy(self.g_L, u.nS), v_shape),
-            'C_m': self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape),
-            'E_ex': self._broadcast_to_state(self._to_numpy(self.E_ex, u.mV), v_shape),
-            'E_in': self._broadcast_to_state(self._to_numpy(self.E_in, u.mV), v_shape),
-            'E_L': self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape),
-            'tau_syn_ex': self._broadcast_to_state(self._to_numpy(self.tau_syn_ex, u.ms), v_shape),
-            'tau_syn_in': self._broadcast_to_state(self._to_numpy(self.tau_syn_in, u.ms), v_shape),
-            'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
-            'tau_ahp': self._broadcast_to_state(self._to_numpy(self.tau_ahp, u.ms), v_shape),
-            'E_ahp': self._broadcast_to_state(self._to_numpy(self.E_ahp, u.mV), v_shape),
-            'PSConInit_E': self._broadcast_to_state(np.e / self._to_numpy(self.tau_syn_ex, u.ms), v_shape),
-            'PSConInit_I': self._broadcast_to_state(np.e / self._to_numpy(self.tau_syn_in, u.ms), v_shape),
-            'PSConInit_AHP': self._broadcast_to_state(
-                self._to_numpy(self.g_ahp, u.nS) * np.e / self._to_numpy(self.tau_ahp, u.ms),
-                v_shape,
-            ),
-            'ahp_bug': self._broadcast_to_state(self._to_bool_numpy(self.ahp_bug), v_shape),
-        }
+        # Current input for next step (one-step delay).
+        new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
-        w_ex_q, w_in_q = self._sum_signed_delta_inputs()
-        w_ex = self._broadcast_to_state(self._to_numpy(w_ex_q, u.nS), v_shape)
-        w_in = self._broadcast_to_state(self._to_numpy(w_in_q, u.nS), v_shape)
+        # Adaptive RKF45 integration via generic integrator.
+        ode_state = DotDict(
+            V=V, dg_ex=dg_ex, g_ex=g_ex,
+            dg_in=dg_in, g_in=g_in,
+            dg_ahp=dg_ahp, g_ahp_state=g_ahp_state,
+        )
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            V_prev=V,
+            i_stim=i_stim,
+            h_substep=h,
+        )
 
-        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
-        new_i_stim = self._broadcast_to_state(self._to_numpy(new_i_stim_q, u.pA), v_shape)
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        V = ode_state.V
+        dg_ex, g_ex = ode_state.dg_ex, ode_state.g_ex
+        dg_in, g_in = ode_state.dg_in, ode_state.g_in
+        dg_ahp, g_ahp_state = ode_state.dg_ahp, ode_state.g_ahp_state
+        spike_mask = extra.spike_mask
 
-        spike_mask = np.zeros(v_shape, dtype=bool)
-        v_for_spike = np.empty_like(V)
+        # Synaptic spike inputs (applied after integration).
+        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
+        w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
+        pscon_ex = np.e / self.tau_syn_ex  # 1/ms
+        pscon_in = np.e / self.tau_syn_in  # 1/ms
 
-        V_next = np.empty_like(V)
-        dg_ex_next = np.empty_like(dg_ex)
-        g_ex_next = np.empty_like(g_ex)
-        dg_in_next = np.empty_like(dg_in)
-        g_in_next = np.empty_like(g_in)
-        dg_ahp_next = np.empty_like(dg_ahp)
-        g_ahp_next = np.empty_like(g_ahp_state)
-        h_next = np.empty_like(h_int)
-        last_spike_time_next = np.empty_like(last_spike_time)
-        last_spike_offset_next = np.empty_like(last_spike_offset)
+        # Apply synaptic spike inputs.
+        dg_ex = dg_ex + pscon_ex * w_ex  # nS/ms + 1/ms * nS = nS/ms
+        dg_in = dg_in + pscon_in * w_in  # nS/ms + 1/ms * nS = nS/ms
 
-        i_syn_ex_next = np.empty_like(V)
-        i_syn_in_next = np.empty_like(V)
-        i_ahp_next = np.empty_like(V)
+        # Write back state.
+        self.V.value = V
+        self.dg_ex.value = dg_ex
+        self.g_ex.value = g_ex
+        self.dg_in.value = dg_in
+        self.g_in.value = g_in
+        self.dg_ahp.value = dg_ahp
+        self.g_ahp_state.value = g_ahp_state
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
-        tiny = np.finfo(np.float64).tiny
-        eps = np.finfo(np.float64).eps
-
-        for idx in np.ndindex(v_shape):
-            local_p = {k: p[k][idx] for k in p}
-            vm_prev = V[idx]
-
-            v_i, dg_ex_i, g_ex_i, dg_in_i, g_in_i, dg_ahp_i, g_ahp_i, h_i = self._rkf45_integrate_scalar(
-                V[idx],
-                dg_ex[idx],
-                g_ex[idx],
-                dg_in[idx],
-                g_in[idx],
-                dg_ahp[idx],
-                g_ahp_state[idx],
-                i_stim[idx],
-                h_int[idx],
-                dt,
-                local_p,
-            )
-
-            crossed = (vm_prev < local_p['V_th']) and (v_i >= local_p['V_th'])
-            if crossed:
-                denom = v_i - vm_prev
-                if abs(denom) < tiny:
-                    dt_from_spike_to_end = 0.0
-                else:
-                    dt_from_spike_to_end = dt * (v_i - local_p['V_th']) / denom
-                dt_from_spike_to_end = min(dt, max(0.0, float(dt_from_spike_to_end)))
-
-                delta_dg = local_p['PSConInit_AHP'] * math.exp(-dt_from_spike_to_end / local_p['tau_ahp'])
-                delta_g = delta_dg * dt_from_spike_to_end
-
-                if bool(local_p['ahp_bug']):
-                    g_ahp_i = delta_g
-                    dg_ahp_i = delta_dg
-                else:
-                    g_ahp_i = g_ahp_i + delta_g
-                    dg_ahp_i = dg_ahp_i + delta_dg
-
-                spike_mask[idx] = True
-                last_spike_time_i = t_ms + dt - dt_from_spike_to_end
-                last_spike_offset_i = dt_from_spike_to_end
-                v_for_spike[idx] = max(v_i, local_p['V_th'] + eps)
-            else:
-                last_spike_time_i = last_spike_time[idx]
-                last_spike_offset_i = last_spike_offset[idx]
-                if v_i >= local_p['V_th']:
-                    # Crossing from below is required for spiking.
-                    v_for_spike[idx] = np.nextafter(local_p['V_th'], -np.inf)
-                else:
-                    v_for_spike[idx] = v_i
-
-            dg_ex_i = dg_ex_i + local_p['PSConInit_E'] * w_ex[idx]
-            dg_in_i = dg_in_i + local_p['PSConInit_I'] * w_in[idx]
-
-            V_next[idx] = v_i
-            dg_ex_next[idx] = dg_ex_i
-            g_ex_next[idx] = g_ex_i
-            dg_in_next[idx] = dg_in_i
-            g_in_next[idx] = g_in_i
-            dg_ahp_next[idx] = dg_ahp_i
-            g_ahp_next[idx] = g_ahp_i
-            h_next[idx] = h_i
-            last_spike_time_next[idx] = last_spike_time_i
-            last_spike_offset_next[idx] = last_spike_offset_i
-
-            i_syn_ex_next[idx] = g_ex_i * (v_i - local_p['E_ex'])
-            i_syn_in_next[idx] = g_in_i * (v_i - local_p['E_in'])
-            i_ahp_next[idx] = g_ahp_i * (v_i - local_p['E_ahp'])
-
-        self.V.value = V_next * u.mV
-        self.dg_ex.value = dg_ex_next
-        self.g_ex.value = g_ex_next * u.nS
-        self.dg_in.value = dg_in_next
-        self.g_in.value = g_in_next * u.nS
-        self.dg_ahp.value = dg_ahp_next
-        self.g_ahp_state.value = g_ahp_next * u.nS
-
-        self.I_syn_ex.value = i_syn_ex_next * u.pA
-        self.I_syn_in.value = i_syn_in_next * u.pA
-        self.I_ahp.value = i_ahp_next * u.pA
-
-        self.integration_step.value = h_next * u.ms
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time_next * u.ms)
-        self.last_spike_offset.value = jax.lax.stop_gradient(last_spike_offset_next * u.ms)
-
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=dftype) * u.mV)
+        return u.math.asarray(spike_mask, dtype=dftype)

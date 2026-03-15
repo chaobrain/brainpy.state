@@ -645,17 +645,13 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables for simulation.
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size. If ``None`` (default), state shape is
-            ``self.varshape``. If ``int``, state shape is
-            ``(batch_size,) + self.varshape``.
         **kwargs
-            Additional keyword arguments (reserved for future use).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -671,8 +667,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         All state arrays are initialized as float64 NumPy arrays using the
         provided initializers.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -754,8 +750,6 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
            where :math:`\phi(h)=\min(\max(g(h-\theta),0),\alpha)`.
 
         5. Apply optional output rectification:
-           ditype = brainstate.environ.ditype()
-           dftype = brainstate.environ.dftype()
            :math:`X_{n+1}\gets\max(X',\,\mathrm{rectify\_rate})`.
 
         6. Update state variables: ``rate``, ``noise``, ``delayed_rate``,
@@ -833,6 +827,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         if self.rectify_output:
             rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
+        ditype = brainstate.environ.ditype()
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
@@ -1287,17 +1282,13 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables for simulation.
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size. If ``None`` (default), state shape is
-            ``self.varshape``. If ``int``, state shape is
-            ``(batch_size,) + self.varshape``.
         **kwargs
-            Additional keyword arguments (reserved for future use).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -1315,13 +1306,15 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         provided initializers. Both ``instant_rate`` and ``delayed_rate`` are
         initialized to ``noisy_rate`` (outgoing values are noisy).
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
-        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
+        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
         noisy_rate_np = self._to_numpy(noisy_rate)
 
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
         self.noisy_rate = brainstate.ShortTermState(noisy_rate_np)
@@ -1465,6 +1458,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
             rate_new += P2 * H_ex * (delayed_ex + instant_ex)
             rate_new += P2 * H_in * (delayed_in + instant_in)
 
+        ditype = brainstate.environ.ditype()
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.noisy_rate.value = noisy_rate

@@ -421,7 +421,7 @@ class aeif_cond_alpha(NESTNeuron):
 
         self._validate_parameters()
 
-        self.interator = AdaptiveRungeKuttaStep(
+        self.integrator = AdaptiveRungeKuttaStep(
             method='RKF45',
             vf=self._vector_field,
             event_fn=self._event_fn,
@@ -677,7 +677,7 @@ class aeif_cond_alpha(NESTNeuron):
             v_peak_detect=v_peak_detect,
         )
 
-        ode_state, h, extra = self.interator(state=ode_state, h=h, extra=extra)
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
         V, dg_ex, g_ex = ode_state.V, ode_state.dg_ex, ode_state.g_ex
         dg_in, g_in, w = ode_state.dg_in, ode_state.g_in, ode_state.w
         spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable

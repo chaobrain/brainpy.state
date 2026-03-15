@@ -303,18 +303,13 @@ class erfc_neuron(NESTNeuron):
         self.stochastic_update = stochastic_update
         self.rng_seed = int(rng_seed)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize binary state, input accumulator, and update timing.
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Optional leading batch dimension. If ``None``, states are created
-            with shape ``self.varshape``; otherwise with
-            ``(batch_size,) + self.varshape``.
-        **kwargs : Any
-            Unused compatibility arguments.
-
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Raises
         ------
@@ -324,9 +319,9 @@ class erfc_neuron(NESTNeuron):
             If initializer values are incompatible with required numeric/unit
             conversions.
         """
-        shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
+        shape = self.varshape
 
-        y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
+        y = braintools.init.param(self.y_initializer, self.varshape)
         dftype = brainstate.environ.dftype()
         self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
         self.h = brainstate.ShortTermState(u.math.zeros(shape, dtype=dftype) * u.mV)

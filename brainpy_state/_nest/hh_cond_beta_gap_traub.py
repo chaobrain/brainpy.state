@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable
 
 import brainstate
@@ -25,150 +24,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
-from scipy.integrate import solve_ivp
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'hh_cond_beta_gap_traub',
 ]
-
-
-def _hh_cond_beta_gap_traub_equilibrium(V):
-    r"""Compute Traub HH gating variable equilibrium values at voltage V (mV).
-
-    This matches NEST's ``State_::State_(const Parameters_&)`` initialization,
-    which applies the Traub rate equations **without** the V_T offset.  The
-    dynamics function uses ``V - V_T`` in its rate equations, but the
-    equilibrium initialization in NEST uses the raw voltage ``y_[0]`` (= E_L).
-
-    Parameters
-    ----------
-    V : float
-        Membrane potential in mV (without V_T offset).
-
-    Returns
-    -------
-    m_inf : float
-        Sodium activation gating variable equilibrium value (unitless, 0-1 range).
-    h_inf : float
-        Sodium inactivation gating variable equilibrium value (unitless, 0-1 range).
-    n_inf : float
-        Potassium activation gating variable equilibrium value (unitless, 0-1 range).
-
-    Notes
-    -----
-    The equilibrium values are computed from the rate equations:
-
-    .. math::
-
-        x_{\infty} = \frac{\alpha_x}{\alpha_x + \beta_x}
-
-    where the rate functions match the Traub-Miles formulation with zero V_T shift.
-    This differs from the dynamics integration, which applies the voltage shift
-    ``V - V_T`` during time evolution.
-    """
-    alpha_n = 0.032 * (15.0 - V) / (math.exp((15.0 - V) / 5.0) - 1.0)
-    beta_n = 0.5 * math.exp((10.0 - V) / 40.0)
-    alpha_m = 0.32 * (13.0 - V) / (math.exp((13.0 - V) / 4.0) - 1.0)
-    beta_m = 0.28 * (V - 40.0) / (math.exp((V - 40.0) / 5.0) - 1.0)
-    alpha_h = 0.128 * math.exp((17.0 - V) / 18.0)
-    beta_h = 4.0 / (1.0 + math.exp((40.0 - V) / 5.0))
-    m_inf = alpha_m / (alpha_m + beta_m)
-    h_inf = alpha_h / (alpha_h + beta_h)
-    n_inf = alpha_n / (alpha_n + beta_n)
-    return m_inf, h_inf, n_inf
-
-
-def _beta_normalization_factor(tau_rise, tau_decay):
-    r"""Compute the normalization factor for a beta-function synapse.
-
-    This is a Python translation of NEST's ``beta_normalization_factor()``
-    from ``libnestutil/beta_normalization_factor.h``.
-
-    The beta function synapse ODE solution is:
-
-    .. math::
-
-       g(t) = \\frac{c}{a - b} \\left( e^{-bt} - e^{-at} \\right)
-
-    where :math:`a = 1/\\tau_{rise}` and :math:`b = 1/\\tau_{decay}`.
-    This function computes the constant :math:`c` such that the peak
-    conductance equals 1 nS for unit-weight spike input.
-
-    Parameters
-    ----------
-    tau_rise : float
-        Synaptic rise time constant in milliseconds. Must be positive.
-    tau_decay : float
-        Synaptic decay time constant in milliseconds. Must be positive.
-
-    Returns
-    -------
-    float
-        Normalization factor (unitless) that scales the synaptic conductance jump
-        to ensure peak conductance equals 1 nS for a unit-weight input spike.
-
-    Notes
-    -----
-    **Mathematical Derivation:**
-
-    1. The beta-function conductance is the solution to the second-order system:
-
-       .. math::
-
-           \\frac{d(\\Delta g)}{dt} &= -\\frac{\\Delta g}{\\tau_{decay}} \\\\
-           \\frac{dg}{dt} &= \\Delta g - \\frac{g}{\\tau_{rise}}
-
-    2. For an impulse input at t=0, the analytical solution is:
-
-       .. math::
-
-           g(t) = c \\cdot \\frac{e^{-t/\\tau_{decay}} - e^{-t/\\tau_{rise}}}{1/\\tau_{rise} - 1/\\tau_{decay}}
-
-    3. The peak occurs at time:
-
-       .. math::
-
-           t_{peak} = \\frac{\\tau_{rise} \\tau_{decay}}{\\tau_{decay} - \\tau_{rise}} \\ln\\left(\\frac{\\tau_{decay}}{\\tau_{rise}}\\right)
-
-    4. The normalization factor ensures :math:`g(t_{peak}) = 1` nS.
-
-    **Special Cases:**
-
-    - When :math:`\\tau_{rise} \\approx \\tau_{decay}`, the beta function degenerates to
-      an alpha function with normalization factor :math:`e / \\tau_{decay}`.
-    - If either time constant is zero or negative (invalid), the function returns 0.
-
-    **Numerical Stability:**
-
-    Uses ``numpy.finfo(np.float64).eps`` to detect near-equality of time constants,
-    preventing division by zero or overflow in the log/exponential calculations.
-
-    References
-    ----------
-    .. [1] Rotter S, Diesmann M (1999). Exact digital simulation of
-           time-invariant linear systems with applications to neuronal
-           modeling. Biological Cybernetics 81:381.
-           DOI: https://doi.org/10.1007/s004220050570
-    .. [2] Roth A, van Rossum M (2010). Chapter 6: Modeling synapses.
-           in De Schutter, Computational Modeling Methods for
-           Neuroscientists, MIT Press.
-    """
-    eps = np.finfo(np.float64).eps
-    tau_difference = tau_decay - tau_rise
-    peak_value = 0.0
-
-    if abs(tau_difference) > eps:
-        t_peak = tau_decay * tau_rise * math.log(tau_decay / tau_rise) / tau_difference
-        peak_value = math.exp(-t_peak / tau_decay) - math.exp(-t_peak / tau_rise)
-
-    if abs(peak_value) < eps:
-        # rise time ≈ decay time -> alpha function fallback
-        return math.e / tau_decay
-    else:
-        return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
 
 class hh_cond_beta_gap_traub(NESTNeuron):
@@ -298,9 +161,9 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
     **7. Numerical Integration**
 
-    Uses ``scipy.integrate.solve_ivp`` with the RK45 (Dormand-Prince) adaptive-step
-    Runge-Kutta method. Default tolerances (``rtol=1e-3``, ``atol=1e-9``) match NEST's
-    GSL RKF45 integrator settings for numerical correspondence in benchmark comparisons.
+    Uses an adaptive Runge-Kutta-Fehlberg (RKF45) integrator implemented in JAX.
+    Default absolute tolerance (``gsl_error_tol=1e-6``) matches NEST's GSL RKF45
+    integrator settings for numerical correspondence in benchmark comparisons.
 
     The ODE system has 8 state variables per neuron:
     :math:`[V_m, m, h, n, \Delta g_{ex}, g_{ex}, \Delta g_{in}, g_{in}]`.
@@ -345,6 +208,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     I_e : ArrayLike, default 0 pA
         Constant external input current (bias current). Can be positive (depolarizing)
         or negative (hyperpolarizing).
+    gsl_error_tol : ArrayLike, default 1e-6
+        Unitless local RKF45 error tolerance, broadcastable and strictly positive.
     V_m_init : ArrayLike, optional
         Initial membrane potential. If None, defaults to ``E_L``.
     Act_m_init : ArrayLike, optional
@@ -359,10 +224,6 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     spk_reset : str, default 'hard'
         Spike reset mode for gradient computation. ``'hard'`` uses stop_gradient;
         ``'soft'`` allows gradients through spike. Does not affect forward dynamics.
-    rtol : float, default 1e-3
-        Relative tolerance for ODE solver. Smaller values increase accuracy but reduce speed.
-    atol : float, default 1e-9
-        Absolute tolerance for ODE solver (per-unit tolerance in natural units: mV, ms, nS).
     name : str, optional
         Name identifier for the neuron population.
 
@@ -392,6 +253,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     ``tau_rise_in``      ``tau_rise_in``       :math:`\tau_{rise,in}`          Inhibitory rise time (ms)
     ``tau_decay_in``     ``tau_decay_in``      :math:`\tau_{decay,in}`         Inhibitory decay time (ms)
     ``I_e``              ``I_e``               :math:`I_e`                     External current (pA)
+    ``gsl_error_tol``    --                    --                              RKF45 local error tolerance
     ``V_m_init``         (initial ``V_m``)     :math:`V_m(t=0)`                Initial membrane potential (mV)
     ``Act_m_init``       (initial ``Act_m``)   :math:`m(t=0)`                  Initial Na activation (0-1)
     ``Inact_h_init``     (initial ``Inact_h``) :math:`h(t=0)`                  Initial Na inactivation (0-1)
@@ -401,18 +263,18 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     Attributes
     ----------
     V : brainstate.HiddenState
-        Membrane potential in mV. Shape: ``(batch_size, *in_size)`` or ``(*in_size,)``.
+        Membrane potential in mV. Shape: ``(*in_size,)``.
     m : brainstate.HiddenState
         Sodium activation gating variable (unitless, 0-1 range).
     h : brainstate.HiddenState
         Sodium inactivation gating variable (unitless, 0-1 range).
     n : brainstate.HiddenState
         Potassium activation gating variable (unitless, 0-1 range).
-    dg_ex : brainstate.HiddenState
+    dg_ex : brainstate.ShortTermState
         Time derivative of excitatory conductance in nS/ms (beta-function intermediate state).
     g_ex : brainstate.HiddenState
         Excitatory synaptic conductance in nS.
-    dg_in : brainstate.HiddenState
+    dg_in : brainstate.ShortTermState
         Time derivative of inhibitory conductance in nS/ms (beta-function intermediate state).
     g_in : brainstate.HiddenState
         Inhibitory synaptic conductance in nS.
@@ -420,6 +282,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         Buffered stimulation current in pA (applied in next time step).
     refractory_step_count : brainstate.ShortTermState
         Integer countdown of remaining refractory steps. Zero means neuron can spike.
+    integration_step : brainstate.ShortTermState
+        Persistent RKF45 substep size estimate (ms).
     last_spike_time : brainstate.ShortTermState
         Time of most recent spike emission in ms (for recording/analysis).
 
@@ -456,14 +320,12 @@ class hh_cond_beta_gap_traub(NESTNeuron):
        potential, increase ``t_ref``. Traub and Miles (1991) used 3 ms; NEST defaults
        to 2 ms.
 
-    6. **Numerical stability**: The adaptive RK45 integrator handles the stiff HH
-       dynamics robustly. If you encounter instability, try reducing ``rtol`` or
-       increasing the simulation time step ``dt``.
+    6. **Numerical stability**: The adaptive RKF45 integrator handles the stiff HH
+       dynamics robustly. If you encounter instability, try reducing ``gsl_error_tol``
+       or increasing the simulation time step ``dt``.
 
-    7. **Performance**: Each neuron integrates an 8D ODE system independently using
-       SciPy's ``solve_ivp``, which calls Python code per neuron. For large networks
-       (>1000 neurons), this may be slower than NEST's compiled C++ implementation.
-       Consider vectorization or JIT compilation for production runs.
+    7. **Performance**: All neurons are integrated in a single vectorized adaptive
+       RKF45 loop via JAX, providing efficient GPU/TPU execution.
 
     Examples
     --------
@@ -558,6 +420,10 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
+    _MIN_H = 1e-8 * u.ms  # ms
+    _MAX_ITERS = 100000
+    _EPS = np.finfo(np.float64).eps
+
     def __init__(
         self,
         in_size: Size,
@@ -577,14 +443,13 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         tau_rise_in: ArrayLike = 0.5 * u.ms,
         tau_decay_in: ArrayLike = 10. * u.ms,
         I_e: ArrayLike = 0. * u.pA,
+        gsl_error_tol: ArrayLike = 1e-6,
         V_m_init: ArrayLike = None,
         Act_m_init: ArrayLike = None,
         Inact_h_init: ArrayLike = None,
         Act_n_init: ArrayLike = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        rtol: float = 1e-3,
-        atol: float = 1e-9,
         name: str = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
@@ -605,51 +470,163 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         self.tau_rise_in = braintools.init.param(tau_rise_in, self.varshape)
         self.tau_decay_in = braintools.init.param(tau_decay_in, self.varshape)
         self.I_e = braintools.init.param(I_e, self.varshape)
+        self.gsl_error_tol = gsl_error_tol
         self.V_m_init = V_m_init
         self.Act_m_init = Act_m_init
         self.Inact_h_init = Inact_h_init
         self.Act_n_init = Act_n_init
-        self.rtol = rtol
-        self.atol = atol
 
         self._validate_parameters()
 
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
+
+        # other variable
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+
     @staticmethod
-    def _to_numpy(x, unit):
-        r"""Convert saiunit quantity to NumPy float64 array in specified unit.
+    def _hh_equilibrium(V):
+        r"""Compute Traub HH gating variable equilibrium values at voltage V (mV).
+
+        This matches NEST's ``State_::State_(const Parameters_&)`` initialization,
+        which applies the Traub rate equations **without** the V_T offset.  The
+        dynamics function uses ``V - V_T`` in its rate equations, but the
+        equilibrium initialization in NEST uses the raw voltage ``y_[0]`` (= E_L).
 
         Parameters
         ----------
-        x : ArrayLike with saiunit
-            Quantity to convert (e.g., ``50 * u.mV``).
-        unit : saiunit.Unit
-            Target unit for conversion (e.g., ``u.mV``).
+        V : float
+            Membrane potential in mV (without V_T offset).
 
         Returns
         -------
-        np.ndarray
-            NumPy array with dtype float64 containing unitless values in target unit.
-        """
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
+        m_inf : float
+            Sodium activation gating variable equilibrium value (unitless, 0-1 range).
+        h_inf : float
+            Sodium inactivation gating variable equilibrium value (unitless, 0-1 range).
+        n_inf : float
+            Potassium activation gating variable equilibrium value (unitless, 0-1 range).
 
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        r"""Broadcast NumPy array to match state variable shape.
+        Notes
+        -----
+        The equilibrium values are computed from the rate equations:
+
+        .. math::
+
+            x_{\infty} = \frac{\alpha_x}{\alpha_x + \beta_x}
+
+        where the rate functions match the Traub-Miles formulation with zero V_T shift.
+        This differs from the dynamics integration, which applies the voltage shift
+        ``V - V_T`` during time evolution.
+        """
+        alpha_n = 0.032 * (15.0 - V) / (np.exp((15.0 - V) / 5.0) - 1.0)
+        beta_n = 0.5 * np.exp((10.0 - V) / 40.0)
+        alpha_m = 0.32 * (13.0 - V) / (np.exp((13.0 - V) / 4.0) - 1.0)
+        beta_m = 0.28 * (V - 40.0) / (np.exp((V - 40.0) / 5.0) - 1.0)
+        alpha_h = 0.128 * np.exp((17.0 - V) / 18.0)
+        beta_h = 4.0 / (1.0 + np.exp((40.0 - V) / 5.0))
+        m_inf = alpha_m / (alpha_m + beta_m)
+        h_inf = alpha_h / (alpha_h + beta_h)
+        n_inf = alpha_n / (alpha_n + beta_n)
+        return m_inf, h_inf, n_inf
+
+    @classmethod
+    def _beta_normalization_factor_scalar(cls, tau_rise: float, tau_decay: float):
+        r"""Compute the normalization factor for a beta-function synapse.
+
+        This is a Python translation of NEST's ``beta_normalization_factor()``
+        from ``libnestutil/beta_normalization_factor.h``.
+
+        The beta function synapse ODE solution is:
+
+        .. math::
+
+           g(t) = \frac{c}{a - b} \left( e^{-bt} - e^{-at} \right)
+
+        where :math:`a = 1/\tau_{rise}` and :math:`b = 1/\tau_{decay}`.
+        This function computes the constant :math:`c` such that the peak
+        conductance equals 1 nS for unit-weight spike input.
 
         Parameters
         ----------
-        x_np : np.ndarray
-            Input array (possibly scalar or smaller shape).
-        shape : tuple
-            Target shape for broadcasting.
+        tau_rise : float
+            Synaptic rise time constant in milliseconds. Must be positive.
+        tau_decay : float
+            Synaptic decay time constant in milliseconds. Must be positive.
 
         Returns
         -------
-        np.ndarray
-            Broadcasted array with specified shape.
+        float
+            Normalization factor (unitless) that scales the synaptic conductance jump
+            to ensure peak conductance equals 1 nS for a unit-weight input spike.
+
+        Notes
+        -----
+        **Mathematical Derivation:**
+
+        1. The beta-function conductance is the solution to the second-order system:
+
+           .. math::
+
+               \frac{d(\Delta g)}{dt} &= -\frac{\Delta g}{\tau_{decay}} \\\\
+               \frac{dg}{dt} &= \Delta g - \frac{g}{\tau_{rise}}
+
+        2. For an impulse input at t=0, the analytical solution is:
+
+           .. math::
+
+               g(t) = c \cdot \frac{e^{-t/\tau_{decay}} - e^{-t/\tau_{rise}}}{1/\tau_{rise} - 1/\tau_{decay}}
+
+        3. The peak occurs at time:
+
+           .. math::
+
+               t_{peak} = \frac{\tau_{rise} \tau_{decay}}{\tau_{decay} - \tau_{rise}} \ln\left(\frac{\tau_{decay}}{\tau_{rise}}\right)
+
+        4. The normalization factor ensures :math:`g(t_{peak}) = 1` nS.
+
+        **Special Cases:**
+
+        - When :math:`\tau_{rise} \approx \tau_{decay}`, the beta function degenerates to
+          an alpha function with normalization factor :math:`e / \tau_{decay}`.
+        - If either time constant is zero or negative (invalid), the function returns 0.
+
+        **Numerical Stability:**
+
+        Uses ``numpy.finfo(np.float64).eps`` to detect near-equality of time constants,
+        preventing division by zero or overflow in the log/exponential calculations.
+
+        References
+        ----------
+        .. [1] Rotter S, Diesmann M (1999). Exact digital simulation of
+               time-invariant linear systems with applications to neuronal
+               modeling. Biological Cybernetics 81:381.
+               DOI: https://doi.org/10.1007/s004220050570
+        .. [2] Roth A, van Rossum M (2010). Chapter 6: Modeling synapses.
+               in De Schutter, Computational Modeling Methods for
+               Neuroscientists, MIT Press.
         """
-        return np.broadcast_to(x_np, shape)
+        tau_difference = tau_decay - tau_rise
+        peak_value = 0.0
+
+        if abs(tau_difference) > cls._EPS:
+            t_peak = tau_decay * tau_rise * np.log(tau_decay / tau_rise) / tau_difference
+            peak_value = np.exp(-t_peak / tau_decay) - np.exp(-t_peak / tau_rise)
+
+        if abs(peak_value) < cls._EPS:
+            # rise time ~ decay time -> alpha function fallback
+            return np.e / tau_decay
+        else:
+            return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
     def _validate_parameters(self):
         r"""Validate parameter constraints at initialization.
@@ -683,28 +660,10 @@ class hh_cond_beta_gap_traub(NESTNeuron):
             or np.any(self.g_L < 0.0 * u.nS)
         ):
             raise ValueError('All conductances must be non-negative.')
+        if np.any(self.gsl_error_tol <= 0.0):
+            raise ValueError('The gsl_error_tol must be strictly positive.')
 
-    def _refractory_counts(self):
-        r"""Compute number of simulation steps in refractory period.
-
-        Returns
-        -------
-        jnp.ndarray
-            Integer array (dtype int32) with shape matching neuron population.
-            Each element is :math:`\lceil t_{ref} / dt \\rceil`, the number of
-            time steps the neuron remains refractory after a spike.
-
-        Notes
-        -----
-        Uses ceiling division to ensure the refractory period is at least one full
-        time step if ``t_ref > 0``. For example, with ``t_ref = 2 ms`` and ``dt = 0.1 ms``,
-        returns 20 steps.
-        """
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
-
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables to equilibrium or user-specified values.
 
         Sets up hidden states (membrane potential, gating variables, synaptic conductances)
@@ -723,12 +682,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size for parallel simulation of multiple independent trials.
-            If None, no batch dimension is added (states have shape ``(*in_size,)``).
-            If provided, states have shape ``(batch_size, *in_size)``.
         **kwargs : dict, optional
-            Additional keyword arguments (reserved for future extensions, currently ignored).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -777,12 +732,13 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         - ``m`` (HiddenState): Sodium activation (0-1)
         - ``h`` (HiddenState): Sodium inactivation (0-1)
         - ``n`` (HiddenState): Potassium activation (0-1)
-        - ``dg_ex`` (HiddenState): Excitatory conductance derivative (nS)
+        - ``dg_ex`` (ShortTermState): Excitatory conductance derivative (nS/ms)
         - ``g_ex`` (HiddenState): Excitatory conductance (nS)
-        - ``dg_in`` (HiddenState): Inhibitory conductance derivative (nS)
+        - ``dg_in`` (ShortTermState): Inhibitory conductance derivative (nS/ms)
         - ``g_in`` (HiddenState): Inhibitory conductance (nS)
         - ``I_stim`` (ShortTermState): Stimulation current buffer (pA)
         - ``refractory_step_count`` (ShortTermState): Refractory countdown (int)
+        - ``integration_step`` (ShortTermState): RKF45 substep size (ms)
         - ``last_spike_time`` (ShortTermState): Last spike time (ms)
 
         Examples
@@ -797,14 +753,6 @@ class hh_cond_beta_gap_traub(NESTNeuron):
            >>> print(neuron.V.value)  # Should be E_L = -60 mV
            >>> print(neuron.m.value)  # Equilibrium at -60 mV
 
-        **Batched initialization for parallel trials:**
-
-        .. code-block:: python
-
-           >>> neuron = bst.hh_cond_beta_gap_traub(10)
-           >>> neuron.init_state(batch_size=32)  # 32 independent trials
-           >>> print(neuron.V.value.shape)  # (32, 10)
-
         **Custom depolarized initial state:**
 
         .. code-block:: python
@@ -817,57 +765,61 @@ class hh_cond_beta_gap_traub(NESTNeuron):
            >>> print(neuron.V.value)  # -45 mV
            >>> print(neuron.m.value)  # Equilibrium at -45 mV (higher than at -60 mV)
         """
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+        dt = brainstate.environ.get_dt()
+
         # Default V_m_init to E_L (matching NEST: y_[0] = p.E_L)
         if self.V_m_init is not None:
             V_init_val = self.V_m_init
         else:
             V_init_val = self.E_L
 
-        V_init_mV = self._to_numpy(V_init_val, u.mV)
+        V_init_mV = np.asarray(u.math.asarray(V_init_val / u.mV), dtype=dftype)
         V_init_scalar = float(V_init_mV.flat[0]) if V_init_mV.ndim > 0 else float(V_init_mV)
 
         # Compute equilibrium gating variables at initial V.
         # NEST uses raw V_m (not V_m - V_T) for equilibrium initialization.
-        m_eq, h_eq, n_eq = _hh_cond_beta_gap_traub_equilibrium(V_init_scalar)
+        m_eq, h_eq, n_eq = self._hh_equilibrium(V_init_scalar)
 
-        V = braintools.init.param(braintools.init.Constant(V_init_val), self.varshape, batch_size)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
+        V = braintools.init.param(braintools.init.Constant(V_init_val), self.varshape)
+        zeros = u.math.zeros(self.varshape, dtype=u.math.asarray(V / u.mV).dtype) * (u.nS / u.ms)
 
         if self.Act_m_init is not None:
-            m_init = self._to_numpy(self.Act_m_init, u.UNITLESS).item()
+            m_init = float(np.asarray(u.math.asarray(self.Act_m_init / u.UNITLESS), dtype=dftype))
         else:
             m_init = m_eq
         if self.Inact_h_init is not None:
-            h_init = self._to_numpy(self.Inact_h_init, u.UNITLESS).item()
+            h_init = float(np.asarray(u.math.asarray(self.Inact_h_init / u.UNITLESS), dtype=dftype))
         else:
             h_init = h_eq
         if self.Act_n_init is not None:
-            n_init = self._to_numpy(self.Act_n_init, u.UNITLESS).item()
+            n_init = float(np.asarray(u.math.asarray(self.Act_n_init / u.UNITLESS), dtype=dftype))
         else:
             n_init = n_eq
 
         self.V = brainstate.HiddenState(V)
         self.m = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(m_init), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(m_init), self.varshape)
         )
         self.h = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(h_init), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(h_init), self.varshape)
         )
         self.n = brainstate.HiddenState(
-            braintools.init.param(braintools.init.Constant(n_init), self.varshape, batch_size)
+            braintools.init.param(braintools.init.Constant(n_init), self.varshape)
         )
         # Beta-function synapse state: derivative (dg) and conductance (g)
         # All initialized to zero (matching NEST: y_[i] = 0 for i > 0)
-        self.dg_ex = brainstate.HiddenState(zeros * u.nS)
-        self.g_ex = brainstate.HiddenState(zeros * u.nS)
-        self.dg_in = brainstate.HiddenState(zeros * u.nS)
-        self.g_in = brainstate.HiddenState(zeros * u.nS)
-        self.I_stim = brainstate.ShortTermState(zeros * u.pA)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.dg_ex = brainstate.ShortTermState(zeros)
+        self.g_ex = brainstate.HiddenState(u.math.zeros(self.varshape, dtype=dftype) * u.nS)
+        self.dg_in = brainstate.ShortTermState(zeros)
+        self.g_in = brainstate.HiddenState(u.math.zeros(self.varshape, dtype=dftype) * u.nS)
+
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
+        self.V_old = brainstate.ShortTermState(V)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute differentiable spike output from membrane potential.
@@ -894,7 +846,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         ----------
         V : ArrayLike, optional
             Membrane potential in millivolts. If None, uses ``self.V.value`` (current state).
-            Shape must match ``(batch_size, *in_size)`` or ``(*in_size,)``.
+            Shape must match ``(*in_size,)``.
 
         Returns
         -------
@@ -1047,12 +999,140 @@ class hh_cond_beta_gap_traub(NESTNeuron):
             g_in = g_in + u.math.maximum(-out, zero)
         return g_ex, g_in
 
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, m, h, n, dg_ex, g_ex, dg_in, g_in -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim, V_old, v_spike_detect --
+            mutable auxiliary data carried through the integrator.
+
+        Returns
+        -------
+        DotDict with same keys as ``state``, containing time derivatives.
+        """
+        V_m = state.V
+        m_ = state.m
+        h_ = state.h
+        n_ = state.n
+
+        # Ionic currents
+        I_Na = self.g_Na * m_ * m_ * m_ * h_ * (V_m - self.E_Na)
+        I_K = self.g_K * n_ * n_ * n_ * n_ * (V_m - self.E_K)
+        I_L = self.g_L * (V_m - self.E_L)
+
+        # Synaptic currents (conductance-based)
+        I_syn_exc = state.g_ex * (V_m - self.E_ex)
+        I_syn_inh = state.g_in * (V_m - self.E_in)
+
+        # Shifted voltage for gating variable rate equations
+        V_shifted = (V_m - self.V_T) / u.mV  # unitless
+
+        # Traub-Miles rate functions (with safe clipping to avoid overflow)
+        arg_n = u.math.clip((15.0 - V_shifted) / 5.0, -500.0, 500.0)
+        alpha_n = 0.032 * (15.0 - V_shifted) / (u.math.exp(arg_n) - 1.0) / u.ms
+
+        alpha_n = u.math.where(
+            u.math.abs(15.0 - V_shifted) < 1e-10,
+            0.032 * 5.0 / u.ms,  # L'Hopital limit
+            alpha_n
+        )
+        beta_n = 0.5 * u.math.exp(u.math.clip((10.0 - V_shifted) / 40.0, -500.0, 500.0)) / u.ms
+
+        arg_m = u.math.clip((13.0 - V_shifted) / 4.0, -500.0, 500.0)
+        alpha_m = 0.32 * (13.0 - V_shifted) / (u.math.exp(arg_m) - 1.0) / u.ms
+
+        alpha_m = u.math.where(
+            u.math.abs(13.0 - V_shifted) < 1e-10,
+            0.32 * 4.0 / u.ms,  # L'Hopital limit
+            alpha_m
+        )
+
+        arg_bm = u.math.clip((V_shifted - 40.0) / 5.0, -500.0, 500.0)
+        beta_m = 0.28 * (V_shifted - 40.0) / (u.math.exp(arg_bm) - 1.0) / u.ms
+
+        beta_m = u.math.where(
+            u.math.abs(V_shifted - 40.0) < 1e-10,
+            0.28 * 5.0 / u.ms,  # L'Hopital limit
+            beta_m
+        )
+
+        alpha_h = 0.128 * u.math.exp(u.math.clip((17.0 - V_shifted) / 18.0, -500.0, 500.0)) / u.ms
+        beta_h = 4.0 / (1.0 + u.math.exp(u.math.clip((40.0 - V_shifted) / 5.0, -500.0, 500.0))) / u.ms
+
+        # Membrane potential derivative
+        dV = (-I_Na - I_K - I_L - I_syn_exc - I_syn_inh + extra.i_stim + self.I_e) / self.C_m
+
+        # Gating variable derivatives
+        dm = alpha_m * (1.0 - m_) - beta_m * m_
+        dh = alpha_h * (1.0 - h_) - beta_h * h_
+        dn = alpha_n * (1.0 - n_) - beta_n * n_
+
+        # Beta-function synapse derivatives
+        ddg_ex = -state.dg_ex / self.tau_decay_ex
+        dg_ex_dt = state.dg_ex - state.g_ex / self.tau_rise_ex
+        ddg_in = -state.dg_in / self.tau_decay_in
+        dg_in_dt = state.dg_in - state.g_in / self.tau_rise_in
+
+        return DotDict(
+            V=dV, m=dm, h=dh, n=dn,
+            dg_ex=ddg_ex, g_ex=dg_ex_dt, dg_in=ddg_in, g_in=dg_in_dt
+        )
+
+    def _event_fn(self, state, extra, accept):
+        """In-loop spike detection and refractory handling.
+
+        For the HH model, spike detection uses threshold crossing + local maximum
+        detection. No voltage reset occurs after spike (repolarization is natural).
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, m, h, n, dg_ex, g_ex, dg_in, g_in -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim, V_old, v_spike_detect.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
+
+        Returns
+        -------
+        (new_state, new_extra) DotDicts with updated spike/refractory info.
+        """
+        unstable = extra.unstable | jnp.any(
+            accept & (
+                (state.V < -1e3 * u.mV) |
+                (state.V > 1e3 * u.mV)
+            )
+        )
+
+        # Spike detection: threshold crossing + local maximum (V_old > V)
+        # Only for non-refractory neurons where the substep was accepted.
+        crossed_threshold = state.V >= extra.v_spike_detect
+        local_max = extra.V_old > state.V
+        spike_now = accept & (extra.r <= 0) & crossed_threshold & local_max
+        spike_mask = extra.spike_mask | spike_now
+
+        # Set refractory counter on spike (no voltage reset for HH).
+        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count, extra.r)
+
+        # Track V_old for local maximum detection in next substep.
+        new_V_old = u.math.where(accept, state.V, extra.V_old)
+
+        new_state = DotDict({**state})
+        new_extra = DotDict(
+            {**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable, 'V_old': new_V_old}
+        )
+        return new_state, new_extra
+
     def update(self, x=0. * u.pA):
         r"""Update neuron state for one simulation time step.
 
         Advances all state variables by one time step ``dt`` following the NEST
         ``hh_cond_beta_gap_traub`` update protocol. Integrates the 8D ODE system
-        using adaptive RK45, applies synaptic conductance jumps, detects spikes,
+        using adaptive RKF45, applies synaptic conductance jumps, detects spikes,
         and updates refractory state.
 
         **Update Protocol (Matching NEST Order):**
@@ -1062,8 +1142,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         2. **ODE integration**: Integrate the 8-variable system
            :math:`[V_m, m, h, n, \Delta g_{ex}, g_{ex}, \Delta g_{in}, g_{in}]`
-           from :math:`t` to :math:`t + dt` using ``scipy.integrate.solve_ivp``
-           with RK45 method and tolerances (``rtol``, ``atol``).
+           from :math:`t` to :math:`t + dt` using adaptive RKF45.
 
         3. **Apply synaptic inputs**: Add arriving spike-triggered conductance jumps:
 
@@ -1096,26 +1175,25 @@ class hh_cond_beta_gap_traub(NESTNeuron):
             - Gap-junction current: :math:`I_{gap} = \sum_j g_{gap,ij}(V_j - V_i)`
             - Any additional bias or time-varying input current
 
-            Shape must broadcast with ``(batch_size, *in_size)`` or be scalar.
+            Shape must broadcast with ``(*in_size,)`` or be scalar.
             Unit: picoamperes (pA).
 
         Returns
         -------
         spike : ArrayLike
-            Differentiable spike output with shape ``(batch_size, *in_size)`` or ``(*in_size,)``.
-            Binary spike indicator processed through ``spk_fun`` for gradient computation.
-            Forward pass: 1.0 where spike occurred, 0.0 otherwise.
-            Backward pass: gradient provided by surrogate function (e.g., ``ReluGrad``).
+            Binary spike output with shape ``(*in_size,)``.
+            Dtype: ``float64``. Values of ``1.0`` indicate at least one spike
+            event occurred during the integrated interval :math:`(t, t+dt]`.
 
         Notes
         -----
         **Numerical Integration Details:**
 
-        - Each neuron's 8D ODE is integrated independently using SciPy's ``solve_ivp``.
-        - The RK45 (Dormand-Prince) method uses adaptive step-size control internally,
-          but the final state is sampled at exactly :math:`t + dt`.
-        - Tolerances: ``rtol`` (relative, default 1e-3) and ``atol`` (absolute, default 1e-9).
-        - Integration is performed in NumPy (CPU) per neuron, then converted to JAX arrays.
+        - All neurons are integrated simultaneously using a vectorized adaptive
+          RKF45 loop implemented in JAX, providing efficient GPU/TPU execution.
+        - The RKF45 (Runge-Kutta-Fehlberg) method uses adaptive step-size control
+          with error tolerance ``gsl_error_tol``.
+        - Integration includes in-loop spike detection with local maximum criterion.
 
         **Spike Detection Logic:**
 
@@ -1139,261 +1217,103 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         For networks, this typically requires gathering :math:`V_j` from connected neurons
         before calling :meth:`update`.
 
-        **Performance Considerations:**
-
-        - **Computational cost**: :math:`O(n)` where :math:`n` is the number of neurons.
-          Each neuron integrates independently (no vectorization across neurons).
-        - **Memory**: Temporary NumPy arrays are allocated for flattened state variables.
-        - **Bottleneck**: Per-neuron SciPy ODE solver calls dominate runtime. For large
-          populations (>1000 neurons), this is significantly slower than NEST's compiled
-          C++ implementation.
-
-        **Failure Modes**
-
-
-        - If the ODE solver fails to converge (rare), ``solve_ivp`` will return a partial
-          solution. Check ``sol.success`` if you encounter NaN values.
-        - Extremely stiff parameter regimes (e.g., very small time constants with large ``dt``)
-          may require tighter tolerances (smaller ``rtol``/``atol``).
-
         See Also
         --------
-        init_state : Initialize state variables to equilibrium or custom values.
+        init_state : Initialize state variables before calling ``update()``.
         get_spike : Compute differentiable spike output from voltage.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        h = float(u.math.asarray(dt_q / u.ms))
-
-        v_shape = self.V.value.shape
-
-        # Extract parameters as numpy float64
-        E_L = self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape)
-        C_m = self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape)
-        g_Na = self._broadcast_to_state(self._to_numpy(self.g_Na, u.nS), v_shape)
-        g_K = self._broadcast_to_state(self._to_numpy(self.g_K, u.nS), v_shape)
-        g_L = self._broadcast_to_state(self._to_numpy(self.g_L, u.nS), v_shape)
-        E_Na = self._broadcast_to_state(self._to_numpy(self.E_Na, u.mV), v_shape)
-        E_K = self._broadcast_to_state(self._to_numpy(self.E_K, u.mV), v_shape)
-        V_T = self._broadcast_to_state(self._to_numpy(self.V_T, u.mV), v_shape)
-        E_ex = self._broadcast_to_state(self._to_numpy(self.E_ex, u.mV), v_shape)
-        E_in = self._broadcast_to_state(self._to_numpy(self.E_in, u.mV), v_shape)
-        I_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
-        tau_rise_ex = self._broadcast_to_state(self._to_numpy(self.tau_rise_ex, u.ms), v_shape)
-        tau_decay_ex = self._broadcast_to_state(self._to_numpy(self.tau_decay_ex, u.ms), v_shape)
-        tau_rise_in = self._broadcast_to_state(self._to_numpy(self.tau_rise_in, u.ms), v_shape)
-        tau_decay_in = self._broadcast_to_state(self._to_numpy(self.tau_decay_in, u.ms), v_shape)
-
-        # Current state
-        V_m = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
+        dt = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
-        m_val = self._broadcast_to_state(np.asarray(self.m.value, dtype=dftype), v_shape)
-        h_val = self._broadcast_to_state(np.asarray(self.h.value, dtype=dftype), v_shape)
-        n_val = self._broadcast_to_state(np.asarray(self.n.value, dtype=dftype), v_shape)
-        dg_ex_val = self._broadcast_to_state(self._to_numpy(self.dg_ex.value, u.nS), v_shape)
-        g_ex_val = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
-        dg_in_val = self._broadcast_to_state(self._to_numpy(self.dg_in.value, u.nS), v_shape)
-        g_in_val = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
-        I_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
         ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
+
+        # Read state variables with their natural units.
+        V = self.V.value  # mV
+        m_val = self.m.value  # unitless
+        h_val = self.h.value  # unitless
+        n_val = self.n.value  # unitless
+        dg_ex = self.dg_ex.value  # nS/ms
+        g_ex = self.g_ex.value  # nS
+        dg_in = self.dg_in.value  # nS/ms
+        g_in = self.g_in.value  # nS
+        r = self.refractory_step_count.value  # int
+        i_stim = self.I_stim.value  # pA
+        h = self.integration_step.value  # ms
+        V_old = self.V_old.value  # mV
+
+        # Spike detection threshold: V_T + 30 mV
+        v_spike_detect = self.V_T + 30.0 * u.mV
+
+        # Current input for next step (one-step delay).
+        new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
+
+        # Adaptive RKF45 integration via generic integrator.
+        ode_state = DotDict(
+            V=V, m=m_val, h=h_val, n=n_val,
+            dg_ex=dg_ex, g_ex=g_ex, dg_in=dg_in, g_in=g_in
+        )
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            r=r,
+            unstable=jnp.array(False),
+            i_stim=i_stim,
+            V_old=V_old,
+            v_spike_detect=v_spike_detect,
         )
 
-        # Collect spike/current inputs
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        V = ode_state.V
+        m_val, h_val, n_val = ode_state.m, ode_state.h, ode_state.n
+        dg_ex, g_ex = ode_state.dg_ex, ode_state.g_ex
+        dg_in, g_in = ode_state.dg_in, ode_state.g_in
+        spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable
+
+        # Post-loop stability check.
+        brainstate.transform.jit_error_if(
+            jnp.any(unstable), 'Numerical instability in hh_cond_beta_gap_traub dynamics.'
+        )
+
+        # Decrement refractory counter.
+        r = u.math.where(r > 0, r - 1, r)
+
+        # Synaptic spike inputs (applied after integration).
         dg_ex_q, dg_in_q = self._sum_signed_delta_inputs()
-        dg_ex_input = self._broadcast_to_state(self._to_numpy(dg_ex_q, u.nS), v_shape)
-        dg_in_input = self._broadcast_to_state(self._to_numpy(dg_in_q, u.nS), v_shape)
-        I_stim_next = self._broadcast_to_state(
-            self._to_numpy(self.sum_current_inputs(x, self.V.value), u.pA), v_shape
-        )
 
-        # Compute beta normalization factors (PSConInit)
-        # These are scalar per neuron; use the first element for simplicity
-        # (broadcast parameters are uniform per neuron in typical usage).
-        tau_rise_ex_flat = tau_rise_ex.ravel()
-        tau_decay_ex_flat = tau_decay_ex.ravel()
-        tau_rise_in_flat = tau_rise_in.ravel()
-        tau_decay_in_flat = tau_decay_in.ravel()
+        # Compute beta normalization factors.
+        tau_rise_ex_ms = float(u.get_mantissa(self.tau_rise_ex / u.ms)) if np.ndim(self.tau_rise_ex) == 0 else None
+        tau_decay_ex_ms = float(u.get_mantissa(self.tau_decay_ex / u.ms)) if np.ndim(self.tau_decay_ex) == 0 else None
+        tau_rise_in_ms = float(u.get_mantissa(self.tau_rise_in / u.ms)) if np.ndim(self.tau_rise_in) == 0 else None
+        tau_decay_in_ms = float(u.get_mantissa(self.tau_decay_in / u.ms)) if np.ndim(self.tau_decay_in) == 0 else None
 
-        # Record V before integration for spike detection
-        V_old = V_m.copy()
+        if tau_rise_ex_ms is not None and tau_decay_ex_ms is not None:
+            pscon_ex = self._beta_normalization_factor_scalar(tau_rise_ex_ms, tau_decay_ex_ms) / u.ms
+        else:
+            # Fallback: use element-wise computation for array taus
+            pscon_ex = np.e / self.tau_decay_ex
 
-        # Integrate ODE for each neuron independently
-        flat_size = int(np.prod(v_shape)) if len(v_shape) > 0 else 1
-        V_new = np.empty(flat_size, dtype=dftype)
-        m_new = np.empty(flat_size, dtype=dftype)
-        h_new = np.empty(flat_size, dtype=dftype)
-        n_new = np.empty(flat_size, dtype=dftype)
-        dg_ex_new = np.empty(flat_size, dtype=dftype)
-        g_ex_new = np.empty(flat_size, dtype=dftype)
-        dg_in_new = np.empty(flat_size, dtype=dftype)
-        g_in_new = np.empty(flat_size, dtype=dftype)
+        if tau_rise_in_ms is not None and tau_decay_in_ms is not None:
+            pscon_in = self._beta_normalization_factor_scalar(tau_rise_in_ms, tau_decay_in_ms) / u.ms
+        else:
+            pscon_in = np.e / self.tau_decay_in
 
-        V_m_flat = V_m.ravel()
-        m_flat = m_val.ravel()
-        h_flat = h_val.ravel()
-        n_flat = n_val.ravel()
-        dg_ex_flat = dg_ex_val.ravel()
-        g_ex_flat = g_ex_val.ravel()
-        dg_in_flat = dg_in_val.ravel()
-        g_in_flat = g_in_val.ravel()
-        I_stim_flat = I_stim.ravel()
-        g_Na_flat = g_Na.ravel()
-        g_K_flat = g_K.ravel()
-        g_L_flat = g_L.ravel()
-        E_Na_flat = E_Na.ravel()
-        E_K_flat = E_K.ravel()
-        E_L_flat = E_L.ravel()
-        V_T_flat = V_T.ravel()
-        E_ex_flat = E_ex.ravel()
-        E_in_flat = E_in.ravel()
-        C_m_flat = C_m.ravel()
-        I_e_flat = I_e.ravel()
+        # Apply synaptic spike inputs.
+        dg_ex = dg_ex + pscon_ex * dg_ex_q  # nS/ms + 1/ms * nS = nS/ms
+        dg_in = dg_in + pscon_in * dg_in_q  # nS/ms + 1/ms * nS = nS/ms
 
-        for i in range(flat_size):
-            # State vector: [V, m, h, n, dg_ex, g_ex, dg_in, g_in]
-            y0 = np.array([
-                V_m_flat[i], m_flat[i], h_flat[i], n_flat[i],
-                dg_ex_flat[i], g_ex_flat[i], dg_in_flat[i], g_in_flat[i]
-            ])
-
-            # Capture per-neuron parameters for closure
-            _g_Na = g_Na_flat[i]
-            _g_K = g_K_flat[i]
-            _g_L = g_L_flat[i]
-            _E_Na = E_Na_flat[i]
-            _E_K = E_K_flat[i]
-            _E_L = E_L_flat[i]
-            _V_T = V_T_flat[i]
-            _E_ex = E_ex_flat[i]
-            _E_in = E_in_flat[i]
-            _C_m = C_m_flat[i]
-            _I_e = I_e_flat[i]
-            _I_stim = I_stim_flat[i]
-            _tau_rise_ex = tau_rise_ex_flat[i]
-            _tau_decay_ex = tau_decay_ex_flat[i]
-            _tau_rise_in = tau_rise_in_flat[i]
-            _tau_decay_in = tau_decay_in_flat[i]
-
-            def rhs(t_local, y,
-                    _g_Na=_g_Na, _g_K=_g_K, _g_L=_g_L,
-                    _E_Na=_E_Na, _E_K=_E_K, _E_L=_E_L,
-                    _V_T=_V_T, _E_ex=_E_ex, _E_in=_E_in,
-                    _C_m=_C_m, _I_e=_I_e, _I_stim=_I_stim,
-                    _tau_rise_ex=_tau_rise_ex, _tau_decay_ex=_tau_decay_ex,
-                    _tau_rise_in=_tau_rise_in, _tau_decay_in=_tau_decay_in):
-                V_m_ = y[0]
-                m_ = y[1]
-                h_ = y[2]
-                n_ = y[3]
-                dg_e = y[4]
-                g_e = y[5]
-                dg_i = y[6]
-                g_i = y[7]
-
-                # Ionic currents
-                I_Na = _g_Na * m_ * m_ * m_ * h_ * (V_m_ - _E_Na)
-                I_K = _g_K * n_ * n_ * n_ * n_ * (V_m_ - _E_K)
-                I_L = _g_L * (V_m_ - _E_L)
-
-                # Synaptic currents (conductance-based)
-                I_syn_exc = g_e * (V_m_ - _E_ex)
-                I_syn_inh = g_i * (V_m_ - _E_in)
-
-                # Shifted voltage for gating variable rate equations
-                V = V_m_ - _V_T
-
-                alpha_n = 0.032 * (15.0 - V) / (math.exp((15.0 - V) / 5.0) - 1.0)
-                beta_n = 0.5 * math.exp((10.0 - V) / 40.0)
-                alpha_m = 0.32 * (13.0 - V) / (math.exp((13.0 - V) / 4.0) - 1.0)
-                beta_m = 0.28 * (V - 40.0) / (math.exp((V - 40.0) / 5.0) - 1.0)
-                alpha_h = 0.128 * math.exp((17.0 - V) / 18.0)
-                beta_h = 4.0 / (1.0 + math.exp((40.0 - V) / 5.0))
-
-                f = np.empty(8)
-                # Membrane potential (no gap current in the single-neuron ODE;
-                # gap current is injected via I_stim or x input)
-                f[0] = (-I_Na - I_K - I_L - I_syn_exc - I_syn_inh + _I_stim + _I_e) / _C_m
-                # Gating variables
-                f[1] = alpha_m - (alpha_m + beta_m) * m_
-                f[2] = alpha_h - (alpha_h + beta_h) * h_
-                f[3] = alpha_n - (alpha_n + beta_n) * n_
-                # Beta-function synapse: excitatory
-                f[4] = -dg_e / _tau_decay_ex
-                f[5] = dg_e - (g_e / _tau_rise_ex)
-                # Beta-function synapse: inhibitory
-                f[6] = -dg_i / _tau_decay_in
-                f[7] = dg_i - (g_i / _tau_rise_in)
-                return f
-
-            sol = solve_ivp(
-                rhs,
-                [0.0, h],
-                y0,
-                method='RK45',
-                rtol=self.rtol,
-                atol=self.atol,
-                dense_output=False,
-            )
-            yf = sol.y[:, -1]
-            V_new[i] = yf[0]
-            m_new[i] = yf[1]
-            h_new[i] = yf[2]
-            n_new[i] = yf[3]
-            dg_ex_new[i] = yf[4]
-            g_ex_new[i] = yf[5]
-            dg_in_new[i] = yf[6]
-            g_in_new[i] = yf[7]
-
-        V_m = V_new.reshape(v_shape)
-        m_val = m_new.reshape(v_shape)
-        h_val = h_new.reshape(v_shape)
-        n_val = n_new.reshape(v_shape)
-        dg_ex_val = dg_ex_new.reshape(v_shape)
-        g_ex_val = g_ex_new.reshape(v_shape)
-        dg_in_val = dg_in_new.reshape(v_shape)
-        g_in_val = g_in_new.reshape(v_shape)
-
-        # Add arriving spike conductance inputs (after ODE integration, matching NEST)
-        # NEST applies: S_.y_[DG_EXC] += spike_exc * PSConInit_E
-        # PSConInit_E is the beta normalization factor
-        for i in range(flat_size):
-            pscon_ex = _beta_normalization_factor(tau_rise_ex_flat[i], tau_decay_ex_flat[i])
-            pscon_in = _beta_normalization_factor(tau_rise_in_flat[i], tau_decay_in_flat[i])
-            idx = np.unravel_index(i, v_shape) if len(v_shape) > 0 else ()
-            dg_ex_val[idx] += dg_ex_input.ravel()[i] * pscon_ex
-            dg_in_val[idx] += dg_in_input.ravel()[i] * pscon_in
-
-        # Spike detection: threshold crossing + local maximum
-        not_refractory = r == 0
-        V_T_arr = self._broadcast_to_state(self._to_numpy(self.V_T, u.mV), v_shape)
-        crossed_threshold = V_m >= (V_T_arr + 30.0)
-        local_max = V_old > V_m
-        spike_cond = not_refractory & crossed_threshold & local_max
-
-        # Refractory update
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
-            v_shape,
-        )
-        r_new = np.where(spike_cond, refr_counts, np.where(r > 0, r - 1, r))
-
-        # Write back state
-        self.V.value = V_m * u.mV
+        # Write back state.
+        self.V.value = V
         self.m.value = m_val
         self.h.value = h_val
         self.n.value = n_val
-        self.dg_ex.value = dg_ex_val * u.nS
-        self.g_ex.value = g_ex_val * u.nS
-        self.dg_in.value = dg_in_val * u.nS
-        self.g_in.value = g_in_val * u.nS
-        self.I_stim.value = I_stim_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r_new, dtype=ditype)
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
-        )
+        self.dg_ex.value = dg_ex
+        self.g_ex.value = g_ex
+        self.dg_in.value = dg_in
+        self.g_in.value = g_in
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
+        self.V_old.value = V
 
-        # Return spike output: only signal a spike when spike_cond is True
-        V_out = np.where(spike_cond, 1e-12, -1.0)
-        return self.get_spike(V_out * u.mV)
+        return u.math.asarray(spike_mask, dtype=dftype)

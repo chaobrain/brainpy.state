@@ -236,24 +236,25 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
     r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
-        neuron = gif_cond_exp_multisynapse(1)
-        self.assertEqual(neuron.g_L, 4.0 * u.nS)
-        self.assertEqual(neuron.E_L, -70.0 * u.mV)
-        self.assertEqual(neuron.C_m, 80.0 * u.pF)
-        self.assertEqual(neuron.V_reset, -55.0 * u.mV)
-        self.assertEqual(neuron.Delta_V, 0.5 * u.mV)
-        self.assertEqual(neuron.V_T_star, -35.0 * u.mV)
-        self.assertAlmostEqual(neuron.lambda_0, 0.001)  # 1/ms (= 1/s internally)
-        self.assertEqual(neuron.t_ref, 4.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        # Multisynapse defaults: single receptor with tau_syn=2.0, E_rev=0.0
-        self.assertEqual(neuron.tau_syn, (2.0,))
-        self.assertEqual(neuron.E_rev, (0.0,))
-        self.assertEqual(neuron.n_receptors, 1)
-        self.assertEqual(neuron.tau_sfa, ())
-        self.assertEqual(neuron.q_sfa, ())
-        self.assertEqual(neuron.tau_stc, ())
-        self.assertEqual(neuron.q_stc, ())
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = gif_cond_exp_multisynapse(1)
+            self.assertEqual(neuron.g_L, 4.0 * u.nS)
+            self.assertEqual(neuron.E_L, -70.0 * u.mV)
+            self.assertEqual(neuron.C_m, 80.0 * u.pF)
+            self.assertEqual(neuron.V_reset, -55.0 * u.mV)
+            self.assertEqual(neuron.Delta_V, 0.5 * u.mV)
+            self.assertEqual(neuron.V_T_star, -35.0 * u.mV)
+            self.assertAlmostEqual(neuron.lambda_0, 0.001)  # 1/ms (= 1/s internally)
+            self.assertEqual(neuron.t_ref, 4.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            # Multisynapse defaults: single receptor with tau_syn=2.0, E_rev=0.0
+            self.assertEqual(neuron.tau_syn, (2.0,))
+            self.assertEqual(neuron.E_rev, (0.0,))
+            self.assertEqual(neuron.n_receptors, 1)
+            self.assertEqual(neuron.tau_sfa, ())
+            self.assertEqual(neuron.q_sfa, ())
+            self.assertEqual(neuron.tau_stc, ())
+            self.assertEqual(neuron.q_stc, ())
 
     def test_initial_state_matches_nest(self):
         r"""V_m should be initialized to E_L, all conductances to 0."""
@@ -268,57 +269,68 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.g[1].value, 0.0 * u.nS))
 
     def test_multiple_receptors(self):
-        r"""Verify model with multiple receptor ports."""
-        neuron = gif_cond_exp_multisynapse(
-            1, tau_syn=(2.0, 4.0, 8.0), E_rev=(0.0, -85.0, -65.0)
-        )
-        self.assertEqual(neuron.n_receptors, 3)
-        self.assertEqual(neuron.tau_syn, (2.0, 4.0, 8.0))
-        self.assertEqual(neuron.E_rev, (0.0, -85.0, -65.0))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Verify model with multiple receptor ports."""
+            neuron = gif_cond_exp_multisynapse(
+                1, tau_syn=(2.0, 4.0, 8.0), E_rev=(0.0, -85.0, -65.0)
+            )
+            self.assertEqual(neuron.n_receptors, 3)
+            self.assertEqual(neuron.tau_syn, (2.0, 4.0, 8.0))
+            self.assertEqual(neuron.E_rev, (0.0, -85.0, -65.0))
 
 
 class TestGIFCondExpMultisynParameterValidation(unittest.TestCase):
     r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_syn_E_rev_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(2.0, 4.0), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(2.0, 4.0), E_rev=(0.0,))
 
     def test_empty_tau_syn_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(), E_rev=())
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(), E_rev=())
 
     def test_mismatched_tau_sfa_q_sfa_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_sfa=[10.0], q_sfa=[1.0, 2.0])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_sfa=[10.0], q_sfa=[1.0, 2.0])
 
     def test_mismatched_tau_stc_q_stc_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_stc=[10.0, 20.0], q_stc=[1.0])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_stc=[10.0, 20.0], q_stc=[1.0])
 
     def test_negative_capacitance_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, C_m=-80.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, C_m=-80.0 * u.pF)
 
     def test_negative_g_L_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, g_L=-1.0 * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, g_L=-1.0 * u.nS)
 
     def test_negative_Delta_V_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, Delta_V=-0.5 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, Delta_V=-0.5 * u.mV)
 
     def test_negative_lambda_0_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, lambda_0=-1.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, lambda_0=-1.0)
 
     def test_negative_tau_syn_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(-2.0,), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(-2.0,), E_rev=(0.0,))
 
     def test_zero_tau_syn_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(0.0,), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(0.0,), E_rev=(0.0,))
 
 
 class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):

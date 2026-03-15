@@ -323,63 +323,71 @@ class TestGlifPsc(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        r"""Verify default parameters match NEST C++ source."""
-        neuron = glif_psc(1)
-        self.assertEqual(neuron.g_m, 9.43 * u.nS)
-        self.assertEqual(neuron.E_L, -78.85 * u.mV)
-        self.assertEqual(neuron.V_th, -51.68 * u.mV)
-        self.assertEqual(neuron.C_m, 58.72 * u.pF)
-        self.assertEqual(neuron.t_ref, 3.75 * u.ms)
-        self.assertEqual(neuron.V_reset, -78.85 * u.mV)
-        self.assertEqual(neuron.th_spike_add, 0.37)
-        self.assertEqual(neuron.th_spike_decay, 0.009)
-        self.assertEqual(neuron.voltage_reset_fraction, 0.20)
-        self.assertEqual(neuron.voltage_reset_add, 18.51)
-        self.assertEqual(neuron.th_voltage_index, 0.005)
-        self.assertEqual(neuron.th_voltage_decay, 0.09)
-        self.assertEqual(neuron.asc_init, (0.0, 0.0))
-        self.assertEqual(neuron.asc_decay, (0.003, 0.1))
-        self.assertEqual(neuron.asc_amps, (-9.18, -198.94))
-        self.assertEqual(neuron.asc_r, (1.0, 1.0))
-        self.assertEqual(neuron.tau_syn, (2.0,))
-        self.assertFalse(neuron.has_theta_spike)
-        self.assertFalse(neuron.has_asc)
-        self.assertFalse(neuron.has_theta_voltage)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Verify default parameters match NEST C++ source."""
+            neuron = glif_psc(1)
+            self.assertEqual(neuron.g_m, 9.43 * u.nS)
+            self.assertEqual(neuron.E_L, -78.85 * u.mV)
+            self.assertEqual(neuron.V_th, -51.68 * u.mV)
+            self.assertEqual(neuron.C_m, 58.72 * u.pF)
+            self.assertEqual(neuron.t_ref, 3.75 * u.ms)
+            self.assertEqual(neuron.V_reset, -78.85 * u.mV)
+            self.assertEqual(neuron.th_spike_add, 0.37)
+            self.assertEqual(neuron.th_spike_decay, 0.009)
+            self.assertEqual(neuron.voltage_reset_fraction, 0.20)
+            self.assertEqual(neuron.voltage_reset_add, 18.51)
+            self.assertEqual(neuron.th_voltage_index, 0.005)
+            self.assertEqual(neuron.th_voltage_decay, 0.09)
+            self.assertEqual(neuron.asc_init, (0.0, 0.0))
+            self.assertEqual(neuron.asc_decay, (0.003, 0.1))
+            self.assertEqual(neuron.asc_amps, (-9.18, -198.94))
+            self.assertEqual(neuron.asc_r, (1.0, 1.0))
+            self.assertEqual(neuron.tau_syn, (2.0,))
+            self.assertFalse(neuron.has_theta_spike)
+            self.assertFalse(neuron.has_asc)
+            self.assertFalse(neuron.has_theta_voltage)
 
     # ------------------------------------------------------------------
     # 2. Parameter validation tests
     # ------------------------------------------------------------------
 
     def test_invalid_model_combination(self):
-        r"""Invalid mechanism combinations should raise."""
-        with self.assertRaises(ValueError):
-            glif_psc(1, adapting_threshold=True, spike_dependent_threshold=False)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Invalid mechanism combinations should raise."""
+            with self.assertRaises(ValueError):
+                glif_psc(1, adapting_threshold=True, spike_dependent_threshold=False)
 
     def test_v_reset_ge_v_th_raises(self):
-        with self.assertRaises(ValueError):
-            glif_psc(1, V_reset=-50.0 * u.mV, V_th=-51.68 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc(1, V_reset=-50.0 * u.mV, V_th=-51.68 * u.mV)
 
     def test_capacitance_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc(1, C_m=0.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc(1, C_m=0.0 * u.pF)
 
     def test_conductance_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc(1, g=0.0 * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc(1, g=0.0 * u.nS)
 
     def test_t_ref_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc(1, t_ref=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc(1, t_ref=0.0 * u.ms)
 
     def test_asc_size_mismatch(self):
-        with self.assertRaises(ValueError):
-            glif_psc(1, after_spike_currents=True,
-                     asc_init=(0.0,), asc_decay=(0.003, 0.1),
-                     asc_amps=(-9.18, -198.94), asc_r=(1.0, 1.0))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc(1, after_spike_currents=True,
+                         asc_init=(0.0,), asc_decay=(0.003, 0.1),
+                         asc_amps=(-9.18, -198.94), asc_r=(1.0, 1.0))
 
     def test_tau_syn_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc(1, tau_syn=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc(1, tau_syn=(0.0,))
 
     # ------------------------------------------------------------------
     # 3. IAFPropagatorAlpha tests

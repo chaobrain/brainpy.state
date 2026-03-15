@@ -893,7 +893,7 @@ class rate_neuron_opn(_lin_rate_base):
 
         return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables for simulation.
 
         This method must be called before the first ``update()`` call. It
@@ -903,16 +903,8 @@ class rate_neuron_opn(_lin_rate_base):
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension size for parallel simulation of multiple instances.
-            If ``None`` (default), state shape is ``self.varshape`` (single
-            instance). If ``int > 0``, state shape is
-            ``(batch_size,) + self.varshape`` (batched instances). For example,
-            if ``self.varshape=(10,)`` and ``batch_size=32``, the state shape
-            will be ``(32, 10)``. Default: ``None``.
         **kwargs
-            Additional keyword arguments (reserved for future use, currently
-            ignored).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -956,7 +948,7 @@ class rate_neuron_opn(_lin_rate_base):
 
         Examples
         --------
-        Initialize without batch dimension (single instance):
+        Initialize a single population:
 
         .. code-block:: python
 
@@ -966,15 +958,6 @@ class rate_neuron_opn(_lin_rate_base):
            >>> model.init_state()
            >>> print(model.rate.value.shape)
            (10,)
-
-        Initialize with batch dimension (32 parallel instances):
-
-        .. code-block:: python
-
-           >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms)
-           >>> model.init_state(batch_size=32)
-           >>> print(model.rate.value.shape)
-           (32, 10)
 
         Custom initializers:
 
@@ -994,9 +977,9 @@ class rate_neuron_opn(_lin_rate_base):
         --------
         update : Perform one simulation step after initialization.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
-        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
+        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
         noisy_rate_np = self._to_numpy(noisy_rate)
