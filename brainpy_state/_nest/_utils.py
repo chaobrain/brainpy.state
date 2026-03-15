@@ -30,6 +30,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import saiunit as u
+from brainstate.typing import PyTree
 from jax.interpreters.partial_eval import DynamicJaxprTracer
 
 __all__ = [
@@ -724,7 +725,12 @@ class AdaptiveRungeKuttaStep:
         """Return a list of available method names."""
         return list(tableau_mapping.keys())
 
-    def __call__(self, state, h, extra=None):
+    def __call__(
+        self,
+        state: PyTree,
+        h: u.Quantity,
+        extra: Optional[PyTree] = None
+    ):
         """Integrate over one simulation timestep.
 
         Parameters
