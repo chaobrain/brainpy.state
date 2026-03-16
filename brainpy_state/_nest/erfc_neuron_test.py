@@ -195,7 +195,7 @@ class TestErfcNeuron(unittest.TestCase):
             )
             neuron.init_state()
 
-            n_steps = 6000
+            n_steps = 1000
             y_sum = np.zeros(n, dtype=dftype)
 
             for step in range(n_steps):

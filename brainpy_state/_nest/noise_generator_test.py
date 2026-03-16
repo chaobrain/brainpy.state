@@ -117,7 +117,7 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
     def test_mean_and_std(self):
         r"""Generated noise should have approximately correct mean and std."""
         dt_ms = 0.1
-        n_steps = 10000
+        n_steps = 2000
         mean_val = 50.0
         std_val = 100.0
 

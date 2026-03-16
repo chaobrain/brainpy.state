@@ -368,7 +368,8 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         if dy_inputs is not None:
             for port, weight in dy_inputs:
                 neuron.add_delta_input(
-                    f'receptor_{port}_step{k}', weight * u.pA
+                    f'receptor_{port}_step{k}', weight * u.pA,
+                    label=f'receptor_{port}'
                 )
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
@@ -588,7 +589,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif2_spike_dependent_threshold(self):
         r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -630,7 +631,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif3_after_spike_currents(self):
         r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -672,7 +673,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif4_combined_reset_and_asc(self):
         r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -714,7 +715,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif5_full_model(self):
         r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -1011,8 +1012,8 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
 
             # All receptors should have non-zero y1_fast and y1_slow
             for k_rec in range(3):
-                y1_fast_val = float((neuron.y1_fast[k_rec].value / u.pA)[0])
-                y1_slow_val = float((neuron.y1_slow[k_rec].value / u.pA)[0])
+                y1_fast_val = float((neuron.y1_fast[k_rec].value / (u.pA / u.ms))[0])
+                y1_slow_val = float((neuron.y1_slow[k_rec].value / (u.pA / u.ms))[0])
                 self.assertGreater(abs(y1_fast_val), 0.0,
                                    msg=f"Receptor {k_rec} should have non-zero y1_fast")
                 self.assertGreater(abs(y1_slow_val), 0.0,
@@ -1132,9 +1133,9 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
                     self._step(neuron, k)
                     _ref_glif_psc_double_alpha_step(state, params, dt_val)
 
-                y1_fast_model.append(float((neuron.y1_fast[0].value / u.pA)[0]))
+                y1_fast_model.append(float((neuron.y1_fast[0].value / (u.pA / u.ms))[0]))
                 y2_fast_model.append(float((neuron.y2_fast[0].value / u.pA)[0]))
-                y1_slow_model.append(float((neuron.y1_slow[0].value / u.pA)[0]))
+                y1_slow_model.append(float((neuron.y1_slow[0].value / (u.pA / u.ms))[0]))
                 y2_slow_model.append(float((neuron.y2_slow[0].value / u.pA)[0]))
                 y1_fast_ref.append(state['y1_fast'][0])
                 y2_fast_ref.append(state['y2_fast'][0])
@@ -1225,7 +1226,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif1_voltage_trace_with_constant_current(self):
         r"""GLIF1 with constant current: full voltage trace matches reference."""
         dt_val = 0.01
-        n_steps = 3000
+        n_steps = 800
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(

@@ -123,7 +123,7 @@ class Net(brainstate.nn.Module):
     def __init__(self, n_spike):
         super().__init__()
         times = brainstate.random.randn(n_spike) * spike_sigma + 20 * u.ms
-        self.ext = brainpy.state.SpikeTime(n_spike, times=times, indices=u.math.arange(n_spike), need_sort=False)
+        self.ext = brainpy.state.SpikeTime(n_spike, times=times, indices=u.math.arange(n_spike))
         self.pop = Population(in_size=n_groups * group_size)
         self.syn = Projection(self.pop)
 

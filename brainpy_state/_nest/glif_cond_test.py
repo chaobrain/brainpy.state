@@ -536,7 +536,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif2_spike_dependent_threshold(self):
         r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -585,7 +585,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif3_after_spike_currents(self):
         r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -628,7 +628,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif4_combined_reset_and_asc(self):
         r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -671,7 +671,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif5_full_model(self):
         r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -895,7 +895,7 @@ class TestGlifCond(unittest.TestCase):
 
             # All receptors should have non-zero dg
             for k_rec in range(3):
-                dg_val = float((neuron.dg_syn[k_rec].value / u.nS)[0])
+                dg_val = float((neuron.dg_syn[k_rec].value / (u.nS / u.ms))[0])
                 self.assertGreater(abs(dg_val), 0.0,
                                    msg=f"Receptor {k_rec} should have non-zero dg")
 

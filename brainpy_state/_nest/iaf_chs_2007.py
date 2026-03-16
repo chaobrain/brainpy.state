@@ -488,9 +488,8 @@ class iaf_chs_2007(NESTNeuron):
 
         V = braintools.init.param(self.V_initializer, self.varshape)
         zeros = u.math.zeros(self.varshape, dtype=dftype)
-        zeros_per_ms = u.math.zeros(self.varshape, dtype=dftype) / u.ms
 
-        self.i_syn_ex = brainstate.ShortTermState(zeros_per_ms)
+        self.i_syn_ex = brainstate.ShortTermState(zeros)
         self.V_syn = brainstate.ShortTermState(zeros)
         self.V_spike = brainstate.ShortTermState(zeros)
         self.V = brainstate.HiddenState(V)
@@ -749,11 +748,6 @@ class iaf_chs_2007(NESTNeuron):
                 noise_term = U_noise * sampled_noise
                 pos = u.math.where(use_noise, pos + 1, pos)
 
-        # Synaptic spike inputs (positive-weight-only, applied before integration).
-        w_ex = self.sum_delta_inputs(u.math.zeros(self.varshape, dtype=dftype), label='w_ex')
-        w_ex = u.math.maximum(w_ex, 0.0)
-        i_syn_ex = i_syn_ex + w_ex / u.ms
-
         # Adaptive RKF45 integration via generic integrator.
         ode_state = DotDict(i_syn_ex=i_syn_ex, V_syn=V_syn, V_spike=V_spike)
         extra = DotDict(
@@ -764,6 +758,19 @@ class iaf_chs_2007(NESTNeuron):
 
         ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
         i_syn_ex = ode_state.i_syn_ex
+
+        # Synaptic spike inputs (positive-weight-only, applied AFTER integration
+        # to match NEST's ordering: decay first, then add arriving weights).
+        # NEST clamps each individual weight to zero before accumulating,
+        # so we clamp per-input (not after summing).
+        w_ex = u.math.zeros(self.varshape, dtype=dftype)
+        if self._delta_inputs is not None:
+            label_prefix = 'w_ex // '
+            for key in tuple(self._delta_inputs.keys()):
+                if key.startswith(label_prefix):
+                    val = self._delta_inputs.pop(key)
+                    w_ex = w_ex + u.math.maximum(val, 0.0)
+        i_syn_ex = i_syn_ex + w_ex
         V_syn = ode_state.V_syn
         V_spike = ode_state.V_spike
         spike_mask = extra.spike_mask

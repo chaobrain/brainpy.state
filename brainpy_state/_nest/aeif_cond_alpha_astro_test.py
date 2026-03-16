@@ -23,6 +23,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -496,23 +497,26 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
                 w_initializer=braintools.init.Constant(params['w'] * u.pA),
             )
             neuron.init_state()
-            neuron.dg_ex.value = np.asarray([params['dg_ex']], dtype=dftype)
-            neuron.dg_in.value = np.asarray([params['dg_in']], dtype=dftype)
+            neuron.dg_ex.value = np.asarray([params['dg_ex']], dtype=dftype) * (u.nS / u.ms)
+            neuron.dg_in.value = np.asarray([params['dg_in']], dtype=dftype) * (u.nS / u.ms)
 
-            bp_v = np.empty(n_steps, dtype=dftype)
-            bp_w = np.empty(n_steps, dtype=dftype)
-            bp_g_ex = np.empty(n_steps, dtype=dftype)
-            bp_g_in = np.empty(n_steps, dtype=dftype)
-            bp_i_sic = np.empty(n_steps, dtype=dftype)
-
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):
                     neuron.update(x=0.0 * u.pA)
-                bp_v[k] = float((neuron.V.value / u.mV)[0])
-                bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_g_ex[k] = float((neuron.g_ex.value / u.nS)[0])
-                bp_g_in[k] = float((neuron.g_in.value / u.nS)[0])
-                bp_i_sic[k] = float((neuron.I_sic.value / u.pA)[0])
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    neuron.I_sic.value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            bp_v = np.asarray(results[0].flatten(), dtype=dftype)
+            bp_w = np.asarray(results[1].flatten(), dtype=dftype)
+            bp_g_ex = np.asarray(results[2].flatten(), dtype=dftype)
+            bp_g_in = np.asarray(results[3].flatten(), dtype=dftype)
+            bp_i_sic = np.asarray(results[4].flatten(), dtype=dftype)
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         valid = (bp_indices >= 0) & (bp_indices < n_steps)

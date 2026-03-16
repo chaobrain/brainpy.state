@@ -793,10 +793,10 @@ class glif_psc_double_alpha(NESTNeuron):
         V = braintools.init.param(self.V_initializer, self.varshape)
         self.V = brainstate.HiddenState(V)
 
-        # Per-receptor alpha-function current states: fast component (y1_fast, y2_fast)
+        # Per-receptor alpha-function current states: fast component (y1_fast rate pA/ms, y2_fast current pA)
         self.y1_fast = [
             brainstate.HiddenState(
-                braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape)
+                braintools.init.param(braintools.init.Constant(0.0 * u.pA / u.ms), self.varshape)
             )
             for _ in range(self._n_receptors)
         ]
@@ -807,10 +807,10 @@ class glif_psc_double_alpha(NESTNeuron):
             for _ in range(self._n_receptors)
         ]
 
-        # Per-receptor alpha-function current states: slow component (y1_slow, y2_slow)
+        # Per-receptor alpha-function current states: slow component (y1_slow rate pA/ms, y2_slow current pA)
         self.y1_slow = [
             brainstate.HiddenState(
-                braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape)
+                braintools.init.param(braintools.init.Constant(0.0 * u.pA / u.ms), self.varshape)
             )
             for _ in range(self._n_receptors)
         ]
@@ -1203,7 +1203,7 @@ class glif_psc_double_alpha(NESTNeuron):
         dy_inputs = []
         for k in range(self._n_receptors):
             label = f'receptor_{k}'
-            w_k = self.sum_delta_inputs(u.math.zeros_like(self.y1_fast[0].value), label=label)
+            w_k = self.sum_delta_inputs(u.math.zeros(self.varshape, dtype=dftype) * u.pA, label=label)
             dy_inputs.append(w_k)
 
         # Apply synaptic spike inputs to y1 states.

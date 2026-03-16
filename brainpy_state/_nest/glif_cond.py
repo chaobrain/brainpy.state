@@ -677,7 +677,7 @@ class glif_cond(NESTNeuron):
         ]
         self.dg_syn = [
             brainstate.HiddenState(
-                braintools.init.param(braintools.init.Constant(0.0 * u.nS), self.varshape)
+                braintools.init.param(braintools.init.Constant(0.0 * u.nS / u.ms), self.varshape)
             )
             for _ in range(self._n_receptors)
         ]
@@ -782,43 +782,35 @@ class glif_cond(NESTNeuron):
         return derivs
 
     def _event_fn(self, state, extra, accept):
-        """In-loop spike detection, reset, and refractory handling.
+        """In-loop refractory clamping and stability check.
+
+        Spike detection and reset are handled in the post-integration
+        numpy loop (matching NEST's structure where spike detection
+        happens after the ODE integration step, not during it).
 
         Parameters
         ----------
         state : DotDict
             ODE state variables including V_rel and per-receptor dg/g.
         extra : DotDict
-            Auxiliary data including spike_mask, r, unstable, threshold, etc.
+            Auxiliary data including r, unstable, etc.
         accept : array, bool
             Mask of neurons whose RK substep was accepted.
 
         Returns
         -------
-        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
+        (new_state, new_extra) DotDicts with updated state.
         """
         unstable = extra.unstable | jnp.any(
             accept & (state.V_rel < -1e3 * u.mV)
         )
 
+        # During refractory: clamp V to V_reset, dV=0 is handled by _vector_field
         refr_accept = accept & (extra.r > 0)
         new_V_rel = u.math.where(refr_accept, extra.V_reset_rel, state.V_rel)
 
-        spike_now = accept & (extra.r <= 0) & (new_V_rel > extra.threshold * u.mV)
-        spike_mask = extra.spike_mask | spike_now
-
-        # For GLIF1/3: simple reset
-        # For GLIF2/4/5: biologically defined reset
-        if not self.has_theta_spike:
-            reset_V = extra.V_reset_rel
-        else:
-            reset_V = self.voltage_reset_fraction * extra.v_old + self.voltage_reset_add * u.mV
-
-        new_V_rel = u.math.where(spike_now, reset_V, new_V_rel)
-        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count, extra.r)
-
         new_state = DotDict({**state, 'V_rel': new_V_rel})
-        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
+        new_extra = DotDict({**extra, 'unstable': unstable})
         return new_state, new_extra
 
     def _collect_receptor_delta_inputs(self):
@@ -973,9 +965,10 @@ class glif_cond(NESTNeuron):
         ).copy()
         V_rel = V_abs - E_L_mV  # relative to E_L
 
+        _dg_unit = u.nS / u.ms
         dg_all = [
             np.broadcast_to(
-                np.asarray(u.math.asarray(self.dg_syn[k].value / u.nS), dtype=dftype), v_shape
+                np.asarray(u.math.asarray(self.dg_syn[k].value / _dg_unit), dtype=dftype), v_shape
             ).copy()
             for k in range(self._n_receptors)
         ]
@@ -1015,7 +1008,7 @@ class glif_cond(NESTNeuron):
         # ---- Adaptive RKF45 integration via generic integrator ----
         ode_state = DotDict(V_rel=V_rel * u.mV)
         for k in range(self._n_receptors):
-            ode_state['dg_%d' % k] = dg_all[k] * u.nS
+            ode_state['dg_%d' % k] = dg_all[k] * (u.nS / u.ms)
             ode_state['g_%d' % k] = g_all[k] * u.nS
 
         extra = DotDict(
@@ -1038,8 +1031,6 @@ class glif_cond(NESTNeuron):
         V_rel_new = ode_state.V_rel
         dg_new = [ode_state['dg_%d' % k] for k in range(self._n_receptors)]
         g_new = [ode_state['g_%d' % k] for k in range(self._n_receptors)]
-        spike_mask_jax = extra.spike_mask
-        r_new = extra.r
         unstable = extra.unstable
 
         # Post-loop stability check.
@@ -1048,9 +1039,8 @@ class glif_cond(NESTNeuron):
         )
 
         # Convert integrated state back to numpy for GLIF-specific post-processing
-        V_rel_np = np.asarray(u.math.asarray(V_rel_new / u.mV), dtype=dftype)
-        spike_mask = np.asarray(spike_mask_jax, dtype=bool)
-        r_np = np.asarray(r_new, dtype=ditype)
+        V_rel_np = np.asarray(u.math.asarray(V_rel_new / u.mV), dtype=dftype).copy()
+        r_np = np.asarray(r, dtype=ditype).copy()
 
         # ---- GLIF-specific post-integration: threshold dynamics ----
         # Pre-compute decay rates (matching NEST pre_run_hook)
@@ -1175,8 +1165,9 @@ class glif_cond(NESTNeuron):
         cond_init_vals = [np.e / self.tau_syn[k] for k in range(self._n_receptors)]
 
         # Extract integrated synaptic state back to numpy for spike input application
+        _dg_unit = u.nS / u.ms
         dg_next = [
-            np.asarray(u.math.asarray(dg_new[k] / u.nS), dtype=dftype)
+            np.asarray(u.math.asarray(dg_new[k] / _dg_unit), dtype=dftype)
             for k in range(self._n_receptors)
         ]
         g_next = [
@@ -1194,7 +1185,7 @@ class glif_cond(NESTNeuron):
         # Write back state
         self.V.value = (V_final + E_L_mV) * u.mV  # convert back to absolute
         for k in range(self._n_receptors):
-            self.dg_syn[k].value = dg_next[k] * u.nS
+            self.dg_syn[k].value = dg_next[k] * _dg_unit
             self.g_syn[k].value = g_next[k] * u.nS
         self.refractory_step_count.value = jnp.asarray(r_final, dtype=ditype)
         self.integration_step.value = h_out * u.ms

@@ -583,7 +583,11 @@ class AdaptiveRungeKuttaStep:
         v_shape = first_leaf.shape
         dftype = brainstate.environ.dftype()
 
-        t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
+        # Match units of t_local to dt (unitless if dt is unitless)
+        if isinstance(dt, u.Quantity):
+            t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
+        else:
+            t_local = jnp.zeros(v_shape, dtype=dftype)
         h = u.math.maximum(h, min_h)
 
         init_carry = (state, t_local, h, extra, jnp.array(0, dtype=jnp.int32))

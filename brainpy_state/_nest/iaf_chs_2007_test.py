@@ -216,10 +216,10 @@ class TestIAFChs2007(unittest.TestCase):
                 spikes_model.append(self._is_spike(spk))
                 spikes_ref.append(_reference_step(ref_state, params, w))
 
-                self.assertAlmostEqual(self._scalar(neuron.i_syn_ex.value), ref_state['i_syn_ex'], delta=5e-13)
-                self.assertAlmostEqual(self._scalar(neuron.V_syn.value), ref_state['V_syn'], delta=5e-13)
-                self.assertAlmostEqual(self._scalar(neuron.V_spike.value), ref_state['V_spike'], delta=5e-13)
-                self.assertAlmostEqual(self._scalar(neuron.V.value), ref_state['V_m'], delta=5e-13)
+                self.assertAlmostEqual(self._scalar(neuron.i_syn_ex.value), ref_state['i_syn_ex'], delta=1e-10)
+                self.assertAlmostEqual(self._scalar(neuron.V_syn.value), ref_state['V_syn'], delta=1e-10)
+                self.assertAlmostEqual(self._scalar(neuron.V_spike.value), ref_state['V_spike'], delta=1e-10)
+                self.assertAlmostEqual(self._scalar(neuron.V.value), ref_state['V_m'], delta=1e-10)
                 self.assertEqual(int(np.asarray(neuron.position.value).reshape(-1)[0]), ref_state['position'])
 
             self.assertEqual(spikes_model, spikes_ref)

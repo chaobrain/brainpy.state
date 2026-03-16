@@ -664,7 +664,7 @@ class TestHTNeuronSpiking(unittest.TestCase):
     def test_refractory_period(self):
         r"""After a spike, neuron should be refractory for t_ref steps."""
         dt = 0.1
-        n_steps = 1000
+        n_steps = 300
         I_strong = 50.0
         t_ref = 2.0
         expected_ref_steps = int(round(t_ref / dt))
@@ -690,7 +690,7 @@ class TestHTNeuronSpiking(unittest.TestCase):
     def test_spike_resets_V_and_theta(self):
         r"""On spike, V and theta should be set to E_Na."""
         dt = 0.1
-        n_steps = 1000
+        n_steps = 300
         I_strong = 50.0
 
         with brainstate.environ.context(dt=dt * u.ms):

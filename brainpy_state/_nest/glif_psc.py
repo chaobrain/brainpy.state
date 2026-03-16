@@ -664,10 +664,10 @@ class glif_psc(NESTNeuron):
         V = braintools.init.param(self.V_initializer, self.varshape)
         self.V = brainstate.HiddenState(V)
 
-        # Per-receptor alpha-function current states: y1, y2
+        # Per-receptor alpha-function current states: y1 (rate, pA/ms), y2 (current, pA)
         self.y1 = [
             brainstate.HiddenState(
-                braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape)
+                braintools.init.param(braintools.init.Constant(0.0 * u.pA / u.ms), self.varshape)
             )
             for _ in range(self._n_receptors)
         ]
@@ -814,18 +814,19 @@ class glif_psc(NESTNeuron):
         )
 
         refr_accept = accept & (extra.r > 0)
-        new_V = u.math.where(refr_accept, self.V_reset, state.V)
 
-        spike_now = accept & (extra.r <= 0) & (new_V >= extra.v_peak_detect)
+        spike_now = accept & (extra.r <= 0) & (state.V >= extra.v_peak_detect)
         spike_mask = extra.spike_mask | spike_now
 
         # Voltage reset depends on model level
         if not self.has_theta_spike:
-            # GLIF1/3: simple reset to V_reset
+            # GLIF1/3: simple reset to V_reset during refractory and on spike
+            new_V = u.math.where(refr_accept, self.V_reset, state.V)
             new_V = u.math.where(spike_now, self.V_reset, new_V)
         else:
-            # GLIF2/4/5: biologically defined reset
-            # V_new = f_v * (V - E_L) + voltage_reset_add + E_L (in absolute terms)
+            # GLIF2/4/5: biologically defined reset on spike;
+            # during refractory, hold V at its current value (already bio-reset)
+            new_V = state.V
             v_reset_bio = (
                 self.voltage_reset_fraction * (new_V - self.E_L)
                 + self.voltage_reset_add * u.mV
@@ -1121,8 +1122,8 @@ class glif_psc(NESTNeuron):
         for k in range(self._n_receptors):
             y1_val = ode_state['y1_%d' % k]
             y2_val = ode_state['y2_%d' % k]
-            # Add incoming spike current jumps
-            y1_val = y1_val + dy_input[k] * PSCInitialValues[k] * u.pA
+            # Add incoming spike current jumps (y1 has units pA/ms)
+            y1_val = y1_val + dy_input[k] * PSCInitialValues[k] * u.pA / u.ms
             self.y1[k].value = y1_val
             self.y2[k].value = y2_val
 
