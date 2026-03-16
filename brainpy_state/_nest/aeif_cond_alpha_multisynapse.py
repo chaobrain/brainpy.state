@@ -530,8 +530,8 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
         self.V = brainstate.HiddenState(V)
         self.w = brainstate.HiddenState(w)
 
-        # dg has shape varshape + (n_receptors,), units nS/ms
-        zeros_dg = u.math.zeros(self.varshape + (self.n_receptors,), dtype=V.dtype) * (u.nS / u.ms)
+        # dg has shape varshape + (n_receptors,), stored unitless (mantissa in nS/ms)
+        zeros_dg = u.math.zeros(self.varshape + (self.n_receptors,), dtype=V.dtype)
         self.dg = brainstate.ShortTermState(zeros_dg)
         self.g = brainstate.HiddenState(g)
 
@@ -716,8 +716,8 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
         # Build ODE state DotDict with per-receptor dg_k and g_k.
         ode_state = DotDict(V=V, w=w)
         for k in range(n_receptors):
-            ode_state[f'dg_{k}'] = dg[..., k] * u.nS / u.ms  # restore units for dg
-            ode_state[f'g_{k}'] = g[..., k] * u.nS  # restore units for g
+            ode_state[f'dg_{k}'] = dg[..., k] * (u.nS / u.ms)  # dg stored unitless, restore nS/ms
+            ode_state[f'g_{k}'] = g[..., k]  # g stored with nS units
 
         extra = DotDict(
             spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),

@@ -201,7 +201,10 @@ class TestHHCondExpTraubSubthreshold(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -292,7 +295,10 @@ class TestHHCondExpTraubSpiking(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -429,7 +435,10 @@ class TestHHCondExpTraubSynaptic(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -518,7 +527,10 @@ class TestHHCondExpTraubMultiStep(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -669,7 +681,10 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -775,7 +790,10 @@ class TestHHCondExpTraubEdgeCases(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 

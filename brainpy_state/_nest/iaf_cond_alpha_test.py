@@ -143,7 +143,10 @@ class TestIAFCondAlpha(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'delta_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'delta_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'delta_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -207,8 +210,8 @@ class TestIAFCondAlpha(unittest.TestCase):
 
             expected_dg_ex = math.e / 0.2 * 5.0
             expected_dg_in = math.e / 2.0 * 3.0
-            self.assertAlmostEqual(float(neuron.dg_ex.value[0]), expected_dg_ex, delta=1e-12)
-            self.assertAlmostEqual(float(neuron.dg_in.value[0]), expected_dg_in, delta=1e-12)
+            self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ex.value[0])), expected_dg_ex, delta=1e-12)
+            self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_in.value[0])), expected_dg_in, delta=1e-12)
             self.assertTrue(u.math.allclose(neuron.g_ex.value, 0.0 * u.nS))
             self.assertTrue(u.math.allclose(neuron.g_in.value, 0.0 * u.nS))
 
@@ -270,9 +273,9 @@ class TestIAFCondAlpha(unittest.TestCase):
                 spikes_ref.append(_reference_step(ref_state, params, x_i, w_i, 0.1))
 
                 self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['v'], delta=2e-6)
-                self.assertAlmostEqual(float(neuron.dg_ex.value[0]), ref_state['dg_ex'], delta=2e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ex.value[0])), ref_state['dg_ex'], delta=2e-6)
                 self.assertAlmostEqual(float((neuron.g_ex.value / u.nS)[0]), ref_state['g_ex'], delta=2e-6)
-                self.assertAlmostEqual(float(neuron.dg_in.value[0]), ref_state['dg_in'], delta=2e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_in.value[0])), ref_state['dg_in'], delta=2e-6)
                 self.assertAlmostEqual(float((neuron.g_in.value / u.nS)[0]), ref_state['g_in'], delta=2e-6)
                 self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
                 self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=2e-6)

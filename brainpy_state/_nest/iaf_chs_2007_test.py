@@ -83,7 +83,7 @@ class TestIAFChs2007(unittest.TestCase):
     def _step(self, neuron, k, x=0.0, delta_weights=None):
         if delta_weights is not None:
             for i, w in enumerate(delta_weights):
-                neuron.add_delta_input(f'w_{k}_{i}', float(w))
+                neuron.add_delta_input(f'w_{k}_{i}', float(w), label='w_ex')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 

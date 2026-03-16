@@ -647,7 +647,7 @@ class aeif_psc_alpha(NESTNeuron):
 
         dV_raw = (
                      -self.g_L * (v_eff - self.E_L) + i_spike
-                     - state.I_ex - state.I_in - state.w + self.I_e + extra.i_stim
+                     + state.I_ex - state.I_in - state.w + self.I_e + extra.i_stim
                  ) / self.C_m
         dV = u.math.where(is_refractory, u.math.zeros_like(dV_raw), dV_raw)
 

@@ -323,9 +323,9 @@ class TestIAFBW2001Exact(unittest.TestCase):
 
                 for i, (rec, w) in enumerate(events):
                     if rec == 'AMPA':
-                        ce.add_delta_input(f'e_{k}_{i}', w)
+                        ce.add_delta_input(f'e_{k}_{i}', w, label='w_ex')
                     else:
-                        ce.add_delta_input(f'i_{k}_{i}', -w)
+                        ce.add_delta_input(f'i_{k}_{i}', w, label='w_in')
 
                 with brainstate.environ.context(t=k * self.dt):
                     bw.update(x=x_k, spike_events=events)

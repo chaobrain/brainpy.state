@@ -123,6 +123,11 @@ def propagator_exp(tau_syn, tau_m, c_m, h_ms):
     np.ndarray
         Propagator coefficient P21.
     """
+    tau_syn = np.asarray(tau_syn, dtype=np.float64)
+    tau_m = np.asarray(tau_m, dtype=np.float64)
+    c_m = np.asarray(c_m, dtype=np.float64)
+    h_ms = np.asarray(h_ms, dtype=np.float64)
+
     with np.errstate(divide='ignore', invalid='ignore', over='ignore', under='ignore'):
         beta = tau_syn * tau_m / (tau_m - tau_syn)
         gamma = beta / c_m
@@ -161,6 +166,11 @@ def alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h_ms):
     P32 : np.ndarray
         Alpha propagator P32 coefficient.
     """
+    tau_syn = np.asarray(tau_syn, dtype=np.float64)
+    tau_m = np.asarray(tau_m, dtype=np.float64)
+    c_m = np.asarray(c_m, dtype=np.float64)
+    h_ms = np.asarray(h_ms, dtype=np.float64)
+
     with np.errstate(divide='ignore', invalid='ignore', over='ignore', under='ignore'):
         beta = tau_syn * tau_m / (tau_m - tau_syn)
         gamma = beta / c_m
@@ -415,8 +425,17 @@ def _rk_scaled_error_norm(y0, y1, y_error, atol, rtol):
 
     err_tree = jax.tree.map(_leaf_err, y0, y1, y_error, is_leaf=_is_quantity)
     err_leaves = jax.tree.leaves(err_tree)
-    err = err_leaves[0]
-    for e in err_leaves[1:]:
+    # Reduce each leaf to the minimum ndim (per-neuron shape) so that
+    # leaves with extra trailing dimensions (e.g. per-receptor) don't
+    # broadcast and expand the shape of the combined error.
+    min_ndim = min(e.ndim for e in err_leaves)
+    reduced = []
+    for e in err_leaves:
+        while e.ndim > min_ndim:
+            e = jnp.max(e, axis=-1)
+        reduced.append(e)
+    err = reduced[0]
+    for e in reduced[1:]:
         err = jnp.maximum(err, e)
     return err
 

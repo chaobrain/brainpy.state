@@ -361,9 +361,9 @@ class TestIAFBW2001(unittest.TestCase):
                 for i, ev in enumerate(events):
                     receptor, w = ev
                     if receptor == 'AMPA':
-                        ce.add_delta_input(f'e_{k}_{i}', w)
+                        ce.add_delta_input(f'e_{k}_{i}', w, label='w_ex')
                     else:
-                        ce.add_delta_input(f'i_{k}_{i}', -w)
+                        ce.add_delta_input(f'i_{k}_{i}', w, label='w_in')
 
                 with brainstate.environ.context(t=k * self.dt):
                     bw.update(x=x_k, spike_events=events)

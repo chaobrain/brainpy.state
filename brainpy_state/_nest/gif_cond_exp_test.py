@@ -293,7 +293,10 @@ class TestGIFCondExpSubthresholdDynamics(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -412,7 +415,10 @@ class TestGIFCondExpRefractoryBehavior(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -473,7 +479,10 @@ class TestGIFCondExpAdaptation(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -591,7 +600,10 @@ class TestGIFCondExpStochasticSpiking(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -664,7 +676,10 @@ class TestGIFCondExpReferenceTrace(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -820,7 +835,10 @@ class TestGIFCondExpUpdateOrder(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 

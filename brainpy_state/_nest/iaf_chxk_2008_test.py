@@ -173,7 +173,10 @@ class TestIAFChxk2008(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, weights=None):
         if weights is not None:
             for i, w in enumerate(weights):
-                neuron.add_delta_input(f'w_{k}_{i}', float(w) * u.nS)
+                if w >= 0:
+                    neuron.add_delta_input(f'w_{k}_{i}', float(w) * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'w_{k}_{i}', float(-w) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
@@ -241,8 +244,8 @@ class TestIAFChxk2008(unittest.TestCase):
             neuron.init_state()
 
             self._step(neuron, 0, weights=[5.0, -3.0])
-            self.assertAlmostEqual(float(neuron.dg_ex.value[0]), math.e * 5.0, delta=1e-12)
-            self.assertAlmostEqual(float(neuron.dg_in.value[0]), math.e * 3.0, delta=1e-12)
+            self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ex.value[0])), math.e * 5.0, delta=1e-12)
+            self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_in.value[0])), math.e * 3.0, delta=1e-12)
             self.assertTrue(u.math.allclose(neuron.g_ex.value, 0.0 * u.nS))
             self.assertTrue(u.math.allclose(neuron.g_in.value, 0.0 * u.nS))
 
@@ -336,11 +339,11 @@ class TestIAFChxk2008(unittest.TestCase):
                 spikes_ref.append(_reference_step(ref, p, x_i, ws, 0.1, 0.1 * k))
 
                 self.assertAlmostEqual(self._scalar(neuron.V.value, u.mV), ref['v'], delta=3e-6)
-                self.assertAlmostEqual(float(neuron.dg_ex.value[0]), ref['dg_ex'], delta=3e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ex.value[0])), ref['dg_ex'], delta=3e-6)
                 self.assertAlmostEqual(self._scalar(neuron.g_ex.value, u.nS), ref['g_ex'], delta=3e-6)
-                self.assertAlmostEqual(float(neuron.dg_in.value[0]), ref['dg_in'], delta=3e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_in.value[0])), ref['dg_in'], delta=3e-6)
                 self.assertAlmostEqual(self._scalar(neuron.g_in.value, u.nS), ref['g_in'], delta=3e-6)
-                self.assertAlmostEqual(float(neuron.dg_ahp.value[0]), ref['dg_ahp'], delta=4e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ahp.value[0])), ref['dg_ahp'], delta=4e-6)
                 self.assertAlmostEqual(self._scalar(neuron.g_ahp_state.value, u.nS), ref['g_ahp'], delta=4e-6)
                 self.assertAlmostEqual(self._scalar(neuron.I_syn_ex.value, u.pA), ref['i_syn_ex'], delta=4e-5)
                 self.assertAlmostEqual(self._scalar(neuron.I_syn_in.value, u.pA), ref['i_syn_in'], delta=4e-5)
@@ -418,11 +421,11 @@ class TestIAFChxk2008(unittest.TestCase):
                 _reference_step(ref, p, x_i, ws, 0.1, 0.1 * k)
 
                 self.assertAlmostEqual(self._scalar(neuron.V.value, u.mV), ref['v'], delta=3e-6)
-                self.assertAlmostEqual(float(neuron.dg_ex.value[0]), ref['dg_ex'], delta=3e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ex.value[0])), ref['dg_ex'], delta=3e-6)
                 self.assertAlmostEqual(self._scalar(neuron.g_ex.value, u.nS), ref['g_ex'], delta=3e-6)
-                self.assertAlmostEqual(float(neuron.dg_in.value[0]), ref['dg_in'], delta=3e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_in.value[0])), ref['dg_in'], delta=3e-6)
                 self.assertAlmostEqual(self._scalar(neuron.g_in.value, u.nS), ref['g_in'], delta=3e-6)
-                self.assertAlmostEqual(float(neuron.dg_ahp.value[0]), ref['dg_ahp'], delta=4e-6)
+                self.assertAlmostEqual(float(u.get_mantissa(neuron.dg_ahp.value[0])), ref['dg_ahp'], delta=4e-6)
                 self.assertAlmostEqual(self._scalar(neuron.g_ahp_state.value, u.nS), ref['g_ahp'], delta=4e-6)
                 self.assertAlmostEqual(self._scalar(neuron.last_spike_time.value, u.ms), ref['last_spike_time'],
                                        delta=3e-6)

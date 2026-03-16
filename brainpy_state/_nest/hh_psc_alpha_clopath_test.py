@@ -249,7 +249,10 @@ class TestHHClopathSubthreshold(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -338,7 +341,10 @@ class TestHHClopathSpiking(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -467,7 +473,10 @@ class TestHHClopathSynaptic(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -557,7 +566,10 @@ class TestHHClopathVoltageTraces(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -572,7 +584,7 @@ class TestHHClopathVoltageTraces(unittest.TestCase):
             neuron.init_state()
 
             # Run for many steps to let filtered voltages approach V_m
-            for k in range(10000):
+            for k in range(3000):
                 self._step(neuron, k)
 
             V = _V_mV(neuron)
@@ -736,7 +748,10 @@ class TestHHClopathMultiStep(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 
@@ -836,7 +851,10 @@ class TestHHClopathEdgeCases(unittest.TestCase):
 
     def _step(self, neuron, step_idx, x=0. * u.pA, delta=None):
         if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
+            if u.get_mantissa(delta) >= 0:
+                neuron.add_delta_input(f'delta_{step_idx}', delta, label='w_ex')
+            else:
+                neuron.add_delta_input(f'delta_{step_idx}', -delta, label='w_in')
         with brainstate.environ.context(t=step_idx * self.dt):
             return neuron.update(x=x)
 

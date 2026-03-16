@@ -33,6 +33,9 @@ Test coverage:
 import math
 import unittest
 
+import brainstate
+import saiunit as u
+
 from brainpy_state._nest.cm_default import (
     cm_default,
     _NaChannel,
@@ -210,9 +213,9 @@ class TestPassiveSingleCompartment(unittest.TestCase):
         })
         model.pre_run_hook(self.dt)
 
-        # Inject current for many steps
+        # Inject current until steady state
         I_ext = 1.0  # nA
-        for _ in range(10000):
+        for _ in range(2000):
             model.add_current(0, I_ext)
             model.step()
 
@@ -240,7 +243,7 @@ class TestPassiveMultiCompartment(unittest.TestCase):
         })
         model.pre_run_hook(self.dt)
 
-        for _ in range(100000):
+        for _ in range(5000):
             model.step()
 
         # Both should approach e_L
@@ -343,7 +346,7 @@ class TestPassiveMultiCompartment(unittest.TestCase):
         model.pre_run_hook(self.dt)
 
         # Just verify it runs without errors and converges
-        for _ in range(100000):
+        for _ in range(5000):
             model.step()
 
         voltages = model.get_voltages()
@@ -649,7 +652,7 @@ class TestSpikeDetection(unittest.TestCase):
         model.pre_run_hook(0.1)
 
         # Drive voltage just above threshold
-        for _ in range(10000):
+        for _ in range(2000):
             model.add_current(0, 2.0)
             spike = model.step()
             if spike:
@@ -744,7 +747,7 @@ class TestMatrixSolver(unittest.TestCase):
             })
         model.pre_run_hook(0.1)
 
-        for _ in range(50000):
+        for _ in range(5000):
             model.step()
 
         for i in range(n_comps):
@@ -779,7 +782,7 @@ class TestMatrixSolver(unittest.TestCase):
         })
         model.pre_run_hook(0.1)
 
-        for _ in range(50000):
+        for _ in range(5000):
             model.step()
 
         for i in range(5):

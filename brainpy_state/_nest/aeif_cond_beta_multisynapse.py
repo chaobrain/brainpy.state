@@ -598,8 +598,8 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         w = braintools.init.param(self.w_initializer, self.varshape)
         g = braintools.init.param(self.g_initializer, self.varshape + (self.n_receptors,))
 
-        # dg has units of nS/ms (derivative of conductance)
-        zeros_dg = u.math.zeros(self.varshape + (self.n_receptors,), dtype=V.dtype) * (u.nS / u.ms)
+        # dg stored unitless (mantissa in nS/ms)
+        zeros_dg = u.math.zeros(self.varshape + (self.n_receptors,), dtype=V.dtype)
 
         self.V = brainstate.HiddenState(V)
         self.w = brainstate.HiddenState(w)
@@ -843,7 +843,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
         # Read state variables with their natural units.
         V = self.V.value  # mV
-        dg = self.dg.value  # nS/ms
+        dg = self.dg.value * (u.nS / u.ms)  # stored unitless, restore nS/ms
         g = self.g.value  # nS
         w = self.w.value  # pA
         r = self.refractory_step_count.value  # int
@@ -904,7 +904,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
         # Write back state.
         self.V.value = V
-        self.dg.value = dg
+        self.dg.value = u.get_mantissa(dg)  # store unitless mantissa
         self.g.value = g
         self.w.value = w
         self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
