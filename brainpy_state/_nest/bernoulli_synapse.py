@@ -16,8 +16,8 @@
 # -*- coding: utf-8 -*-
 
 
+import brainstate
 import saiunit as u
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
 

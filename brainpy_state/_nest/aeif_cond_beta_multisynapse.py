@@ -860,13 +860,18 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
         w_by_rec = self._parse_spike_events(spike_events, v_shape)
 
         # Default delta input mapped to receptor 1.
+        # Use jnp.asarray (not np.asarray) so this path is JIT-compatible inside
+        # brainstate.transform.for_loop, where sum_delta_inputs may return a tracer.
         w_default = u.get_mantissa(u.math.asarray(self.sum_delta_inputs(0.0 * u.nS) / u.nS))
-        w_default = np.broadcast_to(np.asarray(w_default, dtype=dftype), v_shape)
+        w_default = jnp.broadcast_to(jnp.asarray(w_default, dtype=dftype), v_shape)
         if n_receptors > 0:
-            if np.any(w_default < 0.0):
+            # Guard with is_tracer: concrete values support Python-level ValueError;
+            # traced values (inside JIT) skip the eager check safely.
+            if not is_tracer(w_default) and np.any(np.asarray(w_default) < 0.0):
                 raise ValueError('Synaptic weights for conductance-based multisynapse models must be non-negative.')
-            w_by_rec[..., 0] += w_default
-        elif np.any(w_default != 0.0):
+            # Use JAX immutable update so w_by_rec stays JIT-compatible.
+            w_by_rec = jnp.asarray(w_by_rec).at[..., 0].add(w_default)
+        elif not is_tracer(w_default) and np.any(np.asarray(w_default) != 0.0):
             raise ValueError('No receptor ports available for incoming spike conductance.')
 
         # Beta normalization factors (unitless, per receptor).

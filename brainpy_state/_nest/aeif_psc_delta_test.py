@@ -275,18 +275,55 @@ class TestAEIFPscDelta(unittest.TestCase):
                 'i_stim': 0.0,
             }
 
-            spikes_model = []
+            # Run Python reference simulation first (fast, no JAX overhead)
             spikes_ref = []
-            for k, (x_i, dV_i) in enumerate(zip(x_seq, dV_seq)):
-                spk = self._step(neuron, k, x=x_i * u.pA, dV_values=[dV_i] if dV_i != 0.0 else None)
-                spikes_model.append(self._is_spike(spk))
+            ref_v_list, ref_w_list, ref_r_list, ref_h_list = [], [], [], []
+            for x_i, dV_i in zip(x_seq, dV_seq):
                 n_spk_ref = _reference_step(ref_state, p, x_i, dV_i, 0.1)
                 spikes_ref.append(n_spk_ref > 0)
+                ref_v_list.append(ref_state['v'])
+                ref_w_list.append(ref_state['w'])
+                ref_r_list.append(ref_state['r'])
+                ref_h_list.append(ref_state['h'])
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['v'], delta=2e-6)
-                self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['w'], delta=2e-6)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
-                self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=2e-6)
+            # Pre-compute input arrays for JIT-compiled loop
+            dftype = brainstate.environ.dftype()
+            n_steps = len(x_seq)
+            x_arr = jnp.array(x_seq, dtype=dftype)   # pA mantissa, shape (n_steps,)
+            dV_arr = jnp.array(dV_seq, dtype=dftype)  # mV mantissa, shape (n_steps,)
+
+            # Run all model steps via for_loop (single compile + no per-step sync)
+            def run_step(k):
+                with brainstate.environ.context(t=k * 0.1 * u.ms):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                # Apply delta after integration — semantically identical to
+                # registering it via add_delta_input before update(), because
+                # update() applies deltas post-RKF45 in both cases.
+                neuron.V.value = neuron.V.value + dV_arr[k] * u.mV
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.refractory_step_count.value,
+                    neuron.integration_step.value / u.ms,
+                    jnp.asarray(spk, dtype=dftype),
+                )
+
+            results = brainstate.transform.for_loop(run_step, jnp.arange(n_steps))
+            model_v = np.asarray(results[0]).reshape(n_steps)
+            model_w = np.asarray(results[1]).reshape(n_steps)
+            model_r = np.asarray(results[2]).reshape(n_steps)
+            model_h = np.asarray(results[3]).reshape(n_steps)
+            spikes_model = [bool(np.asarray(results[4])[k, 0] > 0.0) for k in range(n_steps)]
+
+            for k in range(n_steps):
+                self.assertAlmostEqual(float(model_v[k]), ref_v_list[k], delta=2e-6,
+                                       msg=f'V mismatch at step {k}')
+                self.assertAlmostEqual(float(model_w[k]), ref_w_list[k], delta=2e-6,
+                                       msg=f'w mismatch at step {k}')
+                self.assertEqual(int(model_r[k]), ref_r_list[k],
+                                 msg=f'r mismatch at step {k}')
+                self.assertAlmostEqual(float(model_h[k]), ref_h_list[k], delta=2e-6,
+                                       msg=f'h mismatch at step {k}')
 
             self.assertEqual(spikes_model, spikes_ref)
             self.assertTrue(any(spikes_model))

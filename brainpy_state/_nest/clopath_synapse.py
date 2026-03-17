@@ -1,6 +1,7 @@
 import math
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -347,7 +348,7 @@ class clopath_synapse(NESTSynapse):
         t_last_spike_ms: ArrayLike = 0.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
 
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay = self._validate_positive_delay(delay)

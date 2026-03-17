@@ -304,27 +304,36 @@ class TestAEIFCondAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            @brainstate.transform.jit
-            def _step(k, x=0.0 * u.pA):
-                with brainstate.environ.context(t=k * self.dt):
-                    return neuron.update(x=x)
-
-            @brainstate.transform.jit
-            def _step_exe(k, x=0.0 * u.pA, dg_values=()):
-                for i, val in enumerate(dg_values):
-                    neuron.add_delta_input(f'delta_{k}_{i}', val * u.nS, label='w_ex')
-                with brainstate.environ.context(t=k * self.dt):
-                    return neuron.update(x=x)
-
-            @brainstate.transform.jit
-            def _step_inh(k, x=0.0 * u.pA, dg_values=()):
-                for i, val in enumerate(dg_values):
-                    neuron.add_delta_input(f'delta_{k}_{i}', (-val) * u.nS, label='w_in')
-                with brainstate.environ.context(t=k * self.dt):
-                    return neuron.update(x=x)
-
             x_seq = [0.0, 20.0, 0.0, -30.0, 0.0, 40.0, 0.0, 0.0, -10.0, 0.0, 0.0, 0.0] + [0.0] * 48
             w_seq = [0.0, 5.0, -2.0, 0.0, 4.0, -3.0, 0.0, 0.0, 1.0, 0.0, 0.0, -2.5] + [0.0] * 48
+            n_steps = len(x_seq)
+            x_arr = jnp.array(x_seq, dtype=jnp.float64)
+            w_arr = jnp.array(w_seq, dtype=jnp.float64)
+
+            def _model_step(k):
+                x_i = x_arr[k]
+                w_i = w_arr[k]
+                # Route signed weights to excitatory / inhibitory labels via
+                # jnp.where so the body is fully JIT-compatible.
+                dg_ex_input = u.math.where(w_i > 0., w_i, 0.) * u.nS
+                dg_in_input = u.math.where(w_i < 0., -w_i, 0.) * u.nS
+                neuron.add_delta_input('_fl_ex', dg_ex_input, label='w_ex')
+                neuron.add_delta_input('_fl_in', dg_in_input, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_i * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.dg_ex.value / _DG_RATE_UNIT,
+                    neuron.g_ex.value / u.nS,
+                    neuron.dg_in.value / _DG_RATE_UNIT,
+                    neuron.g_in.value / u.nS,
+                    neuron.w.value / u.pA,
+                    neuron.refractory_step_count.value,
+                    neuron.integration_step.value / u.ms,
+                    spk,
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
 
             p = {
                 'V_peak_rhs': 0.0,
@@ -346,44 +355,43 @@ class TestAEIFCondAlpha(unittest.TestCase):
                 'atol': 1e-6,
                 'refr_counts': int(math.ceil(0.25 / 0.1)),
             }
-            y_ref = jnp.array([-68.0, 0.0, 0.0, 0.0, 0.0, 5.0], dtype=jnp.float64)
-            r_ref = jnp.int32(0)
-            h_ref = jnp.float64(0.1)
-            i_stim_ref = jnp.float64(0.0)
 
-            def _ref_step_fn(y, r, h, i_stim, x_next, w_step):
-                return _reference_step_jax(y, r, h, i_stim, p, x_next, w_step, jnp.float64(0.1))
-
-            _ref_step_jit = jax.jit(_ref_step_fn)
-
-            spikes_model = []
-            spikes_ref = []
-            for k, (x_i, w_i) in enumerate(zip(x_seq, w_seq)):
-                if w_i > 0.:
-                    spk = _step_exe(k, x=x_i * u.pA, dg_values=[w_i])
-                elif w_i == 0.0:
-                    spk = _step(k, x=x_i * u.pA)
-                else:
-                    spk = _step_inh(k, x=x_i * u.pA, dg_values=[w_i])
-                spikes_model.append(self._is_spike(spk))
-
-                y_ref, r_ref, h_ref, i_stim_ref, n_spk_ref = _ref_step_jit(
-                    y_ref, r_ref, h_ref, i_stim_ref,
-                    jnp.float64(x_i), jnp.float64(w_i),
+            def _ref_scan(carry, xs):
+                y, r, h, i_stim = carry
+                x_next, w_step = xs
+                y_new, r_new, h_new, i_stim_new, spike_count = _reference_step_jax(
+                    y, r, h, i_stim, p, x_next, w_step, jnp.float64(0.1)
                 )
-                spikes_ref.append(int(n_spk_ref) > 0)
+                return (y_new, r_new, h_new, i_stim_new), (y_new, r_new, h_new, spike_count)
 
-                self.assertAlmostEqual(_get_scalar(neuron.V.value, u.mV), float(y_ref[0]), delta=2e-6)
-                self.assertAlmostEqual(_get_scalar(neuron.dg_ex.value, _DG_RATE_UNIT), float(y_ref[1]), delta=2e-6)
-                self.assertAlmostEqual(_get_scalar(neuron.g_ex.value, u.nS), float(y_ref[2]), delta=2e-6)
-                self.assertAlmostEqual(_get_scalar(neuron.dg_in.value, _DG_RATE_UNIT), float(y_ref[3]), delta=2e-6)
-                self.assertAlmostEqual(_get_scalar(neuron.g_in.value, u.nS), float(y_ref[4]), delta=2e-6)
-                self.assertAlmostEqual(_get_scalar(neuron.w.value, u.pA), float(y_ref[5]), delta=2e-6)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), int(r_ref))
-                self.assertAlmostEqual(_get_scalar(neuron.integration_step.value, u.ms), float(h_ref), delta=2e-6)
+            y0 = jnp.array([-68.0, 0.0, 0.0, 0.0, 0.0, 5.0], dtype=jnp.float64)
+            _, (all_y, all_r, all_h, all_spike_counts) = jax.lax.scan(
+                _ref_scan,
+                (y0, jnp.int32(0), jnp.float64(0.1), jnp.float64(0.0)),
+                (x_arr, w_arr),
+            )
 
-            self.assertEqual(spikes_model, spikes_ref)
-            self.assertTrue(any(spikes_model))
+            # Post-loop comparisons (bulk assertions over all 60 steps).
+            model_V = np.asarray(results[0]).reshape(n_steps)
+            model_dg_ex = np.asarray(results[1]).reshape(n_steps)
+            model_g_ex = np.asarray(results[2]).reshape(n_steps)
+            model_dg_in = np.asarray(results[3]).reshape(n_steps)
+            model_g_in = np.asarray(results[4]).reshape(n_steps)
+            model_w = np.asarray(results[5]).reshape(n_steps)
+            model_r = np.asarray(results[6]).reshape(n_steps)
+            model_h = np.asarray(results[7]).reshape(n_steps)
+            model_spk = np.asarray(results[8]).reshape(n_steps)
+
+            npt.assert_allclose(model_V, np.asarray(all_y[:, 0]), atol=2e-6, rtol=0, err_msg='V mismatch')
+            npt.assert_allclose(model_dg_ex, np.asarray(all_y[:, 1]), atol=2e-6, rtol=0, err_msg='dg_ex mismatch')
+            npt.assert_allclose(model_g_ex, np.asarray(all_y[:, 2]), atol=2e-6, rtol=0, err_msg='g_ex mismatch')
+            npt.assert_allclose(model_dg_in, np.asarray(all_y[:, 3]), atol=2e-6, rtol=0, err_msg='dg_in mismatch')
+            npt.assert_allclose(model_g_in, np.asarray(all_y[:, 4]), atol=2e-6, rtol=0, err_msg='g_in mismatch')
+            npt.assert_allclose(model_w, np.asarray(all_y[:, 5]), atol=2e-6, rtol=0, err_msg='w mismatch')
+            npt.assert_array_equal(model_r, np.asarray(all_r))
+            npt.assert_allclose(model_h, np.asarray(all_h), atol=2e-6, rtol=0, err_msg='h mismatch')
+            npt.assert_array_equal(model_spk > 0, np.asarray(all_spike_counts) > 0)
+            self.assertTrue(np.any(model_spk > 0))
 
     @unittest.skip('Multiple internal spikes per integration step not yet supported by RK45 integrator')
     def test_zero_refractory_allows_multiple_internal_spikes_and_updates_w(self):

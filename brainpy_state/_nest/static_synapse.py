@@ -405,8 +405,8 @@ class static_synapse(NESTSynapse):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike, *, name: str) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -430,9 +430,9 @@ class static_synapse(NESTSynapse):
 
     @staticmethod
     def _normalize_scalar_weight(weight: ArrayLike):
+        dftype = brainstate.environ.dftype()
         if isinstance(weight, u.Quantity):
             unit = u.get_unit(weight)
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(weight.to_decimal(unit), dtype=dftype)
             if arr.size != 1:
                 raise ValueError('weight must be scalar.')
@@ -473,9 +473,9 @@ class static_synapse(NESTSynapse):
 
     @staticmethod
     def _weight_to_float(weight) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(weight, u.Quantity):
             unit = u.get_unit(weight)
-            dftype = brainstate.environ.dftype()
             return float(np.asarray(weight.to_decimal(unit), dtype=dftype).reshape(()))
         return float(np.asarray(u.math.asarray(weight), dtype=dftype).reshape(()))
 

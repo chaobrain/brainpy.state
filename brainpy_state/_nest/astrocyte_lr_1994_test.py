@@ -287,16 +287,15 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
                 astro.init_state()
 
             n_steps = int(round(simtime / self.dt))
-            bp_ip3 = np.zeros(n_steps)
-            bp_ca = np.zeros(n_steps)
-            bp_h = np.zeros(n_steps)
 
-            for i in range(n_steps):
-                with brainstate.environ.context(dt=self.dt_q, t=i * self.dt_q):
-                    astro.update()
-                bp_ip3[i] = float(np.asarray(astro.IP3.value).squeeze())
-                bp_ca[i] = float(np.asarray(astro.Ca.value).squeeze())
-                bp_h[i] = float(np.asarray(astro.h_IP3R.value).squeeze())
+            def body(_):
+                astro.update()
+                return astro.IP3.value, astro.Ca.value, astro.h_IP3R.value
+
+            results = brainstate.transform.for_loop(body, np.zeros(n_steps))
+            bp_ip3 = np.asarray(results[0]).squeeze(axis=-1)
+            bp_ca = np.asarray(results[1]).squeeze(axis=-1)
+            bp_h = np.asarray(results[2]).squeeze(axis=-1)
 
             np.testing.assert_allclose(bp_ip3, ref_ip3, rtol=1e-4, atol=1e-8,
                                        err_msg="IP3 mismatch in free decay")
@@ -336,17 +335,17 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
             n_steps = int(round(simtime / self.dt))
             spike_step = int(round(spike_time / self.dt))
 
-            bp_ip3 = np.zeros(n_steps)
-            bp_ca = np.zeros(n_steps)
-            bp_h = np.zeros(n_steps)
+            spike_weights_all = np.zeros(n_steps)
+            spike_weights_all[spike_step - 1] = spike_weight
 
-            for i in range(n_steps):
-                sw = spike_weight if i == spike_step - 1 else 0.0
-                with brainstate.environ.context(dt=self.dt_q, t=i * self.dt_q):
-                    astro.update(spike_weights=sw)
-                bp_ip3[i] = float(np.asarray(astro.IP3.value).squeeze())
-                bp_ca[i] = float(np.asarray(astro.Ca.value).squeeze())
-                bp_h[i] = float(np.asarray(astro.h_IP3R.value).squeeze())
+            def body(sw):
+                astro.update(spike_weights=sw)
+                return astro.IP3.value, astro.Ca.value, astro.h_IP3R.value
+
+            results = brainstate.transform.for_loop(body, spike_weights_all)
+            bp_ip3 = np.asarray(results[0]).squeeze(axis=-1)
+            bp_ca = np.asarray(results[1]).squeeze(axis=-1)
+            bp_h = np.asarray(results[2]).squeeze(axis=-1)
 
             np.testing.assert_allclose(bp_ip3, ref_ip3, rtol=1e-4, atol=1e-8,
                                        err_msg="IP3 mismatch with spike input")
@@ -366,9 +365,12 @@ class TestAstrocyteLR1994Dynamics(unittest.TestCase):
                 astro.init_state()
 
             n_steps = int(round(simtime / self.dt))
-            for i in range(n_steps):
-                with brainstate.environ.context(dt=self.dt_q, t=i * self.dt_q):
-                    astro.update()
+
+            def body(_):
+                astro.update()
+                return astro.IP3.value
+
+            brainstate.transform.for_loop(body, np.zeros(n_steps))
 
             # Should not change much from initial (near equilibrium)
             np.testing.assert_allclose(
@@ -589,21 +591,20 @@ class TestAstrocyteLR1994NestComparison(unittest.TestCase):
             with brainstate.environ.context(dt=dt_q):
                 astro.init_state()
 
-            bp_ip3 = np.zeros(n_steps)
-            bp_ca = np.zeros(n_steps)
-            bp_h = np.zeros(n_steps)
-
             # Spike at t=10ms -> arrives at step index 99 (t=10.0 after 100 steps of 0.1ms)
             spike_step = int(round(10.0 / dt))  # step 100
 
-            for i in range(n_steps):
-                # Spike at step 99 (so that after integration, IP3 gets the bump at t=10)
-                sw = 1.0 if i == spike_step - 1 else 0.0
-                with brainstate.environ.context(dt=dt_q, t=i * dt_q):
-                    astro.update(spike_weights=sw)
-                bp_ip3[i] = float(np.asarray(astro.IP3.value).squeeze())
-                bp_ca[i] = float(np.asarray(astro.Ca.value).squeeze())
-                bp_h[i] = float(np.asarray(astro.h_IP3R.value).squeeze())
+            spike_weights_all = np.zeros(n_steps)
+            spike_weights_all[spike_step - 1] = 1.0
+
+            def body(sw):
+                astro.update(spike_weights=sw)
+                return astro.IP3.value, astro.Ca.value, astro.h_IP3R.value
+
+            results = brainstate.transform.for_loop(body, spike_weights_all)
+            bp_ip3 = np.asarray(results[0]).squeeze(axis=-1)
+            bp_ca = np.asarray(results[1]).squeeze(axis=-1)
+            bp_h = np.asarray(results[2]).squeeze(axis=-1)
 
             np.testing.assert_allclose(
                 bp_ip3, ref_ip3, rtol=1e-3, atol=1e-6,
@@ -662,16 +663,15 @@ class TestAstrocyteLR1994NestComparison(unittest.TestCase):
                 astro_bp.init_state()
 
             n_steps = len(nest_ip3)
-            bp_ip3 = np.zeros(n_steps)
-            bp_ca = np.zeros(n_steps)
-            bp_h = np.zeros(n_steps)
 
-            for i in range(n_steps):
-                with brainstate.environ.context(dt=dt_q, t=i * dt_q):
-                    astro_bp.update()
-                bp_ip3[i] = float(np.asarray(astro_bp.IP3.value).squeeze())
-                bp_ca[i] = float(np.asarray(astro_bp.Ca.value).squeeze())
-                bp_h[i] = float(np.asarray(astro_bp.h_IP3R.value).squeeze())
+            def body(_):
+                astro_bp.update()
+                return astro_bp.IP3.value, astro_bp.Ca.value, astro_bp.h_IP3R.value
+
+            results = brainstate.transform.for_loop(body, np.zeros(n_steps))
+            bp_ip3 = np.asarray(results[0]).squeeze(axis=-1)
+            bp_ca = np.asarray(results[1]).squeeze(axis=-1)
+            bp_h = np.asarray(results[2]).squeeze(axis=-1)
 
             np.testing.assert_allclose(
                 bp_ip3, nest_ip3, rtol=1e-3, atol=1e-6,

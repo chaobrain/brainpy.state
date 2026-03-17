@@ -685,6 +685,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
     def _allocate_clopath_delay_buffers(self, state_shape, dt_q):
         """Allocate ring buffers for delayed Clopath u-bar traces."""
         delay_steps = self._delay_u_bars_steps(dt_q)
+        self._delay_steps = delay_steps  # Python int for JIT-safe modulo
         ditype = brainstate.environ.ditype()
         self.delayed_u_bars_steps = brainstate.ShortTermState(np.asarray(delay_steps, dtype=ditype))
         self.delayed_u_bars_idx = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
@@ -856,25 +857,22 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     def _write_clopath_history(self, V_m, u_plus, u_minus, u_bar):
         """Update Clopath delayed ring buffers with current u-bar traces."""
-        dftype = brainstate.environ.dftype()
-        plus_buf = np.asarray(self.delayed_u_bar_plus_buffer.value, dtype=dftype)
-        minus_buf = np.asarray(self.delayed_u_bar_minus_buffer.value, dtype=dftype)
-
         ditype = brainstate.environ.ditype()
-        delay_steps = int(np.asarray(self.delayed_u_bars_steps.value, dtype=ditype))
-        idx = int(np.asarray(self.delayed_u_bars_idx.value, dtype=ditype))
+        idx = self.delayed_u_bars_idx.value
+        plus_buf = jnp.asarray(self.delayed_u_bar_plus_buffer.value)
+        minus_buf = jnp.asarray(self.delayed_u_bar_minus_buffer.value)
 
-        u_plus_np = np.asarray(u.get_mantissa(u_plus), dtype=dftype)
-        u_minus_np = np.asarray(u.get_mantissa(u_minus), dtype=dftype)
+        u_plus_val = u.get_mantissa(u_plus)
+        u_minus_val = u.get_mantissa(u_minus)
 
-        plus_buf[idx] = u_plus_np
-        minus_buf[idx] = u_minus_np
+        plus_buf = plus_buf.at[idx].set(u_plus_val)
+        minus_buf = minus_buf.at[idx].set(u_minus_val)
 
-        idx = (idx + 1) % delay_steps
+        new_idx = (idx + 1) % self._delay_steps
 
         self.delayed_u_bar_plus_buffer.value = plus_buf
         self.delayed_u_bar_minus_buffer.value = minus_buf
-        self.delayed_u_bars_idx.value = np.asarray(idx, dtype=ditype)
+        self.delayed_u_bars_idx.value = jnp.asarray(new_idx, dtype=ditype)
 
     def update(self, x=0.0 * u.pA):
         r"""Advance neuron state by one time step using adaptive RKF45 integration.

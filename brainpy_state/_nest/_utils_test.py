@@ -18,12 +18,10 @@
 import math
 import unittest
 
-import brainstate
-import saiunit as u
 import numpy as np
 import numpy.testing as npt
 
-from ._utils import (
+from brainpy_state._nest._utils import (
     propagator_exp,
     alpha_propagator_p31_p32,
 )

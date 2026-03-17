@@ -231,6 +231,7 @@ class TestAEIFCondExp(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.V.value, 0.03558718861209964 * u.mV, atol=1e-12 * u.mV))
 
     def test_reference_trace_matches_nest_step_logic(self):
+        dt_ms_float = float(self.dt / u.ms)
         with brainstate.environ.context(dt=self.dt):
             neuron = aeif_cond_exp(
                 1,
@@ -260,6 +261,7 @@ class TestAEIFCondExp(unittest.TestCase):
 
             x_seq = [0.0, 20.0, 0.0, -30.0, 0.0, 40.0, 0.0, 0.0, -10.0, 0.0, 0.0, 0.0] + [0.0] * 48
             w_seq = [0.0, 5.0, -2.0, 0.0, 4.0, -3.0, 0.0, 0.0, 1.0, 0.0, 0.0, -2.5] + [0.0] * 48
+            n_steps = len(x_seq)
 
             p = {
                 'V_peak_rhs': 0.0,
@@ -291,20 +293,60 @@ class TestAEIFCondExp(unittest.TestCase):
                 'i_stim': 0.0,
             }
 
-            spikes_model = []
-            spikes_ref = []
-            for k, (x_i, w_i) in enumerate(zip(x_seq, w_seq)):
-                spk = self._step(neuron, k, x=x_i * u.pA, dg_values=[w_i] if w_i != 0.0 else None)
-                spikes_model.append(self._is_spike(spk))
+            # Pre-run the reference Python loop (fast, pure numpy/python).
+            ref_v, ref_g_ex, ref_g_in, ref_w, ref_r, ref_h, spikes_ref = [], [], [], [], [], [], []
+            for x_i, w_i in zip(x_seq, w_seq):
                 n_spk_ref = _reference_step(ref_state, p, x_i, w_i, 0.1)
                 spikes_ref.append(n_spk_ref > 0)
+                ref_v.append(ref_state['v'])
+                ref_g_ex.append(ref_state['g_ex'])
+                ref_g_in.append(ref_state['g_in'])
+                ref_w.append(ref_state['w'])
+                ref_r.append(ref_state['r'])
+                ref_h.append(ref_state['h'])
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['v'], delta=2e-6)
-                self.assertAlmostEqual(float((neuron.g_ex.value / u.nS)[0]), ref_state['g_ex'], delta=2e-6)
-                self.assertAlmostEqual(float((neuron.g_in.value / u.nS)[0]), ref_state['g_in'], delta=2e-6)
-                self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['w'], delta=2e-6)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
-                self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=2e-6)
+            # Pre-compute per-step JAX input arrays.
+            dftype = brainstate.environ.dftype()
+            x_arr = jnp.array(x_seq, dtype=dftype) * u.pA
+            w_ex_arr = jnp.array([max(0.0, w) for w in w_seq], dtype=dftype) * u.nS
+            w_in_arr = jnp.array([max(0.0, -w) for w in w_seq], dtype=dftype) * u.nS
+
+            def body(k):
+                # Inject per-step delta inputs (positive weights → g_ex, negative → g_in).
+                neuron.add_delta_input('step_w_ex', w_ex_arr[k], label='w_ex')
+                neuron.add_delta_input('step_w_in', w_in_arr[k], label='w_in')
+                with brainstate.environ.context(t=(k * dt_ms_float) * u.ms):
+                    spk = neuron.update(x=x_arr[k])
+                return (
+                    neuron.V.value,
+                    neuron.g_ex.value,
+                    neuron.g_in.value,
+                    neuron.w.value,
+                    neuron.refractory_step_count.value,
+                    neuron.integration_step.value,
+                    u.math.asarray(spk, dtype=dftype),
+                )
+
+            results = brainstate.transform.for_loop(body, jnp.arange(n_steps))
+
+            # Unpack: each result has shape (n_steps, 1); strip the trailing neuron axis.
+            v_trace = np.asarray(results[0] / u.mV)[:, 0]
+            g_ex_trace = np.asarray(results[1] / u.nS)[:, 0]
+            g_in_trace = np.asarray(results[2] / u.nS)[:, 0]
+            w_trace = np.asarray(results[3] / u.pA)[:, 0]
+            r_trace = np.asarray(results[4])[:, 0]
+            h_trace = np.asarray(results[5] / u.ms)[:, 0]
+            spk_trace = np.asarray(results[6])[:, 0]
+
+            spikes_model = [bool(spk_trace[k] > 0.0) for k in range(n_steps)]
+
+            for k in range(n_steps):
+                self.assertAlmostEqual(v_trace[k], ref_v[k], delta=2e-6)
+                self.assertAlmostEqual(g_ex_trace[k], ref_g_ex[k], delta=2e-6)
+                self.assertAlmostEqual(g_in_trace[k], ref_g_in[k], delta=2e-6)
+                self.assertAlmostEqual(w_trace[k], ref_w[k], delta=2e-6)
+                self.assertEqual(int(r_trace[k]), ref_r[k])
+                self.assertAlmostEqual(h_trace[k], ref_h[k], delta=2e-6)
 
             self.assertEqual(spikes_model, spikes_ref)
             self.assertTrue(any(spikes_model))

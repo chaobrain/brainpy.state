@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 import brainstate
+import braintools
 import jax.numpy as jnp
 import saiunit as u
 from brainstate.typing import Size
@@ -516,7 +517,7 @@ class astrocyte_lr_1994(NESTNeuron):
         """
         return list(self.RECORDABLES)
 
-    def init_state(self, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize astrocyte state variables.
 
         Creates state arrays for IP3 concentration, cytosolic calcium concentration,
@@ -526,6 +527,9 @@ class astrocyte_lr_1994(NESTNeuron):
 
         Parameters
         ----------
+        batch_size : int or None, optional
+            If provided, states are created with shape ``(batch_size, *varshape)``
+            to support batched simulation. If None, states have shape ``varshape``.
         **kwargs : dict, optional
             Unused compatibility parameters accepted by the base-state API.
 
@@ -540,17 +544,27 @@ class astrocyte_lr_1994(NESTNeuron):
         dftype = brainstate.environ.dftype()
         dt = brainstate.environ.get_dt()
 
-        ip3 = jnp.full(self.varshape, self._IP3_init, dtype=dftype)
-        ca = jnp.full(self.varshape, self._Ca_init, dtype=dftype)
-        h = jnp.full(self.varshape, self._h_IP3R_init, dtype=dftype)
+        ip3 = jnp.asarray(
+            braintools.init.param(braintools.init.Constant(self._IP3_init), self.varshape, batch_size),
+            dtype=dftype,
+        )
+        ca = jnp.asarray(
+            braintools.init.param(braintools.init.Constant(self._Ca_init), self.varshape, batch_size),
+            dtype=dftype,
+        )
+        h = jnp.asarray(
+            braintools.init.param(braintools.init.Constant(self._h_IP3R_init), self.varshape, batch_size),
+            dtype=dftype,
+        )
+        shape = ip3.shape  # (batch_size, *varshape) when batch_size is not None
 
         self.IP3 = brainstate.HiddenState(ip3)
         self.Ca = brainstate.HiddenState(ca)
         self.h_IP3R = brainstate.HiddenState(h)
-        self.SIC = brainstate.ShortTermState(jnp.zeros(self.varshape, dtype=dftype))
-        self.J_noise = brainstate.ShortTermState(jnp.zeros(self.varshape, dtype=dftype))
+        self.SIC = brainstate.ShortTermState(jnp.zeros(shape, dtype=dftype))
+        self.J_noise = brainstate.ShortTermState(jnp.zeros(shape, dtype=dftype))
         self.integration_step = brainstate.ShortTermState(
-            jnp.full(self.varshape, u.get_mantissa(dt), dtype=dftype) * u.ms
+            jnp.full(shape, u.get_mantissa(dt), dtype=dftype) * u.ms
         )
 
     def _vector_field(self, state, extra):
@@ -709,7 +723,7 @@ class astrocyte_lr_1994(NESTNeuron):
         ca = jnp.clip(ca, 0.0, self.Ca_tot)
 
         # Apply spike input: IP3 += delta_IP3 * spike_weight.
-        sw = jnp.broadcast_to(jnp.asarray(spike_weights, dtype=dftype), self.varshape)
+        sw = jnp.broadcast_to(jnp.asarray(spike_weights, dtype=dftype), ip3.shape)
         ip3 = ip3 + self.delta_IP3 * sw
 
         # Compute SIC output.
@@ -729,7 +743,7 @@ class astrocyte_lr_1994(NESTNeuron):
         self.integration_step.value = h
 
         # Store new external current for next step (one-step delay, NEST semantics).
-        j_ext = jnp.broadcast_to(jnp.asarray(J_ext, dtype=dftype), self.varshape)
+        j_ext = jnp.broadcast_to(jnp.asarray(J_ext, dtype=dftype), ip3.shape)
         self.J_noise.value = j_ext
 
         return sic_out

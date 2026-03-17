@@ -419,6 +419,7 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
             }
 
             dftype = brainstate.environ.dftype()
+            ditype = brainstate.environ.ditype()
             ref_state = {
                 'v': -68.0,
                 'w': 5.0,
@@ -439,49 +440,101 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
                 'last_ltp_dw': 0.0,
             }
 
-            spikes_model = []
+            n_steps = len(x_seq)
+            x_arr = jnp.array(x_seq, dtype=dftype)
+            dV_arr = jnp.array(dV_seq, dtype=dftype)
+
+            # --- Model loop via for_loop (JIT-compiled) ---
+            def _model_step(k):
+                neuron.add_delta_input('_dV', dV_arr[k] * u.mV)
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    spk,
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.z.value / u.pA,
+                    neuron.V_th.value / u.mV,
+                    neuron.u_bar_plus.value / u.mV,
+                    neuron.u_bar_minus.value / u.mV,
+                    neuron.u_bar_bar.value / u.mV,
+                    neuron.refractory_step_count.value,
+                    neuron.clamp_step_count.value,
+                    neuron.integration_step.value / u.ms,
+                    neuron.delayed_u_bars_idx.value,
+                    neuron.delayed_u_bar_plus_buffer.value[:, 0],
+                    neuron.delayed_u_bar_minus_buffer.value[:, 0],
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
+            spk_arr = np.asarray(results[0].flatten(), dtype=dftype)
+            v_arr = np.asarray(results[1].flatten(), dtype=dftype)
+            w_arr_m = np.asarray(results[2].flatten(), dtype=dftype)
+            z_arr_m = np.asarray(results[3].flatten(), dtype=dftype)
+            vth_arr = np.asarray(results[4].flatten(), dtype=dftype)
+            uplus_arr = np.asarray(results[5].flatten(), dtype=dftype)
+            uminus_arr = np.asarray(results[6].flatten(), dtype=dftype)
+            ubar_arr = np.asarray(results[7].flatten(), dtype=dftype)
+            refr_arr = np.asarray(results[8].flatten(), dtype=ditype)
+            clamp_arr = np.asarray(results[9].flatten(), dtype=ditype)
+            h_arr = np.asarray(results[10].flatten(), dtype=dftype)
+            delay_idx_arr = np.asarray(results[11], dtype=ditype)           # (n_steps,)
+            delay_plus_arr = np.asarray(results[12], dtype=dftype)          # (n_steps, delay_steps)
+            delay_minus_arr = np.asarray(results[13], dtype=dftype)         # (n_steps, delay_steps)
+
+            # --- Reference loop (pure Python) ---
             spikes_ref = []
-            saw_clamp = False
-            saw_refractory = False
+            ref_v = np.empty(n_steps, dtype=dftype)
+            ref_w = np.empty(n_steps, dtype=dftype)
+            ref_z = np.empty(n_steps, dtype=dftype)
+            ref_vth = np.empty(n_steps, dtype=dftype)
+            ref_uplus = np.empty(n_steps, dtype=dftype)
+            ref_uminus = np.empty(n_steps, dtype=dftype)
+            ref_ubar = np.empty(n_steps, dtype=dftype)
+            ref_r = np.empty(n_steps, dtype=ditype)
+            ref_clamp = np.empty(n_steps, dtype=ditype)
+            ref_h = np.empty(n_steps, dtype=dftype)
+            ref_delay_idx = np.empty(n_steps, dtype=ditype)
+            ref_delay_plus = np.empty((n_steps, delay_steps), dtype=dftype)
+            ref_delay_minus = np.empty((n_steps, delay_steps), dtype=dftype)
 
             for k, (x_i, dV_i) in enumerate(zip(x_seq, dV_seq)):
-                spk = self._step(neuron, k, x=x_i * u.pA, dV_values=[dV_i] if dV_i != 0.0 else None)
-                spikes_model.append(self._is_spike(spk))
-
                 n_spk_ref = _reference_step(ref_state, p, x_i, dV_i, dt_ms)
                 spikes_ref.append(n_spk_ref > 0)
+                ref_v[k] = ref_state['v']
+                ref_w[k] = ref_state['w']
+                ref_z[k] = ref_state['z']
+                ref_vth[k] = ref_state['v_th']
+                ref_uplus[k] = ref_state['u_plus']
+                ref_uminus[k] = ref_state['u_minus']
+                ref_ubar[k] = ref_state['u_bar']
+                ref_r[k] = ref_state['r']
+                ref_clamp[k] = ref_state['clamp']
+                ref_h[k] = ref_state['h']
+                ref_delay_idx[k] = ref_state['delay_idx']
+                ref_delay_plus[k] = ref_state['delay_plus'].copy()
+                ref_delay_minus[k] = ref_state['delay_minus'].copy()
 
-                saw_clamp = saw_clamp or int(neuron.clamp_step_count.value[0]) > 0
-                saw_refractory = saw_refractory or int(neuron.refractory_step_count.value[0]) > 0
+            # --- Batch assertions ---
+            spikes_model = list(spk_arr > 0.5)
+            saw_clamp = bool(np.any(clamp_arr > 0))
+            saw_refractory = bool(np.any(refr_arr > 0))
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['v'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['w'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.z.value / u.pA)[0]), ref_state['z'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.V_th.value / u.mV)[0]), ref_state['v_th'], delta=3e-6)
-
-                self.assertAlmostEqual(float((neuron.u_bar_plus.value / u.mV)[0]), ref_state['u_plus'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.u_bar_minus.value / u.mV)[0]), ref_state['u_minus'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.u_bar_bar.value / u.mV)[0]), ref_state['u_bar'], delta=3e-6)
-
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
-                self.assertEqual(int(neuron.clamp_step_count.value[0]), ref_state['clamp'])
-                self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=3e-6)
-
-                ditype = brainstate.environ.ditype()
-                self.assertEqual(int(np.asarray(neuron.delayed_u_bars_idx.value, dtype=ditype)),
-                                 ref_state['delay_idx'])
-                npt.assert_allclose(
-                    np.asarray(neuron.delayed_u_bar_plus_buffer.value, dtype=dftype)[:, 0],
-                    ref_state['delay_plus'],
-                    atol=3e-6,
-                    rtol=0.0,
-                )
-                npt.assert_allclose(
-                    np.asarray(neuron.delayed_u_bar_minus_buffer.value, dtype=dftype)[:, 0],
-                    ref_state['delay_minus'],
-                    atol=3e-6,
-                    rtol=0.0,
-                )
+            npt.assert_allclose(v_arr, ref_v, atol=3e-6, rtol=0.0, err_msg='V mismatch')
+            npt.assert_allclose(w_arr_m, ref_w, atol=3e-6, rtol=0.0, err_msg='w mismatch')
+            npt.assert_allclose(z_arr_m, ref_z, atol=3e-6, rtol=0.0, err_msg='z mismatch')
+            npt.assert_allclose(vth_arr, ref_vth, atol=3e-6, rtol=0.0, err_msg='V_th mismatch')
+            npt.assert_allclose(uplus_arr, ref_uplus, atol=3e-6, rtol=0.0, err_msg='u_bar_plus mismatch')
+            npt.assert_allclose(uminus_arr, ref_uminus, atol=3e-6, rtol=0.0, err_msg='u_bar_minus mismatch')
+            npt.assert_allclose(ubar_arr, ref_ubar, atol=3e-6, rtol=0.0, err_msg='u_bar_bar mismatch')
+            np.testing.assert_array_equal(refr_arr, ref_r)
+            np.testing.assert_array_equal(clamp_arr, ref_clamp)
+            npt.assert_allclose(h_arr, ref_h, atol=3e-6, rtol=0.0, err_msg='integration_step mismatch')
+            np.testing.assert_array_equal(delay_idx_arr, ref_delay_idx)
+            npt.assert_allclose(delay_plus_arr, ref_delay_plus, atol=3e-6, rtol=0.0,
+                                err_msg='delay_plus buffer mismatch')
+            npt.assert_allclose(delay_minus_arr, ref_delay_minus, atol=3e-6, rtol=0.0,
+                                err_msg='delay_minus buffer mismatch')
 
             self.assertEqual(spikes_model, spikes_ref)
             self.assertTrue(any(spikes_model))
@@ -596,25 +649,27 @@ class TestAEIFPscDeltaClopath(unittest.TestCase):
             )
             neuron.init_state()
 
-            bp_v = np.empty(n_steps, dtype=dftype)
-            bp_w = np.empty(n_steps, dtype=dftype)
-            bp_z = np.empty(n_steps, dtype=dftype)
-            bp_v_th = np.empty(n_steps, dtype=dftype)
-            bp_u_plus = np.empty(n_steps, dtype=dftype)
-            bp_u_minus = np.empty(n_steps, dtype=dftype)
-            bp_u_bar = np.empty(n_steps, dtype=dftype)
-
-            for k in range(n_steps):
-                with brainstate.environ.context(t=(k * dt_ms) * u.ms):
+            def _run_step(k):
+                with brainstate.environ.context(t=k * (dt_ms * u.ms)):
                     neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.z.value / u.pA,
+                    neuron.V_th.value / u.mV,
+                    neuron.u_bar_plus.value / u.mV,
+                    neuron.u_bar_minus.value / u.mV,
+                    neuron.u_bar_bar.value / u.mV,
+                )
 
-                bp_v[k] = float((neuron.V.value / u.mV)[0])
-                bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_z[k] = float((neuron.z.value / u.pA)[0])
-                bp_v_th[k] = float((neuron.V_th.value / u.mV)[0])
-                bp_u_plus[k] = float((neuron.u_bar_plus.value / u.mV)[0])
-                bp_u_minus[k] = float((neuron.u_bar_minus.value / u.mV)[0])
-                bp_u_bar[k] = float((neuron.u_bar_bar.value / u.mV)[0])
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            bp_v = np.asarray(results[0].flatten(), dtype=dftype)
+            bp_w = np.asarray(results[1].flatten(), dtype=dftype)
+            bp_z = np.asarray(results[2].flatten(), dtype=dftype)
+            bp_v_th = np.asarray(results[3].flatten(), dtype=dftype)
+            bp_u_plus = np.asarray(results[4].flatten(), dtype=dftype)
+            bp_u_minus = np.asarray(results[5].flatten(), dtype=dftype)
+            bp_u_bar = np.asarray(results[6].flatten(), dtype=dftype)
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         self.assertTrue(np.all(bp_indices >= 0))
