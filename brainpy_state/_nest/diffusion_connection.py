@@ -1,5 +1,6 @@
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -405,7 +406,7 @@ class diffusion_connection(NESTSynapse):
         diffusion_factor: ArrayLike = 1.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         # Keep a status ``weight`` field for parity with NEST model status.
         self.weight = 1.0
         self.drift_factor = self._to_float_scalar(drift_factor, name='drift_factor')
@@ -1420,6 +1421,7 @@ class diffusion_connection(NESTSynapse):
 
     @staticmethod
     def _to_coeff_array(value: ArrayLike) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
@@ -1429,6 +1431,7 @@ class diffusion_connection(NESTSynapse):
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
@@ -1438,6 +1441,7 @@ class diffusion_connection(NESTSynapse):
 
     @staticmethod
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)

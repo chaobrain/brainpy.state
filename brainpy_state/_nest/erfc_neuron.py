@@ -400,9 +400,8 @@ class erfc_neuron(NESTNeuron):
             If ``h`` is not unit-compatible with ``theta`` and ``sigma`` (all
             should be in mV).
         """
-        dftype = brainstate.environ.dftype()
-        arg = -(h - self.theta) / (u.math.asarray(jnp.sqrt(2.0), dtype=dftype) * self.sigma)
-        return 0.5 * jspecial.erfc(u.math.asarray(arg, dtype=dftype))
+        arg = -(h - self.theta) / (jnp.sqrt(jnp.asarray(2.0)) * self.sigma)
+        return 0.5 * jspecial.erfc(u.math.asarray(arg))
 
     def update(self, x=0. * u.mV):
         r"""Advance the binary neuron by one simulation step.

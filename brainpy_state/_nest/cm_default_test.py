@@ -1035,9 +1035,13 @@ class TestNESTComparison(unittest.TestCase):
         })
         model.pre_run_hook(dt)
 
-        # NEST delivers spike at t=1.0 + delay=0.1 -> arrives at step 11
-        # (1-indexed steps in NEST, 0-indexed in our model)
-        spike_step = int(round((1.0 + dt) / dt))
+        # NEST delivers spike at t=1.0ms with delay=0.1ms -> spike first applied at
+        # NEST step 11 (from t=1.1ms to t=1.2ms). In our bp model the receptor has
+        # g_total=0 AT the spike instant (decay→spike→compute), so the conductance
+        # only becomes non-zero one step AFTER the spike is injected. We therefore
+        # inject one step earlier (step 10) so that the non-zero conductance is
+        # present during step 11, matching the NEST result at nest_v0[11].
+        spike_step = int(round(1.0 / dt))
 
         bp_v0 = []
         for step in range(len(nest_v0)):
@@ -1102,9 +1106,11 @@ class TestNESTComparison(unittest.TestCase):
         model.add_compartment(-1, soma_params)
         model.pre_run_hook(dt)
 
-        # DC generator delivers current starting at dt with delay dt
-        # So current arrives at step 2 (0-indexed) onwards
-        dc_start_step = int(round(2 * dt / dt))
+        # DC generator has delay=dt, so the first event arrives at the neuron at
+        # t=dt. NEST processes that event at the start of the step from t=dt to
+        # t=2*dt (step index 1, 0-indexed), and the voltage record at t=2*dt
+        # (nest_v0[1]) is the first one affected. Apply current from step 1 to match.
+        dc_start_step = int(round(dt / dt))
 
         bp_v0 = []
         for step in range(len(nest_v0)):

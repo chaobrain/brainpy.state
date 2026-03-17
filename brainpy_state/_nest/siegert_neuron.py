@@ -402,9 +402,9 @@ class siegert_neuron(NESTNeuron):
     def _drain_delayed_queue(self, step_idx: int, state_shape):
         drift = self._delayed_drift_queue.pop(step_idx, None)
         diffusion = self._delayed_diffusion_queue.pop(step_idx, None)
+        dftype = brainstate.environ.dftype()
 
         if drift is None:
-            dftype = brainstate.environ.dftype()
             drift = np.zeros(state_shape, dtype=dftype)
         else:
             drift = np.array(self._broadcast_to_state(np.asarray(drift, dtype=dftype), state_shape), copy=True)

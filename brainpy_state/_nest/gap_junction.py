@@ -1,5 +1,6 @@
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -258,7 +259,7 @@ class gap_junction(NESTSynapse):
         weight: ArrayLike = 1.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         self.weight = self._to_float_scalar(weight, name='weight')
 
         # Runtime state accumulated from incoming GapJunctionEvent payloads.
