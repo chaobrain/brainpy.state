@@ -75,12 +75,12 @@ class _lin_rate_base(NESTNeuron):
     @staticmethod
     def _to_numpy(x):
         dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x), dtype=dftype)
+        return np.asarray(u.get_mantissa(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_ms(x):
         dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
+        return np.asarray(u.get_mantissa(x / u.ms), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -89,7 +89,7 @@ class _lin_rate_base(NESTNeuron):
     @staticmethod
     def _to_int_scalar(x, name: str):
         dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
+        arr = np.asarray(u.get_mantissa(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])
@@ -132,7 +132,7 @@ class _lin_rate_base(NESTNeuron):
             multiplicity = ev.get('multiplicity', 1.0)
             delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
             dftype = brainstate.environ.dftype()
-            weight_sign = np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0
+            weight_sign = np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0
         elif isinstance(ev, (tuple, list)):
             if len(ev) == 2:
                 rate, weight = ev
@@ -145,7 +145,7 @@ class _lin_rate_base(NESTNeuron):
                 rate, weight, delay_steps, multiplicity = ev
             else:
                 raise ValueError('Rate event tuples must have length 2, 3, or 4.')
-            weight_sign = np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0
+            weight_sign = np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0
         else:
             rate = ev
             weight = 1.0

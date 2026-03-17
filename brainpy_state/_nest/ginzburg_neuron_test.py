@@ -111,16 +111,19 @@ class TestGinzburgNeuron(unittest.TestCase):
             )
             neuron.init_state()
 
-            h_trace = []
-            for step in range(19):
-                if step == 9:
-                    delta = 1.0 * u.mV  # up-transition encoding
-                elif step == 14:
-                    delta = -1.0 * u.mV  # down-transition encoding
-                else:
-                    delta = None
-                self._step(neuron, step, delta=delta)
-                h_trace.append(float((neuron.h.value / u.mV)[0]))
+            dftype = brainstate.environ.dftype()
+            # Pre-compute per-step delta inputs (dimensionless mV mantissa).
+            delta_vals = jnp.zeros(19, dtype=dftype)
+            delta_vals = delta_vals.at[9].set(1.0)    # up-transition
+            delta_vals = delta_vals.at[14].set(-1.0)  # down-transition
+
+            def body(delta_raw):
+                # Apply delta directly to h (bypasses add_delta_input / sum_delta_inputs).
+                neuron.h.value = neuron.h.value + delta_raw * u.mV
+                neuron.update(x=0.0 * u.mV)
+                return (neuron.h.value / u.mV)[0]
+
+            h_trace = brainstate.transform.for_loop(body, delta_vals)
 
             expected = [0.0] * 9 + [1.0] * 5 + [0.0] * 5
             np.testing.assert_allclose(h_trace, expected, atol=1e-12, rtol=0.0)

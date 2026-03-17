@@ -425,12 +425,19 @@ def _rk_scaled_error_norm(y0, y1, y_error, atol, rtol):
 
     err_tree = jax.tree.map(_leaf_err, y0, y1, y_error, is_leaf=_is_quantity)
     err_leaves = jax.tree.leaves(err_tree)
+    # Skip zero-size leaves (e.g., empty adaptation arrays when n_stc=0 or n_sfa=0).
+    # A leaf with shape (0, n) has size=0 and contributes no error information, but
+    # would otherwise produce shape (0,) arrays that contaminate broadcasts with
+    # non-empty leaves (e.g., shape (n,) -> (0,) via jnp.maximum broadcasting rules).
+    non_empty = [e for e in err_leaves if e.size > 0]
+    if not non_empty:
+        return jnp.zeros(jax.tree.leaves(y0)[0].shape)
     # Reduce each leaf to the minimum ndim (per-neuron shape) so that
     # leaves with extra trailing dimensions (e.g. per-receptor) don't
     # broadcast and expand the shape of the combined error.
-    min_ndim = min(e.ndim for e in err_leaves)
+    min_ndim = min(e.ndim for e in non_empty)
     reduced = []
-    for e in err_leaves:
+    for e in non_empty:
         while e.ndim > min_ndim:
             e = jnp.max(e, axis=-1)
         reduced.append(e)
@@ -581,13 +588,15 @@ class AdaptiveRungeKuttaStep:
 
         first_leaf = jax.tree.leaves(state)[0]
         v_shape = first_leaf.shape
-        dftype = brainstate.environ.dftype()
+        # Use the dtype of the state leaves (not dftype) so that float64
+        # state (e.g., when jax_enable_x64 is True) keeps t_local consistent.
+        state_dtype = first_leaf.dtype
 
         # Match units of t_local to dt (unitless if dt is unitless)
         if isinstance(dt, u.Quantity):
-            t_local = jnp.zeros(v_shape, dtype=dftype) * u.ms
+            t_local = jnp.zeros(v_shape, dtype=state_dtype) * u.ms
         else:
-            t_local = jnp.zeros(v_shape, dtype=dftype)
+            t_local = jnp.zeros(v_shape, dtype=state_dtype)
         h = u.math.maximum(h, min_h)
 
         init_carry = (state, t_local, h, extra, jnp.array(0, dtype=jnp.int32))

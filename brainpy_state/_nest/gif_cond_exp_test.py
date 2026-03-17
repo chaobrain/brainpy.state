@@ -45,6 +45,8 @@ import braintools
 import brainstate
 import saiunit as u
 import jax
+import jax.numpy as jnp
+jax.config.update('jax_enable_x64', True)
 
 from brainpy.state import gif_cond_exp
 
@@ -360,8 +362,11 @@ class TestGIFCondExpSubthresholdDynamics(unittest.TestCase):
             gi0 = float((neuron.g_in.value / u.nS)[0])
 
             # Run for 10 steps (1 ms) and check decay
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def _decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_decay_body, jnp.arange(1, 11))
 
             ge1 = float((neuron.g_ex.value / u.nS)[0])
             gi1 = float((neuron.g_in.value / u.nS)[0])
@@ -443,11 +448,16 @@ class TestGIFCondExpRefractoryBehavior(unittest.TestCase):
             self.assertTrue(float(spk0[0]) > 0, "Should spike on step 0 with lambda_0=1e12")
 
             # Steps 1-9 should be refractory, V clamped to V_reset
-            for k in range(1, 10):
-                self._step(neuron, k)
-                v = float((neuron.V.value / u.mV)[0])
+            def _refr_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV
+
+            v_trace = brainstate.transform.for_loop(_refr_body, jnp.arange(1, 10))
+            for idx in range(9):
+                v = float(v_trace[idx, 0])
                 self.assertAlmostEqual(v, -55.0, places=6,
-                                       msg=f"V should be V_reset during refractory at step {k}")
+                                       msg=f"V should be V_reset during refractory at step {idx + 1}")
 
     def test_refractory_count_matches_t_ref(self):
         r"""Refractory counter should match ceil(t_ref / dt)."""
@@ -515,8 +525,11 @@ class TestGIFCondExpAdaptation(unittest.TestCase):
             neuron.lambda_0 = 0.0  # turn off spiking
 
             # Run several steps and check stc decay
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def _stc_decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_stc_decay_body, jnp.arange(1, 11))
 
             # After 10 steps (1 ms), each element should be q_stc[i] * exp(-1ms/tau[i])
             # But note: the elements were set after spike, then decayed each step
@@ -552,8 +565,11 @@ class TestGIFCondExpAdaptation(unittest.TestCase):
             self._step(neuron, 0)
             neuron.lambda_0 = 0.0
 
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def _sfa_decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_sfa_decay_body, jnp.arange(1, 11))
 
             for i in range(len(tau_sfa)):
                 expected = q_sfa[i] * math.exp(-1.0 / tau_sfa[i])
@@ -619,9 +635,13 @@ class TestGIFCondExpStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
+            def _no_spike_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update(x=0.0 * u.pA)
+
+            spk_trace = brainstate.transform.for_loop(_no_spike_body, jnp.arange(100))
             for k in range(100):
-                spk = self._step(neuron, k)
-                self.assertEqual(float(spk[0]), 0.0,
+                self.assertEqual(float(spk_trace[k, 0]), 0.0,
                                  f"No spike expected with lambda_0=0 at step {k}")
 
     def test_high_lambda_produces_spikes(self):
@@ -638,12 +658,12 @@ class TestGIFCondExpStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_count = 0
-            for k in range(100):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_count += 1
+            def _high_lam_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update(x=0.0 * u.pA)
 
+            spk_trace = brainstate.transform.for_loop(_high_lam_body, jnp.arange(100))
+            spike_count = int(jnp.sum(spk_trace[:, 0] > 0))
             self.assertTrue(spike_count > 50,
                             f"Expected many spikes with high lambda, got {spike_count}")
 
@@ -658,10 +678,20 @@ class TestGIFCondExpStochasticSpiking(unittest.TestCase):
             n1.init_state()
             n2.init_state()
 
+            ks = jnp.arange(50)
+
+            def _det_body1(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n1.update(x=0.0 * u.pA)
+
+            def _det_body2(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n2.update(x=0.0 * u.pA)
+
+            s1_trace = brainstate.transform.for_loop(_det_body1, ks)
+            s2_trace = brainstate.transform.for_loop(_det_body2, ks)
             for k in range(50):
-                s1 = self._step(n1, k)
-                s2 = self._step(n2, k)
-                self.assertEqual(float(s1[0]), float(s2[0]),
+                self.assertEqual(float(s1_trace[k, 0]), float(s2_trace[k, 0]),
                                  f"Spike mismatch at step {k} with identical RNG")
 
 
@@ -731,20 +761,37 @@ class TestGIFCondExpReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model, ge_model, gi_model = [], [], []
-            for k in range(n_steps):
-                x_pA = i_stim_seq[k]
-                self._step(neuron, k, x=x_pA * u.pA, dg_values=dg_seq[k])
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                ge_model.append(float((neuron.g_ex.value / u.nS)[0]))
-                gi_model.append(float((neuron.g_in.value / u.nS)[0]))
+            # Pre-compute per-step inputs as JAX arrays for for_loop
+            dg_ex_arr = jnp.array(
+                [sum(v for v in step if v >= 0) for step in dg_seq], dtype=jnp.float64
+            )
+            dg_in_arr = jnp.array(
+                [sum(-v for v in step if v < 0) for step in dg_seq], dtype=jnp.float64
+            )
+            i_stim_arr = jnp.array(i_stim_seq, dtype=jnp.float64)
+
+            def _sub_body(k):
+                neuron.add_delta_input('_fl_ex', dg_ex_arr[k] * u.nS, label='w_ex')
+                neuron.add_delta_input('_fl_in', dg_in_arr[k] * u.nS, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=i_stim_arr[k] * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_sub_body, jnp.arange(n_steps))
+            v_model = results[0][:, 0]
+            ge_model = results[1][:, 0]
+            gi_model = results[2][:, 0]
 
         for k in range(n_steps):
-            self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
-                                   msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
-            self.assertAlmostEqual(ge_model[k], ge_ref[k], places=5,
+            self.assertAlmostEqual(float(v_model[k]), v_ref[k], places=4,
+                                   msg=f"V mismatch at step {k}: model={float(v_model[k])}, ref={v_ref[k]}")
+            self.assertAlmostEqual(float(ge_model[k]), ge_ref[k], places=5,
                                    msg=f"g_ex mismatch at step {k}")
-            self.assertAlmostEqual(gi_model[k], gi_ref[k], places=5,
+            self.assertAlmostEqual(float(gi_model[k]), gi_ref[k], places=5,
                                    msg=f"g_in mismatch at step {k}")
 
     def test_full_trace_with_adaptation_and_spiking(self):
@@ -809,19 +856,26 @@ class TestGIFCondExpReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model, ge_model, gi_model = [], [], []
-            for k in range(n_steps):
-                self._step(neuron, k, x=0.0 * u.pA)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                ge_model.append(float((neuron.g_ex.value / u.nS)[0]))
-                gi_model.append(float((neuron.g_in.value / u.nS)[0]))
+            def _adapt_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_adapt_body, jnp.arange(n_steps))
+            v_model = results[0][:, 0]
+            ge_model = results[1][:, 0]
+            gi_model = results[2][:, 0]
 
         for k in range(n_steps):
-            self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
-                                   msg=f"V mismatch at step {k}: model={v_model[k]}, ref={v_ref[k]}")
-            self.assertAlmostEqual(ge_model[k], ge_ref[k], places=5,
+            self.assertAlmostEqual(float(v_model[k]), v_ref[k], places=4,
+                                   msg=f"V mismatch at step {k}: model={float(v_model[k])}, ref={v_ref[k]}")
+            self.assertAlmostEqual(float(ge_model[k]), ge_ref[k], places=5,
                                    msg=f"g_ex mismatch at step {k}")
-            self.assertAlmostEqual(gi_model[k], gi_ref[k], places=5,
+            self.assertAlmostEqual(float(gi_model[k]), gi_ref[k], places=5,
                                    msg=f"g_in mismatch at step {k}")
 
 

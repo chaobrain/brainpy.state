@@ -45,6 +45,7 @@ import braintools
 import brainstate
 import saiunit as u
 import jax
+jax.config.update("jax_enable_x64", True)
 import numpy as np
 
 from brainpy.state import gif_psc_exp

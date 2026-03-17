@@ -525,30 +525,56 @@ class gif_cond_exp(NESTNeuron):
         self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
         self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
         self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
-        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA))
 
-        # Adaptation state: stc and sfa element arrays (unitless floats in nA and mV respectively)
+        # Adaptation state: JAX arrays wrapped in ShortTermState for JIT compatibility.
         n_stc = len(self.tau_stc)
         n_sfa = len(self.tau_sfa)
         v_shape = self.varshape
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=dftype)  # total stc current (nA)
-        self._sfa_val = np.full(
-            v_shape,
-            float(np.asarray(u.math.asarray(self.V_T_star / u.mV), dtype=dftype)),
-            dtype=dftype
-        )  # adaptive threshold (mV)
+        V_T_star_mV = float(np.asarray(u.get_mantissa(self.V_T_star / u.mV)))
 
-        # RNG state
-        if self._rng_key is not None:
-            self._rng_state = self._rng_key
-        else:
-            self._rng_state = jax.random.PRNGKey(0)
+        self._stc_elems_state = (
+            brainstate.ShortTermState(jnp.zeros((n_stc, *v_shape), dtype=jnp.float64))
+            if n_stc > 0 else None
+        )
+        self._sfa_elems_state = (
+            brainstate.ShortTermState(jnp.zeros((n_sfa, *v_shape), dtype=jnp.float64))
+            if n_sfa > 0 else None
+        )
+        self._stc_val_state = brainstate.ShortTermState(
+            jnp.zeros(v_shape, dtype=jnp.float64)
+        )
+        self._sfa_val_state = brainstate.ShortTermState(
+            jnp.full(v_shape, V_T_star_mV, dtype=jnp.float64)
+        )
+
+        # RNG state as ShortTermState for JIT compatibility.
+        rng_init = self._rng_key if self._rng_key is not None else jax.random.PRNGKey(0)
+        self._rng_state = brainstate.ShortTermState(rng_init)
 
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
+
+    @property
+    def _stc_elems(self):
+        """Spike-triggered current elements (n_stc, *varshape), float64."""
+        return self._stc_elems_state.value if self._stc_elems_state is not None else None
+
+    @property
+    def _sfa_elems(self):
+        """Spike-frequency adaptation elements (n_sfa, *varshape), float64."""
+        return self._sfa_elems_state.value if self._sfa_elems_state is not None else None
+
+    @property
+    def _stc_val(self):
+        """Total STC current at the start of the last update step (*varshape), float64."""
+        return self._stc_val_state.value
+
+    @property
+    def _sfa_val(self):
+        """Effective firing threshold (V_T_star + sum of sfa elements) (*varshape), float64."""
+        return self._sfa_val_state.value
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute differentiable spike signal using surrogate gradient.
@@ -702,13 +728,11 @@ class gif_cond_exp(NESTNeuron):
         - If RKF45 cannot converge within ``_MAX_ITERS`` iterations, integration may be
           incomplete. This typically occurs only with extreme parameter values or very large dt.
         """
-        import math as _math
-
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        dt_ms = float(u.math.asarray(dt / u.ms))
+        dt_ms = float(u.get_mantissa(dt / u.ms))
 
         # Read state variables with their natural units.
         V = self.V.value  # mV
@@ -722,35 +746,43 @@ class gif_cond_exp(NESTNeuron):
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
         v_shape = self.V.value.shape
+        n_stc = len(self.tau_stc)
+        n_sfa = len(self.tau_sfa)
+        n_dims = len(v_shape)
 
-        # ---- Step 1: Decay stc/sfa elements and compute totals ----
-        P_stc = [_math.exp(-dt_ms / tau) for tau in self.tau_stc]
-        P_sfa = [_math.exp(-dt_ms / tau) for tau in self.tau_sfa]
+        # ---- Step 1: Compute stc/sfa totals and exponential decay ----
+        if n_stc > 0:
+            stc_elems = self._stc_elems_state.value              # (n_stc, *v_shape), float64
+            stc_total = jnp.sum(stc_elems, axis=0)              # (*v_shape)
+            P_stc_arr = jnp.array(
+                [np.exp(-dt_ms / tau) for tau in self.tau_stc], dtype=jnp.float64
+            ).reshape(n_stc, *([1] * n_dims))
+            stc_elems_decayed = stc_elems * P_stc_arr
+        else:
+            stc_total = jnp.zeros(v_shape, dtype=jnp.float64)
+            stc_elems_decayed = None
 
-        stc_total_np = np.zeros(v_shape, dtype=dftype)
-        if self._stc_elems is not None:
-            for i in range(len(self.tau_stc)):
-                stc_total_np += self._stc_elems[i]
-                self._stc_elems[i] *= P_stc[i]
+        V_T_star_mV = float(np.asarray(u.get_mantissa(self.V_T_star / u.mV)))
+        if n_sfa > 0:
+            sfa_elems = self._sfa_elems_state.value              # (n_sfa, *v_shape), float64
+            sfa_total = V_T_star_mV + jnp.sum(sfa_elems, axis=0)  # (*v_shape)
+            P_sfa_arr = jnp.array(
+                [np.exp(-dt_ms / tau) for tau in self.tau_sfa], dtype=jnp.float64
+            ).reshape(n_sfa, *([1] * n_dims))
+            sfa_elems_decayed = sfa_elems * P_sfa_arr
+        else:
+            sfa_total = jnp.full(v_shape, V_T_star_mV, dtype=jnp.float64)
+            sfa_elems_decayed = None
 
-        sfa_total_np = np.full(
-            v_shape,
-            float(np.asarray(u.math.asarray(self.V_T_star / u.mV), dtype=dftype)),
-            dtype=dftype
-        )
-        if self._sfa_elems is not None:
-            for i in range(len(self.tau_sfa)):
-                sfa_total_np += self._sfa_elems[i]
-                self._sfa_elems[i] *= P_sfa[i]
+        self._stc_val_state.value = stc_total
+        self._sfa_val_state.value = sfa_total
 
-        self._stc_val[:] = stc_total_np
-        self._sfa_val[:] = sfa_total_np
+        # Convert stc_total to physical units for the ODE (cast to dftype to preserve state dtype)
+        stc_total_pA = stc_total.astype(dftype) * u.nA
 
-        # Convert stc_total to units for the vector field (pA = nA * 1000)
-        stc_total_pA = jnp.asarray(stc_total_np, dtype=dftype) * u.nA
-
-        # Advance RNG state for this step
-        self._rng_state, subkey = jax.random.split(self._rng_state)
+        # Advance RNG state
+        new_rng, subkey = jax.random.split(self._rng_state.value)
+        self._rng_state.value = new_rng
         rand_vals = jax.random.uniform(subkey, shape=v_shape)
 
         # ---- Step 2: Adaptive RKF45 integration via generic integrator ----
@@ -761,9 +793,9 @@ class gif_cond_exp(NESTNeuron):
             unstable=jnp.array(False),
             i_stim=i_stim,
             stc_total=stc_total_pA,
-            sfa_total=jnp.asarray(sfa_total_np, dtype=dftype),
+            sfa_total=sfa_total,
             lambda_0=self.lambda_0,
-            Delta_V=float(np.asarray(u.math.asarray(self.Delta_V / u.mV), dtype=dftype)),
+            Delta_V=float(np.asarray(u.get_mantissa(self.Delta_V / u.mV))),
             rand_vals=rand_vals,
             dt_ms=dt_ms,
         )
@@ -788,15 +820,19 @@ class gif_cond_exp(NESTNeuron):
         g_ex = g_ex + w_ex
         g_in = g_in + w_in
 
-        # ---- Step 4: Update stc/sfa elements on spike ----
-        # spike_mask is a JAX array; convert to numpy for element updates
-        spike_np = np.asarray(spike_mask)
-        if self._stc_elems is not None:
-            for i in range(len(self.q_stc)):
-                self._stc_elems[i] = np.where(spike_np, self._stc_elems[i] + self.q_stc[i], self._stc_elems[i])
-        if self._sfa_elems is not None:
-            for i in range(len(self.q_sfa)):
-                self._sfa_elems[i] = np.where(spike_np, self._sfa_elems[i] + self.q_sfa[i], self._sfa_elems[i])
+        # ---- Step 4: Update stc/sfa elements on spike (JAX-native, JIT-compatible) ----
+        if n_stc > 0 or n_sfa > 0:
+            spike_mask_f = spike_mask.astype(jnp.float64)
+            if n_stc > 0:
+                q_stc_arr = jnp.array(self.q_stc, dtype=jnp.float64).reshape(
+                    n_stc, *([1] * n_dims)
+                )
+                self._stc_elems_state.value = stc_elems_decayed + q_stc_arr * spike_mask_f
+            if n_sfa > 0:
+                q_sfa_arr = jnp.array(self.q_sfa, dtype=jnp.float64).reshape(
+                    n_sfa, *([1] * n_dims)
+                )
+                self._sfa_elems_state.value = sfa_elems_decayed + q_sfa_arr * spike_mask_f
 
         # ---- Step 5: Write back state ----
         self.V.value = V

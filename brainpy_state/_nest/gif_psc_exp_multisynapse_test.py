@@ -47,7 +47,13 @@ import braintools
 import brainstate
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
+
+# Ensure float64 is active even when JAX was already initialized before this
+# module was imported (e.g. by pytest collecting other test files first).
+jax.config.update('jax_enable_x64', True)
+brainstate.environ.set_precision('64')
 
 from brainpy_state._nest.gif_psc_exp_multisynapse import gif_psc_exp_multisynapse
 
@@ -399,8 +405,11 @@ class TestSubthresholdDynamics(unittest.TestCase):
             ])
 
             # Run for 10 steps (1 ms) and check decay
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def _decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_decay_body, jnp.arange(1, 11))
 
             dftype = brainstate.environ.dftype()
             i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
@@ -485,9 +494,12 @@ class TestSubthresholdDynamics(unittest.TestCase):
             ])
 
             # Let dynamics evolve for a few steps
-            for k in range(1, 5):
-                self._step(base, k)
-                self._step(stim, k)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    base.update(x=0.0 * u.pA)
+                    stim.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_body, jnp.arange(1, 5))
 
             v_base = float((base.V.value / u.mV)[0])
             v_stim = float((stim.V.value / u.mV)[0])
@@ -527,11 +539,16 @@ class TestRefractoryBehavior(unittest.TestCase):
             self.assertTrue(float(spk0[0]) > 0, "Should spike on step 0")
 
             # Steps 1-9 should be refractory, V clamped to V_reset
-            for k in range(1, 10):
-                self._step(neuron, k)
-                v = float((neuron.V.value / u.mV)[0])
+            def _refr_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV
+
+            v_trace = brainstate.transform.for_loop(_refr_body, jnp.arange(1, 10))
+            for idx in range(9):
+                v = float(v_trace[idx, 0])
                 self.assertAlmostEqual(v, -55.0, places=6,
-                                       msg=f"V should be V_reset during refractory at step {k}")
+                                       msg=f"V should be V_reset during refractory at step {idx + 1}")
 
     def test_refractory_count_matches_t_ref(self):
         r"""Refractory counter should match ceil(t_ref / dt) as in NEST."""
@@ -576,8 +593,11 @@ class TestRefractoryBehavior(unittest.TestCase):
             self.assertAlmostEqual(isyn, 10.0, places=5)
 
             # Let it decay for 10 more steps (1 ms)
-            for k in range(2, 12):
-                self._step(neuron, k)
+            def _decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_decay_body, jnp.arange(2, 12))
 
             isyn_after = float(np.asarray(u.math.asarray(neuron.i_syn.value / u.pA))[0, 0])
             expected = 10.0 * math.exp(-1.0 / 2.0)
@@ -621,8 +641,11 @@ class TestAdaptation(unittest.TestCase):
             neuron.lambda_0 = 0.0
 
             # Run 10 steps (1 ms)
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def _stc_decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_stc_decay_body, jnp.arange(1, 11))
 
             for i in range(len(tau_stc)):
                 expected = q_stc[i] * math.exp(-1.0 / tau_stc[i])
@@ -652,8 +675,11 @@ class TestAdaptation(unittest.TestCase):
             self._step(neuron, 0)
             neuron.lambda_0 = 0.0
 
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def _sfa_decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_sfa_decay_body, jnp.arange(1, 11))
 
             for i in range(len(tau_sfa)):
                 expected = q_sfa[i] * math.exp(-1.0 / tau_sfa[i])
@@ -701,9 +727,12 @@ class TestAdaptation(unittest.TestCase):
             with_stc.init_state()
             with_stc._stc_elems[0][0] = 50.0  # Simulate post-spike
 
-            for k in range(20):
-                self._step(no_stc, k)
-                self._step(with_stc, k)
+            def _stc_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    no_stc.update(x=0.0 * u.pA)
+                    with_stc.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_stc_body, jnp.arange(20))
 
             v_no = float((no_stc.V.value / u.mV)[0])
             v_with = float((with_stc.V.value / u.mV)[0])
@@ -734,9 +763,13 @@ class TestStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
+            def _no_spike_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update(x=0.0 * u.pA)
+
+            spk_trace = brainstate.transform.for_loop(_no_spike_body, jnp.arange(100))
             for k in range(100):
-                spk = self._step(neuron, k)
-                self.assertEqual(float(spk[0]), 0.0,
+                self.assertEqual(float(spk_trace[k, 0]), 0.0,
                                  f"No spike expected with lambda_0=0 at step {k}")
 
     def test_high_lambda_produces_spikes(self):
@@ -753,11 +786,12 @@ class TestStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_count = 0
-            for k in range(100):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_count += 1
+            def _high_lam_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update(x=0.0 * u.pA)
+
+            spk_trace = brainstate.transform.for_loop(_high_lam_body, jnp.arange(100))
+            spike_count = int(jnp.sum(spk_trace[:, 0] > 0))
 
             self.assertTrue(spike_count > 50,
                             f"Expected many spikes with high lambda, got {spike_count}")
@@ -775,10 +809,20 @@ class TestStochasticSpiking(unittest.TestCase):
             n1.init_state()
             n2.init_state()
 
+            ks = jnp.arange(50)
+
+            def _det_body1(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n1.update(x=0.0 * u.pA)
+
+            def _det_body2(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n2.update(x=0.0 * u.pA)
+
+            s1_trace = brainstate.transform.for_loop(_det_body1, ks)
+            s2_trace = brainstate.transform.for_loop(_det_body2, ks)
             for k in range(50):
-                s1 = self._step(n1, k)
-                s2 = self._step(n2, k)
-                self.assertEqual(float(s1[0]), float(s2[0]),
+                self.assertEqual(float(s1_trace[k, 0]), float(s2_trace[k, 0]),
                                  f"Spike mismatch at step {k} with identical RNG")
 
 
@@ -840,18 +884,25 @@ class TestReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            isyn_model = []
-            for k in range(n_steps):
-                x_pA = i_stim_seq[k]
-                se = None
-                if w_seq[k]:
-                    se = [(rec, w * u.pA) for rec, w in w_seq[k]]
-                self._step(neuron, k, x=x_pA * u.pA, spike_events=se)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                dftype = brainstate.environ.dftype()
-                isyn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
-                isyn_model.append(isyn[0, 0])
+            # Pre-compute per-step inputs as JAX arrays for for_loop
+            w_arr = np.zeros((n_steps, 1, len(tau_syn)), dtype=np.float64)
+            for k_pre, events in enumerate(w_seq):
+                for rec, w in events:
+                    w_arr[k_pre, 0, rec - 1] += w
+            w_arr_jax = jnp.array(w_arr)
+            i_stim_arr = jnp.array(i_stim_seq, dtype=jnp.float64)
+
+            def _sub_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=i_stim_arr[k] * u.pA, receptor_weights=w_arr_jax[k])
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.i_syn.value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_sub_body, jnp.arange(n_steps))
+            v_model = [float(results[0][k, 0]) for k in range(n_steps)]
+            isyn_model = [float(results[1][k, 0, 0]) for k in range(n_steps)]
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
@@ -901,19 +952,26 @@ class TestReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            isyn_model_0, isyn_model_1 = [], []
-            for k in range(n_steps):
-                x_pA = i_stim_seq[k]
-                se = None
-                if w_seq[k]:
-                    se = [(rec, w * u.pA) for rec, w in w_seq[k]]
-                self._step(neuron, k, x=x_pA * u.pA, spike_events=se)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                dftype = brainstate.environ.dftype()
-                isyn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
-                isyn_model_0.append(isyn[0, 0])
-                isyn_model_1.append(isyn[0, 1])
+            # Pre-compute per-step inputs as JAX arrays for for_loop
+            w_arr = np.zeros((n_steps, 1, len(tau_syn)), dtype=np.float64)
+            for k_pre, events in enumerate(w_seq):
+                for rec, w in events:
+                    w_arr[k_pre, 0, rec - 1] += w
+            w_arr_jax = jnp.array(w_arr)
+            i_stim_arr = jnp.array(i_stim_seq, dtype=jnp.float64)
+
+            def _multi_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=i_stim_arr[k] * u.pA, receptor_weights=w_arr_jax[k])
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.i_syn.value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_multi_body, jnp.arange(n_steps))
+            v_model = [float(results[0][k, 0]) for k in range(n_steps)]
+            isyn_model_0 = [float(results[1][k, 0, 0]) for k in range(n_steps)]
+            isyn_model_1 = [float(results[1][k, 0, 1]) for k in range(n_steps)]
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
@@ -979,10 +1037,13 @@ class TestReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                self._step(neuron, k, x=0.0 * u.pA)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            def _adapt_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV
+
+            v_results = brainstate.transform.for_loop(_adapt_body, jnp.arange(n_steps))
+            v_model = [float(v_results[k, 0]) for k in range(n_steps)]
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
@@ -1057,13 +1118,20 @@ class TestReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                se = None
-                if w_seq[k]:
-                    se = [(rec, w * u.pA) for rec, w in w_seq[k]]
-                self._step(neuron, k, x=0.0 * u.pA, spike_events=se)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            # Pre-compute per-step receptor weights for for_loop
+            w_arr = np.zeros((n_steps, 1, len(tau_syn)), dtype=np.float64)
+            for k_pre, events in enumerate(w_seq):
+                for rec, w in events:
+                    w_arr[k_pre, 0, rec - 1] += w
+            w_arr_jax = jnp.array(w_arr)
+
+            def _dc_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA, receptor_weights=w_arr_jax[k])
+                return neuron.V.value / u.mV
+
+            v_results = brainstate.transform.for_loop(_dc_body, jnp.arange(n_steps))
+            v_model = [float(v_results[k, 0]) for k in range(n_steps)]
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
@@ -1257,8 +1325,11 @@ class TestMultisynapseSpecific(unittest.TestCase):
             ])
 
             # Run for 20 steps (2 ms) - enough to see different decay rates
-            for k in range(1, 21):
-                self._step(neuron, k)
+            def _ind_decay_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(_ind_decay_body, jnp.arange(1, 21))
 
             dftype = brainstate.environ.dftype()
             i_syn = np.asarray(u.math.asarray(neuron.i_syn.value / u.pA), dtype=dftype)
@@ -1352,13 +1423,21 @@ class TestMultisynapseSpecific(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                se = None
-                if w_seq[k]:
-                    se = [(rec, w * u.pA) for rec, w in w_seq[k]]
-                self._step(neuron, k, x=i_stim_seq[k] * u.pA, spike_events=se)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            # Pre-compute per-step inputs for for_loop
+            w_arr = np.zeros((n_steps, 1, len(tau_syn)), dtype=np.float64)
+            for k_pre, events in enumerate(w_seq):
+                for rec, w in events:
+                    w_arr[k_pre, 0, rec - 1] += w
+            w_arr_jax = jnp.array(w_arr)
+            i_stim_arr = jnp.array(i_stim_seq, dtype=jnp.float64)
+
+            def _equiv_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=i_stim_arr[k] * u.pA, receptor_weights=w_arr_jax[k])
+                return neuron.V.value / u.mV
+
+            v_results = brainstate.transform.for_loop(_equiv_body, jnp.arange(n_steps))
+            v_model = [float(v_results[k, 0]) for k in range(n_steps)]
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,

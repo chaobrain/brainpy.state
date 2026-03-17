@@ -521,6 +521,20 @@ class gif_pop_psc_exp(NESTNeuron):
         # RNG
         self._rng = np.random.RandomState(self.rng_seed)
 
+    def reset_state(self, **kwargs):
+        r"""Reset all population state variables to initial conditions.
+
+        Equivalent to calling ``init_state()`` again: re-initializes all
+        history buffers, observable states, and the random number generator
+        to their values immediately after construction.
+
+        Parameters
+        ----------
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
+        """
+        self.init_state(**kwargs)
+
     def _draw_binomial(self, n_expect: float) -> int:
         r"""Draw a binomial random number of spikes, matching NEST.
 
@@ -736,27 +750,50 @@ class gif_pop_psc_exp(NESTNeuron):
         # Use a local theta_hat to preserve S_.theta_hat_ for recording
         theta_hat_local = self._theta_hat
 
-        # lines 13-27: loop over non-refractory cohorts
+        # lines 13-27: loop over non-refractory cohorts (vectorized with numpy)
         n_non_ref = self._len_kernel - self._k_ref
-        for k_marked in range(n_non_ref):
-            k = (self._k0 + k_marked) % self._len_kernel  # line 14
-            theta = self._theta[k_marked] + theta_hat_local  # line 15
-            theta_hat_local += self._n[k] * self._theta_tld[k_marked]  # line 16
-            self._u[k] = (self._u[k] - self.E_L) * self._P22 + h_tot  # line 17
-            lambda_tld = self._escrate(self._u[k] - theta)  # line 18
+        if n_non_ref > 0:
+            # Rotating indices for all non-refractory cohorts (line 14)
+            k_arr = (self._k0 + np.arange(n_non_ref)) % self._len_kernel
 
-            P_lambda_ = 0.0005 * (lambda_tld + self._lambda_buf[k]) * h
-            if P_lambda_ > 0.01:
-                P_lambda_ = 1.0 - np.exp(-P_lambda_)  # line 20
+            # Compute per-cohort thresholds (lines 15-16).
+            # theta_hat_local has a sequential cumulative dependency:
+            #   theta[i] = _theta[i] + theta_hat_local_init + sum(_n[k_arr[j]]*_theta_tld[j] for j<i)
+            # We use an exclusive prefix-sum to vectorize this.
+            n_contributions = self._n[k_arr] * self._theta_tld[:n_non_ref]
+            cumsum_excl = np.empty(n_non_ref, dtype=n_contributions.dtype)
+            cumsum_excl[0] = 0.0
+            if n_non_ref > 1:
+                cumsum_excl[1:] = np.cumsum(n_contributions[:-1])
+            theta_arr = self._theta[:n_non_ref] + theta_hat_local + cumsum_excl  # line 15
 
-            self._lambda_buf[k] = lambda_tld  # line 21
-            Y_ += P_lambda_ * self._v_buf[k]  # line 22
-            Z_ += self._v_buf[k]  # line 23
-            W_ += P_lambda_ * self._m[k]  # line 24
+            # Update mean survivor membrane potentials (line 17, no cross-dependencies)
+            self._u[k_arr] = (self._u[k_arr] - self.E_L) * self._P22 + h_tot
 
-            ompl = 1.0 - P_lambda_
-            self._v_buf[k] = ompl * ompl * self._v_buf[k] + P_lambda_ * self._m[k]
-            self._m[k] = ompl * self._m[k]  # line 26
+            # Escape rates (line 18) and trapezoidal probabilities (lines 19-20)
+            lambda_tld_arr = self.lambda_0 * np.exp(
+                (self._u[k_arr] - theta_arr) / self.Delta_V
+            )
+            P_lambda_arr = 0.0005 * (lambda_tld_arr + self._lambda_buf[k_arr]) * h
+            P_lambda_arr = np.where(
+                P_lambda_arr > 0.01,
+                1.0 - np.exp(-P_lambda_arr),
+                P_lambda_arr,
+            )
+
+            self._lambda_buf[k_arr] = lambda_tld_arr  # line 21
+
+            # Accumulate sums (lines 22-24)
+            Y_ = float(np.sum(P_lambda_arr * self._v_buf[k_arr]))
+            Z_ = float(np.sum(self._v_buf[k_arr]))
+            W_ = float(np.sum(P_lambda_arr * self._m[k_arr]))
+
+            # Update survival and variance buffers (lines 25-26)
+            ompl_arr = 1.0 - P_lambda_arr
+            self._v_buf[k_arr] = (
+                ompl_arr * ompl_arr * self._v_buf[k_arr] + P_lambda_arr * self._m[k_arr]
+            )
+            self._m[k_arr] = ompl_arr * self._m[k_arr]
 
         # line 28
         if (Z_ + self._z) > 0.0:
