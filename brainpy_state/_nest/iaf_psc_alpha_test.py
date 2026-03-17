@@ -20,9 +20,10 @@ import unittest
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainpy.state import iaf_psc_alpha
 
 
@@ -222,17 +223,25 @@ class TestIAFPscAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            first_spike = None
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV, spk, neuron.last_spike_time.value / u.ms
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(80))
+            vm_all = np.asarray(results[0][:, 0])
+            spk_all = np.asarray(u.get_mantissa(results[1][:, 0]))
+            lst_all = np.asarray(results[2][:, 0])
+
             for k in range(80):
-                spk = self._step(neuron, k)
                 t_ms = round((k + 1) * 0.1, 1)
                 if t_ms in reference:
-                    vm = float((neuron.V.value / u.mV)[0])
-                    self.assertAlmostEqual(vm, reference[t_ms], delta=8e-4)
-                if first_spike is None and self._is_spike(spk):
-                    first_spike = float((neuron.last_spike_time.value / u.ms)[0])
+                    self.assertAlmostEqual(float(vm_all[k]), reference[t_ms], delta=8e-4)
 
-            self.assertIsNotNone(first_spike)
+            spike_mask = spk_all > 0.0
+            self.assertTrue(np.any(spike_mask))
+            first_spike_idx = int(np.argmax(spike_mask))
+            first_spike = float(lst_all[first_spike_idx])
             self.assertAlmostEqual(first_spike, 4.8, delta=1e-12)
 
     def test_subthreshold_state_matches_reference_equations(self):
@@ -367,19 +376,34 @@ class TestIAFPscAlpha(unittest.TestCase):
                 V_initializer=braintools.init.Constant(-70. * u.mV),
             )
             neuron.init_state()
+            dftype = brainstate.environ.dftype()
 
-            trace = []
-            for k in range(500):
-                delta = None
-                if k == 10:
-                    delta = np.full_like(tau_syn, 1000.0) * u.pA
-                if k == 20:
-                    delta = np.full_like(tau_syn, -1000.0) * u.pA
-                self._step(neuron, k, delta=delta)
-                dftype = brainstate.environ.dftype()
-                trace.append(np.asarray(u.math.asarray(neuron.V.value / u.mV), dtype=dftype))
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV
 
-            trace = np.asarray(trace)
+            # Steps 0-9: no delta
+            trace_0 = brainstate.transform.for_loop(_run_step, jnp.arange(10))
+            # Step 10: with delta
+            neuron.add_delta_input('delta_10', np.full_like(tau_syn, 1000.0) * u.pA)
+            with brainstate.environ.context(t=10 * self.dt):
+                neuron.update(x=0.0 * u.pA)
+            trace_10 = (neuron.V.value / u.mV)[jnp.newaxis]
+            # Steps 11-19: no delta
+            trace_1 = brainstate.transform.for_loop(_run_step, jnp.arange(11, 20))
+            # Step 20: with delta
+            neuron.add_delta_input('delta_20', np.full_like(tau_syn, -1000.0) * u.pA)
+            with brainstate.environ.context(t=20 * self.dt):
+                neuron.update(x=0.0 * u.pA)
+            trace_20 = (neuron.V.value / u.mV)[jnp.newaxis]
+            # Steps 21-499: no delta
+            trace_2 = brainstate.transform.for_loop(_run_step, jnp.arange(21, 500))
+
+            trace = np.asarray(
+                jnp.concatenate([trace_0, trace_10, trace_1, trace_20, trace_2], axis=0),
+                dtype=dftype,
+            )
             self.assertFalse(np.any(~np.isfinite(trace)))
 
             v_range = trace.max(axis=0) - trace.min(axis=0)

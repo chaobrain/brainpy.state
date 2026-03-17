@@ -753,7 +753,10 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
         v_shape = self.V.value.shape
         w_by_rec = self._parse_spike_events(spike_events, v_shape)
         w_default_raw = self.sum_delta_inputs(0.0 * u.nS)
-        w_default = np.asarray(u.math.asarray(w_default_raw / u.nS), dtype=dftype)
+        w_default_val = w_default_raw / u.nS
+        if isinstance(w_default_val, u.Quantity):
+            w_default_val = u.get_mantissa(w_default_val)
+        w_default = np.asarray(w_default_val, dtype=dftype)
         w_default = np.broadcast_to(w_default, v_shape)
         if n_receptors > 0:
             if np.any(w_default < 0.0):

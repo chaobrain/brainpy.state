@@ -486,6 +486,34 @@ class iaf_psc_exp(NESTNeuron):
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
+        # Pre-compute propagator coefficients (constant for a given dt).
+        self._precompute_propagators()
+
+    def _precompute_propagators(self):
+        """Pre-compute NEST propagator coefficients from dt and model parameters."""
+        dt_q = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
+        h = float(u.math.asarray(dt_q / u.ms))
+
+        tau_ex_np = np.asarray(u.math.asarray(self.tau_syn_ex / u.ms), dtype=dftype)
+        tau_in_np = np.asarray(u.math.asarray(self.tau_syn_in / u.ms), dtype=dftype)
+        tau_m_np = np.asarray(u.math.asarray(self.tau_m / u.ms), dtype=dftype)
+        C_m_np = np.asarray(u.math.asarray(self.C_m / u.pF), dtype=dftype)
+
+        self._P11_ex = jnp.asarray(np.exp(-h / tau_ex_np))
+        self._P11_in = jnp.asarray(np.exp(-h / tau_in_np))
+        self._P22 = jnp.asarray(np.exp(-h / tau_m_np))
+        self._P21_ex = jnp.asarray(propagator_exp(tau_ex_np, tau_m_np, C_m_np, h))
+        self._P21_in = jnp.asarray(propagator_exp(tau_in_np, tau_m_np, C_m_np, h))
+        self._P20 = jnp.asarray(tau_m_np / C_m_np * (1.0 - np.exp(-h / tau_m_np)))
+        self._h = h
+
+        # Pre-compute stochastic threshold parameters.
+        self._delta_np = jnp.asarray(np.asarray(u.math.asarray(self.delta / u.mV), dtype=dftype))
+        self._rho_np = jnp.asarray(np.asarray(u.math.asarray(self.rho * u.second), dtype=dftype))
+        self._deterministic = self._delta_np < 1e-10
+        self._delta_safe = jnp.where(self._deterministic, 1.0, self._delta_np)
+
     def get_spike(self, V: ArrayLike = None):
         r"""Evaluate surrogate spike activation for a voltage tensor.
 
@@ -566,7 +594,7 @@ class iaf_psc_exp(NESTNeuron):
         dt_q = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        h = float(u.math.asarray(dt_q / u.ms))
+        h = self._h
 
         # Read state variables with their natural units.
         V = self.V.value  # mV
@@ -576,27 +604,13 @@ class iaf_psc_exp(NESTNeuron):
         i_1 = self.i_1.value  # pA
         r = self.refractory_step_count.value  # int
 
-        # Strip units to unitless NumPy for propagator coefficient computation.
-        tau_ex_np = np.asarray(u.math.asarray(self.tau_syn_ex / u.ms), dtype=dftype)
-        tau_in_np = np.asarray(u.math.asarray(self.tau_syn_in / u.ms), dtype=dftype)
-        tau_m_np = np.asarray(u.math.asarray(self.tau_m / u.ms), dtype=dftype)
-        C_m_np = np.asarray(u.math.asarray(self.C_m / u.pF), dtype=dftype)
-
-        # Precompute exact propagator coefficients (unitless NumPy).
-        P11_ex = np.exp(-h / tau_ex_np)
-        P11_in = np.exp(-h / tau_in_np)
-        P22 = np.exp(-h / tau_m_np)
-        P21_ex = propagator_exp(tau_ex_np, tau_m_np, C_m_np, h)
-        P21_in = propagator_exp(tau_in_np, tau_m_np, C_m_np, h)
-        P20 = tau_m_np / C_m_np * (1.0 - P22)
-
-        # Convert propagator coefficients to JAX arrays for vectorized ops.
-        P11_ex = jnp.asarray(P11_ex)
-        P11_in = jnp.asarray(P11_in)
-        P22 = jnp.asarray(P22)
-        P21_ex = jnp.asarray(P21_ex)
-        P21_in = jnp.asarray(P21_in)
-        P20 = jnp.asarray(P20)
+        # Use pre-computed propagator coefficients.
+        P11_ex = self._P11_ex
+        P11_in = self._P11_in
+        P22 = self._P22
+        P21_ex = self._P21_ex
+        P21_in = self._P21_in
+        P20 = self._P20
 
         # Relative voltages and thresholds (unit-aware).
         V_rel = V - self.E_L  # mV
@@ -636,20 +650,15 @@ class iaf_psc_exp(NESTNeuron):
 
         # 5. Threshold test, reset and refractory assignment.
         # Deterministic thresholding when delta < 1e-10 mV.
-        delta_np = np.asarray(u.math.asarray(self.delta / u.mV), dtype=dftype)
-        rho_np = np.asarray(u.math.asarray(self.rho * u.second), dtype=dftype)
-        deterministic = jnp.asarray(delta_np < 1e-10)
-
         det_spike = V_rel >= theta
 
         # Stochastic escape-noise: phi * h * 1e-3 (phi in 1/s, h in ms).
-        delta_safe = jnp.where(jnp.asarray(delta_np < 1e-10), 1.0, jnp.asarray(delta_np))
         V_rel_np_val = u.math.asarray(V_rel / u.mV)
         theta_np_val = u.math.asarray(theta / u.mV)
-        phi = jnp.asarray(rho_np) * jnp.exp((V_rel_np_val - theta_np_val) / delta_safe)
+        phi = self._rho_np * jnp.exp((V_rel_np_val - theta_np_val) / self._delta_safe)
         stoch_spike = jnp.asarray(np.random.random(size=self.varshape)) < phi * h * 1e-3
 
-        spike_cond = jnp.where(deterministic, det_spike, stoch_spike)
+        spike_cond = jnp.where(self._deterministic, det_spike, stoch_spike)
 
         r = u.math.where(spike_cond, self.ref_count, r)
         V_before_reset = V_rel

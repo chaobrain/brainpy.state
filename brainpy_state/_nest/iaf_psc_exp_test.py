@@ -20,9 +20,10 @@ import unittest
 
 import brainstate
 import braintools
-import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainpy.state import iaf_psc_exp
 
 jax.config.update('jax_enable_x64', True)
@@ -96,8 +97,12 @@ class TestIAFPscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            for k in range(80):
-                self._step(neuron, k)
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA, x_filtered=0.0 * u.pA)
+                return neuron.last_spike_time.value / u.ms
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(80))
 
             # Same first-spike time as in NEST iaf_psc_exp DC test: 4.8 ms.
             t_spike = float((neuron.last_spike_time.value / u.ms)[0])

@@ -445,6 +445,39 @@ class iaf_psc_alpha(NESTNeuron):
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
+        # Pre-compute propagator coefficients (constant for a given dt).
+        self._precompute_propagators()
+
+    def _precompute_propagators(self):
+        """Pre-compute NEST propagator coefficients from dt and model parameters.
+
+        Called once during ``init_state`` so that ``update`` never needs to
+        call ``float(dt)`` or recompute exponentials each step.
+        """
+        dt = brainstate.environ.get_dt()
+        h = float(u.math.asarray(dt / u.ms))
+
+        tau_ex = np.asarray(u.get_mantissa(self.tau_syn_ex / u.ms), dtype=np.float64)
+        tau_in = np.asarray(u.get_mantissa(self.tau_syn_in / u.ms), dtype=np.float64)
+        tau_m = np.asarray(u.get_mantissa(self.tau_m / u.ms), dtype=np.float64)
+        c_m = np.asarray(u.get_mantissa(self.C_m / u.pF), dtype=np.float64)
+
+        self._P11_ex = np.exp(-h / tau_ex)
+        self._P22_ex = self._P11_ex
+        self._P21_ex = h * self._P11_ex
+
+        self._P11_in = np.exp(-h / tau_in)
+        self._P22_in = self._P11_in
+        self._P21_in = h * self._P11_in
+
+        self._expm1_tau_m = np.expm1(-h / tau_m)
+        self._P30 = -tau_m / c_m * self._expm1_tau_m
+        self._P31_ex, self._P32_ex = self._alpha_propagator_p31_p32(tau_ex, tau_m, c_m, h)
+        self._P31_in, self._P32_in = self._alpha_propagator_p31_p32(tau_in, tau_m, c_m, h)
+
+        self._epsc_init = np.e / self.tau_syn_ex  # 1/ms (unit-aware)
+        self._ipsc_init = np.e / self.tau_syn_in  # 1/ms (unit-aware)
+
     def get_spike(self, V: ArrayLike = None):
         r"""Evaluate surrogate spike output for a voltage tensor.
 
@@ -553,9 +586,7 @@ class iaf_psc_alpha(NESTNeuron):
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
-        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        h = float(u.math.asarray(dt / u.ms))
 
         # Read state variables with their natural units.
         V = self.V.value  # mV
@@ -566,28 +597,21 @@ class iaf_psc_alpha(NESTNeuron):
         y0 = self.y0.value  # pA
         r = self.refractory_step_count.value  # int
 
-        # Strip units for coefficient computation (float64 NumPy).
-        tau_ex = np.asarray(u.get_mantissa(self.tau_syn_ex / u.ms), dtype=np.float64)
-        tau_in = np.asarray(u.get_mantissa(self.tau_syn_in / u.ms), dtype=np.float64)
-        tau_m = np.asarray(u.get_mantissa(self.tau_m / u.ms), dtype=np.float64)
-        c_m = np.asarray(u.get_mantissa(self.C_m / u.pF), dtype=np.float64)
-
-        # Coefficients from NEST pre_run_hook.
-        P11_ex = np.exp(-h / tau_ex)
-        P22_ex = P11_ex
-        P21_ex = h * P11_ex
-
-        P11_in = np.exp(-h / tau_in)
-        P22_in = P11_in
-        P21_in = h * P11_in
-
-        expm1_tau_m = np.expm1(-h / tau_m)
-        P30 = -tau_m / c_m * expm1_tau_m
-        P31_ex, P32_ex = self._alpha_propagator_p31_p32(tau_ex, tau_m, c_m, h)
-        P31_in, P32_in = self._alpha_propagator_p31_p32(tau_in, tau_m, c_m, h)
-
-        epsc_init = np.e / self.tau_syn_ex  # 1/ms (unit-aware)
-        ipsc_init = np.e / self.tau_syn_in  # 1/ms (unit-aware)
+        # Use pre-computed propagator coefficients.
+        P11_ex = self._P11_ex
+        P22_ex = self._P22_ex
+        P21_ex = self._P21_ex
+        P11_in = self._P11_in
+        P22_in = self._P22_in
+        P21_in = self._P21_in
+        expm1_tau_m = self._expm1_tau_m
+        P30 = self._P30
+        P31_ex = self._P31_ex
+        P32_ex = self._P32_ex
+        P31_in = self._P31_in
+        P32_in = self._P32_in
+        epsc_init = self._epsc_init
+        ipsc_init = self._ipsc_init
 
         # Spike/current buffers for next step.
         w_all = self.sum_delta_inputs(0. * u.pA)

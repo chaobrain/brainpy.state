@@ -1074,7 +1074,6 @@ class hh_psc_alpha_clopath(NESTNeuron):
         u_bm = ode_state.u_bar_minus
         u_bb = ode_state.u_bar_bar
         r = extra.r
-        V_old_final = extra.V_old
 
         # Synaptic spike inputs (applied after integration).
         w_ex = self.sum_delta_inputs(u.math.zeros_like(self.I_syn_ex.value), label='w_ex')
@@ -1087,9 +1086,11 @@ class hh_psc_alpha_clopath(NESTNeuron):
         dI_in = dI_in + pscon_in * w_in  # pA/ms + 1/ms * pA = pA/ms
 
         # Spike detection: threshold crossing + local maximum
+        # Use V_old (pre-integration voltage) not extra.V_old (integrator-internal),
+        # matching hh_psc_alpha spike detection logic.
         not_refractory = r == 0
         crossed_threshold = V >= 0.0 * u.mV
-        local_max = V_old_final > V
+        local_max = V_old > V
         spike_cond = not_refractory & crossed_threshold & local_max
 
         # Refractory update
