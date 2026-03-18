@@ -333,7 +333,7 @@ class izhikevich(NESTNeuron):
         self.V_initializer = V_initializer
         self.U_initializer = U_initializer
 
-    def init_state(self, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize state variables for the Izhikevich neuron.
 
         This method initializes the membrane potential :math:`V_{\text{m}}`,
@@ -345,6 +345,10 @@ class izhikevich(NESTNeuron):
 
         Parameters
         ----------
+        batch_size : int or None, optional
+            If provided, states are created with shape
+            ``(batch_size, *varshape)``. ``None`` keeps unbatched state.
+            Default is ``None``.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
 
@@ -357,17 +361,17 @@ class izhikevich(NESTNeuron):
         - The buffered current ``I`` is always initialized to zero with units
           of pA, implementing NEST's ring buffer semantic (one-step delay).
         """
-        V = braintools.init.param(self.V_initializer, self.varshape)
+        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         if self.U_initializer is not None:
-            U = braintools.init.param(self.U_initializer, self.varshape)
+            U = braintools.init.param(self.U_initializer, self.varshape, batch_size)
         else:
             # NEST default: u_ = b * v_  (dimensionless b times V in mV)
             U = self.b * V
         self.V = brainstate.HiddenState(V)
         self.U = brainstate.HiddenState(U)
         # Buffered input current (one-step delay, matching NEST ring buffer)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-        self.I = brainstate.ShortTermState(zeros * u.pA)
+        batch_shape = ((batch_size,) + tuple(self.varshape)) if batch_size is not None else self.varshape
+        self.I = brainstate.ShortTermState(u.math.zeros(batch_shape) * u.pA)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute spike output using the surrogate gradient function.

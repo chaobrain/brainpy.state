@@ -286,8 +286,8 @@ class mip_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -297,8 +297,8 @@ class mip_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -521,6 +521,62 @@ class mip_generator(NESTDevice):
             out[i] = int(copied)
         return out
 
+    def simulate(self, n_steps: int) -> np.ndarray:
+        r"""Run ``n_steps`` simulation steps in one vectorised NumPy call.
+
+        Equivalent to calling :meth:`update` in a loop with
+        ``brainstate.environ.context(t=k*dt)`` for ``k = 0, 1, ..., n_steps-1``,
+        but avoids per-step Python overhead by batching all random draws.
+
+        Parameters
+        ----------
+        n_steps : int
+            Number of simulation steps to run. Assumes step index ``k``
+            corresponds to time ``t = k * dt``.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            Integer array of shape ``(n_steps, *self.varshape)`` with
+            spike multiplicities per step and per child train.
+
+        Notes
+        -----
+        ``Binomial(n, p)`` is used in place of ``n`` independent
+        ``Bernoulli(p)`` trials — statistically equivalent but faster.
+        """
+        if not hasattr(self, '_rng_parent'):
+            self.init_state()
+
+        dt_ms = self._dt_ms()
+        if (not np.isfinite(self._dt_cache_ms)) or (
+            not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)
+        ):
+            self._refresh_timing_cache(dt_ms)
+
+        ditype = brainstate.environ.ditype()
+        n = int(n_steps)
+        steps = np.arange(n, dtype=np.int64)
+        active = (steps > self._t_min_step) & (steps <= self._t_max_step)
+
+        if self.rate <= 0.0 or self._num_targets == 0:
+            return np.zeros((n,) + tuple(self.varshape), dtype=ditype)
+
+        lam = self.rate * dt_ms / 1000.0
+        n_parents = self._rng_parent.poisson(lam, n).astype(np.int64)
+        n_parents = np.where(active, n_parents, 0)
+
+        if self.p_copy <= 0.0:
+            mat = np.zeros((n, self._num_targets), dtype=ditype)
+        elif self.p_copy >= 1.0:
+            mat = np.broadcast_to(n_parents[:, np.newaxis], (n, self._num_targets)).copy().astype(ditype)
+        else:
+            mat = self._rng_child.binomial(
+                n_parents[:, np.newaxis], self.p_copy, size=(n, self._num_targets)
+            ).astype(ditype)
+
+        return mat.reshape((n,) + tuple(self.varshape))
+
     def update(self):
         r"""Advance one simulation step and emit child spike multiplicities.
 
@@ -561,8 +617,8 @@ class mip_generator(NESTDevice):
         ):
             self._refresh_timing_cache(dt_ms)
 
+        ditype = brainstate.environ.ditype()
         if self.rate <= 0.0:
-            ditype = brainstate.environ.ditype()
             return np.zeros(self.varshape, dtype=ditype)
 
         curr_step = self._time_to_step(self._current_time_ms(), dt_ms)

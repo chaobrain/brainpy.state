@@ -21,6 +21,7 @@ from typing import Callable, Tuple
 import brainstate
 import braintools
 import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -216,8 +217,7 @@ class _lin_rate_base(NESTNeuron):
 
     def _common_inputs(self, x, instant_rate_events, delayed_rate_events):
         state_shape = self.rate.value.shape
-        ditype = brainstate.environ.ditype()
-        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
+        step_idx = self._step_count
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events(
@@ -408,30 +408,41 @@ class lin_rate_ipn(_lin_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        ditype = brainstate.environ.ditype()
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._step_count = 0
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
+               _precomputed_ex=None, _precomputed_in=None):
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        dftype = brainstate.environ.dftype()
+        state_shape = self.rate.value.shape
 
-        state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs(
-            x=x,
-            instant_rate_events=instant_rate_events,
-            delayed_rate_events=delayed_rate_events,
-        )
         tau, sigma, mu, g, g_ex, g_in, theta_ex, theta_in = self._common_parameters(state_shape)
         lambda_ = self._broadcast_to_state(self._to_numpy(self.lambda_), state_shape)
         rectify_rate = self._broadcast_to_state(self._to_numpy(self.rectify_rate), state_shape)
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
+
+        if _precomputed_ex is not None:
+            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
+            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
+            instant_ex = jnp.zeros(state_shape, dtype=dftype)
+            instant_in = jnp.zeros(state_shape, dtype=dftype)
+            mu_ext = jnp.zeros(state_shape, dtype=dftype)
+        else:
+            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs(
+                x=x,
+                instant_rate_events=instant_rate_events,
+                delayed_rate_events=delayed_rate_events,
+            )
+            self._step_count = step_idx + 1
 
         if noise is None:
-            xi = np.random.normal(size=state_shape)
+            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         if np.any(lambda_ > 0.0):
@@ -453,8 +464,8 @@ class lin_rate_ipn(_lin_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones_like(rate_prev)
+        H_in = jnp.ones_like(rate_prev)
         if self.mult_coupling:
             H_ex = self._mult_coupling_ex(rate_prev, g_ex, theta_ex)
             H_in = self._mult_coupling_in(rate_prev, g_in, theta_in)
@@ -470,14 +481,12 @@ class lin_rate_ipn(_lin_rate_base):
             rate_new += P2 * H_in * self._input(delayed_in + instant_in, g)
 
         if self.rectify_output:
-            rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
+            rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        ditype = brainstate.environ.ditype()
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new
 
 
@@ -585,28 +594,39 @@ class lin_rate_opn(_lin_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
-        ditype = brainstate.environ.ditype()
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._step_count = 0
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
+               _precomputed_ex=None, _precomputed_in=None):
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        dftype = brainstate.environ.dftype()
+        state_shape = self.rate.value.shape
 
-        state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs(
-            x=x,
-            instant_rate_events=instant_rate_events,
-            delayed_rate_events=delayed_rate_events,
-        )
         tau, sigma, mu, g, g_ex, g_in, theta_ex, theta_in = self._common_parameters(state_shape)
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
+
+        if _precomputed_ex is not None:
+            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
+            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
+            instant_ex = jnp.zeros(state_shape, dtype=dftype)
+            instant_in = jnp.zeros(state_shape, dtype=dftype)
+            mu_ext = jnp.zeros(state_shape, dtype=dftype)
+        else:
+            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs(
+                x=x,
+                instant_rate_events=instant_rate_events,
+                delayed_rate_events=delayed_rate_events,
+            )
+            self._step_count = step_idx + 1
 
         if noise is None:
-            xi = np.random.normal(size=state_shape)
+            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         P1 = np.exp(-h / tau)
@@ -617,8 +637,8 @@ class lin_rate_opn(_lin_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones_like(rate_prev)
+        H_in = jnp.ones_like(rate_prev)
         if self.mult_coupling:
             H_ex = self._mult_coupling_ex(noisy_rate, g_ex, theta_ex)
             H_in = self._mult_coupling_in(noisy_rate, g_in, theta_in)
@@ -638,6 +658,4 @@ class lin_rate_opn(_lin_rate_base):
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        ditype = brainstate.environ.ditype()
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

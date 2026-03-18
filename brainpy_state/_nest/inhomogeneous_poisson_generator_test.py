@@ -26,6 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
+import brainstate.transform as bst
 import saiunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -54,7 +55,6 @@ def _run_bp_counts(
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
     dftype = brainstate.environ.dftype()
-    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = inhomogeneous_poisson_generator(
@@ -69,9 +69,15 @@ def _run_bp_counts(
         )
         gen.init_state()
 
-        for step in range(n_steps):
-            with brainstate.environ.context(t=step * dt):
-                totals[step] = float(np.asarray(gen.update(), dtype=dftype).sum())
+        # Pre-compute per-step times as a JAX array, then JIT-compile the loop.
+        t_ms_array = jnp.arange(n_steps, dtype=dftype) * dt_ms
+
+        def body(t_ms):
+            with brainstate.environ.context(t=t_ms * u.ms):
+                out = gen.update()
+            return jnp.asarray(out, dtype=dftype).sum()
+
+        totals = np.array(bst.for_loop(body, t_ms_array))
 
     return totals
 

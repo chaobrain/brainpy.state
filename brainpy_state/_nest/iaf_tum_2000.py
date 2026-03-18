@@ -747,6 +747,12 @@ class iaf_tum_2000(NESTNeuron):
             np.asarray(bu.math.asarray(bu.math.ceil(self.t_ref / dt_q)), dtype=ditype)
         )
 
+        # Pre-compute unit-stripped static JAX parameter arrays for JIT-compatible update().
+        self._E_L_jnp = jnp.asarray(np.asarray(bu.math.asarray(self.E_L / bu.mV), dtype=dftype))
+        self._theta_jnp = jnp.asarray(np.asarray(bu.math.asarray((self.V_th - self.E_L) / bu.mV), dtype=dftype))
+        self._V_reset_rel_jnp = jnp.asarray(np.asarray(bu.math.asarray((self.V_reset - self.E_L) / bu.mV), dtype=dftype))
+        self._I_e_jnp = jnp.asarray(np.asarray(bu.math.asarray(self.I_e / bu.pA), dtype=dftype))
+
     def get_spike(self, V: ArrayLike = None):
         r"""Compute surrogate spike output given membrane potential.
 
@@ -927,7 +933,8 @@ class iaf_tum_2000(NESTNeuron):
 
         return w_ex, w_in
 
-    def update(self, x=0. * bu.pA, x_filtered=0. * bu.pA, spike_events=None):
+    def update(self, x=0. * bu.pA, x_filtered=0. * bu.pA, spike_events=None,
+               _w_ex_jnp=None, _w_in_jnp=None):
         r"""Advance the neuron state by one simulation step.
 
         Performs a complete integration step following NEST ``iaf_tum_2000``
@@ -1047,96 +1054,92 @@ class iaf_tum_2000(NESTNeuron):
         ``float64`` for coefficient computation and state updates.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        h = float(bu.math.asarray(dt_q / bu.ms))
-        t_ms = float(bu.math.asarray(t / bu.ms))
-
-        state_shape = self.V.value.shape
-        dftype = brainstate.environ.dftype()
+        h = self._h  # pre-computed Python float, safe under JIT
+        t_ms = bu.math.asarray(t / bu.ms)  # JAX scalar, traced under JIT
         ditype = brainstate.environ.ditype()
 
-        E_L = np.broadcast_to(np.asarray(bu.math.asarray(self.E_L / bu.mV), dtype=dftype), state_shape)
-        V_rel = np.broadcast_to(np.asarray(bu.math.asarray(self.V.value / bu.mV), dtype=dftype), state_shape) - E_L
-        C_m = np.broadcast_to(np.asarray(bu.math.asarray(self.C_m / bu.pF), dtype=dftype), state_shape)
-        tau_m = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_m / bu.ms), dtype=dftype), state_shape)
-        tau_ex = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_syn_ex / bu.ms), dtype=dftype), state_shape)
-        tau_in = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_syn_in / bu.ms), dtype=dftype), state_shape)
-        I_e = np.broadcast_to(np.asarray(bu.math.asarray(self.I_e / bu.pA), dtype=dftype), state_shape)
-        theta = np.broadcast_to(np.asarray(bu.math.asarray((self.V_th - self.E_L) / bu.mV), dtype=dftype), state_shape)
-        V_reset_rel = np.broadcast_to(np.asarray(bu.math.asarray((self.V_reset - self.E_L) / bu.mV), dtype=dftype), state_shape)
-        rho = np.broadcast_to(np.asarray(bu.math.asarray(self.rho / (1 / bu.second)), dtype=dftype), state_shape)
-        delta = np.broadcast_to(np.asarray(bu.math.asarray(self.delta / bu.mV), dtype=dftype), state_shape)
+        # Pre-computed static JAX parameter arrays (no unit stripping per step).
+        E_L = self._E_L_jnp
+        theta = self._theta_jnp
+        V_reset_rel = self._V_reset_rel_jnp
+        I_e = self._I_e_jnp
+        tau_fac = self._tau_fac_jnp
+        tau_psc = self._tau_psc_jnp
+        tau_rec = self._tau_rec_jnp
+        U = self._U_jnp
 
-        tau_fac = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_fac / bu.ms), dtype=dftype), state_shape)
-        tau_psc = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_psc / bu.ms), dtype=dftype), state_shape)
-        tau_rec = np.broadcast_to(np.asarray(bu.math.asarray(self.tau_rec / bu.ms), dtype=dftype), state_shape)
-        U = np.broadcast_to(np.asarray(bu.math.asarray(self.U), dtype=dftype), state_shape)
+        # Pre-computed propagator coefficients.
+        P11_ex = self._P11_ex
+        P11_in = self._P11_in
+        P22 = self._P22
+        P21_ex = self._P21_ex
+        P21_in = self._P21_in
+        P20 = self._P20
 
-        i_0 = np.broadcast_to(np.asarray(bu.math.asarray(self.i_0.value / bu.pA), dtype=dftype), state_shape)
-        i_1 = np.broadcast_to(np.asarray(bu.math.asarray(self.i_1.value / bu.pA), dtype=dftype), state_shape)
-        i_syn_ex = np.broadcast_to(np.asarray(bu.math.asarray(self.i_syn_ex.value / bu.pA), dtype=dftype), state_shape)
-        i_syn_in = np.broadcast_to(np.asarray(bu.math.asarray(self.i_syn_in.value / bu.pA), dtype=dftype), state_shape)
-        r = np.broadcast_to(
-            np.asarray(bu.math.asarray(self.refractory_step_count.value), dtype=ditype),
-            state_shape,
-        )
+        # Read state variables as JAX arrays (unit-stripped).
+        V_rel = bu.math.asarray(self.V.value / bu.mV) - E_L
+        i_0 = bu.math.asarray(self.i_0.value / bu.pA)
+        i_1 = bu.math.asarray(self.i_1.value / bu.pA)
+        i_syn_ex = bu.math.asarray(self.i_syn_ex.value / bu.pA)
+        i_syn_in = bu.math.asarray(self.i_syn_in.value / bu.pA)
+        r = self.refractory_step_count.value
+        x_state = self.x.value
+        y_state = self.y.value
+        u_state = self.u.value
+        last_spike_prev = bu.math.asarray(self.last_spike_time.value / bu.ms)
 
-        x_state = np.broadcast_to(np.asarray(bu.math.asarray(self.x.value), dtype=dftype), state_shape)
-        y_state = np.broadcast_to(np.asarray(bu.math.asarray(self.y.value), dtype=dftype), state_shape)
-        u_state = np.broadcast_to(np.asarray(bu.math.asarray(self.u.value), dtype=dftype), state_shape)
-        last_spike_prev = np.broadcast_to(np.asarray(bu.math.asarray(self.last_spike_time.value / bu.ms), dtype=dftype), state_shape)
+        # Spike event handling: JIT-compatible path takes pre-computed JAX arrays;
+        # Python path parses spike_events dicts/tuples (cannot run inside jit).
+        if _w_ex_jnp is not None or _w_in_jnp is not None:
+            w_ex = _w_ex_jnp if _w_ex_jnp is not None else jnp.zeros(self.varshape)
+            w_in = _w_in_jnp if _w_in_jnp is not None else jnp.zeros(self.varshape)
+        else:
+            ev_ex, ev_in = self._parse_spike_events(spike_events, self.varshape)
+            reg_ex, reg_in = self._parse_registered_spike_inputs(self.varshape)
+            w_ex = jnp.asarray(ev_ex + reg_ex)
+            w_in = jnp.asarray(ev_in + reg_in)
 
-        P11_ex = np.exp(-h / tau_ex)
-        P11_in = np.exp(-h / tau_in)
-        P22 = np.exp(-h / tau_m)
-        P21_ex = propagator_exp(tau_ex, tau_m, C_m, h)
-        P21_in = propagator_exp(tau_in, tau_m, C_m, h)
-        P20 = tau_m / C_m * (1.0 - P22)
+        # Buffer next-step inputs (ring-buffer semantics, one-step delay).
+        # The `+ jnp.zeros(self.varshape)` broadcasts scalar inputs to varshape.
+        i_0_next = bu.math.asarray(self.sum_current_inputs(x, self.V.value) / bu.pA) + jnp.zeros(self.varshape)
+        i_1_next = bu.math.asarray(x_filtered / bu.pA) + jnp.zeros(self.varshape)
 
-        ev_ex, ev_in = self._parse_spike_events(spike_events, state_shape)
-        reg_ex, reg_in = self._parse_registered_spike_inputs(state_shape)
-        w_ex = ev_ex + reg_ex
-        w_in = ev_in + reg_in
-
-        i_0_next = np.broadcast_to(
-            np.asarray(bu.math.asarray(self.sum_current_inputs(x, self.V.value) / bu.pA), dtype=dftype),
-            state_shape,
-        )
-        i_1_next = np.broadcast_to(np.asarray(bu.math.asarray(x_filtered / bu.pA), dtype=dftype), state_shape)
-
+        # 1. Membrane propagation (skip if refractory).
         not_refractory = r == 0
         V_candidate = V_rel * P22 + i_syn_ex * P21_ex + i_syn_in * P21_in + (I_e + i_0) * P20
-        V_rel = np.where(not_refractory, V_candidate, V_rel)
-        r = np.where(not_refractory, r, r - 1)
+        V_rel = jnp.where(not_refractory, V_candidate, V_rel)
+        r = jnp.where(not_refractory, r, r - 1)
 
+        # 2. Synaptic decay.
         i_syn_ex = i_syn_ex * P11_ex
         i_syn_in = i_syn_in * P11_in
+
+        # 3. Filtered receptor-1 current injection.
         i_syn_ex = i_syn_ex + (1.0 - P11_ex) * i_1
+
+        # 4. Arriving spike inputs.
         i_syn_ex = i_syn_ex + w_ex
         i_syn_in = i_syn_in + w_in
 
-        deterministic = delta < 1e-10
+        # 5. Threshold test (deterministic or escape-noise).
         det_spike = V_rel >= theta
-        phi = rho * np.exp((V_rel - theta) / np.where(deterministic, 1.0, delta))
-        stoch_spike = np.random.random(size=state_shape) < phi * h * 1e-3
-        spike_cond = np.where(deterministic, det_spike, stoch_spike)
+        phi = self._rho_np * jnp.exp((V_rel - theta) / self._delta_safe)
+        stoch_spike = jnp.asarray(np.random.random(size=self.varshape)) < phi * h * 1e-3
+        spike_cond = jnp.where(self._deterministic, det_spike, stoch_spike)
 
-        refr_counts = np.broadcast_to(
-            np.asarray(bu.math.asarray(self.ref_count), dtype=ditype),
-            state_shape,
-        )
-        r = np.where(spike_cond, refr_counts, r)
+        r = jnp.where(spike_cond, self._ref_count_jnp, r)
         V_before_reset = V_rel
-        V_rel = np.where(spike_cond, V_reset_rel, V_rel)
+        V_rel = jnp.where(spike_cond, V_reset_rel, V_rel)
 
-        t_last = np.where(last_spike_prev < 0.0, 0.0, last_spike_prev)
+        # 6. Tsodyks-Markram state update on spike.
+        t_last = jnp.where(last_spike_prev < 0.0, 0.0, last_spike_prev)
         t_spike = t_ms + h
         h_tsodyks = t_spike - t_last
 
-        tau_fac_safe = np.where(tau_fac == 0.0, 1.0, tau_fac)
-        Puu = np.where(tau_fac == 0.0, 0.0, np.exp(-h_tsodyks / tau_fac_safe))
-        Pyy = np.exp(-h_tsodyks / tau_psc)
-        Pzz = np.expm1(-h_tsodyks / tau_rec)
+        tau_fac_safe = jnp.where(tau_fac == 0.0, 1.0, tau_fac)
+        Puu = jnp.where(tau_fac == 0.0, 0.0, jnp.exp(-h_tsodyks / tau_fac_safe))
+        Pyy = jnp.exp(-h_tsodyks / tau_psc)
+        Pzz = jnp.expm1(-h_tsodyks / tau_rec)
         Pxy = (Pzz * tau_rec - (Pyy - 1.0) * tau_psc) / (tau_psc - tau_rec)
 
         z_state = 1.0 - x_state - y_state
@@ -1149,12 +1152,13 @@ class iaf_tum_2000(NESTNeuron):
         x_new = x_prop - delta_y_tsp
         y_new = y_prop + delta_y_tsp
 
-        x_state = np.where(spike_cond, x_new, x_state)
-        y_state = np.where(spike_cond, y_new, y_state)
-        u_state = np.where(spike_cond, u_jump, u_state)
-        spike_offset = np.where(spike_cond, delta_y_tsp, 0.0)
-        last_spike_next = np.where(spike_cond, t_spike, last_spike_prev)
+        x_state = jnp.where(spike_cond, x_new, x_state)
+        y_state = jnp.where(spike_cond, y_new, y_state)
+        u_state = jnp.where(spike_cond, u_jump, u_state)
+        spike_offset = jnp.where(spike_cond, delta_y_tsp, 0.0)
+        last_spike_next = jnp.where(spike_cond, t_spike, last_spike_prev)
 
+        # 7. Write back state.
         self.V.value = (V_rel + E_L) * bu.mV
         self.i_syn_ex.value = i_syn_ex * bu.pA
         self.i_syn_in.value = i_syn_in * bu.pA
@@ -1171,5 +1175,5 @@ class iaf_tum_2000(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        V_out = np.where(spike_cond, theta + E_L + 1e-12, V_before_reset + E_L)
+        V_out = jnp.where(spike_cond, theta + E_L + 1e-12, V_before_reset + E_L)
         return self.get_spike(V_out * bu.mV)

@@ -277,7 +277,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
         self.y_initializer = y_initializer
         self.stochastic_update = stochastic_update
 
-    def init_state(self, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize neuron state variables.
 
         Allocates and initializes the binary output state ``y``, total synaptic input ``h``,
@@ -285,6 +285,9 @@ class mcculloch_pitts_neuron(NESTNeuron):
 
         Parameters
         ----------
+        batch_size : int, optional
+            Batch size for batched simulation. If provided, state shapes will be
+            ``(batch_size, *in_size)`` instead of ``(in_size,)``.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
 
@@ -299,19 +302,19 @@ class mcculloch_pitts_neuron(NESTNeuron):
           at simulation start.
         """
         # Binary output state y (0.0 or 1.0)
-        y = braintools.init.param(self.y_initializer, self.varshape)
+        y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
         dftype = brainstate.environ.dftype()
         self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
 
-        # Total synaptic input h
+        # Total synaptic input h — use same shape as y
         self.h = brainstate.ShortTermState(
-            u.math.zeros(self.varshape, dtype=dftype) * u.mV
+            u.math.zeros(self.y.value.shape, dtype=dftype) * u.mV
         )
 
         # Next update time for stochastic mode
         if self.stochastic_update:
             self.t_next = brainstate.ShortTermState(
-                u.math.full(self.varshape, -1e7, dtype=dftype) * u.ms
+                u.math.full(self.y.value.shape, -1e7, dtype=dftype) * u.ms
             )
 
     def _heaviside(self, h):

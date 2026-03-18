@@ -220,9 +220,9 @@ class TestPoissonGeneratorPSVsNEST(unittest.TestCase):
         nest.Connect(gens, sr)
         nest.Simulate(simtime_ms)
 
+        dftype = brainstate.environ.dftype()
         events = sr.get('events')
         if len(events['times']) == 0:
-            dftype = brainstate.environ.dftype()
             return np.zeros(n_steps, dtype=dftype)
 
         steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)

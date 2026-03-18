@@ -336,7 +336,7 @@ class ignore_and_fire(NESTNeuron):
 
         return firing_period_steps, phase_steps
 
-    def init_state(self, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize internal state variables for simulation.
 
         Computes and stores ``firing_period_steps`` and ``phase_steps`` as
@@ -346,6 +346,10 @@ class ignore_and_fire(NESTNeuron):
 
         Parameters
         ----------
+        batch_size : int or None, optional
+            If provided, states are created with shape
+            ``(batch_size, *varshape)``. ``None`` keeps unbatched state.
+            Default is ``None``.
         **kwargs
             Unused compatibility parameters accepted by the base-state API.
 
@@ -372,12 +376,16 @@ class ignore_and_fire(NESTNeuron):
         firing_period_steps, phase_steps = self._calc_initial_variables()
 
         ditype = brainstate.environ.ditype()
-        self.firing_period_steps = brainstate.ShortTermState(
-            jnp.asarray(firing_period_steps, dtype=ditype)
-        )
-        self.phase_steps = brainstate.ShortTermState(
-            jnp.asarray(phase_steps, dtype=ditype)
-        )
+        fps_arr = jnp.asarray(firing_period_steps, dtype=ditype)
+        ps_arr = jnp.asarray(phase_steps, dtype=ditype)
+
+        if batch_size is not None:
+            batch_shape = (batch_size,) + tuple(self.varshape)
+            fps_arr = jnp.broadcast_to(fps_arr, batch_shape)
+            ps_arr = jnp.broadcast_to(ps_arr, batch_shape)
+
+        self.firing_period_steps = brainstate.ShortTermState(fps_arr)
+        self.phase_steps = brainstate.ShortTermState(ps_arr)
 
     def update(self, x=None):
         r"""Update the ignore_and_fire neuron for one simulation time step.

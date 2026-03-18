@@ -49,7 +49,6 @@ def _run_bp_counts(
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
     dftype = brainstate.environ.dftype()
-    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = poisson_generator(
@@ -62,9 +61,14 @@ def _run_bp_counts(
         )
         gen.init_state()
 
-        for step in range(n_steps):
-            with brainstate.environ.context(t=step * dt):
-                totals[step] = float(np.asarray(gen.update(), dtype=dftype).sum())
+        t_array = jnp.arange(n_steps, dtype=dftype) * dt_ms
+
+        def step_fn(t_ms):
+            with brainstate.environ.context(t=t_ms * u.ms):
+                out = gen.update()
+            return jnp.asarray(out, dtype=dftype).sum()
+
+        totals = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
     return totals
 
@@ -187,9 +191,9 @@ class TestPoissonGeneratorVsNEST(unittest.TestCase):
         nest.Connect(gens, sr)
         nest.Simulate(simtime_ms)
 
+        dftype = brainstate.environ.dftype()
         events = sr.get('events')
         if len(events['times']) == 0:
-            dftype = brainstate.environ.dftype()
             return np.zeros(n_steps, dtype=dftype)
 
         steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)

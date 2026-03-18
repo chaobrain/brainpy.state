@@ -23,6 +23,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import lin_rate_ipn, lin_rate_opn
@@ -422,13 +423,17 @@ class TestLinRate(unittest.TestCase):
                 rate_initializer=braintools.init.Constant(-0.3),
             )
             ipn_bp.init_state()
-            dftype = brainstate.environ.dftype()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            bp_noise = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(ipn_bp, k)
-                bp_rate[k] = float(np.asarray(ipn_bp.rate.value).reshape(-1)[0])
-                bp_noise[k] = float(np.asarray(ipn_bp.noise.value).reshape(-1)[0])
+
+            def run_ipn(_):
+                ipn_bp.update(noise=0.0)
+                return (
+                    ipn_bp.rate.value.reshape(-1)[0],
+                    ipn_bp.noise.value.reshape(-1)[0],
+                )
+
+            ipn_results = brainstate.transform.for_loop(run_ipn, np.zeros(steps))
+            bp_rate = np.asarray(ipn_results[0])
+            bp_noise = np.asarray(ipn_results[1])
 
         n_cmp = min(bp_rate.size, ipn_nest['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], ipn_nest['rate'][:n_cmp], atol=1e-12)
@@ -457,14 +462,19 @@ class TestLinRate(unittest.TestCase):
                 noisy_rate_initializer=braintools.init.Constant(0.4),
             )
             opn_bp.init_state()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            bp_noise = np.zeros((steps,), dtype=dftype)
-            bp_noisy = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(opn_bp, k)
-                bp_rate[k] = float(np.asarray(opn_bp.rate.value).reshape(-1)[0])
-                bp_noise[k] = float(np.asarray(opn_bp.noise.value).reshape(-1)[0])
-                bp_noisy[k] = float(np.asarray(opn_bp.noisy_rate.value).reshape(-1)[0])
+
+            def run_opn(_):
+                opn_bp.update(noise=0.0)
+                return (
+                    opn_bp.rate.value.reshape(-1)[0],
+                    opn_bp.noise.value.reshape(-1)[0],
+                    opn_bp.noisy_rate.value.reshape(-1)[0],
+                )
+
+            opn_results = brainstate.transform.for_loop(run_opn, np.zeros(steps))
+            bp_rate = np.asarray(opn_results[0])
+            bp_noise = np.asarray(opn_results[1])
+            bp_noisy = np.asarray(opn_results[2])
 
         n_cmp = min(bp_rate.size, opn_nest['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], opn_nest['rate'][:n_cmp], atol=1e-12)
@@ -506,21 +516,28 @@ class TestLinRate(unittest.TestCase):
             bp_delayed_model.init_state()
 
             dftype = brainstate.environ.dftype()
-            bp_instant = np.zeros((steps,), dtype=dftype)
-            bp_delayed = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(
-                    bp_instant_model,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
+            instant_event = [{'rate': drive, 'weight': weight}]
+
+            def run_instant(_):
+                bp_instant_model.update(instant_rate_events=instant_event, noise=0.0)
+                return bp_instant_model.rate.value.reshape(-1)[0]
+
+            # Pre-compute the delayed excitatory input arriving at each step:
+            # a constant event scheduled at step k arrives at step k + delay_steps,
+            # so step j receives the event iff j >= delay_steps.
+            k_arr = jnp.arange(steps, dtype=dftype)
+            delayed_ex_arr = jnp.where(k_arr >= delay_steps, float(drive * weight), 0.0)
+
+            def run_delayed(k):
+                bp_delayed_model.update(
+                    _precomputed_ex=delayed_ex_arr[k],
+                    _precomputed_in=0.0,
+                    noise=0.0,
                 )
-                self._step(
-                    bp_delayed_model,
-                    k,
-                    delayed_rate_events=[{'rate': drive, 'weight': weight, 'delay_steps': delay_steps}],
-                )
-                bp_instant[k] = float(np.asarray(bp_instant_model.rate.value).reshape(-1)[0])
-                bp_delayed[k] = float(np.asarray(bp_delayed_model.rate.value).reshape(-1)[0])
+                return bp_delayed_model.rate.value.reshape(-1)[0]
+
+            bp_instant = np.asarray(brainstate.transform.for_loop(run_instant, np.zeros(steps)))
+            bp_delayed = np.asarray(brainstate.transform.for_loop(run_delayed, jnp.arange(steps)))
 
         n_cmp = min(bp_instant.size, nest_instant.size)
         npt.assert_allclose(bp_instant[:n_cmp], nest_instant[:n_cmp], atol=1e-10)

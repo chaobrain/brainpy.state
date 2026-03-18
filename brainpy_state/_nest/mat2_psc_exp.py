@@ -419,6 +419,9 @@ class mat2_psc_exp(NESTNeuron):
         dt = brainstate.environ.get_dt()
         self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
+        # Pre-compute all propagator constants for JIT-compatible update()
+        self._precompute_constants()
+
     @staticmethod
     def _to_numpy(x, unit):
         dftype = brainstate.environ.dftype()
@@ -427,6 +430,42 @@ class mat2_psc_exp(NESTNeuron):
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
         return np.broadcast_to(x_np, shape)
+
+    def _precompute_constants(self):
+        """Pre-compute time-step propagator coefficients as JAX arrays (called once at init)."""
+        dftype = brainstate.environ.dftype()
+        dt = brainstate.environ.get_dt()
+        h = float(np.asarray(u.math.asarray(dt / u.ms)))
+
+        tau_m = self._to_numpy(self.tau_m, u.ms)
+        tau_ex = self._to_numpy(self.tau_syn_ex, u.ms)
+        tau_in = self._to_numpy(self.tau_syn_in, u.ms)
+        C_m = self._to_numpy(self.C_m, u.pF)
+        tau_1 = self._to_numpy(self.tau_1, u.ms)
+        tau_2 = self._to_numpy(self.tau_2, u.ms)
+
+        self._P11ex = jnp.asarray(np.exp(-h / tau_ex), dtype=dftype)
+        self._P11in = jnp.asarray(np.exp(-h / tau_in), dtype=dftype)
+        self._P22_expm1 = jnp.asarray(np.expm1(-h / tau_m), dtype=dftype)
+        self._P21ex = jnp.asarray(
+            -tau_m / (C_m * (1.0 - tau_m / tau_ex)) * np.exp(-h / tau_ex)
+            * np.expm1(h * (1.0 / tau_ex - 1.0 / tau_m)),
+            dtype=dftype,
+        )
+        self._P21in = jnp.asarray(
+            -tau_m / (C_m * (1.0 - tau_m / tau_in)) * np.exp(-h / tau_in)
+            * np.expm1(h * (1.0 / tau_in - 1.0 / tau_m)),
+            dtype=dftype,
+        )
+        self._P20 = jnp.asarray(-tau_m / C_m * np.expm1(-h / tau_m), dtype=dftype)
+        self._P11th = jnp.asarray(np.exp(-h / tau_1), dtype=dftype)
+        self._P22th = jnp.asarray(np.exp(-h / tau_2), dtype=dftype)
+
+        self._E_L_mV = jnp.asarray(self._to_numpy(self.E_L, u.mV), dtype=dftype)
+        self._I_e_pA = jnp.asarray(self._to_numpy(self.I_e, u.pA), dtype=dftype)
+        self._alpha_1_mV = jnp.asarray(self._to_numpy(self.alpha_1, u.mV), dtype=dftype)
+        self._alpha_2_mV = jnp.asarray(self._to_numpy(self.alpha_2, u.mV), dtype=dftype)
+        self._omega_rel_mV = jnp.asarray(self._to_numpy(self.omega - self.E_L, u.mV), dtype=dftype)
 
     def _validate_parameters(self):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
@@ -495,7 +534,7 @@ class mat2_psc_exp(NESTNeuron):
         v_scaled = (V - V_th) / u.math.abs(self.omega - self.E_L)
         return self.spk_fun(v_scaled)
 
-    def update(self, x=0. * u.pA):
+    def update(self, x=0. * u.pA, spike_delta=None):
         r"""Advance the neuron state by one time step.
 
         Implements the NEST-compatible update order for the MAT2 model with exact
@@ -507,6 +546,12 @@ class mat2_psc_exp(NESTNeuron):
             External input current (pA) for this time step (default: 0 pA).
             Broadcastable to population shape. This current is buffered and applied
             in the **next** time step (one-step delay).
+        spike_delta : Quantity, optional
+            Instantaneous spike-weight input (pA) to add to synaptic currents.
+            When provided, bypasses ``sum_delta_inputs()`` — useful for JIT-compiled
+            ``brainstate.transform.for_loop`` simulations where delta inputs are
+            pre-computed as a JAX array indexed by step.  Positive values go to
+            ``i_syn_ex``; negative values go to ``i_syn_in``.
 
         Returns
         -------
@@ -538,99 +583,68 @@ class mat2_psc_exp(NESTNeuron):
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
-        h = float(u.math.asarray(dt_q / u.ms))
-
-        v_shape = self.V.value.shape
-
-        # Extract all parameters as plain float64 numpy arrays
-        E_L = self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape)
-        C_m = self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape)
-        tau_m = self._broadcast_to_state(self._to_numpy(self.tau_m, u.ms), v_shape)
-        tau_ex = self._broadcast_to_state(self._to_numpy(self.tau_syn_ex, u.ms), v_shape)
-        tau_in = self._broadcast_to_state(self._to_numpy(self.tau_syn_in, u.ms), v_shape)
-        I_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
-        tau_1 = self._broadcast_to_state(self._to_numpy(self.tau_1, u.ms), v_shape)
-        tau_2 = self._broadcast_to_state(self._to_numpy(self.tau_2, u.ms), v_shape)
-        alpha_1 = self._broadcast_to_state(self._to_numpy(self.alpha_1, u.mV), v_shape)
-        alpha_2 = self._broadcast_to_state(self._to_numpy(self.alpha_2, u.mV), v_shape)
-        # omega is stored as absolute mV; convert to relative to E_L
-        omega_rel = self._broadcast_to_state(self._to_numpy(self.omega - self.E_L, u.mV), v_shape)
-
-        # State variables (all relative to E_L for V_m, relative to omega for thresholds)
-        V_rel = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape) - E_L
-        V_th_1 = self._broadcast_to_state(self._to_numpy(self.V_th_1.value, u.mV), v_shape)
-        V_th_2 = self._broadcast_to_state(self._to_numpy(self.V_th_2.value, u.mV), v_shape)
-        i_syn_ex = self._broadcast_to_state(self._to_numpy(self.i_syn_ex.value, u.pA), v_shape)
-        i_syn_in = self._broadcast_to_state(self._to_numpy(self.i_syn_in.value, u.pA), v_shape)
-        i_0 = self._broadcast_to_state(self._to_numpy(self.i_0.value, u.pA), v_shape)
+        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
-        )
 
-        # --- Compute propagator coefficients ---
-        # Membrane potential propagators (exact integration)
-        P11ex = np.exp(-h / tau_ex)
-        P11in = np.exp(-h / tau_in)
-        P22_expm1 = np.expm1(-h / tau_m)
-
-        P21ex = -tau_m / (C_m * (1.0 - tau_m / tau_ex)) * P11ex * np.expm1(h * (1.0 / tau_ex - 1.0 / tau_m))
-        P21in = -tau_m / (C_m * (1.0 - tau_m / tau_in)) * P11in * np.expm1(h * (1.0 / tau_in - 1.0 / tau_m))
-        P20 = -tau_m / C_m * P22_expm1
-
-        # Adaptive threshold propagators
-        P11th = np.exp(-h / tau_1)
-        P22th = np.exp(-h / tau_2)
+        # Extract state variables as dimensionless JAX arrays (JIT-compatible)
+        V_rel = u.math.asarray(self.V.value / u.mV, dtype=dftype) - self._E_L_mV
+        V_th_1 = u.math.asarray(self.V_th_1.value / u.mV, dtype=dftype)
+        V_th_2 = u.math.asarray(self.V_th_2.value / u.mV, dtype=dftype)
+        i_syn_ex = u.math.asarray(self.i_syn_ex.value / u.pA, dtype=dftype)
+        i_syn_in = u.math.asarray(self.i_syn_in.value / u.pA, dtype=dftype)
+        i_0 = u.math.asarray(self.i_0.value / u.pA, dtype=dftype)
+        r = self.refractory_step_count.value
 
         # --- Get spike inputs ---
-        w_all = self._broadcast_to_state(self._to_numpy(self.sum_delta_inputs(0. * u.pA), u.pA), v_shape)
-        w_ex = np.where(w_all > 0.0, w_all, 0.0)
-        w_in = np.where(w_all < 0.0, w_all, 0.0)
+        if spike_delta is not None:
+            w_all = u.math.asarray(spike_delta / u.pA, dtype=dftype)
+        else:
+            w_all = u.math.asarray(self.sum_delta_inputs(0. * u.pA) / u.pA, dtype=dftype)
+        w_ex = jnp.where(w_all > 0.0, w_all, jnp.zeros_like(w_all))
+        w_in = jnp.where(w_all < 0.0, w_all, jnp.zeros_like(w_all))
 
         # --- Get current inputs (one-step delayed, stored for next step) ---
-        i_0_next = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.V.value), u.pA), v_shape)
+        i_0_next = jnp.broadcast_to(
+            u.math.asarray(self.sum_current_inputs(x, self.V.value) / u.pA, dtype=dftype),
+            self.varshape,
+        )
 
         # === NEST update ordering (mat2_psc_exp.cpp lines 316-358) ===
 
-        # Step 1: Evolve membrane potential
-        V_rel = V_rel * P22_expm1 + V_rel + i_syn_ex * P21ex + i_syn_in * P21in + (I_e + i_0) * P20
+        # Step 1: Evolve membrane potential using pre-computed propagators
+        V_rel = (V_rel * self._P22_expm1 + V_rel
+                 + i_syn_ex * self._P21ex + i_syn_in * self._P21in
+                 + (self._I_e_pA + i_0) * self._P20)
 
         # Step 2: Evolve adaptive threshold
-        V_th_1 = V_th_1 * P11th
-        V_th_2 = V_th_2 * P22th
+        V_th_1 = V_th_1 * self._P11th
+        V_th_2 = V_th_2 * self._P22th
 
         # Step 3: Decay synaptic currents and add incoming spikes
-        i_syn_ex = i_syn_ex * P11ex
-        i_syn_in = i_syn_in * P11in
-        i_syn_ex = i_syn_ex + w_ex
-        i_syn_in = i_syn_in + w_in
+        i_syn_ex = i_syn_ex * self._P11ex + w_ex
+        i_syn_in = i_syn_in * self._P11in + w_in
 
         # Step 4-5: Spike detection (no voltage reset!)
         not_refractory = r == 0
-        spike_cond = not_refractory & (V_rel >= omega_rel + V_th_1 + V_th_2)
+        spike_cond = not_refractory & (V_rel >= self._omega_rel_mV + V_th_1 + V_th_2)
 
         # On spike: jump threshold components, set refractory counter
-        V_th_1 = np.where(spike_cond, V_th_1 + alpha_1, V_th_1)
-        V_th_2 = np.where(spike_cond, V_th_2 + alpha_2, V_th_2)
-        r = np.where(
+        V_th_1 = jnp.where(spike_cond, V_th_1 + self._alpha_1_mV, V_th_1)
+        V_th_2 = jnp.where(spike_cond, V_th_2 + self._alpha_2_mV, V_th_2)
+        r = jnp.where(
             spike_cond,
-            self._broadcast_to_state(
-                np.asarray(u.math.asarray(self.ref_count), dtype=ditype), v_shape
-            ),
-            np.where(not_refractory, r, r - 1),
-        )
-
-        # Step 6: Store buffered currents for next step
-        # (i_0 is updated with the new current input)
+            self.ref_count,
+            jnp.where(not_refractory, r, r - 1),
+        ).astype(ditype)
 
         # --- Write back state variables ---
-        self.V.value = (V_rel + E_L) * u.mV
+        self.V.value = (V_rel + self._E_L_mV) * u.mV
         self.V_th_1.value = V_th_1 * u.mV
         self.V_th_2.value = V_th_2 * u.mV
         self.i_syn_ex.value = i_syn_ex * u.pA
         self.i_syn_in.value = i_syn_in * u.pA
         self.i_0.value = i_0_next * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
+        self.refractory_step_count.value = r
         self.last_spike_time.value = jax.lax.stop_gradient(
             u.math.where(spike_cond, t + dt_q, self.last_spike_time.value)
         )
@@ -638,9 +652,7 @@ class mat2_psc_exp(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        # Return spike output: for surrogate gradient, emit above-threshold signal.
-        # The effective threshold (absolute) is E_L + omega_rel + V_th_1 + V_th_2.
-        # When spiking, produce V slightly above threshold; otherwise, slightly below.
-        V_th_abs = omega_rel + V_th_1 + V_th_2 + E_L
-        V_out = np.where(spike_cond, V_th_abs + 1e-12, V_th_abs - 1e-12)
+        # Return spike output via surrogate gradient
+        V_th_abs = self._omega_rel_mV + V_th_1 + V_th_2 + self._E_L_mV
+        V_out = jnp.where(spike_cond, V_th_abs + 1e-12, V_th_abs - 1e-12)
         return self.get_spike(V_out * u.mV, V_th_abs * u.mV)

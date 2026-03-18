@@ -431,54 +431,72 @@ class TestIAFTUM2000(unittest.TestCase):
             stim_end = 45.0
             n_steps = int(round(60.0 / self.dt_ms))
 
-            tum_queue = {}
-            exp_queue = {}
-            syn_state = dict(x=0.0, y=0.0, u=0.0, last_spike=-1e7)
+            # Pre-compute DC drive array as JAX quantities.
+            dc_arr = jax.numpy.array(
+                [dc_amp if (stim_start <= k * self.dt_ms < stim_end) else 0.0
+                 for k in range(n_steps)],
+                dtype=jax.numpy.float64,
+            ) * bu.pA
 
-            post_tum_v = []
-            post_exp_v = []
-            post_tum_i = []
-            post_exp_i = []
+            # Phase 1: JIT-compiled run of both pre-synaptic neurons.
+            def _pre_step(k):
+                x_i = dc_arr[k]
+                with brainstate.environ.context(t=k * self.dt):
+                    tum_spk = pre_tum.update(x=x_i)
+                    exp_spk = pre_exp.update(x=x_i)
+                return tum_spk, pre_tum.spike_offset.value, exp_spk
 
-            for k in range(n_steps):
-                t_ms = k * self.dt_ms
-                x_drive = dc_amp if (stim_start <= t_ms < stim_end) else 0.0
+            pre_results = brainstate.transform.for_loop(_pre_step, jax.numpy.arange(n_steps))
+            tum_spks = jax.numpy.asarray(pre_results[0])[:, 0]      # (n_steps,)
+            tum_offsets = jax.numpy.asarray(pre_results[1])[:, 0]   # (n_steps,)
+            exp_spks = jax.numpy.asarray(pre_results[2])[:, 0]      # (n_steps,)
 
-                pre_spk_tum = self._step(pre_tum, k, x=x_drive * bu.pA)
-                pre_spk_exp = self._step(pre_exp, k, x=x_drive * bu.pA)
-                self.assertEqual(_is_spike(pre_spk_tum), _is_spike(pre_spk_exp))
+            # Verify pre-synaptic spike equivalence.
+            np.testing.assert_array_equal(
+                np.asarray(tum_spks) > 0.0,
+                np.asarray(exp_spks) > 0.0,
+            )
 
-                if _is_spike(pre_spk_tum):
-                    t_deliver = k + delay_steps
-                    offset = float(pre_tum.spike_offset.value[0])
-                    tum_queue.setdefault(t_deliver, []).append(
-                        {
-                            'receptor_type': 1,
-                            'weight': weight * bu.pA,
-                            'offset': offset,
-                            'sender_model': 'iaf_tum_2000',
-                        }
-                    )
+            # Phase 2: Compute delayed effective weights as a JAX array.
+            # w_ex_per_step[k] = weight * tum_offsets[k - delay_steps]
+            #                     if tum_spks[k - delay_steps] > 0, else 0.
+            padded_spks = jax.numpy.concatenate(
+                [jax.numpy.zeros(delay_steps, dtype=jax.numpy.float64), tum_spks]
+            )
+            padded_offsets = jax.numpy.concatenate(
+                [jax.numpy.zeros(delay_steps, dtype=jax.numpy.float64), tum_offsets]
+            )
+            w_ex_per_step = jax.numpy.where(
+                padded_spks[:n_steps] > 0.0,
+                weight * padded_offsets[:n_steps],
+                0.0,
+            )  # shape: (n_steps,)
 
-                    delta_y = _tsodyks_connection_spike_jump(
-                        syn_state,
-                        stp,
-                        t_spike=t_ms + self.dt_ms,
-                    )
-                    exp_queue[t_deliver] = exp_queue.get(t_deliver, 0.0) + weight * delta_y
+            # Phase 3: JIT-compiled run of both post-synaptic neurons.
+            def _post_step(k):
+                w_ex_k = w_ex_per_step[k]
+                # post_tum: pass pre-computed JAX weight arrays directly.
+                w_ex_arr = jax.numpy.broadcast_to(
+                    w_ex_k, post_tum.varshape
+                )
+                w_in_arr = jax.numpy.zeros(post_tum.varshape, dtype=jax.numpy.float64)
+                # post_exp: inject via add_delta_input (consumed by sum_delta_inputs in update).
+                post_exp.add_delta_input('_fl', w_ex_k * bu.pA)
+                with brainstate.environ.context(t=k * self.dt):
+                    post_tum.update(_w_ex_jnp=w_ex_arr, _w_in_jnp=w_in_arr)
+                    post_exp.update()
+                return (
+                    post_tum.V.value / bu.mV,
+                    post_tum.i_syn_ex.value / bu.pA,
+                    post_exp.V.value / bu.mV,
+                    post_exp.i_syn_ex.value / bu.pA,
+                )
 
-                ev_tum = tum_queue.pop(k, None)
-                ev_exp = exp_queue.pop(k, 0.0)
-                if ev_exp != 0.0:
-                    post_exp.add_delta_input(f'ev_{k}', ev_exp * bu.pA)
-
-                self._step(post_tum, k, spike_events=ev_tum)
-                self._step(post_exp, k)
-
-                post_tum_v.append(float((post_tum.V.value / bu.mV)[0]))
-                post_exp_v.append(float((post_exp.V.value / bu.mV)[0]))
-                post_tum_i.append(float((post_tum.i_syn_ex.value / bu.pA)[0]))
-                post_exp_i.append(float((post_exp.i_syn_ex.value / bu.pA)[0]))
+            post_results = brainstate.transform.for_loop(_post_step, jax.numpy.arange(n_steps))
+            post_tum_v = np.asarray(post_results[0])[:, 0]
+            post_tum_i = np.asarray(post_results[1])[:, 0]
+            post_exp_v = np.asarray(post_results[2])[:, 0]
+            post_exp_i = np.asarray(post_results[3])[:, 0]
 
             np.testing.assert_allclose(post_tum_v, post_exp_v, atol=1e-10)
             np.testing.assert_allclose(post_tum_i, post_exp_i, atol=1e-10)

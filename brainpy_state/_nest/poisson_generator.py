@@ -252,22 +252,22 @@ class poisson_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
@@ -556,12 +556,21 @@ class poisson_generator(NESTDevice):
         not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)):
             self._refresh_timing_cache(dt_ms)
 
+        ditype = brainstate.environ.ditype()
+
         if self.rate <= 0.0:
-            ditype = brainstate.environ.ditype()
             return jax.numpy.zeros(self.varshape, dtype=ditype)
 
-        curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
-        if self._is_active(curr_step):
-            lam = self.rate * dt_ms / 1000.0
-            return self._sample_poisson(lam)
-        return jax.numpy.zeros(self.varshape, dtype=ditype)
+        # JAX-compatible activity check (works under jit / for_loop tracing).
+        # t may be a traced abstract value inside for_loop, so we avoid float().
+        t = brainstate.environ.get('t', default=0. * u.ms)
+        if isinstance(t, u.Quantity):
+            t_ms_num = t.to_decimal(u.ms)
+        else:
+            t_ms_num = jax.numpy.asarray(t)
+        curr_step = jax.numpy.rint(t_ms_num / dt_ms).astype(jax.numpy.int64)
+        is_active = (self._t_min_step < curr_step) & (curr_step <= self._t_max_step)
+
+        lam = self.rate * dt_ms / 1000.0
+        spikes = self._sample_poisson(lam)
+        return jax.numpy.where(is_active, spikes, jax.numpy.zeros(self.varshape, dtype=ditype))

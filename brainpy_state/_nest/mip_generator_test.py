@@ -49,7 +49,6 @@ def _run_bp_matrix(
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
     ditype = brainstate.environ.ditype()
-    mat = np.zeros((n_steps, n_trains), dtype=ditype)
 
     with brainstate.environ.context(dt=dt):
         gen = mip_generator(
@@ -62,10 +61,7 @@ def _run_bp_matrix(
             rng_seed=rng_seed,
         )
         gen.init_state()
-
-        for step in range(n_steps):
-            with brainstate.environ.context(t=step * dt):
-                mat[step] = np.asarray(gen.update(), dtype=ditype).reshape(-1)
+        mat = gen.simulate(n_steps).reshape(n_steps, n_trains).astype(ditype)
 
     return mat
 

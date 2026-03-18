@@ -620,8 +620,8 @@ class multimeter(NESTDevice):
         if n_items is None:
             n_items = 0
 
+        ditype = brainstate.environ.ditype()
         if senders is None:
-            ditype = brainstate.environ.ditype()
             sender_arr = np.ones((n_items,), dtype=ditype)
         else:
             sender_arr = np.asarray(u.math.asarray(senders), dtype=ditype).reshape(-1)
