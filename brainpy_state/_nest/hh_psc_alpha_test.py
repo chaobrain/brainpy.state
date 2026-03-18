@@ -441,12 +441,23 @@ class TestHHPscAlphaSynaptic(unittest.TestCase):
             neuron = hh_psc_alpha(1, I_e=0. * u.pA)
             neuron.init_state()
 
-            self._step(neuron, 0)
-            dI_before = _get_scalar(neuron.dI_syn_ex.value)
+            # Pre-compute per-step excitatory delta: 0 pA at step 0, 100 pA at step 1.
+            # Apply manually inside for_loop to avoid two separate JIT compilations.
+            pscon_ex = np.e / neuron.tau_syn_ex  # Quantity, units 1/ms
+            delta_ex = jnp.array([0., 100.]) * u.pA  # shape (2,), units pA
+
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0. * u.pA)
+                neuron.dI_syn_ex.value = neuron.dI_syn_ex.value + pscon_ex * delta_ex[k]
+                return neuron.dI_syn_ex.value / (u.pA / u.ms)
+
+            dI_trace = np.asarray(brainstate.transform.for_loop(_run_step, jnp.arange(2))[:, 0])
+
+            dI_before = float(dI_trace[0])
             self.assertAlmostEqual(dI_before, 0.0, places=10)
 
-            self._step(neuron, 1, delta=100. * u.pA)
-            dI_after = _get_scalar(neuron.dI_syn_ex.value)
+            dI_after = float(dI_trace[1])
             self.assertGreater(dI_after, 0.0, "dI_syn_ex should be positive after excitatory input")
 
     def test_inhibitory_spike_input(self):
@@ -455,9 +466,19 @@ class TestHHPscAlphaSynaptic(unittest.TestCase):
             neuron = hh_psc_alpha(1, I_e=0. * u.pA)
             neuron.init_state()
 
-            self._step(neuron, 0)
-            self._step(neuron, 1, delta=-50. * u.pA)
-            dI_in = _get_scalar(neuron.dI_syn_in.value)
+            # Pre-compute per-step inhibitory delta: 0 pA at step 0, -50 pA at step 1.
+            pscon_in = np.e / neuron.tau_syn_in  # Quantity, units 1/ms
+            delta_in = jnp.array([0., -50.]) * u.pA  # shape (2,), units pA
+
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0. * u.pA)
+                neuron.dI_syn_in.value = neuron.dI_syn_in.value + pscon_in * delta_in[k]
+                return neuron.dI_syn_in.value / (u.pA / u.ms)
+
+            dI_trace = np.asarray(brainstate.transform.for_loop(_run_step, jnp.arange(2))[:, 0])
+
+            dI_in = float(dI_trace[1])
             self.assertLess(dI_in, 0.0, "dI_syn_in should be negative after inhibitory input")
 
     def test_alpha_psc_waveform(self):
@@ -467,17 +488,23 @@ class TestHHPscAlphaSynaptic(unittest.TestCase):
             neuron = hh_psc_alpha(1, I_e=0. * u.pA, tau_syn_ex=tau_ex_ms * u.ms)
             neuron.init_state()
 
-            self._step(neuron, 0, delta=100. * u.pA)
+            # Pre-compute per-step excitatory delta: 100 pA at step 0, 0 elsewhere.
+            # Merged into a single for_loop to avoid two separate JIT compilations.
+            pscon_ex = np.e / neuron.tau_syn_ex  # Quantity, units 1/ms
+            n_steps = 100
+            delta_ex = jnp.zeros(n_steps).at[0].set(100.) * u.pA  # shape (100,), units pA
 
             def _run_step(k):
                 with brainstate.environ.context(t=k * self.dt):
                     neuron.update(x=0. * u.pA)
+                neuron.dI_syn_ex.value = neuron.dI_syn_ex.value + pscon_ex * delta_ex[k]
                 return neuron.I_syn_ex.value / u.pA
 
-            I_trace = np.asarray(brainstate.transform.for_loop(_run_step, jnp.arange(1, 100))[:, 0])
+            # I_trace[k] = I_syn_ex after step k; step k → time k * dt_ms
+            I_trace = np.asarray(brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0])
 
             peak_idx = int(np.argmax(I_trace))
-            peak_time = (peak_idx + 1) * 0.1
+            peak_time = peak_idx * 0.1  # step k → time k * 0.1 ms
 
             self.assertAlmostEqual(peak_time, tau_ex_ms, delta=0.5)
             self.assertGreater(float(I_trace[peak_idx]), float(I_trace[-1]))
@@ -492,14 +519,18 @@ class TestHHPscAlphaSynaptic(unittest.TestCase):
             )
             neuron.init_state()
 
-            self._step(neuron, 0, delta=1. * u.pA)
+            # Pre-compute per-step excitatory delta: 1 pA at step 0, 0 elsewhere.
+            pscon_ex = np.e / neuron.tau_syn_ex  # Quantity, units 1/ms
+            n_steps = 200
+            delta_ex = jnp.zeros(n_steps).at[0].set(1.) * u.pA  # shape (200,), units pA
 
             def _run_step(k):
                 with brainstate.environ.context(t=k * self.dt):
                     neuron.update(x=0. * u.pA)
+                neuron.dI_syn_ex.value = neuron.dI_syn_ex.value + pscon_ex * delta_ex[k]
                 return neuron.I_syn_ex.value / u.pA
 
-            I_trace = np.asarray(brainstate.transform.for_loop(_run_step, jnp.arange(1, 200))[:, 0])
+            I_trace = np.asarray(brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0])
 
             peak = float(I_trace.max())
             self.assertAlmostEqual(peak, 1.0, delta=0.05)
@@ -596,29 +627,31 @@ class TestHHPscAlphaMultiStep(unittest.TestCase):
 
     def test_firing_rate_increases_with_current(self):
         r"""Firing rate should increase monotonically with input current."""
+        I_amp_vals = [500., 1000., 1500.]
         with brainstate.environ.context(dt=self.dt):
-            rates = []
-            for I_amp in [500., 1000., 1500.]:
-                neuron = hh_psc_alpha(1, I_e=I_amp * u.pA)
-                neuron.init_state()
+            # Batch all 3 amplitudes into a single 3-neuron population so warm-up
+            # and measurement run in parallel with a single JIT compilation.
+            I_amps = u.math.asarray(jnp.array(I_amp_vals)) * u.pA  # shape (3,)
+            neuron = hh_psc_alpha(3, I_e=I_amps)
+            neuron.init_state()
 
-                def _run_step(k):
-                    with brainstate.environ.context(t=k * self.dt):
-                        spk = neuron.update(x=0. * u.pA)
-                    return spk
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0. * u.pA)
+                return spk
 
-                # Warm-up phase
-                brainstate.transform.for_loop(_run_step, jnp.arange(1000))
-                # Measurement phase
-                spk_all = brainstate.transform.for_loop(_run_step, jnp.arange(1000, 11000))
-                spk_arr = np.asarray(u.get_mantissa(spk_all[:, 0]))
-                n_spikes = int(np.sum(spk_arr > 0.0))
-                rates.append(n_spikes)
+            # Warm-up phase (all 3 amplitudes in parallel)
+            brainstate.transform.for_loop(_run_step, jnp.arange(1000))
+            # Measurement phase
+            spk_all = brainstate.transform.for_loop(_run_step, jnp.arange(1000, 11000))
+            # spk_all shape: (10000, 3)
+            spk_arr = np.asarray(u.get_mantissa(spk_all))
+            rates = [int(np.sum(spk_arr[:, i] > 0.0)) for i in range(3)]
 
-            for i in range(1, len(rates)):
-                self.assertGreaterEqual(rates[i], rates[i - 1],
-                                        f"Rate at {[500, 1000, 1500][i]} pA should be >= rate at "
-                                        f"{[500, 1000, 1500][i - 1]} pA")
+        for i in range(1, len(rates)):
+            self.assertGreaterEqual(rates[i], rates[i - 1],
+                                    f"Rate at {I_amp_vals[i]} pA should be >= rate at "
+                                    f"{I_amp_vals[i - 1]} pA")
 
 
 class TestHHPscAlphaEdgeCases(unittest.TestCase):

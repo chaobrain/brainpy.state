@@ -24,6 +24,7 @@ import saiunit as bu
 import jax
 import numpy as np
 from brainpy.state import iaf_psc_exp, iaf_tum_2000
+from brainpy_state._nest._utils import propagator_exp
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -38,10 +39,10 @@ def _event_effective_weight_pA(event):
     sender_model = 'iaf_tum_2000'
     multiplicity = 1.0
     offset = 1.0
+    dftype = brainstate.environ.dftype()
 
     if isinstance(event, dict):
         receptor = int(event.get('receptor_type', event.get('receptor', 0)))
-        dftype = brainstate.environ.dftype()
         weight = float(np.asarray(bu.math.asarray(event.get('weight', 0.0 * bu.pA) / bu.pA), dtype=dftype))
         offset = float(np.asarray(bu.math.asarray(event.get('offset', 1.0)), dtype=dftype))
         multiplicity = float(np.asarray(bu.math.asarray(event.get('multiplicity', 1.0)), dtype=dftype))
@@ -161,7 +162,7 @@ def _tsodyks_connection_spike_jump(state, p, t_spike):
 
 class TestIAFTUM2000(unittest.TestCase):
     def setUp(self):
-        brainstate.environ.set(dt=0.1 * u.ms)
+        brainstate.environ.set(dt=0.1 * bu.ms)
         self.dt = 0.1 * bu.ms
         self.dt_ms = 0.1
 
@@ -327,9 +328,9 @@ class TestIAFTUM2000(unittest.TestCase):
                 P11ex=math.exp(-self.dt_ms / p['tau_syn_ex']),
                 P11in=math.exp(-self.dt_ms / p['tau_syn_in']),
                 P22=math.exp(-self.dt_ms / p['tau_m']),
-                P21ex=float(iaf_psc_exp._propagator_exp(np.asarray(p['tau_syn_ex']), np.asarray(p['tau_m']),
+                P21ex=float(propagator_exp(np.asarray(p['tau_syn_ex']), np.asarray(p['tau_m']),
                                                         np.asarray(p['C_m']), self.dt_ms)),
-                P21in=float(iaf_psc_exp._propagator_exp(np.asarray(p['tau_syn_in']), np.asarray(p['tau_m']),
+                P21in=float(propagator_exp(np.asarray(p['tau_syn_in']), np.asarray(p['tau_m']),
                                                         np.asarray(p['C_m']), self.dt_ms)),
                 P20=p['tau_m'] / p['C_m'] * (1.0 - math.exp(-self.dt_ms / p['tau_m'])),
                 theta=p['V_th'] - p['E_L'],

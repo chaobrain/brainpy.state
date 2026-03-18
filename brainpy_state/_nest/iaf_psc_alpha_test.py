@@ -276,6 +276,34 @@ class TestIAFPscAlpha(unittest.TestCase):
 
             x_seq = [10.0, 30.0, 0.0, -20.0, 50.0, 0.0, 0.0, 10.0, 0.0, 0.0]
             w_seq = [0.0, 100.0, -20.0, 0.0, 0.0, 50.0, -30.0, 0.0, 0.0, 0.0]
+            n_steps = len(x_seq)
+
+            # Pre-compute per-step inputs as JAX arrays.
+            x_seq_arr = jnp.array(x_seq)
+            w_seq_arr = jnp.array(w_seq)
+
+            def _run_step(k):
+                neuron.add_delta_input('w', w_seq_arr[k] * u.pA)
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_seq_arr[k] * u.pA)
+                return (
+                    (neuron.V.value / u.mV)[0],
+                    (neuron.I_syn_ex.value / u.pA)[0],
+                    (neuron.I_syn_in.value / u.pA)[0],
+                    (neuron.dI_syn_ex.value / (u.pA / u.ms))[0],
+                    (neuron.dI_syn_in.value / (u.pA / u.ms))[0],
+                    neuron.refractory_step_count.value[0],
+                    spk[0],
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            vm_all = np.asarray(results[0])
+            isyn_ex_all = np.asarray(results[1])
+            isyn_in_all = np.asarray(results[2])
+            di_ex_all = np.asarray(results[3])
+            di_in_all = np.asarray(results[4])
+            r_all = np.asarray(results[5])
+            spk_all = np.asarray(results[6])
 
             ref_state = {
                 'y0': 0.0,
@@ -288,16 +316,15 @@ class TestIAFPscAlpha(unittest.TestCase):
             }
 
             for k, (x_i, w_i) in enumerate(zip(x_seq, w_seq)):
-                spk = self._step(neuron, k, x=x_i * u.pA, delta=w_i * u.pA)
-                self.assertFalse(self._is_spike(spk))
+                self.assertFalse(float(spk_all[k]) > 0.0)
                 _reference_step(ref_state, params, x_i, w_i, 0.1)
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['y3'] + params['E_L'], delta=1e-12)
-                self.assertAlmostEqual(float((neuron.I_syn_ex.value / u.pA)[0]), ref_state['I_ex'], delta=1e-12)
-                self.assertAlmostEqual(float((neuron.I_syn_in.value / u.pA)[0]), ref_state['I_in'], delta=1e-12)
-                self.assertAlmostEqual(float(u.get_mantissa(neuron.dI_syn_ex.value)[0]), ref_state['dI_ex'], delta=1e-12)
-                self.assertAlmostEqual(float(u.get_mantissa(neuron.dI_syn_in.value)[0]), ref_state['dI_in'], delta=1e-12)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
+                self.assertAlmostEqual(float(vm_all[k]), ref_state['y3'] + params['E_L'], delta=1e-12)
+                self.assertAlmostEqual(float(isyn_ex_all[k]), ref_state['I_ex'], delta=1e-12)
+                self.assertAlmostEqual(float(isyn_in_all[k]), ref_state['I_in'], delta=1e-12)
+                self.assertAlmostEqual(float(di_ex_all[k]), ref_state['dI_ex'], delta=1e-12)
+                self.assertAlmostEqual(float(di_in_all[k]), ref_state['dI_in'], delta=1e-12)
+                self.assertEqual(int(r_all[k]), ref_state['r'])
 
     def test_spike_refractory_trace_matches_reference_equations(self):
         with brainstate.environ.context(dt=self.dt):
@@ -328,12 +355,31 @@ class TestIAFPscAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            x_seq = [0.0] * 60
-            w_seq = [0.0] * 60
+            n_steps = 60
+            x_seq = [0.0] * n_steps
+            w_seq = [0.0] * n_steps
             # Add alpha-shaped excit/inhib input around refractory phases.
             w_seq[8] = 200.0
             w_seq[9] = -150.0
             w_seq[30] = 100.0
+
+            # Pre-compute per-step delta weights as a JAX array.
+            w_seq_arr = jnp.array(w_seq)
+
+            def _run_step(k):
+                neuron.add_delta_input('w', w_seq_arr[k] * u.pA)
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (
+                    (neuron.V.value / u.mV)[0],
+                    neuron.refractory_step_count.value[0],
+                    spk[0],
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            vm_all = np.asarray(results[0])
+            r_all = np.asarray(results[1])
+            spk_all = np.asarray(results[2])
 
             ref_state = {
                 'y0': 0.0,
@@ -348,15 +394,14 @@ class TestIAFPscAlpha(unittest.TestCase):
             spike_times_model = []
             spike_times_ref = []
             for k, (x_i, w_i) in enumerate(zip(x_seq, w_seq)):
-                spk = self._step(neuron, k, x=x_i * u.pA, delta=w_i * u.pA)
                 spk_ref = _reference_step(ref_state, params, x_i, w_i, 0.1)
-                if self._is_spike(spk):
+                if float(spk_all[k]) > 0.0:
                     spike_times_model.append(round((k + 1) * 0.1, 12))
                 if spk_ref:
                     spike_times_ref.append(round((k + 1) * 0.1, 12))
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['y3'] + params['E_L'], delta=1e-11)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
+                self.assertAlmostEqual(float(vm_all[k]), ref_state['y3'] + params['E_L'], delta=1e-11)
+                self.assertEqual(int(r_all[k]), ref_state['r'])
 
             self.assertEqual(spike_times_model, spike_times_ref)
             self.assertGreaterEqual(len(spike_times_model), 1)

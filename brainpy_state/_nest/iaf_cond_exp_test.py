@@ -22,6 +22,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import iaf_cond_exp
 
@@ -218,9 +219,13 @@ class TestIAFCondExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            spikes = []
-            for k in range(5):
-                spikes.append(self._is_spike(self._step(neuron, k)))
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update()
+                return spk
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(5))
+            spikes = [bool(float(results[k, 0]) > 0.5) for k in range(5)]
 
             self.assertTrue(spikes[0])
             self.assertTrue((not spikes[1]) and (not spikes[2]) and (not spikes[3]))
@@ -248,14 +253,31 @@ class TestIAFCondExp(unittest.TestCase):
 
             x_seq = [0.0, 30.0, 0.0, 0.0, -20.0, 0.0, 0.0]
             dg_seq = [[4.0], [], [-2.0], [3.0, -1.0], [], [], [1.5]]
+            n_steps = len(x_seq)
 
-            v_model, ge_model, gi_model, s_model = [], [], [], []
-            for k in range(len(x_seq)):
-                spk = self._step(neuron, k, x=x_seq[k] * u.pA, dg_values=dg_seq[k])
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                ge_model.append(float((neuron.g_ex.value / u.nS)[0]))
-                gi_model.append(float((neuron.g_in.value / u.nS)[0]))
-                s_model.append(self._is_spike(spk))
+            # Pre-compute per-step inputs as JAX arrays.
+            dftype = brainstate.environ.dftype()
+            x_arr = jnp.array(x_seq, dtype=dftype)
+            w_ex_arr = jnp.array([sum(v for v in dgs if v >= 0) for dgs in dg_seq], dtype=dftype)
+            w_in_arr = jnp.array([sum(-v for v in dgs if v < 0) for dgs in dg_seq], dtype=dftype)
+
+            def _body(k):
+                neuron.add_delta_input('w_ex', w_ex_arr[k] * u.nS, label='w_ex')
+                neuron.add_delta_input('w_in', w_in_arr[k] * u.nS, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    spk,
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(results[0][k, 0]) for k in range(n_steps)]
+            ge_model = [float(results[1][k, 0]) for k in range(n_steps)]
+            gi_model = [float(results[2][k, 0]) for k in range(n_steps)]
+            s_model = [bool(float(results[3][k, 0]) > 0.5) for k in range(n_steps)]
 
             dt = 0.1
             p = {

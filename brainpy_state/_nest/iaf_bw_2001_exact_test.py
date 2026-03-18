@@ -22,6 +22,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
@@ -310,33 +311,54 @@ class TestIAFBW2001Exact(unittest.TestCase):
             bw.init_state()
             ce.init_state()
 
+            n_steps = 260
+            dftype = brainstate.environ.dftype()
             rng = np.random.default_rng(123)
-            v_bw = []
-            v_ce = []
-            for k in range(260):
-                events = []
+
+            # Pre-compute per-step inputs using the same RNG sequence as the original loop.
+            ds_ampa_np = np.zeros(n_steps, dtype=dftype)
+            ds_gaba_np = np.zeros(n_steps, dtype=dftype)
+            x_np = np.zeros(n_steps, dtype=dftype)
+            for k in range(n_steps):
                 if rng.random() < 0.1:
-                    events.append(('AMPA', 40.0 * u.nS))
+                    ds_ampa_np[k] = 40.0  # nS
                 if rng.random() < 0.08:
-                    events.append(('GABA', 15.0 * u.nS))
-                x_k = (20.0 * math.sin(0.07 * k)) * u.pA
+                    ds_gaba_np[k] = 15.0  # nS
+                x_np[k] = 20.0 * math.sin(0.07 * k)  # pA
 
-                for i, (rec, w) in enumerate(events):
-                    if rec == 'AMPA':
-                        ce.add_delta_input(f'e_{k}_{i}', w, label='w_ex')
-                    else:
-                        ce.add_delta_input(f'i_{k}_{i}', w, label='w_in')
+            ds_ampa_jnp = jnp.asarray(ds_ampa_np)
+            ds_gaba_jnp = jnp.asarray(ds_gaba_np)
+            x_jnp = jnp.asarray(x_np)
 
+            def _run_step(k):
                 with brainstate.environ.context(t=k * self.dt):
-                    bw.update(x=x_k, spike_events=events)
-                    ce.update(x=x_k)
+                    bw.update(x=x_jnp[k] * u.pA)
+                    ce.update(x=x_jnp[k] * u.pA)
+                # Apply conductance jumps after ODE (same timing as original).
+                bw.s_AMPA.value = bw.s_AMPA.value + ds_ampa_jnp[k] * u.nS
+                bw.s_GABA.value = bw.s_GABA.value + ds_gaba_jnp[k] * u.nS
+                ce.g_ex.value = ce.g_ex.value + ds_ampa_jnp[k] * u.nS
+                ce.g_in.value = ce.g_in.value + ds_gaba_jnp[k] * u.nS
+                return (
+                    bw.V.value / u.mV,
+                    ce.V.value / u.mV,
+                    bw.s_AMPA.value / u.nS,
+                    bw.s_GABA.value / u.nS,
+                    ce.g_ex.value / u.nS,
+                    ce.g_in.value / u.nS,
+                )
 
-                v_bw.append(float((bw.V.value / u.mV)[0]))
-                v_ce.append(float((ce.V.value / u.mV)[0]))
-                self.assertAlmostEqual(float((bw.s_AMPA.value / u.nS)[0]), float((ce.g_ex.value / u.nS)[0]), delta=6e-6)
-                self.assertAlmostEqual(float((bw.s_GABA.value / u.nS)[0]), float((ce.g_in.value / u.nS)[0]), delta=6e-6)
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            v_bw = np.asarray(results[0][:, 0], dtype=dftype)
+            v_ce = np.asarray(results[1][:, 0], dtype=dftype)
+            s_ampa_bw = np.asarray(results[2][:, 0], dtype=dftype)
+            s_gaba_bw = np.asarray(results[3][:, 0], dtype=dftype)
+            g_ex_ce = np.asarray(results[4][:, 0], dtype=dftype)
+            g_in_ce = np.asarray(results[5][:, 0], dtype=dftype)
 
-            self.assertTrue(np.max(np.abs(np.asarray(v_bw) - np.asarray(v_ce))) < 7e-6)
+            self.assertTrue(np.max(np.abs(s_ampa_bw - g_ex_ce)) < 6e-6)
+            self.assertTrue(np.max(np.abs(s_gaba_bw - g_in_ce)) < 6e-6)
+            self.assertTrue(np.max(np.abs(v_bw - v_ce)) < 7e-6)
 
     def test_reference_trace_matches_nest_update_logic(self):
         with brainstate.environ.context(dt=self.dt):
@@ -480,32 +502,53 @@ class TestIAFBW2001Exact(unittest.TestCase):
             base.init_state()
             nmda.init_state()
 
+            n_steps = 320
+            dftype = brainstate.environ.dftype()
+
+            # Pre-register the NMDA port on 'nmda' before the loop (k==0 event in original).
+            state_shape = nmda.V.value.shape
+            nmda._parse_spike_events(
+                [{'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 0.0}],
+                state_shape,
+            )
+
+            # Pre-compute per-step inputs using same RNG sequence as original loop.
             rng = np.random.default_rng(4321)
-            v_base = []
-            v_nmda = []
-            for k in range(320):
-                events = []
+            ds_ampa_np = np.zeros(n_steps, dtype=dftype)
+            ds_gaba_np = np.zeros(n_steps, dtype=dftype)
+            dx_nmda_np = np.zeros((n_steps, 1, 1), dtype=dftype)
+            for k in range(n_steps):
                 if rng.random() < 0.12:
-                    events.append(('AMPA', 40.0 * u.nS))
+                    ds_ampa_np[k] = 40.0  # nS
                 if rng.random() < 0.09:
-                    events.append(('GABA', 15.0 * u.nS))
-
-                events_nmda = list(events)
-                if k == 0:
-                    events_nmda.append(
-                        {'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 0.0})
+                    ds_gaba_np[k] = 15.0  # nS
                 if rng.random() < 0.10:
-                    events_nmda.append(
-                        {'receptor_type': 'NMDA', 'weight': 40.0 * u.nS, 'port': 'p0', 'multiplicity': 1.0})
+                    dx_nmda_np[k, 0, 0] = 1.0  # NMDA multiplicity for port p0
 
+            ds_ampa_jnp = jnp.asarray(ds_ampa_np)
+            ds_gaba_jnp = jnp.asarray(ds_gaba_np)
+            dx_nmda_jnp = jnp.asarray(dx_nmda_np)
+
+            def _run_step(k):
                 with brainstate.environ.context(t=k * self.dt):
-                    base.update(spike_events=events)
-                    nmda.update(spike_events=events_nmda)
+                    base.update()
+                    nmda.update()
+                # Apply conductance jumps after ODE (same timing as original).
+                base.s_AMPA.value = base.s_AMPA.value + ds_ampa_jnp[k] * u.nS
+                base.s_GABA.value = base.s_GABA.value + ds_gaba_jnp[k] * u.nS
+                nmda.s_AMPA.value = nmda.s_AMPA.value + ds_ampa_jnp[k] * u.nS
+                nmda.s_GABA.value = nmda.s_GABA.value + ds_gaba_jnp[k] * u.nS
+                nmda.x_NMDA.value = nmda.x_NMDA.value + dx_nmda_jnp[k]
+                return (
+                    base.V.value / u.mV,
+                    nmda.V.value / u.mV,
+                )
 
-                v_base.append(float((base.V.value / u.mV)[0]))
-                v_nmda.append(float((nmda.V.value / u.mV)[0]))
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            v_base = np.asarray(results[0][:, 0], dtype=dftype)
+            v_nmda = np.asarray(results[1][:, 0], dtype=dftype)
 
-            diff = np.asarray(v_nmda) - np.asarray(v_base)
+            diff = v_nmda - v_base
             self.assertGreater(np.mean(diff[120:]), 0.0)
             self.assertGreater(np.max(diff), 0.05)
 

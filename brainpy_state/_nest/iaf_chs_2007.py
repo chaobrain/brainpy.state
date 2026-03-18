@@ -24,10 +24,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
-from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, AdaptiveRungeKuttaStep
+from ._utils import is_tracer
 
 __all__ = [
     'iaf_chs_2007',
@@ -399,8 +398,6 @@ class iaf_chs_2007(NESTNeuron):
 
     _U_TH = 1.0  # NEST hard-coded normalized threshold.
     _E_L = 0.0  # NEST hard-coded normalized rest potential.
-    _MIN_H = 1e-8 * u.ms  # ms
-    _MAX_ITERS = 100000
 
     def __init__(
         self,
@@ -431,16 +428,7 @@ class iaf_chs_2007(NESTNeuron):
         self.V_initializer = V_initializer
 
         self._validate_parameters()
-
-        self.integrator = AdaptiveRungeKuttaStep(
-            method='RKF45',
-            vf=self._vector_field,
-            event_fn=self._event_fn,
-            min_h=self._MIN_H,
-            max_iters=self._MAX_ITERS,
-            atol=self.gsl_error_tol,
-            dt=brainstate.environ.get_dt()
-        )
+        self._precompute_propagators()
 
     def _validate_parameters(self):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
@@ -453,6 +441,31 @@ class iaf_chs_2007(NESTNeuron):
             raise ValueError('Reset magnitude V_reset cannot be negative.')
         if np.any(self.tau_epsp <= 0.0 * u.ms) or np.any(self.tau_reset <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
+
+    def _precompute_propagators(self):
+        """Pre-compute exact discrete-time propagator coefficients from dt and parameters.
+
+        Stores ``_P11`` (= P22), ``_P21``, and ``_P30`` as JAX arrays.
+        Also caches the noise buffer as ``_noise_jax`` for JIT-friendly indexing.
+        """
+        dftype = brainstate.environ.dftype()
+        h_ms = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        tau_epsp_ms = np.asarray(u.get_mantissa(self.tau_epsp / u.ms), dtype=np.float64)
+        tau_reset_ms = np.asarray(u.get_mantissa(self.tau_reset / u.ms), dtype=np.float64)
+        V_epsp = np.asarray(u.get_mantissa(self.V_epsp), dtype=np.float64)
+
+        P11 = np.exp(-h_ms / tau_epsp_ms)   # = P22
+        P30 = np.exp(-h_ms / tau_reset_ms)
+        P21 = V_epsp * np.e * P11 * h_ms / tau_epsp_ms
+
+        self._P11 = jnp.asarray(P11, dtype=dftype)
+        self._P21 = jnp.asarray(P21, dtype=dftype)
+        self._P30 = jnp.asarray(P30, dtype=dftype)
+
+        if self.noise.size > 0:
+            self._noise_jax = jnp.asarray(self.noise, dtype=dftype)
+        else:
+            self._noise_jax = None
 
     def init_state(self, **kwargs):
         r"""Initialize all state variables for the neuron population.
@@ -484,7 +497,6 @@ class iaf_chs_2007(NESTNeuron):
         """
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        dt = brainstate.environ.get_dt()
 
         V = braintools.init.param(self.V_initializer, self.varshape)
         zeros = u.math.zeros(self.varshape, dtype=dftype)
@@ -496,7 +508,6 @@ class iaf_chs_2007(NESTNeuron):
         self.position = brainstate.ShortTermState(u.math.zeros(self.varshape, dtype=ditype))
 
         self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
-        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         r"""Reset all state variables to their initial values.
@@ -572,147 +583,37 @@ class iaf_chs_2007(NESTNeuron):
         v_scaled = V - self._U_TH
         return self.spk_fun(v_scaled)
 
-    def _vector_field(self, state, extra):
-        """Unit-aware vectorized RHS for the iaf_chs_2007 ODE system.
-
-        The underlying continuous-time ODEs are:
-
-        - ``di_syn_ex/dt = -i_syn_ex / tau_epsp``
-        - ``dV_syn/dt = V_epsp * e / tau_epsp * i_syn_ex - V_syn / tau_epsp``
-        - ``dV_spike/dt = -V_spike / tau_reset``
-
-        Parameters
-        ----------
-        state : DotDict
-            Keys: i_syn_ex, V_syn, V_spike -- ODE state variables.
-        extra : DotDict
-            Keys: spike_mask, unstable -- mutable auxiliary data carried
-            through the integrator.
-
-        Returns
-        -------
-        DotDict with same keys as ``state``, containing time derivatives.
-        """
-        di_syn_ex = -state.i_syn_ex / self.tau_epsp
-        dV_syn = self.V_epsp * np.e / self.tau_epsp * state.i_syn_ex - state.V_syn / self.tau_epsp
-        dV_spike = -state.V_spike / self.tau_reset
-
-        return DotDict(i_syn_ex=di_syn_ex, V_syn=dV_syn, V_spike=dV_spike)
-
-    def _event_fn(self, state, extra, accept):
-        """In-loop spike detection and reset handling.
-
-        After each accepted substep, computes the total membrane potential
-        ``V_m = V_syn + V_spike + noise`` and applies the threshold/reset
-        logic: if ``V_m >= U_th``, decrements ``V_spike`` by ``U_reset``.
-
-        Parameters
-        ----------
-        state : DotDict
-            Keys: i_syn_ex, V_syn, V_spike -- ODE state variables.
-        extra : DotDict
-            Keys: spike_mask, unstable, noise_term.
-        accept : array, bool
-            Mask of neurons whose RK substep was accepted.
-
-        Returns
-        -------
-        (new_state, new_extra) DotDicts with updated spike/reset info.
-        """
-        unstable = extra.unstable | jnp.any(
-            accept & (
-                (u.get_mantissa(u.math.abs(state.V_syn)) > 1e6) |
-                (u.get_mantissa(u.math.abs(state.V_spike)) > 1e6)
-            )
-        )
-
-        V_m = state.V_syn + state.V_spike + extra.noise_term
-        spike_now = accept & (u.get_mantissa(V_m) >= self._U_TH)
-        spike_mask = extra.spike_mask | spike_now
-
-        new_V_spike = u.math.where(spike_now, state.V_spike - self.V_reset, state.V_spike)
-
-        new_state = DotDict({**state, 'V_spike': new_V_spike})
-        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'unstable': unstable})
-        return new_state, new_extra
-
     def update(self, x=0.0):
         r"""Advance the neuron state by one simulation time step.
 
         Implements the discrete-time update rule following NEST's exact
-        sequence:
+        sequence using precomputed exact propagators:
 
-        1. Update ``V_syn`` from previous ``i_syn_ex`` using propagator ``P21``.
+        1. Update ``V_syn`` from previous ``i_syn_ex`` using propagator ``P21``
+           (one-step synaptic delay).
         2. Decay ``i_syn_ex`` by ``P11``.
-        3. Add arriving excitatory delta inputs (non-negative weights only).
-        4. Decay ``V_spike`` by ``P30``.
-        5. Sample and add noise term if ``V_noise > 0`` and noise is available.
-        6. Compute total membrane potential ``V_m`` and apply threshold/reset
-           logic: if :math:`V_m \ge U_{th}`, decrement both ``V_spike`` and
-           ``V_m`` by ``U_{reset}``, and update ``last_spike_time``.
-        7. Return spike output via surrogate function.
+        3. Decay ``V_spike`` by ``P30``.
+        4. Sample noise term if ``V_noise > 0`` and noise buffer is non-empty.
+        5. Add arriving excitatory delta inputs (non-negative weights only) to
+           ``i_syn_ex``.
+        6. Compute total membrane potential ``V_m = V_syn + V_spike + noise``
+           and apply threshold/reset logic.
+        7. Return spike output.
 
         Parameters
         ----------
         x : ArrayLike, optional
-            Continuous input current (unused by design). NEST's C++
-            ``iaf_chs_2007`` has no ``CurrentEvent`` handler; this argument is
-            present for API compatibility with other neuron models but is
-            intentionally ignored. Default is ``0.0``.
+            Continuous input current (unused by design). Default is ``0.0``.
 
         Returns
         -------
         ArrayLike
-            Spike output tensor with shape matching ``self.V.value``. Computed
-            by :meth:`get_spike` using the normalized threshold distance
-            :math:`V_m - U_{th}` and the surrogate function ``spk_fun``.
+            Spike output tensor with shape matching ``self.V.value``.
 
         Raises
         ------
         IndexError
-            If the noise buffer is exhausted (``position >= len(noise)``) before
-            the end of the simulation step. Ensure the ``noise`` array has
-            length at least equal to the total number of simulation steps.
-
-        Notes
-        -----
-        **Update ordering semantics:**
-
-        The key consequence of NEST's update order is that a spike arriving in
-        the current step immediately increments ``i_syn_ex``, but the resulting
-        ``V_syn`` contribution appears in the total ``V_m`` only from the next
-        step onward. This introduces an effective one-step synaptic delay for
-        all spike inputs.
-
-        **Propagator precomputation:**
-
-        Each step recomputes the propagators ``P11``, ``P22``, ``P30``, and
-        ``P21`` from the current ``dt`` and model parameters. This ensures
-        correctness even if ``dt`` changes between steps, but incurs a small
-        computational cost. In practice, ``dt`` is typically fixed for the
-        entire simulation.
-
-        **Noise consumption:**
-
-        One noise sample per neuron per step is consumed from the flat
-        ``self.noise`` array using the ``position`` index. For vectorized or
-        batched states, each element independently increments its ``position``
-        index if ``V_noise > 0`` for that element.
-        **The noise buffer must be pre-allocated with at least ``num_steps`` samples.**
-
-        **No refractory state:**
-
-        Unlike standard LIF models, this model has no refractory clamping. If
-        :math:`V_m` remains above threshold after reset (possible if
-        :math:`U_{reset}` is small relative to the PSP amplitude), the neuron
-        can spike again immediately in the next step.
-
-        **Computational complexity:**
-
-        Per-step cost is :math:`O(|\mathrm{state}|)` for state propagation,
-        plus :math:`O(K)` for collecting ``K`` delta inputs, plus
-        :math:`O(|\mathrm{state}|)` for noise sampling (if active). All
-        operations are vectorized via JAX and the adaptive RKF45 integrator.
+            If the noise buffer is exhausted before the end of the simulation.
         """
         # NEST iaf_chs_2007 has no CurrentEvent handler; x is intentionally unused.
         del x
@@ -727,42 +628,37 @@ class iaf_chs_2007(NESTNeuron):
         V_syn = self.V_syn.value
         V_spike = self.V_spike.value
         pos = self.position.value
-        h = self.integration_step.value
 
-        # Noise term computation (pre-integration, stays constant during substeps).
+        # Exact discrete-time propagation (NEST update order).
+        # Step 1: update V_syn from old i_syn_ex (one-step synaptic delay).
+        V_syn_new = self._P11 * V_syn + self._P21 * i_syn_ex
+        # Step 2: decay i_syn_ex.
+        i_syn_ex_new = self._P11 * i_syn_ex
+        # Step 3: decay V_spike.
+        V_spike_new = self._P30 * V_spike
+
+        # Step 4: noise term.
         noise_term = u.math.zeros(self.varshape, dtype=dftype)
-        if self.noise.size > 0:
-            U_noise = self.V_noise
-            use_noise = U_noise > 0.0
-            if np.any(u.get_mantissa(use_noise)):
-                pos_np = np.asarray(u.math.asarray(pos), dtype=int)
-                if np.any(pos_np[np.asarray(u.get_mantissa(use_noise), dtype=bool)] >= self.noise.size):
-                    raise IndexError(
-                        'Noise signal exhausted before end of simulation. '
-                        'Provide a noise vector at least as long as all simulated steps.'
-                    )
-                sampled_noise = u.math.zeros(self.varshape, dtype=dftype)
-                use_mask = np.asarray(u.get_mantissa(use_noise), dtype=bool)
-                noise_vals = jnp.asarray(self.noise[pos_np.clip(0, self.noise.size - 1)], dtype=dftype)
-                sampled_noise = u.math.where(use_noise, noise_vals, sampled_noise)
-                noise_term = U_noise * sampled_noise
+        if self._noise_jax is not None:
+            use_noise = self.V_noise > 0.0
+            if np.any(np.asarray(use_noise)):
+                if not is_tracer(pos):
+                    # Python-level exhaustion check (raises IndexError for eager callers).
+                    pos_np = np.asarray(u.math.asarray(pos), dtype=int)
+                    use_mask = np.asarray(use_noise, dtype=bool)
+                    if np.any(pos_np[use_mask] >= self.noise.size):
+                        raise IndexError(
+                            'Noise signal exhausted before end of simulation. '
+                            'Provide a noise vector at least as long as all simulated steps.'
+                        )
+                # JAX-friendly dynamic gather (works inside jit / for_loop).
+                pos_jax = jnp.asarray(u.math.asarray(pos), dtype=jnp.int32)
+                pos_safe = jnp.clip(pos_jax, 0, self.noise.size - 1)
+                noise_vals = self._noise_jax[pos_safe]
+                noise_term = u.math.where(use_noise, self.V_noise * noise_vals, noise_term)
                 pos = u.math.where(use_noise, pos + 1, pos)
 
-        # Adaptive RKF45 integration via generic integrator.
-        ode_state = DotDict(i_syn_ex=i_syn_ex, V_syn=V_syn, V_spike=V_spike)
-        extra = DotDict(
-            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
-            unstable=jnp.array(False),
-            noise_term=noise_term,
-        )
-
-        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
-        i_syn_ex = ode_state.i_syn_ex
-
-        # Synaptic spike inputs (positive-weight-only, applied AFTER integration
-        # to match NEST's ordering: decay first, then add arriving weights).
-        # NEST clamps each individual weight to zero before accumulating,
-        # so we clamp per-input (not after summing).
+        # Step 5: add excitatory spike weights (positive-weight-only, per NEST).
         w_ex = u.math.zeros(self.varshape, dtype=dftype)
         if self._delta_inputs is not None:
             label_prefix = 'w_ex // '
@@ -770,27 +666,20 @@ class iaf_chs_2007(NESTNeuron):
                 if key.startswith(label_prefix):
                     val = self._delta_inputs.pop(key)
                     w_ex = w_ex + u.math.maximum(val, 0.0)
-        i_syn_ex = i_syn_ex + w_ex
-        V_syn = ode_state.V_syn
-        V_spike = ode_state.V_spike
-        spike_mask = extra.spike_mask
-        unstable = extra.unstable
+        i_syn_ex_new = i_syn_ex_new + w_ex
 
-        # Post-loop stability check.
-        brainstate.transform.jit_error_if(
-            jnp.any(unstable), 'Numerical instability in iaf_chs_2007 dynamics.'
-        )
-
-        # Compute total membrane potential.
-        V_m = V_syn + V_spike + noise_term
+        # Step 6: compute total V_m and apply threshold/reset.
+        V_m = V_syn_new + V_spike_new + noise_term
+        spike_mask = u.get_mantissa(V_m) >= self._U_TH
+        V_spike_new = u.math.where(spike_mask, V_spike_new - self.V_reset, V_spike_new)
+        V_m = u.math.where(spike_mask, V_m - self.V_reset, V_m)
 
         # Write back state.
-        self.i_syn_ex.value = i_syn_ex
-        self.V_syn.value = V_syn
-        self.V_spike.value = V_spike
+        self.i_syn_ex.value = i_syn_ex_new
+        self.V_syn.value = V_syn_new
+        self.V_spike.value = V_spike_new
         self.V.value = V_m
-        self.position.value = jnp.asarray(u.get_mantissa(pos), dtype=ditype)
-        self.integration_step.value = h
+        self.position.value = jnp.asarray(u.math.asarray(pos), dtype=ditype)
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 

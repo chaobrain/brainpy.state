@@ -22,6 +22,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import iaf_psc_exp_htum
 
@@ -75,12 +76,14 @@ class TestIAFPscExpHtum(unittest.TestCase):
             )
             neuron.init_state()
 
-            spikes = []
-            v_vals = []
-            for k in range(12):
-                spk = self._step(neuron, k)
-                spikes.append(self._is_spike(spk))
-                v_vals.append(float((neuron.V.value / u.mV)[0]))
+            def _step_body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0. * u.pA)
+                return spk[0], (neuron.V.value / u.mV)[0]
+
+            results = brainstate.transform.for_loop(_step_body, jnp.arange(12))
+            spikes = [bool(np.asarray(results[0])[k] > 0.0) for k in range(12)]
+            v_vals = [float(np.asarray(results[1])[k]) for k in range(12)]
 
             self.assertTrue(spikes[0])
             # total refractory blocks spikes for ceil(0.5/0.1)=5 steps after spike.
@@ -123,6 +126,7 @@ class TestIAFPscExpHtum(unittest.TestCase):
             x_seq = [10.0, 20.0, 0.0, 0.0, 0.0, -5.0, 0.0, 0.0]
             w_seq = [0.0, 30.0, -20.0, 0.0, 0.0, 20.0, -10.0, 0.0]
 
+            # --- Pre-compute reference values ---
             v = -67.0 - p['E_L']
             i0 = 0.0
             iex = 0.0
@@ -135,39 +139,60 @@ class TestIAFPscExpHtum(unittest.TestCase):
             p11in = math.exp(-0.1 / p['tau_in'])
             p22 = math.exp(-0.1 / p['tau_m'])
             p20 = p['tau_m'] / p['C_m'] * (1.0 - p22)
-            p21ex = _propagator_exp(np.asarray(p['tau_ex']), np.asarray(p['tau_m']), np.asarray(p['C_m']),
-                                                0.1)
-            p21in = _propagator_exp(np.asarray(p['tau_in']), np.asarray(p['tau_m']), np.asarray(p['C_m']),
-                                                0.1)
-            ref_abs = int(math.ceil(p['t_ref_abs'] / 0.1))
-            ref_tot = int(math.ceil(p['t_ref_tot'] / 0.1))
+            p21ex = _propagator_exp(np.asarray(p['tau_ex']), np.asarray(p['tau_m']), np.asarray(p['C_m']), 0.1)
+            p21in = _propagator_exp(np.asarray(p['tau_in']), np.asarray(p['tau_m']), np.asarray(p['C_m']), 0.1)
+            ref_abs_count = int(math.ceil(p['t_ref_abs'] / 0.1))
+            ref_tot_count = int(math.ceil(p['t_ref_tot'] / 0.1))
 
-            for k, (x, w) in enumerate(zip(x_seq, w_seq)):
-                spk = self._step(neuron, k, x=x * u.pA, delta=w * u.pA)
-
+            ref_spikes, ref_v, ref_r_abs, ref_r_tot = [], [], [], []
+            for x, w in zip(x_seq, w_seq):
                 if r_abs == 0:
                     v = v * p22 + iex * p21ex + iin * p21in + (p['I_e'] + i0) * p20
                 else:
                     r_abs -= 1
-
                 iex = iex * p11ex + max(w, 0.0)
                 iin = iin * p11in + min(w, 0.0)
-
                 spike_ref = False
                 if r_tot == 0:
                     if v >= th:
                         spike_ref = True
-                        r_abs = ref_abs
-                        r_tot = ref_tot
+                        r_abs = ref_abs_count
+                        r_tot = ref_tot_count
                         v = reset
                 else:
                     r_tot -= 1
-
                 i0 = x
-                self.assertEqual(self._is_spike(spk), spike_ref)
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), v + p['E_L'], delta=1e-11)
-                self.assertEqual(int(neuron.refractory_abs_step_count.value[0]), r_abs)
-                self.assertEqual(int(neuron.refractory_tot_step_count.value[0]), r_tot)
+                ref_spikes.append(spike_ref)
+                ref_v.append(v + p['E_L'])
+                ref_r_abs.append(r_abs)
+                ref_r_tot.append(r_tot)
+
+            # --- Run model with for_loop ---
+            x_arr = jnp.array(x_seq)
+            w_arr = jnp.array(w_seq)
+
+            def _step_body(k):
+                neuron.add_delta_input('delta', w_arr[k] * u.pA)
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    spk[0],
+                    (neuron.V.value / u.mV)[0],
+                    neuron.refractory_abs_step_count.value[0],
+                    neuron.refractory_tot_step_count.value[0],
+                )
+
+            results = brainstate.transform.for_loop(_step_body, jnp.arange(8))
+            spk_all = np.asarray(results[0])
+            v_all = np.asarray(results[1])
+            r_abs_all = np.asarray(results[2])
+            r_tot_all = np.asarray(results[3])
+
+            for k in range(8):
+                self.assertEqual(bool(spk_all[k] > 0.0), ref_spikes[k])
+                self.assertAlmostEqual(float(v_all[k]), ref_v[k], delta=1e-11)
+                self.assertEqual(int(r_abs_all[k]), ref_r_abs[k])
+                self.assertEqual(int(r_tot_all[k]), ref_r_tot[k])
 
 
 if __name__ == '__main__':

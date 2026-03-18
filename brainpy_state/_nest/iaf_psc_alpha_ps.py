@@ -503,13 +503,60 @@ class iaf_psc_alpha_ps(NESTNeuron):
                 w = ev.get('weight', 0.0 * u.pA)
             else:
                 offs, w = ev
-            off_ms = float(u.math.asarray(offs / u.ms))
+            off_ms = float(u.get_mantissa(offs / u.ms))
             w_np = np.broadcast_to(
-                np.asarray(u.math.asarray(w / u.pA), dtype=dftype),
+                np.asarray(u.get_mantissa(w / u.pA), dtype=dftype),
                 v_shape,
             )
             events.append((off_ms, w_np))
         return events
+
+    def _precompute_constants(self, h, v_shape, dftype, ditype):
+        """Pre-compute constant numpy parameter arrays for use in update().
+
+        Caches all parameter-derived arrays that are invariant across
+        simulation steps (fixed dt, shape, and dtypes).  Subsequent
+        calls to update() reuse the cached arrays, eliminating per-step
+        JAX dispatch overhead for parameter conversions.
+
+        Parameters
+        ----------
+        h : float
+            Step size in ms.
+        v_shape : tuple
+            State array shape.
+        dftype : dtype
+            Float dtype for computations.
+        ditype : dtype
+            Integer dtype for step counters.
+        """
+        _tnp = lambda x, unit: np.broadcast_to(
+            np.asarray(u.get_mantissa(x / unit), dtype=dftype), v_shape
+        )
+
+        E_L = _tnp(self.E_L, u.mV)
+        refr_steps = np.broadcast_to(
+            np.asarray(np.ceil(_tnp(self.t_ref, u.ms) / h), dtype=ditype), v_shape
+        )
+        if np.any(refr_steps < 1):
+            raise ValueError('Refractory time must be at least one time step.')
+
+        self._c_E_L = E_L
+        self._c_tau_m = _tnp(self.tau_m, u.ms)
+        self._c_tau_ex = _tnp(self.tau_syn_ex, u.ms)
+        self._c_tau_in = _tnp(self.tau_syn_in, u.ms)
+        self._c_c_m = _tnp(self.C_m, u.pF)
+        self._c_i_e = _tnp(self.I_e, u.pA)
+        self._c_u_th = _tnp(self.V_th - self.E_L, u.mV)
+        self._c_u_reset = _tnp(self.V_reset - self.E_L, u.mV)
+        self._c_u_min = -np.inf * np.ones(v_shape, dtype=dftype)
+        if self.V_min is not None:
+            self._c_u_min = _tnp(self.V_min - self.E_L, u.mV)
+        self._c_refr_steps = refr_steps
+        self._c_psc_norm_ex = np.e / self._c_tau_ex
+        self._c_psc_norm_in = np.e / self._c_tau_in
+        # Cache key
+        self._c_key = (h, v_shape, dftype, ditype)
 
     @staticmethod
     def _bisect_root(f, t_hi: float):
@@ -726,59 +773,55 @@ class iaf_psc_alpha_ps(NESTNeuron):
         dt_q = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        h = float(u.math.asarray(dt_q / u.ms))
-        t_ms = float(u.math.asarray(t / u.ms))
+        h = float(u.get_mantissa(dt_q / u.ms))
+        t_ms = float(u.get_mantissa(t / u.ms))
         step_idx = int(round(t_ms / h))
         eps = np.finfo(np.float64).eps
 
         v_shape = self.V.value.shape
 
-        # Convert all parameters and states to unitless numpy arrays.
-        _tn = lambda x, unit: np.broadcast_to(
-            np.asarray(u.math.asarray(x / unit), dtype=dftype), v_shape
+        # Use cached constant parameter arrays; recompute only when key changes.
+        if not hasattr(self, '_c_key') or self._c_key != (h, v_shape, dftype, ditype):
+            self._precompute_constants(h, v_shape, dftype, ditype)
+
+        E_L = self._c_E_L
+        tau_m = self._c_tau_m
+        tau_ex = self._c_tau_ex
+        tau_in = self._c_tau_in
+        c_m = self._c_c_m
+        i_e = self._c_i_e
+        u_th = self._c_u_th
+        u_reset = self._c_u_reset
+        u_min = self._c_u_min
+        refr_steps = self._c_refr_steps
+        psc_norm_ex = self._c_psc_norm_ex
+        psc_norm_in = self._c_psc_norm_in
+
+        # Convert per-step state arrays to unitless numpy.
+        _tn_state = lambda x, unit: np.broadcast_to(
+            np.asarray(u.get_mantissa(x / unit), dtype=dftype), v_shape
         )
 
-        E_L = _tn(self.E_L, u.mV)
-        V_m = _tn(self.V.value, u.mV) - E_L
-        I_ex = _tn(self.I_syn_ex.value, u.pA)
+        V_m = _tn_state(self.V.value, u.mV) - E_L
+        I_ex = _tn_state(self.I_syn_ex.value, u.pA)
         dI_ex = np.broadcast_to(np.asarray(self.dI_syn_ex.value, dtype=dftype), v_shape)
-        I_in = _tn(self.I_syn_in.value, u.pA)
+        I_in = _tn_state(self.I_syn_in.value, u.pA)
         dI_in = np.broadcast_to(np.asarray(self.dI_syn_in.value, dtype=dftype), v_shape)
-        y_input = _tn(self.y_input.value, u.pA)
+        y_input = _tn_state(self.y_input.value, u.pA)
 
         is_refractory = np.broadcast_to(
-            np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool), v_shape
+            np.asarray(self.is_refractory.value, dtype=bool), v_shape
         ).copy()
         last_spike_step = np.broadcast_to(
-            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=ditype), v_shape
+            np.asarray(self.last_spike_step.value, dtype=ditype), v_shape
         ).copy()
-        last_spike_offset = _tn(self.last_spike_offset.value, u.ms).copy()
-        last_spike_time_prev = _tn(self.last_spike_time.value, u.ms).copy()
-
-        tau_m = _tn(self.tau_m, u.ms)
-        tau_ex = _tn(self.tau_syn_ex, u.ms)
-        tau_in = _tn(self.tau_syn_in, u.ms)
-        c_m = _tn(self.C_m, u.pF)
-        i_e = _tn(self.I_e, u.pA)
-        u_th = _tn(self.V_th - self.E_L, u.mV)
-        u_reset = _tn(self.V_reset - self.E_L, u.mV)
-        u_min = -np.inf * np.ones(v_shape, dtype=dftype)
-        if self.V_min is not None:
-            u_min = _tn(self.V_min - self.E_L, u.mV)
-
-        refr_steps = np.broadcast_to(
-            np.asarray(np.ceil(_tn(self.t_ref, u.ms) / h), dtype=ditype), v_shape
-        )
-        if np.any(refr_steps < 1):
-            raise ValueError('Refractory time must be at least one time step.')
-
-        psc_norm_ex = np.e / tau_ex
-        psc_norm_in = np.e / tau_in
+        last_spike_offset = _tn_state(self.last_spike_offset.value, u.ms).copy()
+        last_spike_time_prev = _tn_state(self.last_spike_time.value, u.ms).copy()
 
         # Parse spike events and add on-grid delta inputs.
         events = self._parse_spike_events(spike_events, v_shape)
         on_grid = np.broadcast_to(
-            np.asarray(u.math.asarray(self.sum_delta_inputs(0. * u.pA) / u.pA), dtype=dftype),
+            np.asarray(u.get_mantissa(self.sum_delta_inputs(0. * u.pA) / u.pA), dtype=dftype),
             v_shape,
         )
         events.append((0.0, on_grid))
@@ -789,7 +832,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
         # Current input for next step (one-step delay).
         y_input_next = np.broadcast_to(
-            np.asarray(u.math.asarray(self.sum_current_inputs(x, self.V.value) / u.pA), dtype=dftype),
+            np.asarray(u.get_mantissa(self.sum_current_inputs(x, self.V.value) / u.pA), dtype=dftype),
             v_shape,
         )
 

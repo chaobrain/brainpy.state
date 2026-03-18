@@ -521,7 +521,7 @@ class iaf_chxk_2008(NESTNeuron):
         self.integrator = AdaptiveRungeKuttaStep(
             method='RKF45',
             vf=self._vector_field,
-            event_fn=self._event_fn,
+            event_fn=None,
             min_h=self._MIN_H,
             max_iters=self._MAX_ITERS,
             atol=self.gsl_error_tol,
@@ -577,6 +577,8 @@ class iaf_chxk_2008(NESTNeuron):
         g_ahp_init = braintools.init.param(self.g_ahp_initializer, self.varshape)
         zeros = u.math.zeros(self.varshape, dtype=V.dtype) * (u.nS / u.ms)
 
+        zeros_pA = u.math.zeros(self.varshape, dtype=dftype) * u.pA
+
         self.V = brainstate.HiddenState(V)
         self.dg_ex = brainstate.ShortTermState(zeros)
         self.g_ex = brainstate.HiddenState(g_ex)
@@ -585,7 +587,12 @@ class iaf_chxk_2008(NESTNeuron):
         self.dg_ahp = brainstate.ShortTermState(zeros)
         self.g_ahp_state = brainstate.HiddenState(g_ahp_init)
 
-        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.I_syn_ex = brainstate.ShortTermState(zeros_pA)
+        self.I_syn_in = brainstate.ShortTermState(zeros_pA)
+        self.I_ahp = brainstate.ShortTermState(zeros_pA)
+
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms, dtype=dftype))
+        self.last_spike_offset = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.ms, dtype=dftype))
         self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
         self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
@@ -618,8 +625,7 @@ class iaf_chxk_2008(NESTNeuron):
         state : DotDict
             Keys: V, dg_ex, g_ex, dg_in, g_in, dg_ahp, g_ahp_state — ODE state variables.
         extra : DotDict
-            Keys: spike_mask, V_prev, i_stim — mutable auxiliary data carried
-            through the integrator.
+            Keys: i_stim — buffered external current for this step.
 
         Returns
         -------
@@ -645,60 +651,8 @@ class iaf_chxk_2008(NESTNeuron):
             dg_ahp=ddg_ahp, g_ahp_state=dg_ahp_dt,
         )
 
-    def _event_fn(self, state, extra, accept):
-        """In-loop spike detection with threshold crossing from below, AHP kick.
 
-        Parameters
-        ----------
-        state : DotDict
-            Keys: V, dg_ex, g_ex, dg_in, g_in, dg_ahp, g_ahp_state — ODE state variables.
-        extra : DotDict
-            Keys: spike_mask, V_prev, i_stim.
-        accept : array, bool
-            Mask of neurons whose RK substep was accepted.
-
-        Returns
-        -------
-        (new_state, new_extra) DotDicts with updated spike/AHP info.
-        """
-        # Threshold crossing from below
-        crossed = accept & (extra.V_prev < self.V_th) & (state.V >= self.V_th)
-        spike_mask = extra.spike_mask | crossed
-
-        # Precise spike timing via linear interpolation
-        denom = state.V - extra.V_prev
-        safe_denom = u.math.where(u.math.abs(denom) < 1e-30 * u.mV, 1.0 * u.mV, denom)
-        dt_spike = extra.h_substep * (state.V - self.V_th) / safe_denom
-        dt_spike = u.math.clip(dt_spike, 0.0 * u.ms, extra.h_substep)
-        dt_spike = u.math.where(crossed, dt_spike, 0.0 * u.ms)
-
-        # AHP kick: initialize at spike time and decay forward to step end
-        pscon_ahp = self.g_ahp * np.e / self.tau_ahp  # nS/ms
-        delta_dg = pscon_ahp * u.math.exp(-dt_spike / self.tau_ahp)
-        delta_g = delta_dg * dt_spike
-
-        # ahp_bug mode: replace vs accumulate
-        ahp_bug_mask = crossed & self.ahp_bug
-        ahp_normal_mask = crossed & ~self.ahp_bug
-
-        new_dg_ahp = u.math.where(ahp_bug_mask, delta_dg, state.dg_ahp)
-        new_dg_ahp = u.math.where(ahp_normal_mask, new_dg_ahp + delta_dg, new_dg_ahp)
-
-        new_g_ahp_state = u.math.where(ahp_bug_mask, delta_g, state.g_ahp_state)
-        new_g_ahp_state = u.math.where(ahp_normal_mask, new_g_ahp_state + delta_g, new_g_ahp_state)
-
-        # Update V_prev for next substep crossing detection
-        new_V_prev = u.math.where(accept, state.V, extra.V_prev)
-
-        new_state = DotDict({
-            **state,
-            'dg_ahp': new_dg_ahp,
-            'g_ahp_state': new_g_ahp_state,
-        })
-        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'V_prev': new_V_prev})
-        return new_state, new_extra
-
-    def update(self, x=0.0 * u.pA):
+    def update(self, x=0.0 * u.pA, w_ex=None, w_in=None):
         r"""Advance the neuron by one simulation step.
 
         Parameters
@@ -707,20 +661,29 @@ class iaf_chxk_2008(NESTNeuron):
             Continuous external current input in pA, broadcastable to
             ``self.varshape``. This value is stored into ``I_stim`` and applied
             at the next simulation step (one-step delay).
+        w_ex : ArrayLike or None, optional
+            Excitatory synaptic weight increment (nS) to add to ``dg_ex`` after
+            integration, scaled by ``e/tau_syn_ex``. When ``None`` (default),
+            the value is read from registered delta inputs with label ``'w_ex'``.
+            Provide an explicit array for JIT-compatible (for_loop) usage.
+        w_in : ArrayLike or None, optional
+            Inhibitory synaptic weight increment (nS), analogous to ``w_ex``
+            but for ``dg_in`` with label ``'w_in'``.
 
         Returns
         -------
         jax.Array
             Binary spike tensor with dtype ``jnp.float64`` and shape
-            ``self.V.value.shape``. A value of ``1.0`` indicates at least one
-            internal spike event occurred during the integrated interval
-            :math:`(t, t+dt]`.
+            ``self.V.value.shape``. A value of ``1.0`` indicates a threshold
+            crossing from below during the integrated interval :math:`(t, t+dt]`.
 
         Notes
         -----
-        Integration is performed with an adaptive vectorized RKF45 loop,
-        including in-loop spike detection with threshold crossing from below
-        and AHP kicks. All arithmetic is unit-aware via ``saiunit.math``.
+        Integration uses an adaptive RKF45 loop.  Spike detection and AHP kicks
+        follow NEST semantics: crossing is checked at the *global* step level
+        (comparing V before and after the full integration), and the AHP state
+        is updated post-integration using linear interpolation of the spike time.
+        Synaptic inputs (``w_ex``, ``w_in``) are applied after integration.
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
@@ -728,11 +691,12 @@ class iaf_chxk_2008(NESTNeuron):
 
         # Read state variables with their natural units.
         V = self.V.value  # mV
+        V_start = V       # saved for global-step spike offset computation
         dg_ex = self.dg_ex.value  # nS/ms
-        g_ex = self.g_ex.value  # nS
+        g_ex = self.g_ex.value    # nS
         dg_in = self.dg_in.value  # nS/ms
-        g_in = self.g_in.value  # nS
-        dg_ahp = self.dg_ahp.value  # nS/ms
+        g_in = self.g_in.value    # nS
+        dg_ahp = self.dg_ahp.value      # nS/ms
         g_ahp_state = self.g_ahp_state.value  # nS
         i_stim = self.I_stim.value  # pA
         h = self.integration_step.value  # ms
@@ -740,35 +704,62 @@ class iaf_chxk_2008(NESTNeuron):
         # Current input for next step (one-step delay).
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
-        # Adaptive RKF45 integration via generic integrator.
+        # Adaptive RKF45 integration (no per-substep event callback).
         ode_state = DotDict(
             V=V, dg_ex=dg_ex, g_ex=g_ex,
             dg_in=dg_in, g_in=g_in,
             dg_ahp=dg_ahp, g_ahp_state=g_ahp_state,
         )
-        extra = DotDict(
-            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
-            V_prev=V,
-            i_stim=i_stim,
-            h_substep=h,
-        )
+        extra = DotDict(i_stim=i_stim)
 
-        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        ode_state, h, _ = self.integrator(state=ode_state, h=h, extra=extra)
         V = ode_state.V
         dg_ex, g_ex = ode_state.dg_ex, ode_state.g_ex
         dg_in, g_in = ode_state.dg_in, ode_state.g_in
         dg_ahp, g_ahp_state = ode_state.dg_ahp, ode_state.g_ahp_state
-        spike_mask = extra.spike_mask
+
+        # Global-step spike detection: threshold crossing from below only.
+        crossed = (V_start < self.V_th) & (V >= self.V_th)
+
+        # Global-step spike-offset interpolation: time from spike to step end.
+        denom = V - V_start
+        safe_denom = u.math.where(u.math.abs(denom) < 1e-30 * u.mV, 1.0 * u.mV, denom)
+        spike_offset = dt * (V - self.V_th) / safe_denom
+        spike_offset = u.math.clip(spike_offset, 0.0 * u.ms, dt)
+        spike_offset = u.math.where(crossed, spike_offset, 0.0 * u.ms)
+
+        # Apply AHP kick post-integration (matches NEST reference semantics).
+        pscon_ahp = self.g_ahp * np.e / self.tau_ahp  # nS/ms
+        delta_dg_ahp = pscon_ahp * u.math.exp(-spike_offset / self.tau_ahp)
+        delta_g_ahp = delta_dg_ahp * spike_offset
+
+        ahp_bug_on = crossed & jnp.asarray(self.ahp_bug)
+        ahp_bug_off = crossed & jnp.logical_not(jnp.asarray(self.ahp_bug))
+        new_dg_ahp = u.math.where(ahp_bug_on, delta_dg_ahp, dg_ahp)
+        new_dg_ahp = u.math.where(ahp_bug_off, new_dg_ahp + delta_dg_ahp, new_dg_ahp)
+        new_g_ahp = u.math.where(ahp_bug_on, delta_g_ahp, g_ahp_state)
+        new_g_ahp = u.math.where(ahp_bug_off, new_g_ahp + delta_g_ahp, new_g_ahp)
+        dg_ahp = new_dg_ahp
+        g_ahp_state = new_g_ahp
+
+        # Compute recordable synaptic currents (post-integration, pre-weight-update).
+        I_syn_ex = g_ex * (V - self.E_ex)    # nS * mV = pA
+        I_syn_in = g_in * (V - self.E_in)    # nS * mV = pA
+        I_ahp_cur = g_ahp_state * (V - self.E_ahp)  # nS * mV = pA
 
         # Synaptic spike inputs (applied after integration).
-        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
-        w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
+        if w_ex is None:
+            w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
+        if w_in is None:
+            w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
         pscon_ex = np.e / self.tau_syn_ex  # 1/ms
         pscon_in = np.e / self.tau_syn_in  # 1/ms
+        dg_ex = dg_ex + pscon_ex * w_ex   # nS/ms
+        dg_in = dg_in + pscon_in * w_in   # nS/ms
 
-        # Apply synaptic spike inputs.
-        dg_ex = dg_ex + pscon_ex * w_ex  # nS/ms + 1/ms * nS = nS/ms
-        dg_in = dg_in + pscon_in * w_in  # nS/ms + 1/ms * nS = nS/ms
+        # Update spike-time and spike-offset states.
+        new_spike_offset = u.math.where(crossed, spike_offset, self.last_spike_offset.value)
+        new_spike_time = u.math.where(crossed, t + dt - spike_offset, self.last_spike_time.value)
 
         # Write back state.
         self.V.value = V
@@ -778,9 +769,12 @@ class iaf_chxk_2008(NESTNeuron):
         self.g_in.value = g_in
         self.dg_ahp.value = dg_ahp
         self.g_ahp_state.value = g_ahp_state
+        self.I_syn_ex.value = I_syn_ex
+        self.I_syn_in.value = I_syn_in
+        self.I_ahp.value = I_ahp_cur
         self.integration_step.value = h
         self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
-        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
-        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
+        self.last_spike_offset.value = jax.lax.stop_gradient(new_spike_offset)
+        self.last_spike_time.value = jax.lax.stop_gradient(new_spike_time)
 
-        return u.math.asarray(spike_mask, dtype=dftype)
+        return u.math.asarray(crossed, dtype=dftype)

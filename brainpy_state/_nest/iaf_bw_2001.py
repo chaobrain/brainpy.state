@@ -474,6 +474,14 @@ class iaf_bw_2001(NESTNeuron):
         dt = brainstate.environ.get_dt()
         self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
+        # Pre-compute NMDA jump constants once (parameters are constant throughout simulation).
+        _alpha_np = np.asarray(u.get_mantissa(self.alpha * u.ms))
+        _tau_rise_np = np.asarray(u.get_mantissa(self.tau_rise_NMDA / u.ms))
+        _tau_decay_np = np.asarray(u.get_mantissa(self.tau_decay_NMDA / u.ms))
+        _k0, _k1 = self._nmda_jump_constants(_alpha_np, _tau_rise_np, _tau_decay_np)
+        self._k0_np = np.asarray(_k0, dtype=np.float64)
+        self._k1_np = np.asarray(_k1, dtype=np.float64)
+
     @property
     def receptor_types(self):
         r"""Return dictionary of available receptor types.
@@ -699,24 +707,19 @@ class iaf_bw_2001(NESTNeuron):
         -------
         DotDict with same keys as ``state``, containing time derivatives.
         """
-        is_refractory = extra.r > 0
-
-        v_eff = u.math.where(is_refractory, self.V_reset, state.V)
-
         # AMPA current: I_AMPA = (V - E_ex) * s_AMPA
-        i_ampa = state.s_AMPA * (v_eff - self.E_ex)
+        i_ampa = state.s_AMPA * (state.V - self.E_ex)
         # GABA current: I_GABA = (V - E_in) * s_GABA
-        i_gaba = state.s_GABA * (v_eff - self.E_in)
+        i_gaba = state.s_GABA * (state.V - self.E_in)
         # NMDA current with Mg2+ block
-        v_mV = v_eff / u.mV
+        v_mV = state.V / u.mV
         conc_mM = self.conc_Mg2 / u.mM
         denom = 1.0 + conc_mM * u.math.exp(-0.062 * v_mV) / 3.57
-        i_nmda = state.s_NMDA * (v_eff - self.E_ex) / denom
+        i_nmda = state.s_NMDA * (state.V - self.E_ex) / denom
 
         i_syn = i_ampa + i_gaba + i_nmda
 
-        dV_raw = (-self.g_L * (v_eff - self.E_L) - i_syn + extra.i_stim) / self.C_m
-        dV = u.math.where(is_refractory, u.math.zeros_like(dV_raw), dV_raw)
+        dV = (-self.g_L * (state.V - self.E_L) - i_syn + extra.i_stim) / self.C_m
 
         ds_AMPA = -state.s_AMPA / self.tau_AMPA
         ds_GABA = -state.s_GABA / self.tau_GABA
@@ -745,19 +748,10 @@ class iaf_bw_2001(NESTNeuron):
             accept & ((state.V < -1e3 * u.mV) | (state.s_AMPA < -1e6 * u.nS) | (state.s_AMPA > 1e6 * u.nS))
         )
 
-        # Refractory clamping
-        refr_accept = accept & (extra.r > 0)
-        new_V = u.math.where(refr_accept, self.V_reset, state.V)
-
-        # Spike detection (non-refractory neurons above threshold)
-        spike_now = accept & (extra.r <= 0) & (new_V >= self.V_th)
+        # Spike detection: non-refractory (r <= 0 at step start), above threshold, not already spiked.
+        # The ODE integrates freely; V reset and refractory clamping are applied post-integration.
+        spike_now = accept & (extra.r <= 0) & (state.V >= self.V_th) & ~extra.spike_mask
         spike_mask = extra.spike_mask | spike_now
-
-        # Reset V on spike
-        new_V = u.math.where(spike_now, self.V_reset, new_V)
-
-        # Refractory counter: set on spike if ref_count > 0
-        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, extra.r)
 
         # NMDA spike offset computation on spike
         dt_since_last = extra.t_spike - extra.last_spike_time
@@ -770,17 +764,15 @@ class iaf_bw_2001(NESTNeuron):
         new_spike_offset = u.math.where(spike_now, offset, extra.spike_offset)
         new_last_spike_time = u.math.where(spike_now, extra.t_spike, extra.last_spike_time)
 
-        new_state = DotDict({**state, 'V': new_V})
         new_extra = DotDict({
             **extra,
             'spike_mask': spike_mask,
-            'r': r,
             'unstable': unstable,
             's_nmda_pre': new_s_nmda_pre,
             'spike_offset': new_spike_offset,
             'last_spike_time': new_last_spike_time,
         })
-        return new_state, new_extra
+        return state, new_extra
 
     def _parse_spike_events(self, spike_events: Iterable, state_shape):
         r"""Parse explicit spike events into per-receptor conductance increments.
@@ -955,11 +947,9 @@ class iaf_bw_2001(NESTNeuron):
         # Current input for next step (one-step delay).
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
-        # Precompute NMDA jump constants (unitless).
-        alpha_unitless = u.get_mantissa(self.alpha * u.ms)
-        tau_rise_unitless = u.get_mantissa(self.tau_rise_NMDA / u.ms)
-        tau_decay_unitless = u.get_mantissa(self.tau_decay_NMDA / u.ms)
-        k0, k1 = self._nmda_jump_constants(alpha_unitless, tau_rise_unitless, tau_decay_unitless)
+        # Use pre-computed NMDA jump constants (computed once in __init__).
+        k0 = jnp.asarray(self._k0_np, dtype=dftype)
+        k1 = jnp.asarray(self._k1_np, dtype=dftype)
 
         # Adaptive RKF45 integration via generic integrator.
         ode_state = DotDict(V=V, s_AMPA=s_AMPA, s_GABA=s_GABA, s_NMDA=s_NMDA)
@@ -971,15 +961,15 @@ class iaf_bw_2001(NESTNeuron):
             s_nmda_pre=s_nmda_pre,
             spike_offset=jnp.zeros(self.varshape, dtype=dftype),
             last_spike_time=last_spike_time,
-            k0=jnp.asarray(k0, dtype=dftype),
-            k1=jnp.asarray(k1, dtype=dftype),
+            k0=k0,
+            k1=k1,
             t_spike=t + dt,
         )
 
         ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
-        V = ode_state.V
+        V_ode = ode_state.V  # Free ODE output — no refractory/spike reset applied yet.
         s_AMPA, s_GABA, s_NMDA = ode_state.s_AMPA, ode_state.s_GABA, ode_state.s_NMDA
-        spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable
+        spike_mask, r_init, unstable = extra.spike_mask, extra.r, extra.unstable
         s_nmda_pre = extra.s_nmda_pre
         spike_offset_new = extra.spike_offset
         last_spike_time = extra.last_spike_time
@@ -989,10 +979,30 @@ class iaf_bw_2001(NESTNeuron):
             jnp.any(unstable), 'Numerical instability in iaf_bw_2001 dynamics.'
         )
 
-        # Decrement refractory counter.
-        r = u.math.where(r > 0, r - 1, r)
+        # Compute synaptic currents from FREE ODE output (before V reset/refractory clamping).
+        # This matches NEST semantics: recorded currents reflect the ODE solution.
+        v_mV = V_ode / u.mV
+        conc_mM = self.conc_Mg2 / u.mM
+        denom = 1.0 + conc_mM * u.math.exp(-0.062 * v_mV) / 3.57
+        I_AMPA_val = s_AMPA * (V_ode - self.E_ex)
+        I_GABA_val = s_GABA * (V_ode - self.E_in)
+        I_NMDA_val = s_NMDA * (V_ode - self.E_ex) / denom
 
-        # Synaptic spike inputs (applied after integration).
+        # Apply refractory / spike reset post-integration (matching NEST).
+        # V is clamped to V_reset if the neuron spiked this step OR is still refractory.
+        V = u.math.where(spike_mask | (r_init > 0), self.V_reset, V_ode)
+
+        # Update refractory counter:
+        #   - spike this step and t_ref > 0 → start refractory (ref_count steps)
+        #   - already refractory               → decrement
+        #   - otherwise                        → keep at 0
+        r = u.math.where(
+            spike_mask & (self.ref_count > 0),
+            self.ref_count,
+            u.math.where(r_init > 0, r_init - 1, r_init),
+        )
+
+        # Synaptic spike inputs (applied after integration and current recording).
         # Parse explicit spike events.
         ev_ampa, ev_gaba, ev_nmda = self._parse_spike_events(spike_events, self.varshape)
 
@@ -1005,14 +1015,6 @@ class iaf_bw_2001(NESTNeuron):
         s_AMPA = s_AMPA + ev_ampa + w_ampa
         s_GABA = s_GABA + ev_gaba + w_gaba
         s_NMDA = s_NMDA + ev_nmda + w_nmda
-
-        # Compute synaptic currents for recordables.
-        v_mV = V / u.mV
-        conc_mM = self.conc_Mg2 / u.mM
-        denom = 1.0 + conc_mM * u.math.exp(-0.062 * v_mV) / 3.57
-        I_AMPA_val = s_AMPA * (V - self.E_ex)
-        I_GABA_val = s_GABA * (V - self.E_in)
-        I_NMDA_val = s_NMDA * (V - self.E_ex) / denom
 
         # Write back state.
         self.V.value = V

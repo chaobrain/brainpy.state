@@ -605,7 +605,7 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     def _nmda_num_ports(self):
         if hasattr(self, 'x_NMDA'):
-            return int(np.asarray(self.x_NMDA.value).shape[-1])
+            return int(self.x_NMDA.value.shape[-1])
         return 0
 
     def init_state(self, **kwargs):
@@ -908,21 +908,22 @@ class iaf_bw_2001_exact(NESTNeuron):
     def _vector_field(self, state, extra):
         """Unit-aware vectorized RHS for all neurons simultaneously.
 
+        The ODE is integrated freely without in-loop V clamping or spike reset.
+        Spike detection and refractory clamping are applied post-integration
+        in :meth:`update`, matching NEST's GSL-based integration semantics.
+
         Parameters
         ----------
         state : DotDict
             Keys: V, s_AMPA, s_GABA, x_NMDA, s_NMDA_components -- ODE state variables.
         extra : DotDict
-            Keys: spike_mask, r, unstable, i_stim, nmda_weights -- mutable
-            auxiliary data carried through the integrator.
+            Keys: unstable, i_stim, nmda_weights -- auxiliary data.
 
         Returns
         -------
         DotDict with same keys as ``state``, containing time derivatives.
         """
-        is_refractory = extra.r > 0
-
-        v_eff = u.math.where(is_refractory, self.V_reset, state.V)
+        v_eff = state.V  # V evolves freely; no refractory clamping in ODE
 
         # Synaptic currents
         i_ampa = state.s_AMPA * (v_eff - self.E_ex)
@@ -935,12 +936,11 @@ class iaf_bw_2001_exact(NESTNeuron):
         v_mV = v_eff / u.mV
         conc_Mg2_mM = self.conc_Mg2 / u.mM
         denom = 1.0 + conc_Mg2_mM * u.math.exp(-0.062 * v_mV) / 3.57
-        i_nmda = (v_eff - self.E_ex) / denom * s_nmda_sum
+        i_nmda = (v_eff - self.E_ex) / denom * s_nmda_sum * u.nS
 
         i_syn = i_ampa + i_gaba + i_nmda
 
-        dV_raw = (-self.g_L * (v_eff - self.E_L) - i_syn + extra.i_stim) / self.C_m
-        dV = u.math.where(is_refractory, u.math.zeros_like(dV_raw), dV_raw)
+        dV = (-self.g_L * (v_eff - self.E_L) - i_syn + extra.i_stim) / self.C_m
 
         ds_AMPA = -state.s_AMPA / self.tau_AMPA
         ds_GABA = -state.s_GABA / self.tau_GABA
@@ -964,36 +964,29 @@ class iaf_bw_2001_exact(NESTNeuron):
         )
 
     def _event_fn(self, state, extra, accept):
-        """In-loop spike detection, reset, and refractory handling.
+        """Track numerical instability only; no in-ODE spike/reset logic.
+
+        Spike detection and refractory clamping are handled post-integration
+        in :meth:`update` to match NEST's semantics (currents recorded from
+        freely-evolved, pre-reset V).
 
         Parameters
         ----------
         state : DotDict
-            Keys: V, s_AMPA, s_GABA, x_NMDA, s_NMDA_components -- ODE state variables.
+            Keys: V, s_AMPA, s_GABA, x_NMDA, s_NMDA_components.
         extra : DotDict
-            Keys: spike_mask, r, unstable, i_stim, nmda_weights.
+            Keys: unstable, i_stim, nmda_weights.
         accept : array, bool
             Mask of neurons whose RK substep was accepted.
 
         Returns
         -------
-        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
+        (state, new_extra) -- state is unchanged; extra has updated unstable flag.
         """
         unstable = extra.unstable | jnp.any(
-            accept & (state.V < -1e3 * u.mV)
+            accept & (u.get_mantissa(state.V) < -1e3)
         )
-
-        refr_accept = accept & (extra.r > 0)
-        new_V = u.math.where(refr_accept, self.V_reset, state.V)
-
-        spike_now = accept & (extra.r <= 0) & (new_V >= self.V_th)
-        spike_mask = extra.spike_mask | spike_now
-        new_V = u.math.where(spike_now, self.V_reset, new_V)
-        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, extra.r)
-
-        new_state = DotDict({**state, 'V': new_V})
-        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
-        return new_state, new_extra
+        return state, DotDict({**extra, 'unstable': unstable})
 
     def update(self, x=0. * u.pA, spike_events=None):
         r"""Advance neuron state by one simulation time step.
@@ -1096,7 +1089,21 @@ class iaf_bw_2001_exact(NESTNeuron):
         ds_ampa = ds_ampa_ev + ds_ampa_reg
         ds_gaba = ds_gaba_ev + ds_gaba_reg
 
-        n_nmda = int(x_NMDA.shape[-1]) if len(x_NMDA.shape) > len(state_shape) else 0
+        n_nmda_pre = int(x_NMDA.shape[-1]) if len(x_NMDA.shape) > len(state_shape) else 0
+        # Re-read n_nmda and weights after parsing; new ports may have been registered.
+        n_nmda = int(self.x_NMDA.value.shape[-1]) if len(self.x_NMDA.value.shape) > len(state_shape) else 0
+        nmda_weights_val = self.nmda_weights.value
+
+        # If new ports were registered during parsing, expand pre-integration arrays with zeros.
+        if n_nmda > n_nmda_pre:
+            n_new = n_nmda - n_nmda_pre
+            x_NMDA = np.concatenate(
+                [np.asarray(x_NMDA, dtype=dftype), np.zeros(state_shape + (n_new,), dtype=dftype)], axis=-1
+            )
+            s_NMDA_components = np.concatenate(
+                [np.asarray(s_NMDA_components, dtype=dftype), np.zeros(state_shape + (n_new,), dtype=dftype)], axis=-1
+            )
+
         if n_nmda > 0 and dx_nmda_ev.shape[-1] != n_nmda:
             if dx_nmda_ev.shape[-1] < n_nmda:
                 pad = np.zeros(state_shape + (n_nmda - dx_nmda_ev.shape[-1],), dtype=dftype)
@@ -1105,6 +1112,8 @@ class iaf_bw_2001_exact(NESTNeuron):
                 dx_nmda_ev = dx_nmda_ev[..., :n_nmda]
 
         # Adaptive RKF45 integration via generic integrator.
+        # V evolves freely (no in-ODE refractory clamp or spike reset)
+        # to match NEST's GSL integration semantics.
         ode_state = DotDict(
             V=V,
             s_AMPA=s_AMPA,
@@ -1112,29 +1121,40 @@ class iaf_bw_2001_exact(NESTNeuron):
             x_NMDA=x_NMDA,
             s_NMDA_components=s_NMDA_components,
         )
-        extra = DotDict(
-            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
-            r=r,
+        ode_extra = DotDict(
             unstable=jnp.array(False),
             i_stim=i_stim,
             nmda_weights=nmda_weights_val,
         )
 
-        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
-        V = ode_state.V
+        ode_state, h, ode_extra = self.integrator(state=ode_state, h=h, extra=ode_extra)
+        V = ode_state.V        # freely-evolved post-ODE V (may exceed V_th)
         s_AMPA = ode_state.s_AMPA
         s_GABA = ode_state.s_GABA
         x_NMDA = ode_state.x_NMDA
         s_NMDA_components = ode_state.s_NMDA_components
-        spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable
+        unstable = ode_extra.unstable
 
         # Post-loop stability check.
         brainstate.transform.jit_error_if(
             jnp.any(unstable), 'Numerical instability in iaf_bw_2001_exact dynamics.'
         )
 
-        # Decrement refractory counter.
-        r = u.math.where(r > 0, r - 1, r)
+        # Compute NMDA weighted sum and synaptic currents for recording.
+        # Use the freely-evolved post-ODE V (before any spike reset or refractory clamp),
+        # matching NEST's recording semantics where currents are snapshotted pre-reset.
+        if n_nmda > 0:
+            s_nmda_sum = u.math.sum(nmda_weights_val * s_NMDA_components, axis=-1)
+        else:
+            s_nmda_sum = u.math.zeros(self.varshape, dtype=dftype)
+
+        v_for_current = V  # pre-reset, freely-evolved V
+        i_ampa = s_AMPA * (v_for_current - self.E_ex)
+        i_gaba = s_GABA * (v_for_current - self.E_in)
+        v_mV = v_for_current / u.mV
+        conc_Mg2_mM = self.conc_Mg2 / u.mM
+        denom = 1.0 + conc_Mg2_mM * u.math.exp(-0.062 * v_mV) / 3.57
+        i_nmda = (v_for_current - self.E_ex) / denom * s_nmda_sum * u.nS
 
         # Apply synaptic spike inputs (applied after integration).
         s_AMPA = s_AMPA + ds_ampa * u.nS
@@ -1142,20 +1162,16 @@ class iaf_bw_2001_exact(NESTNeuron):
         if n_nmda > 0:
             x_NMDA = x_NMDA + dx_nmda_ev
 
-        # Compute NMDA weighted sum for recording.
-        if n_nmda > 0:
-            s_nmda_sum = u.math.sum(nmda_weights_val * s_NMDA_components, axis=-1)
-        else:
-            s_nmda_sum = u.math.zeros(self.varshape, dtype=dftype)
+        # Post-ODE spike detection and refractory handling (matches NEST ordering).
+        # Refractory neurons: clamp V to V_reset, decrement counter.
+        is_refractory = r > 0
+        V = u.math.where(is_refractory, self.V_reset, V)
+        r = u.math.where(is_refractory, r - 1, r)
 
-        # Compute synaptic currents for recording.
-        v_for_current = V
-        i_ampa = s_AMPA * (v_for_current - self.E_ex)
-        i_gaba = s_GABA * (v_for_current - self.E_in)
-        v_mV = v_for_current / u.mV
-        conc_Mg2_mM = self.conc_Mg2 / u.mM
-        denom = 1.0 + conc_Mg2_mM * u.math.exp(-0.062 * v_mV) / 3.57
-        i_nmda = (v_for_current - self.E_ex) / denom * s_nmda_sum * u.nS
+        # Non-refractory neurons: check threshold, emit spike, reset V, enter refractoriness.
+        spike_mask = (~is_refractory) & (V >= self.V_th)
+        V = u.math.where(spike_mask, self.V_reset, V)
+        r = u.math.where(spike_mask & (self.ref_count > 0), self.ref_count, r)
 
         # Write back state.
         self.V.value = V

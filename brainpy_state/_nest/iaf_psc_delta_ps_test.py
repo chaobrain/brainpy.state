@@ -20,6 +20,7 @@ import unittest
 
 import brainstate
 import braintools
+import numpy as np
 import saiunit as u
 import jax.numpy as jnp
 from brainpy.state import iaf_psc_delta_ps
@@ -110,11 +111,16 @@ class TestIAFPscDeltaPS(unittest.TestCase):
                     neuron.init_state()
 
                     steps = int(round(duration / dt))
-                    for k in range(steps):
-                        self._step(neuron, k)
+
+                    def _run_step(k):
+                        with brainstate.environ.context(t=k * dt_q):
+                            neuron.update(x=0.0 * u.pA)
+                        return neuron.V.value / u.mV
+
+                    v_trace = brainstate.transform.for_loop(_run_step, jnp.arange(steps))
 
                     expected = 1000. * 10. / 250. * (1. - math.exp(-duration / 10.))
-                    vm = float((neuron.V.value / u.mV)[0])
+                    vm = float(v_trace[-1, 0])
                     self.assertAlmostEqual(vm, expected, delta=atol)
 
     def test_first_spike_time_from_dc_current_matches_analytic(self):
@@ -161,16 +167,26 @@ class TestIAFPscDeltaPS(unittest.TestCase):
             # absolute time T must be queued in step index (T - dt) / dt.
             step_ids = {int(round((t - 0.01) / 0.01)) for t in input_times}
 
-            first_spike_time = None
-            for k in range(int(round(200.0 / 0.01))):
-                if k in step_ids:
-                    spk = self._step(neuron, k, delta=2.5 * u.mV)
-                else:
-                    spk = self._step(neuron, k)
-                if first_spike_time is None and self._is_spike(spk):
-                    first_spike_time = float((neuron.last_spike_time.value / u.ms)[0])
+            n_steps = int(round(200.0 / 0.01))
 
-            self.assertIsNotNone(first_spike_time)
+            # Pre-compute delta array: 2.5 mV at spike steps, 0 elsewhere.
+            delta_vals = jnp.zeros(n_steps)
+            for sid in step_ids:
+                delta_vals = delta_vals.at[sid].set(2.5)
+
+            def _run_step(k):
+                with brainstate.environ.context(t=k * dt):
+                    neuron.add_delta_input('w', delta_vals[k] * u.mV)
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk, neuron.last_spike_time.value / u.ms
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            all_spk = np.asarray(results[0])        # (n_steps, 1)
+            all_spike_times = np.asarray(results[1])  # (n_steps, 1)
+
+            spiked_steps = np.where(all_spk[:, 0] > 0)[0]
+            self.assertGreater(len(spiked_steps), 0, 'Expected at least one spike')
+            first_spike_time = float(all_spike_times[spiked_steps[0], 0])
             self.assertAlmostEqual(first_spike_time, 4.1, delta=1e-6)
 
     def test_refractory_input_discounting_with_precise_event(self):
@@ -201,8 +217,10 @@ class TestIAFPscDeltaPS(unittest.TestCase):
                     break
 
             self.assertIsNotNone(release_step)
-            expected_v = -70.0 + buffered
-            self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), expected_v, delta=1e-6)
+            # Model computes v_i in float64, but JAX stores as float32 (x64 disabled).
+            # Round expected to float32 to match stored precision.
+            expected_v = float(np.float32(-70.0 + buffered))
+            self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), expected_v, delta=1e-9)
             self.assertAlmostEqual(float((neuron.refractory_spike_buffer.value / u.mV)[0]), 0.0, delta=1e-9)
 
     def test_super_threshold_initialization_spikes_immediately(self):

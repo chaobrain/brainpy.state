@@ -740,19 +740,21 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
 
             spike_delivery_steps = {10, 21}
 
-            V_trace = []
-            g_ex_trace = []
+            # Pre-compute per-step excitatory spike inputs as a JAX array
+            n_steps = 50
+            spike_vals = jnp.zeros((n_steps, 1))
+            for _s in spike_delivery_steps:
+                spike_vals = spike_vals.at[_s].set(1.0)
 
-            for k in range(50):
-                dc_current = 100.0 * u.pA
-                spike_input = None
-                if k in spike_delivery_steps:
-                    spike_input = 1.0 * u.nS
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=100.0 * u.pA)
+                neuron.g_ex.value = neuron.g_ex.value + spike_vals[k] * u.nS
+                return neuron.V.value / u.mV
 
-                self._step(neuron, k, x=dc_current, delta=spike_input)
-
-                V_trace.append(_V_mV(neuron))
-                g_ex_trace.append(_g_nS(neuron.g_ex.value))
+            V_trace = list(np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            ))
 
             # During the fast AP phase (steps 1-10), allow larger tolerance
             # because the stiff dynamics amplify solver differences.
@@ -787,16 +789,22 @@ class TestHHCondExpTraubNESTReference(unittest.TestCase):
             neuron.init_state()
 
             spike_delivery_steps = {10, 21}
-            g_ex_trace = []
 
-            for k in range(50):
-                dc_current = 100.0 * u.pA
-                spike_input = None
-                if k in spike_delivery_steps:
-                    spike_input = 1.0 * u.nS
+            # Pre-compute per-step excitatory spike inputs as a JAX array
+            n_steps = 50
+            spike_vals = jnp.zeros((n_steps, 1))
+            for _s in spike_delivery_steps:
+                spike_vals = spike_vals.at[_s].set(1.0)
 
-                self._step(neuron, k, x=dc_current, delta=spike_input)
-                g_ex_trace.append(_g_nS(neuron.g_ex.value))
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=100.0 * u.pA)
+                neuron.g_ex.value = neuron.g_ex.value + spike_vals[k] * u.nS
+                return neuron.g_ex.value / u.nS
+
+            g_ex_trace = list(np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            ))
 
             # Compare g_ex against reference
             for k in range(min(len(self.reference_g_ex), len(g_ex_trace))):

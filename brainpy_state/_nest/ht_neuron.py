@@ -802,7 +802,7 @@ class ht_neuron(NESTNeuron):
     GABA_A = 3
     GABA_B = 4
 
-    _MIN_H = 1e-8 * u.ms
+    _MIN_H = 1e-8  # ms (dimensionless float — state variables are unitless)
     _MAX_ITERS = 100000
 
     def __init__(
@@ -933,7 +933,16 @@ class ht_neuron(NESTNeuron):
         self._cond_step_GABA_A = g_peak_GABA_A * _beta_normalization_factor(tau_rise_GABA_A, tau_decay_GABA_A)
         self._cond_step_GABA_B = g_peak_GABA_B * _beta_normalization_factor(tau_rise_GABA_B, tau_decay_GABA_B)
 
-        # Adaptive RKF45 integrator
+        # Pre-compute refractory step count; dt_ms is a plain float (ms)
+        # because all state variables in ht_neuron are dimensionless and the
+        # RK weighted-sum s + h*acc must not introduce unit mismatches.
+        dt = brainstate.environ.get_dt()
+        dt_ms = float(u.math.asarray(dt / u.ms))
+        self._dt_ms = dt_ms
+        self.ref_count = int(round(self.t_ref / dt_ms))
+
+        # Adaptive RKF45 integrator — pass dimensionless dt/min_h so that
+        # h * k_derivative stays dimensionless (same units as state leaves).
         self.integrator = AdaptiveRungeKuttaStep(
             method='RKF45',
             vf=self._vector_field,
@@ -941,14 +950,8 @@ class ht_neuron(NESTNeuron):
             min_h=self._MIN_H,
             max_iters=self._MAX_ITERS,
             atol=self.gsl_error_tol,
-            dt=brainstate.environ.get_dt()
+            dt=dt_ms,
         )
-
-        # Pre-compute refractory step count
-        ditype = brainstate.environ.ditype()
-        dt = brainstate.environ.get_dt()
-        dt_ms = float(u.math.asarray(dt / u.ms))
-        self.ref_count = int(round(self.t_ref / dt_ms))
 
         # Compute initial membrane potential (leak equilibrium) for voltage clamp
         self._V_clamp = (self.g_NaL * self.E_Na + self.g_KL * self.E_K) / (self.g_NaL + self.g_KL)
@@ -1109,7 +1112,11 @@ class ht_neuron(NESTNeuron):
 
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        dt = brainstate.environ.get_dt()
+        # Use dimensionless dt_ms so that integration_step.value is a plain
+        # float; this prevents h * k_derivative from picking up ms units when
+        # the state leaves are dimensionless (would cause UnitMismatchError
+        # in AdaptiveRungeKuttaStep._rk_weighted_sum).
+        dt_ms = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
 
         # Compute equilibrium values for intrinsic gating
         m_nmda_init = _m_eq_NMDA(V_init, self.S_act_NMDA, self.V_act_NMDA)
@@ -1203,9 +1210,11 @@ class ht_neuron(NESTNeuron):
             u.math.full(self.varshape, -1e7 * u.ms)
         )
 
-        # Integration step size
+        # Integration step size (dimensionless float in ms — must match the
+        # dimensionless dt passed to AdaptiveRungeKuttaStep so that h*k stays
+        # in the same units as the state leaves, which are all dimensionless).
         self.integration_step = brainstate.ShortTermState.init(
-            braintools.init.Constant(dt), self.varshape
+            braintools.init.Constant(dt_ms), self.varshape
         )
 
     def get_spike(self, V: ArrayLike = None):

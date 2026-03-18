@@ -42,6 +42,7 @@ os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['JAX_ENABLE_X64'] = 'True'
 
 import numpy as np
+import jax.numpy as jnp
 
 import brainstate
 import braintools
@@ -314,7 +315,8 @@ class TestGlifPsc(unittest.TestCase):
         if dy_inputs is not None:
             for port, weight in dy_inputs:
                 neuron.add_delta_input(
-                    f'receptor_{port}_step{k}', weight * u.pA
+                    f'receptor_{port}_step{k}', weight * u.pA,
+                    label=f'receptor_{port}'
                 )
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
@@ -443,34 +445,31 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=False, has_asc=False, has_theta_voltage=False,
-                dt=dt_val,
-            )
-            state = _make_ref_state(params, V_abs=-78.85)
+            x_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[50].set(300.0)
 
-            v_model = []
-            v_ref = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=x_vals[k] * u.pA)
+                return neuron.V.value / u.mV
 
-            for k in range(n_steps):
-                # Apply external current at step 50
-                if k == 50:
-                    x_val = 300.0
-                else:
-                    x_val = 0.0
+            v_model_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(v_model_all[k, 0]) for k in range(n_steps)]
 
-                spk = self._step(neuron, k, x=x_val * u.pA)
-                v_m = float((neuron.V.value / u.mV)[0])
-                v_model.append(v_m)
+        params = _make_ref_params(
+            has_theta_spike=False, has_asc=False, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        state = _make_ref_state(params, V_abs=-78.85)
 
-                # Reference
-                _ref_glif_psc_step(state, params, dt_val)
-                state['i_stim'] = x_val
-                v_ref.append(state['V_rel'] + params['E_L'])
+        v_ref = []
+        for k in range(n_steps):
+            _ref_glif_psc_step(state, params, dt_val)
+            state['i_stim'] = float(x_vals[k])
+            v_ref.append(state['V_rel'] + params['E_L'])
 
-            for k in range(n_steps):
-                self.assertAlmostEqual(v_model[k], v_ref[k], places=6,
-                                       msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}")
+        for k in range(n_steps):
+            self.assertAlmostEqual(v_model[k], v_ref[k], places=6,
+                                   msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}")
 
     def test_glif1_spike_and_refractory(self):
         r"""GLIF1: spike generation and refractory period."""
@@ -488,28 +487,30 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=False, has_asc=False, has_theta_voltage=False,
-                dt=dt_val,
-            )
-            params['I_e'] = 500.0
-            state = _make_ref_state(params, V_abs=-78.85)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
 
-            model_spikes = []
-            ref_spikes = []
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
 
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
+        params = _make_ref_params(
+            has_theta_spike=False, has_asc=False, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        params['I_e'] = 500.0
+        state = _make_ref_state(params, V_abs=-78.85)
 
-                spiked = _ref_glif_psc_step(state, params, dt_val)
-                if spiked:
-                    ref_spikes.append(k)
+        ref_spikes = []
+        for k in range(n_steps):
+            spiked = _ref_glif_psc_step(state, params, dt_val)
+            if spiked:
+                ref_spikes.append(k)
 
-            self.assertEqual(model_spikes, ref_spikes,
-                             msg="Spike times should match reference")
-            self.assertGreater(len(model_spikes), 0, "Should have at least one spike")
+        self.assertEqual(model_spikes, ref_spikes,
+                         msg="Spike times should match reference")
+        self.assertGreater(len(model_spikes), 0, "Should have at least one spike")
 
     # ------------------------------------------------------------------
     # 5. GLIF2 (LIF_R) spike-dependent threshold test
@@ -531,33 +532,35 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=True, has_asc=False, has_theta_voltage=False,
-                dt=dt_val,
-            )
-            params['I_e'] = 500.0
-            state = _make_ref_state(params, V_abs=-78.85)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
 
-            model_spikes = []
-            ref_spikes = []
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
 
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
+        params = _make_ref_params(
+            has_theta_spike=True, has_asc=False, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        params['I_e'] = 500.0
+        state = _make_ref_state(params, V_abs=-78.85)
 
-                spiked = _ref_glif_psc_step(state, params, dt_val)
-                if spiked:
-                    ref_spikes.append(k)
+        ref_spikes = []
+        for k in range(n_steps):
+            spiked = _ref_glif_psc_step(state, params, dt_val)
+            if spiked:
+                ref_spikes.append(k)
 
-            self.assertEqual(model_spikes, ref_spikes)
-            self.assertGreater(len(model_spikes), 0)
+        self.assertEqual(model_spikes, ref_spikes)
+        self.assertGreater(len(model_spikes), 0)
 
-            # Verify threshold is tracked
-            v_m = float((neuron.V.value / u.mV)[0])
-            E_L = -78.85
-            v_rel = v_m - E_L
-            self.assertAlmostEqual(v_rel, state['V_rel'], places=1)
+        # Verify threshold is tracked
+        v_m = float((neuron.V.value / u.mV)[0])
+        E_L = -78.85
+        v_rel = v_m - E_L
+        self.assertAlmostEqual(v_rel, state['V_rel'], places=1)
 
     # ------------------------------------------------------------------
     # 6. GLIF3 (LIF_ASC) after-spike currents test
@@ -579,27 +582,29 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=False, has_asc=True, has_theta_voltage=False,
-                dt=dt_val,
-            )
-            params['I_e'] = 500.0
-            state = _make_ref_state(params, V_abs=-78.85)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
 
-            model_spikes = []
-            ref_spikes = []
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
 
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
+        params = _make_ref_params(
+            has_theta_spike=False, has_asc=True, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        params['I_e'] = 500.0
+        state = _make_ref_state(params, V_abs=-78.85)
 
-                spiked = _ref_glif_psc_step(state, params, dt_val)
-                if spiked:
-                    ref_spikes.append(k)
+        ref_spikes = []
+        for k in range(n_steps):
+            spiked = _ref_glif_psc_step(state, params, dt_val)
+            if spiked:
+                ref_spikes.append(k)
 
-            self.assertEqual(model_spikes, ref_spikes)
-            self.assertGreater(len(model_spikes), 0)
+        self.assertEqual(model_spikes, ref_spikes)
+        self.assertGreater(len(model_spikes), 0)
 
     # ------------------------------------------------------------------
     # 7. GLIF4 (LIF_R_ASC) combined test
@@ -621,27 +626,29 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=True, has_asc=True, has_theta_voltage=False,
-                dt=dt_val,
-            )
-            params['I_e'] = 500.0
-            state = _make_ref_state(params, V_abs=-78.85)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
 
-            model_spikes = []
-            ref_spikes = []
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
 
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
+        params = _make_ref_params(
+            has_theta_spike=True, has_asc=True, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        params['I_e'] = 500.0
+        state = _make_ref_state(params, V_abs=-78.85)
 
-                spiked = _ref_glif_psc_step(state, params, dt_val)
-                if spiked:
-                    ref_spikes.append(k)
+        ref_spikes = []
+        for k in range(n_steps):
+            spiked = _ref_glif_psc_step(state, params, dt_val)
+            if spiked:
+                ref_spikes.append(k)
 
-            self.assertEqual(model_spikes, ref_spikes)
-            self.assertGreater(len(model_spikes), 0)
+        self.assertEqual(model_spikes, ref_spikes)
+        self.assertGreater(len(model_spikes), 0)
 
     # ------------------------------------------------------------------
     # 8. GLIF5 (LIF_R_ASC_A) full model test
@@ -663,39 +670,40 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=True, has_asc=True, has_theta_voltage=True,
-                dt=dt_val,
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(results[0][k, 0]) > 0]
+            v_model = [float(results[1][k, 0]) for k in range(n_steps)]
+
+        params = _make_ref_params(
+            has_theta_spike=True, has_asc=True, has_theta_voltage=True,
+            dt=dt_val,
+        )
+        params['I_e'] = 500.0
+        state = _make_ref_state(params, V_abs=-78.85)
+
+        ref_spikes = []
+        v_ref = []
+        for k in range(n_steps):
+            spiked = _ref_glif_psc_step(state, params, dt_val)
+            if spiked:
+                ref_spikes.append(k)
+            v_ref.append(state['V_rel'] + params['E_L'])
+
+        self.assertEqual(model_spikes, ref_spikes)
+        self.assertGreater(len(model_spikes), 0)
+
+        # Check voltage trace agreement (relaxed tolerance due to
+        # RKF45 vs exact propagator difference in bio-reset voltage)
+        for k in range(n_steps):
+            self.assertAlmostEqual(
+                v_model[k], v_ref[k], places=1,
+                msg=f"Step {k}: model={v_model[k]:.8f}, ref={v_ref[k]:.8f}"
             )
-            params['I_e'] = 500.0
-            state = _make_ref_state(params, V_abs=-78.85)
-
-            model_spikes = []
-            ref_spikes = []
-            v_model = []
-            v_ref = []
-
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-
-                spiked = _ref_glif_psc_step(state, params, dt_val)
-                if spiked:
-                    ref_spikes.append(k)
-                v_ref.append(state['V_rel'] + params['E_L'])
-
-            self.assertEqual(model_spikes, ref_spikes)
-            self.assertGreater(len(model_spikes), 0)
-
-            # Check voltage trace agreement (relaxed tolerance due to
-            # RKF45 vs exact propagator difference in bio-reset voltage)
-            for k in range(n_steps):
-                self.assertAlmostEqual(
-                    v_model[k], v_ref[k], places=1,
-                    msg=f"Step {k}: model={v_model[k]:.8f}, ref={v_ref[k]:.8f}"
-                )
 
     # ------------------------------------------------------------------
     # 9. Alpha-function PSC current test
@@ -724,25 +732,28 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Inject one spike of weight 1.0 at step 10
-            y2_trace = []
-            for k in range(n_steps):
-                if k == 10:
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                else:
-                    self._step(neuron, k)
-                y2_trace.append(float((neuron.y2[0].value / u.pA)[0]))
+            # Inject one spike of weight 1.0 at step 10; zero elsewhere
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
 
-            # Peak should be approximately 1 pA at t = tau_syn = 2.0 ms
-            # i.e., at step 10 + 2.0/0.01 = 210
-            peak_idx = np.argmax(y2_trace)
-            peak_time_ms = (peak_idx - 10) * dt_val
-            self.assertAlmostEqual(peak_time_ms, tau_syn_val, delta=0.1,
-                                   msg=f"Peak at {peak_time_ms} ms, expected ~{tau_syn_val} ms")
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.y2[0].value / u.pA
 
-            # Peak current should be approximately 1 pA
-            self.assertAlmostEqual(y2_trace[peak_idx], 1.0, delta=0.05,
-                                   msg=f"Peak I={y2_trace[peak_idx]} pA, expected ~1.0 pA")
+            y2_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            y2_trace = [float(y2_all[k, 0]) for k in range(n_steps)]
+
+        # Peak should be approximately 1 pA at t = tau_syn = 2.0 ms
+        # i.e., at step 10 + 2.0/0.01 = 210
+        peak_idx = np.argmax(y2_trace)
+        peak_time_ms = (peak_idx - 10) * dt_val
+        self.assertAlmostEqual(peak_time_ms, tau_syn_val, delta=0.1,
+                               msg=f"Peak at {peak_time_ms} ms, expected ~{tau_syn_val} ms")
+
+        # Peak current should be approximately 1 pA
+        self.assertAlmostEqual(y2_trace[peak_idx], 1.0, delta=0.05,
+                               msg=f"Peak I={y2_trace[peak_idx]} pA, expected ~1.0 pA")
 
     def test_synaptic_current_depolarizes(self):
         r"""Positive synaptic current input should depolarize membrane."""
@@ -773,7 +784,7 @@ class TestGlifPsc(unittest.TestCase):
             )
             exc.init_state()
 
-            # Step 0: inject spike
+            # Step 0: inject spike to exc, zero to base
             self._step(base, 0)
             self._step(exc, 0, dy_inputs=[(0, 50.0)])  # positive weight
 
@@ -808,7 +819,7 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Run until first spike
+            # Run until first spike (Python loop — breaks on condition)
             spike_step = None
             for k in range(2000):
                 spk = self._step(neuron, k)
@@ -899,32 +910,42 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=True, has_asc=True, has_theta_voltage=True,
-                dt=dt_val,
-            )
-            params['I_e'] = 500.0
-            state = _make_ref_state(params, V_abs=-78.85)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron._threshold_state.value,
+                    neuron._threshold_spike_state.value,
+                    neuron._threshold_voltage_state.value,
+                )
 
-            for k in range(n_steps):
-                self._step(neuron, k)
-                _ref_glif_psc_step(state, params, dt_val)
+            brainstate.transform.for_loop(_body, jnp.arange(n_steps))
 
-            # Compare threshold components
-            th_model = float(neuron._threshold[0])
-            th_ref = state['threshold']
-            self.assertAlmostEqual(th_model, th_ref, places=4,
-                                   msg=f"Threshold: model={th_model}, ref={th_ref}")
+        params = _make_ref_params(
+            has_theta_spike=True, has_asc=True, has_theta_voltage=True,
+            dt=dt_val,
+        )
+        params['I_e'] = 500.0
+        state = _make_ref_state(params, V_abs=-78.85)
 
-            th_spk_model = float(neuron._threshold_spike[0])
-            th_spk_ref = state['threshold_spike']
-            self.assertAlmostEqual(th_spk_model, th_spk_ref, places=4,
-                                   msg=f"Threshold spike: model={th_spk_model}, ref={th_spk_ref}")
+        for k in range(n_steps):
+            _ref_glif_psc_step(state, params, dt_val)
 
-            th_vlt_model = float(neuron._threshold_voltage[0])
-            th_vlt_ref = state['threshold_voltage']
-            self.assertAlmostEqual(th_vlt_model, th_vlt_ref, places=4,
-                                   msg=f"Threshold voltage: model={th_vlt_model}, ref={th_vlt_ref}")
+        # Compare threshold components
+        th_model = float(neuron._threshold[0])
+        th_ref = state['threshold']
+        self.assertAlmostEqual(th_model, th_ref, places=4,
+                               msg=f"Threshold: model={th_model}, ref={th_ref}")
+
+        th_spk_model = float(neuron._threshold_spike[0])
+        th_spk_ref = state['threshold_spike']
+        self.assertAlmostEqual(th_spk_model, th_spk_ref, places=4,
+                               msg=f"Threshold spike: model={th_spk_model}, ref={th_spk_ref}")
+
+        th_vlt_model = float(neuron._threshold_voltage[0])
+        th_vlt_ref = state['threshold_voltage']
+        self.assertAlmostEqual(th_vlt_model, th_vlt_ref, places=4,
+                               msg=f"Threshold voltage: model={th_vlt_model}, ref={th_vlt_ref}")
 
     # ------------------------------------------------------------------
     # 14. Synaptic current y1/y2 trace against reference
@@ -948,41 +969,48 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                tau_syn=(tau_syn_val,),
-                has_theta_spike=False, has_asc=False, has_theta_voltage=False,
-                dt=dt_val,
+            # Spike of weight 1.0 at step 10; zero elsewhere
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
+
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron.y1[0].value / (u.pA / u.ms),
+                    neuron.y2[0].value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            y1_model = [float(results[0][k, 0]) for k in range(n_steps)]
+            y2_model = [float(results[1][k, 0]) for k in range(n_steps)]
+
+        params = _make_ref_params(
+            tau_syn=(tau_syn_val,),
+            has_theta_spike=False, has_asc=False, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        state = _make_ref_state(params, V_abs=-78.85)
+
+        y1_ref = []
+        y2_ref = []
+        for k in range(n_steps):
+            if k == 10:
+                _ref_glif_psc_step(state, params, dt_val, spike_weights=[1.0])
+            else:
+                _ref_glif_psc_step(state, params, dt_val)
+            y1_ref.append(state['y1'][0])
+            y2_ref.append(state['y2'][0])
+
+        for k in range(n_steps):
+            self.assertAlmostEqual(
+                y1_model[k], y1_ref[k], places=10,
+                msg=f"y1 step {k}: model={y1_model[k]}, ref={y1_ref[k]}"
             )
-            state = _make_ref_state(params, V_abs=-78.85)
-
-            y1_model = []
-            y2_model = []
-            y1_ref = []
-            y2_ref = []
-
-            for k in range(n_steps):
-                if k == 10:
-                    spike_w = [1.0]
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                    _ref_glif_psc_step(state, params, dt_val, spike_weights=spike_w)
-                else:
-                    self._step(neuron, k)
-                    _ref_glif_psc_step(state, params, dt_val)
-
-                y1_model.append(float((neuron.y1[0].value / (u.pA / u.ms))[0]))
-                y2_model.append(float((neuron.y2[0].value / u.pA)[0]))
-                y1_ref.append(state['y1'][0])
-                y2_ref.append(state['y2'][0])
-
-            for k in range(n_steps):
-                self.assertAlmostEqual(
-                    y1_model[k], y1_ref[k], places=10,
-                    msg=f"y1 step {k}: model={y1_model[k]}, ref={y1_ref[k]}"
-                )
-                self.assertAlmostEqual(
-                    y2_model[k], y2_ref[k], places=10,
-                    msg=f"y2 step {k}: model={y2_model[k]}, ref={y2_ref[k]}"
-                )
+            self.assertAlmostEqual(
+                y2_model[k], y2_ref[k], places=10,
+                msg=f"y2 step {k}: model={y2_model[k]}, ref={y2_ref[k]}"
+            )
 
     # ------------------------------------------------------------------
     # 15. Multiple synaptic time constants with different inputs
@@ -1007,37 +1035,42 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                tau_syn=tau_syn_list,
-                has_theta_spike=False, has_asc=False, has_theta_voltage=False,
-                dt=dt_val,
+            # Spikes at steps 20 (receptor 0, weight 5.0) and 50 (receptor 1, weight 3.0)
+            w0 = jnp.zeros(n_steps, dtype=jnp.float64).at[20].set(5.0)
+            w1 = jnp.zeros(n_steps, dtype=jnp.float64).at[50].set(3.0)
+
+            def _body(k):
+                neuron.add_delta_input('w0', w0[k] * u.pA, label='receptor_0')
+                neuron.add_delta_input('w1', w1[k] * u.pA, label='receptor_1')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV
+
+            v_model_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(v_model_all[k, 0]) for k in range(n_steps)]
+
+        params = _make_ref_params(
+            tau_syn=tau_syn_list,
+            has_theta_spike=False, has_asc=False, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        state = _make_ref_state(params, V_abs=-78.85)
+
+        v_ref = []
+        for k in range(n_steps):
+            if k == 20:
+                _ref_glif_psc_step(state, params, dt_val, spike_weights=[5.0, 0.0])
+            elif k == 50:
+                _ref_glif_psc_step(state, params, dt_val, spike_weights=[0.0, 3.0])
+            else:
+                _ref_glif_psc_step(state, params, dt_val)
+            v_ref.append(state['V_rel'] + params['E_L'])
+
+        for k in range(n_steps):
+            self.assertAlmostEqual(
+                v_model[k], v_ref[k], places=6,
+                msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}"
             )
-            state = _make_ref_state(params, V_abs=-78.85)
-
-            v_model = []
-            v_ref = []
-
-            for k in range(n_steps):
-                if k == 20:
-                    # Spike to receptor 0
-                    self._step(neuron, k, dy_inputs=[(0, 5.0)])
-                    _ref_glif_psc_step(state, params, dt_val, spike_weights=[5.0, 0.0])
-                elif k == 50:
-                    # Spike to receptor 1
-                    self._step(neuron, k, dy_inputs=[(1, 3.0)])
-                    _ref_glif_psc_step(state, params, dt_val, spike_weights=[0.0, 3.0])
-                else:
-                    self._step(neuron, k)
-                    _ref_glif_psc_step(state, params, dt_val)
-
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                v_ref.append(state['V_rel'] + params['E_L'])
-
-            for k in range(n_steps):
-                self.assertAlmostEqual(
-                    v_model[k], v_ref[k], places=6,
-                    msg=f"Step {k}: model={v_model[k]}, ref={v_ref[k]}"
-                )
 
     # ------------------------------------------------------------------
     # 16. GLIF1 voltage trace matches reference exactly
@@ -1059,36 +1092,37 @@ class TestGlifPsc(unittest.TestCase):
             )
             neuron.init_state()
 
-            params = _make_ref_params(
-                has_theta_spike=False, has_asc=False, has_theta_voltage=False,
-                dt=dt_val,
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(results[0][k, 0]) > 0]
+            v_model = [float(results[1][k, 0]) for k in range(n_steps)]
+
+        params = _make_ref_params(
+            has_theta_spike=False, has_asc=False, has_theta_voltage=False,
+            dt=dt_val,
+        )
+        params['I_e'] = 400.0
+        state = _make_ref_state(params, V_abs=-78.85)
+
+        ref_spikes = []
+        v_ref = []
+        for k in range(n_steps):
+            spiked = _ref_glif_psc_step(state, params, dt_val)
+            if spiked:
+                ref_spikes.append(k)
+            v_ref.append(state['V_rel'] + params['E_L'])
+
+        self.assertEqual(model_spikes, ref_spikes)
+
+        for k in range(n_steps):
+            self.assertAlmostEqual(
+                v_model[k], v_ref[k], places=8,
+                msg=f"Step {k}: model={v_model[k]:.10f}, ref={v_ref[k]:.10f}"
             )
-            params['I_e'] = 400.0
-            state = _make_ref_state(params, V_abs=-78.85)
-
-            v_model = []
-            v_ref = []
-            model_spikes = []
-            ref_spikes = []
-
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-
-                spiked = _ref_glif_psc_step(state, params, dt_val)
-                if spiked:
-                    ref_spikes.append(k)
-                v_ref.append(state['V_rel'] + params['E_L'])
-
-            self.assertEqual(model_spikes, ref_spikes)
-
-            for k in range(n_steps):
-                self.assertAlmostEqual(
-                    v_model[k], v_ref[k], places=8,
-                    msg=f"Step {k}: model={v_model[k]:.10f}, ref={v_ref[k]:.10f}"
-                )
 
 
 if __name__ == '__main__':

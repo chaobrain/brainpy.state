@@ -174,6 +174,7 @@ class TestIAFChs2007(unittest.TestCase):
 
     def test_reference_trace_matches_nest_step_logic(self):
         with brainstate.environ.context(dt=self.dt):
+            import jax.numpy as jnp
             dftype = brainstate.environ.dftype()
             noise = np.linspace(-1.0, 1.0, 256, dtype=dftype)
             neuron = iaf_chs_2007(
@@ -189,7 +190,7 @@ class TestIAFChs2007(unittest.TestCase):
             neuron.init_state()
 
             w_seq = [0.0, 50.0, 0.0, -20.0, 0.0, 0.0, 30.0, 0.0, 0.0, 10.0, 0.0, -7.0, 0.0, 0.0, 0.0] + [0.0] * 30
-            x_seq = [100.0 * u.pA if (k % 2 == 0) else -70.0 * u.pA for k in range(len(w_seq))]
+            n_steps = len(w_seq)
 
             params = {
                 'dt': 0.1,
@@ -208,19 +209,56 @@ class TestIAFChs2007(unittest.TestCase):
                 'position': 0,
             }
 
-            spikes_model = []
+            # Build reference traces with the Python scalar reference loop.
+            ref_i_syn_ex = []
+            ref_V_syn = []
+            ref_V_spike = []
+            ref_V_m = []
+            ref_position = []
             spikes_ref = []
-
-            for k, (w, x) in enumerate(zip(w_seq, x_seq)):
-                spk = self._step(neuron, k, x=x, delta_weights=[w] if w != 0.0 else None)
-                spikes_model.append(self._is_spike(spk))
+            for w in w_seq:
                 spikes_ref.append(_reference_step(ref_state, params, w))
+                ref_i_syn_ex.append(ref_state['i_syn_ex'])
+                ref_V_syn.append(ref_state['V_syn'])
+                ref_V_spike.append(ref_state['V_spike'])
+                ref_V_m.append(ref_state['V_m'])
+                ref_position.append(ref_state['position'])
 
-                self.assertAlmostEqual(self._scalar(neuron.i_syn_ex.value), ref_state['i_syn_ex'], delta=1e-10)
-                self.assertAlmostEqual(self._scalar(neuron.V_syn.value), ref_state['V_syn'], delta=1e-10)
-                self.assertAlmostEqual(self._scalar(neuron.V_spike.value), ref_state['V_spike'], delta=1e-10)
-                self.assertAlmostEqual(self._scalar(neuron.V.value), ref_state['V_m'], delta=1e-10)
-                self.assertEqual(int(np.asarray(neuron.position.value).reshape(-1)[0]), ref_state['position'])
+            # Pre-compute per-step weights as a JAX array so the loop body has
+            # a fixed, JIT-traceable graph.
+            w_array = jnp.array(w_seq, dtype=dftype)
+
+            def _body(k):
+                # Always add the weight; clamping to 0 inside update() matches
+                # the original "delta_weights=[w] if w != 0.0 else None" semantics.
+                neuron.add_delta_input('w_ex', w_array[k], label='w_ex')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update()
+                return (
+                    spk,
+                    neuron.i_syn_ex.value,
+                    neuron.V_syn.value,
+                    neuron.V_spike.value,
+                    neuron.V.value,
+                    neuron.position.value,
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+
+            # results[i] has shape (n_steps, 1); [k, 0] extracts step k, neuron 0.
+            spikes_model = [bool(float(results[0][k, 0]) > 0.5) for k in range(n_steps)]
+            i_syn_trace = np.asarray(results[1][:, 0])
+            V_syn_trace = np.asarray(results[2][:, 0])
+            V_spike_trace = np.asarray(results[3][:, 0])
+            V_m_trace = np.asarray(results[4][:, 0])
+            pos_trace = np.asarray(results[5][:, 0], dtype=int)
+
+            for k in range(n_steps):
+                self.assertAlmostEqual(float(i_syn_trace[k]), ref_i_syn_ex[k], delta=1e-10)
+                self.assertAlmostEqual(float(V_syn_trace[k]), ref_V_syn[k], delta=1e-10)
+                self.assertAlmostEqual(float(V_spike_trace[k]), ref_V_spike[k], delta=1e-10)
+                self.assertAlmostEqual(float(V_m_trace[k]), ref_V_m[k], delta=1e-10)
+                self.assertEqual(pos_trace[k], ref_position[k])
 
             self.assertEqual(spikes_model, spikes_ref)
             self.assertTrue(any(spikes_model))

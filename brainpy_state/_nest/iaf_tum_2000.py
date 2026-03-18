@@ -705,6 +705,48 @@ class iaf_tum_2000(NESTNeuron):
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
+        # Pre-compute propagator coefficients (constant for a given dt).
+        self._precompute_propagators()
+
+    def _precompute_propagators(self):
+        """Pre-compute NEST propagator coefficients and cached parameters from dt."""
+        dt_q = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+        h = float(bu.math.asarray(dt_q / bu.ms))
+
+        tau_ex_np = np.asarray(bu.math.asarray(self.tau_syn_ex / bu.ms), dtype=dftype)
+        tau_in_np = np.asarray(bu.math.asarray(self.tau_syn_in / bu.ms), dtype=dftype)
+        tau_m_np = np.asarray(bu.math.asarray(self.tau_m / bu.ms), dtype=dftype)
+        C_m_np = np.asarray(bu.math.asarray(self.C_m / bu.pF), dtype=dftype)
+
+        self._P11_ex = jnp.asarray(np.exp(-h / tau_ex_np))
+        self._P11_in = jnp.asarray(np.exp(-h / tau_in_np))
+        self._P22 = jnp.asarray(np.exp(-h / tau_m_np))
+        self._P21_ex = jnp.asarray(propagator_exp(tau_ex_np, tau_m_np, C_m_np, h))
+        self._P21_in = jnp.asarray(propagator_exp(tau_in_np, tau_m_np, C_m_np, h))
+        self._P20 = jnp.asarray(tau_m_np / C_m_np * (1.0 - np.exp(-h / tau_m_np)))
+        self._h = h
+
+        # Stochastic threshold cached values.
+        delta_np = np.asarray(bu.math.asarray(self.delta / bu.mV), dtype=dftype)
+        rho_np = np.asarray(bu.math.asarray(self.rho / (1 / bu.second)), dtype=dftype)
+        self._delta_np = jnp.asarray(delta_np)
+        self._rho_np = jnp.asarray(rho_np)
+        self._deterministic = self._delta_np < 1e-10
+        self._delta_safe = jnp.where(self._deterministic, 1.0, self._delta_np)
+
+        # Tsodyks cached parameters (dimensionless ms values).
+        self._tau_fac_jnp = jnp.asarray(np.asarray(bu.math.asarray(self.tau_fac / bu.ms), dtype=dftype))
+        self._tau_psc_jnp = jnp.asarray(np.asarray(bu.math.asarray(self.tau_psc / bu.ms), dtype=dftype))
+        self._tau_rec_jnp = jnp.asarray(np.asarray(bu.math.asarray(self.tau_rec / bu.ms), dtype=dftype))
+        self._U_jnp = jnp.asarray(np.asarray(bu.math.asarray(self.U), dtype=dftype))
+
+        # Refractory step count as JAX integer array.
+        self._ref_count_jnp = jnp.asarray(
+            np.asarray(bu.math.asarray(bu.math.ceil(self.t_ref / dt_q)), dtype=ditype)
+        )
+
     def get_spike(self, V: ArrayLike = None):
         r"""Compute surrogate spike output given membrane potential.
 

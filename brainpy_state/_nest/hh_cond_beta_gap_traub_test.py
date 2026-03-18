@@ -522,19 +522,27 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
             neuron.init_state()
 
-            self._step(neuron, 0)
-            g_before = _g_nS(neuron.g_ex.value)
+            # Pre-compute per-step delta: 0 nS at step 0, 5 nS at step 1, 0 nS at step 2.
+            delta_raw = jnp.array([0., 5., 0.])
+
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
+                    neuron.update(x=0. * u.pA)
+                # Return mantissa values (plain JAX arrays, no units)
+                return u.get_mantissa(neuron.dg_ex.value / u.nS), u.get_mantissa(neuron.g_ex.value / u.nS)
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(3))
+            dg_arr = np.asarray(results[0][:, 0])
+            g_arr = np.asarray(results[1][:, 0])
+
+            g_before = g_arr[0]
             self.assertAlmostEqual(g_before, 0.0, places=10)
 
-            # After a spike input, g_ex should eventually increase
-            # (the input goes to dg_ex, which then drives g_ex)
-            self._step(neuron, 1, delta=5. * u.nS)
-            dg_after = _g_nS(neuron.dg_ex.value)
+            dg_after = dg_arr[1]
             self.assertGreater(dg_after, 0.0, "dg_ex should be positive after excitatory input")
 
-            # One more step to let dg_ex drive g_ex
-            self._step(neuron, 2)
-            g_after = _g_nS(neuron.g_ex.value)
+            g_after = g_arr[2]
             self.assertGreater(g_after, 0.0, "g_ex should be positive after dg_ex drives it")
 
     def test_inhibitory_conductance_input(self):
@@ -543,9 +551,17 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             neuron = hh_cond_beta_gap_traub(1, I_e=0. * u.pA)
             neuron.init_state()
 
-            self._step(neuron, 0)
-            self._step(neuron, 1, delta=-5. * u.nS)
-            dg_in = _g_nS(neuron.dg_in.value)
+            # Pre-compute per-step delta: 0 nS at step 0, -5 nS at step 1.
+            delta_raw = jnp.array([0., -5.])
+
+            def _run_step_inh(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
+                    neuron.update(x=0. * u.pA)
+                return u.get_mantissa(neuron.dg_in.value / u.nS)
+
+            results = brainstate.transform.for_loop(_run_step_inh, jnp.arange(2))
+            dg_in = float(np.asarray(results[1, 0]))
             self.assertGreater(dg_in, 0.0, "dg_in should be positive after inhibitory input (sign flipped)")
 
     def test_beta_conductance_rise_and_decay(self):
@@ -557,16 +573,17 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Add a conductance pulse
-            self._step(neuron, 0, delta=10. * u.nS)
+            # Pre-compute per-step delta: 10 nS at step 0, 0 nS afterwards.
+            delta_raw = jnp.zeros(500).at[0].set(10.)
 
-            # Collect conductance trace
+            # Collect conductance trace (single for_loop, no separate _step call)
             def _run_step_g(k):
                 with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
                     neuron.update(x=0. * u.pA)
                 return neuron.g_ex.value / u.nS
 
-            g_trace = list(np.asarray(brainstate.transform.for_loop(_run_step_g, jnp.arange(1, 500))[:, 0]))
+            g_trace = list(np.asarray(brainstate.transform.for_loop(_run_step_g, jnp.arange(500))[:, 0]))
 
             # Conductance should first rise and then decay (beta shape)
             # Find peak index
@@ -591,13 +608,15 @@ class TestHHCondBetaGapTraubSynaptic(unittest.TestCase):
             )
             neuron.init_state()
 
-            self._step(neuron, 0, delta=10. * u.nS)
+            # Pre-compute per-step delta: 10 nS at step 0, 0 nS afterwards.
+            delta_raw = jnp.zeros(2000).at[0].set(10.)
 
             def _run_step_decay(k):
                 with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
                     neuron.update(x=0. * u.pA)
 
-            brainstate.transform.for_loop(_run_step_decay, jnp.arange(1, 2000))
+            brainstate.transform.for_loop(_run_step_decay, jnp.arange(2000))
 
             g_final = _g_nS(neuron.g_ex.value)
             self.assertAlmostEqual(g_final, 0.0, delta=1e-3,
@@ -684,19 +703,14 @@ class TestHHCondBetaGapTraubMultiStep(unittest.TestCase):
                 neuron = hh_cond_beta_gap_traub(1, I_e=I_amp * u.pA)
                 neuron.init_state()
 
-                def _run_step(k):
-                    with brainstate.environ.context(t=k * self.dt):
-                        neuron.update(x=0. * u.pA)
-
-                brainstate.transform.for_loop(_run_step, jnp.arange(1000))
-
-                def _count_step(k):
+                # Single for_loop over all 11000 steps; count only spikes from step 1000+.
+                def _run_all(k):
                     with brainstate.environ.context(t=k * self.dt):
                         spk = neuron.update(x=0. * u.pA)
                     return spk
 
-                spk_all = brainstate.transform.for_loop(_count_step, jnp.arange(1000, 11000))
-                spk_arr = np.asarray(u.get_mantissa(spk_all[:, 0]))
+                all_spk = brainstate.transform.for_loop(_run_all, jnp.arange(11000))
+                spk_arr = np.asarray(u.get_mantissa(all_spk[1000:, 0]))
                 n_spikes = int(np.sum(spk_arr > 0.0))
                 rates.append(n_spikes)
 
@@ -868,14 +882,15 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
             neuron.init_state()
 
             V_before = _V_mV(neuron)
-            # Add a large excitatory conductance
-            self._step(neuron, 0, delta=50. * u.nS)
-            # Step a few times so the beta-function conductance builds up and affects V
+            # Pre-compute per-step delta: 50 nS at step 0, 0 nS afterwards.
+            delta_raw = jnp.zeros(20).at[0].set(50.)
+
             def _run_step_ex(k):
                 with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
                     neuron.update(x=0. * u.pA)
 
-            brainstate.transform.for_loop(_run_step_ex, jnp.arange(1, 20))
+            brainstate.transform.for_loop(_run_step_ex, jnp.arange(20))
             V_after = _V_mV(neuron)
 
             self.assertGreater(V_after, V_before,
@@ -888,13 +903,15 @@ class TestHHCondBetaGapTraubEdgeCases(unittest.TestCase):
             neuron.init_state()
 
             V_before = _V_mV(neuron)
-            self._step(neuron, 0, delta=-50. * u.nS)
-            # Step a few times for the beta-function inhibitory conductance to build up
+            # Pre-compute per-step delta: -50 nS at step 0, 0 nS afterwards.
+            delta_raw = jnp.zeros(20).at[0].set(-50.)
+
             def _run_step_in(k):
                 with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
                     neuron.update(x=0. * u.pA)
 
-            brainstate.transform.for_loop(_run_step_in, jnp.arange(1, 20))
+            brainstate.transform.for_loop(_run_step_in, jnp.arange(20))
             V_after = _V_mV(neuron)
 
             self.assertLess(V_after, V_before,
@@ -934,11 +951,19 @@ class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Add unit weight spike input
-            self._step(neuron, 0, delta=1. * u.nS)
+            # Add unit weight spike input via for_loop (single step, avoids separate JIT).
+            delta_raw = jnp.array([1.])
+
+            def _run_step_ode(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
+                    neuron.update(x=0. * u.pA)
+                return neuron.dg_ex.value
+
+            results = brainstate.transform.for_loop(_run_step_ode, jnp.arange(1))
 
             # After step 0: dg_ex should have the PSConInit value
-            dg_model = _g_nS(neuron.dg_ex.value)
+            dg_model = _g_nS(results[0])
             self.assertAlmostEqual(dg_model, pscon, delta=pscon * 0.01,
                                    msg=f"dg_ex after spike should be ~PSConInit ({pscon:.6f})")
 
@@ -951,14 +976,16 @@ class TestHHCondBetaGapTraubBetaSynapseODE(unittest.TestCase):
             )
             neuron.init_state()
 
-            self._step(neuron, 0, delta=1. * u.nS)
+            # Pre-compute per-step delta: 1 nS at step 0, 0 nS afterwards.
+            delta_raw = jnp.zeros(500).at[0].set(1.)
 
             def _run_step_peak(k):
                 with brainstate.environ.context(t=k * self.dt):
+                    neuron.add_delta_input('spike_input', delta_raw[k] * u.nS)
                     neuron.update(x=0. * u.pA)
                 return neuron.g_ex.value / u.nS
 
-            g_trace = list(np.asarray(brainstate.transform.for_loop(_run_step_peak, jnp.arange(1, 500))[:, 0]))
+            g_trace = list(np.asarray(brainstate.transform.for_loop(_run_step_peak, jnp.arange(500))[:, 0]))
 
             peak_g = max(g_trace)
             # With proper normalization, peak should be ~1 nS for a unit weight spike

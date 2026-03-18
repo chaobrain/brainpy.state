@@ -596,6 +596,12 @@ class iaf_cond_alpha_mc(NESTNeuron):
         v_p = braintools.init.param(init_cfg['proximal'], self.varshape)
         v_d = braintools.init.param(init_cfg['distal'], self.varshape)
 
+        # braintools.init.param may return a scalar Quantity when the initializer
+        # is a concrete value; broadcast explicitly so V has shape (*varshape, 3).
+        v_s = u.math.broadcast_to(v_s, self.varshape)
+        v_p = u.math.broadcast_to(v_p, self.varshape)
+        v_d = u.math.broadcast_to(v_d, self.varshape)
+
         v_stack = u.math.stack([v_s, v_p, v_d], axis=-1)
         return v_stack
 
@@ -617,6 +623,47 @@ class iaf_cond_alpha_mc(NESTNeuron):
             for comp in ('soma', 'proximal', 'distal')
         ]
         return u.math.stack(vals, axis=-1)
+
+    def _parse_x_input(self, x, dftype):
+        """Parse x (scalar, array, or compartment dict) into a (*varshape, 3) pA array.
+
+        Parameters
+        ----------
+        x : ArrayLike or dict
+            External current input.  Scalar/array is applied to soma only.
+            Dict keys: ``'soma'``, ``'proximal'``, ``'distal'`` (or receptor-type
+            aliases ``'soma_curr'``, ``'proximal_curr'``, ``'distal_curr'``).
+        dftype : dtype
+            Float dtype for the zeros baseline.
+
+        Returns
+        -------
+        Quantity, shape (*varshape, 3), unit pA
+        """
+        zeros_pA = u.math.zeros(self.varshape, dtype=dftype) * u.pA
+        if isinstance(x, dict):
+            i_s = zeros_pA
+            i_p = zeros_pA
+            i_d = zeros_pA
+            for key, val in x.items():
+                val_bc = u.math.broadcast_to(val, self.varshape)
+                if key in ('soma', 'soma_curr', 7):
+                    i_s = i_s + val_bc
+                elif key in ('proximal', 'proximal_curr', 8):
+                    i_p = i_p + val_bc
+                elif key in ('distal', 'distal_curr', 9):
+                    i_d = i_d + val_bc
+                else:
+                    raise ValueError(
+                        f'Unknown current input key {key!r}. '
+                        f'Valid keys: soma, proximal, distal, '
+                        f'soma_curr, proximal_curr, distal_curr'
+                    )
+            return u.math.stack([i_s, i_p, i_d], axis=-1)
+        else:
+            # Scalar or array: apply to soma only (NEST convention).
+            i_s = u.math.broadcast_to(x, self.varshape)
+            return u.math.stack([i_s, zeros_pA, zeros_pA], axis=-1)
 
     def init_state(self, **kwargs):
         r"""Initialize all state variables.
@@ -645,12 +692,13 @@ class iaf_cond_alpha_mc(NESTNeuron):
         V = self._initial_membrane_potential()
         comp_shape = self.varshape + (self.NCOMP,)
 
-        zeros_nS_per_ms = u.math.zeros(comp_shape, dtype=V.dtype) * (u.nS / u.ms)
-
         self.V = brainstate.HiddenState(V)
-        self.dg_ex = brainstate.ShortTermState(zeros_nS_per_ms)
+        # dg_ex / dg_in are stored as plain (dimensionless) JAX arrays whose numeric
+        # value represents conductance-derivative in nS/ms.  This matches NEST's flat
+        # double state-vector convention and allows direct np.asarray() access.
+        self.dg_ex = brainstate.ShortTermState(jnp.zeros(comp_shape, dtype=V.dtype))
         self.g_ex = brainstate.HiddenState(u.math.zeros(comp_shape, dtype=dftype) * u.nS)
-        self.dg_in = brainstate.ShortTermState(u.math.zeros(comp_shape, dtype=dftype) * (u.nS / u.ms))
+        self.dg_in = brainstate.ShortTermState(jnp.zeros(comp_shape, dtype=dftype))
         self.g_in = brainstate.HiddenState(u.math.zeros(comp_shape, dtype=dftype) * u.nS)
 
         self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
@@ -717,14 +765,25 @@ class iaf_cond_alpha_mc(NESTNeuron):
         """
         is_refractory = extra.r > 0
 
-        # Effective voltages: soma clamped during refractory, others unclamped
-        v_s_eff = u.math.where(is_refractory, self.V_reset, state.V_s)
+        # Effective voltages: soma clamped during refractory; otherwise clamped
+        # to V_th (NEST convention: v_eff = min(V_s, V_th) when non-refractory).
+        # This matches NEST's iaf_cond_alpha_mc ODE which uses
+        #   v_eff = V_reset if refractory else min(V_s, V_th)
+        # The threshold clamp creates a kink in the ODE at V_s = V_th that
+        # the adaptive step-size controller can detect, keeping h in sync with
+        # the reference implementation.
+        v_s_eff = u.math.where(is_refractory, self.V_reset, u.math.minimum(state.V_s, self.V_th))
         v_p_eff = state.V_p
         v_d_eff = state.V_d
 
-        # Coupling currents
+        # Coupling currents.
+        # Soma uses the clamped v_s_eff = min(V_s, V_th); proximal and distal
+        # use the raw (un-clamped) state.V_s when computing their inter-compartment
+        # coupling.  This exactly mirrors the per-compartment loop in NEST's
+        # _dynamics_ref where each compartment has its own local v_eff and the
+        # OTHER compartment's raw state vector entry is used for the coupling term.
         i_conn_s = self.g_sp * (v_s_eff - v_p_eff)
-        i_conn_p = self.g_sp * (v_p_eff - v_s_eff) + self.g_pd * (v_p_eff - v_d_eff)
+        i_conn_p = self.g_sp * (v_p_eff - state.V_s) + self.g_pd * (v_p_eff - v_d_eff)
         i_conn_d = self.g_pd * (v_d_eff - v_p_eff)
 
         # --- Soma ---
@@ -735,34 +794,43 @@ class iaf_cond_alpha_mc(NESTNeuron):
                     + extra.i_stim[..., self.SOMA] + self.soma['I_e']) / self.soma['C_m']
         dV_s = u.math.where(is_refractory, u.math.zeros_like(dV_s_raw), dV_s_raw)
 
+        # dg_ex_s / dg_in_s are dimensionless (value in nS/ms).
+        # Their time derivative (ddg) has units 1/ms so that h[ms]*ddg = dimensionless. ✓
+        # The derivative of g_ex_s (units nS) must have units nS/ms:
+        #   dg_ex_s * (nS/ms) converts the dimensionless auxiliary variable to nS/ms. ✓
         ddg_ex_s = -state.dg_ex_s / self.soma['tau_syn_ex']
-        dg_ex_s = state.dg_ex_s - state.g_ex_s / self.soma['tau_syn_ex']
+        dg_ex_s = state.dg_ex_s * (u.nS / u.ms) - state.g_ex_s / self.soma['tau_syn_ex']
         ddg_in_s = -state.dg_in_s / self.soma['tau_syn_in']
-        dg_in_s = state.dg_in_s - state.g_in_s / self.soma['tau_syn_in']
+        dg_in_s = state.dg_in_s * (u.nS / u.ms) - state.g_in_s / self.soma['tau_syn_in']
 
         # --- Proximal ---
         i_syn_ex_p = state.g_ex_p * (v_p_eff - self.proximal['E_ex'])
         i_syn_in_p = state.g_in_p * (v_p_eff - self.proximal['E_in'])
         i_leak_p = self.proximal['g_L'] * (v_p_eff - self.proximal['E_L'])
-        dV_p = (-i_leak_p - i_syn_ex_p - i_syn_in_p - i_conn_p
-                + extra.i_stim[..., self.PROX] + self.proximal['I_e']) / self.proximal['C_m']
+        dV_p_raw = (-i_leak_p - i_syn_ex_p - i_syn_in_p - i_conn_p
+                    + extra.i_stim[..., self.PROX] + self.proximal['I_e']) / self.proximal['C_m']
+        # NEST freezes ALL compartment voltages during soma refractory (reference:
+        # f[V_M] = 0.0 if is_refractory else ... for ALL n in {SOMA, PROX, DIST}).
+        dV_p = u.math.where(is_refractory, u.math.zeros_like(dV_p_raw), dV_p_raw)
 
         ddg_ex_p = -state.dg_ex_p / self.proximal['tau_syn_ex']
-        dg_ex_p = state.dg_ex_p - state.g_ex_p / self.proximal['tau_syn_ex']
+        dg_ex_p = state.dg_ex_p * (u.nS / u.ms) - state.g_ex_p / self.proximal['tau_syn_ex']
         ddg_in_p = -state.dg_in_p / self.proximal['tau_syn_in']
-        dg_in_p = state.dg_in_p - state.g_in_p / self.proximal['tau_syn_in']
+        dg_in_p = state.dg_in_p * (u.nS / u.ms) - state.g_in_p / self.proximal['tau_syn_in']
 
         # --- Distal ---
         i_syn_ex_d = state.g_ex_d * (v_d_eff - self.distal['E_ex'])
         i_syn_in_d = state.g_in_d * (v_d_eff - self.distal['E_in'])
         i_leak_d = self.distal['g_L'] * (v_d_eff - self.distal['E_L'])
-        dV_d = (-i_leak_d - i_syn_ex_d - i_syn_in_d - i_conn_d
-                + extra.i_stim[..., self.DIST] + self.distal['I_e']) / self.distal['C_m']
+        dV_d_raw = (-i_leak_d - i_syn_ex_d - i_syn_in_d - i_conn_d
+                    + extra.i_stim[..., self.DIST] + self.distal['I_e']) / self.distal['C_m']
+        # Same NEST convention: distal voltage also frozen during refractory.
+        dV_d = u.math.where(is_refractory, u.math.zeros_like(dV_d_raw), dV_d_raw)
 
         ddg_ex_d = -state.dg_ex_d / self.distal['tau_syn_ex']
-        dg_ex_d = state.dg_ex_d - state.g_ex_d / self.distal['tau_syn_ex']
+        dg_ex_d = state.dg_ex_d * (u.nS / u.ms) - state.g_ex_d / self.distal['tau_syn_ex']
         ddg_in_d = -state.dg_in_d / self.distal['tau_syn_in']
-        dg_in_d = state.dg_in_d - state.g_in_d / self.distal['tau_syn_in']
+        dg_in_d = state.dg_in_d * (u.nS / u.ms) - state.g_in_d / self.distal['tau_syn_in']
 
         return DotDict(
             V_s=dV_s, V_p=dV_p, V_d=dV_d,
@@ -772,7 +840,12 @@ class iaf_cond_alpha_mc(NESTNeuron):
         )
 
     def _event_fn(self, state, extra, accept):
-        """In-loop spike detection, reset, and refractory handling.
+        """Stability monitoring callback (called after each accepted RK substep).
+
+        Spike detection and refractory updates are handled *outside* the
+        integrator (in ``update()``) to match NEST's reference semantics:
+        the refractory flag is fixed for the entire dt interval, and threshold
+        crossing is checked once after the integration completes.
 
         Parameters
         ----------
@@ -785,25 +858,13 @@ class iaf_cond_alpha_mc(NESTNeuron):
 
         Returns
         -------
-        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
+        (state, new_extra) with only the ``unstable`` flag updated.
         """
         unstable = extra.unstable | jnp.any(
             accept & (state.V_s < -1e3 * u.mV)
         )
-
-        # Clamp soma during refractory
-        refr_accept = accept & (extra.r > 0)
-        new_V_s = u.math.where(refr_accept, self.V_reset, state.V_s)
-
-        # Spike detection on soma only
-        spike_now = accept & (extra.r <= 0) & (new_V_s >= self.V_th)
-        spike_mask = extra.spike_mask | spike_now
-        new_V_s = u.math.where(spike_now, self.V_reset, new_V_s)
-        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, extra.r)
-
-        new_state = DotDict({**state, 'V_s': new_V_s})
-        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
-        return new_state, new_extra
+        new_extra = DotDict({**extra, 'unstable': unstable})
+        return state, new_extra
 
     def update(self, x=0. * u.pA, spike_events=None, current_events=None):
         r"""Advance the neuron state by one time step.
@@ -896,8 +957,9 @@ class iaf_cond_alpha_mc(NESTNeuron):
         i_stim = self.I_stim.value  # pA, shape (*varshape, 3)
         h = self.integration_step.value  # ms
 
-        # Current input for next step (one-step delay).
-        new_i_stim = self.sum_current_inputs(x, self.V.value[..., self.SOMA])  # pA
+        # Parse x into per-compartment array (*varshape, 3) for next step (one-step delay).
+        x_arr = self._parse_x_input(x, dftype)
+        new_i_stim = self.sum_current_inputs(x_arr, self.V.value[..., self.SOMA])  # pA
 
         # Build ODE state as flat per-compartment DotDict
         ode_state = DotDict(
@@ -918,45 +980,111 @@ class iaf_cond_alpha_mc(NESTNeuron):
 
         # Adaptive RKF45 integration via generic integrator.
         ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
-        spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable
+        unstable = extra.unstable
+        # extra.r is unchanged: _event_fn no longer modifies it, so it equals
+        # the initial r read above.  Use the original r variable directly.
 
         # Post-loop stability check.
         brainstate.transform.jit_error_if(
             jnp.any(unstable), 'Numerical instability in iaf_cond_alpha_mc dynamics.'
         )
 
-        # Decrement refractory counter.
-        r = u.math.where(r > 0, r - 1, r)
+        # Post-integration spike detection and refractory update (NEST semantics).
+        # This mirrors _reference_step / _rkf45_ref_step: refractory state is
+        # fixed during integration; threshold is checked once after the full dt.
+        refr_active = r > 0
+        spike_mask = (~refr_active) & (ode_state.V_s >= self.V_th)
+
+        # Reset somatic voltage: V_reset during refractory, V_reset on spike.
+        V_s_post = u.math.where(refr_active | spike_mask, self.V_reset, ode_state.V_s)
+
+        # Update refractory counter: set to ref_count on new spike, decrement
+        # by 1 if already refractory, else keep at 0.
+        r_new = jnp.asarray(
+            u.get_mantissa(
+                u.math.where(
+                    spike_mask,
+                    self.ref_count,
+                    u.math.where(refr_active, r - 1, r),
+                )
+            ),
+            dtype=ditype,
+        )
 
         # Synaptic spike inputs (applied after integration).
-        # Per-compartment excitatory/inhibitory: soma, proximal, distal
-        tau_syn_ex = self._stack_compartment_param('tau_syn_ex')  # (*varshape, 3)
-        tau_syn_in = self._stack_compartment_param('tau_syn_in')  # (*varshape, 3)
-        pscon_ex = np.e / tau_syn_ex  # 1/ms, (*varshape, 3)
-        pscon_in = np.e / tau_syn_in  # 1/ms, (*varshape, 3)
+        # Use dimensionless pscon (value in 1/ms) so that dg_ex (dimensionless) stays
+        # dimensionless after: dg_ex += pscon * w_nS.
+        tau_syn_ex = self._stack_compartment_param('tau_syn_ex')  # (*varshape, 3), ms
+        tau_syn_in = self._stack_compartment_param('tau_syn_in')  # (*varshape, 3), ms
+        pscon_ex = np.e / u.get_mantissa(tau_syn_ex / u.ms)  # (*varshape, 3), dimensionless (1/ms)
+        pscon_in = np.e / u.get_mantissa(tau_syn_in / u.ms)  # (*varshape, 3), dimensionless (1/ms)
 
-        w_ex_s = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value[..., self.SOMA]), label='w_ex_s')
-        w_in_s = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value[..., self.SOMA]), label='w_in_s')
-        w_ex_p = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value[..., self.PROX]), label='w_ex_p')
-        w_in_p = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value[..., self.PROX]), label='w_in_p')
-        w_ex_d = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value[..., self.DIST]), label='w_ex_d')
-        w_in_d = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value[..., self.DIST]), label='w_in_d')
+        # Initialize per-receptor spike weights (nS).
+        w_ex_s = u.math.zeros_like(g_ex[..., self.SOMA])
+        w_in_s = u.math.zeros_like(g_in[..., self.SOMA])
+        w_ex_p = u.math.zeros_like(g_ex[..., self.PROX])
+        w_in_p = u.math.zeros_like(g_in[..., self.PROX])
+        w_ex_d = u.math.zeros_like(g_ex[..., self.DIST])
+        w_in_d = u.math.zeros_like(g_in[..., self.DIST])
+
+        # Process spike_events passed directly to update().
+        if spike_events is not None:
+            for event in spike_events:
+                if isinstance(event, dict):
+                    rtype = event.get('receptor_type', event.get('receptor'))
+                    weight = event.get('weight')
+                else:
+                    rtype, weight = event
+                # Resolve string receptor type to integer.
+                if isinstance(rtype, str):
+                    if rtype not in self.SPIKE_RECEPTOR_TYPES:
+                        raise ValueError(
+                            f'Unknown receptor type {rtype!r}. '
+                            f'Valid spike receptors: {sorted(self.SPIKE_RECEPTOR_TYPES)}'
+                        )
+                    rtype = self.SPIKE_RECEPTOR_TYPES[rtype]
+                # Non-negative weight constraint (NEST semantics).
+                if np.any(np.asarray(u.get_mantissa(weight)) < 0.0):
+                    raise ValueError(
+                        f'Spike weights must be non-negative (NEST constraint), got {weight}'
+                    )
+                # Route weight to the correct compartment and synapse type.
+                if rtype == 1:    w_ex_s = w_ex_s + weight   # soma_exc
+                elif rtype == 2:  w_in_s = w_in_s + weight   # soma_inh
+                elif rtype == 3:  w_ex_p = w_ex_p + weight   # proximal_exc
+                elif rtype == 4:  w_in_p = w_in_p + weight   # proximal_inh
+                elif rtype == 5:  w_ex_d = w_ex_d + weight   # distal_exc
+                elif rtype == 6:  w_in_d = w_in_d + weight   # distal_inh
+                else:
+                    raise ValueError(
+                        f'Invalid spike receptor type {rtype}. Valid spike types: 1-6.'
+                    )
+
+        # Add registered delta inputs (from projection layers).
+        w_ex_s = self.sum_delta_inputs(w_ex_s, label='w_ex_s')
+        w_in_s = self.sum_delta_inputs(w_in_s, label='w_in_s')
+        w_ex_p = self.sum_delta_inputs(w_ex_p, label='w_ex_p')
+        w_in_p = self.sum_delta_inputs(w_in_p, label='w_in_p')
+        w_ex_d = self.sum_delta_inputs(w_ex_d, label='w_ex_d')
+        w_in_d = self.sum_delta_inputs(w_in_d, label='w_in_d')
 
         # Apply synaptic spike inputs.
-        dg_ex_s = ode_state.dg_ex_s + pscon_ex[..., self.SOMA] * w_ex_s
-        dg_in_s = ode_state.dg_in_s + pscon_in[..., self.SOMA] * w_in_s
-        dg_ex_p = ode_state.dg_ex_p + pscon_ex[..., self.PROX] * w_ex_p
-        dg_in_p = ode_state.dg_in_p + pscon_in[..., self.PROX] * w_in_p
-        dg_ex_d = ode_state.dg_ex_d + pscon_ex[..., self.DIST] * w_ex_d
-        dg_in_d = ode_state.dg_in_d + pscon_in[..., self.DIST] * w_in_d
+        # w_* has units nS; pscon_* is dimensionless (1/ms); stripping nS gives the
+        # dimensionless update (value in nS/ms) that matches dg_ex / dg_in storage.
+        dg_ex_s = ode_state.dg_ex_s + pscon_ex[..., self.SOMA] * u.get_mantissa(w_ex_s / u.nS)
+        dg_in_s = ode_state.dg_in_s + pscon_in[..., self.SOMA] * u.get_mantissa(w_in_s / u.nS)
+        dg_ex_p = ode_state.dg_ex_p + pscon_ex[..., self.PROX] * u.get_mantissa(w_ex_p / u.nS)
+        dg_in_p = ode_state.dg_in_p + pscon_in[..., self.PROX] * u.get_mantissa(w_in_p / u.nS)
+        dg_ex_d = ode_state.dg_ex_d + pscon_ex[..., self.DIST] * u.get_mantissa(w_ex_d / u.nS)
+        dg_in_d = ode_state.dg_in_d + pscon_in[..., self.DIST] * u.get_mantissa(w_in_d / u.nS)
 
         # Write back state - reassemble compartment dimension.
-        self.V.value = u.math.stack([ode_state.V_s, ode_state.V_p, ode_state.V_d], axis=-1)
+        self.V.value = u.math.stack([V_s_post, ode_state.V_p, ode_state.V_d], axis=-1)
         self.dg_ex.value = u.math.stack([dg_ex_s, dg_ex_p, dg_ex_d], axis=-1)
         self.g_ex.value = u.math.stack([ode_state.g_ex_s, ode_state.g_ex_p, ode_state.g_ex_d], axis=-1)
         self.dg_in.value = u.math.stack([dg_in_s, dg_in_p, dg_in_d], axis=-1)
         self.g_in.value = u.math.stack([ode_state.g_in_s, ode_state.g_in_p, ode_state.g_in_d], axis=-1)
-        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.refractory_step_count.value = r_new
         self.integration_step.value = h
         self.I_stim.value = new_i_stim + u.math.zeros(self.varshape + (self.NCOMP,)) * u.pA
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)

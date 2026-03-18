@@ -1082,8 +1082,10 @@ class hh_psc_alpha_clopath(NESTNeuron):
         pscon_in = np.e / self.tau_syn_in  # 1/ms
 
         # Apply synaptic spike inputs.
+        # w_ex is positive (excitatory magnitude); w_in is positive (inhibitory magnitude,
+        # negated here to produce a negative dI_in, matching the inhibitory convention).
         dI_ex = dI_ex + pscon_ex * w_ex  # pA/ms + 1/ms * pA = pA/ms
-        dI_in = dI_in + pscon_in * w_in  # pA/ms + 1/ms * pA = pA/ms
+        dI_in = dI_in - pscon_in * w_in  # pA/ms - 1/ms * pA = pA/ms (negative = inhibitory)
 
         # Spike detection: threshold crossing + local maximum
         # Use V_old (pre-integration voltage) not extra.V_old (integrator-internal),

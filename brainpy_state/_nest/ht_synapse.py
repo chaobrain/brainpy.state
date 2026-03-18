@@ -1,6 +1,7 @@
 import math
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -262,7 +263,7 @@ class ht_synapse(NESTSynapse):
         P: ArrayLike = 1.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay_steps = self._validate_delay_steps(delay_steps)
         self.tau_P = self._validate_tau_P(tau_P)
@@ -957,7 +958,7 @@ class ht_synapse(NESTSynapse):
         send : Process individual spike with full control.
         reset_state : Reset internal state between simulations.
         """
-        times = np.asarray(u.math.asarray(spike_times_ms), dtype=dftype).reshape(-1)
+        times = np.asarray(u.math.asarray(spike_times_ms), dtype=brainstate.environ.dftype()).reshape(-1)
         events = []
         for t in times:
             events.append(
@@ -974,7 +975,7 @@ class ht_synapse(NESTSynapse):
     def _to_float_scalar(value: ArrayLike, name: str) -> float:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=brainstate.environ.dftype()).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])
@@ -986,7 +987,7 @@ class ht_synapse(NESTSynapse):
     def _to_int_scalar(value: ArrayLike, name: str) -> int:
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
-        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
+        arr = np.asarray(u.math.asarray(value), dtype=brainstate.environ.dftype()).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr[0])

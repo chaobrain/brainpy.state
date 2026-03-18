@@ -345,37 +345,44 @@ class TestIAFBW2001(unittest.TestCase):
             bw.init_state()
             ce.init_state()
 
+            # Pre-compute all per-step inputs so the loop body has a fixed JAX graph.
             rng = np.random.default_rng(123)
-            v_bw = []
-            v_ce = []
+            r = rng.random((240, 2))  # r[:,0]=AMPA draws, r[:,1]=GABA draws
+            ampa_w = jnp.where(jnp.array(r[:, 0] < 0.1), 40.0, 0.0)   # nS per step
+            gaba_w = jnp.where(jnp.array(r[:, 1] < 0.08), 15.0, 0.0)  # nS per step
+            x_vals = jnp.array([20.0 * math.sin(0.07 * k) for k in range(240)])  # pA per step
+
+            def _body(k):
+                # Use fixed-key delta inputs so the loop body traces identically each step.
+                bw.add_delta_input('ampa', ampa_w[k] * u.nS, label='AMPA')
+                bw.add_delta_input('gaba', gaba_w[k] * u.nS, label='GABA')
+                ce.add_delta_input('ampa_ce', ampa_w[k] * u.nS, label='w_ex')
+                ce.add_delta_input('gaba_ce', gaba_w[k] * u.nS, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    bw.update(x=x_vals[k] * u.pA)
+                    ce.update(x=x_vals[k] * u.pA)
+                return (
+                    bw.V.value / u.mV,
+                    ce.V.value / u.mV,
+                    bw.s_AMPA.value / u.nS,
+                    ce.g_ex.value / u.nS,
+                    bw.s_GABA.value / u.nS,
+                    ce.g_in.value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(240))
+            v_bw = np.asarray(results[0][:, 0])
+            v_ce = np.asarray(results[1][:, 0])
+            s_ampa_trace = np.asarray(results[2][:, 0])
+            g_ex_trace = np.asarray(results[3][:, 0])
+            s_gaba_trace = np.asarray(results[4][:, 0])
+            g_in_trace = np.asarray(results[5][:, 0])
 
             for k in range(240):
-                events = []
-                if rng.random() < 0.1:
-                    events.append(('AMPA', 40.0 * u.nS))
-                if rng.random() < 0.08:
-                    events.append(('GABA', 15.0 * u.nS))
+                self.assertAlmostEqual(s_ampa_trace[k], g_ex_trace[k], delta=5e-6)
+                self.assertAlmostEqual(s_gaba_trace[k], g_in_trace[k], delta=5e-6)
 
-                x_k = (20.0 * math.sin(0.07 * k)) * u.pA
-
-                for i, ev in enumerate(events):
-                    receptor, w = ev
-                    if receptor == 'AMPA':
-                        ce.add_delta_input(f'e_{k}_{i}', w, label='w_ex')
-                    else:
-                        ce.add_delta_input(f'i_{k}_{i}', w, label='w_in')
-
-                with brainstate.environ.context(t=k * self.dt):
-                    bw.update(x=x_k, spike_events=events)
-                    ce.update(x=x_k)
-
-                v_bw.append(float((bw.V.value / u.mV)[0]))
-                v_ce.append(float((ce.V.value / u.mV)[0]))
-
-                self.assertAlmostEqual(float((bw.s_AMPA.value / u.nS)[0]), float((ce.g_ex.value / u.nS)[0]), delta=5e-6)
-                self.assertAlmostEqual(float((bw.s_GABA.value / u.nS)[0]), float((ce.g_in.value / u.nS)[0]), delta=5e-6)
-
-            self.assertTrue(np.max(np.abs(np.asarray(v_bw) - np.asarray(v_ce))) < 6e-6)
+            self.assertTrue(np.max(np.abs(v_bw - v_ce)) < 6e-6)
 
     def test_reference_trace_matches_nest_update_logic(self):
         with brainstate.environ.context(dt=self.dt):
@@ -506,29 +513,30 @@ class TestIAFBW2001(unittest.TestCase):
             base.init_state()
             nmda.init_state()
 
+            # Pre-compute all per-step inputs (same RNG sequence as the original loop).
             rng = np.random.default_rng(4321)
-            v_base = []
-            v_nmda = []
+            r = rng.random((280, 3))  # r[:,0]=AMPA, r[:,1]=GABA, r[:,2]=NMDA draws
+            ampa_w = jnp.where(jnp.array(r[:, 0] < 0.12), 40.0, 0.0)       # nS
+            gaba_w = jnp.where(jnp.array(r[:, 1] < 0.09), 15.0, 0.0)       # nS
+            # NMDA: weight * offset = 40 * 0.55 = 22 nS (already scaled)
+            nmda_w = jnp.where(jnp.array(r[:, 2] < 0.10), 40.0 * 0.55, 0.0)  # nS
 
-            for k in range(280):
-                events = []
-                if rng.random() < 0.12:
-                    events.append(('AMPA', 40.0 * u.nS))
-                if rng.random() < 0.09:
-                    events.append(('GABA', 15.0 * u.nS))
-
-                events_nmda = list(events)
-                if rng.random() < 0.10:
-                    events_nmda.append(('NMDA', 40.0 * u.nS, 0.55))
-
+            def _body(k):
+                base.add_delta_input('ampa', ampa_w[k] * u.nS, label='AMPA')
+                base.add_delta_input('gaba', gaba_w[k] * u.nS, label='GABA')
+                nmda.add_delta_input('ampa', ampa_w[k] * u.nS, label='AMPA')
+                nmda.add_delta_input('gaba', gaba_w[k] * u.nS, label='GABA')
+                nmda.add_delta_input('nmda', nmda_w[k] * u.nS, label='NMDA')
                 with brainstate.environ.context(t=k * self.dt):
-                    base.update(spike_events=events)
-                    nmda.update(spike_events=events_nmda)
+                    base.update()
+                    nmda.update()
+                return (base.V.value / u.mV, nmda.V.value / u.mV)
 
-                v_base.append(float((base.V.value / u.mV)[0]))
-                v_nmda.append(float((nmda.V.value / u.mV)[0]))
+            results = brainstate.transform.for_loop(_body, jnp.arange(280))
+            v_base = np.asarray(results[0][:, 0])
+            v_nmda_arr = np.asarray(results[1][:, 0])
 
-            diff = np.asarray(v_nmda) - np.asarray(v_base)
+            diff = v_nmda_arr - v_base
             self.assertGreater(np.mean(diff[120:]), 0.0)
             self.assertGreater(np.max(diff), 0.05)
 

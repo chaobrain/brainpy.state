@@ -518,6 +518,45 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
+        self._precompute_propagators()
+
+    def _precompute_propagators(self):
+        """Pre-compute NEST propagator coefficients from dt and model parameters.
+
+        Called once during ``init_state`` so that ``update`` never needs to
+        recompute exponentials each step and remains JIT-compatible.
+        """
+        dt = brainstate.environ.get_dt()
+        h = float(u.math.asarray(dt / u.ms))
+        dftype = brainstate.environ.dftype()
+
+        tau_m_ms = np.asarray(u.get_mantissa(self.tau_m / u.ms), dtype=np.float64)
+        C_m_pF = np.asarray(u.get_mantissa(self.C_m / u.pF), dtype=np.float64)
+
+        # Membrane propagators.
+        P22 = np.exp(-h / tau_m_ms)
+        self._P22 = P22.astype(dftype)
+        self._P20 = (tau_m_ms / C_m_pF * (1.0 - P22)).astype(dftype)
+
+        # Synaptic decay.
+        self._P11_syn = np.exp(-h / self.tau_syn).astype(dftype)
+
+        # Per-receptor membrane coupling.
+        P21_list = []
+        for tau_s in self.tau_syn:
+            P21_list.append(
+                propagator_exp(
+                    tau_s * np.ones(self.varshape), tau_m_ms, C_m_pF, h
+                ).astype(dftype)
+            )
+        self._P21_syn = np.stack(P21_list, axis=-1)
+
+        # Pre-compute constant voltage and current values.
+        self._E_L_mV = np.asarray(u.get_mantissa(self.E_L / u.mV), dtype=dftype)
+        self._theta_mV = np.asarray(u.get_mantissa((self.V_th - self.E_L) / u.mV), dtype=dftype)
+        self._V_reset_rel_mV = np.asarray(u.get_mantissa((self.V_reset - self.E_L) / u.mV), dtype=dftype)
+        self._I_e_pA = np.asarray(u.get_mantissa(self.I_e / u.pA), dtype=dftype)
+
     def get_spike(self, V: ArrayLike = None):
         r"""Evaluate surrogate spike activation for a voltage tensor.
 
@@ -608,7 +647,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
             out[..., receptor - 1] += np.broadcast_to(w_np, v_shape)
         return out
 
-    def update(self, x=0. * u.pA, spike_events=None):
+    def update(self, x=0. * u.pA, spike_events=None, w_by_rec=None):
         r"""Advance the neuron state by one simulation step.
 
         Executes the full NEST-compatible per-step update: exact membrane
@@ -637,6 +676,13 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
 
             Multiple events for the same receptor are accumulated additively.
             ``None`` injects no receptor spike events. Default is ``None``.
+            Ignored when ``w_by_rec`` is provided.
+        w_by_rec : array-like or None, optional
+            Pre-computed per-receptor spike weights in pA (dimensionless),
+            shape broadcastable to ``self.varshape + (n_receptors,)``. When
+            provided, bypasses ``spike_events`` parsing and
+            ``sum_delta_inputs``, making the update JIT-compatible for use
+            inside ``brainstate.transform.for_loop``. Default is ``None``.
 
         Returns
         -------
@@ -668,78 +714,71 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
-        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
-        h = float(u.math.asarray(dt / u.ms))
-        v_shape = self.V.value.shape
 
         # Read state variables with their natural units.
         V = self.V.value  # mV
-        i_syn = self.i_syn.value  # pA, shape v_shape + (n_receptors,)
+        i_syn = self.i_syn.value  # pA, shape varshape + (n_receptors,)
         i_const = self.i_const.value  # pA
         r = self.refractory_step_count.value  # int
 
-        # Derived quantities.
-        V_rel = V - self.E_L  # mV
-        theta = self.V_th - self.E_L  # mV
-        V_reset_rel = self.V_reset - self.E_L  # mV
+        # Use pre-computed constants (avoids recomputing exponentials each step).
+        I_e_pA = self._I_e_pA
+        E_L_mV = self._E_L_mV
+        theta_mV = self._theta_mV
+        V_reset_rel_mV = self._V_reset_rel_mV
+        P22 = self._P22
+        P20 = self._P20
+        P11_syn = self._P11_syn
+        P21_syn = self._P21_syn
 
-        # Propagator coefficients (unitless numpy scalars / arrays).
-        tau_m_ms = u.math.asarray(self.tau_m / u.ms)  # unitless
-        C_m_pF = u.math.asarray(self.C_m / u.pF)  # unitless
-        I_e_pA = u.math.asarray(self.I_e / u.pA)  # unitless
-        i_const_pA = u.math.asarray(i_const / u.pA)  # unitless
+        # Strip units (JAX-compatible via u.get_mantissa).
+        i_const_pA = u.get_mantissa(i_const / u.pA)
+        V_rel_mV = u.get_mantissa((V - self.E_L) / u.mV)
+        i_syn_pA = u.get_mantissa(i_syn / u.pA)
 
-        P22 = np.exp(-h / tau_m_ms)
-        P20 = tau_m_ms / C_m_pF * (1.0 - P22)
-        P11_syn = np.exp(-h / self.tau_syn)
-        P21_syn = np.stack([
-            propagator_exp(
-                tau_s * np.ones(v_shape), tau_m_ms, C_m_pF, h
+        # Build per-receptor spike weight array.
+        if w_by_rec is None:
+            # Python-level path: parses spike_events dicts/tuples (not JIT-compatible).
+            dftype = brainstate.environ.dftype()
+            v_shape = self.V.value.shape
+            w_val = self._parse_spike_events(spike_events, v_shape)
+            w_delta = np.asarray(
+                u.get_mantissa(self.sum_delta_inputs(0. * u.pA) / u.pA),
+                dtype=dftype,
             )
-            for tau_s in self.tau_syn
-        ], axis=-1)
-
-        # Parse spike events and default delta input.
-        w_by_rec = self._parse_spike_events(spike_events, v_shape)
-        w_default_pA = np.asarray(
-            u.math.asarray(self.sum_delta_inputs(0. * u.pA) / u.pA), dtype=dftype
-        )
-        w_default = np.broadcast_to(w_default_pA, v_shape)
-        if self.n_receptors > 0:
-            w_by_rec[..., 0] += w_default
+            w_delta = np.broadcast_to(w_delta, v_shape)
+            if self.n_receptors > 0:
+                w_val = w_val.copy()
+                w_val[..., 0] += w_delta
+        else:
+            # JAX-array path: caller supplies pre-computed weights, JIT-compatible.
+            w_val = w_by_rec
 
         # Current input for next step (one-step delay).
         new_i_const = self.sum_current_inputs(x, self.V.value)  # pA
-
-        # Strip i_syn to unitless pA values for propagator arithmetic.
-        i_syn_pA = np.asarray(u.math.asarray(i_syn / u.pA), dtype=dftype)
-        V_rel_mV = np.asarray(u.math.asarray(V_rel / u.mV), dtype=dftype)
-        theta_mV = np.asarray(u.math.asarray(theta / u.mV), dtype=dftype)
-        V_reset_rel_mV = np.asarray(u.math.asarray(V_reset_rel / u.mV), dtype=dftype)
-        E_L_mV = np.asarray(u.math.asarray(self.E_L / u.mV), dtype=dftype)
 
         # 1. Membrane integration for non-refractory neurons.
         not_refractory = r == 0
         V_candidate = (
             V_rel_mV * P22
             + (I_e_pA + i_const_pA) * P20
-            + np.sum(P21_syn * i_syn_pA, axis=-1)
+            + jnp.sum(P21_syn * i_syn_pA, axis=-1)
         )
-        V_rel_mV = np.where(not_refractory, V_candidate, V_rel_mV)
+        V_rel_mV = jnp.where(not_refractory, V_candidate, V_rel_mV)
 
         # 2. Decrement refractory counters.
-        r = u.math.where(not_refractory, r, r - 1)
+        r = jnp.where(not_refractory, r, r - 1)
 
         # 3. Decay receptor currents and inject spike weights.
         i_syn_pA = i_syn_pA * P11_syn
-        i_syn_pA = i_syn_pA + w_by_rec
+        i_syn_pA = i_syn_pA + w_val
 
         # 4. Threshold test, reset, refractory assignment.
         spike_cond = V_rel_mV >= theta_mV
-        r = u.math.where(spike_cond, self.ref_count, r)
+        r = jnp.where(spike_cond, jnp.asarray(u.get_mantissa(self.ref_count), dtype=ditype), r)
         V_before_reset = V_rel_mV
-        V_rel_mV = np.where(spike_cond, V_reset_rel_mV, V_rel_mV)
+        V_rel_mV = jnp.where(spike_cond, V_reset_rel_mV, V_rel_mV)
 
         # Write back state.
         self.V.value = (V_rel_mV + E_L_mV) * u.mV
@@ -752,5 +791,5 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        V_out = np.where(spike_cond, theta_mV + E_L_mV + 1e-12, V_before_reset + E_L_mV)
+        V_out = jnp.where(spike_cond, theta_mV + E_L_mV + 1e-12, V_before_reset + E_L_mV)
         return self.get_spike(V_out * u.mV)

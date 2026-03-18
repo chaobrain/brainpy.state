@@ -22,6 +22,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import iaf_cond_exp, iaf_cond_exp_sfa_rr
 
@@ -291,18 +292,48 @@ class TestIAFCondExpSfaRr(unittest.TestCase):
 
             x_seq = [0.0, 80.0, 0.0, -30.0, 0.0, 60.0, 0.0, 0.0, -10.0, 0.0]
             dg_seq = [[4.0], [], [-2.0], [3.0, -1.0], [], [], [1.0], [], [], [2.0]]
+            n_steps = len(x_seq)
 
-            for k, (x_i, dgs) in enumerate(zip(x_seq, dg_seq)):
-                spk_ref = self._step(neuron_ref, k, x=x_i * u.pA, dg_values=dgs)
-                spk_sfa = self._step(neuron_sfa, k, x=x_i * u.pA, dg_values=dgs)
+            # Pre-compute per-step inputs as JAX arrays.
+            x_arr = jnp.array(x_seq)
+            w_ex_arr = jnp.array([sum(max(0.0, dg) for dg in dgs) for dgs in dg_seq])
+            w_in_arr = jnp.array([sum(max(0.0, -dg) for dg in dgs) for dgs in dg_seq])
 
-                self.assertEqual(self._is_spike(spk_ref), self._is_spike(spk_sfa))
-                self.assertAlmostEqual(float((neuron_ref.V.value / u.mV)[0]), float((neuron_sfa.V.value / u.mV)[0]),
-                                       delta=3e-6)
-                self.assertAlmostEqual(float((neuron_ref.g_ex.value / u.nS)[0]),
-                                       float((neuron_sfa.g_ex.value / u.nS)[0]), delta=2e-6)
-                self.assertAlmostEqual(float((neuron_ref.g_in.value / u.nS)[0]),
-                                       float((neuron_sfa.g_in.value / u.nS)[0]), delta=2e-6)
+            # JIT-compiled simulation via for_loop with fixed-key delta inputs.
+            def _run_step(k):
+                neuron_ref.add_delta_input('w_ex', w_ex_arr[k] * u.nS, label='w_ex')
+                neuron_ref.add_delta_input('w_in', w_in_arr[k] * u.nS, label='w_in')
+                neuron_sfa.add_delta_input('w_ex', w_ex_arr[k] * u.nS, label='w_ex')
+                neuron_sfa.add_delta_input('w_in', w_in_arr[k] * u.nS, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk_ref = neuron_ref.update(x=x_arr[k] * u.pA)
+                    spk_sfa = neuron_sfa.update(x=x_arr[k] * u.pA)
+                return (
+                    spk_ref,
+                    neuron_ref.V.value / u.mV,
+                    neuron_ref.g_ex.value / u.nS,
+                    neuron_ref.g_in.value / u.nS,
+                    spk_sfa,
+                    neuron_sfa.V.value / u.mV,
+                    neuron_sfa.g_ex.value / u.nS,
+                    neuron_sfa.g_in.value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            spk_ref_all = np.asarray(results[0][:, 0])
+            v_ref_all = np.asarray(results[1][:, 0])
+            g_ex_ref_all = np.asarray(results[2][:, 0])
+            g_in_ref_all = np.asarray(results[3][:, 0])
+            spk_sfa_all = np.asarray(results[4][:, 0])
+            v_sfa_all = np.asarray(results[5][:, 0])
+            g_ex_sfa_all = np.asarray(results[6][:, 0])
+            g_in_sfa_all = np.asarray(results[7][:, 0])
+
+            for k in range(n_steps):
+                self.assertEqual(bool(spk_ref_all[k] > 0.0), bool(spk_sfa_all[k] > 0.0))
+                self.assertAlmostEqual(float(v_ref_all[k]), float(v_sfa_all[k]), delta=3e-6)
+                self.assertAlmostEqual(float(g_ex_ref_all[k]), float(g_ex_sfa_all[k]), delta=2e-6)
+                self.assertAlmostEqual(float(g_in_ref_all[k]), float(g_in_sfa_all[k]), delta=2e-6)
 
     def test_reference_trace_matches_nest_step_logic(self):
         with brainstate.environ.context(dt=self.dt):
@@ -325,12 +356,14 @@ class TestIAFCondExpSfaRr(unittest.TestCase):
                 q_sfa=1.5 * u.nS,
                 q_rr=200.0 * u.nS,
                 I_e=500.0 * u.pA,
+                gsl_error_tol=1e-3,
                 V_initializer=braintools.init.Constant(-69.5 * u.mV),
             )
             neuron.init_state()
 
             x_seq = [0.0, 20.0, 0.0, -25.0, 0.0, 40.0, 0.0, 0.0, -10.0, 0.0, 0.0, 15.0] + [0.0] * 36
             dg_seq = [[5.0], [], [-1.5], [2.0, -0.5], [], [], [1.5], [], [0.0], [-2.0], [1.0], []] + [[]] * 36
+            n_steps = len(x_seq)
 
             params = {
                 'E_L': -70.0,
@@ -362,22 +395,63 @@ class TestIAFCondExpSfaRr(unittest.TestCase):
                 'i_stim': 0.0,
             }
 
-            spikes_model = []
+            # Run reference in pure Python/NumPy first.
+            ref_v, ref_g_ex, ref_g_in, ref_g_sfa, ref_g_rr = [], [], [], [], []
+            ref_r, ref_h = [], []
             spikes_ref = []
             for k, (x_i, dgs) in enumerate(zip(x_seq, dg_seq)):
-                spk = self._step(neuron, k, x=x_i * u.pA, dg_values=dgs if dgs else None)
-                spikes_model.append(self._is_spike(spk))
                 spikes_ref.append(_reference_step(ref_state, params, x_i, dgs, 0.1))
+                ref_v.append(ref_state['v'])
+                ref_g_ex.append(ref_state['g_ex'])
+                ref_g_in.append(ref_state['g_in'])
+                ref_g_sfa.append(ref_state['g_sfa'])
+                ref_g_rr.append(ref_state['g_rr'])
+                ref_r.append(ref_state['r'])
+                ref_h.append(ref_state['h'])
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['v'], delta=4e-6)
-                self.assertAlmostEqual(float((neuron.g_ex.value / u.nS)[0]), ref_state['g_ex'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.g_in.value / u.nS)[0]), ref_state['g_in'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.g_sfa.value / u.nS)[0]), ref_state['g_sfa'], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.g_rr.value / u.nS)[0]), ref_state['g_rr'], delta=3e-6)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
-                self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=3e-6)
+            # Pre-compute per-step inputs as JAX arrays.
+            x_arr = jnp.array(x_seq)
+            w_ex_arr = jnp.array([sum(max(0.0, dg) for dg in dgs) for dgs in dg_seq])
+            w_in_arr = jnp.array([sum(max(0.0, -dg) for dg in dgs) for dgs in dg_seq])
 
-        self.assertEqual(spikes_model, spikes_ref)
+            # JIT-compiled simulation via for_loop with fixed-key delta inputs.
+            def _run_step(k):
+                neuron.add_delta_input('w_ex', w_ex_arr[k] * u.nS, label='w_ex')
+                neuron.add_delta_input('w_in', w_in_arr[k] * u.nS, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    spk,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    neuron.g_sfa.value / u.nS,
+                    neuron.g_rr.value / u.nS,
+                    neuron.refractory_step_count.value,
+                    neuron.integration_step.value / u.ms,
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            v_all = np.asarray(results[0][:, 0])
+            spk_all = np.asarray(results[1][:, 0])
+            g_ex_all = np.asarray(results[2][:, 0])
+            g_in_all = np.asarray(results[3][:, 0])
+            g_sfa_all = np.asarray(results[4][:, 0])
+            g_rr_all = np.asarray(results[5][:, 0])
+            r_all = np.asarray(results[6][:, 0])
+            h_all = np.asarray(results[7][:, 0])
+
+            for k in range(n_steps):
+                self.assertAlmostEqual(float(v_all[k]), ref_v[k], delta=4e-6)
+                self.assertAlmostEqual(float(g_ex_all[k]), ref_g_ex[k], delta=3e-6)
+                self.assertAlmostEqual(float(g_in_all[k]), ref_g_in[k], delta=3e-6)
+                self.assertAlmostEqual(float(g_sfa_all[k]), ref_g_sfa[k], delta=3e-6)
+                self.assertAlmostEqual(float(g_rr_all[k]), ref_g_rr[k], delta=3e-6)
+                self.assertEqual(int(r_all[k]), ref_r[k])
+                self.assertAlmostEqual(float(h_all[k]), ref_h[k], delta=3e-6)
+
+            spikes_model = [bool(v > 0.0) for v in spk_all]
+            self.assertEqual(spikes_model, spikes_ref)
 
 
 if __name__ == '__main__':

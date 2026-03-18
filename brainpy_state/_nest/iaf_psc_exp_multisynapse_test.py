@@ -21,6 +21,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import iaf_psc_exp_multisynapse
 
@@ -93,19 +94,26 @@ class TestIAFPscExpMultisynapse(unittest.TestCase):
                 k = int(round((t_event - 0.1) / 0.1))
                 step_events.setdefault(k, []).append((ridx, w * u.pA))
 
-            times = []
-            i_syn_trace = []
-            v_trace = []
-            for k in range(steps):
-                ev = step_events.get(k, None)
-                self._step(neuron, k, spike_events=ev)
-                times.append((k + 1) * 0.1)
-                i_syn_trace.append(np.asarray(u.math.asarray(neuron.i_syn.value[0] / u.pA), dtype=dftype))
-                v_trace.append(float((neuron.V.value / u.mV)[0]))
+            # Pre-compute per-step spike weight array for JIT-compatible for_loop.
+            n_rec = len(tau_syns)
+            w_per_step = np.zeros((steps, n_rec), dtype=dftype)
+            for k_idx, events in step_events.items():
+                for ridx, w in events:
+                    w_per_step[k_idx, ridx - 1] += float(w / u.pA)
+            w_per_step_jax = jnp.array(w_per_step)
 
-            times = np.asarray(times, dtype=dftype)
-            i_syn_trace = np.asarray(i_syn_trace, dtype=dftype)
-            v_trace = np.asarray(v_trace, dtype=dftype)
+            def _body(k):
+                with brainstate.environ.context(t=k * 0.1 * u.ms):
+                    neuron.update(w_by_rec=w_per_step_jax[k])
+                return (
+                    neuron.i_syn.value[0] / u.pA,
+                    (neuron.V.value / u.mV)[0],
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(steps))
+            times = np.asarray([(k + 1) * 0.1 for k in range(steps)], dtype=dftype)
+            i_syn_trace = np.asarray(u.get_mantissa(results[0]), dtype=dftype)
+            v_trace = np.asarray(u.get_mantissa(results[1]), dtype=dftype)
 
             i_syn_ref = []
             v_ref = np.zeros_like(times)

@@ -37,6 +37,7 @@ import unittest
 import brainstate
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import ht_neuron
 from scipy.integrate import solve_ivp
@@ -552,9 +553,11 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
             V_init = _get_scalar(neuron.V.value)
             theta_init = _get_scalar(neuron.theta.value)
 
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             V_final = _get_scalar(neuron.V.value)
             theta_final = _get_scalar(neuron.theta.value)
@@ -577,27 +580,28 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
         params = _default_params()
         y_ref = _default_initial_state(params)
 
+        # Advance reference solver independently (pure Python/scipy, fast)
+        for k in range(n_steps):
+            sol = solve_ivp(
+                lambda t, y: _nest_ht_dynamics(t, y, params),
+                [0.0, dt], y_ref,
+                method='RK45', rtol=1e-3, atol=1e-9,
+            )
+            y_ref = sol.y[:, -1]
+            m_eq_nmda = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
+            y_ref[_m_fast_NMDA] = min(m_eq_nmda, y_ref[_m_fast_NMDA])
+            y_ref[_m_slow_NMDA] = min(m_eq_nmda, y_ref[_m_slow_NMDA])
+
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            for k in range(n_steps):
-                # Reference solver
-                sol = solve_ivp(
-                    lambda t, y: _nest_ht_dynamics(t, y, params),
-                    [0.0, dt], y_ref,
-                    method='RK45', rtol=1e-3, atol=1e-9,
-                )
-                y_ref = sol.y[:, -1]
-
-                # Enforce instantaneous NMDA blocking (as NEST does after each step)
-                m_eq_nmda = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
-                y_ref[_m_fast_NMDA] = min(m_eq_nmda, y_ref[_m_fast_NMDA])
-                y_ref[_m_slow_NMDA] = min(m_eq_nmda, y_ref[_m_slow_NMDA])
-
-                # Model update
+            # Advance model with JIT-compiled for_loop
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             # Compare final states
             V_model = _get_scalar(neuron.V.value)
@@ -622,11 +626,11 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
 
             V_init = _get_scalar(neuron.V.value)
 
-            # Inject current for first step to store in buffer,
-            # then it applies from step 1 onward
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_dc)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             V_final = _get_scalar(neuron.V.value)
             # DC current should depolarize (increase V)
@@ -650,16 +654,16 @@ class TestHTNeuronSpiking(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            spiked = False
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
-                    spk = neuron.update(I_strong)
-                    if _get_scalar(neuron.V.value) >= 25.0:
-                        # Spike detected (V was reset to E_Na=30 and is near there)
-                        spiked = True
-                        break
+                    neuron.update(I_strong)
+                return neuron.V.value
 
-            self.assertTrue(spiked, "Strong DC current should produce a spike")
+            V_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            )
+            self.assertTrue(np.any(V_trace >= 25.0),
+                            "Strong DC current should produce a spike")
 
     def test_refractory_period(self):
         r"""After a spike, neuron should be refractory for t_ref steps."""
@@ -673,19 +677,18 @@ class TestHTNeuronSpiking(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            first_spike_step = None
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_strong)
-                    ref = int(_get_scalar(neuron.ref_steps.value))
-                    if first_spike_step is None and ref > 0:
-                        first_spike_step = k
-                        # Just spiked: ref should be set to PotassiumRefractoryCounts
-                        self.assertEqual(ref, expected_ref_steps,
-                                         f"After spike, ref_steps should be {expected_ref_steps}")
-                        break
+                return neuron.ref_steps.value
 
-            self.assertIsNotNone(first_spike_step, "Should have spiked")
+            ref_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            )
+            first_nonzero = np.where(ref_trace > 0)[0]
+            self.assertGreater(len(first_nonzero), 0, "Should have spiked")
+            self.assertEqual(int(ref_trace[first_nonzero[0]]), expected_ref_steps,
+                             f"After spike, ref_steps should be {expected_ref_steps}")
 
     def test_spike_resets_V_and_theta(self):
         r"""On spike, V and theta should be set to E_Na."""
@@ -697,21 +700,24 @@ class TestHTNeuronSpiking(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            for k in range(n_steps):
+            expected_ref = int(round(2.0 / dt))
+
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_strong)
-                    ref = int(_get_scalar(neuron.ref_steps.value))
-                    V = _get_scalar(neuron.V.value)
-                    theta = _get_scalar(neuron.theta.value)
-                    if ref > 0 and ref == int(round(2.0 / dt)):
-                        # Just spiked this step - but V has already been
-                        # through the ODE integration for this step with
-                        # the post-spike K current active. V was set to E_Na
-                        # before the ref counter was decremented.
-                        # We just check V is near E_Na range
-                        self.assertGreater(V, 0.0,
-                                           msg="V should be high right after spike")
-                        break
+                return neuron.V.value, neuron.ref_steps.value
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            V_trace = np.asarray(results[0][:, 0])
+            ref_trace = np.asarray(results[1][:, 0])
+
+            # Find first spike step (ref == expected_ref)
+            spike_steps = np.where(ref_trace == expected_ref)[0]
+            if len(spike_steps) > 0:
+                first_spike = int(spike_steps[0])
+                # V should be high right after spike
+                self.assertGreater(float(V_trace[first_spike]), 0.0,
+                                   msg="V should be high right after spike")
 
 
 class TestHTNeuronSynapticDynamics(unittest.TestCase):
@@ -734,16 +740,18 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
 
             # Manually inject AMPA spike at step 0
             # In NEST, spikes add to DG_AMPA * cond_step
-            # We simulate this by directly adding to DG_AMPA after init
-            neuron.DG_AMPA.value = np.asarray(cond_step)
+            # Use jnp.full to match varshape (1,) — np.asarray(scalar) gives shape ()
+            # which breaks jax.lax.while_loop's shape-consistency requirement.
+            neuron.DG_AMPA.value = jnp.full(neuron.varshape, cond_step)
 
-            G_trace = []
-            for k in range(100):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
-                    G_trace.append(_get_scalar(neuron.G_AMPA.value))
+                return neuron.G_AMPA.value
 
-            G_trace = np.array(G_trace)
+            G_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(100))[:, 0]
+            )
             # G_AMPA should rise then decay
             self.assertGreater(np.max(G_trace), 0.0,
                                msg="AMPA conductance should increase after spike")
@@ -765,15 +773,16 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
-            neuron.DG_GABA_A.value = np.asarray(cond_step)
+            neuron.DG_GABA_A.value = jnp.full(neuron.varshape, cond_step)
 
-            G_trace = []
-            for k in range(200):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
-                    G_trace.append(_get_scalar(neuron.G_GABA_A.value))
+                return neuron.G_GABA_A.value
 
-            G_trace = np.array(G_trace)
+            G_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(200))[:, 0]
+            )
             self.assertGreater(np.max(G_trace), 0.0)
             self.assertAlmostEqual(np.max(G_trace), params['g_peak_GABA_A'], places=1)
 
@@ -893,17 +902,23 @@ class TestHTNeuronNMDA(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
-                    V = _get_scalar(neuron.V.value)
-                    m_eq = _m_eq_NMDA(V, neuron.S_act_NMDA, neuron.V_act_NMDA)
-                    m_f = _get_scalar(neuron.m_fast_NMDA_state.value)
-                    m_s = _get_scalar(neuron.m_slow_NMDA_state.value)
-                    self.assertLessEqual(m_f, m_eq + 1e-10,
-                                         msg=f"Step {k}: m_fast_NMDA exceeds equilibrium")
-                    self.assertLessEqual(m_s, m_eq + 1e-10,
-                                         msg=f"Step {k}: m_slow_NMDA exceeds equilibrium")
+                return neuron.V.value, neuron.m_fast_NMDA_state.value, neuron.m_slow_NMDA_state.value
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            V_trace = np.asarray(results[0][:, 0])
+            mf_trace = np.asarray(results[1][:, 0])
+            ms_trace = np.asarray(results[2][:, 0])
+
+            for k in range(n_steps):
+                V_k = float(V_trace[k])
+                m_eq = _m_eq_NMDA(V_k, neuron.S_act_NMDA, neuron.V_act_NMDA)
+                self.assertLessEqual(float(mf_trace[k]), m_eq + 1e-10,
+                                     msg=f"Step {k}: m_fast_NMDA exceeds equilibrium")
+                self.assertLessEqual(float(ms_trace[k]), m_eq + 1e-10,
+                                     msg=f"Step {k}: m_slow_NMDA exceeds equilibrium")
 
 
 class TestHTNeuronThresholdDynamics(unittest.TestCase):
@@ -923,11 +938,13 @@ class TestHTNeuronThresholdDynamics(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
             # Manually set theta to a high value
-            neuron.theta.value = np.asarray(30.0)
+            neuron.theta.value = jnp.full(neuron.varshape, 30.0)
 
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             theta_final = _get_scalar(neuron.theta.value)
             # After 500 steps (50 ms with dt=0.1), theta should be
@@ -957,9 +974,11 @@ class TestHTNeuronMultipleNeurons(unittest.TestCase):
                 V_values, V_values[0] * np.ones(5), decimal=10
             )
 
-            for k in range(10):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(10))
 
             # After evolution, all identical neurons with same input should
             # still have same state
@@ -1017,35 +1036,35 @@ class TestHTNeuronReferenceComparison(unittest.TestCase):
         params['I_stim'] = I_dc
         y_ref = _default_initial_state(params)
 
+        # Reference: advance scipy in Python loop (unavoidable)
+        V_ref_trace = []
+        for k in range(n_steps):
+            sol = solve_ivp(
+                lambda t, y: _nest_ht_dynamics(t, y, params),
+                [0.0, dt], y_ref,
+                method='RK45', rtol=1e-3, atol=1e-9,
+            )
+            y_ref = sol.y[:, -1]
+            m_eq = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
+            y_ref[_m_fast_NMDA] = min(m_eq, y_ref[_m_fast_NMDA])
+            y_ref[_m_slow_NMDA] = min(m_eq, y_ref[_m_slow_NMDA])
+            V_ref_trace.append(y_ref[_V_M])
+        V_ref_trace = np.array(V_ref_trace)
+
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
             # Set I_stim to I_dc (it applies from step 0)
-            neuron.I_stim.value = np.asarray(I_dc)
+            neuron.I_stim.value = jnp.full(neuron.varshape, I_dc)
 
-            V_model_trace = []
-            V_ref_trace = []
-
-            for k in range(n_steps):
-                # Reference solver
-                sol = solve_ivp(
-                    lambda t, y: _nest_ht_dynamics(t, y, params),
-                    [0.0, dt], y_ref,
-                    method='RK45', rtol=1e-3, atol=1e-9,
-                )
-                y_ref = sol.y[:, -1]
-                m_eq = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
-                y_ref[_m_fast_NMDA] = min(m_eq, y_ref[_m_fast_NMDA])
-                y_ref[_m_slow_NMDA] = min(m_eq, y_ref[_m_slow_NMDA])
-                V_ref_trace.append(y_ref[_V_M])
-
-                # Model
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_dc)
-                V_model_trace.append(_get_scalar(neuron.V.value))
+                return neuron.V.value
 
-            V_model_trace = np.array(V_model_trace)
-            V_ref_trace = np.array(V_ref_trace)
+            V_model_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            )
 
             # Traces should match closely
             max_diff = np.max(np.abs(V_model_trace - V_ref_trace))

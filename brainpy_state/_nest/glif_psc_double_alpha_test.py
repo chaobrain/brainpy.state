@@ -957,8 +957,6 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
 
     def test_refractory_period_holds_voltage(self):
         r"""During refractory period, voltage should be held at reset value."""
-        dt_val = 0.01
-
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
                 1,
@@ -971,25 +969,30 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_step = None
-            for k in range(2000):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_step = k
-                    break
+            # I_e=800 pA is strong; spike well before 300 steps
+            n_steps = 300
 
-            self.assertIsNotNone(spike_step, "Should have spiked")
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV, neuron.refractory_step_count.value)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            spk_trace, v_trace, refr_trace = results
+
+            spike_steps = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+            self.assertGreater(len(spike_steps), 0, "Should have spiked")
+            spike_step = spike_steps[0]
 
             self.assertGreater(
-                int(neuron.refractory_step_count.value[0]),
+                int(refr_trace[spike_step, 0]),
                 0,
                 "Should be refractory after spike"
             )
 
-            v_reset = float((neuron.V.value / u.mV)[0])
+            v_reset = float(v_trace[spike_step, 0])
             for k in range(spike_step + 1, spike_step + 5):
-                self._step(neuron, k)
-                v_now = float((neuron.V.value / u.mV)[0])
+                v_now = float(v_trace[k, 0])
                 self.assertAlmostEqual(
                     v_now, v_reset, places=10,
                     msg=f"Voltage should be held during refractory at step {k}"
@@ -1320,12 +1323,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Inject spike
-            self._step(neuron, 0, dy_inputs=[(0, 1.0)])
+            # Inject spike at step 0, then run steps 0..49 via for_loop
+            w_vals = jnp.zeros(50, dtype=jnp.float64).at[0].set(1.0)
 
-            # Run a few steps
-            for k in range(1, 50):
-                self._step(neuron, k)
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return None
+
+            brainstate.transform.for_loop(_body, jnp.arange(50))
 
             I_syn = neuron.get_I_syn()
             I_syn_fast = neuron.get_I_syn_fast()
@@ -1347,8 +1354,6 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
 
     def test_synaptic_current_depolarizes(self):
         r"""Positive synaptic current input should depolarize membrane."""
-        dt_val = 0.01
-
         with brainstate.environ.context(dt=self.dt):
             base = glif_psc_double_alpha(
                 1,
@@ -1376,12 +1381,17 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             exc.init_state()
 
-            self._step(base, 0)
-            self._step(exc, 0, dy_inputs=[(0, 50.0)])
+            # exc gets a synaptic spike at step 0; base does not — run all 101 steps in for_loop
+            w_vals = jnp.zeros(101, dtype=jnp.float64).at[0].set(50.0)
 
-            for k in range(1, 101):
-                self._step(base, k)
-                self._step(exc, k)
+            def _body(k):
+                exc.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    base.update(x=0.0 * u.pA)
+                    exc.update(x=0.0 * u.pA)
+                return None
+
+            brainstate.transform.for_loop(_body, jnp.arange(101))
 
             v_base = float((base.V.value / u.mV)[0])
             v_exc = float((exc.V.value / u.mV)[0])
