@@ -408,93 +408,143 @@ class TestIAFBW2001(unittest.TestCase):
             neuron.init_state()
 
             dt = 0.1
+            N = 80
             k0, k1 = _nmda_jump_constants_ref(0.5, 2.0, 100.0)
             params = {
-                'E_L': -70.0,
-                'E_ex': 0.0,
-                'E_in': -70.0,
-                'V_th': -63.0,
-                'V_reset': -68.0,
-                'C_m': 500.0,
-                'g_L': 25.0,
-                't_ref': 0.3,
-                'tau_AMPA': 2.0,
-                'tau_GABA': 5.0,
-                'tau_decay_NMDA': 100.0,
-                'tau_rise_NMDA': 2.0,
-                'alpha': 0.5,
-                'conc_Mg2': 1.0,
-                'gsl_error_tol': 1e-3,
-                'k0': k0,
-                'k1': k1,
-            }
-            ref = {
-                'v': -70.0,
-                's_ampa': 0.0,
-                's_gaba': 0.0,
-                's_nmda': 0.0,
-                'i_ampa': 0.0,
-                'i_gaba': 0.0,
-                'i_nmda': 0.0,
-                'r': 0,
-                'h': dt,
-                'i_stim': 0.0,
-                's_nmda_pre': 0.0,
-                'last_spike_time': -1e7,
-                'spike_offset': 0.0,
+                'E_L': -70.0, 'E_ex': 0.0, 'E_in': -70.0,
+                'V_th': -63.0, 'V_reset': -68.0, 'C_m': 500.0, 'g_L': 25.0,
+                't_ref': 0.3, 'tau_AMPA': 2.0, 'tau_GABA': 5.0,
+                'tau_decay_NMDA': 100.0, 'tau_rise_NMDA': 2.0,
+                'alpha': 0.5, 'conc_Mg2': 1.0, 'gsl_error_tol': 1e-3,
+                'k0': k0, 'k1': k1,
             }
 
-            x_seq = []
+            # Pre-compute all per-step inputs as JAX arrays.
+            nmda_steps = {10, 20, 30, 40, 50}
+            x_list, ampa_list, gaba_list, nmda_list = [], [], [], []
             spike_events_seq = []
-            for k in range(80):
+            for k in range(N):
                 if 5 <= k < 55:
-                    x_seq.append(2200.0)
+                    x_list.append(2200.0)
                 elif 55 <= k < 65:
-                    x_seq.append(-300.0)
+                    x_list.append(-300.0)
                 else:
-                    x_seq.append(0.0)
+                    x_list.append(0.0)
+                ampa_list.append(40.0 if k % 7 == 1 else 0.0)
+                gaba_list.append(15.0 if k % 11 == 3 else 0.0)
+                nmda_list.append(25.0 * 0.6 if k in nmda_steps else 0.0)
 
                 ev = []
                 if k % 7 == 1:
                     ev.append(('AMPA', 40.0, 1.0))
                 if k % 11 == 3:
                     ev.append(('GABA', 15.0, 1.0))
-                if k in (10, 20, 30, 40, 50):
+                if k in nmda_steps:
                     ev.append(('NMDA', 25.0, 0.6))
                 spike_events_seq.append(ev)
 
-            spk_model = []
-            spk_ref = []
+            x_arr = jnp.array(x_list)
+            ampa_arr = jnp.array(ampa_list)
+            gaba_arr = jnp.array(gaba_list)
+            nmda_arr = jnp.array(nmda_list)
 
-            for k, (x_k, ev_k) in enumerate(zip(x_seq, spike_events_seq)):
-                ev_model = []
-                for rec, w, off in ev_k:
-                    if rec == 'NMDA':
-                        ev_model.append((rec, w * u.nS, off))
-                    else:
-                        ev_model.append((rec, w * u.nS))
+            # Run model with for_loop (single JAX compilation).
+            def _body(k):
+                neuron.add_delta_input('ampa', ampa_arr[k] * u.nS, label='AMPA')
+                neuron.add_delta_input('gaba', gaba_arr[k] * u.nS, label='GABA')
+                neuron.add_delta_input('nmda', nmda_arr[k] * u.nS, label='NMDA')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.s_AMPA.value / u.nS,
+                    neuron.s_GABA.value / u.nS,
+                    neuron.s_NMDA.value / u.nS,
+                    neuron.I_AMPA.value / u.pA,
+                    neuron.I_GABA.value / u.pA,
+                    neuron.I_NMDA.value / u.pA,
+                    neuron.refractory_step_count.value,
+                    neuron.integration_step.value / u.ms,
+                    neuron.s_NMDA_pre.value,
+                    neuron.spike_offset.value,
+                    neuron.last_spike_time.value / u.ms,
+                    spk,
+                )
 
-                spk = self._step(neuron, k, x=x_k * u.pA, spike_events=ev_model)
-                spk_model.append(self._is_spike(spk))
+            results = brainstate.transform.for_loop(_body, jnp.arange(N))
 
-                spk_ref.append(_reference_step(ref, params, x_k, ev_k, dt, k * dt))
+            # Extract model traces (shape: (N, 1) -> (N,)).
+            v_m = np.asarray(results[0][:, 0])
+            s_ampa_m = np.asarray(results[1][:, 0])
+            s_gaba_m = np.asarray(results[2][:, 0])
+            s_nmda_m = np.asarray(results[3][:, 0])
+            i_ampa_m = np.asarray(results[4][:, 0])
+            i_gaba_m = np.asarray(results[5][:, 0])
+            i_nmda_m = np.asarray(results[6][:, 0])
+            r_m = np.asarray(results[7][:, 0], dtype=int)
+            h_m = np.asarray(results[8][:, 0])
+            s_nmda_pre_m = np.asarray(results[9][:, 0])
+            spike_offset_m = np.asarray(results[10][:, 0])
+            last_spike_t_m = np.asarray(results[11][:, 0])
+            spk_m = np.asarray(results[12][:, 0])
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref['v'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.s_AMPA.value / u.nS)[0]), ref['s_ampa'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.s_GABA.value / u.nS)[0]), ref['s_gaba'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.s_NMDA.value / u.nS)[0]), ref['s_nmda'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.I_AMPA.value / u.pA)[0]), ref['i_ampa'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.I_GABA.value / u.pA)[0]), ref['i_gaba'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.I_NMDA.value / u.pA)[0]), ref['i_nmda'], delta=7e-6)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref['r'])
-                self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref['h'], delta=7e-6)
-                self.assertAlmostEqual(float(neuron.s_NMDA_pre.value[0]), ref['s_nmda_pre'], delta=7e-6)
-                self.assertAlmostEqual(float(neuron.spike_offset.value[0]), ref['spike_offset'], delta=7e-6)
-                self.assertAlmostEqual(float((neuron.last_spike_time.value / u.ms)[0]), ref['last_spike_time'],
-                                       delta=7e-6)
+            # Run reference implementation (pure Python, fast).
+            ref = {
+                'v': -70.0, 's_ampa': 0.0, 's_gaba': 0.0, 's_nmda': 0.0,
+                'i_ampa': 0.0, 'i_gaba': 0.0, 'i_nmda': 0.0,
+                'r': 0, 'h': dt, 'i_stim': 0.0,
+                's_nmda_pre': 0.0, 'last_spike_time': -1e7, 'spike_offset': 0.0,
+            }
+            ref_v = np.empty(N)
+            ref_s_ampa = np.empty(N)
+            ref_s_gaba = np.empty(N)
+            ref_s_nmda = np.empty(N)
+            ref_i_ampa = np.empty(N)
+            ref_i_gaba = np.empty(N)
+            ref_i_nmda = np.empty(N)
+            ref_r = np.empty(N, dtype=int)
+            ref_h = np.empty(N)
+            ref_s_nmda_pre = np.empty(N)
+            ref_spike_offset = np.empty(N)
+            ref_last_spike_t = np.empty(N)
+            ref_spk = np.empty(N, dtype=bool)
 
-            self.assertEqual(spk_model, spk_ref)
-            self.assertTrue(any(spk_model))
+            for k in range(N):
+                ref_spk[k] = _reference_step(
+                    ref, params, float(x_arr[k]), spike_events_seq[k], dt, k * dt
+                )
+                ref_v[k] = ref['v']
+                ref_s_ampa[k] = ref['s_ampa']
+                ref_s_gaba[k] = ref['s_gaba']
+                ref_s_nmda[k] = ref['s_nmda']
+                ref_i_ampa[k] = ref['i_ampa']
+                ref_i_gaba[k] = ref['i_gaba']
+                ref_i_nmda[k] = ref['i_nmda']
+                ref_r[k] = ref['r']
+                ref_h[k] = ref['h']
+                ref_s_nmda_pre[k] = ref['s_nmda_pre']
+                ref_spike_offset[k] = ref['spike_offset']
+                ref_last_spike_t[k] = ref['last_spike_time']
+
+            # Compare all traces at once.
+            tol = 7e-6
+            np.testing.assert_allclose(v_m, ref_v, atol=tol, err_msg='V mismatch')
+            np.testing.assert_allclose(s_ampa_m, ref_s_ampa, atol=tol, err_msg='s_AMPA mismatch')
+            np.testing.assert_allclose(s_gaba_m, ref_s_gaba, atol=tol, err_msg='s_GABA mismatch')
+            np.testing.assert_allclose(s_nmda_m, ref_s_nmda, atol=tol, err_msg='s_NMDA mismatch')
+            np.testing.assert_allclose(i_ampa_m, ref_i_ampa, atol=tol, err_msg='I_AMPA mismatch')
+            np.testing.assert_allclose(i_gaba_m, ref_i_gaba, atol=tol, err_msg='I_GABA mismatch')
+            np.testing.assert_allclose(i_nmda_m, ref_i_nmda, atol=tol, err_msg='I_NMDA mismatch')
+            np.testing.assert_array_equal(r_m, ref_r, err_msg='refractory count mismatch')
+            np.testing.assert_allclose(h_m, ref_h, atol=tol, err_msg='integration step mismatch')
+            np.testing.assert_allclose(s_nmda_pre_m, ref_s_nmda_pre, atol=tol, err_msg='s_NMDA_pre mismatch')
+            np.testing.assert_allclose(spike_offset_m, ref_spike_offset, atol=tol, err_msg='spike_offset mismatch')
+            np.testing.assert_allclose(last_spike_t_m, ref_last_spike_t, atol=tol, err_msg='last_spike_time mismatch')
+
+            spk_model_bool = [bool(s > 0.0) for s in spk_m]
+            spk_ref_bool = [bool(s) for s in ref_spk]
+            self.assertEqual(spk_model_bool, spk_ref_bool)
+            self.assertTrue(any(spk_model_bool))
 
     def test_nmda_increases_voltage_vs_no_nmda(self):
         with brainstate.environ.context(dt=self.dt):
