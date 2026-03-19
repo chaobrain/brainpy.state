@@ -23,6 +23,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import jax
+import jax.numpy as jnp
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
@@ -125,9 +126,12 @@ class TestSpikeDilutorOrdering(unittest.TestCase):
                 ditype = brainstate.environ.ditype()
                 got = np.asarray(dil.update(mother_spikes=n_mother), dtype=ditype).reshape(-1)
 
-        rng = np.random.default_rng(seed)
+        # Reference: replicate the same JAX PRNG split that update() performs.
+        # init_state sets rng_key = PRNGKey(seed); update splits it once.
+        init_key = jax.random.PRNGKey(seed)
+        _, subkey = jax.random.split(init_key)
         expected = np.asarray(
-            [np.count_nonzero(rng.random(n_mother) < p_copy) for _ in range(n_targets)],
+            jax.random.binomial(subkey, n=n_mother, p=p_copy, shape=(n_targets,)),
             dtype=ditype,
         )
         np.testing.assert_array_equal(got, expected)
@@ -152,21 +156,27 @@ class TestSpikeDilutorStatistics(unittest.TestCase):
     def test_mean_matches_nest_unittest_spec(self):
         # Equivalent to NEST's test_spike_dilutor.sli:
         # 5000 mother spikes, p_copy=0.2, 10 targets, mean should be within 5%.
-        dt = 1.0 * u.ms
+        dt_ms_val = 1.0
         n_spikes = 5000
         n_targets = 10
         p_copy = 0.2
         expected = n_spikes * p_copy
 
-        with brainstate.environ.context(dt=dt):
+        with brainstate.environ.context(dt=dt_ms_val * u.ms):
             dil = spike_dilutor(in_size=n_targets, p_copy=p_copy, rng_seed=12345)
             dil.init_state()
 
             dftype = brainstate.environ.dftype()
-            counts = np.zeros(n_targets, dtype=dftype)
-            for step in range(1, n_spikes + 1):
-                with brainstate.environ.context(t=step * dt):
-                    counts += np.asarray(dil.update(mother_spikes=1.0), dtype=dftype).reshape(-1)
+            # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+            t_array = jnp.arange(1, n_spikes + 1, dtype=dftype) * dt_ms_val
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    out = dil.update(mother_spikes=1.0)
+                return jnp.asarray(out, dtype=dftype)
+
+            all_counts = np.array(brainstate.transform.for_loop(step_fn, t_array))
+            counts = all_counts.sum(axis=0)
 
         avg_count = float(np.mean(counts))
         rel_err = abs(avg_count - expected) / expected
@@ -211,16 +221,22 @@ class TestSpikeDilutorVsNEST(unittest.TestCase):
 
     @staticmethod
     def _run_bp_average_count(n_spikes, n_targets, p_copy):
-        dt = 1.0 * u.ms
-        with brainstate.environ.context(dt=dt):
+        dt_ms_val = 1.0
+        with brainstate.environ.context(dt=dt_ms_val * u.ms):
             dil = spike_dilutor(in_size=n_targets, p_copy=p_copy, rng_seed=12345)
             dil.init_state()
 
             dftype = brainstate.environ.dftype()
-            counts = np.zeros(n_targets, dtype=dftype)
-            for step in range(1, n_spikes + 1):
-                with brainstate.environ.context(t=step * dt):
-                    counts += np.asarray(dil.update(mother_spikes=1.0), dtype=dftype).reshape(-1)
+            # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+            t_array = jnp.arange(1, n_spikes + 1, dtype=dftype) * dt_ms_val
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    out = dil.update(mother_spikes=1.0)
+                return jnp.asarray(out, dtype=dftype)
+
+            all_counts = np.array(brainstate.transform.for_loop(step_fn, t_array))
+            counts = all_counts.sum(axis=0)
         return float(np.mean(counts))
 
     def test_mean_dynamics_match_nest(self):

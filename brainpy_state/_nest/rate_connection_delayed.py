@@ -1,5 +1,6 @@
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -253,7 +254,7 @@ class rate_connection_delayed(NESTSynapse):
         delay_steps: ArrayLike = 1,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay_steps = self._validate_delay_steps(delay_steps)
 

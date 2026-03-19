@@ -21,6 +21,7 @@ import unittest
 import brainstate
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -45,19 +46,26 @@ def _to_ms_scalar(value):
 def _run_bp_iaf_trace(simtime_ms, dt_ms, sr_params, i_e_pA):
     n_steps = int(round(simtime_ms / dt_ms))
     dt = dt_ms * u.ms
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
 
     with brainstate.environ.context(dt=dt):
         neuron = iaf_psc_delta(1, I_e=i_e_pA * u.pA)
         neuron.init_state()
         sr = spike_recorder(**sr_params)
 
+        # JIT-compile neuron dynamics via for_loop, collect all spike outputs
+        def _step(k):
+            with brainstate.environ.context(t=k * dt):
+                spk = neuron.update()
+            return spk
+
+        all_spikes = brainstate.transform.for_loop(_step, jnp.arange(n_steps))
+        # all_spikes shape: (n_steps, 1) — feed to spike_recorder in Python
+        all_spikes_np = np.asarray(u.math.asarray(all_spikes), dtype=dftype).reshape(n_steps, -1)
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt):
-                spk = neuron.update()
-                dftype = brainstate.environ.dftype()
-                spk_np = np.asarray(u.math.asarray(spk), dtype=dftype).reshape(-1)
-                ditype = brainstate.environ.ditype()
-                sr.update(spikes=spk_np, senders=np.array([1], dtype=ditype))
+                sr.update(spikes=all_spikes_np[step], senders=np.array([1], dtype=ditype))
 
     return sr.events
 
@@ -87,13 +95,13 @@ def _run_nest_iaf_trace(simtime_ms, dt_ms, sr_params, i_e_pA):
     nest.Simulate(simtime_ms)
 
     ev = sr.events
+    dftype = brainstate.environ.dftype()
     ditype = brainstate.environ.ditype()
     out = {
         'senders': np.asarray(ev['senders'], dtype=ditype),
     }
     if nest_sr_params['time_in_steps']:
         out['times'] = np.asarray(ev['times'], dtype=ditype)
-        dftype = brainstate.environ.dftype()
         out['offsets'] = np.asarray(ev['offsets'], dtype=dftype)
     else:
         out['times'] = np.asarray(ev['times'], dtype=dftype)

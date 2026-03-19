@@ -1,5 +1,6 @@
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -285,7 +286,7 @@ class rate_connection_instantaneous(NESTSynapse):
         weight: ArrayLike = 1.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         self.weight = self._to_float_scalar(weight, name='weight')
         # Kept for status parity with NEST; not used in transmission logic.
         self.delay = 1

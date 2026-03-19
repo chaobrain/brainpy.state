@@ -19,6 +19,7 @@
 import math
 from collections.abc import Mapping
 
+import brainstate
 import saiunit as u
 import jax.numpy as jnp
 import numpy as np
@@ -576,9 +577,9 @@ class stdp_facetshw_synapse_hom(static_synapse):
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             unit = u.get_unit(value)
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(unit), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)

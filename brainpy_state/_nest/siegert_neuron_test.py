@@ -23,6 +23,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import siegert_neuron
@@ -294,19 +295,23 @@ class TestSiegertNeuron(unittest.TestCase):
             nrn.init_state()
 
             dftype = brainstate.environ.dftype()
-            bp_rate = np.zeros((replay_steps,), dtype=dftype)
-            for k in range(replay_steps):
-                self._step(
-                    nrn,
-                    k,
-                    delayed_diffusion_events=[{
-                        'coeff': 1.0,
-                        'drift_factor': drift_factor,
-                        'diffusion_factor': diffusion_factor,
-                        'delay_steps': 1,
-                    }],
-                )
-                bp_rate[k] = float(np.asarray(nrn.rate.value).reshape(-1)[0])
+            # With delay_steps=1: step 0 has no delayed input (drift=0, diffusion=0);
+            # steps 1+ receive the constant event (drift=drift_factor, diffusion=diffusion_factor).
+            # Pre-compute Siegert drive for both regimes outside the JIT loop.
+            drive_0 = float(np.asarray(
+                nrn.siegert_rate(np.array([0.0]), np.array([0.0]))).reshape(-1)[0])
+            drive_const = float(np.asarray(
+                nrn.siegert_rate(np.array([drift_factor]), np.array([diffusion_factor]))).reshape(-1)[0])
+
+            precomputed_drive = np.full((replay_steps, 1), drive_const, dtype=dftype)
+            precomputed_drive[0, 0] = drive_0
+            precomputed_drive_jax = jnp.asarray(precomputed_drive)
+
+            def _body(drive_k):
+                nrn.update(_precomputed_drive=drive_k)
+                return nrn.rate.value[0]
+
+            bp_rate = np.array(brainstate.transform.for_loop(_body, precomputed_drive_jax))
 
         n_cmp = min(bp_rate.size, nest_rate.size)
         npt.assert_allclose(bp_rate[:n_cmp], nest_rate[:n_cmp], atol=2e-6, rtol=1e-8)

@@ -23,6 +23,7 @@ import brainstate
 import braintools
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import lin_rate_opn, rate_neuron_opn
@@ -370,8 +371,9 @@ class TestRateNeuronOPN(unittest.TestCase):
             [0.2, -1.0, 0.4, -0.3, 1.1, 0.0, -0.8, 0.7] * 8,
             dtype=dftype,
         )
-        instant_ev = [{'rate': 0.7, 'weight': 0.3}, {'rate': -0.5, 'weight': -0.2}]
-        delayed_ev = [{'rate': 0.4, 'weight': 0.6, 'delay_steps': 2}]
+        # Events used every step:
+        #   instant_ev: {rate=0.7, weight=0.3} -> ex; {rate=-0.5, weight=-0.2} -> in
+        #   delayed_ev: {rate=0.4, weight=0.6, delay=2} -> arrives 2 steps later -> ex
 
         with brainstate.environ.context(dt=self.dt):
             opn_template = rate_neuron_opn(
@@ -407,27 +409,72 @@ class TestRateNeuronOPN(unittest.TestCase):
             opn_template.init_state()
             opn_linear.init_state()
 
-            for k in range(steps):
-                self._step(
-                    opn_template,
-                    k,
-                    noise=noise_seq[k],
-                    instant_rate_events=instant_ev,
-                    delayed_rate_events=delayed_ev,
-                )
-                self._step(
-                    opn_linear,
-                    k,
-                    noise=noise_seq[k],
-                    instant_rate_events=instant_ev,
-                    delayed_rate_events=delayed_ev,
+            # --- Pre-compute per-step inputs for opn_template (rate_neuron_opn) ---
+            # For linear_summation=False in rate_neuron_opn, _event_to_ex_in applies
+            # the input nonlinearity g(h)=g*h during event processing.
+            g_val = float(np.asarray(u.get_mantissa(opn_template.g)))  # 1.3
+            # instant event {rate=0.7, weight=0.3}: _input_transform(0.7)=1.3*0.7=0.91
+            #   weighted_value = 0.91*0.3 = 0.273; weight>0 -> ex=0.273
+            # instant event {rate=-0.5, weight=-0.2}: _input_transform(-0.5)=1.3*(-0.5)=-0.65
+            #   weighted_value = -0.65*(-0.2) = 0.13; weight<0 -> ex=0, in=0.13
+            # delayed {rate=0.4, weight=0.6, delay=2}: _input_transform(0.4)=1.3*0.4=0.52
+            #   weighted_value = 0.52*0.6 = 0.312; weight>0 -> ex=0.312; arrives at k+2
+            opn_instant_ex_val = g_val * 0.7 * 0.3   # 0.273
+            opn_instant_in_val = abs(g_val * (-0.5) * (-0.2))  # 0.13
+            opn_delayed_ex_val = g_val * 0.4 * 0.6   # 0.312
+            precomputed_ex_opn = np.full((steps, 1), opn_instant_ex_val, dtype=dftype)
+            precomputed_in_opn = np.full((steps, 1), opn_instant_in_val, dtype=dftype)
+            precomputed_ex_opn[2:] += opn_delayed_ex_val
+
+            # --- Pre-compute per-step inputs for opn_linear (lin_rate_opn) ---
+            # For lin_rate_opn, _parse_event does rate*weight (no nonlinearity during buffering).
+            # The g factor is applied inside update() as: rate_new += P2*H*g*(ex+instant_ex).
+            # instant event {rate=0.7, weight=0.3}: ex = 0.7*0.3 = 0.21
+            # instant event {rate=-0.5, weight=-0.2}: weighted=(-0.5)*(-0.2)=0.1; weight<0->in=0.1
+            # delayed {rate=0.4, weight=0.6, delay=2}: ex = 0.4*0.6 = 0.24; arrives at k+2
+            lin_instant_ex_val = 0.7 * 0.3    # 0.21
+            lin_instant_in_val = 0.5 * 0.2    # 0.10
+            lin_delayed_ex_val = 0.4 * 0.6    # 0.24
+            precomputed_ex_lin = np.full((steps, 1), lin_instant_ex_val, dtype=dftype)
+            precomputed_in_lin = np.full((steps, 1), lin_instant_in_val, dtype=dftype)
+            precomputed_ex_lin[2:] += lin_delayed_ex_val
+
+            noise_input = jnp.asarray(noise_seq, dtype=dftype).reshape(steps, 1)
+            ex_opn_j = jnp.asarray(precomputed_ex_opn)
+            in_opn_j = jnp.asarray(precomputed_in_opn)
+            ex_lin_j = jnp.asarray(precomputed_ex_lin)
+            in_lin_j = jnp.asarray(precomputed_in_lin)
+
+            def body_opn(inputs):
+                noise_k, ex_k, in_k = inputs
+                opn_template.update(noise=noise_k, _precomputed_ex=ex_k, _precomputed_in=in_k)
+                return (
+                    opn_template.rate.value,
+                    opn_template.noise.value,
+                    opn_template.noisy_rate.value,
+                    opn_template.delayed_rate.value,
+                    opn_template.instant_rate.value,
                 )
 
-                npt.assert_allclose(opn_template.rate.value, opn_linear.rate.value, atol=1e-12)
-                npt.assert_allclose(opn_template.noise.value, opn_linear.noise.value, atol=1e-12)
-                npt.assert_allclose(opn_template.noisy_rate.value, opn_linear.noisy_rate.value, atol=1e-12)
-                npt.assert_allclose(opn_template.delayed_rate.value, opn_linear.delayed_rate.value, atol=1e-12)
-                npt.assert_allclose(opn_template.instant_rate.value, opn_linear.instant_rate.value, atol=1e-12)
+            def body_lin(inputs):
+                noise_k, ex_k, in_k = inputs
+                opn_linear.update(noise=noise_k, _precomputed_ex=ex_k, _precomputed_in=in_k)
+                return (
+                    opn_linear.rate.value,
+                    opn_linear.noise.value,
+                    opn_linear.noisy_rate.value,
+                    opn_linear.delayed_rate.value,
+                    opn_linear.instant_rate.value,
+                )
+
+            res_opn = brainstate.transform.for_loop(body_opn, (noise_input, ex_opn_j, in_opn_j))
+            res_lin = brainstate.transform.for_loop(body_lin, (noise_input, ex_lin_j, in_lin_j))
+
+        npt.assert_allclose(res_opn[0], res_lin[0], atol=1e-12)
+        npt.assert_allclose(res_opn[1], res_lin[1], atol=1e-12)
+        npt.assert_allclose(res_opn[2], res_lin[2], atol=1e-12)
+        npt.assert_allclose(res_opn[3], res_lin[3], atol=1e-12)
+        npt.assert_allclose(res_opn[4], res_lin[4], atol=1e-12)
 
     def test_matches_nest_lin_rate_trace_with_default_linear_template(self):
         if not _is_nest_available():
@@ -473,14 +520,17 @@ class TestRateNeuronOPN(unittest.TestCase):
             )
             bp.init_state()
             dftype = brainstate.environ.dftype()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            bp_noise = np.zeros((steps,), dtype=dftype)
-            bp_noisy = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(bp, k)
-                bp_rate[k] = float(np.asarray(bp.rate.value).reshape(-1)[0])
-                bp_noise[k] = float(np.asarray(bp.noise.value).reshape(-1)[0])
-                bp_noisy[k] = float(np.asarray(bp.noisy_rate.value).reshape(-1)[0])
+            # sigma=0 -> no noise; no events -> pre-computed inputs are zeros.
+            zeros = jnp.zeros((1,), dtype=dftype)
+
+            def _body(_k):
+                bp.update(_precomputed_ex=zeros, _precomputed_in=zeros, noise=zeros)
+                return (bp.rate.value[0], bp.noise.value[0], bp.noisy_rate.value[0])
+
+            _res = brainstate.transform.for_loop(_body, jnp.arange(steps))
+            bp_rate = np.array(_res[0])
+            bp_noise = np.array(_res[1])
+            bp_noisy = np.array(_res[2])
 
         n_cmp = min(bp_rate.size, nest_out['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], nest_out['rate'][:n_cmp], atol=1e-12)
@@ -522,21 +572,41 @@ class TestRateNeuronOPN(unittest.TestCase):
             bp_delayed.init_state()
 
             dftype = brainstate.environ.dftype()
-            trace_instant = np.zeros((steps,), dtype=dftype)
-            trace_delayed = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(
-                    bp_instant,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                self._step(
-                    bp_delayed,
-                    k,
-                    delayed_rate_events=[{'rate': drive, 'weight': weight, 'delay_steps': delay_steps}],
-                )
-                trace_instant[k] = float(np.asarray(bp_instant.rate.value).reshape(-1)[0])
-                trace_delayed[k] = float(np.asarray(bp_delayed.rate.value).reshape(-1)[0])
+            # Pre-compute per-step inputs (linear_summation=True, mult_coupling=False).
+            # For linear_summation=True, _event_to_ex_in uses rate*weight (pre-nonlinearity).
+            # The nonlinearity g(h)=g*h is applied inside update() to the accumulated inputs.
+            # default g=1.0 for these neurons, so ex = drive * weight = 1.5 * 0.5 = 0.75.
+            inst_ex_val = np.float64(drive * weight)   # 0.75 per step
+            zeros1 = jnp.zeros((1,), dtype=dftype)
+
+            # Instantaneous: ex=0.75 every step; no delayed events.
+            ex_instant = jnp.full((steps, 1), inst_ex_val, dtype=dftype)
+            in_instant = jnp.zeros((steps, 1), dtype=dftype)
+
+            # Delayed with delay_steps steps: ex=0.75 arrives starting from step delay_steps.
+            ex_delayed = jnp.where(
+                jnp.arange(steps, dtype=dftype).reshape(steps, 1) >= np.float64(delay_steps),
+                inst_ex_val,
+                0.0,
+            )
+            in_delayed = jnp.zeros((steps, 1), dtype=dftype)
+
+            def _body_instant(inputs):
+                ex_k, in_k = inputs
+                bp_instant.update(_precomputed_ex=ex_k, _precomputed_in=in_k, noise=zeros1)
+                return bp_instant.rate.value[0]
+
+            def _body_delayed(inputs):
+                ex_k, in_k = inputs
+                bp_delayed.update(_precomputed_ex=ex_k, _precomputed_in=in_k, noise=zeros1)
+                return bp_delayed.rate.value[0]
+
+            trace_instant = np.array(
+                brainstate.transform.for_loop(_body_instant, (ex_instant, in_instant))
+            )
+            trace_delayed = np.array(
+                brainstate.transform.for_loop(_body_delayed, (ex_delayed, in_delayed))
+            )
 
         n_cmp = min(trace_instant.size, nest_instant.size)
         npt.assert_allclose(trace_instant[:n_cmp], nest_instant[:n_cmp], atol=1e-10)

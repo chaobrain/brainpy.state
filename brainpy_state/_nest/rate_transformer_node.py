@@ -549,7 +549,8 @@ class rate_transformer_node(NESTNeuron):
 
         self._delayed_queue = {}
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None):
+    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None,
+               _precomputed_rate=None):
         r"""Execute one timestep of the rate transformation algorithm.
 
         Processes incoming rate events (both instant and delayed), applies the configured
@@ -587,6 +588,21 @@ class rate_transformer_node(NESTNeuron):
             - ``delay_steps=0``: event applied immediately (equivalent to instant event)
             - ``delay_steps=d > 0``: event applied after ``d`` timesteps
             - Negative ``delay_steps`` raises ``ValueError``
+
+        _precomputed_rate : array_like or None, optional
+            **JIT-compatible fast path**: pre-computed output rate for the current timestep,
+            bypassing all Python-level event queue operations *and* the nonlinearity call.
+
+            The caller is responsible for computing the correct value outside the loop:
+
+            - For ``linear_summation=True``: ``nl(sum_j w_j * r_j)``
+            - For ``linear_summation=False``: ``sum_j w_j * nl(r_j)``
+
+            When provided, ``instant_rate_events``, ``delayed_rate_events``, and the
+            internal ``_step_count`` / ``_delayed_queue`` are all ignored. This allows the
+            body of a ``brainstate.transform.for_loop`` to be JIT-compiled without
+            requiring the user-supplied nonlinearity to handle JAX traced values.
+            Default: ``None`` (use standard Python-queue event processing).
 
         Returns
         -------
@@ -644,8 +660,20 @@ class rate_transformer_node(NESTNeuron):
         """
         del x  # NEST rate transformer has no intrinsic current input.
 
-        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
+
+        if _precomputed_rate is not None:
+            # JIT-compatible path: bypass all Python queue, event-dict, and nonlinearity
+            # operations. The caller pre-computes the full output rate before the loop.
+            rate_new = u.math.asarray(_precomputed_rate, dtype=dftype)
+            rate_prev = u.math.asarray(self.rate.value, dtype=dftype)
+            self.rate.value = rate_new
+            self.delayed_rate.value = rate_prev
+            self.instant_rate.value = rate_new
+            return rate_new
+
+        ditype = brainstate.environ.ditype()
         step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_total = self._drain_delayed_queue(step_idx, state_shape)

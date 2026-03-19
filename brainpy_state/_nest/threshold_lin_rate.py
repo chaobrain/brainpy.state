@@ -21,6 +21,7 @@ from typing import Callable
 import brainstate
 import braintools
 import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -42,12 +43,12 @@ class _threshold_lin_rate_base(_lin_rate_base):
     @staticmethod
     def _mult_coupling_ex(rate):
         dftype = brainstate.environ.dftype()
-        return np.ones_like(rate, dtype=dftype)
+        return jnp.ones_like(rate, dtype=dftype)
 
     @staticmethod
     def _mult_coupling_in(rate):
         dftype = brainstate.environ.dftype()
-        return np.ones_like(rate, dtype=dftype)
+        return jnp.ones_like(rate, dtype=dftype)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
         if isinstance(ev, dict):
@@ -84,7 +85,7 @@ class _threshold_lin_rate_base(_lin_rate_base):
         multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
         dftype = brainstate.environ.dftype()
         weight_sign = self._broadcast_to_state(
-            np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0,
+            np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0,
             state_shape,
         )
 
@@ -142,8 +143,7 @@ class _threshold_lin_rate_base(_lin_rate_base):
 
     def _common_inputs_threshold(self, x, instant_rate_events, delayed_rate_events, g, theta, alpha):
         state_shape = self.rate.value.shape
-        ditype = brainstate.environ.ditype()
-        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
+        step_idx = self._step_count
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events_threshold(
@@ -677,8 +677,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        ditype = brainstate.environ.ditype()
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._step_count = 0
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -764,7 +763,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         decay rates, or noise parameters are caught at construction by
         ``_validate_parameters``. Invalid event formats raise ``ValueError``.
         """
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
 
         tau, sigma, mu, g, theta, alpha = self._common_parameters_threshold(state_shape)
@@ -780,12 +780,12 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
             alpha=alpha,
         )
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
         if noise is None:
-            xi = np.random.normal(size=state_shape)
+            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         if np.any(lambda_ > 0.0):
@@ -807,8 +807,8 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones_like(rate_prev)
+        H_in = jnp.ones_like(rate_prev)
         if self.mult_coupling:
             H_ex = self._mult_coupling_ex(rate_prev)
             H_in = self._mult_coupling_in(rate_prev)
@@ -825,14 +825,13 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
             rate_new += P2 * H_in * (delayed_in + instant_in)
 
         if self.rectify_output:
-            rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
+            rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
-        ditype = brainstate.environ.ditype()
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
+        self._step_count = step_idx + 1
         return rate_new
 
 
@@ -1314,13 +1313,12 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         noisy_rate_np = self._to_numpy(noisy_rate)
 
         dftype = brainstate.environ.dftype()
-        ditype = brainstate.environ.ditype()
         self.rate = brainstate.ShortTermState(rate_np)
         self.noise = brainstate.ShortTermState(noise_np)
         self.noisy_rate = brainstate.ShortTermState(noisy_rate_np)
         self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._step_count = 0
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -1412,7 +1410,8 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         or noise parameters are caught at construction by ``_validate_parameters``.
         Invalid event formats raise ``ValueError``.
         """
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
 
         tau, sigma, mu, g, theta, alpha = self._common_parameters_threshold(state_shape)
@@ -1425,12 +1424,12 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
             alpha=alpha,
         )
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
         if noise is None:
-            xi = np.random.normal(size=state_shape)
+            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         P1 = np.exp(-h / tau)
@@ -1441,8 +1440,8 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones_like(rate_prev)
+        H_in = jnp.ones_like(rate_prev)
         if self.mult_coupling:
             H_ex = self._mult_coupling_ex(noisy_rate)
             H_in = self._mult_coupling_in(noisy_rate)
@@ -1458,11 +1457,10 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
             rate_new += P2 * H_ex * (delayed_ex + instant_ex)
             rate_new += P2 * H_in * (delayed_in + instant_in)
 
-        ditype = brainstate.environ.ditype()
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
+        self._step_count = step_idx + 1
         return rate_new

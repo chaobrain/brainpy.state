@@ -314,13 +314,13 @@ class spike_recorder(NESTDevice):
 
     @property
     def events(self) -> dict[str, np.ndarray]:
+        dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
         out = {
             'senders': np.asarray(self._events_senders, dtype=ditype),
         }
         if self.time_in_steps:
             out['times'] = np.asarray(self._events_times_steps, dtype=ditype)
-            dftype = brainstate.environ.dftype()
             out['offsets'] = np.asarray(self._events_offsets, dtype=dftype)
         else:
             out['times'] = np.asarray(self._events_times_ms, dtype=dftype)
@@ -572,10 +572,10 @@ class spike_recorder(NESTDevice):
         size: int = None,
         unit=None,
     ) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            dftype = brainstate.environ.dftype()
             arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
@@ -606,10 +606,10 @@ class spike_recorder(NESTDevice):
         default: int = None,
         size: int = None,
     ) -> np.ndarray:
+        ditype = brainstate.environ.ditype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            ditype = brainstate.environ.ditype()
             arr = np.asarray([default], dtype=ditype)
         else:
             arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)

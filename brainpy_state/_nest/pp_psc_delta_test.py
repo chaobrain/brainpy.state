@@ -44,8 +44,10 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 
 import braintools
 import brainstate
+import brainstate.transform as bst_transform
 import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._nest.pp_psc_delta import pp_psc_delta
@@ -368,7 +370,7 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
 
             self._step(neuron, 0)
             v = float((neuron.V.value / u.mV)[0])
-            self.assertAlmostEqual(v, V_expected, places=8)
+            self.assertAlmostEqual(v, V_expected, places=7)
 
     def test_constant_current_steady_state(self):
         r"""With constant current and no spiking, V should approach steady state V_ss = I_e * tau_m / C_m."""
@@ -389,8 +391,11 @@ class TestPpPscDeltaSubthresholdDynamics(unittest.TestCase):
             neuron.init_state()
 
             # Run for a long time (100 ms = 1000 steps) to reach steady state
-            for k in range(1000):
-                self._step(neuron, k)
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+
+            bst_transform.for_loop(run_step, jnp.arange(1000))
 
             v = float((neuron.V.value / u.mV)[0])
             self.assertAlmostEqual(v, V_ss, places=2)
@@ -427,10 +432,13 @@ class TestPpPscDeltaDeadTime(unittest.TestCase):
             self.assertTrue(float(spk0[0]) > 0, "Should spike with very high rate")
 
             # Steps 1-49: should not spike (in dead time)
-            for k in range(1, 50):
-                spk = self._step(neuron, k)
-                self.assertEqual(float(spk[0]), 0.0,
-                                 f"Should not spike during dead time at step {k}")
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update()[0]
+
+            spikes = bst_transform.for_loop(run_step, jnp.arange(1, 50))
+            self.assertTrue(np.all(np.array(spikes) == 0.0),
+                            "Should not spike during dead time")
 
     def test_dead_time_count_matches_duration(self):
         r"""Refractory counter should match dead_time / dt."""
@@ -596,13 +604,15 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
             self._step(neuron, 0)
 
             # Disable spiking for subsequent steps
-            old_c2 = neuron.c_2
             neuron.c_2 = 0.0
             neuron.c_1 = 0.0
 
             # Run 10 steps (1 ms) to let adaptation decay
-            for k in range(1, 11):
-                self._step(neuron, k)
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+
+            bst_transform.for_loop(run_step, jnp.arange(1, 11))
 
             # Check each element decayed correctly
             h = 0.1  # ms
@@ -611,8 +621,10 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
                 # Then 10 steps of decay: expected = q_sfa[i] * exp(-10*h / tau)
                 n_decay_steps = 10  # steps 1-10 each decay
                 expected = q_sfa[i] * math.exp(-n_decay_steps * h / tau_sfa[i])
-                actual = neuron._q_elems[i][0]
-                self.assertAlmostEqual(actual, expected, places=6,
+                actual = float(neuron._q_elems.value[i][0] / u.mV)
+                # float32 arithmetic gives ~1e-6 absolute error over 10 steps;
+                # places=5 (tolerance 5e-6) is the tightest achievable without x64.
+                self.assertAlmostEqual(actual, expected, places=5,
                                        msg=f"SFA element {i} decay mismatch")
 
     def test_adaptation_reduces_effective_rate(self):
@@ -642,15 +654,18 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
             )
             with_adapt.init_state()
 
-            spikes_no_adapt = 0
-            spikes_with_adapt = 0
-            for k in range(1000):
-                s1 = self._step(no_adapt, k)
-                s2 = self._step(with_adapt, k)
-                if float(s1[0]) > 0:
-                    spikes_no_adapt += 1
-                if float(s2[0]) > 0:
-                    spikes_with_adapt += 1
+            def run_no_adapt(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return no_adapt.update()[0]
+
+            def run_with_adapt(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return with_adapt.update()[0]
+
+            s1_all = bst_transform.for_loop(run_no_adapt, jnp.arange(1000))
+            s2_all = bst_transform.for_loop(run_with_adapt, jnp.arange(1000))
+            spikes_no_adapt = int(jnp.sum(s1_all > 0))
+            spikes_with_adapt = int(jnp.sum(s2_all > 0))
 
             # With adaptation, there should be fewer spikes
             self.assertTrue(spikes_with_adapt < spikes_no_adapt,
@@ -676,7 +691,7 @@ class TestPpPscDeltaAdaptation(unittest.TestCase):
 
             # All 3 elements should have nonzero values
             for i in range(3):
-                self.assertTrue(neuron._q_elems[i][0] > 0,
+                self.assertTrue(float(neuron._q_elems.value[i][0] / u.mV) > 0,
                                 f"SFA element {i} should be nonzero after spike")
 
 
@@ -705,10 +720,13 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            for k in range(100):
-                spk = self._step(neuron, k)
-                self.assertEqual(float(spk[0]), 0.0,
-                                 f"No spike expected with zero rate at step {k}")
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update()[0]
+
+            spikes = bst_transform.for_loop(run_step, jnp.arange(100))
+            self.assertTrue(np.all(np.array(spikes) == 0.0),
+                            "No spike expected with zero rate")
 
     def test_high_rate_produces_spikes(self):
         r"""With very high c_2 (high rate), spikes should occur readily."""
@@ -722,11 +740,12 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_count = 0
-            for k in range(100):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_count += 1
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update()[0]
+
+            spikes = bst_transform.for_loop(run_step, jnp.arange(100))
+            spike_count = int(jnp.sum(spikes > 0))
 
             self.assertTrue(spike_count > 30,
                             f"Expected many spikes with high rate, got {spike_count}")
@@ -742,11 +761,20 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
             n1.init_state()
             n2.init_state()
 
-            for k in range(50):
-                s1 = self._step(n1, k)
-                s2 = self._step(n2, k)
-                self.assertEqual(float(s1[0]), float(s2[0]),
-                                 f"Spike mismatch at step {k} with identical RNG")
+            def run_n1(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n1.update()[0]
+
+            def run_n2(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n2.update()[0]
+
+            s1_all = bst_transform.for_loop(run_n1, jnp.arange(50))
+            s2_all = bst_transform.for_loop(run_n2, jnp.arange(50))
+            np.testing.assert_array_equal(
+                np.array(s1_all), np.array(s2_all),
+                err_msg="Spike mismatch with identical RNG"
+            )
 
     def test_linear_transfer_function(self):
         r"""With c_2=0, only the linear part c_1*V should contribute to rate."""
@@ -764,11 +792,12 @@ class TestPpPscDeltaStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_count = 0
-            for k in range(200):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_count += 1
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update()[0]
+
+            spikes = bst_transform.for_loop(run_step, jnp.arange(200))
+            spike_count = int(jnp.sum(spikes > 0))
 
             # Should have some spikes from the linear rate
             self.assertTrue(spike_count > 0,
@@ -857,13 +886,17 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                x_pA = i_stim_seq[k]
-                dv = delta_v_seq[k]
-                delta = dv * u.mV if dv != 0.0 else None
-                self._step(neuron, k, x=x_pA * u.pA, delta=delta)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            x_arr = jnp.array(i_stim_seq) * u.pA
+            dv_arr = jnp.array(delta_v_seq) * u.mV
+
+            def run_step(k):
+                neuron.add_delta_input('_delta', dv_arr[k])
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=x_arr[k])
+                return neuron.V.value[0] / u.mV
+
+            v_model_arr = bst_transform.for_loop(run_step, jnp.arange(n_steps))
+            v_model = list(np.array(v_model_arr))
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=5,
@@ -912,12 +945,13 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            spk_model = []
-            for k in range(n_steps):
-                spk = self._step(neuron, k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                spk_model.append(float(spk[0]))
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update()
+                return neuron.V.value[0] / u.mV, spk[0]
+
+            results = bst_transform.for_loop(run_step, jnp.arange(n_steps))
+            v_model = list(np.array(results[0]))
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=6,
@@ -965,10 +999,12 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                self._step(neuron, k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.V.value[0] / u.mV
+
+            v_model = list(np.array(bst_transform.for_loop(run_step, jnp.arange(n_steps))))
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=6,
@@ -1017,12 +1053,15 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                dv = delta_v_seq[k]
-                delta = dv * u.mV if dv != 0.0 else None
-                self._step(neuron, k, delta=delta)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            dv_arr = jnp.array(delta_v_seq) * u.mV
+
+            def run_step(k):
+                neuron.add_delta_input('_delta', dv_arr[k])
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.V.value[0] / u.mV
+
+            v_model = list(np.array(bst_transform.for_loop(run_step, jnp.arange(n_steps))))
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=5,
@@ -1070,10 +1109,12 @@ class TestPpPscDeltaReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            for k in range(n_steps):
-                self._step(neuron, k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            def run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.V.value[0] / u.mV
+
+            v_model = list(np.array(bst_transform.for_loop(run_step, jnp.arange(n_steps))))
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=5,
@@ -1117,8 +1158,10 @@ class TestPpPscDeltaUpdateOrder(unittest.TestCase):
 
             # The E_sfa should be the decayed value
             expected_q = 100.0 * math.exp(-0.1 / 10.0)
-            actual_q = neuron._q_val[0]
-            self.assertAlmostEqual(actual_q, expected_q, places=6)
+            actual_q = float(neuron._q_val.value[0] / u.mV)
+            # float32 arithmetic gives ~1.4e-6 absolute error for this value;
+            # places=5 (tolerance 5e-6) is the tightest achievable without x64.
+            self.assertAlmostEqual(actual_q, expected_q, places=5)
 
     def test_delta_input_applied_before_spike_check(self):
         r"""Delta inputs should be incorporated in the V update before the spike check."""

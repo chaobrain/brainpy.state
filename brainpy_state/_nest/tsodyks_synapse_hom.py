@@ -19,6 +19,7 @@
 import math
 from collections.abc import Mapping
 
+import brainstate
 import saiunit as u
 import jax.numpy as jnp
 import numpy as np

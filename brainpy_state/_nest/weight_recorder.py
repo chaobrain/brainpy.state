@@ -432,6 +432,7 @@ class weight_recorder(NESTDevice):
             ditype = brainstate.environ.ditype()
             return np.asarray(self.senders, dtype=ditype)
         if key == 'targets':
+            ditype = brainstate.environ.ditype()
             return np.asarray(self.targets, dtype=ditype)
         raise KeyError(f'Unsupported key "{key}" for weight_recorder.get().')
 
@@ -695,10 +696,10 @@ class weight_recorder(NESTDevice):
         size: int = None,
         unit=None,
     ) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            dftype = brainstate.environ.dftype()
             arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
@@ -729,10 +730,10 @@ class weight_recorder(NESTDevice):
         default: int = None,
         size: int = None,
     ) -> np.ndarray:
+        ditype = brainstate.environ.ditype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            ditype = brainstate.environ.ditype()
             arr = np.asarray([default], dtype=ditype)
         else:
             arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)

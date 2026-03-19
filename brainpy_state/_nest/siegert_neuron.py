@@ -23,6 +23,7 @@ import brainstate
 import braintools
 import saiunit as u
 import numpy as np
+import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -352,12 +353,12 @@ class siegert_neuron(NESTNeuron):
     @staticmethod
     def _to_numpy(x):
         dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x), dtype=dftype)
+        return np.asarray(u.get_mantissa(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_ms(x):
         dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
+        return np.asarray(u.get_mantissa(x / u.ms), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -366,7 +367,7 @@ class siegert_neuron(NESTNeuron):
     @staticmethod
     def _to_int_scalar(x, name: str):
         dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
+        arr = np.asarray(u.get_mantissa(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])
@@ -864,6 +865,7 @@ class siegert_neuron(NESTNeuron):
         diffusion_input: ArrayLike = 0.0,
         instant_diffusion_events=None,
         delayed_diffusion_events=None,
+        _precomputed_drive=None,
     ):
         r"""Advance the rate dynamics by one simulation timestep.
 
@@ -1026,9 +1028,24 @@ class siegert_neuron(NESTNeuron):
         """
         ditype = brainstate.environ.ditype()
         dftype = brainstate.environ.dftype()
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
 
         state_shape = self.rate.value.shape
+
+        if _precomputed_drive is not None:
+            # JIT-compatible path: bypass event queue and Siegert computation entirely.
+            drive = jnp.broadcast_to(jnp.asarray(_precomputed_drive, dtype=dftype), state_shape)
+            rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
+            tau = np.broadcast_to(self._to_numpy_ms(self.tau), state_shape)
+            mean = np.broadcast_to(self._to_numpy(self.mean), state_shape)
+            p1 = np.exp(-h / tau)
+            p2 = -np.expm1(-h / tau)
+            rate_new = p1 * rate_prev + p2 * (mean + drive)
+            self.rate.value = rate_new
+            self.delayed_rate.value = rate_new
+            self.instant_rate.value = rate_new
+            return rate_new
+
         step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         drift_delayed, diffusion_delayed = self._drain_delayed_queue(step_idx, state_shape)

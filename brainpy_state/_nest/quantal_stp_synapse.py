@@ -18,6 +18,7 @@
 
 import math
 
+import brainstate
 import saiunit as u
 import jax.numpy as jnp
 import numpy as np

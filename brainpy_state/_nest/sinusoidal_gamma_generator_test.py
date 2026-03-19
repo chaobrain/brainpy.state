@@ -27,6 +27,7 @@ import jax
 jax.config.update('jax_enable_x64', True)
 import brainstate
 import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -56,7 +57,6 @@ def _run_bp_counts(
     dt = dt_ms * u.ms
     n_steps = int(round(simtime_ms / dt_ms))
     dftype = brainstate.environ.dftype()
-    totals = np.zeros(n_steps, dtype=dftype)
 
     with brainstate.environ.context(dt=dt):
         gen = sinusoidal_gamma_generator(
@@ -74,9 +74,14 @@ def _run_bp_counts(
         )
         gen.init_state()
 
-        for step in range(n_steps):
-            with brainstate.environ.context(t=step * dt):
-                totals[step] = float(np.asarray(gen.update(), dtype=dftype).sum())
+        t_array = jnp.arange(n_steps, dtype=dftype) * dt_ms
+
+        def step_fn(t_ms):
+            with brainstate.environ.context(t=t_ms * u.ms):
+                out = gen.update()
+            return jnp.asarray(out, dtype=dftype).sum()
+
+        totals = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
     return totals
 
@@ -132,11 +137,17 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
         self.dt = 1.0 * u.ms
 
     def _run_trace(self, gen, n_steps):
-        trace = []
-        for step in range(n_steps):
-            with brainstate.environ.context(t=step * self.dt):
-                trace.append(int(np.asarray(gen.update())[0]))
-        return trace
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+        dt_ms_val = float(np.asarray(self.dt.to_decimal(u.ms)))
+        t_array = jnp.arange(n_steps, dtype=dftype) * dt_ms_val
+
+        def step_fn(t_ms):
+            with brainstate.environ.context(t=t_ms * u.ms):
+                out = gen.update()
+            return jnp.asarray(out, dtype=ditype).reshape(-1)[0]
+
+        return list(np.array(brainstate.transform.for_loop(step_fn, t_array), dtype=int))
 
     def test_start_exclusive_stop_inclusive(self):
         with brainstate.environ.context(dt=self.dt):
@@ -170,7 +181,6 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
         phase_deg = phi_rad / np.pi * 180.0
 
         dftype = brainstate.environ.dftype()
-        recorded = np.zeros(n_steps, dtype=dftype)
         with brainstate.environ.context(dt=dt):
             gen = sinusoidal_gamma_generator(
                 in_size=1,
@@ -182,10 +192,15 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
                 rng_seed=3,
             )
             gen.init_state()
-            for step in range(n_steps):
-                with brainstate.environ.context(t=step * dt):
+
+            t_array = jnp.arange(n_steps, dtype=dftype) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     gen.update()
-                recorded[step] = gen.get_recorded_rate()
+                return jnp.asarray(gen._recorded_rate_hz.value, dtype=dftype)
+
+            recorded = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
         times_ms = (np.arange(n_steps, dtype=dftype) + 1.0) * dt_ms
         expected = dc_hz + ac_hz * np.sin(
@@ -207,9 +222,15 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
             dftype = brainstate.environ.dftype()
             gen._sample_uniform = lambda shape=(): np.full(shape, 2.0, dtype=dftype)
 
-            for step in range(3):
-                with brainstate.environ.context(t=step * self.dt):
+            dt_ms_val = float(np.asarray(self.dt.to_decimal(u.ms)))
+            t_array = jnp.arange(3, dtype=dftype) * dt_ms_val
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     gen.update()
+                return jnp.zeros(())
+
+            brainstate.transform.for_loop(step_fn, t_array)
 
             with brainstate.environ.context(t=3.0 * self.dt):
                 gen.set(rate=1000.0 * u.Hz)
@@ -235,12 +256,20 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
                 rng_seed=7,
             )
             gen.init_state()
+            dftype = brainstate.environ.dftype()
+            ditype = brainstate.environ.ditype()
+            dt_ms_val = float(np.asarray(dt.to_decimal(u.ms)))
+            t_array = jnp.arange(50, dtype=dftype) * dt_ms_val
 
-            for step in range(50):
-                with brainstate.environ.context(t=step * dt):
-                    ditype = brainstate.environ.ditype()
-                    out = np.asarray(gen.update(), dtype=ditype)
-                self.assertTrue(np.all(out == out.reshape(-1)[0]))
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    out = gen.update()
+                return jnp.asarray(out, dtype=ditype)
+
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        for out in outputs:
+            self.assertTrue(np.all(out == out.reshape(-1)[0]))
 
     def test_individual_spike_trains_true_are_not_forced_equal(self):
         dt = 0.1 * u.ms
@@ -255,17 +284,20 @@ class TestSinusoidalGammaGeneratorOrdering(unittest.TestCase):
                 rng_seed=11,
             )
             gen.init_state()
+            dftype = brainstate.environ.dftype()
+            ditype = brainstate.environ.ditype()
+            dt_ms_val = float(np.asarray(dt.to_decimal(u.ms)))
+            t_array = jnp.arange(80, dtype=dftype) * dt_ms_val
 
-            has_non_uniform_step = False
-            for step in range(80):
-                with brainstate.environ.context(t=step * dt):
-                    ditype = brainstate.environ.ditype()
-                    out = np.asarray(gen.update(), dtype=ditype)
-                if np.any(out != out.reshape(-1)[0]):
-                    has_non_uniform_step = True
-                    break
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    out = gen.update()
+                return jnp.asarray(out, dtype=ditype)
 
-            self.assertTrue(has_non_uniform_step)
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        has_non_uniform_step = any(np.any(out != out.reshape(-1)[0]) for out in outputs)
+        self.assertTrue(has_non_uniform_step)
 
 
 class TestSinusoidalGammaGeneratorVsNEST(unittest.TestCase):
@@ -322,9 +354,9 @@ class TestSinusoidalGammaGeneratorVsNEST(unittest.TestCase):
         nest.Connect(gens, sr)
         nest.Simulate(simtime_ms)
 
+        dftype = brainstate.environ.dftype()
         events = sr.get('events')
         if len(events['times']) == 0:
-            dftype = brainstate.environ.dftype()
             return np.zeros(n_steps, dtype=dftype)
 
         steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)

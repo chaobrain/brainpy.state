@@ -20,7 +20,6 @@ import math
 
 import brainstate
 import saiunit as u
-import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -365,8 +364,8 @@ class ppd_sup_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -376,8 +375,8 @@ class ppd_sup_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -455,10 +454,13 @@ class ppd_sup_generator(NESTDevice):
         return self._to_scalar_time_ms(dt)
 
     def _current_time_ms(self) -> float:
-        t = brainstate.environ.get('t', default=0. * u.ms)
+        t = brainstate.environ.get('t', default=None)
         if t is None:
             return 0.0
-        return self._to_scalar_time_ms(t)
+        # Fast path for scalar Quantity (avoids np.asarray round-trip).
+        if isinstance(t, u.Quantity):
+            return float(t.to_decimal(u.ms))
+        return float(t)
 
     def _refresh_runtime_cache(self, dt_ms: float):
         self._assert_grid_time('origin', self.origin, dt_ms)
@@ -776,20 +778,18 @@ class ppd_sup_generator(NESTDevice):
         if not hasattr(self, 'occ_refractory'):
             self.init_state()
 
-        dt_ms = self._dt_ms()
-        if (not np.isfinite(self._dt_cache_ms)) or (
-            not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)
-        ):
-            self._refresh_runtime_cache(dt_ms)
+        if not np.isfinite(self._dt_cache_ms):
+            self._refresh_runtime_cache(self._dt_ms())
+        dt_ms = self._dt_cache_ms
 
+        ditype = brainstate.environ.ditype()
         if self.rate <= 0.0 or self._num_targets == 0:
-            ditype = brainstate.environ.ditype()
-            return jnp.zeros(self.varshape, dtype=ditype)
+            return np.zeros(self.varshape, dtype=ditype)
 
         curr_t_ms = self._current_time_ms()
         curr_step = self._time_to_step(curr_t_ms, dt_ms)
         if not self._is_active(curr_step):
-            return jnp.zeros(self.varshape, dtype=ditype)
+            return np.zeros(self.varshape, dtype=ditype)
 
         if self.relative_amplitude > 0.0 and self.frequency != 0.0:
             hazard_step_t = self._hazard_step * (
@@ -819,4 +819,4 @@ class ppd_sup_generator(NESTDevice):
         self.occ_refractory.value = occ_ref
         self.occ_active.value = occ_active
         self.activate.value = activate
-        return jnp.asarray(counts.reshape(self.varshape), dtype=ditype)
+        return counts.reshape(self.varshape)

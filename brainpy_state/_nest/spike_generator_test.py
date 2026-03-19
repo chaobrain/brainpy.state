@@ -30,8 +30,10 @@ Validates the brainpy.state ``spike_generator`` against:
 import unittest
 
 import brainstate
-import saiunit as u
+import jax.numpy as jnp
+import numpy as np
 import numpy.testing as npt
+import saiunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -200,13 +202,17 @@ class TestSpikeGeneratorSimulation(unittest.TestCase):
                 spike_times=[t * u.ms for t in spike_times_ms],
             )
 
-            recorded_spike_times = []
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = sg.update()
-                    if float(out[0]) > 0.5:
-                        recorded_spike_times.append(round(t, 4))
+                return out[0]
+
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        spike_steps = np.where(outputs > 0.5)[0]
+        recorded_spike_times = [round(float(s * dt_ms), 4) for s in spike_steps]
 
         npt.assert_allclose(recorded_spike_times, spike_times_ms, atol=1e-4,
                             err_msg="Recorded spike times don't match input")
@@ -227,13 +233,17 @@ class TestSpikeGeneratorSimulation(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            recorded = []
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = sg.update()
-                    if float(out[0]) > 0.5:
-                        recorded.append(round(t, 4))
+                return out[0]
+
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        spike_steps = np.where(outputs > 0.5)[0]
+        recorded = [round(float(s * dt_ms), 4) for s in spike_steps]
 
         # Only spikes at 3.0, 5.0, 7.0 are in [3, 8)
         expected = [3.0, 5.0, 7.0]
@@ -287,13 +297,17 @@ class TestSpikeGeneratorVsNEST(unittest.TestCase):
                 spike_times=[t * u.ms for t in spike_times_ms],
             )
 
-            bp_spike_times = []
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = sg.update()
-                    if float(out[0]) > 0.5:
-                        bp_spike_times.append(round(t, 4))
+                return out[0]
+
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        spike_steps = np.where(outputs > 0.5)[0]
+        bp_spike_times = [round(float(s * self.dt_ms), 4) for s in spike_steps]
 
         # NEST spike times may have delay offset; compare the intended spike times
         npt.assert_allclose(bp_spike_times, spike_times_ms, atol=1e-4,
@@ -334,13 +348,16 @@ class TestSpikeGeneratorVsNEST(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            bp_n_spikes = 0
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = sg.update()
-                    if float(out[0]) > 0.5:
-                        bp_n_spikes += 1
+                return out[0]
+
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        bp_n_spikes = int(np.sum(outputs > 0.5))
 
         # Both should record the same number of spikes in [5, 6)
         self.assertEqual(bp_n_spikes, nest_n_spikes,

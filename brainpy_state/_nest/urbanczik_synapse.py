@@ -1,6 +1,7 @@
 import math
 from typing import Any
 
+import brainstate
 import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -302,7 +303,7 @@ class urbanczik_synapse(NESTSynapse):
         t_last_spike_ms: ArrayLike = -1.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
 
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay = self._validate_positive_delay(delay)
@@ -1158,6 +1159,7 @@ class urbanczik_synapse(NESTSynapse):
         Handles saiunit Quantity objects by extracting mantissa. Flattens arrays to check
         for single-element constraint.
         """
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
@@ -1195,6 +1197,7 @@ class urbanczik_synapse(NESTSynapse):
         Converts to float first, validates finiteness, then rounds and checks integer constraint
         with 1e-12 absolute tolerance. Handles saiunit Quantity objects.
         """
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)

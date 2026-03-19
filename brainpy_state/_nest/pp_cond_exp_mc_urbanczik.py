@@ -668,13 +668,18 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         )
 
         # Urbanczik history: list of (t_ms, dPI) tuples per neuron element
+        # (populated only during Python-loop execution, not inside for_loop / JIT)
         self._urbanczik_history = {}
 
-        # RNG state
-        if self._rng_key is not None:
-            self._rng_state = self._rng_key
-        else:
-            self._rng_state = jax.random.PRNGKey(0)
+        # Current-step dPI stored as ShortTermState so for_loop bodies can
+        # return it and collect the full trace.
+        self._dPI = brainstate.ShortTermState(
+            jnp.zeros(self.varshape, dtype=dftype)
+        )
+
+        # RNG state as ShortTermState so jax.lax.scan tracks it correctly.
+        rng_init = self._rng_key if self._rng_key is not None else jax.random.PRNGKey(0)
+        self._rng_state = brainstate.ShortTermState(rng_init)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Evaluate surrogate spike output from membrane voltage.
@@ -929,7 +934,10 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         dftype = brainstate.environ.dftype()
         ditype = brainstate.environ.ditype()
 
-        dt_ms = float(u.math.asarray(dt / u.ms))  # dt in ms
+        # dt_ms as a JAX scalar (concrete when dt is a static environ value).
+        dt_ms = u.get_mantissa(dt / u.ms)
+
+        v_shape = self.varshape
 
         # Read state variables with their natural units.
         V_s = self.V_s.value  # mV
@@ -951,7 +959,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
             V_d=V_d, I_ex_d=I_ex_d, I_in_d=I_in_d,
         )
         extra = DotDict(
-            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            spike_mask=jnp.zeros(v_shape, dtype=jnp.bool_),
             r=r,
             i_stim_soma=i_stim_soma,
         )
@@ -974,90 +982,93 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         I_ex_d = I_ex_d + d_dend_exc
         I_in_d = I_in_d - d_dend_inh  # Note: inhibitory is subtracted (NEST convention)
 
-        # --- Stochastic spike generation (per-element, Python loop) ---
-        v_shape = self.varshape
+        # --- Vectorized stochastic spike generation (fully JAX, JIT-compatible) ---
 
-        # Convert state to numpy for per-element spike generation
-        V_s_np = np.asarray(u.math.asarray(V_s / u.mV), dtype=dftype)
-        V_d_np = np.asarray(u.math.asarray(V_d / u.mV), dtype=dftype)
-        r_np = np.asarray(u.get_mantissa(r), dtype=ditype)
-        ref_counts_np = np.asarray(u.get_mantissa(self.ref_count), dtype=ditype)
+        # Advance RNG via ShortTermState so jax.lax.scan tracks the key.
+        new_rng, subkey = jax.random.split(self._rng_state.value)
+        self._rng_state.value = new_rng
 
-        # Advance RNG
-        self._rng_state, subkey = jax.random.split(self._rng_state)
-        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=dftype)
+        # Instantaneous firing rate for all neurons (Hz).
+        V_s_mv = u.get_mantissa(V_s / u.mV)
+        rate = 1000.0 * self.phi_max / (
+            1.0 + self.rate_slope * jnp.exp(
+                jnp.clip(self.beta * (self.theta - V_s_mv), -500.0, 500.0)
+            )
+        )
 
-        spike_mask = np.zeros(v_shape, dtype=bool)
+        not_refractory = (r == 0)
 
-        # Compute step time for urbanczik history
-        t_ms = float(u.math.asarray(t / u.ms)) + dt_ms
+        # Dead-time flag per neuron (True when t_ref > 0).
+        t_ref_ms = u.get_mantissa(self.t_ref / u.ms)
+        has_dead_time = jnp.broadcast_to(t_ref_ms > 0.0, v_shape)
 
-        # Precompute scalar parameters for phi/h functions
-        phi_max = self.phi_max
-        rate_slope = self.rate_slope
-        beta = self.beta
-        theta = self.theta
+        # --- Dead-time mode: at most 1 spike per step ---
+        rand_vals = jax.random.uniform(subkey, shape=v_shape, dtype=dftype)
+        spike_prob = -jnp.expm1(-rate * dt_ms * 1e-3)
+        has_spike_dead = rand_vals <= spike_prob
 
-        # Precompute numpy arrays for per-element parameters
-        g_sp_np = np.asarray(u.math.asarray(self.g_sp / u.nS), dtype=dftype)
-        g_L_soma_np = np.asarray(u.math.asarray(self.soma_g_L / u.nS), dtype=dftype)
-        E_L_soma_np = np.asarray(u.math.asarray(self.soma_E_L / u.mV), dtype=dftype)
-        t_ref_np = np.asarray(u.math.asarray(self.t_ref / u.ms), dtype=dftype)
+        # --- Poisson mode: draw spike count from Poisson distribution ---
+        subkey_p, _ = jax.random.split(subkey)
+        lam = rate * dt_ms * 1e-3
+        n_spikes_poisson = jax.random.poisson(subkey_p, lam, shape=v_shape, dtype=ditype)
+        has_spike_poisson = n_spikes_poisson > 0
 
-        # Broadcast to v_shape
-        g_sp_np = np.broadcast_to(g_sp_np, v_shape)
-        g_L_soma_np = np.broadcast_to(g_L_soma_np, v_shape)
-        E_L_soma_np = np.broadcast_to(E_L_soma_np, v_shape)
-        t_ref_np = np.broadcast_to(t_ref_np, v_shape)
-        V_s_np = np.broadcast_to(V_s_np, v_shape).copy()
-        V_d_np = np.broadcast_to(V_d_np, v_shape).copy()
-        r_np = np.broadcast_to(r_np, v_shape).copy()
-        ref_counts_np = np.broadcast_to(ref_counts_np, v_shape)
+        # Select spike event based on dead-time flag.
+        spike_now_if_active = jnp.where(has_dead_time, has_spike_dead, has_spike_poisson)
+        spike_mask = not_refractory & (rate > 0.0) & spike_now_if_active
 
-        for idx in np.ndindex(v_shape):
-            n_spikes = 0
+        # Spike count (float) for dPI formula.
+        n_spikes_float = jnp.where(
+            spike_mask,
+            jnp.where(has_dead_time,
+                      jnp.ones(v_shape, dtype=dftype),
+                      n_spikes_poisson.astype(dftype)),
+            jnp.zeros(v_shape, dtype=dftype),
+        )
 
-            if r_np[idx] == 0:
-                # Neuron not refractory — no V_m reset after spike
-                u_val = V_s_np[idx]
-                rate = 1000.0 * phi_max / (1.0 + rate_slope * np.exp(beta * (theta - u_val)))
+        # Update refractory counter.
+        new_r = jnp.where(
+            spike_mask,
+            jnp.broadcast_to(u.get_mantissa(self.ref_count), v_shape),
+            jnp.maximum(0, r - 1),
+        )
 
-                if rate > 0.0:
-                    t_ref_val = float(t_ref_np[idx])
+        # --- Urbanczik learning signal (fully vectorized) ---
+        V_d_mv = u.get_mantissa(V_d / u.mV)
+        g_sp_nS = jnp.broadcast_to(u.get_mantissa(self.g_sp / u.nS), v_shape)
+        g_L_s_nS = jnp.broadcast_to(u.get_mantissa(self.soma_g_L / u.nS), v_shape)
+        E_L_s_mV = jnp.broadcast_to(u.get_mantissa(self.soma_E_L / u.mV), v_shape)
 
-                    if t_ref_val > 0.0:
-                        # With dead time: at most 1 spike
-                        if rand_vals[idx] <= -np.expm1(-rate * dt_ms * 1e-3):
-                            n_spikes = 1
-                    else:
-                        # No dead time: Poisson spikes
-                        lam = rate * dt_ms * 1e-3
-                        n_spikes = int(np.random.RandomState(
-                            int(rand_vals[idx] * 2 ** 31)
-                        ).poisson(lam))
+        V_W_star = (E_L_s_mV * g_L_s_nS + V_d_mv * g_sp_nS) / (g_sp_nS + g_L_s_nS)
+        phi_val = self.phi_max / (
+            1.0 + self.rate_slope * jnp.exp(
+                jnp.clip(self.beta * (self.theta - V_W_star), -500.0, 500.0)
+            )
+        )
+        h_val = 15.0 * self.beta / (
+            1.0 + (1.0 / self.rate_slope) * jnp.exp(
+                jnp.clip(-self.beta * (self.theta - V_W_star), -500.0, 500.0)
+            )
+        )
+        dPI = (n_spikes_float - phi_val * dt_ms) * h_val
 
-                    if n_spikes > 0:
-                        spike_mask[idx] = True
-                        r_np[idx] = ref_counts_np[idx]
-            else:
-                # Refractory: decrement
-                r_np[idx] -= 1
+        # Store current-step dPI as ShortTermState (accessible from for_loop body).
+        self._dPI.value = dPI
 
-            # --- Urbanczik learning signal ---
-            V_d_current = V_d_np[idx]
-            g_D = g_sp_np[idx]
-            g_L_s = g_L_soma_np[idx]
-            E_L_s = E_L_soma_np[idx]
-            V_W_star = (E_L_s * g_L_s + V_d_current * g_D) / (g_D + g_L_s)
-
-            phi_val = phi_max / (1.0 + rate_slope * np.exp(beta * (theta - V_W_star)))
-            h_val = 15.0 * beta / (1.0 + (1.0 / rate_slope) * np.exp(-beta * (theta - V_W_star)))
-            dPI = (n_spikes - phi_val * dt_ms) * h_val
-
-            flat_idx = np.ravel_multi_index(idx, v_shape) if len(idx) > 0 else 0
-            if flat_idx not in self._urbanczik_history:
-                self._urbanczik_history[flat_idx] = []
-            self._urbanczik_history[flat_idx].append((t_ms, dPI))
+        # Populate Python history dict only when NOT inside a JAX JIT context.
+        # t is a concrete Quantity during Python loops; a JAX tracer inside for_loop.
+        if not is_tracer(u.math.asarray(t / u.ms)):
+            t_ms_val = (
+                float(np.asarray(u.math.asarray(t / u.ms)))
+                + float(np.asarray(dt_ms))
+            )
+            dPI_np = np.asarray(dPI)
+            for idx in np.ndindex(v_shape):
+                flat_idx = np.ravel_multi_index(idx, v_shape) if len(idx) > 0 else 0
+                if flat_idx not in self._urbanczik_history:
+                    self._urbanczik_history[flat_idx] = []
+                dpi_val = float(dPI_np[idx]) if dPI_np.ndim > 0 else float(dPI_np)
+                self._urbanczik_history[flat_idx].append((t_ms_val, dpi_val))
 
         # Write back state.
         self.V_s.value = V_s
@@ -1066,9 +1077,9 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         self.V_d.value = V_d
         self.I_ex_d.value = I_ex_d
         self.I_in_d.value = I_in_d
-        self.refractory_step_count.value = jnp.asarray(r_np, dtype=ditype)
+        self.refractory_step_count.value = jnp.asarray(new_r, dtype=ditype)
         self.integration_step.value = h
-        self.I_stim_soma.value = new_i_stim_soma + u.math.zeros(self.varshape) * u.pA
+        self.I_stim_soma.value = new_i_stim_soma + u.math.zeros(v_shape) * u.pA
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 

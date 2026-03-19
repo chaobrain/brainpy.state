@@ -304,8 +304,11 @@ class spike_train_injector(NESTDevice):
 
         # ---- Store spike times as a Quantity array ----
         # u.math.asarray validates unit consistency across all entries.
+        # Plain floats are interpreted as milliseconds.
         if len(spike_times) > 0:
             self.spike_times = u.math.asarray(spike_times)
+            if not isinstance(self.spike_times, u.Quantity):
+                self.spike_times = self.spike_times * u.ms
 
             # Validate non-descending order.
             for i in range(1, len(self.spike_times)):
