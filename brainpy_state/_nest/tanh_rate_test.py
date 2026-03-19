@@ -21,8 +21,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import tanh_rate_ipn, tanh_rate_opn
@@ -401,13 +402,17 @@ class TestTanhRate(unittest.TestCase):
             n1.init_state()
 
             dftype = brainstate.environ.dftype()
-            y0 = np.zeros(steps, dtype=dftype)
-            y1 = np.zeros(steps, dtype=dftype)
-            for k in range(steps):
-                self._step(n0, k, instant_rate_events=event)
-                self._step(n1, k, instant_rate_events=event)
-                y0[k] = float(np.asarray(n0.rate.value).reshape(-1)[0])
-                y1[k] = float(np.asarray(n1.rate.value).reshape(-1)[0])
+
+            def body0(_):
+                n0.update(noise=0.0, instant_rate_events=event)
+                return n0.rate.value.reshape(-1)[0]
+
+            def body1(_):
+                n1.update(noise=0.0, instant_rate_events=event)
+                return n1.rate.value.reshape(-1)[0]
+
+            y0 = np.asarray(brainstate.transform.for_loop(body0, np.zeros(steps, dtype=dftype)))
+            y1 = np.asarray(brainstate.transform.for_loop(body1, np.zeros(steps, dtype=dftype)))
 
         npt.assert_allclose(y0, y1, atol=1e-12)
 
@@ -447,12 +452,14 @@ class TestTanhRate(unittest.TestCase):
             )
             ipn_bp.init_state()
             dftype = brainstate.environ.dftype()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            bp_noise = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(ipn_bp, k)
-                bp_rate[k] = float(np.asarray(ipn_bp.rate.value).reshape(-1)[0])
-                bp_noise[k] = float(np.asarray(ipn_bp.noise.value).reshape(-1)[0])
+
+            def body_ipn(_):
+                ipn_bp.update(noise=0.0)
+                return (ipn_bp.rate.value.reshape(-1)[0], ipn_bp.noise.value.reshape(-1)[0])
+
+            res_ipn = brainstate.transform.for_loop(body_ipn, np.zeros(steps, dtype=dftype))
+            bp_rate = np.asarray(res_ipn[0])
+            bp_noise = np.asarray(res_ipn[1])
 
         n_cmp = min(bp_rate.size, ipn_nest['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], ipn_nest['rate'][:n_cmp], atol=1e-12)
@@ -485,14 +492,19 @@ class TestTanhRate(unittest.TestCase):
                 noisy_rate_initializer=braintools.init.Constant(0.4),
             )
             opn_bp.init_state()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            bp_noise = np.zeros((steps,), dtype=dftype)
-            bp_noisy = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(opn_bp, k)
-                bp_rate[k] = float(np.asarray(opn_bp.rate.value).reshape(-1)[0])
-                bp_noise[k] = float(np.asarray(opn_bp.noise.value).reshape(-1)[0])
-                bp_noisy[k] = float(np.asarray(opn_bp.noisy_rate.value).reshape(-1)[0])
+
+            def body_opn(_):
+                opn_bp.update(noise=0.0)
+                return (
+                    opn_bp.rate.value.reshape(-1)[0],
+                    opn_bp.noise.value.reshape(-1)[0],
+                    opn_bp.noisy_rate.value.reshape(-1)[0],
+                )
+
+            res_opn = brainstate.transform.for_loop(body_opn, np.zeros(steps, dtype=dftype))
+            bp_rate = np.asarray(res_opn[0])
+            bp_noise = np.asarray(res_opn[1])
+            bp_noisy = np.asarray(res_opn[2])
 
         n_cmp = min(bp_rate.size, opn_nest['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], opn_nest['rate'][:n_cmp], atol=1e-12)
@@ -554,21 +566,22 @@ class TestTanhRate(unittest.TestCase):
             bp_event_sum.init_state()
 
             dftype = brainstate.environ.dftype()
-            y_linear_sum = np.zeros((steps,), dtype=dftype)
-            y_event_sum = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(
-                    bp_linear_sum,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                self._step(
-                    bp_event_sum,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                y_linear_sum[k] = float(np.asarray(bp_linear_sum.rate.value).reshape(-1)[0])
-                y_event_sum[k] = float(np.asarray(bp_event_sum.rate.value).reshape(-1)[0])
+            event_spec = [{'rate': drive, 'weight': weight}]
+
+            def body_linear(_):
+                bp_linear_sum.update(noise=0.0, instant_rate_events=event_spec)
+                return bp_linear_sum.rate.value.reshape(-1)[0]
+
+            def body_event(_):
+                bp_event_sum.update(noise=0.0, instant_rate_events=event_spec)
+                return bp_event_sum.rate.value.reshape(-1)[0]
+
+            y_linear_sum = np.asarray(
+                brainstate.transform.for_loop(body_linear, np.zeros(steps, dtype=dftype))
+            )
+            y_event_sum = np.asarray(
+                brainstate.transform.for_loop(body_event, np.zeros(steps, dtype=dftype))
+            )
 
         n_cmp = min(y_linear_sum.size, nest_linear_sum.size)
         npt.assert_allclose(y_linear_sum[:n_cmp], nest_linear_sum[:n_cmp], atol=1e-10)

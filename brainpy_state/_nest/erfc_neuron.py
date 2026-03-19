@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import jax.scipy.special as jspecial
@@ -237,7 +237,7 @@ class erfc_neuron(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.erfc_neuron(in_size=10, tau_m=5.0 * u.ms)
        ...     neu.init_state(batch_size=1)
@@ -249,7 +249,7 @@ class erfc_neuron(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.erfc_neuron(
        ...         in_size=(2, 3),
@@ -303,18 +303,13 @@ class erfc_neuron(NESTNeuron):
         self.stochastic_update = stochastic_update
         self.rng_seed = int(rng_seed)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize binary state, input accumulator, and update timing.
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Optional leading batch dimension. If ``None``, states are created
-            with shape ``self.varshape``; otherwise with
-            ``(batch_size,) + self.varshape``.
-        **kwargs : Any
-            Unused compatibility arguments.
-
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Raises
         ------
@@ -324,9 +319,9 @@ class erfc_neuron(NESTNeuron):
             If initializer values are incompatible with required numeric/unit
             conversions.
         """
-        shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
+        shape = self.varshape
 
-        y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
+        y = braintools.init.param(self.y_initializer, self.varshape)
         dftype = brainstate.environ.dftype()
         self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
         self.h = brainstate.ShortTermState(u.math.zeros(shape, dtype=dftype) * u.mV)
@@ -405,9 +400,8 @@ class erfc_neuron(NESTNeuron):
             If ``h`` is not unit-compatible with ``theta`` and ``sigma`` (all
             should be in mV).
         """
-        dftype = brainstate.environ.dftype()
-        arg = -(h - self.theta) / (u.math.asarray(jnp.sqrt(2.0), dtype=dftype) * self.sigma)
-        return 0.5 * jspecial.erfc(u.math.asarray(arg, dtype=dftype))
+        arg = -(h - self.theta) / (jnp.sqrt(jnp.asarray(2.0)) * self.sigma)
+        return 0.5 * jspecial.erfc(u.math.asarray(arg))
 
     def update(self, x=0. * u.mV):
         r"""Advance the binary neuron by one simulation step.

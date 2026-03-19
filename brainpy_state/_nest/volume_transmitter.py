@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -189,7 +189,7 @@ class volume_transmitter(NESTDevice):
         validated to be ``>= 1``.  Increasing this value reduces how often
         connected synapses receive delivered spike histories.
         Default is ``1``.
-    min_delay : brainunit.Quantity or float, optional
+    min_delay : saiunit.Quantity or float, optional
         Scalar effective global minimal synaptic delay.  Unitful values are
         converted to ms; plain floats are interpreted as ms.  Must be strictly
         positive and an integer multiple of the simulation ``dt`` at the time
@@ -239,7 +239,7 @@ class volume_transmitter(NESTDevice):
         flattened sizes.
     TypeError
         If provided scalar/array inputs cannot be converted by
-        ``brainunit`` or NumPy conversion paths.
+        ``saiunit`` or NumPy conversion paths.
     KeyError
         At :meth:`update` time, if the simulation context is missing the
         required ``'t'`` or ``dt`` entries (depends on
@@ -271,7 +271,7 @@ class volume_transmitter(NESTDevice):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> from brainpy.state import volume_transmitter
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
@@ -290,7 +290,7 @@ class volume_transmitter(NESTDevice):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> from brainpy.state import volume_transmitter
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     vt = volume_transmitter(deliver_interval=1, min_delay=0.1 * u.ms)
@@ -461,7 +461,7 @@ class volume_transmitter(NESTDevice):
 
             - ``'deliver_interval'`` — returns ``int``.
             - ``'min_delay'`` — returns the stored ``min_delay`` value as
-              passed to the constructor (``brainunit.Quantity`` or ``float``).
+              passed to the constructor (``saiunit.Quantity`` or ``float``).
             - ``'local_device_id'`` — returns ``int``.
             - ``'spike_history'`` — returns ``tuple[spikecounter, ...]``
               (same as :meth:`deliver_spikes`).
@@ -474,7 +474,7 @@ class volume_transmitter(NESTDevice):
 
         Returns
         -------
-        int or float or brainunit.Quantity or tuple[spikecounter, ...]
+        int or float or saiunit.Quantity or tuple[spikecounter, ...]
             The selected value.  Type depends on ``key`` as described above.
 
         Raises
@@ -648,7 +648,7 @@ class volume_transmitter(NESTDevice):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> import numpy as np
            >>> from brainpy.state import volume_transmitter
            >>> with brainstate.environ.context(dt=0.1 * u.ms):

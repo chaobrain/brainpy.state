@@ -16,14 +16,11 @@ The library ships **167+ models** organized in three tiers:
 - **NEST-compatible models (119+)**: faithful JAX re-implementations of
   `NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron, synapse,
   plasticity (STDP, STP), and device models.
-- All parameters carry **physical units** via `brainunit <https://github.com/chaobrain/brainunit>`_,
+- All parameters carry **physical units** via `saiunit <https://github.com/chaobrain/saiunit>`_,
   and every neuron supports surrogate-gradient-based training out of the box.
-
-Compared to ``brainpy.dyn``, ``brainpy.state`` has the following characteristics:
-
-- **Ecosystem compatability**: ``brainpy.state`` is built on `brainstate <https://github.com/chaobrain/brainstate>`_ and fully compatible with `BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
-- **Model scope**: ``brainpy.state`` implements much more models including BrainPy-style models plus a large NEST-compatible model set.
-- **Scientific ergonomics**: ``brainpy.state`` uses physical units via ``brainunit`` by default and is designed for surrogate-gradient training.
+- **Ecosystem compatability**: Compared to ``brainpy.dyn``,  ``brainpy.state`` is built on
+  `brainstate <https://github.com/chaobrain/brainstate>`_ and fully compatible with
+  `BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
 
 
 Installation
@@ -65,7 +62,7 @@ Quick Example
 
    import brainpy
    import brainstate
-   import brainunit as u
+   import saiunit as u
 
    # Create neuron populations
    E = brainpy.state.LIF(3200, V_rest=-60*u.mV, V_th=-50*u.mV, tau=20*u.ms)
@@ -130,7 +127,7 @@ See also the ecosystem
 ``brainpy.state`` is one part of the `BrainX ecosystem <https://brainmodeling.readthedocs.io/>`__:
 
 - `brainstate <https://github.com/chaobrain/brainstate>`_ — state management for JAX-based brain modeling
-- `brainunit <https://github.com/chaobrain/brainunit>`_ — physical units for neuroscience
+- `saiunit <https://github.com/chaobrain/saiunit>`_ — physical units for neuroscience
 - `brainevent <https://github.com/chaobrain/brainevent>`_ — event-driven sparse operators
 - `braintools <https://github.com/chaobrain/braintools>`_ — surrogate gradients, analysis, and utilities
 

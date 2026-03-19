@@ -21,11 +21,13 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
+import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'siegert_neuron',
@@ -268,7 +270,7 @@ class siegert_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms, tau_m=10*u.ms)
         >>> model.init_all_states()
@@ -351,12 +353,12 @@ class siegert_neuron(NESTNeuron):
     @staticmethod
     def _to_numpy(x):
         dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x), dtype=dftype)
+        return np.asarray(u.get_mantissa(x), dtype=dftype)
 
     @staticmethod
     def _to_numpy_ms(x):
         dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / u.ms), dtype=dftype)
+        return np.asarray(u.get_mantissa(x / u.ms), dtype=dftype)
 
     @staticmethod
     def _broadcast_to_state(x_np: np.ndarray, shape):
@@ -365,7 +367,7 @@ class siegert_neuron(NESTNeuron):
     @staticmethod
     def _to_int_scalar(x, name: str):
         dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
+        arr = np.asarray(u.get_mantissa(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         return int(arr[0])
@@ -401,9 +403,9 @@ class siegert_neuron(NESTNeuron):
     def _drain_delayed_queue(self, step_idx: int, state_shape):
         drift = self._delayed_drift_queue.pop(step_idx, None)
         diffusion = self._delayed_diffusion_queue.pop(step_idx, None)
+        dftype = brainstate.environ.dftype()
 
         if drift is None:
-            dftype = brainstate.environ.dftype()
             drift = np.zeros(state_shape, dtype=dftype)
         else:
             drift = np.array(self._broadcast_to_state(np.asarray(drift, dtype=dftype), state_shape), copy=True)
@@ -525,19 +527,23 @@ class siegert_neuron(NESTNeuron):
         return drift_now, diffusion_now
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy_ms(self.tau) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.tau, self.tau_m, self.tau_syn, self.t_ref, self.V_reset, self.theta)):
+            return
+
+        if np.any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self._to_numpy_ms(self.tau_m) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant tau_m must be > 0.')
-        if np.any(self._to_numpy_ms(self.tau_syn) < 0.0):
+        if np.any(self.tau_syn < 0.0 * u.ms):
             raise ValueError('Synaptic time constant tau_syn must be >= 0.')
-        if np.any(self._to_numpy_ms(self.t_ref) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory period t_ref must be >= 0.')
-        if np.any(self._to_numpy(self.V_reset) >= self._to_numpy(self.theta)):
+        if np.any(self.V_reset >= self.theta):
             raise ValueError('Reset potential V_reset must be smaller than threshold theta.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
 
         self.rate = brainstate.ShortTermState(rate_np)
@@ -801,7 +807,7 @@ class siegert_neuron(NESTNeuron):
 
             >>> import brainpy.state as bp
             >>> import numpy as np
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> model = bp.siegert_neuron(in_size=1, tau_m=10*u.ms, t_ref=2*u.ms, theta=15.0)
             >>> mu_vals = np.linspace(0, 25, 50)
             >>> rates = model.siegert_rate(mu=mu_vals, sigma_square=2.0)
@@ -859,6 +865,7 @@ class siegert_neuron(NESTNeuron):
         diffusion_input: ArrayLike = 0.0,
         instant_diffusion_events=None,
         delayed_diffusion_events=None,
+        _precomputed_drive=None,
     ):
         r"""Advance the rate dynamics by one simulation timestep.
 
@@ -965,8 +972,6 @@ class siegert_neuron(NESTNeuron):
 
         - Delayed events use integer step delays (not continuous time).
         - Outgoing diffusion coefficients are updated post-integration (not mid-step).
-        ditype = brainstate.environ.ditype()
-        dftype = brainstate.environ.dftype()
         - No iterative waveform relaxation (NEST's WFR mode is not implemented).
 
         Examples
@@ -976,7 +981,7 @@ class siegert_neuron(NESTNeuron):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate
             >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms)
             >>> model.init_all_states()
@@ -1021,9 +1026,26 @@ class siegert_neuron(NESTNeuron):
             ...     rate = model.update(instant_diffusion_events=events)
             >>> print(f"Combined event effect: {rate.mean():.2f} Hz")
         """
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
 
         state_shape = self.rate.value.shape
+
+        if _precomputed_drive is not None:
+            # JIT-compatible path: bypass event queue and Siegert computation entirely.
+            drive = jnp.broadcast_to(jnp.asarray(_precomputed_drive, dtype=dftype), state_shape)
+            rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
+            tau = np.broadcast_to(self._to_numpy_ms(self.tau), state_shape)
+            mean = np.broadcast_to(self._to_numpy(self.mean), state_shape)
+            p1 = np.exp(-h / tau)
+            p2 = -np.expm1(-h / tau)
+            rate_new = p1 * rate_prev + p2 * (mean + drive)
+            self.rate.value = rate_new
+            self.delayed_rate.value = rate_new
+            self.instant_rate.value = rate_new
+            return rate_new
+
         step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         drift_delayed, diffusion_delayed = self._drain_delayed_queue(step_idx, state_shape)

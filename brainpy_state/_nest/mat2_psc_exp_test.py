@@ -34,8 +34,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._nest.mat2_psc_exp import mat2_psc_exp
@@ -130,15 +131,18 @@ class TestMat2PscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Simulate 80 steps (8.0 ms) with DC current starting at step 1
-            # (mimicking dc_generator with delay=0.1ms connected at t=0).
-            spike_times = []
-            for k in range(80):
-                # DC current arrives at step 1 (delay of 1 step)
-                dc = 2400.0 * u.pA if k >= 1 else 0.0 * u.pA
-                spk = self._step(neuron, k, x=dc)
-                if self._is_spike(spk):
-                    spike_times.append(k + 1)  # NEST records at lag+1
+            n_steps = 80
+            dt_ms = 0.1
+
+            def step_fn(k):
+                dc = jnp.where(k >= 1, 2400.0, 0.0) * u.pA
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    spk = neuron.update(x=dc)
+                return spk
+
+            all_spikes = brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            spike_mask = np.array(all_spikes).reshape(-1) > 0.5
+            spike_times = [int(k) + 1 for k in np.where(spike_mask)[0]]
 
             np.testing.assert_array_equal(spike_times, [11, 32, 54])
 
@@ -184,34 +188,33 @@ class TestMat2PscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            # In NEST, the multimeter records *before* the update at each step.
-            # The data at step k reflects the state after step k-1's update.
-            # We record after each update and compare with NEST data.
-            # NEST records at steps 1..21 correspond to state after steps 0..20.
-            recorded_vm = []
-            recorded_vth = []
+            n_steps = 21
+            dt_ms = 0.1
+            omega_abs = float(u.math.asarray(neuron.omega / u.mV))
 
-            for k in range(21):
-                dc = 2400.0 * u.pA if k >= 1 else 0.0 * u.pA
-                self._step(neuron, k, x=dc)
+            def step_fn(k):
+                dc = jnp.where(k >= 1, 2400.0, 0.0) * u.pA
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    neuron.update(x=dc)
+                return neuron.V.value / u.mV, neuron.V_th_1.value / u.mV, neuron.V_th_2.value / u.mV
 
-                V_m = float((neuron.V.value / u.mV)[0])
-                omega_abs = float(u.math.asarray(neuron.omega / u.mV))
-                V_th_1 = float((neuron.V_th_1.value / u.mV)[0])
-                V_th_2 = float((neuron.V_th_2.value / u.mV)[0])
-                V_th = omega_abs + V_th_1 + V_th_2
-
-                recorded_vm.append(V_m)
-                recorded_vth.append(V_th)
+            all_V, all_vth1, all_vth2 = brainstate.transform.for_loop(
+                step_fn, jnp.arange(n_steps)
+            )
+            all_V_np = np.array(all_V)[:, 0]
+            all_vth1_np = np.array(all_vth1)[:, 0]
+            all_vth2_np = np.array(all_vth2)[:, 0]
 
             for i, (step, exp_vm, exp_vth) in enumerate(expected):
+                recorded_vm = float(all_V_np[i])
+                recorded_vth = omega_abs + float(all_vth1_np[i]) + float(all_vth2_np[i])
                 self.assertAlmostEqual(
-                    recorded_vm[i], exp_vm, places=3,
-                    msg=f'V_m mismatch at step {step}: got {recorded_vm[i]}, expected {exp_vm}'
+                    recorded_vm, exp_vm, places=3,
+                    msg=f'V_m mismatch at step {step}: got {recorded_vm}, expected {exp_vm}'
                 )
                 self.assertAlmostEqual(
-                    recorded_vth[i], exp_vth, places=3,
-                    msg=f'V_th mismatch at step {step}: got {recorded_vth[i]}, expected {exp_vth}'
+                    recorded_vth, exp_vth, places=3,
+                    msg=f'V_th mismatch at step {step}: got {recorded_vth}, expected {exp_vth}'
                 )
 
     # ------------------------------------------------------------------
@@ -262,23 +265,31 @@ class TestMat2PscExp(unittest.TestCase):
             P21in = -tau_m / (C_m * (1.0 - tau_m / tau_in)) * P11in * math.expm1(h * (1.0 / tau_in - 1.0 / tau_m))
             P20 = -tau_m / C_m * P22_expm1
 
-            v = 0.0  # V_m relative to E_L
+            # Compute reference V_m trajectory
+            n_steps = 20
+            ref_v = np.zeros(n_steps)
+            v = 0.0
             i0 = 0.0
             iex = 0.0
             iin = 0.0
-
-            for k in range(20):
-                self._step(neuron, k)
-
-                # Evolve V_m
+            for k in range(n_steps):
                 v = v * P22_expm1 + v + iex * P21ex + iin * P21in + (I_e + i0) * P20
-
-                # Decay PSCs (no spikes arriving)
                 iex *= P11ex
                 iin *= P11in
+                ref_v[k] = v + params['E_L']
 
-                actual_v = float((neuron.V.value / u.mV)[0])
-                self.assertAlmostEqual(actual_v, v + params['E_L'], delta=1e-11,
+            dt_ms = 0.1
+
+            def step_fn(k):
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    neuron.update()
+                return neuron.V.value / u.mV
+
+            all_V = brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            all_V_np = np.array(all_V)[:, 0]
+
+            for k in range(n_steps):
+                self.assertAlmostEqual(all_V_np[k], ref_v[k], delta=1e-11,
                                        msg=f'V_m mismatch at step {k}')
 
     # ------------------------------------------------------------------
@@ -298,22 +309,26 @@ class TestMat2PscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            V_at_spike = None
-            V_after_spike = None
+            n_steps = 80
+            dt_ms = 0.1
 
-            for k in range(80):
-                spk = self._step(neuron, k)
-                if self._is_spike(spk) and V_at_spike is None:
-                    V_at_spike = float((neuron.V.value / u.mV)[0])
-                elif V_at_spike is not None and V_after_spike is None:
-                    V_after_spike = float((neuron.V.value / u.mV)[0])
-                    break
+            def step_fn(k):
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    spk = neuron.update()
+                return spk, neuron.V.value / u.mV
 
-            self.assertIsNotNone(V_at_spike)
-            self.assertIsNotNone(V_after_spike)
+            all_spks, all_V = brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            all_spks_np = np.array(all_spks).reshape(-1)
+            all_V_np = np.array(all_V)[:, 0]
+
+            spike_steps = np.where(all_spks_np > 0.5)[0]
+            self.assertGreater(len(spike_steps), 0, 'No spike occurred during test')
+            first_spike_step = int(spike_steps[0])
+            self.assertGreater(n_steps - 1, first_spike_step, 'Spike at last step, cannot check V_after')
+
+            V_at_spike = float(all_V_np[first_spike_step])
+            V_after_spike = float(all_V_np[first_spike_step + 1])
             # After spike, V should continue to evolve, NOT be reset to E_L
-            # V_after should be greater than V_at since current is still driving it up
-            # (but may also decrease due to leak). The key check: it is NOT reset to E_L.
             self.assertNotAlmostEqual(V_after_spike, -70.0, places=3,
                                       msg='V_m appears to have been reset to E_L after spike')
 
@@ -335,29 +350,38 @@ class TestMat2PscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            first_spike = False
-            for k in range(80):
-                v_th_1_before = float((neuron.V_th_1.value / u.mV)[0])
-                v_th_2_before = float((neuron.V_th_2.value / u.mV)[0])
-                spk = self._step(neuron, k)
-                if self._is_spike(spk) and not first_spike:
-                    first_spike = True
-                    v_th_1_after = float((neuron.V_th_1.value / u.mV)[0])
-                    v_th_2_after = float((neuron.V_th_2.value / u.mV)[0])
+            n_steps = 80
+            dt_ms = 0.1
 
-                    # After spike, V_th_1 should have increased.
-                    # The threshold decays during the step and then jumps.
-                    # V_th_1 was 0 before, decayed by P11th, then jumped by alpha_1.
-                    h = 0.1
-                    P11th = math.exp(-h / 10.0)
-                    P22th = math.exp(-h / 200.0)
-                    expected_vth1 = v_th_1_before * P11th + 37.0
-                    expected_vth2 = v_th_2_before * P22th + 2.0
-                    self.assertAlmostEqual(v_th_1_after, expected_vth1, delta=1e-10)
-                    self.assertAlmostEqual(v_th_2_after, expected_vth2, delta=1e-10)
-                    break
+            def step_fn(k):
+                vth1_before = neuron.V_th_1.value / u.mV
+                vth2_before = neuron.V_th_2.value / u.mV
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    spk = neuron.update()
+                vth1_after = neuron.V_th_1.value / u.mV
+                vth2_after = neuron.V_th_2.value / u.mV
+                return spk, vth1_before, vth2_before, vth1_after, vth2_after
 
-            self.assertTrue(first_spike, 'No spike occurred during test')
+            all_spks, all_vth1_before, all_vth2_before, all_vth1_after, all_vth2_after = (
+                brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            )
+            all_spks_np = np.array(all_spks).reshape(-1)
+            spike_steps = np.where(all_spks_np > 0.5)[0]
+            self.assertGreater(len(spike_steps), 0, 'No spike occurred during test')
+
+            first_spike_step = int(spike_steps[0])
+            v_th_1_before = float(np.array(all_vth1_before)[first_spike_step, 0])
+            v_th_2_before = float(np.array(all_vth2_before)[first_spike_step, 0])
+            v_th_1_after = float(np.array(all_vth1_after)[first_spike_step, 0])
+            v_th_2_after = float(np.array(all_vth2_after)[first_spike_step, 0])
+
+            h = 0.1
+            P11th = math.exp(-h / 10.0)
+            P22th = math.exp(-h / 200.0)
+            expected_vth1 = v_th_1_before * P11th + 37.0
+            expected_vth2 = v_th_2_before * P22th + 2.0
+            self.assertAlmostEqual(v_th_1_after, expected_vth1, delta=1e-10)
+            self.assertAlmostEqual(v_th_2_after, expected_vth2, delta=1e-10)
 
     # ------------------------------------------------------------------
     # Test 8: Refractory period prevents spiking
@@ -377,11 +401,17 @@ class TestMat2PscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_steps = []
-            for k in range(80):
-                spk = self._step(neuron, k)
-                if self._is_spike(spk):
-                    spike_steps.append(k)
+            n_steps = 80
+            dt_ms = 0.1
+
+            def step_fn(k):
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    spk = neuron.update()
+                return spk
+
+            all_spikes = brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            spike_mask = np.array(all_spikes).reshape(-1) > 0.5
+            spike_steps = list(np.where(spike_mask)[0])
 
             # Must have at least 2 spikes
             self.assertGreaterEqual(len(spike_steps), 2)
@@ -415,33 +445,48 @@ class TestMat2PscExp(unittest.TestCase):
             P11in = math.exp(-h / tau_in)
 
             # Step 0: inject excitatory spike (positive weight)
-            spk = self._step(neuron, 0, delta=100.0 * u.pA)
+            with brainstate.environ.context(t=0.0 * u.ms):
+                neuron.update(spike_delta=100.0 * u.pA)
 
             # After step 0: i_syn_ex should be 100 (decayed then added)
-            iex = 100.0  # added after decay of 0
+            iex = 100.0
             actual_iex = float((neuron.i_syn_ex.value / u.pA)[0])
             self.assertAlmostEqual(actual_iex, iex, delta=1e-11)
 
-            # Follow exponential decay for several steps
-            for k in range(1, 10):
-                self._step(neuron, k)
-                iex *= P11ex
-                actual_iex = float((neuron.i_syn_ex.value / u.pA)[0])
-                self.assertAlmostEqual(actual_iex, iex, delta=1e-10,
-                                       msg=f'i_syn_ex mismatch at step {k}')
+            # Steps 1-9: follow exponential decay (no delta input)
+            dt_ms = 0.1
 
-            # Now inject inhibitory spike (negative weight)
-            self._step(neuron, 10, delta=-50.0 * u.pA)
+            def decay_ex_fn(k):
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    neuron.update()
+                return neuron.i_syn_ex.value / u.pA
+
+            all_iex = brainstate.transform.for_loop(decay_ex_fn, jnp.arange(1, 10))
+            all_iex_np = np.array(all_iex)[:, 0]
+            for i in range(9):
+                iex *= P11ex
+                self.assertAlmostEqual(all_iex_np[i], iex, delta=1e-10,
+                                       msg=f'i_syn_ex mismatch at step {i + 1}')
+
+            # Step 10: inject inhibitory spike (negative weight)
+            with brainstate.environ.context(t=10.0 * dt_ms * u.ms):
+                neuron.update(spike_delta=-50.0 * u.pA)
             iin = -50.0
             actual_iin = float((neuron.i_syn_in.value / u.pA)[0])
             self.assertAlmostEqual(actual_iin, iin, delta=1e-11)
 
-            for k in range(11, 20):
-                self._step(neuron, k)
+            # Steps 11-19: follow exponential decay
+            def decay_in_fn(k):
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    neuron.update()
+                return neuron.i_syn_in.value / u.pA
+
+            all_iin = brainstate.transform.for_loop(decay_in_fn, jnp.arange(11, 20))
+            all_iin_np = np.array(all_iin)[:, 0]
+            for i in range(9):
                 iin *= P11in
-                actual_iin = float((neuron.i_syn_in.value / u.pA)[0])
-                self.assertAlmostEqual(actual_iin, iin, delta=1e-10,
-                                       msg=f'i_syn_in mismatch at step {k}')
+                self.assertAlmostEqual(all_iin_np[i], iin, delta=1e-10,
+                                       msg=f'i_syn_in mismatch at step {i + 1}')
 
     # ------------------------------------------------------------------
     # Test 10: Full step-by-step equation match
@@ -502,76 +547,110 @@ class TestMat2PscExp(unittest.TestCase):
 
             refr = int(math.ceil(params['t_ref'] / h))
 
-            v = -67.0 - params['E_L']  # V_m relative to E_L
-            i0 = 0.0
-            iex = 0.0
-            iin = 0.0
-            vth1 = 0.0
-            vth2 = 0.0
-            r = 0
-
-            # Input sequences: spike weights at specific steps
+            # Input sequences: spike weights and DC currents at specific steps
             w_seq = [0.0, 30.0, -15.0, 0.0, 0.0, 20.0, -10.0, 0.0, 0.0, 0.0]
             x0_seq = [10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            n_steps = len(w_seq)
 
-            for k in range(len(w_seq)):
+            # Compute reference values (Python loop, reference only)
+            v = -67.0 - params['E_L']
+            i0_ref = 0.0
+            iex_ref = 0.0
+            iin_ref = 0.0
+            vth1_ref = 0.0
+            vth2_ref = 0.0
+            r_ref = 0
+            ref_spike = np.zeros(n_steps, dtype=bool)
+            ref_V = np.zeros(n_steps)
+            ref_iex = np.zeros(n_steps)
+            ref_iin = np.zeros(n_steps)
+            ref_vth1 = np.zeros(n_steps)
+            ref_vth2 = np.zeros(n_steps)
+            ref_r = np.zeros(n_steps, dtype=int)
+            for k in range(n_steps):
                 w = w_seq[k]
                 x0 = x0_seq[k]
-
-                spk = self._step(neuron, k, x=x0 * u.pA, delta=w * u.pA if w != 0.0 else None)
-
-                # NEST update order:
-                # 1. Evolve V_m
-                v = v * P22_expm1 + v + iex * P21ex + iin * P21in + (I_e + i0) * P20
-
-                # 2. Evolve adaptive threshold
-                vth1 *= P11th
-                vth2 *= P22th
-
-                # 3. Decay PSCs and add spikes
-                iex *= P11ex
-                iin *= P11in
-                iex += max(w, 0.0)
-                iin += min(w, 0.0)
-
-                # 4-5. Spike detection
-                spike_ref = False
-                if r == 0:
-                    if v >= omega_rel + vth1 + vth2:
-                        spike_ref = True
-                        r = refr
-                        vth1 += alpha_1
-                        vth2 += alpha_2
+                v = v * P22_expm1 + v + iex_ref * P21ex + iin_ref * P21in + (I_e + i0_ref) * P20
+                vth1_ref *= P11th
+                vth2_ref *= P22th
+                iex_ref *= P11ex
+                iin_ref *= P11in
+                iex_ref += max(w, 0.0)
+                iin_ref += min(w, 0.0)
+                if r_ref == 0:
+                    if v >= omega_rel + vth1_ref + vth2_ref:
+                        ref_spike[k] = True
+                        r_ref = refr
+                        vth1_ref += alpha_1
+                        vth2_ref += alpha_2
                 else:
-                    r -= 1
+                    r_ref -= 1
+                i0_ref = x0
+                ref_V[k] = v + params['E_L']
+                ref_iex[k] = iex_ref
+                ref_iin[k] = iin_ref
+                ref_vth1[k] = vth1_ref
+                ref_vth2[k] = vth2_ref
+                ref_r[k] = r_ref
 
-                # 6. Update i_0
-                i0 = x0
+            # Run model with for_loop using pre-computed input arrays
+            w_arr = jnp.array(w_seq)
+            x0_arr = jnp.array(x0_seq)
+            dt_ms = 0.1
 
-                self.assertEqual(self._is_spike(spk), spike_ref,
-                                 msg=f'Spike mismatch at step {k}')
+            def step_fn(k):
+                w = w_arr[k] * u.pA
+                x0 = x0_arr[k] * u.pA
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    spk = neuron.update(x=x0, spike_delta=w)
+                return (
+                    spk,
+                    neuron.V.value / u.mV,
+                    neuron.i_syn_ex.value / u.pA,
+                    neuron.i_syn_in.value / u.pA,
+                    neuron.V_th_1.value / u.mV,
+                    neuron.V_th_2.value / u.mV,
+                    neuron.refractory_step_count.value,
+                )
+
+            results = brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            all_spks, all_V, all_iex, all_iin, all_vth1, all_vth2, all_r = results
+
+            all_spks_np = np.array(all_spks).reshape(-1)
+            all_V_np = np.array(all_V)[:, 0]
+            all_iex_np = np.array(all_iex)[:, 0]
+            all_iin_np = np.array(all_iin)[:, 0]
+            all_vth1_np = np.array(all_vth1)[:, 0]
+            all_vth2_np = np.array(all_vth2)[:, 0]
+            all_r_np = np.array(all_r)[:, 0]
+
+            for k in range(n_steps):
+                self.assertEqual(
+                    bool(all_spks_np[k] > 0.5), bool(ref_spike[k]),
+                    msg=f'Spike mismatch at step {k}'
+                )
                 self.assertAlmostEqual(
-                    float((neuron.V.value / u.mV)[0]), v + params['E_L'], delta=1e-11,
+                    float(all_V_np[k]), ref_V[k], delta=1e-11,
                     msg=f'V_m mismatch at step {k}'
                 )
                 self.assertAlmostEqual(
-                    float((neuron.i_syn_ex.value / u.pA)[0]), iex, delta=1e-11,
+                    float(all_iex_np[k]), ref_iex[k], delta=1e-11,
                     msg=f'i_syn_ex mismatch at step {k}'
                 )
                 self.assertAlmostEqual(
-                    float((neuron.i_syn_in.value / u.pA)[0]), iin, delta=1e-11,
+                    float(all_iin_np[k]), ref_iin[k], delta=1e-11,
                     msg=f'i_syn_in mismatch at step {k}'
                 )
                 self.assertAlmostEqual(
-                    float((neuron.V_th_1.value / u.mV)[0]), vth1, delta=1e-11,
+                    float(all_vth1_np[k]), ref_vth1[k], delta=1e-11,
                     msg=f'V_th_1 mismatch at step {k}'
                 )
                 self.assertAlmostEqual(
-                    float((neuron.V_th_2.value / u.mV)[0]), vth2, delta=1e-11,
+                    float(all_vth2_np[k]), ref_vth2[k], delta=1e-11,
                     msg=f'V_th_2 mismatch at step {k}'
                 )
                 self.assertEqual(
-                    int(neuron.refractory_step_count.value[0]), r,
+                    int(all_r_np[k]), ref_r[k],
                     msg=f'Refractory count mismatch at step {k}'
                 )
 
@@ -602,20 +681,35 @@ class TestMat2PscExp(unittest.TestCase):
             P11th = math.exp(-h / 10.0)
             P22th = math.exp(-h / 200.0)
 
+            n_steps = 50
+            dt_ms = 0.1
+            # Compute reference decay
+            vth1_ref = np.zeros(n_steps)
+            vth2_ref = np.zeros(n_steps)
             vth1 = 20.0
             vth2 = 5.0
-
-            for k in range(50):
-                self._step(neuron, k)
+            for k in range(n_steps):
                 vth1 *= P11th
                 vth2 *= P22th
+                vth1_ref[k] = vth1
+                vth2_ref[k] = vth2
 
+            def step_fn(k):
+                with brainstate.environ.context(t=k.astype(jnp.float64) * dt_ms * u.ms):
+                    neuron.update()
+                return neuron.V_th_1.value / u.mV, neuron.V_th_2.value / u.mV
+
+            all_vth1, all_vth2 = brainstate.transform.for_loop(step_fn, jnp.arange(n_steps))
+            all_vth1_np = np.array(all_vth1)[:, 0]
+            all_vth2_np = np.array(all_vth2)[:, 0]
+
+            for k in range(n_steps):
                 self.assertAlmostEqual(
-                    float((neuron.V_th_1.value / u.mV)[0]), vth1, delta=1e-11,
+                    float(all_vth1_np[k]), vth1_ref[k], delta=1e-11,
                     msg=f'V_th_1 decay mismatch at step {k}'
                 )
                 self.assertAlmostEqual(
-                    float((neuron.V_th_2.value / u.mV)[0]), vth2, delta=1e-11,
+                    float(all_vth2_np[k]), vth2_ref[k], delta=1e-11,
                     msg=f'V_th_2 decay mismatch at step {k}'
                 )
 

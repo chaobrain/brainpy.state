@@ -19,7 +19,7 @@ import importlib.util
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import numpy as np
 import numpy.testing as npt
@@ -76,8 +76,10 @@ def _run_bp_correlomatrix(
     cmd_params = {} if cmd_params is None else dict(cmd_params)
     n_channels = len(spike_times_by_channel)
 
+    dftype = brainstate.environ.dftype()
+    ditype = brainstate.environ.ditype()
+
     if channel_weights is None:
-        dftype = brainstate.environ.dftype()
         channel_weights = np.ones((n_channels,), dtype=dftype)
     else:
         channel_weights = np.asarray(channel_weights, dtype=dftype)
@@ -96,7 +98,6 @@ def _run_bp_correlomatrix(
             with brainstate.environ.context(t=step * dt):
                 if stamp_step in schedule:
                     events = schedule[stamp_step]
-                    ditype = brainstate.environ.ditype()
                     cmd.update(
                         spikes=np.ones((len(events),), dtype=dftype),
                         receptor_ports=np.asarray([e[0] for e in events], dtype=ditype),
@@ -139,8 +140,9 @@ def _run_nest_correlomatrix(
     cmd_params = {} if cmd_params is None else dict(cmd_params)
     n_channels = len(spike_times_by_channel)
 
+    dftype = brainstate.environ.dftype()
+
     if channel_weights is None:
-        dftype = brainstate.environ.dftype()
         channel_weights = np.ones((n_channels,), dtype=dftype)
     else:
         channel_weights = np.asarray(channel_weights, dtype=dftype)

@@ -18,7 +18,7 @@
 
 import math
 
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike
 
 from .static_synapse import _UNSET, static_synapse
@@ -238,7 +238,7 @@ class stdp_triplet_synapse(stdp_synapse):
         Default: ``1.0`` (dimensionless).
     delay : float, array-like, or Quantity, optional
         Synaptic transmission delay. Must be a positive scalar with time units
-        (recommended: ``brainunit.ms``). Will be discretized to integer time steps.
+        (recommended: ``saiunit.ms``). Will be discretized to integer time steps.
         Default: ``1.0 * u.ms``.
     receptor_type : int, optional
         Receptor port identifier on the postsynaptic neuron. Non-negative integer
@@ -390,7 +390,7 @@ class stdp_triplet_synapse(stdp_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bst.stdp_triplet_synapse(
        ...     weight=0.5,
        ...     delay=1.5 * u.ms,
@@ -410,7 +410,7 @@ class stdp_triplet_synapse(stdp_synapse):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> # Initialize simulation context
        >>> with bst.environ.context(dt=0.1 * u.ms):
        ...     syn = bst.stdp_triplet_synapse(weight=1.0, Wmax=2.0)
@@ -579,7 +579,7 @@ class stdp_triplet_synapse(stdp_synapse):
 
         Notes
         -----
-        - All time constants returned in milliseconds (without brainunit units)
+        - All time constants returned in milliseconds (without saiunit units)
         - All trace values reflect current simulation time state
         - Postsynaptic trace values (``Kminus``, ``Kminus_triplet``) are internal
           and not included in the returned dictionary
@@ -869,7 +869,7 @@ class stdp_triplet_synapse(stdp_synapse):
         .. code-block:: python
 
            >>> import brainstate as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with bst.environ.context(dt=0.1 * u.ms):
            ...     post_neuron = bst.LIF(1)  # Postsynaptic neuron
            ...     syn = bst.stdp_triplet_synapse(weight=1.0, post=post_neuron)

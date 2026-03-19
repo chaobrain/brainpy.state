@@ -20,7 +20,7 @@ from typing import Optional, Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import Size, ArrayLike
 
 from brainpy_state._base import Synapse
@@ -88,7 +88,7 @@ class Expon(Synapse, AlignPost):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a simple exponential synapse with 8 ms decay
         >>> syn = brainpy.state.Expon(100, tau=8.*u.ms)
         >>> syn.init_state(batch_size=1)
@@ -204,7 +204,7 @@ class DualExpon(Synapse, AlignPost):
     .. code-block:: python
 
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainpy
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
         ...     syn = brainpy.state.DualExpon(in_size=1, tau_rise=0.5 * u.ms, tau_decay=5.0 * u.ms)
@@ -237,6 +237,14 @@ class DualExpon(Synapse, AlignPost):
         self.amplitude = braintools.init.param(amplitude, self.varshape)
         self.normalize = normalize
         self.g_initializer = g_initializer
+
+        # validate tau_rise != tau_decay when normalize is enabled
+        if self.normalize:
+            brainstate.transform.jit_error_if(
+                u.math.any(u.get_magnitude(self.tau_decay - self.tau_rise) == 0.),
+                'tau_decay must differ from tau_rise when normalize=True. '
+                'Use Alpha synapse for equal time constants.'
+            )
 
     def _dual_exp_normalization(self):
         return (

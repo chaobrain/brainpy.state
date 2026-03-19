@@ -1,7 +1,8 @@
 import math
 from typing import Any
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -302,7 +303,7 @@ class urbanczik_synapse(NESTSynapse):
         t_last_spike_ms: ArrayLike = -1.0,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
 
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay = self._validate_positive_delay(delay)
@@ -1139,7 +1140,7 @@ class urbanczik_synapse(NESTSynapse):
         Parameters
         ----------
         value : ArrayLike
-            Input value (scalar, array, or brainunit Quantity).
+            Input value (scalar, array, or saiunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -1155,9 +1156,10 @@ class urbanczik_synapse(NESTSynapse):
 
         Notes
         -----
-        Handles brainunit Quantity objects by extracting mantissa. Flattens arrays to check
+        Handles saiunit Quantity objects by extracting mantissa. Flattens arrays to check
         for single-element constraint.
         """
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
@@ -1175,7 +1177,7 @@ class urbanczik_synapse(NESTSynapse):
         Parameters
         ----------
         value : ArrayLike
-            Input value (scalar, array, or brainunit Quantity).
+            Input value (scalar, array, or saiunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -1193,8 +1195,9 @@ class urbanczik_synapse(NESTSynapse):
         Notes
         -----
         Converts to float first, validates finiteness, then rounds and checks integer constraint
-        with 1e-12 absolute tolerance. Handles brainunit Quantity objects.
+        with 1e-12 absolute tolerance. Handles saiunit Quantity objects.
         """
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             value = u.get_mantissa(value)
         arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)

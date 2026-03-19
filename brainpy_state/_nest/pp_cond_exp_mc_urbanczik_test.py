@@ -43,7 +43,7 @@ os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['JAX_ENABLE_X64'] = 'True'
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -51,12 +51,44 @@ from scipy.integrate import solve_ivp
 
 from brainpy_state._nest.pp_cond_exp_mc_urbanczik import (
     pp_cond_exp_mc_urbanczik,
-    _phi,
-    _h_func,
-    _idx,
     SOMA, DEND,
-    _V_M, _G_EXC, _G_INH, _I_EXC, _I_INH,
 )
+
+# ---------------------------------------------------------------------------
+# Local helper functions that were previously module-level in the source but
+# are now inlined within the class.  We re-define them here for test use.
+# ---------------------------------------------------------------------------
+
+# State-vector index constants for the 10-element reference ODE vector.
+# Layout: [SOMA: V_M, G_EXC, G_INH, I_EXC, I_INH,
+#           DEND: V_M, G_EXC, G_INH, I_EXC, I_INH]
+_V_M = 0
+_G_EXC = 1
+_G_INH = 2
+_I_EXC = 3
+_I_INH = 4
+_VARS_PER_COMP = 5
+
+
+def _idx(comp, var):
+    r"""Map (compartment, variable) to a flat index in the 10-element state vector."""
+    return comp * _VARS_PER_COMP + var
+
+
+def _phi(V_m, phi_max, rate_slope, beta, theta):
+    r"""Rate function phi(V_m).
+
+    phi(u) = phi_max / (1 + rate_slope * exp(beta * (theta - u)))
+    """
+    return phi_max / (1.0 + rate_slope * math.exp(beta * (theta - V_m)))
+
+
+def _h_func(V_m, rate_slope, beta, theta):
+    r"""Learning modulation function h(u).
+
+    h(u) = 15 * beta / (1 + (1/rate_slope) * exp(-beta * (theta - u)))
+    """
+    return 15.0 * beta / (1.0 + (1.0 / rate_slope) * math.exp(-beta * (theta - V_m)))
 
 
 def _get_scalar(x):
@@ -252,40 +284,49 @@ class TestParameterValidation(unittest.TestCase):
     r"""Test parameter validation matches NEST checks."""
 
     def test_negative_rate_slope(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, rate_slope=-1.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, rate_slope=-1.0)
 
     def test_negative_phi_max(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, phi_max=-0.1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, phi_max=-0.1)
 
     def test_negative_t_ref(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, t_ref=-1.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, t_ref=-1.0 * u.ms)
 
     def test_negative_soma_capacitance(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_C_m=-100.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_C_m=-100.0 * u.pF)
 
     def test_zero_soma_capacitance(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_C_m=0.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_C_m=0.0 * u.pF)
 
     def test_negative_dend_capacitance(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, dend_C_m=-100.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, dend_C_m=-100.0 * u.pF)
 
     def test_negative_soma_tau_syn_ex(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_tau_syn_ex=-1.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_tau_syn_ex=-1.0 * u.ms)
 
     def test_negative_dend_tau_syn_in(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, dend_tau_syn_in=-1.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, dend_tau_syn_in=-1.0 * u.ms)
 
     def test_zero_soma_tau_syn_in(self):
-        with self.assertRaises(ValueError):
-            pp_cond_exp_mc_urbanczik(1, soma_tau_syn_in=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                pp_cond_exp_mc_urbanczik(1, soma_tau_syn_in=0.0 * u.ms)
 
 
 class TestStateInitialization(unittest.TestCase):
@@ -387,12 +428,16 @@ class TestSubthresholdDynamics(unittest.TestCase):
             neuron = pp_cond_exp_mc_urbanczik(1)
             neuron.init_state()
 
-            for i in range(100):
-                self._step(neuron, i)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.V_s.value / u.mV, neuron.V_d.value / u.mV
+
+            v_s_trace, v_d_trace = brainstate.transform.for_loop(_body, jnp.arange(100))
 
             # Should remain at E_L
-            self.assertAlmostEqual(_V_s_mV(neuron), -70.0, places=4)
-            self.assertAlmostEqual(_V_d_mV(neuron), -70.0, places=4)
+            self.assertAlmostEqual(float(v_s_trace[-1, 0]), -70.0, places=4)
+            self.assertAlmostEqual(float(v_d_trace[-1, 0]), -70.0, places=4)
 
     def test_soma_excitatory_conductance_decay(self):
         r"""Somatic excitatory conductance should decay exponentially."""
@@ -403,18 +448,27 @@ class TestSubthresholdDynamics(unittest.TestCase):
             h = 0.1  # ms
             tau_syn_ex = 3.0  # ms
 
-            # Inject conductance
-            self._step(neuron, 0, soma_exc=5.0 * u.nS)
-            g_after_inject = _g_ex_s_nS(neuron)
+            # Pre-compute per-step soma_exc injection: inject 5 nS at step 0 only.
+            soma_exc_vals = np.zeros(11, dtype=np.float64)
+            soma_exc_vals[0] = 5.0
+            soma_exc_arr = jnp.array(soma_exc_vals, dtype=jnp.float64)
+
+            def _body(k):
+                neuron.add_delta_input('soma_exc', jnp.expand_dims(soma_exc_arr[k], 0) * u.nS)
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.g_ex_s.value / u.nS
+
+            g_trace = brainstate.transform.for_loop(_body, jnp.arange(11))
+            # g_trace shape: (11, 1)
+
+            # After step 0: conductance ≈ 5 nS
+            g_after_inject = float(g_trace[0, 0])
             self.assertAlmostEqual(g_after_inject, 5.0, places=2)
 
-            # Let it decay for 10 steps
-            for i in range(1, 11):
-                self._step(neuron, i)
-
-            # Should decay as exp(-10*h / tau)
+            # After 10 decay steps: exp(-10*0.1 / 3.0)
             expected = 5.0 * math.exp(-10 * h / tau_syn_ex)
-            actual = _g_ex_s_nS(neuron)
+            actual = float(g_trace[-1, 0])
             self.assertAlmostEqual(actual, expected, places=2)
 
     def test_dend_excitatory_current_decay(self):
@@ -426,17 +480,27 @@ class TestSubthresholdDynamics(unittest.TestCase):
             h = 0.1  # ms
             tau_syn_ex = 3.0  # ms
 
-            # Inject current
-            self._step(neuron, 0, dend_exc=100.0 * u.pA)
-            I_after_inject = _I_ex_d_pA(neuron)
+            # Pre-compute per-step dend_exc injection: inject 100 pA at step 0 only.
+            dend_exc_vals = np.zeros(11, dtype=np.float64)
+            dend_exc_vals[0] = 100.0
+            dend_exc_arr = jnp.array(dend_exc_vals, dtype=jnp.float64)
+
+            def _body(k):
+                neuron.add_delta_input('dend_exc', jnp.expand_dims(dend_exc_arr[k], 0) * u.pA)
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.I_ex_d.value / u.pA
+
+            I_trace = brainstate.transform.for_loop(_body, jnp.arange(11))
+            # I_trace shape: (11, 1)
+
+            # After step 0: current ≈ 100 pA
+            I_after_inject = float(I_trace[0, 0])
             self.assertAlmostEqual(I_after_inject, 100.0, places=1)
 
-            # Let it decay for 10 steps
-            for i in range(1, 11):
-                self._step(neuron, i)
-
+            # After 10 decay steps
             expected = 100.0 * math.exp(-10 * h / tau_syn_ex)
-            actual = _I_ex_d_pA(neuron)
+            actual = float(I_trace[-1, 0])
             self.assertAlmostEqual(actual, expected, places=1)
 
     def test_dend_inhibitory_sign_convention(self):
@@ -463,14 +527,19 @@ class TestSubthresholdDynamics(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Run for a while
-            for i in range(1000):
-                self._step(neuron, i)
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.V_s.value / u.mV, neuron.V_d.value / u.mV
+
+            v_s_trace, v_d_trace = brainstate.transform.for_loop(
+                _body, jnp.arange(1000)
+            )
 
             # With strong coupling and different E_L, potentials should
             # settle to a steady state between the two E_L values
-            v_s = _V_s_mV(neuron)
-            v_d = _V_d_mV(neuron)
+            v_s = float(v_s_trace[-1, 0])
+            v_d = float(v_d_trace[-1, 0])
 
             # Both should be between -70 and -60 (with tolerance for E_L boundary)
             self.assertGreater(v_s, -70.0)
@@ -547,20 +616,32 @@ class TestSubthresholdDynamics(unittest.TestCase):
             }
 
             n_steps = 20
+
+            # Pre-compute reference trace in Python (scipy).
+            ref_V_s = []
+            ref_V_d = []
             for i in range(n_steps):
-                # Reference step
                 y = _run_ref_dynamics(y, dt_val, p)
+                ref_V_s.append(y[_idx(SOMA, _V_M)])
+                ref_V_d.append(y[_idx(DEND, _V_M)])
 
-                # Model step
-                self._step(neuron, i)
+            # Run model via for_loop.
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update()
+                return neuron.V_s.value / u.mV, neuron.V_d.value / u.mV
 
-                # Compare
+            model_V_s_trace, model_V_d_trace = brainstate.transform.for_loop(
+                _body, jnp.arange(n_steps)
+            )
+
+            for i in range(n_steps):
                 self.assertAlmostEqual(
-                    _V_s_mV(neuron), y[_idx(SOMA, _V_M)], places=4,
+                    float(model_V_s_trace[i, 0]), ref_V_s[i], places=4,
                     msg=f"V_s mismatch at step {i}"
                 )
                 self.assertAlmostEqual(
-                    _V_d_mV(neuron), y[_idx(DEND, _V_M)], places=4,
+                    float(model_V_d_trace[i, 0]), ref_V_d[i], places=4,
                     msg=f"V_d mismatch at step {i}"
                 )
 
@@ -602,23 +683,16 @@ class TestSpikeGeneration(unittest.TestCase):
             # Record V_s before step
             v_before = _V_s_mV(neuron)
 
-            # Run many steps until we get a spike
-            spiked = False
-            for i in range(100):
-                neuron.V_s.value = jnp.array([0.0]) * u.mV  # keep at 0 mV
-                with brainstate.environ.context(t=i * self.dt):
+            # Run all 100 steps and check that at least one spike occurred.
+            def _body(k):
+                neuron.V_s.value = jnp.zeros(1) * u.mV  # keep at 0 mV
+                with brainstate.environ.context(t=k * self.dt):
                     spk = neuron.update()
-                if bool(spk > 0):
-                    spiked = True
-                    # V_s should NOT have been reset
-                    v_after = _V_s_mV(neuron)
-                    # V_s might have changed due to ODE dynamics, but it should
-                    # not have been set to some reset value
-                    # The key check is that the neuron does not jump V_m to a reset
-                    # (unlike IAF models which set V = V_reset)
-                    break
+                return spk
 
-            self.assertTrue(spiked, "Expected at least one spike in 100 steps at 0 mV")
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(100))
+            # spk_trace shape: (100, 1) — check any spike occurred
+            self.assertTrue(bool(jnp.any(spk_trace > 0)), "Expected at least one spike in 100 steps at 0 mV")
 
 
 class TestRefractoryPeriod(unittest.TestCase):
@@ -662,11 +736,14 @@ class TestRefractoryPeriod(unittest.TestCase):
             ditype = brainstate.environ.ditype()
             neuron.refractory_step_count.value = jnp.array([10], dtype=ditype)
 
-            # No spike should occur while refractory
-            for i in range(5):
-                with brainstate.environ.context(t=i * self.dt):
+            # No spike should occur while refractory — run all 5 steps and verify.
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
                     spk = neuron.update()
-                self.assertFalse(bool(spk > 0), f"Spike during refractory at step {i}")
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(5))
+            self.assertFalse(bool(jnp.any(spk_trace > 0)), "No spike should occur during refractory period")
 
 
 class TestUrbanczikHistory(unittest.TestCase):
@@ -784,13 +861,21 @@ class TestPopulation(unittest.TestCase):
             n2 = pp_cond_exp_mc_urbanczik(1, rng_key=jax.random.PRNGKey(42))
             n2.init_state()
 
-            for i in range(50):
-                with brainstate.environ.context(t=i * self.dt):
-                    spk1 = n1.update()
-                    spk2 = n2.update()
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    n1.update()
+                    n2.update()
+                return (
+                    n1.V_s.value / u.mV, n1.V_d.value / u.mV,
+                    n2.V_s.value / u.mV, n2.V_d.value / u.mV,
+                )
 
-                self.assertAlmostEqual(_V_s_mV(n1), _V_s_mV(n2), places=10)
-                self.assertAlmostEqual(_V_d_mV(n1), _V_d_mV(n2), places=10)
+            v_s1_trace, v_d1_trace, v_s2_trace, v_d2_trace = brainstate.transform.for_loop(
+                _body, jnp.arange(50)
+            )
+            for i in range(50):
+                self.assertAlmostEqual(float(v_s1_trace[i, 0]), float(v_s2_trace[i, 0]), places=10)
+                self.assertAlmostEqual(float(v_d1_trace[i, 0]), float(v_d2_trace[i, 0]), places=10)
 
     def test_population_shape(self):
         r"""Model should work with in_size > 1."""
@@ -843,43 +928,40 @@ class TestFullReferenceTrace(unittest.TestCase):
         inject_step = 10
         inject_amount = 5.0  # nS
 
+        # Reference: run in Python loop (scipy, can't be JIT-compiled)
         ref_V_s = []
         ref_V_d = []
-        model_V_s = []
-        model_V_d = []
-
         for i in range(n_steps):
-            # Reference integration
             y = _run_ref_dynamics(y, dt_val, p)
-
-            # Add spike input at inject step (after integration, matching NEST)
             if i == inject_step:
                 y[_idx(SOMA, _G_EXC)] += inject_amount
-
             ref_V_s.append(y[_idx(SOMA, _V_M)])
             ref_V_d.append(y[_idx(DEND, _V_M)])
 
-            # Model step
-            if i == inject_step:
-                with brainstate.environ.context(dt=self.dt, t=i * self.dt):
-                    neuron.add_delta_input(f'soma_exc_{i}', inject_amount * u.nS)
-                    neuron.update()
-            else:
-                with brainstate.environ.context(dt=self.dt, t=i * self.dt):
-                    neuron.update()
+        # Model: pre-compute injection array, run via for_loop.
+        soma_exc_vals = np.zeros(n_steps, dtype=np.float64)
+        soma_exc_vals[inject_step] = inject_amount
+        soma_exc_arr = jnp.array(soma_exc_vals, dtype=jnp.float64)
 
-            model_V_s.append(_V_s_mV(neuron))
-            model_V_d.append(_V_d_mV(neuron))
+        def _body(k):
+            neuron.add_delta_input('soma_exc', jnp.expand_dims(soma_exc_arr[k], 0) * u.nS)
+            with brainstate.environ.context(t=k * self.dt):
+                neuron.update()
+            return neuron.V_s.value / u.mV, neuron.V_d.value / u.mV
+
+        model_V_s_trace, model_V_d_trace = brainstate.transform.for_loop(
+            _body, jnp.arange(n_steps)
+        )
 
         # Compare traces
         for i in range(n_steps):
             self.assertAlmostEqual(
-                model_V_s[i], ref_V_s[i], places=4,
-                msg=f"V_s mismatch at step {i}: model={model_V_s[i]:.8f}, ref={ref_V_s[i]:.8f}"
+                float(model_V_s_trace[i, 0]), ref_V_s[i], places=4,
+                msg=f"V_s mismatch at step {i}: model={float(model_V_s_trace[i, 0]):.8f}, ref={ref_V_s[i]:.8f}"
             )
             self.assertAlmostEqual(
-                model_V_d[i], ref_V_d[i], places=4,
-                msg=f"V_d mismatch at step {i}: model={model_V_d[i]:.8f}, ref={ref_V_d[i]:.8f}"
+                float(model_V_d_trace[i, 0]), ref_V_d[i], places=4,
+                msg=f"V_d mismatch at step {i}: model={float(model_V_d_trace[i, 0]):.8f}, ref={ref_V_d[i]:.8f}"
             )
 
     def test_subthreshold_with_dendritic_excitation(self):
@@ -908,38 +990,38 @@ class TestFullReferenceTrace(unittest.TestCase):
         inject_step = 5
         inject_amount = 200.0  # pA
 
+        # Reference: run in Python loop (scipy, can't be JIT-compiled)
         ref_V_s = []
         ref_V_d = []
-        model_V_s = []
-        model_V_d = []
-
         for i in range(n_steps):
             y = _run_ref_dynamics(y, dt_val, p)
-
             if i == inject_step:
                 y[_idx(DEND, _I_EXC)] += inject_amount
-
             ref_V_s.append(y[_idx(SOMA, _V_M)])
             ref_V_d.append(y[_idx(DEND, _V_M)])
 
-            if i == inject_step:
-                with brainstate.environ.context(dt=self.dt, t=i * self.dt):
-                    neuron.add_delta_input(f'dend_exc_{i}', inject_amount * u.pA)
-                    neuron.update()
-            else:
-                with brainstate.environ.context(dt=self.dt, t=i * self.dt):
-                    neuron.update()
+        # Model: pre-compute injection array, run via for_loop.
+        dend_exc_vals = np.zeros(n_steps, dtype=np.float64)
+        dend_exc_vals[inject_step] = inject_amount
+        dend_exc_arr = jnp.array(dend_exc_vals, dtype=jnp.float64)
 
-            model_V_s.append(_V_s_mV(neuron))
-            model_V_d.append(_V_d_mV(neuron))
+        def _body(k):
+            neuron.add_delta_input('dend_exc', jnp.expand_dims(dend_exc_arr[k], 0) * u.pA)
+            with brainstate.environ.context(t=k * self.dt):
+                neuron.update()
+            return neuron.V_s.value / u.mV, neuron.V_d.value / u.mV
+
+        model_V_s_trace, model_V_d_trace = brainstate.transform.for_loop(
+            _body, jnp.arange(n_steps)
+        )
 
         for i in range(n_steps):
             self.assertAlmostEqual(
-                model_V_s[i], ref_V_s[i], places=4,
+                float(model_V_s_trace[i, 0]), ref_V_s[i], places=4,
                 msg=f"V_s mismatch at step {i}"
             )
             self.assertAlmostEqual(
-                model_V_d[i], ref_V_d[i], places=4,
+                float(model_V_d_trace[i, 0]), ref_V_d[i], places=4,
                 msg=f"V_d mismatch at step {i}"
             )
 

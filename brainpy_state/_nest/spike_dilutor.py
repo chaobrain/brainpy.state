@@ -19,7 +19,9 @@
 import math
 
 import brainstate
-import brainunit as u
+import jax
+import jax.numpy as jnp
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -144,8 +146,8 @@ class spike_dilutor(NESTDevice):
         Scalar-convertible. Must be an integer multiple of ``dt`` when finite.
         Default is ``0.0 * u.ms``.
     rng_seed : int, optional
-        Integer seed for NumPy ``default_rng`` used for Bernoulli copy draws.
-        The RNG is re-initialised in :meth:`init_state`. Default is ``0``.
+        Integer seed for ``jax.random.PRNGKey`` used for Bernoulli copy draws.
+        The PRNG key is re-initialised in :meth:`init_state`. Default is ``0``.
     name : str or None, optional
         Optional node name passed to :class:`Dynamics`.
 
@@ -217,7 +219,7 @@ class spike_dilutor(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sd = brainpy.state.spike_dilutor(
        ...         in_size=4,
@@ -237,7 +239,7 @@ class spike_dilutor(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     sd = brainpy.state.spike_dilutor(p_copy=1.0, in_size=(2, 2))
        ...     sd.init_state()
@@ -371,11 +373,13 @@ class spike_dilutor(NESTDevice):
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        r"""Initialise the per-instance NumPy random number generator.
+        r"""Initialise the per-instance JAX PRNG key.
 
-        Constructs a ``numpy.random.default_rng`` seeded with
-        :attr:`rng_seed`.  Must be called before the first :meth:`update`
-        call; :meth:`update` calls it automatically when the RNG is absent,
+        Constructs a ``jax.random.PRNGKey`` seeded with :attr:`rng_seed`
+        and stores it as a :class:`brainstate.ShortTermState` so that
+        :meth:`update` works under :func:`brainstate.transform.for_loop`
+        (JAX scan) tracing.  Must be called before the first :meth:`update`
+        call; :meth:`update` calls it automatically when the key is absent,
         but explicit initialisation is preferred for reproducibility.
 
         Parameters
@@ -388,11 +392,13 @@ class spike_dilutor(NESTDevice):
 
         Notes
         -----
-        Calling :meth:`init_state` a second time resets the RNG to the
+        Calling :meth:`init_state` a second time resets the PRNG key to the
         initial seed, making simulation runs reproducible when seeded.
         """
         del batch_size, kwargs
-        self._rng = np.random.default_rng(self.rng_seed)
+        self.rng_key = brainstate.ShortTermState(
+            jax.random.PRNGKey(self.rng_seed)
+        )
 
     def set(
         self,
@@ -438,7 +444,7 @@ class spike_dilutor(NESTDevice):
 
            >>> import brainpy
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     sd = brainpy.state.spike_dilutor(p_copy=0.5)
            ...     sd.set(p_copy=0.8, stop=10.0 * u.ms)
@@ -493,7 +499,7 @@ class spike_dilutor(NESTDevice):
 
            >>> import brainpy
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     sd = brainpy.state.spike_dilutor(p_copy=0.3, stop=5.0 * u.ms)
            ...     params = sd.get()
@@ -507,63 +513,20 @@ class spike_dilutor(NESTDevice):
             'origin': float(self.origin),
         }
 
-    def _sample_child_spikes(self, n_mother_spikes: int) -> np.ndarray:
-        r"""Draw Binomial child multiplicities for all targets.
-
-        For each of the :math:`M = \prod\mathrm{varshape}` targets, sums
-        ``n_mother_spikes`` independent Bernoulli trials with success
-        probability :math:`p_{\mathrm{copy}}`.  Three fast paths avoid
-        random sampling when the result is deterministic:
-
-        - ``n_mother_spikes <= 0`` or ``_num_targets == 0``: return zeros.
-        - ``p_copy <= 0.0``: return zeros (no copies ever succeed).
-        - ``p_copy >= 1.0``: return ``n_mother_spikes`` for every target.
-
-        Parameters
-        ----------
-        n_mother_spikes : int
-            Non-negative integer mother multiplicity for the current step.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            1-D array of dtype ``int64`` with length ``self._num_targets``.
-            Element ``j`` gives the number of mother spikes copied to child
-            target ``j``.  Caller is responsible for reshaping to
-            ``self.varshape``.
-
-        Notes
-        -----
-        Random draws are taken from ``self._rng`` (a ``numpy.random.Generator``
-        initialised in :meth:`init_state`).  The draw allocates a temporary
-        array of shape ``(self._num_targets, n_mother_spikes)``, which may be
-        large for high-multiplicity inputs.
-        """
-        ditype = brainstate.environ.ditype()
-        out = np.zeros(self._num_targets, dtype=ditype)
-
-        if n_mother_spikes <= 0 or self._num_targets == 0:
-            return out
-        if self.p_copy <= 0.0:
-            return out
-        if self.p_copy >= 1.0:
-            out.fill(int(n_mother_spikes))
-            return out
-
-        # One Bernoulli trial per (target, mother spike), matching NEST's
-        # explicit event_hook loop semantics.
-        draws = self._rng.random((self._num_targets, int(n_mother_spikes)))
-        out[:] = np.count_nonzero(draws < self.p_copy, axis=1).astype(np.int64)
-        return out
-
     def update(self, mother_spikes: ArrayLike = 0.0):
         r"""Advance one simulation step and emit child spike multiplicities.
 
         Reads the current simulation time from ``brainstate.environ``,
-        checks device activity, and—when active—delegates to
-        :meth:`_sample_child_spikes` to draw independent Binomial counts for
-        each target.  If the timing cache is stale (``dt`` changed since last
-        call), the cache is refreshed before activity is evaluated.
+        checks device activity using JAX operations (JIT-compatible), and
+        draws independent Binomial counts for each target via
+        ``jax.random.binomial``.  If the timing cache is stale (``dt``
+        changed since last call), the cache is refreshed before activity is
+        evaluated.
+
+        This method is fully compatible with :func:`brainstate.transform.for_loop`
+        (JAX scan): the PRNG key is stored as a
+        :class:`brainstate.ShortTermState` and threaded through the scan
+        carry automatically.
 
         Parameters
         ----------
@@ -571,13 +534,12 @@ class spike_dilutor(NESTDevice):
             Mother-process multiplicity contribution for the current step.
             Values are summed element-wise over all array elements, then
             combined with any values registered via :meth:`add_current_input`
-            and :meth:`add_delta_input`.  The resulting total is truncated
-            toward zero to a non-negative integer count.  Unitless count
-            semantics. Default is ``0.0``.
+            and :meth:`add_delta_input`.  Unitless count semantics.
+            Default is ``0.0``.
 
         Returns
         -------
-        out : numpy.ndarray
+        out : jax.Array
             Integer array with dtype ``int64`` and shape ``self.varshape``.
             Each element gives the copied child multiplicity for the
             corresponding target in the current simulation step.  Returns all
@@ -587,21 +549,18 @@ class spike_dilutor(NESTDevice):
         Raises
         ------
         ValueError
-            If the effective mother multiplicity is negative after combining
-            all inputs, or if a finite timing parameter is not an integer
-            multiple of the current ``dt``.
-        TypeError
-            If ``mother_spikes`` cannot be converted to a numeric array.
+            If the effective mother multiplicity is negative when called with
+            a concrete (non-traced) value, or if a finite timing parameter is
+            not an integer multiple of the current ``dt``.
         KeyError
             If required simulation context (e.g. ``dt``) is unavailable
             depending on ``brainstate.environ`` behaviour.
 
         See Also
         --------
-        _sample_child_spikes : Low-level Binomial sampling routine.
-        init_state : Initialise the RNG before calling update.
+        init_state : Initialise the PRNG key before calling update.
         """
-        if not hasattr(self, '_rng'):
+        if not hasattr(self, 'rng_key'):
             self.init_state()
 
         dt_ms = self._dt_ms()
@@ -610,16 +569,60 @@ class spike_dilutor(NESTDevice):
         ):
             self._refresh_timing_cache(dt_ms)
 
-        # Mother multiplicity for the current step: direct input argument plus
-        # optional registered current/delta inputs.
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+
+        # Mother multiplicity for the current step.
         total_spikes = self.sum_current_inputs(mother_spikes)
         total_spikes = self.sum_delta_inputs(total_spikes)
-        n_mother_spikes = self._to_nonnegative_count(total_spikes)
 
-        curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
-        if not self._is_active(curr_step) or n_mother_spikes <= 0:
-            ditype = brainstate.environ.ditype()
-            return np.zeros(self.varshape, dtype=ditype)
+        # Validate non-negative only when the value is concrete (not a JAX tracer).
+        if not isinstance(jnp.asarray(total_spikes), jax.core.Tracer):
+            if float(np.asarray(total_spikes)) < 0.0:
+                raise ValueError('mother_spikes must be non-negative.')
 
-        child_counts = self._sample_child_spikes(n_mother_spikes)
-        return child_counts.reshape(self.varshape)
+        # Get current time as a JAX-compatible scalar so this method works under
+        # jax.jit / brainstate.transform.for_loop tracing.
+        t = brainstate.environ.get('t', default=0. * u.ms)
+        if isinstance(t, u.Quantity):
+            t_ms_jax = t.to_decimal(u.ms)
+        else:
+            t_ms_jax = jnp.asarray(t, dtype=dftype)
+
+        # Activity check using JAX comparisons for JIT compatibility.
+        curr_step_jax = jnp.rint(t_ms_jax / dt_ms).astype(jnp.int64)
+        t_min = jnp.asarray(self._t_min_step, dtype=jnp.int64)
+        t_max = jnp.asarray(self._t_max_step, dtype=jnp.int64)
+        active = jnp.logical_and(t_min < curr_step_jax, curr_step_jax <= t_max)
+
+        # Mother spikes as JAX integer; clip to ≥ 0 after validation.
+        n_mother_jax = jnp.asarray(total_spikes, dtype=jnp.int64)
+        n_mother_safe = jnp.maximum(n_mother_jax, jnp.zeros((), dtype=jnp.int64))
+        positive = n_mother_jax > 0
+
+        zeros = jnp.zeros(self.varshape, dtype=ditype)
+
+        # Fast paths: p_copy=0 → all zeros; p_copy=1 → pass-through.
+        # These use Python-level constants, so the branches are resolved at
+        # trace time and do not prevent JIT compilation.  The PRNG key is
+        # only advanced for the stochastic (0 < p < 1) case, matching the
+        # original model's behaviour of not consuming randomness for trivial
+        # probability values.
+        if self.p_copy <= 0.0:
+            raw_spikes = zeros
+        elif self.p_copy >= 1.0:
+            raw_spikes = jnp.full(self.varshape, n_mother_safe, dtype=ditype)
+        else:
+            # Bernoulli/Binomial sampling via JAX PRNG (JIT-compatible;
+            # PRNG state managed by brainstate ShortTermState).
+            key, subkey = jax.random.split(self.rng_key.value)
+            self.rng_key.value = key
+            p_jax = jnp.asarray(self.p_copy, dtype=dftype)
+            raw_spikes = jax.random.binomial(
+                subkey,
+                n=n_mother_safe,
+                p=p_jax,
+                shape=self.varshape,
+            ).astype(ditype)
+
+        return jnp.where(jnp.logical_and(active, positive), raw_spikes, zeros)

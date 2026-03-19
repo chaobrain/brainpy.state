@@ -22,6 +22,11 @@ Organization
 
       Abstract base classes: Dynamics, Neuron, Synapse
 
+   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
+      :link: nest-base.html
+
+      NEST marker bases: NESTNeuron, NESTSynapse, NESTPlasticity, NESTDevice
+
 
 **BrainPy-style Models**
 
@@ -55,7 +60,7 @@ Organization
    .. grid-item-card:: :material-regular:`sensors;2em` Readouts
       :link: brainpy-readouts.html
 
-      Readout layers (LeakyRateReadout, LeakySpikeReadout)
+      Readout layers (LeakyRateReadout)
 
    .. grid-item-card:: :material-regular:`input;2em` Input Generators
       :link: brainpy-inputs.html
@@ -66,11 +71,6 @@ Organization
 **NEST-Compatible Models**
 
 .. grid:: 1 2 2 3
-
-   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
-      :link: nest-base.html
-
-      NEST marker bases: NESTNeuron, NESTSynapse, NESTPlasticity, NESTDevice
 
    .. grid-item-card:: :material-regular:`hub;2em` NEST Neurons
       :link: nest-neurons.html

@@ -15,181 +15,22 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer, alpha_propagator_p31_p32
 
 __all__ = [
     'glif_psc',
 ]
-
-
-def _iaf_propagator_alpha(tau_syn, tau_m, c_m, h):
-    r"""Compute exact integration propagator elements P31, P32 for alpha-PSC.
-
-    This function mirrors NEST's ``IAFPropagatorAlpha::evaluate()`` with
-    singularity handling for the case :math:`\tau_m \approx \tau_{syn}`.
-    The propagator maps the synaptic current state variables
-    :math:`(y_1, y_2)` to the membrane voltage update during exact integration
-    of the linear subthreshold dynamics.
-
-    Mathematical Formulation
-    ------------------------
-
-    **1. Regular Case** (:math:`\tau_m` and :math:`\tau_{syn}` sufficiently different)
-
-    Intermediate quantities:
-
-    .. math::
-
-        \beta = \frac{\tau_{syn} \cdot \tau_m}{\tau_m - \tau_{syn}}
-
-    .. math::
-
-        \gamma = \frac{\beta}{C_m}
-
-    Propagator elements:
-
-    .. math::
-
-        P_{32} = \gamma \cdot e^{-h/\tau_{syn}} \cdot
-                 \left( e^{h / \beta} - 1 \right)
-
-    .. math::
-
-        P_{31} = \gamma \cdot e^{-h/\tau_{syn}} \cdot
-                 \left( \beta \cdot \left( e^{h / \beta} - 1 \right) - h \right)
-
-    **2. Singular Case** (:math:`\tau_m \approx \tau_{syn}`)
-
-    When the time constants are nearly equal, the regular formulas become
-    numerically unstable. The singular case uses asymptotic expansions:
-
-    .. math::
-
-        P_{32,\text{singular}} = \frac{h}{C_m} \cdot e^{-h/\tau_m}
-
-    .. math::
-
-        P_{31,\text{singular}} = \frac{h^2}{2 \, C_m} \cdot e^{-h/\tau_m}
-
-    **3. Singularity Detection**
-
-    The function tests whether :math:`P_{32}` computed via the regular formula
-    is positive, finite, and non-zero. If not, it falls back to the singular
-    formula. For :math:`P_{31}`, a threshold test based on
-    :math:`h_\mathrm{min} = 10^{-7} \cdot \tau_m^2 / |\tau_m - \tau_{syn}|`
-    determines which formula to use.
-
-    **Computational Stability**
-
-    - Uses ``math.expm1(x)`` to compute :math:`e^x - 1` with high precision
-      for small :math:`x`.
-    - Handles exact equality :math:`\tau_m = \tau_{syn}` explicitly to avoid
-      division by zero.
-    - Matches NEST's numerical stability approach with
-      ``NUMERICAL_STABILITY_FACTOR = 1e-7``.
-
-    Parameters
-    ----------
-    tau_syn : float
-        Synaptic time constant in ms. Must be positive.
-    tau_m : float
-        Membrane time constant in ms. Must be positive.
-    c_m : float
-        Membrane capacitance in pF. Must be positive.
-    h : float
-        Time step in ms. Must be positive.
-
-    Returns
-    -------
-    P31 : float
-        Propagator element mapping :math:`y_1` (derivative of synaptic
-        current state) to membrane voltage increment. Units: mV·ms/pA.
-    P32 : float
-        Propagator element mapping :math:`y_2` (synaptic current state)
-        to membrane voltage increment. Units: mV/pA.
-
-    Raises
-    ------
-    None
-        Function assumes valid positive inputs. Invalid inputs may produce
-        inf or nan results.
-
-    Notes
-    -----
-    - This function is called during the ``glif_psc`` pre-run hook to
-      pre-compute propagator matrix elements for all receptor ports.
-    - The singularity handling ensures that simulations remain stable even
-      when :math:`\tau_m` and :math:`\tau_{syn}` are very close.
-    - See NEST documentation: ``IAF_Integration_Singularity.ipynb`` for
-      detailed derivation and validation.
-
-    References
-    ----------
-    .. [1] NEST Simulator ``iaf_psc_alpha.h`` and ``iaf_propagator_alpha.h``
-           implementation.
-    .. [2] Rotter S, Diesmann M (1999). Exact digital simulation of time-
-           invariant linear systems with applications to neuronal modeling.
-           Biol Cybern 81:381-402.
-    """
-    NUMERICAL_STABILITY_FACTOR = 1e-7
-    inv_tau_syn = 1.0 / tau_syn
-    inv_tau_m = 1.0 / tau_m
-    inv_c_m = 1.0 / c_m
-
-    diff = tau_m - tau_syn
-
-    # Handle exact singularity (tau_m == tau_syn) to avoid ZeroDivisionError.
-    # In NEST C++, float division by zero yields inf/nan which is caught later;
-    # in Python we must handle it explicitly.
-    if diff == 0.0:
-        exp_h_tau = math.exp(-h * inv_tau_m)
-        P32 = h * inv_c_m * exp_h_tau
-        P31 = 0.5 * h * h * inv_c_m * exp_h_tau
-        return P31, P32
-
-    beta = (tau_syn * tau_m) / diff
-    gamma = beta / c_m
-    inv_beta = diff / (tau_syn * tau_m)
-
-    h_min_regular = NUMERICAL_STABILITY_FACTOR * tau_m * tau_m / abs(diff)
-
-    # Compute P32 (same as evaluate_P32_)
-    exp_h_tau_syn = math.exp(-h * inv_tau_syn)
-    expm1_h_tau = math.expm1(h * inv_beta)
-
-    P32 = gamma * exp_h_tau_syn * expm1_h_tau
-
-    # Check if P32 is in the regular regime
-    if P32 > 0 and math.isfinite(P32) and P32 != 0.0:
-        # Regular case
-        exp_h_tau = None  # not needed
-    else:
-        # Singular case for P32
-        exp_h_tau = math.exp(-h * inv_tau_m)
-        P32 = h * inv_c_m * exp_h_tau
-
-    # Compute P31
-    if h > h_min_regular:
-        # Regular case for P31
-        P31 = gamma * exp_h_tau_syn * (beta * expm1_h_tau - h)
-    else:
-        # Singular case for P31
-        if exp_h_tau is None:
-            exp_h_tau = math.exp(-h * inv_tau_m)
-        P31 = 0.5 * h * h * inv_c_m * exp_h_tau
-
-    return P31, P32
 
 
 class glif_psc(NESTNeuron):
@@ -427,12 +268,17 @@ class glif_psc(NESTNeuron):
         Enable voltage-dependent threshold (GLIF5). Default: False.
     I_e : ArrayLike, optional
         Constant external current. Default: 0.0 pA.
+    gsl_error_tol : ArrayLike, optional
+        Unitless local RKF45 error tolerance, broadcastable and strictly positive.
+        Default: 1e-6.
     V_initializer : Callable, optional
         Membrane potential initializer. Default: Constant(E_L).
     spk_fun : Callable, optional
         Surrogate gradient function for spike generation. Default: ReluGrad().
     spk_reset : str, optional
         Spike reset mode: 'hard' or 'soft'. Default: 'hard'.
+    ref_var : bool, optional
+        If ``True``, allocate and expose ``self.refractory`` state.
     name : str, optional
         Name of the neuron group.
 
@@ -465,38 +311,42 @@ class glif_psc(NESTNeuron):
     ``after_spike_currents``        False                                                          Enable after-spike currents (GLIF3/4/5)
     ``adapting_threshold``          False                                                          Enable voltage-dependent threshold (GLIF5)
     ``I_e``                         0.0 pA              :math:`I_e`                                Constant external current
+    ``gsl_error_tol``               1e-6                --                                         Local absolute tolerance for RKF45 error estimate
     ``V_initializer``               Constant(E_L)                                                  Membrane potential initializer
     ``spk_fun``                     ReluGrad()                                                     Surrogate spike function
     ``spk_reset``                   ``'hard'``                                                     Reset mode
+    ``ref_var``                     False                                                          If True, expose boolean refractory state
     =============================== =================== ========================================== =====================================================
 
     Attributes
     ----------
     V : HiddenState
-        Membrane potential :math:`V_\mathrm{m}` (absolute). Shape: (batch,
-        \*in_size).
+        Membrane potential :math:`V_\mathrm{m}` (absolute, mV).
     y1 : list of HiddenState
         Synaptic current derivative states (pA), one per receptor port.
-        Shape: (batch, \*in_size).
     y2 : list of HiddenState
-        Synaptic current states (pA), one per receptor port. Shape: (batch,
-        \*in_size).
+        Synaptic current states (pA), one per receptor port.
     last_spike_time : ShortTermState
-        Last spike time for each neuron (ms). Shape: (batch, \*in_size).
+        Last spike time for each neuron (ms).
     refractory_step_count : ShortTermState
-        Remaining refractory grid steps (int32). Shape: (batch, \*in_size).
+        Remaining refractory grid steps (int32).
+    integration_step : ShortTermState
+        Persistent RKF45 substep size estimate (ms).
     I_stim : ShortTermState
-        Buffered external current for next step (pA). Shape: (batch, \*in_size).
+        Buffered external current for next step (pA).
     _ASCurrents : numpy.ndarray
-        After-spike current values (pA). Shape: (n_asc, batch, \*in_size).
+        After-spike current values (pA). Shape: (n_asc, \*varshape).
     _ASCurrents_sum : numpy.ndarray
-        Sum of after-spike currents (pA). Shape: (batch, \*in_size).
+        Sum of after-spike currents (pA). Shape: (\*varshape).
     _threshold : numpy.ndarray
-        Total threshold (relative to E_L, in mV). Shape: (batch, \*in_size).
+        Total threshold (relative to E_L, in mV). Shape: (\*varshape).
     _threshold_spike : numpy.ndarray
-        Spike component of threshold (mV). Shape: (batch, \*in_size).
+        Spike component of threshold (mV). Shape: (\*varshape).
     _threshold_voltage : numpy.ndarray
-        Voltage component of threshold (mV). Shape: (batch, \*in_size).
+        Voltage component of threshold (mV). Shape: (\*varshape).
+    refractory : ShortTermState
+        Optional boolean refractory indicator, available only when
+        ``ref_var=True``.
 
     Raises
     ------
@@ -546,7 +396,7 @@ class glif_psc(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, spike_dependent_threshold=False,
         ...                         after_spike_currents=False, adapting_threshold=False)
@@ -558,7 +408,7 @@ class glif_psc(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, spike_dependent_threshold=True,
         ...                         after_spike_currents=True, adapting_threshold=True)
@@ -570,7 +420,7 @@ class glif_psc(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, tau_syn=(2.0, 5.0, 10.0))
         ...     model.init_all_states()
@@ -621,9 +471,11 @@ class glif_psc(NESTNeuron):
         after_spike_currents: bool = False,
         adapting_threshold: bool = False,
         I_e: ArrayLike = 0.0 * u.pA,
+        gsl_error_tol: ArrayLike = 1e-6,
         V_initializer: Callable = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
+        ref_var: bool = False,
         name: str = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
@@ -667,8 +519,14 @@ class glif_psc(NESTNeuron):
         self.V_initializer = V_initializer
 
         self._n_receptors = len(self.tau_syn)
+        self.gsl_error_tol = gsl_error_tol
+        self.ref_var = ref_var
 
         self._validate_parameters()
+
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     @property
     def n_receptors(self):
@@ -683,16 +541,14 @@ class glif_psc(NESTNeuron):
         """
         return self._n_receptors
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
-
     def _validate_parameters(self):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated.
+        """
         # Check valid model mechanism combinations
         s, a, v = self.has_theta_spike, self.has_asc, self.has_theta_voltage
         valid_combos = [
@@ -710,18 +566,22 @@ class glif_psc(NESTNeuron):
                 "after_spike_currents=%s, adapting_threshold=%s." % (s, a, v)
             )
 
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m)):
+            return
+
         # V_reset (relative) < V_th (relative) — both relative to E_L
-        E_L_mV = self._to_numpy(self.E_L, u.mV)
-        V_reset_rel = self._to_numpy(self.V_reset, u.mV) - E_L_mV
-        V_th_rel = self._to_numpy(self.V_th, u.mV) - E_L_mV
+        E_L_val = self.E_L
+        V_reset_rel = self.V_reset - E_L_val
+        V_th_rel = self.V_th - E_L_val
         if np.any(V_reset_rel >= V_th_rel):
             raise ValueError("Reset potential must be smaller than threshold.")
 
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError("Capacitance must be strictly positive.")
-        if np.any(self._to_numpy(self.g_m, u.nS) <= 0.0):
+        if np.any(self.g_m <= 0.0 * u.nS):
             raise ValueError("Membrane conductance must be strictly positive.")
-        if np.any(self._to_numpy(self.t_ref, u.ms) <= 0.0):
+        if np.any(self.t_ref <= 0.0 * u.ms):
             raise ValueError("Refractory time constant must be strictly positive.")
 
         if self.has_theta_spike:
@@ -754,86 +614,131 @@ class glif_psc(NESTNeuron):
             if tau <= 0.0:
                 raise ValueError("All synaptic time constants must be strictly positive.")
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        if np.any(self.gsl_error_tol <= 0.0):
+            raise ValueError('The gsl_error_tol must be strictly positive.')
+
+    def init_state(self, **kwargs):
+        r"""Initialize persistent and short-term state variables.
+
+        All GLIF-specific state variables are stored as JAX ``HiddenState`` arrays,
+        and pre-computed decay constants are stored as Python floats.
+
+        Parameters
+        ----------
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
+        """
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+        dt = brainstate.environ.get_dt()
+        dt_ms = float(np.asarray(u.get_mantissa(dt / u.ms)))
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
         self.V = brainstate.HiddenState(V)
 
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-
-        # Per-receptor alpha-function current states: y1, y2
+        # Per-receptor alpha-function current states: y1 (rate, pA/ms), y2 (current, pA)
         self.y1 = [
             brainstate.HiddenState(
-                braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
+                braintools.init.param(braintools.init.Constant(0.0 * u.pA / u.ms), self.varshape)
             )
             for _ in range(self._n_receptors)
         ]
         self.y2 = [
             brainstate.HiddenState(
-                braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
+                braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape)
             )
             for _ in range(self._n_receptors)
         ]
 
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
-        )
-
-        # GLIF-specific state (stored as plain numpy, matching NEST)
-        # ASC values
+        # GLIF-specific state as HiddenState (JAX-traceable, compatible with for_loop)
         n_asc = len(self.asc_decay)
-        dftype = brainstate.environ.dftype()
-        self._ASCurrents = np.zeros((n_asc, *v_shape), dtype=dftype)
-        for a in range(n_asc):
-            self._ASCurrents[a] = self.asc_init[a]
-        self._ASCurrents_sum = np.sum(self._ASCurrents, axis=0) if n_asc > 0 else np.zeros(v_shape, dtype=dftype)
+        self._asc_states = [
+            brainstate.HiddenState(jnp.full(self.varshape, self.asc_init[a], dtype=dftype))
+            for a in range(n_asc)
+        ]
 
-        # Threshold components (relative to E_L)
-        E_L_mV = float(self._to_numpy(self.E_L, u.mV))
-        th_inf = float(self._to_numpy(self.V_th, u.mV)) - E_L_mV
+        # Threshold components (relative to E_L) as HiddenState
+        E_L_mV = float(np.asarray(u.get_mantissa(self.E_L / u.mV)))
+        th_inf = float(np.asarray(u.get_mantissa(self.V_th / u.mV))) - E_L_mV
         self._th_inf = th_inf
-        self._threshold_spike = np.zeros(v_shape, dtype=dftype)
-        self._threshold_voltage = np.zeros(v_shape, dtype=dftype)
-        self._threshold = np.full(v_shape, th_inf, dtype=dftype)
-
-    def reset_state(self, batch_size: int = None, **kwargs):
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        for i in range(self._n_receptors):
-            self.y1[i].value = braintools.init.param(
-                braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-            )
-            self.y2[i].value = braintools.init.param(
-                braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-            )
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
+        self._threshold_spike_state = brainstate.HiddenState(
+            jnp.zeros(self.varshape, dtype=dftype)
         )
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
+        self._threshold_voltage_state = brainstate.HiddenState(
+            jnp.zeros(self.varshape, dtype=dftype)
+        )
+        self._threshold_state = brainstate.HiddenState(
+            jnp.full(self.varshape, th_inf, dtype=dftype)
         )
 
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        n_asc = len(self.asc_decay)
-        dftype = brainstate.environ.dftype()
-        self._ASCurrents = np.zeros((n_asc, *v_shape), dtype=dftype)
-        for a in range(n_asc):
-            self._ASCurrents[a] = self.asc_init[a]
-        self._ASCurrents_sum = np.sum(self._ASCurrents, axis=0) if n_asc > 0 else np.zeros(v_shape, dtype=dftype)
+        # Pre-compute decay rates (Python float constants, computed once per init_state call)
+        G = float(np.asarray(u.get_mantissa(self.g_m / u.nS)))
+        C_m_val = float(np.asarray(u.get_mantissa(self.C_m / u.pF)))
+        t_ref_ms = float(np.asarray(u.get_mantissa(self.t_ref / u.ms)))
 
-        E_L_mV = float(self._to_numpy(self.E_L, u.mV))
-        th_inf = float(self._to_numpy(self.V_th, u.mV)) - E_L_mV
-        self._th_inf = th_inf
-        self._threshold_spike = np.zeros(v_shape, dtype=dftype)
-        self._threshold_voltage = np.zeros(v_shape, dtype=dftype)
-        self._threshold = np.full(v_shape, th_inf, dtype=dftype)
+        if self.has_theta_spike:
+            self._decay_spike = np.exp(-self.th_spike_decay * dt_ms)
+            self._decay_spike_refr = np.exp(-self.th_spike_decay * t_ref_ms)
+
+        if self.has_asc:
+            self._asc_decay_rates = [np.exp(-self.asc_decay[a] * dt_ms) for a in range(n_asc)]
+            self._asc_stable_coeff = [
+                ((1.0 / self.asc_decay[a]) / dt_ms) * (1.0 - self._asc_decay_rates[a])
+                for a in range(n_asc)
+            ]
+            self._asc_refr_decay_rates = [
+                self.asc_r[a] * np.exp(-self.asc_decay[a] * t_ref_ms)
+                for a in range(n_asc)
+            ]
+
+        if self.has_theta_voltage:
+            self._potential_decay_rate = np.exp(-G * dt_ms / C_m_val)
+            self._theta_voltage_decay_rate_inv = 1.0 / np.exp(self.th_voltage_decay * dt_ms)
+            self._phi = self.th_voltage_index / (self.th_voltage_decay - G / C_m_val)
+            self._abpara_ratio = self.th_voltage_index / self.th_voltage_decay
+
+        # Pre-compute exact propagator matrices (NEST IAFPropagatorAlpha scheme)
+        tau_m = C_m_val / G  # membrane time constant in ms
+        self._P33 = np.exp(-dt_ms / tau_m)
+        self._P30 = (1.0 / C_m_val) * (1.0 - self._P33) * tau_m  # mV/pA
+
+        self._P11 = []
+        self._P21 = []
+        self._P22 = []
+        self._P31 = []
+        self._P32 = []
+        self._PSCInitialValues = []
+
+        for k in range(self._n_receptors):
+            p11 = np.exp(-dt_ms / self.tau_syn[k])
+            self._P11.append(p11)
+            self._P22.append(p11)
+            self._P21.append(dt_ms * p11)
+            p31, p32 = alpha_propagator_p31_p32(self.tau_syn[k], tau_m, C_m_val, dt_ms)
+            self._P31.append(float(p31))
+            self._P32.append(float(p32))
+            self._PSCInitialValues.append(np.e / self.tau_syn[k])
+
+        if self.ref_var:
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
+            self.refractory = brainstate.ShortTermState(refractory)
+
+    # Backward-compatible properties for threshold components
+    @property
+    def _threshold(self):
+        return self._threshold_state.value
+
+    @property
+    def _threshold_spike(self):
+        return self._threshold_spike_state.value
+
+    @property
+    def _threshold_voltage(self):
+        return self._threshold_voltage_state.value
 
     def get_spike(self, V: ArrayLike = None):
         r"""Generate spike output via surrogate gradient function.
@@ -866,324 +771,175 @@ class glif_psc(NESTNeuron):
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
-
     def _collect_receptor_delta_inputs(self):
-        r"""Collect delta inputs per receptor port.
+        r"""Collect delta inputs per receptor port using label-based routing.
 
-        Scans the ``delta_inputs`` dictionary for input currents registered
-        with receptor-specific keys. Input keys containing 'receptor_<k>'
-        (0-based indexing) are directed to the corresponding receptor port.
-        Any input not matching a specific receptor pattern is added to
-        receptor 0 as default.
-
-        Returns
-        -------
-        list of numpy.ndarray
-            List of length ``n_receptors``, where each element is a float64
-            array of shape matching the neuron population. Each array contains
-            the total delta input current (pA) for that receptor port during
-            this time step.
-
-        Notes
-        -----
-        - Callable inputs are evaluated once and then removed from the
-          dictionary.
-        - Input values are converted to pA and broadcast to the neuron
-          population shape.
-        - This method is called during the ``update`` step before synaptic
-          state propagation.
+        Returns a list of current jumps (pA) for each receptor port, JIT-compatible.
         """
-        v_shape = self.V.value.shape
         dftype = brainstate.environ.dftype()
-        dy = [np.zeros(v_shape, dtype=dftype) for _ in range(self._n_receptors)]
-
-        if self.delta_inputs is None:
-            return dy
-
-        for key in tuple(self.delta_inputs.keys()):
-            out = self.delta_inputs[key]
-            if callable(out):
-                out = out()
-            else:
-                self.delta_inputs.pop(key)
-
-            out_pA = self._to_numpy(out, u.pA)
-            out_pA = self._broadcast_to_state(out_pA, v_shape)
-
-            port = None
-            parts = key.split('_')
-            for i, part in enumerate(parts):
-                if part == 'receptor' and i + 1 < len(parts):
-                    try:
-                        port = int(parts[i + 1])
-                    except ValueError:
-                        pass
-                    break
-
-            if port is not None and 0 <= port < self._n_receptors:
-                dy[port] = dy[port] + out_pA
-            else:
-                dy[0] = dy[0] + out_pA
-
-        return dy
+        return [
+            self.sum_delta_inputs(
+                jnp.zeros(self.varshape, dtype=dftype) * u.pA,
+                label=f'receptor_{k}',
+            )
+            for k in range(self._n_receptors)
+        ]
 
     def update(self, x=0.0 * u.pA):
-        r"""Perform a single simulation step.
+        r"""Perform a single simulation step using exact propagator matrices.
 
-        Executes the complete GLIF update sequence: threshold adaptation,
-        after-spike current decay, exact membrane potential integration,
-        spike detection with reset, synaptic current propagation, and input
-        buffering. Follows NEST's discrete-time update order exactly.
-
-        The external current input ``x`` is buffered and applied in the *next*
-        time step (one-step delay), matching NEST's convention. Delta inputs
-        (e.g., from synaptic projections) are applied immediately to the
-        synaptic current state variables.
+        Implements the NEST ``glif_psc`` update using the exact
+        IAFPropagatorAlpha integration scheme. All GLIF-specific discrete
+        updates (threshold decay, ASC, voltage-dependent threshold) are
+        applied as vectorised JAX operations, making this method compatible
+        with ``brainstate.transform.for_loop``.
 
         Parameters
         ----------
         x : ArrayLike, optional
-            External current input (pA). Applied with one-step delay
-            (buffered). Shape must broadcast to the neuron population shape.
-            Default: 0.0 pA.
+            External current input (pA), applied with one-step delay. Default: 0.0 pA.
 
         Returns
         -------
-        spike : jax.numpy.ndarray
-            Spike output (float32) via surrogate gradient function. Shape:
-            (batch, \*in_size). Values in [0, 1] during forward pass;
-            backward gradient computed via the surrogate function specified
-            by ``spk_fun``.
-
-        Notes
-        -----
-        - The update follows NEST's exact discrete-time integration order:
-          (1) record old voltage, (2) update threshold and ASC, (3) integrate
-          voltage, (4) check spike and reset, (5) propagate synaptic states,
-          (6) add spike inputs, (7) buffer external current.
-        - Propagator matrix elements are pre-computed once per step for all
-          neurons, ensuring computational efficiency.
-        - Refractory neurons have their voltage clamped to the previous value
-          and do not update threshold or ASC.
-        - The singularity-safe IAFPropagatorAlpha algorithm ensures numerical
-          stability when :math:`\tau_m \approx \tau_{syn}`.
-        - ASC state is stored as NumPy arrays for efficiency and mutated
-          in-place during the update.
+        spike : jax.Array
+            Binary spike tensor (float32), shape ``(*varshape)``.
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
-        dt = float(u.math.asarray(dt_q / u.ms))
-
-        v_shape = self.V.value.shape
-
-        # Extract state as numpy float64
-        E_L_mV = float(self._to_numpy(self.E_L, u.mV))
-        V_abs = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape).copy()
-        V_rel = V_abs - E_L_mV  # relative to E_L
-
-        y1_all = [
-            self._broadcast_to_state(self._to_numpy(self.y1[k].value, u.pA), v_shape).copy()
-            for k in range(self._n_receptors)
-        ]
-        y2_all = [
-            self._broadcast_to_state(self._to_numpy(self.y2[k].value, u.pA), v_shape).copy()
-            for k in range(self._n_receptors)
-        ]
-        ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
-        ).copy()
-        i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape).copy()
-
-        # Parameters
-        G = float(self._to_numpy(self.g_m, u.nS))
-        C_m = float(self._to_numpy(self.C_m, u.pF))
-        V_reset_rel = float(self._to_numpy(self.V_reset, u.mV)) - E_L_mV
-        t_ref_ms = float(self._to_numpy(self.t_ref, u.ms))
-        I_e = float(self._to_numpy(self.I_e, u.pA))
-
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype), v_shape
-        )
-
-        # Pre-compute propagator matrix elements (matching NEST pre_run_hook)
-        Tau = C_m / G  # membrane time constant in ms
-        P33 = math.exp(-dt / Tau)
-        P30 = (1.0 / C_m) * (1.0 - P33) * Tau
-
-        P11 = [0.0] * self._n_receptors
-        P21 = [0.0] * self._n_receptors
-        P22 = [0.0] * self._n_receptors
-        P31 = [0.0] * self._n_receptors
-        P32 = [0.0] * self._n_receptors
-        PSCInitialValues = [0.0] * self._n_receptors
-
-        for i in range(self._n_receptors):
-            P11[i] = math.exp(-dt / self.tau_syn[i])
-            P22[i] = P11[i]
-            P21[i] = dt * P11[i]
-            P31[i], P32[i] = _iaf_propagator_alpha(self.tau_syn[i], Tau, C_m, dt)
-            PSCInitialValues[i] = math.e / self.tau_syn[i]
-
-        # Pre-compute GLIF decay rates
-        if self.has_theta_spike:
-            theta_spike_decay_rate = math.exp(-self.th_spike_decay * dt)
-            theta_spike_refractory_decay_rate = math.exp(-self.th_spike_decay * t_ref_ms)
-
-        if self.has_asc:
-            n_asc = len(self.asc_decay)
-            asc_decay_rates = [math.exp(-self.asc_decay[a] * dt) for a in range(n_asc)]
-            asc_stable_coeff = [
-                ((1.0 / self.asc_decay[a]) / dt) * (1.0 - asc_decay_rates[a])
-                for a in range(n_asc)
-            ]
-            asc_refractory_decay_rates = [
-                self.asc_r[a] * math.exp(-self.asc_decay[a] * t_ref_ms)
-                for a in range(n_asc)
-            ]
-
-        if self.has_theta_voltage:
-            potential_decay_rate = math.exp(-G * dt / C_m)
-            theta_voltage_decay_rate_inverse = 1.0 / math.exp(self.th_voltage_decay * dt)
-            phi = self.th_voltage_index / (self.th_voltage_decay - G / C_m)
-            abpara_ratio_voltage = self.th_voltage_index / self.th_voltage_decay
-
-        # Get per-receptor synaptic spike inputs
-        dy_input = self._collect_receptor_delta_inputs()
-
-        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
-        new_i_stim = self._broadcast_to_state(self._to_numpy(new_i_stim_q, u.pA), v_shape)
-
-        # Output arrays
-        spike_mask = np.zeros(v_shape, dtype=bool)
         dftype = brainstate.environ.dftype()
-        V_next = np.empty(v_shape, dtype=dftype)
-        y1_next = [np.empty(v_shape, dtype=dftype) for _ in range(self._n_receptors)]
-        y2_next = [np.empty(v_shape, dtype=dftype) for _ in range(self._n_receptors)]
-        r_next = np.empty(v_shape, dtype=ditype)
+        ditype = brainstate.environ.ditype()
 
-        for idx in np.ndindex(v_shape):
-            # ---- Step 1: Record v_old (relative) ----
-            v_old = V_rel[idx]
+        # Python-level constants (concrete, not JAX-traced)
+        E_L_mV = float(np.asarray(u.get_mantissa(self.E_L / u.mV)))
+        I_e_pA = float(np.asarray(u.get_mantissa(self.I_e / u.pA)))
+        V_reset_rel = float(np.asarray(u.get_mantissa(self.V_reset / u.mV))) - E_L_mV
+        G_nS = float(np.asarray(u.get_mantissa(self.g_m / u.nS)))
 
-            if r[idx] == 0:
-                # neuron not refractory
+        # JAX state (traced under for_loop)
+        r = self.refractory_step_count.value          # int array, varshape
+        i_stim_pA = u.get_mantissa(self.I_stim.value / u.pA)  # float array, varshape
+        # V_rel (old, before this step's update)
+        V_rel = jax.lax.stop_gradient(
+            u.get_mantissa(self.V.value / u.mV) - E_L_mV
+        )  # plain JAX array, mV relative to E_L
 
-                # ---- Step 2a: Decay spike threshold component ----
-                if self.has_theta_spike:
-                    self._threshold_spike[idx] *= theta_spike_decay_rate
+        # Buffer new external current (one-step delay)
+        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
 
-                # ---- Step 2b: Calculate ASC (exact mean and decay) ----
-                asc_sum = 0.0
-                if self.has_asc:
-                    for a in range(n_asc):
-                        asc_sum += asc_stable_coeff[a] * self._ASCurrents[a][idx]
-                        self._ASCurrents[a][idx] *= asc_decay_rates[a]
-                self._ASCurrents_sum[idx] = asc_sum
+        is_refractory = r > 0
+        i_ext = I_e_pA + i_stim_pA  # pA, plain JAX array
 
-                # ---- Step 2c: Voltage dynamics (exact integration) ----
-                v_new = v_old * P33 + (I_e + i_stim[idx] + asc_sum) * P30
+        n_asc = len(self.asc_decay)
 
-                # Add synapse component
-                I_syn = 0.0
-                for i in range(self._n_receptors):
-                    v_new += P31[i] * y1_all[i][idx] + P32[i] * y2_all[i][idx]
-                    I_syn += y2_all[i][idx]
+        # 1. Spike threshold decay (non-refractory only)
+        if self.has_theta_spike:
+            tspk = self._threshold_spike_state.value
+            tspk = jnp.where(is_refractory, tspk, tspk * self._decay_spike)
+        else:
+            tspk = jnp.zeros(self.varshape, dtype=dftype)
 
-                # ---- Step 2d: Voltage-dependent threshold ----
-                if self.has_theta_voltage:
-                    beta = (I_e + i_stim[idx] + asc_sum) / G
-                    self._threshold_voltage[idx] = (
-                        phi * (v_old - beta) * potential_decay_rate
-                        + theta_voltage_decay_rate_inverse * (
-                            self._threshold_voltage[idx]
-                            - phi * (v_old - beta)
-                            - abpara_ratio_voltage * beta
-                        )
-                        + abpara_ratio_voltage * beta
-                    )
+        # 2. ASC stable-coeff sum + decay (non-refractory only)
+        if self.has_asc:
+            asc_sum_new = jnp.zeros(self.varshape, dtype=dftype)
+            asc_decayed = []
+            for a in range(n_asc):
+                asc_a = self._asc_states[a].value
+                asc_sum_new = asc_sum_new + self._asc_stable_coeff[a] * asc_a
+                asc_decayed.append(asc_a * self._asc_decay_rates[a])
+            asc_sum = jnp.where(is_refractory, jnp.zeros(self.varshape, dtype=dftype), asc_sum_new)
+        else:
+            asc_sum = jnp.zeros(self.varshape, dtype=dftype)
+            asc_decayed = []
 
-                # ---- Step 2e: Update total threshold ----
-                self._threshold[idx] = (
-                    self._threshold_spike[idx]
-                    + self._threshold_voltage[idx]
-                    + self._th_inf
+        # 3. Voltage-dependent threshold (non-refractory only, using old V_rel)
+        if self.has_theta_voltage:
+            tvlt = self._threshold_voltage_state.value
+            beta = (i_ext + asc_sum) / G_nS  # pA/nS = mV
+            tvlt_new = (
+                self._phi * (V_rel - beta) * self._potential_decay_rate
+                + self._theta_voltage_decay_rate_inv * (
+                    tvlt
+                    - self._phi * (V_rel - beta)
+                    - self._abpara_ratio * beta
                 )
+                + self._abpara_ratio * beta
+            )
+            tvlt = jnp.where(is_refractory, tvlt, tvlt_new)
+        else:
+            tvlt = jnp.zeros(self.varshape, dtype=dftype)
 
-                # ---- Step 2f: Check for spike ----
-                if v_new > self._threshold[idx]:
-                    spike_mask[idx] = True
+        # 4. Total threshold
+        threshold = tspk + tvlt + self._th_inf
 
-                    # Set refractory
-                    r_next[idx] = refr_counts[idx]
+        # 5. V update via exact propagator
+        y1_old = [u.get_mantissa(self.y1[k].value / (u.pA / u.ms)) for k in range(self._n_receptors)]
+        y2_old = [u.get_mantissa(self.y2[k].value / u.pA) for k in range(self._n_receptors)]
 
-                    # Reset ASC values
-                    if self.has_asc:
-                        for a in range(n_asc):
-                            self._ASCurrents[a][idx] = (
-                                self.asc_amps[a]
-                                + self._ASCurrents[a][idx] * asc_refractory_decay_rates[a]
-                            )
-
-                    # Reset voltage
-                    if not self.has_theta_spike:
-                        # GLIF1/3: simple reset
-                        v_new = V_reset_rel
-                    else:
-                        # GLIF2/4/5: biologically defined reset
-                        v_new = self.voltage_reset_fraction * v_old + self.voltage_reset_add
-
-                        # Reset spike threshold component
-                        self._threshold_spike[idx] = (
-                            self._threshold_spike[idx] * theta_spike_refractory_decay_rate
-                            + self.th_spike_add
-                        )
-
-                        # Update global threshold
-                        self._threshold[idx] = (
-                            self._threshold_spike[idx]
-                            + self._threshold_voltage[idx]
-                            + self._th_inf
-                        )
-
-                    V_next[idx] = v_new
-                else:
-                    r_next[idx] = 0
-                    V_next[idx] = v_new
-            else:
-                # ---- Refractory: decrement, hold voltage ----
-                r_next[idx] = r[idx] - 1
-                V_next[idx] = v_old
-                self._threshold[idx] = (
-                    self._threshold_spike[idx]
-                    + self._threshold_voltage[idx]
-                    + self._th_inf
-                )
-
-        # ---- Step 4: Update synaptic current state variables ----
-        for i in range(self._n_receptors):
-            for idx in np.ndindex(v_shape):
-                y2_next[i][idx] = P21[i] * y1_all[i][idx] + P22[i] * y2_all[i][idx]
-                y1_next[i][idx] = P11[i] * y1_all[i][idx]
-
-        # ---- Step 5: Add incoming spike current jumps ----
-        for i in range(self._n_receptors):
-            y1_next[i] = y1_next[i] + dy_input[i] * PSCInitialValues[i]
-
-        # ---- Step 6: Update external current (buffered for next step) ----
-        # ---- Step 7: Write back state ----
-        self.V.value = (V_next + E_L_mV) * u.mV  # convert back to absolute
+        v_new = V_rel * self._P33 + (i_ext + asc_sum) * self._P30
         for k in range(self._n_receptors):
-            self.y1[k].value = y1_next[k] * u.pA
-            self.y2[k].value = y2_next[k] * u.pA
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
+            v_new = v_new + self._P31[k] * y1_old[k] + self._P32[k] * y2_old[k]
+        # Clamp refractory neurons to old V_rel
+        v_new = jnp.where(is_refractory, V_rel, v_new)
+
+        # 6. Spike check (non-refractory only)
+        spiked = (v_new > threshold) & ~is_refractory
+
+        # 7. ASC reset on spike
+        if self.has_asc:
+            for a in range(n_asc):
+                asc_a = self._asc_states[a].value
+                asc_reset = self.asc_amps[a] + asc_decayed[a] * self._asc_refr_decay_rates[a]
+                self._asc_states[a].value = jnp.where(
+                    spiked, asc_reset,
+                    jnp.where(is_refractory, asc_a, asc_decayed[a])
+                )
+
+        # 8. Voltage reset on spike
+        if not self.has_theta_spike:
+            # GLIF1/3: simple reset
+            V_final_rel = jnp.where(spiked, V_reset_rel, v_new)
+        else:
+            # GLIF2/4/5: biologically defined reset
+            V_reset_bio = self.voltage_reset_fraction * V_rel + self.voltage_reset_add
+            V_final_rel = jnp.where(spiked, V_reset_bio, v_new)
+            # 9. Theta_spike reset on spike
+            tspk_reset = tspk * self._decay_spike_refr + self.th_spike_add
+            tspk = jnp.where(spiked, tspk_reset, tspk)
+            threshold = jnp.where(spiked, tspk + tvlt + self._th_inf, threshold)
+
+        # 10. Refractory counter
+        r_new = jnp.where(
+            spiked, self.ref_count,
+            jnp.where(is_refractory, r - 1, r)
         )
 
-        return jnp.asarray(spike_mask, dtype=jnp.float32)
+        # 11. Y1/Y2 propagator update (unconditional — all neurons, including refractory)
+        y1_new = [self._P11[k] * y1_old[k] for k in range(self._n_receptors)]
+        y2_new = [self._P21[k] * y1_old[k] + self._P22[k] * y2_old[k]
+                  for k in range(self._n_receptors)]
+
+        # 12. Collect and apply synaptic delta inputs to y1
+        dy_input = self._collect_receptor_delta_inputs()
+        for k in range(self._n_receptors):
+            w_k = u.get_mantissa(dy_input[k] / u.pA)  # weight in pA
+            y1_new[k] = y1_new[k] + self._PSCInitialValues[k] * w_k
+
+        # ---- Write back all state ----
+        self.V.value = (V_final_rel + E_L_mV) * u.mV
+        for k in range(self._n_receptors):
+            self.y1[k].value = y1_new[k] * (u.pA / u.ms)
+            self.y2[k].value = y2_new[k] * u.pA
+
+        self._threshold_spike_state.value = tspk
+        self._threshold_voltage_state.value = tvlt
+        self._threshold_state.value = threshold
+        self.refractory_step_count.value = jnp.asarray(r_new, dtype=ditype)
+        self.I_stim.value = new_i_stim_q + u.math.zeros(self.varshape) * u.pA
+
+        last_spike_time = u.math.where(spiked, t + dt_q, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
+
+        if self.ref_var:
+            self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
+
+        return jnp.asarray(spiked, dtype=jnp.float32)

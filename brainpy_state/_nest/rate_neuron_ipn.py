@@ -20,11 +20,12 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
+from ._utils import is_tracer
 
 __all__ = [
     'rate_neuron_ipn',
@@ -352,7 +353,7 @@ class rate_neuron_ipn(_lin_rate_base):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> model = bst.rate_neuron_ipn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)
        >>> rate = model(x=0.1)  # external drive
@@ -508,13 +509,16 @@ class rate_neuron_ipn(_lin_rate_base):
         -----
         This method is called automatically during ``__init__``.
         """
-        if np.any(self._to_numpy_ms(self.tau) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.tau, self.sigma)):
+            return
+        if np.any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self._to_numpy(self.lambda_) < 0.0):
+        if np.any(self.lambda_ < 0.0):
             raise ValueError('Passive decay rate lambda must be >= 0.')
-        if np.any(self._to_numpy(self.sigma) < 0.0):
+        if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
-        if np.any(self._to_numpy(self.rectify_rate) < 0.0):
+        if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
     def _call_nl(self, fn: Callable, x: np.ndarray):
@@ -883,17 +887,13 @@ class rate_neuron_ipn(_lin_rate_base):
 
         return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables for simulation.
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size. If ``None`` (default), state shape is
-            ``self.varshape``. If ``int``, state shape is
-            ``(batch_size,) + self.varshape``.
         **kwargs
-            Additional keyword arguments (reserved for future use).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -909,8 +909,8 @@ class rate_neuron_ipn(_lin_rate_base):
         All state arrays are initialized as float64 NumPy arrays using the
         provided initializers.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -986,7 +986,6 @@ class rate_neuron_ipn(_lin_rate_base):
            nonlinearity according to ``linear_summation`` mode.
 
         5. Apply optional output rectification:
-           ditype = brainstate.environ.ditype()
            :math:`X_{n+1}\gets\max(X',\,\mathrm{rectify\_rate})`.
 
         6. Update state variables: ``rate``, ``noise``, ``delayed_rate``,
@@ -1064,6 +1063,7 @@ class rate_neuron_ipn(_lin_rate_base):
         if self.rectify_output:
             rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
+        ditype = brainstate.environ.ditype()
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev

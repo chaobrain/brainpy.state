@@ -84,24 +84,66 @@ References
        ``models/gif_psc_exp_multisynapse.cpp``.
 """
 
-import math
-from typing import Callable, Iterable, Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from .gif_psc_exp import gif_psc_exp
+from ._utils import is_tracer, propagator_exp
 
 __all__ = [
     'gif_psc_exp_multisynapse',
 ]
 
+
+# ---------------------------------------------------------------------------
+# Proxy classes for mutable [i][j] access to ShortTermState arrays
+# ---------------------------------------------------------------------------
+
+class _RowProxy:
+    """Read/write proxy for row ``row`` of a 2-D ShortTermState array.
+
+    Supports ``proxy[j]`` (read) and ``proxy[j] = val`` (write) where the
+    underlying state has shape ``(n_elems, *varshape)`` and units ``unit``.
+    """
+    __slots__ = ('_state', '_row', '_unit')
+
+    def __init__(self, state, row, unit):
+        self._state = state
+        self._row = row
+        self._unit = unit
+
+    def __getitem__(self, j):
+        raw = np.asarray(u.get_mantissa(self._state.value))
+        return float(raw[self._row, j])
+
+    def __setitem__(self, j, val):
+        raw = np.asarray(u.get_mantissa(self._state.value)).copy()
+        raw[self._row, j] = float(val)
+        self._state.value = raw * self._unit
+
+
+class _AdaptProxy:
+    """Proxy exposing ``elems[i][j]`` indexing for adaptation state arrays."""
+    __slots__ = ('_state', '_unit')
+
+    def __init__(self, state, unit):
+        self._state = state
+        self._unit = unit
+
+    def __getitem__(self, i):
+        return _RowProxy(self._state, i, self._unit)
+
+
+# ---------------------------------------------------------------------------
+# Main model class
+# ---------------------------------------------------------------------------
 
 class gif_psc_exp_multisynapse(NESTNeuron):
     r"""Current-based generalized integrate-and-fire neuron (GIF) model
@@ -228,9 +270,7 @@ class gif_psc_exp_multisynapse(NESTNeuron):
     After a spike, the neuron enters an absolute refractory period of
     duration :math:`t_{\mathrm{ref}}`. During this period:
 
-    dftype = brainstate.environ.dftype()
-    ditype = brainstate.environ.ditype()
-    * The membrane potential is clamped to :math:`V_{\mathrm{reset}`
+    * The membrane potential is clamped to :math:`V_{\mathrm{reset}}`
     * No spike can be emitted (firing intensity check is skipped)
     * Synaptic currents continue to evolve and receive inputs
     * STC and SFA elements continue to decay
@@ -313,269 +353,70 @@ class gif_psc_exp_multisynapse(NESTNeuron):
     Parameters
     ----------
     in_size : int, tuple of int
-        Shape of the neuron population. Can be an integer (for 1D
-        populations) or a tuple of integers (for multi-dimensional arrays).
+        Shape of the neuron population.
     g_L : Quantity, ArrayLike, optional
-        Leak conductance (nanosiemens). Determines the passive membrane
-        time constant :math:`\tau_m = C_m / g_L`. Must be strictly positive.
-        Default: 4.0 nS.
+        Leak conductance (nanosiemens). Default: 4.0 nS.
     E_L : Quantity, ArrayLike, optional
-        Leak reversal potential (millivolts). Resting potential in the
-        absence of inputs. Default: -70.0 mV.
+        Leak reversal potential (millivolts). Default: -70.0 mV.
     C_m : Quantity, ArrayLike, optional
-        Membrane capacitance (picofarads). Together with ``g_L``, determines
-        the membrane time constant. Must be strictly positive. Default:
-        80.0 pF (gives :math:`\tau_m = 20` ms with default ``g_L``).
+        Membrane capacitance (picofarads). Default: 80.0 pF.
     V_reset : Quantity, ArrayLike, optional
-        Reset potential (millivolts). Membrane potential is clamped to this
-        value during the refractory period. Default: -55.0 mV.
+        Reset potential (millivolts). Default: -55.0 mV.
     Delta_V : Quantity, ArrayLike, optional
-        Voltage scale of stochastic firing (millivolts). Controls the
-        sharpness of the firing threshold in the exponential escape-rate
-        model. Smaller values make spiking more deterministic. Must be
-        strictly positive. Default: 0.5 mV.
+        Voltage scale of stochastic firing (millivolts). Default: 0.5 mV.
     V_T_star : Quantity, ArrayLike, optional
-        Base firing threshold (millivolts). The resting threshold in the
-        absence of spike-frequency adaptation. Default: -35.0 mV.
+        Base firing threshold (millivolts). Default: -35.0 mV.
     lambda_0 : float, optional
-        Stochastic firing intensity at threshold (1/s). When :math:`V(t) =
-        V_T(t)`, the firing rate is ``lambda_0``. Must be non-negative.
-        Internally converted to 1/ms for computation. Default: 1.0 /s.
+        Stochastic firing intensity at threshold (1/s). Default: 1.0 /s.
     t_ref : Quantity, ArrayLike, optional
-        Absolute refractory period (milliseconds). Duration during which
-        the neuron cannot spike after an emitted spike. Must be
-        non-negative. Default: 4.0 ms.
+        Absolute refractory period (milliseconds). Default: 4.0 ms.
     tau_syn : sequence of float, optional
         Synaptic time constants (milliseconds), one per receptor port.
-        Specified as bare floats (not Quantities), matching NEST C++
-        parameterization. The number of elements determines the number of
-        receptor ports. All values must be strictly positive. Default:
-        ``(2.0,)`` (single receptor with 2 ms time constant).
+        Specified as bare floats (not Quantities). Default: ``(2.0,)``.
     I_e : Quantity, ArrayLike, optional
-        Constant external bias current (picoamperes). Applied at every
-        time step. Default: 0.0 pA.
+        Constant external bias current (picoamperes). Default: 0.0 pA.
     tau_sfa : sequence of float, optional
-        Spike-frequency adaptation time constants (milliseconds). Specified
-        as bare floats. Must have the same length as ``q_sfa``. All values
-        must be strictly positive. Default: ``()`` (no adaptation).
+        SFA time constants (milliseconds). Default: ``()`` (no adaptation).
     q_sfa : sequence of float, optional
-        SFA jump values (millivolts). Amount by which each SFA element
-        increases upon spike emission. Specified as bare floats. Positive
-        values cause threshold elevation (adaptation). Default: ``()`` (no
-        adaptation).
+        SFA jump values (millivolts). Default: ``()`` (no adaptation).
     tau_stc : sequence of float, optional
-        Spike-triggered current time constants (milliseconds). Specified as
-        bare floats. Must have the same length as ``q_stc``. All values
-        must be strictly positive. Default: ``()`` (no STC).
+        STC time constants (milliseconds). Default: ``()`` (no STC).
     q_stc : sequence of float, optional
-        STC jump values (nanoamperes). Amount by which each STC element
-        increases upon spike emission. Specified as bare floats. Negative
-        values cause hyperpolarizing currents (e.g., AHP). Default: ``()``
-        (no STC).
+        STC jump values (picoamperes). Default: ``()`` (no STC).
     rng_key : jax.Array, optional
-        JAX PRNG key for stochastic spike generation. If ``None``, a
-        default key (``jax.random.PRNGKey(0)``) is used. For reproducible
-        simulations, provide an explicit key. Default: None.
+        JAX PRNG key for stochastic spike generation. Default: None.
     V_initializer : Callable, optional
-        Initializer function for membrane potential. Should return a
-        Quantity in millivolts. Default: ``Constant(-70.0 * u.mV)`` (resting
-        potential).
+        Initializer for membrane potential. Default: ``Constant(-70.0 mV)``.
     spk_fun : Callable, optional
-        Surrogate gradient function for differentiable spike generation.
-        Applied to scaled voltage for gradient computation. Default:
-        ``ReluGrad()`` (ReLU-based surrogate).
+        Surrogate gradient function. Default: ``ReluGrad()``.
     spk_reset : str, optional
-        Spike reset mode for gradient flow. Options are ``'hard'`` (stop
-        gradient at reset, matches NEST) or ``'soft'`` (allow gradient
-        through reset). Default: ``'hard'``.
+        Spike reset mode (``'hard'`` or ``'soft'``). Default: ``'hard'``.
     name : str, optional
-        Name of the neuron population. Used for logging and debugging. If
-        ``None``, an automatic name is generated. Default: None.
-
-
-    Parameter Mapping
-    -----------------
-
-    Below is the correspondence between brainpy.state and NEST parameter names:
-
-    ==================== =================== =================================== =====================================================
-    **brainpy.state**    **NEST**            **Mathematical Symbol**             **Description**
-    ==================== =================== =================================== =====================================================
-    ``in_size``          n/a                 —                                   Population shape (brainpy.state-specific)
-    ``g_L``              ``g_L``             :math:`g_L`                         Leak conductance
-    ``E_L``              ``E_L``             :math:`E_L`                         Leak reversal potential
-    ``C_m``              ``C_m``             :math:`C_m`                         Membrane capacitance
-    ``V_reset``          ``V_reset``         :math:`V_{\mathrm{reset}}`          Reset potential
-    ``Delta_V``          ``Delta_V``         :math:`\Delta_V`                    Stochastic firing sharpness
-    ``V_T_star``         ``V_T_star``        :math:`V_{T^*}`                     Base firing threshold
-    ``lambda_0``         ``lambda_0``        :math:`\lambda_0`                   Firing intensity at threshold (1/s)
-    ``t_ref``            ``t_ref``           :math:`t_{\mathrm{ref}}`            Absolute refractory period
-    ``tau_syn``          ``tau_syn``         :math:`\tau_{\mathrm{syn},k}`       Synaptic time constants (list/tuple)
-    ``I_e``              ``I_e``             :math:`I_e`                         Constant external current
-    ``tau_sfa``          ``tau_sfa``         :math:`\tau_{\gamma_i}`             SFA time constants (list/tuple)
-    ``q_sfa``            ``q_sfa``           :math:`q_{\gamma_i}`                SFA jump values (list/tuple)
-    ``tau_stc``          ``tau_stc``         :math:`\tau_{\eta_j}`               STC time constants (list/tuple)
-    ``q_stc``            ``q_stc``           :math:`q_{\eta_j}`                  STC jump values (list/tuple)
-    ``rng_key``          RNG state           —                                   JAX PRNG key (brainpy.state-specific)
-    ``V_initializer``    ``V_m``             :math:`V(0)`                        Initial membrane potential
-    ``spk_fun``          n/a                 —                                   Surrogate gradient (brainpy.state-specific)
-    ``spk_reset``        n/a                 —                                   Reset mode (brainpy.state-specific)
-    ==================== =================== =================================== =====================================================
+        Name of the neuron population. Default: None.
 
     State Variables
     ---------------
-    V : HiddenState, shape ``(batch_size, *in_size)``
-        Membrane potential :math:`V_m(t)` in millivolts.
-    i_syn : ShortTermState, shape ``(batch_size, *in_size, n_receptors)``
-        Synaptic currents in picoamperes, one per receptor port.
-        :math:`I_{\mathrm{syn},k}(t)` for :math:`k = 0, \ldots, n_{\mathrm{receptors}} - 1`.
-    refractory_step_count : ShortTermState, shape ``(batch_size, *in_size)``
-        Remaining refractory time steps (int32). Counts down from
-        :math:`\lceil t_{\mathrm{ref}} / dt \rceil` to 0 after each spike.
-    I_stim : ShortTermState, shape ``(batch_size, *in_size)``
-        Buffered external current (picoamperes) applied in the next time
-        step. Implements NEST's ring-buffer semantics (one-step delay).
-    last_spike_time : ShortTermState, shape ``(batch_size, *in_size)``
-        Time of the last emitted spike (milliseconds). Initialized to a
-        large negative value (-1e7 ms).
-
-    Notes
-    -----
-    **Implementation Details:**
-
-    * **Random number generation**: Uses JAX's stateless PRNG. The RNG key
-      is split at each time step to ensure reproducibility. Exact
-      spike-time reproducibility requires matching the initial ``rng_key``.
-
-    * **Parameter units**: Following NEST's C++ implementation,
-      ``tau_syn``, ``tau_sfa``, ``q_sfa``, ``tau_stc``, and ``q_stc`` are
-      specified as **bare floats** (not brainunit Quantities) in their
-      respective natural units (ms, mV, nA). All other parameters use
-      brainunit Quantities for dimensional safety.
-
-    * **Exact integration**: The model uses analytic propagator
-      coefficients for exact integration of linear ODEs, matching NEST's
-      approach. This ensures numerical accuracy independent of time step
-      size (within machine precision).
-
-    * **Singular propagator handling**: If :math:`\tau_m \approx
-      \tau_{\mathrm{syn},k}`, the propagator formula is numerically
-      singular. The implementation uses a threshold-based switch to a
-      limiting formula to avoid instabilities.
-
-    * **GIF toolbox compatibility**: NEST and the GIF toolbox (Pozzorini et
-      al.) use different conventions for when STC/SFA jumps occur. NEST
-      applies jumps immediately after spike emission; the toolbox applies
-      them after the refractory period. Conversion formula:
-
-      .. math::
-
-         q_{\eta,\text{toolbox}} = q_{\eta,\text{NEST}} \cdot
-             \left(1 - e^{-t_{\mathrm{ref}} / \tau_\eta}\right)
-
-    * **Receptor indexing**: NEST uses **1-based indexing** for receptor
-      types (``receptor_type=1`` for the first receptor). Internally, this
-      implementation uses 0-based indexing (Python/NumPy convention).
-
-    * **Default behavior**: With default parameters (single receptor,
-      empty STC/SFA), this model behaves as a simple stochastic LIF neuron
-      with exponential synaptic currents.
-
-    **Failure Modes**
-
-
-    * If ``Delta_V`` is too small (< 1e-6 mV), numerical overflow may occur
-      in the exponential firing intensity computation.
-    * If ``tau_m`` and ``tau_syn[k]`` differ by less than machine epsilon,
-      the propagator may become ill-conditioned despite singular handling.
-    * Extremely short time steps (< 1e-3 ms) may lead to refractory counter
-      overflow (int32 limit).
-
-    Examples
-    --------
-    **Basic usage with single receptor:**
-
-    .. code-block:: python
-
-       >>> import brainpy.state as bst
-       >>> import brainunit as u
-       >>> # Create a small population
-       >>> neurons = bst.gif_psc_exp_multisynapse(10, tau_syn=(2.0,))
-       >>> neurons.init_state()
-       >>> # Simulate one time step
-       >>> spikes = neurons(x=100.0 * u.pA)  # External current input
-
-    **Multi-receptor configuration (AMPA, NMDA, GABA):**
-
-    .. code-block:: python
-
-       >>> # Define three receptor types with different time constants
-       >>> neurons = bst.gif_psc_exp_multisynapse(
-       ...     100,
-       ...     tau_syn=(2.0, 10.0, 5.0),  # AMPA-like, NMDA-like, GABA-like
-       ... )
-       >>> neurons.init_state()
-       >>> # Connect synapses to different receptors
-       >>> # (receptor_type=1 for AMPA, =2 for NMDA, =3 for GABA)
-
-    **With spike-frequency adaptation:**
-
-    .. code-block:: python
-
-       >>> neurons = bst.gif_psc_exp_multisynapse(
-       ...     50,
-       ...     tau_syn=(2.0,),
-       ...     tau_sfa=(100.0, 500.0),  # Two SFA time scales
-       ...     q_sfa=(5.0, 10.0),       # Threshold increases by 5 and 10 mV
-       ... )
-       >>> neurons.init_state()
-
-    **With spike-triggered currents (afterhyperpolarization):**
-
-    .. code-block:: python
-
-       >>> neurons = bst.gif_psc_exp_multisynapse(
-       ...     50,
-       ...     tau_syn=(2.0,),
-       ...     tau_stc=(10.0,),
-       ...     q_stc=(-50.0,),  # Hyperpolarizing current (-50 pA)
-       ... )
-       >>> neurons.init_state()
-
-    **Deterministic spike generation (for testing):**
-
-    .. code-block:: python
-
-       >>> import jax
-       >>> neurons = bst.gif_psc_exp_multisynapse(
-       ...     10,
-       ...     tau_syn=(2.0,),
-       ...     rng_key=jax.random.PRNGKey(42),  # Fixed seed
-       ... )
-       >>> neurons.init_state()
+    V : HiddenState, shape ``(*in_size,)``
+        Membrane potential in millivolts.
+    i_syn : ShortTermState, shape ``(*in_size, n_receptors)``
+        Synaptic currents in picoamperes.
+    refractory_step_count : ShortTermState, shape ``(*in_size,)``
+        Remaining refractory steps (int).
+    I_stim : ShortTermState, shape ``(*in_size,)``
+        Buffered external current (one-step delay).
+    last_spike_time : ShortTermState, shape ``(*in_size,)``
+        Time of last spike (milliseconds).
 
     See Also
     --------
-    gif_psc_exp : Two-receptor GIF model (excitatory/inhibitory)
+    gif_psc_exp : Two-receptor GIF model
     iaf_psc_exp_multisynapse : Multi-receptor IAF model without adaptation
-    aeif_psc_exp_multisynapse : Multi-receptor AdEx model
 
     References
     ----------
-    .. [1] Mensi S, Naud R, Pozzorini C, Avermann M, Petersen CC, Gerstner W
-           (2012). Parameter extraction and classification of three cortical
-           neuron types reveals two distinct adaptation mechanisms. Journal of
-           Neurophysiology, 107(6):1756-1775.
-           DOI: https://doi.org/10.1152/jn.00408.2011
-    .. [2] Pozzorini C, Mensi S, Hagens O, Naud R, Koch C, Gerstner W (2015).
-           Automated high-throughput characterization of single neurons by
-           means of simplified spiking models. PLoS Computational Biology,
-           11(6), e1004275.
-           DOI: https://doi.org/10.1371/journal.pcbi.1004275
-    .. [3] NEST Simulator ``gif_psc_exp_multisynapse`` model documentation
-           and C++ source: ``models/gif_psc_exp_multisynapse.h`` and
-           ``models/gif_psc_exp_multisynapse.cpp``.
-           https://nest-simulator.readthedocs.io/en/stable/models/gif_psc_exp_multisynapse.html
+    .. [1] Mensi S et al. (2012). J. Neurophysiol., 107(6):1756-1775.
+    .. [2] Pozzorini C et al. (2015). PLoS Comput. Biol., 11(6), e1004275.
+    .. [3] NEST Simulator ``gif_psc_exp_multisynapse`` model documentation.
     """
     __module__ = 'brainpy.state'
 
@@ -593,14 +434,16 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         tau_syn: Sequence[float] = (2.0,),  # ms values
         I_e: ArrayLike = 0.0 * u.pA,
         tau_sfa: Sequence[float] = (),  # ms values
-        q_sfa: Sequence[float] = (),  # mV values
+        q_sfa: Sequence[float] = (),    # mV values
         tau_stc: Sequence[float] = (),  # ms values
-        q_stc: Sequence[float] = (),  # nA values
+        q_stc: Sequence[float] = (),    # pA values
         rng_key: Optional[jax.Array] = None,
         V_initializer: Callable = braintools.init.Constant(-70.0 * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         name: str = None,
+        # Accepted for backward compatibility but unused:
+        gsl_error_tol: ArrayLike = 1e-6,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -614,15 +457,16 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         self.t_ref = braintools.init.param(t_ref, self.varshape)
         self.I_e = braintools.init.param(I_e, self.varshape)
 
-        # Synaptic time constants (stored as numpy array of ms values)
-        self.tau_syn = np.asarray([float(x) for x in tau_syn], dtype=dftype)
-        if len(self.tau_syn) == 0:
+        # tau_syn: stored as plain numpy array of ms values (no units)
+        if len(tau_syn) == 0:
             raise ValueError("'tau_syn' must have at least one element.")
+        dftype = brainstate.environ.dftype()
+        self.tau_syn = np.asarray([float(x) for x in tau_syn], dtype=dftype)
 
-        # Stochastic spiking: lambda_0 in 1/s, store as 1/ms internally
-        self.lambda_0 = lambda_0 / 1000.0  # convert from 1/s to 1/ms
+        # Stochastic spiking: lambda_0 in 1/s → store as 1/ms
+        self.lambda_0 = lambda_0 / 1000.0
 
-        # Adaptation parameters (stored as plain Python tuples of floats)
+        # Adaptation parameters (stored as Python tuples of bare floats)
         self.tau_sfa = tuple(float(x) for x in tau_sfa)
         self.q_sfa = tuple(float(x) for x in q_sfa)
         self.tau_stc = tuple(float(x) for x in tau_stc)
@@ -639,50 +483,41 @@ class gif_psc_exp_multisynapse(NESTNeuron):
                 f"Got {len(self.tau_stc)} and {len(self.q_stc)}."
             )
 
+        self.n_stc = len(self.tau_stc)
+        self.n_sfa = len(self.tau_sfa)
+
         # RNG key for stochastic spiking
         self._rng_key = rng_key
 
-        # Initializers
+        # Initializer
         self.V_initializer = V_initializer
 
         self._validate_parameters()
 
+        # Pre-compute refractory step count
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+
     @property
     def n_receptors(self):
-        r"""Number of synaptic receptor ports.
-
-        Returns
-        -------
-        int
-            Number of receptor ports, equal to ``len(tau_syn)``.
-        """
-        return int(self.tau_syn.size)
-
-    @staticmethod
-    def _to_numpy(x, unit):
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
+        r"""Number of synaptic receptor ports."""
+        return int(self.tau_syn.shape[0])
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.g_L, self.Delta_V)):
+            return
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.g_L, u.nS) <= 0.0):
+        if np.any(self.g_L <= 0.0 * u.nS):
             raise ValueError('Membrane conductance must be strictly positive.')
-        if np.any(self._to_numpy(self.Delta_V, u.mV) <= 0.0):
+        if np.any(self.Delta_V <= 0.0 * u.mV):
             raise ValueError('Delta_V must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
         if self.lambda_0 < 0.0:
             raise ValueError('lambda_0 must not be negative.')
-        for i, tau in enumerate(self.tau_syn):
-            if tau <= 0.0:
-                raise ValueError(
-                    f'All synaptic time constants must be strictly positive '
-                    f'(tau_syn[{i}]={tau}).'
-                )
         for i, tau in enumerate(self.tau_sfa):
             if tau <= 0.0:
                 raise ValueError(
@@ -695,235 +530,97 @@ class gif_psc_exp_multisynapse(NESTNeuron):
                     f'All STC time constants must be strictly positive '
                     f'(tau_stc[{i}]={tau}).'
                 )
+        for i, tau in enumerate(self.tau_syn):
+            if tau <= 0.0:
+                raise ValueError(
+                    f'All synaptic time constants must be strictly positive '
+                    f'(tau_syn[{i}]={tau}).'
+                )
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables.
 
-        Creates and initializes state variables including membrane potential,
-        synaptic currents, refractory counters, adaptation elements, and
-        buffered currents. Also initializes the internal RNG state for
-        stochastic spike generation.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            Batch dimension size for vectorized simulation. If ``None``, no
-            batch dimension is added. If provided, all state variables will
-            have shape ``(batch_size, *in_size, ...)``. Default: None.
-        **kwargs
-            Additional keyword arguments (reserved for future extensions,
-            currently unused).
-
-        Notes
-        -----
-        **State Variable Initialization:**
-
-        - ``V``: Membrane potential initialized using ``V_initializer``
-          (default: -70 mV, resting potential).
-        - ``i_syn``: Synaptic currents initialized to zero for all
-          receptors. Shape: ``(*v_shape, n_receptors)``.
-        - ``refractory_step_count``: Refractory counter initialized to 0
-          (not refractory).
-        - ``I_stim``: Buffered external current initialized to 0 pA.
-        - ``last_spike_time``: Last spike time initialized to -1e7 ms (far
-          in the past).
-        - STC elements (``_stc_elems``): Initialized to zero if
-          ``len(tau_stc) > 0``, otherwise ``None``.
-        - SFA elements (``_sfa_elems``): Initialized to zero if
-          ``len(tau_sfa) > 0``, otherwise ``None``.
-        - Total STC (``_stc_val``): Initialized to zero.
-        - Total threshold (``_sfa_val``): Initialized to ``V_T_star``.
-
-        **RNG Initialization:**
-        If ``rng_key`` was provided during construction, uses that key.
-        Otherwise, uses ``jax.random.PRNGKey(0)``. The RNG state is stored
-        internally and updated at each time step.
-
-        This method should be called once before starting simulation, or
-        after calling ``reset_state()`` to reinitialize.
+        Creates membrane potential, synaptic currents, refractory counters,
+        adaptation elements, buffered current, and internal RNG state.
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
 
+        V = braintools.init.param(self.V_initializer, self.varshape)
         self.V = brainstate.HiddenState(V)
+        v_shape = V.shape
 
-        # Synaptic currents: shape (..., n_receptors)
-        syn_zeros = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
-        self.i_syn = brainstate.ShortTermState(syn_zeros * u.pA)
-
-        spk_time = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
+        # Synaptic currents: shape (*v_shape, n_receptors) — float64 for precision
+        syn_shape = v_shape + (self.n_receptors,)
+        self.i_syn = brainstate.ShortTermState(
+            np.zeros(syn_shape, dtype=np.float64) * u.pA
         )
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        ref_steps = braintools.init.param(
-            braintools.init.Constant(0), self.varshape, batch_size
+
+        # STC elements: shape (n_stc, *v_shape) in pA — float64 for precision
+        if self.n_stc > 0:
+            stc_shape = (self.n_stc,) + v_shape
+            self.stc_elems = brainstate.ShortTermState(
+                np.zeros(stc_shape, dtype=np.float64) * u.pA
+            )
+        else:
+            self.stc_elems = None
+
+        # SFA elements: shape (n_sfa, *v_shape) in mV — float64 for precision
+        if self.n_sfa > 0:
+            sfa_shape = (self.n_sfa,) + v_shape
+            self.sfa_elems = brainstate.ShortTermState(
+                np.zeros(sfa_shape, dtype=np.float64) * u.mV
+            )
+        else:
+            self.sfa_elems = None
+
+        self.last_spike_time = brainstate.ShortTermState(
+            u.math.full(v_shape, -1e7 * u.ms)
         )
         self.refractory_step_count = brainstate.ShortTermState(
-            u.math.asarray(ref_steps, dtype=ditype)
+            u.math.full(v_shape, 0, dtype=ditype)
         )
-
         self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(
-                braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-            )
+            u.math.full(v_shape, 0.0 * u.pA, dtype=dftype)
         )
 
-        # Adaptation state: stc and sfa element arrays
-        n_stc = len(self.tau_stc)
-        n_sfa = len(self.tau_sfa)
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=dftype)
-        self._sfa_val = np.full(
-            v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=dftype
-        )
+        # Caches for pre-decay totals (accessed via _stc_val / _sfa_val)
+        V_T_star_mV = float(np.asarray(u.get_mantissa(self.V_T_star)))
+        self._stc_val_cache = np.zeros(v_shape, dtype=np.float64)
+        self._sfa_val_cache = np.full(v_shape, V_T_star_mV, dtype=np.float64)
 
-        # RNG state
-        if self._rng_key is not None:
-            self._rng_state = self._rng_key
-        else:
-            self._rng_state = jax.random.PRNGKey(0)
-
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset all state variables to initial values.
-
-        Resets membrane potential, synaptic currents, refractory counters,
-        adaptation elements, and buffered currents to their initial states.
-        Also reinitializes the internal RNG state. This is equivalent to
-        calling ``init_state()`` but reuses existing state variable objects.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            Batch dimension size. If ``None``, uses the existing batch size
-            (or no batch dimension). If provided and different from the
-            current batch size, reshapes all state variables. Default: None.
-        **kwargs
-            Additional keyword arguments (reserved for future extensions,
-            currently unused).
-
-        Notes
-        -----
-        This method is useful for:
-
-        - Restarting simulations from initial conditions without recreating
-          the neuron object.
-        - Running multiple trials with the same model configuration.
-        - Resetting after parameter changes that require state
-          reinitialization.
-
-        The reset follows the same initialization logic as ``init_state()``,
-        with all state variables returned to their default values (membrane
-        potential from ``V_initializer``, currents to zero, refractory
-        counter to zero, etc.).
-
-        If ``batch_size`` is changed, all state arrays are reshaped
-        accordingly. This allows switching between single-neuron and
-        batched simulations.
-        """
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-
-        syn_zeros = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
-        self.i_syn.value = syn_zeros * u.pA
-
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
-        )
-        ref_steps = braintools.init.param(
-            braintools.init.Constant(0), self.varshape, batch_size
-        )
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
-        )
-
-        n_stc = len(self.tau_stc)
-        n_sfa = len(self.tau_sfa)
-        self._stc_elems = np.zeros((n_stc, *v_shape), dtype=dftype) if n_stc > 0 else None
-        self._sfa_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
-        self._stc_val = np.zeros(v_shape, dtype=dftype)
-        self._sfa_val = np.full(
-            v_shape, float(self._to_numpy(self.V_T_star, u.mV)), dtype=dftype
-        )
-
-        if self._rng_key is not None:
-            self._rng_state = self._rng_key
-        else:
-            self._rng_state = jax.random.PRNGKey(0)
+        # RNG state — stored as ShortTermState so brainstate.transform.for_loop can track it
+        rng_init = self._rng_key if self._rng_key is not None else jax.random.PRNGKey(0)
+        self._rng_state = brainstate.ShortTermState(rng_init)
 
     def get_spike(self, V: ArrayLike = None):
-        r"""Compute spike output via surrogate gradient function.
-
-        Converts membrane potential to a differentiable spike signal by
-        scaling and applying the surrogate gradient function. This method is
-        used for gradient-based learning but does **not** affect the
-        stochastic spike generation during ``update()``.
-
-        Parameters
-        ----------
-        V : Quantity, ArrayLike, optional
-            Membrane potential (millivolts). If ``None``, uses the current
-            state ``self.V.value``. Default: None.
-
-        Returns
-        -------
-        ndarray
-            Spike output (float32). Shape matches ``V``. Typically binary
-            (0 or 1) in forward pass, continuous in backward pass for
-            gradient computation.
-
-        Notes
-        -----
-        The scaling formula is :math:`v_{\mathrm{scaled}} = (V -
-        V_{\mathrm{reset}}) / \Delta_V`, which normalizes the voltage
-        relative to reset potential. The surrogate function then maps this
-        to a spike probability-like value.
-
-        This method is separate from the stochastic firing mechanism used in
-        ``update()``, which draws random numbers and compares to the
-        exponential escape-rate probability.
-        """
+        r"""Compute spike output via surrogate gradient function."""
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_reset) / self.Delta_V
         return self.spk_fun(v_scaled)
 
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
-
-    def _parse_spike_events(self, spike_events: Iterable, v_shape):
-        r"""Parse spike events into per-receptor weight arrays.
-
-        This method accumulates incoming spike weights into a multi-dimensional
-        array organized by receptor port. It handles both tuple and dictionary
-        event formats, supporting NEST-style 1-based receptor indexing.
+    def _parse_spike_events(self, spike_events, v_shape):
+        r"""Parse spike event descriptors into a per-receptor weight array.
 
         Parameters
         ----------
         spike_events : iterable or None
-            Incoming spike events. Each element can be:
-            - A ``(receptor_type, weight)`` tuple
-            - A dict with keys ``'receptor_type'`` (or ``'receptor'``) and
-              ``'weight'``
-            where ``receptor_type`` is a 1-based integer (1 to ``n_receptors``)
-            and ``weight`` is a current value (Quantity in pA or bare float).
-            If ``None``, returns an array of zeros.
+            Events as ``(receptor_type, weight)`` tuples or dicts with
+            ``'receptor_type'`` and ``'weight'`` keys. ``None`` → no events.
         v_shape : tuple of int
-            Shape of the neuron population state (excluding receptor dimension).
+            Shape of the neuron population state.
 
         Returns
         -------
-        ndarray
-            Accumulated spike weights per receptor. Shape: ``v_shape +
-            (n_receptors,)``. Data type: float64. Units: pA (as bare floats).
+        out : np.ndarray, shape ``v_shape + (n_receptors,)``, dtype float64
+            Total weight (pA) arriving at each receptor this step.
 
         Raises
         ------
         ValueError
-            If any ``receptor_type`` is outside the range [1, ``n_receptors``].
+            If any ``receptor_type`` is outside ``[1, n_receptors]``.
         """
-        out = np.zeros(v_shape + (self.n_receptors,), dtype=dftype)
+        out = np.zeros(v_shape + (self.n_receptors,), dtype=np.float64)
         if spike_events is None:
             return out
         for ev in spike_events:
@@ -935,233 +632,221 @@ class gif_psc_exp_multisynapse(NESTNeuron):
                 receptor = int(receptor)
             if receptor < 1 or receptor > self.n_receptors:
                 raise ValueError(
-                    f'Receptor type {receptor} out of range '
-                    f'[1, {self.n_receptors}].'
+                    f'Receptor type {receptor} out of range [1, {self.n_receptors}].'
                 )
-            w_np = np.asarray(u.math.asarray(weight / u.pA), dtype=dftype)
+            w_np = np.asarray(u.math.asarray(weight / u.pA), dtype=np.float64)
             out[..., receptor - 1] += np.broadcast_to(w_np, v_shape)
         return out
 
-    def update(self, x=0.0 * u.pA, spike_events=None):
+    # ------------------------------------------------------------------
+    # Adaptation element proxy properties
+    # ------------------------------------------------------------------
+
+    @property
+    def _stc_elems(self):
+        """Proxy for ``stc_elems[i][j]`` read/write access (units: pA)."""
+        if self.stc_elems is None:
+            raise AttributeError('No STC elements configured (tau_stc is empty).')
+        return _AdaptProxy(self.stc_elems, u.pA)
+
+    @property
+    def _sfa_elems(self):
+        """Proxy for ``sfa_elems[i][j]`` read/write access (units: mV)."""
+        if self.sfa_elems is None:
+            raise AttributeError('No SFA elements configured (tau_sfa is empty).')
+        return _AdaptProxy(self.sfa_elems, u.mV)
+
+    @property
+    def _stc_val(self):
+        """Pre-decay STC totals (pA) from the last completed update step."""
+        return self._stc_val_cache
+
+    @property
+    def _sfa_val(self):
+        """Pre-decay SFA threshold totals (mV) from the last completed update step."""
+        return self._sfa_val_cache
+
+    # ------------------------------------------------------------------
+    # Main update method
+    # ------------------------------------------------------------------
+
+    def update(self, x=0.0 * u.pA, spike_events=None, receptor_weights=None):
         r"""Update neuron state for one simulation step.
 
-        This method advances the neuron state by one time step ``dt``,
-        integrating membrane dynamics, synaptic currents, adaptation
-        mechanisms, and stochastic spike generation. It follows NEST's exact
-        update order for ``gif_psc_exp_multisynapse``.
+        Follows NEST's ``gif_psc_exp_multisynapse::update`` exactly:
 
-        The update sequence is:
-
-        1. Decay STC and SFA elements, compute their totals
-        2. Process synaptic currents for each receptor (propagate, decay, add spikes)
-        3. Update membrane potential (if not refractory) or decrement refractory counter
-        4. Stochastic spike check and adaptation updates (if spike emitted)
-        5. Buffer external current for next step
+        1. Compute pre-decay STC/SFA totals, then decay.
+        2. Propagate + decay + inject per-receptor synaptic currents.
+        3. If not refractory: exact-propagator membrane update + stochastic
+           spike check; if spiked, jump STC/SFA and set refractory counter.
+           If refractory: decrement counter, clamp V to V_reset.
+        4. Buffer external current for next step (one-step delay).
 
         Parameters
         ----------
         x : Quantity, optional
-            External current input (picoamperes). This current is
-            **buffered by one time step** (NEST ring-buffer semantics): the current
-            provided at time :math:`t` is applied at time :math:`t + dt`.
-            Default: 0.0 pA.
-        spike_events : iterable, optional
-            Incoming spike events from presynaptic neurons. Each event
-            specifies a receptor port and synaptic weight. Supported formats:
-
-            - ``(receptor_type, weight)`` tuples
-            - Dicts with keys ``'receptor_type'`` (or ``'receptor'``) and
-              ``'weight'``
-
-            where ``receptor_type`` is 1-based (1 to ``n_receptors``) and
-            ``weight`` is in pA (Quantity or float). If ``None``, only delta
-            inputs registered via ``add_delta_input()`` are used (mapped to
-            receptor 1). Default: None.
+            External current input (pA), buffered by one step. Default: 0 pA.
+        spike_events : iterable or None, optional
+            Receptor-indexed spike events. Default: None.
+        receptor_weights : jax.Array or None, optional
+            Pre-computed per-receptor weight array, shape ``v_shape +
+            (n_receptors,)``.  When provided, these weights are added
+            directly to the synaptic currents after decay (same semantics
+            as ``spike_events``).  Useful inside ``brainstate.transform.for_loop``
+            where Python-level spike_events iteration is not traceable.
+            Default: None.
 
         Returns
         -------
-        ndarray
-            Spike output for this time step. Shape: ``(batch_size, *in_size)``.
-            Data type: float32. Values are in [0, 1] via the surrogate
-            gradient function (typically binary in forward pass, continuous
-            in backward pass for gradient computation).
-
-        Notes
-        -----
-        **Random Number Generation:**
-        At each non-refractory time step, a uniform random number is drawn
-        from the JAX PRNG. The internal RNG state is updated automatically.
-        For reproducible results, initialize with a fixed ``rng_key``.
-
-        **Current Input Buffering:**
-        The external current ``x`` is stored in ``I_stim`` and applied in
-        the **next** time step. This matches NEST's ring-buffer semantics,
-        where spike events and external currents arrive one step before
-        being applied.
-
-        **Receptor Mapping:**
-
-        - Spike events explicitly specify their target receptor via
-          ``receptor_type`` (1-based).
-        - Delta inputs registered via ``add_delta_input()`` are always
-          applied to receptor 1 (the first receptor).
-        - Current inputs registered via ``add_current_input()`` are
-          accumulated into ``I_stim`` and distributed uniformly (not
-          receptor-specific).
-
-        **Failure Modes**
-
-
-        - If ``receptor_type`` in ``spike_events`` is out of range [1,
-          ``n_receptors``], raises ``ValueError``.
-        - If ``Delta_V`` is extremely small, the exponential firing
-          intensity may overflow (returns ``inf``), causing all neurons to
-          spike deterministically.
+        jax.Array
+            Binary spike output (float), shape ``self.V.value.shape``.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        h = float(u.math.asarray(dt_q / u.ms))  # dt in ms
-
+        dt = brainstate.environ.get_dt()
+        h = float(u.get_mantissa(dt / u.ms))           # step in ms (concrete Python float)
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         v_shape = self.V.value.shape
 
-        # Extract state variables as numpy arrays
-        V = self._broadcast_to_state(
-            self._to_numpy(self.V.value, u.mV), v_shape
-        ).copy()
-        i_syn = np.asarray(
-            u.math.asarray(self.i_syn.value / u.pA), dtype=dftype
-        ).copy()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
-            v_shape,
-        ).copy()
-        i_stim = self._broadcast_to_state(
-            self._to_numpy(self.I_stim.value, u.pA), v_shape
-        ).copy()
+        # ---- Strip units from parameters (concrete Python values via get_mantissa) ----
+        tau_m_ms = np.asarray(u.get_mantissa(self.C_m / self.g_L / u.ms))
+        C_m_pF = np.asarray(u.get_mantissa(self.C_m / u.pF))
+        E_L_mV = np.asarray(u.get_mantissa(self.E_L / u.mV))
+        V_reset_mV = np.asarray(u.get_mantissa(self.V_reset / u.mV))
+        Delta_V_mV = np.asarray(u.get_mantissa(self.Delta_V / u.mV))
+        V_T_star_mV = np.asarray(u.get_mantissa(self.V_T_star / u.mV))
+        I_e_pA = np.asarray(u.get_mantissa(self.I_e / u.pA))
 
-        # Extract parameters as numpy arrays
-        E_L = self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape)
-        C_m = self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape)
-        g_L = self._broadcast_to_state(self._to_numpy(self.g_L, u.nS), v_shape)
-        I_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
-        V_reset = self._broadcast_to_state(self._to_numpy(self.V_reset, u.mV), v_shape)
-        V_T_star = float(self._to_numpy(self.V_T_star, u.mV))
-        Delta_V = float(self._to_numpy(self.Delta_V, u.mV))
-        lambda_0 = self.lambda_0  # 1/ms
+        # ---- Read state (JAX arrays, compatible with for_loop tracing) ----
+        V_mV = u.get_mantissa(self.V.value / u.mV)
+        i_syn_pA = u.get_mantissa(self.i_syn.value / u.pA)
+        r = self.refractory_step_count.value
+        I_stim_pA = u.get_mantissa(self.I_stim.value / u.pA)
 
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
-            v_shape,
-        )
-
-        # Compute propagator coefficients (exact integration)
-        tau_m = C_m / g_L  # membrane time constant in ms
-        P33 = np.exp(-h / tau_m)
-        P30 = -1.0 / C_m * np.expm1(-h / tau_m) * tau_m
-        P31 = -np.expm1(-h / tau_m)
-
-        # Per-receptor propagator coefficients
-        P11_syn = np.exp(-h / self.tau_syn)  # shape: (n_receptors,)
+        # ---- Propagator coefficients ----
+        P33 = np.exp(-h / tau_m_ms)
+        P30 = -1.0 / C_m_pF * np.expm1(-h / tau_m_ms) * tau_m_ms
+        P31 = -np.expm1(-h / tau_m_ms)
+        P11_syn = np.exp(-h / self.tau_syn)   # shape (n_receptors,)
         P21_syn = np.stack([
-            gif_psc_exp._propagator_exp(
-                tau_s * np.ones(v_shape), tau_m, C_m, h
-            )
-            for tau_s in self.tau_syn
-        ], axis=-1)  # shape: v_shape + (n_receptors,)
+            propagator_exp(ts * np.ones(v_shape), tau_m_ms, C_m_pF, h)
+            for ts in self.tau_syn
+        ], axis=-1)   # shape v_shape + (n_receptors,)
 
-        # Adaptation decay factors
-        P_stc = [math.exp(-h / tau) for tau in self.tau_stc]
-        P_sfa = [math.exp(-h / tau) for tau in self.tau_sfa]
+        # ---- Step 1: Adaptation — compute pre-decay totals, then decay ----
+        if self.n_stc > 0:
+            stc_elems_pA = jnp.asarray(u.get_mantissa(self.stc_elems.value / u.pA))
+            stc_total_pA = jnp.sum(stc_elems_pA, axis=0)   # pre-decay total
+            P_stc = np.exp(-h / np.array(self.tau_stc, dtype=np.float64))
+            P_stc_bc = P_stc.reshape((-1,) + (1,) * len(v_shape))
+            stc_elems_pA = stc_elems_pA * P_stc_bc        # decay
+        else:
+            stc_total_pA = jnp.zeros(v_shape)
+            stc_elems_pA = None
 
-        # Parse spike events into per-receptor arrays
+        if self.n_sfa > 0:
+            sfa_elems_mV = jnp.asarray(u.get_mantissa(self.sfa_elems.value / u.mV))
+            sfa_total_mV = V_T_star_mV + jnp.sum(sfa_elems_mV, axis=0)  # pre-decay
+            P_sfa = np.exp(-h / np.array(self.tau_sfa, dtype=np.float64))
+            P_sfa_bc = P_sfa.reshape((-1,) + (1,) * len(v_shape))
+            sfa_elems_mV = sfa_elems_mV * P_sfa_bc        # decay
+        else:
+            sfa_total_mV = jnp.broadcast_to(jnp.asarray(V_T_star_mV), v_shape)
+            sfa_elems_mV = None
+
+        # Cache pre-decay totals for external inspection
+        self._stc_val_cache = stc_total_pA
+        self._sfa_val_cache = sfa_total_mV
+
+        # ---- Step 2: Synaptic currents (propagate, decay, inject) ----
+        # Propagate contribution to V using pre-decay i_syn
+        sum_syn_pot = jnp.sum(P21_syn * i_syn_pA, axis=-1)  # shape v_shape
+
+        # Decay each receptor current
+        i_syn_pA = i_syn_pA * P11_syn
+
+        # Parse spike events and add delta inputs (both go to receptors)
         w_by_rec = self._parse_spike_events(spike_events, v_shape)
+        w_default_pA = u.get_mantissa(self.sum_delta_inputs(0.0 * u.pA) / u.pA)
+        w_by_rec[..., 0] = w_by_rec[..., 0] + np.broadcast_to(np.asarray(w_default_pA), v_shape)
+        i_syn_pA = i_syn_pA + jnp.asarray(w_by_rec)   # add spike weights AFTER decay
+        if receptor_weights is not None:
+            i_syn_pA = i_syn_pA + receptor_weights
 
-        # Map default delta inputs to receptor 1
-        w_default = self._broadcast_to_state(
-            self._to_numpy(self.sum_delta_inputs(0.0 * u.pA), u.pA), v_shape
-        )
-        if self.n_receptors > 0:
-            w_by_rec[..., 0] += w_default
+        # Buffer current for NEXT step (NEST ring-buffer semantics)
+        new_I_stim = self.sum_current_inputs(x, self.V.value)
 
-        # Get external current for NEXT step (NEST ring buffer semantics)
-        new_i_stim = self._broadcast_to_state(
-            self._to_numpy(self.sum_current_inputs(x, self.V.value), u.pA), v_shape
-        )
+        # ---- Step 3: Membrane update and stochastic spike check ----
+        not_refractory = (r == 0)
 
-        # Advance RNG state for this step
-        self._rng_state, subkey = jax.random.split(self._rng_state)
-        rand_vals = np.asarray(
-            jax.random.uniform(subkey, shape=v_shape), dtype=dftype
-        )
-
-        spike_mask = np.zeros_like(V, dtype=bool)
-
-        for idx in np.ndindex(v_shape):
-            # ---- Step 1: Decay stc/sfa elements and compute totals ----
-            stc_total = 0.0
-            if self._stc_elems is not None:
-                for i in range(len(self.tau_stc)):
-                    stc_total += self._stc_elems[i][idx]
-                    self._stc_elems[i][idx] *= P_stc[i]
-
-            sfa_total = V_T_star
-            if self._sfa_elems is not None:
-                for i in range(len(self.tau_sfa)):
-                    sfa_total += self._sfa_elems[i][idx]
-                    self._sfa_elems[i][idx] *= P_sfa[i]
-
-            self._stc_val[idx] = stc_total
-            self._sfa_val[idx] = sfa_total
-
-            # ---- Step 2: Synaptic currents ----
-            # Compute propagated contribution, decay, then add new spikes
-            # (matches NEST update order exactly)
-            sum_syn_pot = 0.0
-            for k in range(self.n_receptors):
-                syn_idx = idx + (k,)
-                sum_syn_pot += P21_syn[syn_idx] * i_syn[syn_idx]
-                i_syn[syn_idx] *= P11_syn[k]
-                i_syn[syn_idx] += w_by_rec[syn_idx]
-
-            # ---- Step 3: Refractory / membrane update / spike check ----
-            if r[idx] == 0:
-                # Not refractory: update membrane potential via exact propagator
-                V[idx] = (P30[idx] * (i_stim[idx] + I_e[idx] - stc_total)
-                          + P33[idx] * V[idx]
-                          + P31[idx] * E_L[idx]
-                          + sum_syn_pot)
-
-                # Stochastic spike check
-                lam = lambda_0 * math.exp((V[idx] - sfa_total) / Delta_V)
-                if lam > 0.0:
-                    spike_prob = -math.expm1(-lam * h)
-                    if rand_vals[idx] < spike_prob:
-                        # Spike!
-                        spike_mask[idx] = True
-
-                        # Jump stc elements
-                        if self._stc_elems is not None:
-                            for i in range(len(self.q_stc)):
-                                self._stc_elems[i][idx] += self.q_stc[i]
-
-                        # Jump sfa elements
-                        if self._sfa_elems is not None:
-                            for i in range(len(self.q_sfa)):
-                                self._sfa_elems[i][idx] += self.q_sfa[i]
-
-                        r[idx] = refr_counts[idx]
-            else:
-                # Refractory: decrement counter, clamp V to V_reset
-                r[idx] -= 1
-                V[idx] = V_reset[idx]
-
-        # ---- Step 4: Store new I_stim for next step, update state ----
-        self.V.value = V * u.mV
-        self.i_syn.value = i_syn * u.pA
-        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
+        # Candidate V for non-refractory neurons (NEST propagator update)
+        V_candidate_mV = (
+            P30 * (I_stim_pA + I_e_pA - stc_total_pA)
+            + P33 * V_mV
+            + P31 * E_L_mV
+            + sum_syn_pot
         )
 
-        return jnp.asarray(spike_mask, dtype=jnp.float32)
+        # Stochastic spike check (only for non-refractory)
+        new_rng, subkey = jax.random.split(self._rng_state.value)
+        self._rng_state.value = new_rng
+        rand_vals = jax.random.uniform(subkey, shape=v_shape)
+
+        exp_arg = jnp.clip(
+            (V_candidate_mV - sfa_total_mV) / Delta_V_mV, -500.0, 500.0
+        )
+        lam = self.lambda_0 * jnp.exp(exp_arg)           # 1/ms
+        spike_prob = jnp.clip(-jnp.expm1(-lam * h), 0.0, 1.0)
+        spike_mask = not_refractory & (rand_vals < spike_prob)
+
+        # Final V: spike or refractory → V_reset; else → V_candidate
+        new_V_mV = jnp.where(
+            not_refractory & ~spike_mask,
+            V_candidate_mV,
+            V_reset_mV,
+        )
+
+        # STC jumps on spike (applied to already-decayed elements)
+        if self.n_stc > 0:
+            q_stc_arr = np.array(self.q_stc, dtype=np.float64)
+            stc_elems_pA = jnp.asarray(stc_elems_pA)
+            for i in range(self.n_stc):
+                stc_elems_pA = stc_elems_pA.at[i].set(
+                    jnp.where(spike_mask, stc_elems_pA[i] + q_stc_arr[i], stc_elems_pA[i])
+                )
+
+        # SFA jumps on spike
+        if self.n_sfa > 0:
+            q_sfa_arr = np.array(self.q_sfa, dtype=np.float64)
+            sfa_elems_mV = jnp.asarray(sfa_elems_mV)
+            for i in range(self.n_sfa):
+                sfa_elems_mV = sfa_elems_mV.at[i].set(
+                    jnp.where(spike_mask, sfa_elems_mV[i] + q_sfa_arr[i], sfa_elems_mV[i])
+                )
+
+        # Update refractory counter:
+        #   spike       → ref_count
+        #   refractory  → r - 1
+        #   otherwise   → r (keep 0)
+        ref_count_jax = u.get_mantissa(self.ref_count)
+        new_r = jnp.where(
+            spike_mask,
+            ref_count_jax,
+            jnp.where(not_refractory, r, r - 1),
+        )
+
+        # ---- Write back state ----
+        self.V.value = new_V_mV * u.mV
+        self.i_syn.value = i_syn_pA * u.pA
+        if self.n_stc > 0:
+            self.stc_elems.value = stc_elems_pA * u.pA
+        if self.n_sfa > 0:
+            self.sfa_elems.value = sfa_elems_mV * u.mV
+        self.refractory_step_count.value = new_r.astype(ditype)
+        self.I_stim.value = new_I_stim + u.math.zeros(v_shape) * u.pA
+        last_spike_time = u.math.where(
+            spike_mask, t + dt, self.last_spike_time.value
+        )
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
+
+        return jnp.asarray(spike_mask, dtype=dftype)

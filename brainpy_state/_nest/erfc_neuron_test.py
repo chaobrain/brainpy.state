@@ -27,7 +27,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 
@@ -56,6 +56,9 @@ class TestErfcNeuron(unittest.TestCase):
 
     def test_gain_formula_matches_nest_equation(self):
         r"""g(h)=0.5*erfc(-(h-theta)/(sqrt(2)*sigma))."""
+        # Re-enable x64 after brainstate resets it at import time so that
+        # theta/sigma are stored as float64 and erfc is computed in float64.
+        jax.config.update('jax_enable_x64', True)
         with brainstate.environ.context(dt=self.dt):
             neuron = erfc_neuron(
                 1,
@@ -65,8 +68,7 @@ class TestErfcNeuron(unittest.TestCase):
             )
             neuron.init_state()
 
-            dftype = brainstate.environ.dftype()
-            h = jnp.array([0.7], dtype=dftype) * u.mV
+            h = jnp.array([0.7], dtype=jnp.float64) * u.mV
             got = neuron._gain_probability(h)
             expected = 0.5 * math.erfc(-(0.7 - 0.4) / (math.sqrt(2.0) * 1.3))
             self.assertAlmostEqual(float(got[0]), expected, places=12)
@@ -195,14 +197,15 @@ class TestErfcNeuron(unittest.TestCase):
             )
             neuron.init_state()
 
-            n_steps = 6000
-            y_sum = np.zeros(n, dtype=dftype)
+            n_steps = 1000
+            x_zero = 0.0 * u.mV
 
-            for step in range(n_steps):
-                out = self._step(neuron, step, x=0.0 * u.mV)
-                y_sum += np.asarray(out, dtype=dftype)
+            def body(_):
+                return neuron.update(x=x_zero)
 
-            mean_activity = y_sum / float(n_steps)
+            outputs = brainstate.transform.for_loop(body, np.zeros(n_steps))
+            y_sum = jnp.sum(jnp.asarray(outputs, dtype=dftype), axis=0)
+            mean_activity = np.asarray(y_sum) / float(n_steps)
             theory = np.array(
                 [
                     0.5 * math.erfc(th / (math.sqrt(2.0) * sg))

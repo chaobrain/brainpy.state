@@ -19,7 +19,8 @@
 import math
 from collections.abc import Mapping
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -220,7 +221,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
     .. code-block:: python
 
         >>> import brainpy.state as bs
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> syn = bs.tsodyks_synapse_hom(
         ...     weight=2.0,
         ...     delay=1.5 * u.ms,

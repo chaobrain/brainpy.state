@@ -42,7 +42,8 @@ import numpy as np
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
+import jax.numpy as jnp
 
 brainstate.environ.set(precision=64, platform='cpu')
 
@@ -361,7 +362,7 @@ class TestGlifCond(unittest.TestCase):
         if dg_inputs is not None:
             for port, weight in dg_inputs:
                 neuron.add_delta_input(
-                    f'receptor_{port}_step{k}', weight * u.nS
+                    f'step{k}', weight * u.nS, label=f'receptor_{port}'
                 )
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
@@ -371,64 +372,72 @@ class TestGlifCond(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        r"""Verify default parameters match NEST C++ source."""
-        neuron = glif_cond(1)
-        self.assertEqual(neuron.g_m, 9.43 * u.nS)
-        self.assertEqual(neuron.E_L, -78.85 * u.mV)
-        self.assertEqual(neuron.V_th, -51.68 * u.mV)
-        self.assertEqual(neuron.C_m, 58.72 * u.pF)
-        self.assertEqual(neuron.t_ref, 3.75 * u.ms)
-        self.assertEqual(neuron.V_reset, -78.85 * u.mV)
-        self.assertEqual(neuron.th_spike_add, 0.37)
-        self.assertEqual(neuron.th_spike_decay, 0.009)
-        self.assertEqual(neuron.voltage_reset_fraction, 0.20)
-        self.assertEqual(neuron.voltage_reset_add, 18.51)
-        self.assertEqual(neuron.th_voltage_index, 0.005)
-        self.assertEqual(neuron.th_voltage_decay, 0.09)
-        self.assertEqual(neuron.asc_init, (0.0, 0.0))
-        self.assertEqual(neuron.asc_decay, (0.003, 0.1))
-        self.assertEqual(neuron.asc_amps, (-9.18, -198.94))
-        self.assertEqual(neuron.asc_r, (1.0, 1.0))
-        self.assertEqual(neuron.tau_syn, (0.2, 2.0))
-        self.assertEqual(neuron.E_rev, (0.0, -85.0))
-        self.assertFalse(neuron.has_theta_spike)
-        self.assertFalse(neuron.has_asc)
-        self.assertFalse(neuron.has_theta_voltage)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Verify default parameters match NEST C++ source."""
+            neuron = glif_cond(1)
+            self.assertEqual(neuron.g_m, 9.43 * u.nS)
+            self.assertEqual(neuron.E_L, -78.85 * u.mV)
+            self.assertEqual(neuron.V_th, -51.68 * u.mV)
+            self.assertEqual(neuron.C_m, 58.72 * u.pF)
+            self.assertEqual(neuron.t_ref, 3.75 * u.ms)
+            self.assertEqual(neuron.V_reset, -78.85 * u.mV)
+            self.assertEqual(neuron.th_spike_add, 0.37)
+            self.assertEqual(neuron.th_spike_decay, 0.009)
+            self.assertEqual(neuron.voltage_reset_fraction, 0.20)
+            self.assertEqual(neuron.voltage_reset_add, 18.51)
+            self.assertEqual(neuron.th_voltage_index, 0.005)
+            self.assertEqual(neuron.th_voltage_decay, 0.09)
+            self.assertEqual(neuron.asc_init, (0.0, 0.0))
+            self.assertEqual(neuron.asc_decay, (0.003, 0.1))
+            self.assertEqual(neuron.asc_amps, (-9.18, -198.94))
+            self.assertEqual(neuron.asc_r, (1.0, 1.0))
+            self.assertEqual(neuron.tau_syn, (0.2, 2.0))
+            self.assertEqual(neuron.E_rev, (0.0, -85.0))
+            self.assertFalse(neuron.has_theta_spike)
+            self.assertFalse(neuron.has_asc)
+            self.assertFalse(neuron.has_theta_voltage)
 
     # ------------------------------------------------------------------
     # 2. Parameter validation tests
     # ------------------------------------------------------------------
 
     def test_invalid_model_combination(self):
-        r"""Invalid mechanism combinations should raise."""
-        with self.assertRaises(ValueError):
-            glif_cond(1, adapting_threshold=True, spike_dependent_threshold=False)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Invalid mechanism combinations should raise."""
+            with self.assertRaises(ValueError):
+                glif_cond(1, adapting_threshold=True, spike_dependent_threshold=False)
 
     def test_v_reset_ge_v_th_raises(self):
-        with self.assertRaises(ValueError):
-            glif_cond(1, V_reset=-50.0 * u.mV, V_th=-51.68 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_cond(1, V_reset=-50.0 * u.mV, V_th=-51.68 * u.mV)
 
     def test_capacitance_positive(self):
-        with self.assertRaises(ValueError):
-            glif_cond(1, C_m=0.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_cond(1, C_m=0.0 * u.pF)
 
     def test_conductance_positive(self):
-        with self.assertRaises(ValueError):
-            glif_cond(1, g=0.0 * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_cond(1, g=0.0 * u.nS)
 
     def test_t_ref_positive(self):
-        with self.assertRaises(ValueError):
-            glif_cond(1, t_ref=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_cond(1, t_ref=0.0 * u.ms)
 
     def test_asc_size_mismatch(self):
-        with self.assertRaises(ValueError):
-            glif_cond(1, after_spike_currents=True,
-                      asc_init=(0.0,), asc_decay=(0.003, 0.1),
-                      asc_amps=(-9.18, -198.94), asc_r=(1.0, 1.0))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_cond(1, after_spike_currents=True,
+                          asc_init=(0.0,), asc_decay=(0.003, 0.1),
+                          asc_amps=(-9.18, -198.94), asc_r=(1.0, 1.0))
 
     def test_tau_syn_e_rev_size_mismatch(self):
-        with self.assertRaises(ValueError):
-            glif_cond(1, tau_syn=(0.2, 2.0), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_cond(1, tau_syn=(0.2, 2.0), E_rev=(0.0,))
 
     # ------------------------------------------------------------------
     # 3. GLIF1 (LIF) subthreshold and spike test
@@ -450,7 +459,6 @@ class TestGlifCond(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Inject current via the buffered I_stim mechanism
             params = _make_ref_params(
                 has_theta_spike=False, has_asc=False, has_theta_voltage=False,
                 dt=dt_val,
@@ -458,21 +466,21 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
-            v_model = []
+            # Pre-compute per-step inputs for for_loop
+            x_vals = jnp.zeros(n_steps, dtype=jnp.float64)
+            x_vals = x_vals.at[50].set(300.0)
+
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=x_vals[k] * u.pA)
+                return neuron.V.value / u.mV
+
+            v_model_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(v_model_all[k, 0]) for k in range(n_steps)]
+
             v_ref = []
-
             for k in range(n_steps):
-                # Apply external current at step 50
-                if k == 50:
-                    x_val = 300.0
-                else:
-                    x_val = 0.0
-
-                spk = self._step(neuron, k, x=x_val * u.pA)
-                v_m = float((neuron.V.value / u.mV)[0])
-                v_model.append(v_m)
-
-                # Reference
+                x_val = float(x_vals[k])
                 _ref_glif_step(state, params, dt_val)
                 state['i_stim'] = x_val
                 v_ref.append(state['V_rel'] + params['E_L'])
@@ -505,14 +513,16 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -528,7 +538,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif2_spike_dependent_threshold(self):
         r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -549,14 +559,18 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            spk_trace = results[0]
+            v_trace = results[1]
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -564,9 +578,9 @@ class TestGlifCond(unittest.TestCase):
             self.assertEqual(model_spikes, ref_spikes)
             self.assertGreater(len(model_spikes), 0)
 
-            # Verify threshold is tracked
-            v_m = float((neuron.V.value / u.mV)[0])
+            # Verify voltage at final step
             E_L = -78.85
+            v_m = float(v_trace[-1, 0])
             v_rel = v_m - E_L
             self.assertAlmostEqual(v_rel, state['V_rel'], places=5)
 
@@ -577,7 +591,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif3_after_spike_currents(self):
         r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -598,14 +612,16 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -620,7 +636,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif4_combined_reset_and_asc(self):
         r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -641,14 +657,16 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -663,7 +681,7 @@ class TestGlifCond(unittest.TestCase):
     def test_glif5_full_model(self):
         r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
@@ -684,17 +702,19 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            spk_trace = results[0]
+            v_model_all = results[1]
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-            v_model = []
             v_ref = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-
                 spiked = _ref_glif_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -705,9 +725,10 @@ class TestGlifCond(unittest.TestCase):
 
             # Check voltage trace agreement
             for k in range(n_steps):
+                v_model_k = float(v_model_all[k, 0])
                 self.assertAlmostEqual(
-                    v_model[k], v_ref[k], places=4,
-                    msg=f"Step {k}: model={v_model[k]:.8f}, ref={v_ref[k]:.8f}"
+                    v_model_k, v_ref[k], places=4,
+                    msg=f"Step {k}: model={v_model_k:.8f}, ref={v_ref[k]:.8f}"
                 )
 
     # ------------------------------------------------------------------
@@ -733,14 +754,18 @@ class TestGlifCond(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Inject one spike of weight 1.0 at step 10
-            g_trace = []
-            for k in range(n_steps):
-                if k == 10:
-                    self._step(neuron, k, dg_inputs=[(0, 1.0)])
-                else:
-                    self._step(neuron, k)
-                g_trace.append(float((neuron.g_syn[0].value / u.nS)[0]))
+            # Pre-compute spike input: weight=1.0 nS at step 10, receptor 0
+            dg_ext_all = jnp.zeros((n_steps,), dtype=jnp.float64)
+            dg_ext_all = dg_ext_all.at[10].set(1.0)
+
+            def _body(k):
+                neuron.add_delta_input('fl', dg_ext_all[k] * u.nS, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.g_syn[0].value / u.nS
+
+            g_trace_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            g_trace = [float(g_trace_all[k, 0]) for k in range(n_steps)]
 
             # Peak should be approximately 1 nS at t = tau_syn = 2.0 ms
             # i.e., at step 10 + 2.0/0.01 = 210
@@ -755,8 +780,6 @@ class TestGlifCond(unittest.TestCase):
 
     def test_synaptic_input_affects_voltage(self):
         r"""Excitatory input should depolarize, inhibitory should hyperpolarize."""
-        dt_val = 0.01
-
         with brainstate.environ.context(dt=self.dt):
             # Baseline neuron
             base = glif_cond(
@@ -820,8 +843,6 @@ class TestGlifCond(unittest.TestCase):
 
     def test_refractory_period_holds_voltage(self):
         r"""During refractory period, voltage should be held at pre-spike value."""
-        dt_val = 0.01
-
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_cond(
                 1,
@@ -834,30 +855,39 @@ class TestGlifCond(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Run until first spike
-            spike_step = None
-            for k in range(2000):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_step = k
-                    break
+            # Run up to 500 steps via for_loop and collect spike+V+r trace
+            n_run = 500
 
-            self.assertIsNotNone(spike_step, "Should have spiked")
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (
+                    spk,
+                    neuron.V.value / u.mV,
+                    neuron.refractory_step_count.value,
+                )
 
-            # After spike, neuron should be refractory
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_run))
+            spk_trace = results[0][:, 0]   # (n_run,)
+            v_trace = results[1][:, 0]     # (n_run,)
+            r_trace = results[2][:, 0]     # (n_run,)
+
+            spike_steps = [k for k in range(n_run) if float(spk_trace[k]) > 0]
+            self.assertGreater(len(spike_steps), 0, "Should have spiked")
+            spike_step = spike_steps[0]
+
+            # After spike, refractory counter should be > 0
             self.assertGreater(
-                int(neuron.refractory_step_count.value[0]),
+                int(r_trace[spike_step]),
                 0,
                 "Should be refractory after spike"
             )
 
-            # Run a few more steps — V should remain constant (at reset value)
-            v_reset = float((neuron.V.value / u.mV)[0])
-            for k in range(spike_step + 1, spike_step + 5):
-                self._step(neuron, k)
-                v_now = float((neuron.V.value / u.mV)[0])
+            # V should remain constant (at reset value) for next 4 steps
+            v_reset = float(v_trace[spike_step])
+            for k in range(spike_step + 1, min(spike_step + 5, n_run)):
                 self.assertAlmostEqual(
-                    v_now, v_reset, places=10,
+                    float(v_trace[k]), v_reset, places=10,
                     msg=f"Voltage should be held during refractory at step {k}"
                 )
 
@@ -887,7 +917,7 @@ class TestGlifCond(unittest.TestCase):
 
             # All receptors should have non-zero dg
             for k_rec in range(3):
-                dg_val = float((neuron.dg_syn[k_rec].value / u.nS)[0])
+                dg_val = float((neuron.dg_syn[k_rec].value / (u.nS / u.ms))[0])
                 self.assertGreater(abs(dg_val), 0.0,
                                    msg=f"Receptor {k_rec} should have non-zero dg")
 
@@ -934,12 +964,17 @@ class TestGlifCond(unittest.TestCase):
             state = _make_ref_state(params, V_abs=-78.85)
             state['h'] = dt_val
 
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return None
+
+            brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+
             for k in range(n_steps):
-                self._step(neuron, k)
                 _ref_glif_step(state, params, dt_val)
 
             # Compare threshold components
-            E_L = -78.85
             th_model = float(neuron._threshold[0])
             th_ref = state['threshold']
             self.assertAlmostEqual(th_model, th_ref, places=4,

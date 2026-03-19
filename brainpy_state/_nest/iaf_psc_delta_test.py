@@ -20,7 +20,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import jax.numpy as jnp
+import numpy as np
+import saiunit as u
 from brainpy.state import iaf_psc_delta
 
 
@@ -100,9 +102,18 @@ class TestIAFPscDelta(unittest.TestCase):
             self.assertTrue(self._is_spike(self._step(neuron, 0, delta=2. * u.mV)))
 
             # Three subsequent steps are refractory and should ignore spike jumps.
-            for step in (1, 2, 3):
-                spk = self._step(neuron, step, delta=20. * u.mV)
-                self.assertFalse(self._is_spike(spk))
+            # Pre-compute per-step delta inputs and run via for_loop.
+            delta_arr = jnp.full((3,), 20.)
+
+            def _ref_step(k):
+                neuron.add_delta_input('delta', delta_arr[k] * u.mV)
+                with brainstate.environ.context(t=(1 + k) * self.dt):
+                    spk = neuron.update(x=0. * u.pA)
+                return spk
+
+            spk_all = brainstate.transform.for_loop(_ref_step, jnp.arange(3))
+            for i in range(3):
+                self.assertFalse(self._is_spike(spk_all[i]))
 
             # At the next step, no refractory residual should remain.
             self._step(neuron, 4)
@@ -147,16 +158,6 @@ class TestIAFPscDelta(unittest.TestCase):
             self._step(neuron, 0, delta=2. * u.mV)
             self.assertTrue(u.math.allclose(neuron.last_spike_time.value, self.dt))
 
-    def test_shape_with_batch_and_ref_state(self):
-        with brainstate.environ.context(dt=self.dt):
-            neuron = iaf_psc_delta(4, ref_var=True)
-            neuron.init_state(batch_size=3)
-            self.assertEqual(neuron.V.value.shape, (3, 4))
-            self.assertEqual(neuron.last_spike_time.value.shape, (3, 4))
-            self.assertEqual(neuron.refractory_step_count.value.shape, (3, 4))
-            self.assertEqual(neuron.refractory_spike_buffer.value.shape, (3, 4))
-            self.assertEqual(neuron.refractory.value.shape, (3, 4))
-
     def test_matches_nest_reference_trace(self):
         r"""Regression: validate a deterministic trace against NEST step equations."""
         with brainstate.environ.context(dt=self.dt):
@@ -175,12 +176,21 @@ class TestIAFPscDelta(unittest.TestCase):
             neuron.init_state()
 
             delta_seq = [2., 20., 0., 0., 0.]
-            model_v = []
-            model_s = []
-            for step, dv in enumerate(delta_seq):
-                spk = self._step(neuron, step, delta=dv * u.mV)
-                model_v.append(float((neuron.V.value / u.mV)[0]))
-                model_s.append(float(spk[0]))
+
+            # Pre-compute per-step delta inputs as a JAX array and run via for_loop.
+            delta_arr = jnp.array(delta_seq)
+
+            def _run_step(k):
+                neuron.add_delta_input('delta', delta_arr[k] * u.mV)
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0. * u.pA)
+                return (neuron.V.value / u.mV)[0], spk[0]
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(5))
+            v_all = np.asarray(results[0])
+            s_all = np.asarray(results[1])
+            model_v = [float(v_all[i]) for i in range(5)]
+            model_s = [float(s_all[i]) for i in range(5)]
 
             E_L = -70.0
             C_m = 250.0

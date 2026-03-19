@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -250,7 +250,7 @@ class ginzburg_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>>
         >>> # Create population of 100 binary neurons with sigmoidal gain
@@ -349,7 +349,7 @@ class ginzburg_neuron(NESTNeuron):
         self.stochastic_update = stochastic_update
         self.rng_seed = int(rng_seed)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize neuron state variables.
 
         Creates binary output state :math:`y`, persistent input :math:`h`, PRNG key,
@@ -357,12 +357,8 @@ class ginzburg_neuron(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Number of batches for parallel simulation. If ``None``, creates unbatched
-            states with shape ``in_size``. If specified, prepends batch dimension to
-            create shape ``(batch_size, *in_size)``.
         **kwargs
-            Additional arguments (ignored, for API compatibility).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -372,9 +368,9 @@ class ginzburg_neuron(NESTNeuron):
           distribution when ``stochastic_update=True``.
         - All state arrays use ``float64`` dtype for precise random sampling.
         """
-        shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
+        shape = self.varshape
 
-        y = braintools.init.param(self.y_initializer, self.varshape, batch_size)
+        y = braintools.init.param(self.y_initializer, self.varshape)
         dftype = brainstate.environ.dftype()
         self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
 

@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -242,7 +242,7 @@ class izhikevich(NESTNeuron):
 
        >>> import brainpy.state as bp
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>>
        >>> # Create a regular spiking neuron
        >>> neuron = bp.izhikevich(1, a=0.02, b=0.2, c=-65*u.mV, d=8*u.mV)
@@ -333,7 +333,7 @@ class izhikevich(NESTNeuron):
         self.V_initializer = V_initializer
         self.U_initializer = U_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize state variables for the Izhikevich neuron.
 
         This method initializes the membrane potential :math:`V_{\text{m}}`,
@@ -345,13 +345,12 @@ class izhikevich(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension for parallel simulation of independent neuron
-            populations. If provided, all state variables will have shape
-            ``(batch_size, *varshape)``. Default: None (no batch dimension).
-        **kwargs : dict, optional
-            Additional keyword arguments (currently unused, reserved for
-            future extensions).
+        batch_size : int or None, optional
+            If provided, states are created with shape
+            ``(batch_size, *varshape)``. ``None`` keeps unbatched state.
+            Default is ``None``.
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -371,8 +370,8 @@ class izhikevich(NESTNeuron):
         self.V = brainstate.HiddenState(V)
         self.U = brainstate.HiddenState(U)
         # Buffered input current (one-step delay, matching NEST ring buffer)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-        self.I = brainstate.ShortTermState(zeros * u.pA)
+        batch_shape = ((batch_size,) + tuple(self.varshape)) if batch_size is not None else self.varshape
+        self.I = brainstate.ShortTermState(u.math.zeros(batch_shape) * u.pA)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute spike output using the surrogate gradient function.

@@ -20,11 +20,13 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
+from ._utils import is_tracer
 
 __all__ = [
     'sigmoid_rate_gg_1998_ipn',
@@ -80,7 +82,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
             Ones array with shape matching ``rate``, dtype float64.
         """
         dftype = brainstate.environ.dftype()
-        return np.ones_like(rate, dtype=dftype)
+        return jnp.ones_like(rate, dtype=dftype)
 
     @staticmethod
     def _mult_coupling_in(rate):
@@ -100,7 +102,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
             Ones array with shape matching ``rate``, dtype float64.
         """
         dftype = brainstate.environ.dftype()
-        return np.ones_like(rate, dtype=dftype)
+        return jnp.ones_like(rate, dtype=dftype)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
         r"""Parse rate event into (rate, weight, multiplicity, delay_steps).
@@ -204,7 +206,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
         dftype = brainstate.environ.dftype()
         weight_sign = self._broadcast_to_state(
-            np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0,
+            np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0,
             state_shape,
         )
 
@@ -358,8 +360,7 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
         Continuous inputs (via ``add_current_input``) are aggregated into ``mu_ext``.
         """
         state_shape = self.rate.value.shape
-        ditype = brainstate.environ.ditype()
-        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
+        step_idx = self._step_count
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events_sigmoid_gg_1998(
@@ -637,7 +638,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import brainstate as bs
        >>> pop = bst.sigmoid_rate_gg_1998_ipn(
        ...     in_size=100, tau=20*u.ms, lambda_=0.5, sigma=0.1, g=2.0
@@ -750,16 +751,19 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         ValueError
             If ``rectify_rate < 0`` (negative rectification bound).
         """
-        if np.any(self._to_numpy_ms(self.tau) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.tau, self.sigma)):
+            return
+        if np.any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self._to_numpy(self.lambda_) < 0.0):
+        if np.any(self.lambda_ < 0.0):
             raise ValueError('Passive decay rate lambda must be >= 0.')
-        if np.any(self._to_numpy(self.sigma) < 0.0):
+        if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
-        if np.any(self._to_numpy(self.rectify_rate) < 0.0):
+        if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize neuron state variables and delayed event queues.
 
         Allocates ``rate``, ``noise``, ``instant_rate``, ``delayed_rate``, internal
@@ -768,12 +772,8 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension for vectorized simulation. If ``None`` (default), no
-            batch dimension is added (shape is ``varshape``). If ``int``, creates
-            states with shape ``varshape + (batch_size,)``.
         **kwargs
-            Ignored. Kept for API compatibility with parent classes.
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -785,8 +785,8 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         - ``_step_count`` : int64 scalar starting at 0
         - ``_delayed_ex_queue``, ``_delayed_in_queue`` : empty dicts
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -795,13 +795,13 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        ditype = brainstate.environ.ditype()
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._step_count = 0
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
+    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
+               _precomputed_ex=None, _precomputed_in=None):
         r"""Advance rate neuron dynamics by one time step with stochastic integration.
 
         Implements the full update cycle: drain delayed events, schedule new delayed
@@ -881,23 +881,32 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         (``np.random.normal``). For reproducibility, seed the global RNG before
         simulation.
         """
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
 
         tau, sigma, mu, g = self._common_parameters_sigmoid_gg_1998(state_shape)
         lambda_ = self._broadcast_to_state(self._to_numpy(self.lambda_), state_shape)
         rectify_rate = self._broadcast_to_state(self._to_numpy(self.rectify_rate), state_shape)
 
-        state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = (
-            self._common_inputs_sigmoid_gg_1998(
-                x=x,
-                instant_rate_events=instant_rate_events,
-                delayed_rate_events=delayed_rate_events,
-                g=g,
-            )
-        )
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        if _precomputed_ex is not None:
+            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
+            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
+            instant_ex = jnp.zeros(state_shape, dtype=dftype)
+            instant_in = jnp.zeros(state_shape, dtype=dftype)
+            mu_ext = jnp.zeros(state_shape, dtype=dftype)
+        else:
+            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = (
+                self._common_inputs_sigmoid_gg_1998(
+                    x=x,
+                    instant_rate_events=instant_rate_events,
+                    delayed_rate_events=delayed_rate_events,
+                    g=g,
+                )
+            )
+            self._step_count = step_idx + 1
 
         if noise is None:
             xi = np.random.normal(size=state_shape)
@@ -924,8 +933,8 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones_like(rate_prev)
+        H_in = jnp.ones_like(rate_prev)
         if self.mult_coupling:
             H_ex = self._mult_coupling_ex(rate_prev)
             H_in = self._mult_coupling_in(rate_prev)
@@ -942,12 +951,10 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
             rate_new += P2 * H_in * (delayed_in + instant_in)
 
         if self.rectify_output:
-            rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
+            rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        ditype = brainstate.environ.ditype()
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

@@ -56,7 +56,7 @@ from .projection import (
 # ---------------------------------------------------------------------------
 # Readouts
 # ---------------------------------------------------------------------------
-from .readout import LeakyRateReadout, LeakySpikeReadout
+from .readout import LeakyRateReadout
 # ---------------------------------------------------------------------------
 # Short-term plasticity
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ __all__ = [
     'SymmetryGapJunction', 'AsymmetryGapJunction',
 
     # Readouts
-    'LeakyRateReadout', 'LeakySpikeReadout',
+    'LeakyRateReadout',
 
     # Input generators
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',

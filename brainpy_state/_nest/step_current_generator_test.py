@@ -30,7 +30,8 @@ import math
 import unittest
 
 import brainstate
-import brainunit as u
+import jax.numpy as jnp
+import saiunit as u
 import numpy as np
 import numpy.testing as npt
 
@@ -202,18 +203,20 @@ class TestStepCurrentGeneratorWithNeuron(unittest.TestCase):
             neuron = iaf_psc_delta(1)
             neuron.init_state()
 
-            dftype = brainstate.environ.dftype()
-            vm_bp = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     current = scg.update()
                     neuron.update(x=current)
-                    vm_bp[step] = float(neuron.V.value[0] / u.mV)
+                return neuron.V.value[0] / u.mV
+
+            vm_bp = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
         # Analytical trace
         V = E_L
         ref_count = 0
+        dftype = brainstate.environ.dftype()
         vm_ref = np.empty(n_steps, dtype=dftype)
         for step in range(n_steps):
             t = step * dt_ms
@@ -280,7 +283,16 @@ class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
         nest.Simulate(simtime)
         v_nest = np.array(vm_rec.get("events", "V_m"))
 
-        # --- brainpy.state ---
+        # NEST stimulation devices deliver current via the event queue, imposing
+        # a minimum transport latency of min_delay (default 1 ms = 10 steps at
+        # dt=0.1 ms).  All amplitude_times here are >> dt, so each change is
+        # uniformly delayed by min_delay: v_bp[k] == v_nest[k + offset].
+        # Additionally, NEST records only up to simtime - min_delay, so
+        # len(v_nest) = (simtime - min_delay) / dt.
+        min_delay_ms = nest.GetKernelStatus('min_delay')
+        offset = int(round(min_delay_ms / self.dt_ms))
+
+        # --- brainpy.state (JIT-compiled via for_loop) ---
         n_steps = int(round(simtime / self.dt_ms))
         with brainstate.environ.context(dt=self.dt):
             scg = step_current_generator(
@@ -290,16 +302,18 @@ class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
             neuron = iaf_psc_delta(1)
             neuron.init_state()
 
-            dftype = brainstate.environ.dftype()
-            v_bp = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     current = scg.update()
                     neuron.update(x=current)
-                    v_bp[step] = float(neuron.V.value[0] / u.mV)
+                return neuron.V.value[0] / u.mV
 
-        npt.assert_allclose(v_bp[1:len(v_nest) + 1], v_nest, atol=1e-10,
+            v_bp = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        n_compare = len(v_nest) - offset
+        npt.assert_allclose(v_bp[:n_compare], v_nest[offset:], atol=1e-10,
                             err_msg="Step current V_m differs from NEST")
 
 

@@ -19,7 +19,7 @@ from typing import Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTDevice
@@ -119,7 +119,7 @@ class spike_train_injector(NESTDevice):
         Default is ``1``.
     spike_times : Sequence, optional
         Sequence of spike times with length ``K``. Entries may be unitful
-        times (typically ``brainunit`` ms quantities) or bare numerics
+        times (typically ``saiunit`` ms quantities) or bare numerics
         interpreted as ms. Passed directly to :func:`u.math.asarray`, which
         validates unit consistency across all entries. Must be non-descending.
         Duplicate times are allowed and their multiplicities are accumulated.
@@ -246,7 +246,7 @@ class spike_train_injector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     inj = brainpy.state.spike_train_injector(
        ...         spike_times=[1.0 * u.ms, 2.0 * u.ms, 2.0 * u.ms],
@@ -265,7 +265,7 @@ class spike_train_injector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     inj = brainpy.state.spike_train_injector(
        ...         spike_times=[10.0 * u.ms],
@@ -304,8 +304,11 @@ class spike_train_injector(NESTDevice):
 
         # ---- Store spike times as a Quantity array ----
         # u.math.asarray validates unit consistency across all entries.
+        # Plain floats are interpreted as milliseconds.
         if len(spike_times) > 0:
             self.spike_times = u.math.asarray(spike_times)
+            if not isinstance(self.spike_times, u.Quantity):
+                self.spike_times = self.spike_times * u.ms
 
             # Validate non-descending order.
             for i in range(1, len(self.spike_times)):

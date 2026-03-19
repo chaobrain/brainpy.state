@@ -17,12 +17,13 @@
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'ignore_and_fire',
@@ -157,7 +158,7 @@ class ignore_and_fire(NESTNeuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> # Create an ignore_and_fire neuron with 10 Hz firing rate
         >>> neuron = brainpy.state.ignore_and_fire(1, rate=10.0 * u.Hz)
@@ -258,18 +259,18 @@ class ignore_and_fire(NESTNeuron):
         Notes
         -----
         Unit conversion is applied to ``rate`` via
-        :func:`brainunit.get_magnitude` before validation. ``phase`` is
+        :func:`saiunit.get_magnitude` before validation. ``phase`` is
         validated as a unitless scalar or array.
         """
-        phase = self.phase
-        rate = self.rate
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.phase, self.rate)):
+            return
 
-        # Convert to raw values for comparison
-        phase_val = np.asarray(phase)
+        phase_val = np.asarray(self.phase)
         if np.any(phase_val <= 0.0) or np.any(phase_val > 1.0):
             raise ValueError("Phase must be > 0 and <= 1.")
 
-        rate_val = np.asarray(u.get_magnitude(rate))
+        rate_val = np.asarray(u.get_magnitude(self.rate))
         if np.any(rate_val <= 0.0):
             raise ValueError("Firing rate must be > 0.")
 
@@ -335,24 +336,22 @@ class ignore_and_fire(NESTNeuron):
 
         return firing_period_steps, phase_steps
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize internal state variables for simulation.
 
         Computes and stores ``firing_period_steps`` and ``phase_steps`` as
         :class:`brainstate.ShortTermState` arrays. Both are derived from
         the ``rate`` and ``phase`` parameters via
-        :meth:`_calc_initial_variables`, then broadcast to batch shape if
-        ``batch_size`` is provided.
+        :meth:`_calc_initial_variables`.
 
         Parameters
         ----------
         batch_size : int or None, optional
-            Batch dimension size. When provided, state arrays are broadcast to
-            shape ``(batch_size, *varshape)``. When ``None``, state shape is
-            ``varshape``. Default is ``None``.
-        **kwargs : dict
-            Additional keyword arguments passed to parent
-            :meth:`brainstate.nn.Dynamics.init_state` (currently unused).
+            If provided, states are created with shape
+            ``(batch_size, *varshape)``. ``None`` keeps unbatched state.
+            Default is ``None``.
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
 
         Raises
         ------
@@ -374,19 +373,19 @@ class ignore_and_fire(NESTNeuron):
         typically via ``neuron.init_state()`` or automatically through
         higher-level APIs like ``brainstate.nn.Module.init_all_states()``.
         """
-        firing_period_steps, phase_steps = self._calc_initial_variables(batch_size)
-
-        if batch_size is not None:
-            firing_period_steps = np.broadcast_to(firing_period_steps, (batch_size,) + self.varshape)
-            phase_steps = np.broadcast_to(phase_steps, (batch_size,) + self.varshape)
+        firing_period_steps, phase_steps = self._calc_initial_variables()
 
         ditype = brainstate.environ.ditype()
-        self.firing_period_steps = brainstate.ShortTermState(
-            jnp.asarray(firing_period_steps, dtype=ditype)
-        )
-        self.phase_steps = brainstate.ShortTermState(
-            jnp.asarray(phase_steps, dtype=ditype)
-        )
+        fps_arr = jnp.asarray(firing_period_steps, dtype=ditype)
+        ps_arr = jnp.asarray(phase_steps, dtype=ditype)
+
+        if batch_size is not None:
+            batch_shape = (batch_size,) + tuple(self.varshape)
+            fps_arr = jnp.broadcast_to(fps_arr, batch_shape)
+            ps_arr = jnp.broadcast_to(ps_arr, batch_shape)
+
+        self.firing_period_steps = brainstate.ShortTermState(fps_arr)
+        self.phase_steps = brainstate.ShortTermState(ps_arr)
 
     def update(self, x=None):
         r"""Update the ignore_and_fire neuron for one simulation time step.

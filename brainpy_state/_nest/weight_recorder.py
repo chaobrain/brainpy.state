@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -148,18 +148,18 @@ class weight_recorder(NESTDevice):
         Target-node filter whitelist. Interpreted as a 1-D integer array of
         shape ``(K_t,)`` with strictly positive entries. An empty sequence
         disables target filtering entirely. Default is ``()``.
-    start : brainunit.Quantity or float, optional
+    start : saiunit.Quantity or float, optional
         Scalar relative exclusive lower bound of the recording window,
         convertible to ms. Effective gate is strict:
         ``stamp_step > (origin + start) / dt``. Must be finite and an integer
         multiple of ``dt``. Default is ``0.0 * u.ms``.
-    stop : brainunit.Quantity, float, or None, optional
+    stop : saiunit.Quantity, float, or None, optional
         Scalar relative inclusive upper bound of the recording window,
         convertible to ms. Gate is inclusive:
         ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper bound
         (:math:`s_{\max} = +\infty`). Finite values must be ``dt``-aligned and
         satisfy ``stop >= start``. Default is ``None``.
-    origin : brainunit.Quantity or float, optional
+    origin : saiunit.Quantity or float, optional
         Scalar global origin shift added to both ``start`` and ``stop`` before
         window evaluation, convertible to ms. Shifting the origin displaces
         the entire recording window without changing its duration. Must be
@@ -262,7 +262,7 @@ class weight_recorder(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ditype = brainstate.environ.ditype()
@@ -288,7 +288,7 @@ class weight_recorder(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     wr = brainpy.state.weight_recorder(time_in_steps=True)
@@ -432,6 +432,7 @@ class weight_recorder(NESTDevice):
             ditype = brainstate.environ.ditype()
             return np.asarray(self.senders, dtype=ditype)
         if key == 'targets':
+            ditype = brainstate.environ.ditype()
             return np.asarray(self.targets, dtype=ditype)
         raise KeyError(f'Unsupported key "{key}" for weight_recorder.get().')
 
@@ -695,10 +696,10 @@ class weight_recorder(NESTDevice):
         size: int = None,
         unit=None,
     ) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            dftype = brainstate.environ.dftype()
             arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
@@ -729,10 +730,10 @@ class weight_recorder(NESTDevice):
         default: int = None,
         size: int = None,
     ) -> np.ndarray:
+        ditype = brainstate.environ.ditype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            ditype = brainstate.environ.ditype()
             arr = np.asarray([default], dtype=ditype)
         else:
             arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)

@@ -21,8 +21,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -194,71 +195,73 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events)
 
     def test_nest_cpp_default_parameters_and_recordables(self):
-        neuron = aeif_cond_beta_multisynapse(1)
-        self.assertEqual(neuron.V_peak, 0.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 0.0 * u.ms)
-        self.assertEqual(neuron.g_L, 30.0 * u.nS)
-        self.assertEqual(neuron.C_m, 281.0 * u.pF)
-        self.assertEqual(neuron.E_L, -70.6 * u.mV)
-        self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
-        self.assertEqual(neuron.tau_w, 144.0 * u.ms)
-        self.assertEqual(neuron.a, 4.0 * u.nS)
-        self.assertEqual(neuron.b, 80.5 * u.pA)
-        self.assertEqual(neuron.V_th, -50.4 * u.mV)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        self.assertTrue(np.allclose(neuron.tau_rise, [2.0]))
-        self.assertTrue(np.allclose(neuron.tau_decay, [20.0]))
-        self.assertTrue(np.allclose(neuron.E_rev, [0.0]))
-        self.assertEqual(neuron.n_receptors, 1)
-        self.assertEqual(neuron.recordables, ['V_m', 'w', 'g_1'])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = aeif_cond_beta_multisynapse(1)
+            self.assertEqual(neuron.V_peak, 0.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 0.0 * u.ms)
+            self.assertEqual(neuron.g_L, 30.0 * u.nS)
+            self.assertEqual(neuron.C_m, 281.0 * u.pF)
+            self.assertEqual(neuron.E_L, -70.6 * u.mV)
+            self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
+            self.assertEqual(neuron.tau_w, 144.0 * u.ms)
+            self.assertEqual(neuron.a, 4.0 * u.nS)
+            self.assertEqual(neuron.b, 80.5 * u.pA)
+            self.assertEqual(neuron.V_th, -50.4 * u.mV)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertTrue(np.allclose(neuron.tau_rise, [2.0]))
+            self.assertTrue(np.allclose(neuron.tau_decay, [20.0]))
+            self.assertTrue(np.allclose(neuron.E_rev, [0.0]))
+            self.assertEqual(neuron.n_receptors, 1)
+            self.assertEqual(neuron.recordables, ['V_m', 'w', 'g_1'])
 
-        neuron3 = aeif_cond_beta_multisynapse(
-            1,
-            tau_rise=[0.2, 0.5, 1.0] * u.ms,
-            tau_decay=[0.8, 2.0, 4.0] * u.ms,
-            E_rev=[0.0, -85.0, 20.0] * u.mV,
-        )
-        self.assertEqual(neuron3.recordables, ['V_m', 'w', 'g_1', 'g_2', 'g_3'])
+            neuron3 = aeif_cond_beta_multisynapse(
+                1,
+                tau_rise=[0.2, 0.5, 1.0] * u.ms,
+                tau_decay=[0.8, 2.0, 4.0] * u.ms,
+                E_rev=[0.0, -85.0, 20.0] * u.mV,
+            )
+            self.assertEqual(neuron3.recordables, ['V_m', 'w', 'g_1', 'g_2', 'g_3'])
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(
-                1,
-                E_rev=[0.0, -85.0] * u.mV,
-                tau_rise=[2.0] * u.ms,
-                tau_decay=[20.0] * u.ms,
-            )
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(
-                1,
-                E_rev=[0.0] * u.mV,
-                tau_rise=[2.0] * u.ms,
-                tau_decay=[0.0] * u.ms,
-            )
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(
-                1,
-                E_rev=[0.0] * u.mV,
-                tau_rise=[2.0] * u.ms,
-                tau_decay=[1.0] * u.ms,
-            )
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, Delta_T=-1.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, tau_w=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, gsl_error_tol=0.0)
-        with self.assertRaises(ValueError):
-            aeif_cond_beta_multisynapse(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(
+                    1,
+                    E_rev=[0.0, -85.0] * u.mV,
+                    tau_rise=[2.0] * u.ms,
+                    tau_decay=[20.0] * u.ms,
+                )
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(
+                    1,
+                    E_rev=[0.0] * u.mV,
+                    tau_rise=[2.0] * u.ms,
+                    tau_decay=[0.0] * u.ms,
+                )
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(
+                    1,
+                    E_rev=[0.0] * u.mV,
+                    tau_rise=[2.0] * u.ms,
+                    tau_decay=[1.0] * u.ms,
+                )
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, Delta_T=-1.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, tau_w=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, gsl_error_tol=0.0)
+            with self.assertRaises(ValueError):
+                aeif_cond_beta_multisynapse(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
 
     def test_spike_receptor_routing_and_nonnegative_weight_constraint(self):
         with brainstate.environ.context(dt=self.dt):
@@ -332,6 +335,7 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.V.value, 0.1 * u.mV, atol=1e-11 * u.mV))
 
     def test_refractoriness_clamping_matches_nest(self):
+        dftype = brainstate.environ.dftype()
         for t_ref in (0.0, 0.1):
             with brainstate.environ.context(dt=0.1 * u.ms):
                 neuron = aeif_cond_beta_multisynapse(
@@ -345,23 +349,27 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
                 )
                 neuron.init_state()
 
-                v_trace = []
-                spikes = []
-                for k in range(120):
+                def _run_step(k):
                     with brainstate.environ.context(t=k * 0.1 * u.ms):
                         spk = neuron.update(x=0.0 * u.pA)
-                    v_trace.append(float((neuron.V.value / u.mV)[0]))
-                    spikes.append(self._is_spike(spk))
+                    return (
+                        neuron.V.value / u.mV,  # (1,)
+                        spk,                    # (1,), float64
+                    )
+
+                results = brainstate.transform.for_loop(_run_step, jnp.arange(120))
+                v_trace = np.asarray(results[0])[:, 0]      # (120,)
+                spikes = np.asarray(results[1])[:, 0] > 0   # (120,), bool
 
                 spike_idx = int(np.argmax(spikes))
-                self.assertTrue(spikes[spike_idx])
-                self.assertAlmostEqual(v_trace[spike_idx], -111.0, delta=1e-12)
+                self.assertTrue(bool(spikes[spike_idx]))
+                self.assertAlmostEqual(float(v_trace[spike_idx]), -111.0, delta=1e-12)
 
                 if t_ref == 0.0:
-                    self.assertGreater(v_trace[spike_idx + 1], -111.0)
+                    self.assertGreater(float(v_trace[spike_idx + 1]), -111.0)
                 else:
-                    self.assertAlmostEqual(v_trace[spike_idx + 1], -111.0, delta=1e-12)
-                    self.assertGreater(v_trace[spike_idx + 2], -111.0)
+                    self.assertAlmostEqual(float(v_trace[spike_idx + 1]), -111.0, delta=1e-12)
+                    self.assertGreater(float(v_trace[spike_idx + 2]), -111.0)
 
     def test_w_dynamics_during_refractoriness(self):
         with brainstate.environ.context(dt=1.0 * u.ms):
@@ -386,24 +394,28 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_trace = []
-            w_trace = []
-            spikes = []
-            for k in range(50):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * 1.0 * u.ms):
                     spk = neuron.update(x=0.0 * u.pA)
-                v_trace.append(float((neuron.V.value / u.mV)[0]))
-                w_trace.append(float((neuron.w.value / u.pA)[0]))
-                spikes.append(self._is_spike(spk))
+                return (
+                    neuron.V.value / u.mV,  # (1,)
+                    neuron.w.value / u.pA,  # (1,)
+                    spk,                    # (1,), float64
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(50))
+            v_trace = np.asarray(results[0])[:, 0]    # (50,)
+            w_trace = np.asarray(results[1])[:, 0]    # (50,)
+            spikes = np.asarray(results[2])[:, 0] > 0  # (50,), bool
 
             spike_idx = int(np.argmax(spikes))
-            self.assertTrue(spikes[spike_idx])
+            self.assertTrue(bool(spikes[spike_idx]))
             self.assertLess(20.0, t_ref)
 
-            w0 = w_trace[spike_idx]
-            w1 = w_trace[spike_idx + 20]
-            v0 = v_trace[spike_idx]
-            v1 = v_trace[spike_idx + 20]
+            w0 = float(w_trace[spike_idx])
+            w1 = float(w_trace[spike_idx + 20])
+            v0 = float(v_trace[spike_idx])
+            v1 = float(v_trace[spike_idx + 20])
             self.assertAlmostEqual(v0, V_reset, delta=1e-12)
             self.assertAlmostEqual(v1, V_reset, delta=1e-12)
 
@@ -444,6 +456,7 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
             neuron.g.value = np.asarray([[0.10, 0.20, 0.30, 0.00]], dtype=dftype) * u.nS
 
             n_steps = 80
+            n_receptors = neuron.n_receptors  # 4
             x_seq = np.zeros(n_steps, dtype=dftype)
             x_seq[[1, 5, 9, 16, 30, 45]] = np.asarray([25.0, -30.0, 40.0, -10.0, 50.0, -20.0], dtype=dftype)
 
@@ -457,6 +470,44 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
                 50: [(1, 0.5 * u.nS)],
             }
 
+            # Pre-compute per-step dg increments (g0 * w_by_receptor) as a JAX array.
+            # Shape: (n_steps, n_receptors), unitless (mantissa in nS/ms).
+            g0_arr = neuron._g0  # shape (n_receptors,)
+            dg_increments_seq = np.zeros((n_steps, n_receptors), dtype=dftype)
+            for k_py in range(n_steps):
+                ev = step_events.get(k_py, None)
+                w_by_rec_k = _parse_event_weights(ev, n_receptors)
+                dg_increments_seq[k_py] = g0_arr * w_by_rec_k
+            dg_increments_jnp = jnp.asarray(dg_increments_seq)
+            x_seq_jnp = jnp.asarray(x_seq)
+
+            # Run model simulation via for_loop (JIT-compiled).
+            def _model_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_seq_jnp[k] * u.pA, spike_events=None)
+                # Apply pre-computed spike event dg increment after ODE integration.
+                neuron.dg.value = neuron.dg.value + dg_increments_jnp[k]
+                return (
+                    neuron.V.value / u.mV,                 # (1,)
+                    neuron.w.value / u.pA,                  # (1,)
+                    neuron.dg.value,                        # (1, n_receptors), unitless mantissa
+                    neuron.g.value / u.nS,                  # (1, n_receptors)
+                    neuron.refractory_step_count.value,     # (1,), int
+                    neuron.integration_step.value / u.ms,   # (1,)
+                    spk,                                    # (1,), float64
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
+
+            model_V = np.asarray(results[0])[:, 0]         # (n_steps,)
+            model_w = np.asarray(results[1])[:, 0]         # (n_steps,)
+            model_dg = np.asarray(results[2])[:, 0, :]     # (n_steps, n_receptors)
+            model_g = np.asarray(results[3])[:, 0, :]      # (n_steps, n_receptors)
+            model_r = np.asarray(results[4])[:, 0].astype(int)  # (n_steps,)
+            model_h = np.asarray(results[5])[:, 0]         # (n_steps,)
+            model_spk = np.asarray(results[6])[:, 0] > 0  # (n_steps,), bool
+
+            # Run reference simulation (Python-level adaptive RK45).
             p = {
                 'V_peak_rhs': 0.0,
                 'V_peak_detect': 0.0,
@@ -484,36 +535,35 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
                 'i_stim': 0.0,
             }
 
-            spikes_model = []
-            spikes_ref = []
-            for k in range(n_steps):
-                ev = step_events.get(k, None)
-                spk = self._step(neuron, k, x=x_seq[k] * u.pA, spike_events=ev)
-                spikes_model.append(self._is_spike(spk))
+            ref_V_arr = np.empty(n_steps, dtype=dftype)
+            ref_w_arr = np.empty(n_steps, dtype=dftype)
+            ref_dg_arr = np.empty((n_steps, n_receptors), dtype=dftype)
+            ref_g_arr = np.empty((n_steps, n_receptors), dtype=dftype)
+            ref_r_arr = np.empty(n_steps, dtype=int)
+            ref_h_arr = np.empty(n_steps, dtype=dftype)
+            ref_spk_arr = np.empty(n_steps, dtype=bool)
 
-                w_step = _parse_event_weights(ev, neuron.n_receptors)
-                n_spk_ref = _reference_step(ref_state, p, x_seq[k], w_step, 0.1)
-                spikes_ref.append(n_spk_ref > 0)
+            for k_py in range(n_steps):
+                ev = step_events.get(k_py, None)
+                w_step = _parse_event_weights(ev, n_receptors)
+                n_spk_ref = _reference_step(ref_state, p, x_seq[k_py], w_step, 0.1)
+                ref_V_arr[k_py] = ref_state['y'][0]
+                ref_w_arr[k_py] = ref_state['y'][1]
+                ref_dg_arr[k_py] = ref_state['y'][2::2]
+                ref_g_arr[k_py] = ref_state['y'][3::2]
+                ref_r_arr[k_py] = ref_state['r']
+                ref_h_arr[k_py] = ref_state['h']
+                ref_spk_arr[k_py] = n_spk_ref > 0
 
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), ref_state['y'][0], delta=3e-6)
-                self.assertAlmostEqual(float((neuron.w.value / u.pA)[0]), ref_state['y'][1], delta=3e-6)
-                npt.assert_allclose(
-                    np.asarray(neuron.dg.value, dtype=dftype)[0],
-                    ref_state['y'][2::2],
-                    atol=3e-6,
-                    rtol=0.0,
-                )
-                npt.assert_allclose(
-                    np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=dftype)[0],
-                    ref_state['y'][3::2],
-                    atol=3e-6,
-                    rtol=0.0,
-                )
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), ref_state['r'])
-                self.assertAlmostEqual(float((neuron.integration_step.value / u.ms)[0]), ref_state['h'], delta=3e-6)
-
-            self.assertEqual(spikes_model, spikes_ref)
-            self.assertTrue(any(spikes_model))
+            # Bulk comparison.
+            npt.assert_allclose(model_V, ref_V_arr, atol=3e-6, rtol=0.0, err_msg='V mismatch')
+            npt.assert_allclose(model_w, ref_w_arr, atol=3e-6, rtol=0.0, err_msg='w mismatch')
+            npt.assert_allclose(model_dg, ref_dg_arr, atol=3e-6, rtol=0.0, err_msg='dg mismatch')
+            npt.assert_allclose(model_g, ref_g_arr, atol=3e-6, rtol=0.0, err_msg='g mismatch')
+            npt.assert_array_equal(model_r, ref_r_arr)
+            npt.assert_allclose(model_h, ref_h_arr, atol=3e-6, rtol=0.0, err_msg='h mismatch')
+            npt.assert_array_equal(model_spk, ref_spk_arr)
+            self.assertTrue(np.any(model_spk))
 
     def test_direct_trace_matches_nest_if_available(self):
         if not self._is_nest_available():
@@ -607,16 +657,31 @@ class TestAEIFCondBetaMultisynapse(unittest.TestCase):
             )
             neuron.init_state()
 
-            bp_v = np.empty(n_steps, dtype=dftype)
-            bp_w = np.empty(n_steps, dtype=dftype)
-            bp_g = np.empty((n_steps, 3), dtype=dftype)
+            # Pre-compute per-step dg increments as a JAX array.
+            n_rec = neuron.n_receptors  # 3
+            g0_arr = neuron._g0  # shape (3,)
+            dg_increments_seq = np.zeros((n_steps, n_rec), dtype=dftype)
+            for k_py in range(n_steps):
+                ev = step_events.get(k_py, None)
+                w_by_rec_k = _parse_event_weights(ev, n_rec)
+                dg_increments_seq[k_py] = g0_arr * w_by_rec_k
+            dg_increments_jnp = jnp.asarray(dg_increments_seq)
 
-            for k in range(n_steps):
+            # Run model simulation via for_loop (JIT-compiled).
+            def _model_step(k):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):
-                    neuron.update(x=0.0 * u.pA, spike_events=step_events.get(k, None))
-                bp_v[k] = float((neuron.V.value / u.mV)[0])
-                bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_g[k, :] = np.asarray(u.math.asarray(neuron.g.value / u.nS), dtype=dftype)[0]
+                    neuron.update(x=0.0 * u.pA, spike_events=None)
+                neuron.dg.value = neuron.dg.value + dg_increments_jnp[k]
+                return (
+                    neuron.V.value / u.mV,   # (1,)
+                    neuron.w.value / u.pA,   # (1,)
+                    neuron.g.value / u.nS,   # (1, 3)
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
+            bp_v = np.asarray(results[0])[:, 0]       # (300,)
+            bp_w = np.asarray(results[1])[:, 0]       # (300,)
+            bp_g = np.asarray(results[2])[:, 0, :]    # (300, 3)
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         self.assertTrue(np.all(bp_indices >= 0))

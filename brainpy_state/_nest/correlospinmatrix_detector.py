@@ -20,7 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -169,7 +169,7 @@ class correlospinmatrix_detector(NESTDevice):
         ``in_size`` does not change ``count_covariance`` shape.
         Default is ``1``.
     delta_tau : quantity (ms) or float or None, optional
-        Lag-bin width :math:`\Delta_\tau`. Unitful ``brainunit`` quantities are
+        Lag-bin width :math:`\Delta_\tau`. Unitful ``saiunit`` quantities are
         accepted and converted to ms; bare floats are interpreted as ms.
         Must be finite, strictly positive, and an integer multiple of
         simulation ``dt``. ``None`` auto-selects ``dt``.
@@ -286,7 +286,7 @@ class correlospinmatrix_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlospinmatrix_detector(
@@ -311,7 +311,7 @@ class correlospinmatrix_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlospinmatrix_detector()
        ...     with brainstate.environ.context(t=0.0 * u.ms):
@@ -352,6 +352,7 @@ class correlospinmatrix_detector(NESTDevice):
         self.origin = origin
 
         self._calib: _Calibration | None = None
+        self._calib_param_ids: tuple | None = None
         self._incoming: deque[_BinaryPulse] = deque()
 
         self._last_i = 0
@@ -673,13 +674,41 @@ class correlospinmatrix_detector(NESTDevice):
         self._ensure_calibrated(dt)
 
     def _ensure_calibrated(self, dt) -> _Calibration:
+        # Fast path: skip full recomputation when dt and all params are unchanged.
+        # _compute_calibration is expensive (many JAX ops); avoid calling it every step.
+        if self._calib is not None and self._calib_param_ids is not None:
+            dt_ms = self._fast_dt_ms(dt)
+            if dt_ms == self._calib.dt_ms and self._param_ids() == self._calib_param_ids:
+                return self._calib
+
         new_calib = self._compute_calibration(dt)
 
         if self._calib is None or self._calib.signature != new_calib.signature:
             self._calib = new_calib
             self._reset_state()
 
+        self._calib_param_ids = self._param_ids()
         return self._calib
+
+    def _param_ids(self) -> tuple:
+        """Lightweight snapshot for detecting parameter changes via object identity."""
+        return (
+            id(self.delta_tau),
+            id(self.tau_max),
+            id(self.Tstart),
+            id(self.Tstop),
+            self.N_channels,
+            id(self.start),
+            id(self.stop),
+            id(self.origin),
+        )
+
+    @staticmethod
+    def _fast_dt_ms(dt) -> float:
+        """Extract dt in ms cheaply, avoiding full JAX/numpy pipeline."""
+        if isinstance(dt, u.Quantity):
+            return float(u.get_mantissa(dt / u.ms))
+        return float(dt)
 
     def _reset_state(self):
         self._incoming = deque()
@@ -687,9 +716,10 @@ class correlospinmatrix_detector(NESTDevice):
         self._t_last_in_spike = -2 ** 62
         self._tentative_down = False
 
+        ditype = brainstate.environ.ditype()
+
         if self._calib is None:
             self._curr_state = np.zeros((0,), dtype=np.bool_)
-            ditype = brainstate.environ.ditype()
             self._last_change = np.zeros((0,), dtype=ditype)
             self._count_covariance = np.zeros((0, 0, 0), dtype=ditype)
             return
@@ -852,10 +882,10 @@ class correlospinmatrix_detector(NESTDevice):
         default: float = None,
         size: int = None,
     ) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            dftype = brainstate.environ.dftype()
             arr = np.asarray([default], dtype=dftype)
         else:
             if isinstance(x, u.Quantity):
@@ -884,10 +914,10 @@ class correlospinmatrix_detector(NESTDevice):
         default: int = None,
         size: int = None,
     ) -> np.ndarray:
+        ditype = brainstate.environ.ditype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            ditype = brainstate.environ.ditype()
             arr = np.asarray([default], dtype=ditype)
         else:
             arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)

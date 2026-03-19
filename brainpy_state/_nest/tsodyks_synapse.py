@@ -18,8 +18,8 @@
 
 import math
 
-import brainunit as u
-import jax.numpy as jnp
+import brainstate
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -198,23 +198,23 @@ class tsodyks_synapse(static_synapse):
     delay : ArrayLike, optional
         Synaptic transmission delay :math:`d` in milliseconds. Must be ``> 0``.
         Quantized to integer time steps per :class:`static_synapse` conventions.
-        Scalar with ``brainunit`` time dimension or dimensionless value interpreted
+        Scalar with ``saiunit`` time dimension or dimensionless value interpreted
         as milliseconds. Default: ``1.0 * u.ms``.
     receptor_type : int, optional
         Postsynaptic receptor port identifier (non-negative integer). Routes events
         to labeled input channels on the receiver neuron. Default: ``0``.
     tau_psc : ArrayLike, optional
         Time constant of synaptic current decay :math:`\tau_{\mathrm{psc}}` in milliseconds.
-        Must be ``> 0``. Scalar with ``brainunit`` time dimension or dimensionless
+        Must be ``> 0``. Scalar with ``saiunit`` time dimension or dimensionless
         value interpreted as milliseconds. Default: ``3.0 * u.ms``.
     tau_fac : ArrayLike, optional
         Facilitation time constant :math:`\tau_{\mathrm{fac}}` in milliseconds.
         Must be ``>= 0``. Set to ``0.0 * u.ms`` to disable facilitation.
-        Scalar with ``brainunit`` time dimension or dimensionless value interpreted
+        Scalar with ``saiunit`` time dimension or dimensionless value interpreted
         as milliseconds. Default: ``0.0 * u.ms``.
     tau_rec : ArrayLike, optional
         Recovery (depression) time constant :math:`\tau_{\mathrm{rec}}` in milliseconds.
-        Must be ``> 0``. Scalar with ``brainunit`` time dimension or dimensionless
+        Must be ``> 0``. Scalar with ``saiunit`` time dimension or dimensionless
         value interpreted as milliseconds. Default: ``800.0 * u.ms``.
     U : ArrayLike, optional
         Baseline utilization increment parameter :math:`U` (dimensionless).
@@ -304,7 +304,7 @@ class tsodyks_synapse(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bp
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bp.nest.tsodyks_synapse(
        ...     weight=1.0,
        ...     delay=1.5 * u.ms,

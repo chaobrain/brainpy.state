@@ -17,7 +17,7 @@ from typing import Union, Optional, Sequence, Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -110,9 +110,7 @@ class SpikeTime(brainstate.nn.Dynamics):
         if len(indices) != len(times):
             raise ValueError(f'The length of "indices" and "times" must be the same. '
                              f'However, we got {len(indices)} != {len(times)}.')
-        if callable(time_as_step):
-            self.time_as_step = time_as_step
-        else:
+        if not callable(time_as_step):
             if time_as_step not in ('floor', 'round', 'ceil'):
                 raise ValueError(f'"time_as_step" must be one of "floor", "round", "ceil". '
                                  f'Got {time_as_step!r}.')
@@ -267,7 +265,7 @@ class PoissonSpike(brainstate.nn.Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create 100 Poisson neurons firing at 50 Hz
         >>> poisson = brainpy.state.PoissonSpike(100, freqs=50.*u.Hz)
         >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -352,7 +350,7 @@ class PoissonEncoder(brainstate.nn.Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create a Poisson encoder for 10 neurons
@@ -435,7 +433,7 @@ class PoissonInput(brainstate.nn.Module):
         The number of independent Poisson input sources.
     freq : Union[int, float]
         The firing frequency of each input source in Hz.
-    weight :  ndarray, float, or brainunit.Quantity
+    weight :  ndarray, float, or saiunit.Quantity
         The synaptic weight of each input spike.
     name : Optional[str], optional
         The name of this brainstate.nn.Module.
@@ -462,7 +460,7 @@ class PoissonInput(brainstate.nn.Module):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create a neuron group with membrane potential
@@ -608,7 +606,7 @@ def poisson_input(
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import numpy as np
         >>>
         >>> # Create a membrane potential state
@@ -653,13 +651,14 @@ def poisson_input(
     b = num_input * (1 - p)
     tar_val = target.value
     cond = u.math.logical_and(a > 5, b > 5)
+    std = u.math.sqrt(b * p)  # std = sqrt(n * p * (1-p))
 
     if indices is None:
         # generate Poisson input
         branch1 = jax.tree.map(
             lambda tar: brainstate.random.normal(
                 a,
-                b * p,
+                std,
                 tar.shape,
                 dtype=tar.dtype
             ),
@@ -698,7 +697,7 @@ def poisson_input(
         branch1 = jax.tree.map(
             lambda tar: brainstate.random.normal(
                 a,
-                b * p,
+                std,
                 tar[indices].shape,
                 dtype=tar.dtype
             ),

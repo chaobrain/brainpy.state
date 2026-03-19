@@ -19,7 +19,8 @@
 import math
 from collections.abc import Mapping
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -233,11 +234,11 @@ class stdp_pl_synapse_hom(static_synapse):
         Default: ``0``.
     tau_plus : ArrayLike, optional
         Potentiation time constant :math:`\tau_+` in milliseconds. Must be ``> 0``.
-        Scalar float or brainunit ``Quantity``. **Common property** (not per-connection).
+        Scalar float or saiunit ``Quantity``. **Common property** (not per-connection).
         Default: ``20.0 * u.ms``.
     tau_minus : ArrayLike, optional
         Depression trace time constant :math:`\tau_-` in milliseconds. Must be ``> 0``.
-        Scalar float or brainunit ``Quantity``.
+        Scalar float or saiunit ``Quantity``.
         In NEST, this parameter belongs to the postsynaptic ``ArchivingNode``; here
         it is stored on the synapse for standalone compatibility.
         Default: ``20.0 * u.ms``.
@@ -318,7 +319,7 @@ class stdp_pl_synapse_hom(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bps
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>>
        >>> # Create synapse with power-law STDP
        >>> syn = bps.stdp_pl_synapse_hom(
@@ -407,9 +408,9 @@ class stdp_pl_synapse_hom(static_synapse):
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             unit = u.get_unit(value)
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(unit), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -518,7 +519,7 @@ class stdp_pl_synapse_hom(static_synapse):
             Number of spikes to record (non-negative integer count).
             If ``< 1.0``, no spikes are recorded. Default: ``1.0``.
         t_spike_ms : ArrayLike or None, optional
-            Spike time stamp in milliseconds (scalar float or brainunit ``Quantity``).
+            Spike time stamp in milliseconds (scalar float or saiunit ``Quantity``).
             If ``None``, uses the current simulation time plus one time step:
             :math:`t_{\mathrm{spike}} = t_{\mathrm{current}} + dt`.
             Default: ``None``.
@@ -559,7 +560,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(tau_minus=20*u.ms)
            >>> syn.init_state()
@@ -579,7 +580,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> import brainstate as bst
            >>>
            >>> syn = bps.stdp_pl_synapse_hom()
@@ -681,7 +682,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         Notes
         -----
-        - All brainunit ``Quantity`` values are converted to Python floats (SI units)
+        - All saiunit ``Quantity`` values are converted to Python floats (SI units)
         - Internal state (``t_lastspike``, postsynaptic history) is **not** included
         - The returned dictionary can be used with ``set(**params)`` for state restoration
         - Key names match NEST conventions (``'lambda'`` instead of ``'lambda_'``)
@@ -696,7 +697,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(
            ...     weight=1.5,
@@ -879,7 +880,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(weight=1.0, lambda_=0.1)
            >>> syn.init_state()
@@ -895,7 +896,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom()
            >>> syn.set(tau_plus=15*u.ms, tau_minus=25*u.ms)
@@ -1031,7 +1032,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(weight=1.0, lambda_=0.1, mu=0.4)
            >>> syn.init_state()
@@ -1181,7 +1182,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> import brainstate as bst
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(
@@ -1208,7 +1209,7 @@ class stdp_pl_synapse_hom(static_synapse):
         .. code-block:: python
 
            >>> import brainpy.state as bps
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom()
            >>> syn.init_state()

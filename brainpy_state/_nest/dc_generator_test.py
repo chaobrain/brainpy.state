@@ -30,7 +30,8 @@ import math
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -45,7 +46,7 @@ from brainpy.state import dc_generator, iaf_psc_delta
 
 def _run_bp_simulation(dt_ms, simtime_ms, amplitude_pA, start_ms=0.0,
                        stop_ms=None, origin_ms=0.0, neuron_params=None):
-    r"""Run a simulation and return the V_m trace (one value per step).
+    r"""Run a JIT-compiled simulation and return the V_m trace (one value per step).
 
     Parameters
     ----------
@@ -85,14 +86,16 @@ def _run_bp_simulation(dt_ms, simtime_ms, amplitude_pA, start_ms=0.0,
         neuron = iaf_psc_delta(1, **neuron_params)
         neuron.init_state()
 
-        dftype = brainstate.environ.dftype()
-        vm = np.empty(n_steps, dtype=dftype)
-        for step in range(n_steps):
-            t = step * dt
-            with brainstate.environ.context(t=t):
+        t_array = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+        def step_fn(t_ms):
+            with brainstate.environ.context(t=t_ms * u.ms):
                 current = dc.update()
                 neuron.update(x=current)
-                vm[step] = float(neuron.V.value[0] / u.mV)
+            return neuron.V.value[0] / u.mV
+
+        vm = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
     return vm
 
 
@@ -325,17 +328,20 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
             amplitude_pA=amplitude,
         )
 
-        # Run with I_e
+        # Run with I_e (JIT-compiled via for_loop)
         n_steps = int(round(simtime / self.dt_ms))
         with brainstate.environ.context(dt=self.dt):
             neuron = iaf_psc_delta(1, I_e=amplitude * u.pA)
             neuron.init_state()
-            dftype = brainstate.environ.dftype()
-            vm_ie = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                with brainstate.environ.context(t=step * self.dt):
+
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     neuron.update()
-                    vm_ie[step] = float(neuron.V.value[0] / u.mV)
+                return neuron.V.value[0] / u.mV
+
+            vm_ie = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
         # Traces should be identical (same numerical computation)
         npt.assert_allclose(vm_dc, vm_ie, atol=1e-12,
@@ -358,12 +364,15 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             neuron = iaf_psc_delta(1, I_e=amplitude * u.pA)
             neuron.init_state()
-            dftype = brainstate.environ.dftype()
-            vm_ie = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                with brainstate.environ.context(t=step * self.dt):
+
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     neuron.update()
-                    vm_ie[step] = float(neuron.V.value[0] / u.mV)
+                return neuron.V.value[0] / u.mV
+
+            vm_ie = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
         npt.assert_allclose(vm_dc, vm_ie, atol=1e-12,
                             err_msg="dc_generator trace differs from I_e trace (spiking)")
@@ -502,17 +511,19 @@ class TestDCGeneratorWithNeuron(unittest.TestCase):
             neuron = iaf_psc_delta(1)
             neuron.init_state()
 
-            dftype = brainstate.environ.dftype()
-            vm = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                t = step * self.dt
-                with brainstate.environ.context(t=t):
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     I = dc1.update() + dc2.update()
                     neuron.update(x=I)
-                    vm[step] = float(neuron.V.value[0] / u.mV)
+                return neuron.V.value[0] / u.mV
+
+            vm = np.array(brainstate.transform.for_loop(step_fn, t_array))
 
         # Build analytical reference with piecewise current:
         #   [0,25): 200 pA, [25,50): 300 pA, [50,75): 100 pA, [75,100): 0 pA
+        dftype = brainstate.environ.dftype()
         P33 = math.exp(-self.dt_ms / self.tau_m)
         P30 = (self.tau_m / self.C_m) * (1.0 - P33)
         V = self.E_L
@@ -548,6 +559,12 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
     r"""Compare dc_generator + iaf_psc_delta against NEST.
 
     These tests are skipped when NEST is not installed.
+
+    Note on trace lengths: NEST's multimeter records state up to
+    ``simtime - min_delay`` (default ``min_delay = 1 ms``), so NEST
+    returns fewer samples than brainpy.state.  We compare
+    ``bp_vm[:len(nest_vm)]`` against ``nest_vm``; both index the same
+    physical times starting at ``dt``.
     """
 
     def setUp(self):
@@ -592,8 +609,37 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
         events = mm.get("events")
         return np.array(events["V_m"])
 
+    def _nest_trace_offset(self, start_ms=0.0):
+        r"""Steps by which the NEST trace lags behind the brainpy trace.
+
+        NEST stimulation devices deliver current via the event queue, which
+        imposes a minimum transport latency of ``min_delay`` (default 1 ms).
+        Additionally, NEST does not process device events at t=0 ms (the
+        initialisation instant); the first DC emission in NEST therefore
+        happens at ``max(start_ms, dt_ms)``.  brainpy has no such
+        restriction and applies DC from ``t = start_ms`` immediately.
+
+        The effective offset (in time steps) is::
+
+            offset = round((max(start_ms, dt_ms) + min_delay_ms - start_ms)
+                           / dt_ms)
+
+        which reduces to ``min_delay / dt + 1`` when ``start_ms < dt_ms``
+        and to ``min_delay / dt`` otherwise.
+        """
+        import nest
+        min_delay_ms = nest.GetKernelStatus('min_delay')
+        effective_start_ms = max(start_ms, self.dt_ms)
+        return int(round((effective_start_ms + min_delay_ms - start_ms) / self.dt_ms))
+
     def test_subthreshold_vs_nest(self):
-        r"""Subthreshold DC: compare V_m trace against NEST."""
+        r"""Subthreshold DC: compare V_m trace against NEST.
+
+        NEST stimulation devices have a min_delay (default 1 ms) before DC
+        reaches the neuron.  brainpy applies the current without delay, so
+        bp_vm[k] == nest_vm[k + min_delay_steps]: both represent the
+        voltage after the same number of DC steps have been applied.
+        """
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -608,10 +654,10 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
             amplitude_pA=amplitude,
         )
 
-        # Both should have the same number of steps
-        self.assertEqual(len(bp_vm), len(nest_vm),
-                         "Trace lengths differ between brainpy.state and NEST")
-        npt.assert_allclose(bp_vm, nest_vm, atol=1e-10,
+        offset = self._nest_trace_offset(start_ms=0.0)
+        n_compare = len(nest_vm) - offset
+        self.assertGreaterEqual(len(bp_vm), n_compare)
+        npt.assert_allclose(bp_vm[:n_compare], nest_vm[offset:], atol=1e-10,
                             err_msg="Subthreshold V_m differs from NEST")
 
     def test_suprathreshold_vs_nest(self):
@@ -630,8 +676,10 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
             amplitude_pA=amplitude,
         )
 
-        self.assertEqual(len(bp_vm), len(nest_vm))
-        npt.assert_allclose(bp_vm, nest_vm, atol=1e-10,
+        offset = self._nest_trace_offset(start_ms=0.0)
+        n_compare = len(nest_vm) - offset
+        self.assertGreaterEqual(len(bp_vm), n_compare)
+        npt.assert_allclose(bp_vm[:n_compare], nest_vm[offset:], atol=1e-10,
                             err_msg="Suprathreshold V_m differs from NEST")
 
     def test_start_stop_vs_nest(self):
@@ -653,8 +701,10 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
             amplitude_pA=amplitude, start_ms=start, stop_ms=stop,
         )
 
-        self.assertEqual(len(bp_vm), len(nest_vm))
-        npt.assert_allclose(bp_vm, nest_vm, atol=1e-10,
+        offset = self._nest_trace_offset(start_ms=start)
+        n_compare = len(nest_vm) - offset
+        self.assertGreaterEqual(len(bp_vm), n_compare)
+        npt.assert_allclose(bp_vm[:n_compare], nest_vm[offset:], atol=1e-10,
                             err_msg="V_m with start/stop differs from NEST")
 
     def test_dc_vs_I_e_matches_nest_test(self):
@@ -698,21 +748,34 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
             dc = dc_generator(amplitude=amp * u.pA, start=99.0 * u.ms)
             neuron1 = iaf_psc_delta(1)
             neuron1.init_state()
-            for step in range(n_steps_1):
-                with brainstate.environ.context(t=step * self.dt):
+
+            t_array_1 = jnp.arange(n_steps_1, dtype=jnp.float64) * self.dt_ms
+
+            def phase1_step(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     neuron1.update(x=dc.update())
+                return neuron1.V.value[0] / u.mV
+
+            brainstate.transform.for_loop(phase1_step, t_array_1)
 
         # Phase 2: continue neuron1 with dc, create neuron2 with I_e
         n_steps_2 = int(round(300.0 / self.dt_ms))
         with brainstate.environ.context(dt=self.dt):
             neuron2 = iaf_psc_delta(1, I_e=amp * u.pA)
             neuron2.init_state()
-            for step in range(n_steps_2):
-                t_abs = (n_steps_1 + step) * self.dt
-                with brainstate.environ.context(t=t_abs):
+
+            step_array = jnp.arange(n_steps_2, dtype=jnp.float64)
+
+            def phase2_step(step):
+                t_abs_ms = (n_steps_1 + step) * self.dt_ms
+                t_rel_ms = step * self.dt_ms
+                with brainstate.environ.context(t=t_abs_ms * u.ms):
                     neuron1.update(x=dc.update())
-                with brainstate.environ.context(t=step * self.dt):
+                with brainstate.environ.context(t=t_rel_ms * u.ms):
                     neuron2.update()
+                return neuron1.V.value[0] / u.mV
+
+            brainstate.transform.for_loop(phase2_step, step_array)
 
         v1_bp = float(neuron1.V.value[0] / u.mV)
         v2_bp = float(neuron2.V.value[0] / u.mV)
@@ -740,8 +803,10 @@ class TestDCGeneratorVsNEST(unittest.TestCase):
             amplitude_pA=amplitude,
         )
 
-        self.assertEqual(len(bp_vm), len(nest_vm))
-        npt.assert_allclose(bp_vm, nest_vm, atol=1e-10,
+        offset = self._nest_trace_offset(start_ms=0.0)
+        n_compare = len(nest_vm) - offset
+        self.assertGreaterEqual(len(bp_vm), n_compare)
+        npt.assert_allclose(bp_vm[:n_compare], nest_vm[offset:], atol=1e-10,
                             err_msg="Negative-current V_m differs from NEST")
 
 

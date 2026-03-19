@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -170,7 +170,7 @@ class sinusoidal_gamma_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar mean firing rate in spikes/s (Hz), shape ``()`` after
         conversion. Accepted as a scalar ``ArrayLike`` or a
-        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        :class:`saiunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``0 <= amplitude <= rate``.
         Default is ``0.0 * u.Hz``.
     amplitude : ArrayLike, optional
@@ -312,7 +312,7 @@ class sinusoidal_gamma_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.sinusoidal_gamma_generator(
        ...         in_size=(2, 3),
@@ -335,7 +335,7 @@ class sinusoidal_gamma_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.sinusoidal_gamma_generator(
        ...         individual_spike_trains=False
@@ -418,22 +418,22 @@ class sinusoidal_gamma_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Rate parameters must be scalar.')
         return float(arr.reshape(()))
@@ -841,6 +841,37 @@ class sinusoidal_gamma_generator(NESTDevice):
         hazard[valid] = hazard_valid
         return hazard
 
+    @staticmethod
+    def _delta_lambda_jax(params: tuple, t_a, t_b):
+        """JAX-traceable version of _delta_lambda; works under jax.jit / for_loop."""
+        om, phi, order, rate, amplitude = params
+        delta = order * rate * (t_b - t_a)
+        if abs(amplitude) > 0.0 and abs(om) > 0.0:
+            delta = delta - order * amplitude / om * (
+                jnp.cos(om * t_b + phi) - jnp.cos(om * t_a + phi)
+            )
+        return delta
+
+    def _compute_hazard_jax(self, lambda_val, rate_per_ms, dt_ms: float):
+        """JAX-traceable version of _compute_hazard; works under jax.jit / for_loop."""
+        dftype = brainstate.environ.dftype()
+        lam = jnp.asarray(lambda_val, dtype=dftype)
+        # Clamp tiny negatives (floating-point roundoff); large negatives stay negative.
+        lam_clamped = jnp.where((lam < 0.0) & (lam > -1e-15), jnp.zeros_like(lam), lam)
+        lam_safe = jnp.maximum(lam_clamped, 0.0)
+        q = jax.lax.igammac(jnp.asarray(self.order, dtype=dftype), lam_safe)
+        denom = math.gamma(self.order) * q
+        numer = (
+            dt_ms
+            * self.order
+            * rate_per_ms
+            * jnp.power(lam_safe, self.order - 1.0)
+            * jnp.exp(-lam_safe)
+        )
+        hazard = jnp.where(denom > 0.0, numer / denom, jnp.zeros_like(numer))
+        # Zero out hazard for large-negative lambda (not just rounding noise).
+        return jnp.where(lam_clamped >= 0.0, hazard, jnp.zeros_like(hazard))
+
     def update(self):
         r"""Advance one simulation step and emit binary spike events.
 
@@ -875,59 +906,64 @@ class sinusoidal_gamma_generator(NESTDevice):
             self.init_state()
 
         dt_ms = self._dt_ms()
-        curr_t_ms = self._current_time_ms()
         if (not np.isfinite(self._dt_cache_ms)) or (
             not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)
         ):
             self._refresh_timing_cache(dt_ms)
 
-        curr_step = self._time_to_step(curr_t_ms, dt_ms)
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+
+        # Get current time as a JAX-compatible scalar so this method works under
+        # jax.jit / brainstate.transform.for_loop tracing.
+        t = brainstate.environ.get('t', default=0. * u.ms)
+        if isinstance(t, u.Quantity):
+            t_ms = t.to_decimal(u.ms)
+        else:
+            t_ms = jnp.asarray(t, dtype=dftype)
+        curr_step = jnp.rint(t_ms / dt_ms).astype(jnp.int64)
         t_eval_ms = (curr_step + 1) * dt_ms
 
-        rate_per_ms = self._rate_per_ms + self._amplitude_per_ms * math.sin(
-            self._om_rad_per_ms * t_eval_ms + self._phi_rad
+        # Instantaneous rate at t_eval (jnp.sin handles traced t_eval_ms).
+        sin_val = jnp.sin(
+            jnp.asarray(self._om_rad_per_ms * t_eval_ms + self._phi_rad, dtype=dftype)
         )
-        dftype = brainstate.environ.dftype()
-        self._recorded_rate_hz.value = jnp.asarray(
-            rate_per_ms * 1000.0,
-            dtype=dftype,
-        )
+        rate_per_ms = self._rate_per_ms + self._amplitude_per_ms * sin_val
 
-        if (
-            self._num_trains == 0
-            or rate_per_ms <= 0.0
-            or (not self._is_active(curr_step))
-        ):
-            ditype = brainstate.environ.ditype()
+        # Cache the step-end rate (always updated, even during inactivity).
+        self._recorded_rate_hz.value = jnp.asarray(rate_per_ms * 1000.0, dtype=dftype)
+
+        # Static early exits that don't depend on traced values.
+        if self._num_trains == 0:
+            return jnp.zeros(self.varshape, dtype=ditype)
+        if self._rate_per_ms == 0.0 and self._amplitude_per_ms == 0.0:
             return jnp.zeros(self.varshape, dtype=ditype)
 
-        t0 = np.asarray(self.t0_ms.value, dtype=dftype).reshape(-1).copy()
-        lam0 = np.asarray(self.Lambda_t0.value, dtype=dftype).reshape(-1).copy()
-        lambda_eval = lam0 + np.asarray(
-            self._delta_lambda(self._proc_params, t0, t_eval_ms),
-            dtype=dftype,
-        )
+        # JAX-compatible activity check (works with traced curr_step).
+        is_active = (self._t_min_step < curr_step) & (curr_step <= self._t_max_step)
 
-        hazard = self._compute_hazard(lambda_eval, rate_per_ms, dt_ms)
+        # Fetch renewal state as JAX arrays.
+        t0 = jnp.asarray(self.t0_ms.value, dtype=dftype)
+        lam0 = jnp.asarray(self.Lambda_t0.value, dtype=dftype)
+
+        delta = self._delta_lambda_jax(self._proc_params, t0, t_eval_ms)
+        lambda_eval = lam0 + delta
+
+        hazard = self._compute_hazard_jax(lambda_eval, rate_per_ms, dt_ms)
 
         if self.individual_spike_trains:
-            draws = np.asarray(
-                self._sample_uniform(shape=(self._num_trains,)),
-                dtype=dftype,
-            )
+            draws = self._sample_uniform(shape=(self._num_trains,))
             spikes = draws < hazard
-            if np.any(spikes):
-                t0[spikes] = t_eval_ms
-                lam0[spikes] = 0.0
-            self.t0_ms.value = t0
-            self.Lambda_t0.value = lam0
-            return jnp.asarray(spikes.reshape(self.varshape), dtype=ditype)
+            # Only reset renewal state for trains that spiked AND are active.
+            active_spikes = jnp.where(is_active, spikes, jnp.zeros_like(spikes))
+            self.t0_ms.value = jnp.where(active_spikes, jnp.full_like(t0, t_eval_ms), t0)
+            self.Lambda_t0.value = jnp.where(active_spikes, jnp.zeros_like(lam0), lam0)
+            return jnp.asarray(active_spikes.reshape(self.varshape), dtype=ditype)
 
-        draw = float(np.asarray(self._sample_uniform(shape=()), dtype=dftype).reshape(()))
-        spike = int(draw < float(hazard[0]))
-        if spike:
-            t0[0] = t_eval_ms
-            lam0[0] = 0.0
-            self.t0_ms.value = t0
-            self.Lambda_t0.value = lam0
-        return jnp.full(self.varshape, spike, dtype=ditype)
+        draw = self._sample_uniform(shape=())
+        spike = draw < hazard[0]
+        active_spike = is_active & spike
+        self.t0_ms.value = jnp.where(active_spike, jnp.full_like(t0, t_eval_ms), t0)
+        self.Lambda_t0.value = jnp.where(active_spike, jnp.zeros_like(lam0), lam0)
+        spike_val = jnp.asarray(active_spike, dtype=ditype)
+        return jnp.full(self.varshape, spike_val, dtype=ditype)

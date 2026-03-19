@@ -25,8 +25,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from brainpy.state import iaf_psc_delta, static_synapse
@@ -70,22 +71,31 @@ def _run_bp_trace(spike_times_ms, dt_ms, sim_steps):
         neuron = iaf_psc_delta(1, **params)
         neuron.init_state()
 
-        syn = static_synapse(weight=2.5 * u.mV, delay=0.1 * u.ms, post=neuron)
-        syn.init_state()
+        # Pre-compute synapse delivery schedule using NEST ld_round:
+        # delay=0.1 ms → delay_steps = floor(0.1/dt_ms + 0.5).
+        # Bypass the Python-queue static_synapse so the loop is JIT-compilable.
+        delay_steps = int(math.floor(0.1 / dt_ms + 0.5))
+        dftype = brainstate.environ.dftype()
+        delta_v_np = np.zeros(sim_steps, dtype=dftype)
+        for s in spike_steps:
+            deliver_step = s + delay_steps
+            if 0 <= deliver_step < sim_steps:
+                delta_v_np[deliver_step] += 2.5  # weight in mV
+        delta_v_arr = jnp.array(delta_v_np, dtype=dftype)
 
-        spike_times_out = []
-        v_trace = []
-        for step in range(sim_steps):
-            pre_spike = 1.0 if step in spike_steps else 0.0
-            with brainstate.environ.context(t=step * dt):
-                syn.update(pre_spike=pre_spike)
+        def _step(k):
+            neuron.add_delta_input('_syn_spike', delta_v_arr[k] * u.mV)
+            with brainstate.environ.context(t=k * dt):
                 spk = neuron.update(x=0.0 * u.pA)
-            if bool(u.math.all(spk > 0.0)):
-                spike_times_out.append((step + 1) * dt_ms)
-            v_trace.append(float((neuron.V.value / u.mV)[0]))
+            return (neuron.V.value / u.mV)[0], spk[0]
+
+        v_all, spk_all = brainstate.transform.for_loop(_step, jnp.arange(sim_steps))
 
     dftype = brainstate.environ.dftype()
-    return np.asarray(spike_times_out, dtype=dftype), np.asarray(v_trace, dtype=dftype)
+    v_trace = np.asarray(v_all, dtype=dftype)
+    spk_trace = np.asarray(spk_all, dtype=dftype)
+    spike_times_out = [(step + 1) * dt_ms for step in range(sim_steps) if spk_trace[step] > 0.0]
+    return np.asarray(spike_times_out, dtype=dftype), v_trace
 
 
 class TestStaticSynapseParameters(unittest.TestCase):

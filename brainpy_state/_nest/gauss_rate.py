@@ -20,11 +20,13 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
+from ._utils import is_tracer
 
 __all__ = [
     'gauss_rate_ipn',
@@ -40,12 +42,12 @@ class _gauss_rate_base(_lin_rate_base):
     @staticmethod
     def _mult_coupling_ex(rate):
         dftype = brainstate.environ.dftype()
-        return np.ones_like(rate, dtype=dftype)
+        return jnp.ones_like(rate, dtype=dftype)
 
     @staticmethod
     def _mult_coupling_in(rate):
         dftype = brainstate.environ.dftype()
-        return np.ones_like(rate, dtype=dftype)
+        return jnp.ones_like(rate, dtype=dftype)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
         if isinstance(ev, dict):
@@ -82,7 +84,7 @@ class _gauss_rate_base(_lin_rate_base):
         multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
         dftype = brainstate.environ.dftype()
         weight_sign = self._broadcast_to_state(
-            np.asarray(u.math.asarray(weight), dtype=dftype) >= 0.0,
+            np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0,
             state_shape,
         )
 
@@ -140,8 +142,7 @@ class _gauss_rate_base(_lin_rate_base):
 
     def _common_inputs_gauss(self, x, instant_rate_events, delayed_rate_events, g, mu, sigma):
         state_shape = self.rate.value.shape
-        ditype = brainstate.environ.ditype()
-        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
+        step_idx = self._step_count
 
         delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
         delayed_ex_now, delayed_in_now = self._schedule_delayed_events_gauss(
@@ -451,7 +452,7 @@ class gauss_rate_ipn(_gauss_rate_base):
     .. code-block:: python
 
         >>> import brainpy_state as bpst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.set_dt(0.1 * u.ms)
         >>> neuron = bpst.gauss_rate_ipn(in_size=100)
@@ -595,16 +596,19 @@ class gauss_rate_ipn(_gauss_rate_base):
         the ``sigma=0`` special case (undefined gain function at ``h=mu``), as NEST
         permits this configuration despite potential NaN generation.
         """
-        if np.any(self._to_numpy_ms(self.tau) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.tau, self.sigma)):
+            return
+        if np.any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self._to_numpy(self.lambda_) < 0.0):
+        if np.any(self.lambda_ < 0.0):
             raise ValueError('Passive decay rate lambda must be >= 0.')
-        if np.any(self._to_numpy(self.sigma) < 0.0):
+        if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
-        if np.any(self._to_numpy(self.rectify_rate) < 0.0):
+        if np.any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables and internal delay queues.
 
         Creates and initializes firing rate, noise, and auxiliary state variables
@@ -612,21 +616,15 @@ class gauss_rate_ipn(_gauss_rate_base):
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension for parallel simulation of multiple independent populations.
-            When ``None``, no batch dimension is added (state shape is ``self.varshape``).
-            When an integer, state variables have shape ``(batch_size,) + self.varshape``.
-            Default ``None``.
         **kwargs
-            Additional keyword arguments (ignored, reserved for future extensions).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
         This method initializes:
 
-        - ``self.rate``: Current firing rate, shape ``(batch_size,) + self.varshape`` or
-          ``self.varshape``, initialized via ``rate_initializer``.
-        - ``self.noise``: Last noise sample, same shape, initialized via ``noise_initializer``.
+        - ``self.rate``: Current firing rate, initialized via ``rate_initializer``.
+        - ``self.noise``: Last noise sample, initialized via ``noise_initializer``.
         - ``self.instant_rate``: Copy of ``rate`` for zero-delay transmission.
         - ``self.delayed_rate``: Copy of ``rate`` for delayed transmission.
         - ``self._step_count``: Internal step counter (int64 scalar).
@@ -642,19 +640,12 @@ class gauss_rate_ipn(_gauss_rate_base):
         .. code-block:: python
 
             >>> neuron = bpst.gauss_rate_ipn(in_size=100)
-            >>> neuron.init_state()  # Single population
+            >>> neuron.init_state()
             >>> neuron.rate.value.shape
             (100,)
-
-        .. code-block:: python
-
-            >>> neuron = bpst.gauss_rate_ipn(in_size=(10, 10))
-            >>> neuron.init_state(batch_size=32)  # Batched simulation
-            >>> neuron.rate.value.shape
-            (32, 10, 10)
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
 
@@ -663,8 +654,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        ditype = brainstate.environ.ditype()
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._step_count = 0
 
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
@@ -681,7 +671,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         x : ArrayLike, optional
             External additive drive (current input), broadcast to ``self.varshape``.
             Added to ``mu`` in the drift term. Can be scalar, array-like, or have
-            ``brainunit`` units (automatically converted). Default ``0.0``.
+            ``saiunit`` units (automatically converted). Default ``0.0``.
         instant_rate_events : scalar, tuple, list of tuples, or None, optional
             Rate events applied in the current step with zero delay. Each event can be:
 
@@ -751,7 +741,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         ``self.delayed_rate``, ``self.instant_rate``, ``self._step_count``, and
         modifies delay queues ``self._delayed_ex_queue`` and ``self._delayed_in_queue``.
         """
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
 
         tau, sigma, mu, g = self._common_parameters_gauss(state_shape)
@@ -767,12 +757,13 @@ class gauss_rate_ipn(_gauss_rate_base):
             sigma=sigma,
         )
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        dftype = brainstate.environ.dftype()
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
         if noise is None:
-            xi = np.random.normal(size=state_shape)
+            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         if np.any(lambda_ > 0.0):
@@ -794,8 +785,8 @@ class gauss_rate_ipn(_gauss_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones_like(rate_prev)
+        H_in = jnp.ones_like(rate_prev)
         if self.mult_coupling:
             H_ex = self._mult_coupling_ex(rate_prev)
             H_in = self._mult_coupling_in(rate_prev)
@@ -812,12 +803,11 @@ class gauss_rate_ipn(_gauss_rate_base):
             rate_new += P2 * H_in * (delayed_in + instant_in)
 
         if self.rectify_output:
-            rate_new = np.where(rate_new < rectify_rate, rectify_rate, rate_new)
+            rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
 
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        ditype = brainstate.environ.ditype()
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
+        self._step_count = step_idx + 1
         return rate_new

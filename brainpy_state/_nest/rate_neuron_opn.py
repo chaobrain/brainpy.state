@@ -20,11 +20,13 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest.lin_rate import _lin_rate_base
+from ._utils import is_tracer
 
 __all__ = [
     'rate_neuron_opn',
@@ -192,7 +194,7 @@ class rate_neuron_opn(_lin_rate_base):
         ``in_size=10`` creates 10 neurons, ``in_size=(4, 5)`` creates a 4×5
         grid.
     tau : ArrayLike, optional
-        Time constant :math:`\tau` (brainunit quantity with ms dimension).
+        Time constant :math:`\tau` (saiunit quantity with ms dimension).
         Scalar or array broadcastable to ``self.varshape``. Must be :math:`>0`.
         Controls the exponential relaxation rate of the deterministic dynamics.
         Default: ``10.0 * u.ms``.
@@ -383,7 +385,7 @@ class rate_neuron_opn(_lin_rate_base):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)
        >>> rate = model(x=0.1)  # external drive
@@ -513,9 +515,12 @@ class rate_neuron_opn(_lin_rate_base):
         -----
         This method is called automatically during ``__init__``.
         """
-        if np.any(self._to_numpy_ms(self.tau) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.tau, self.sigma)):
+            return
+        if np.any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self._to_numpy(self.sigma) < 0.0):
+        if np.any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
     def _call_nl(self, fn: Callable, x: np.ndarray):
@@ -566,12 +571,13 @@ class rate_neuron_opn(_lin_rate_base):
         If ``input_nonlinearity`` is ``None``, uses default :math:`g(h)=g\,h`.
         Otherwise calls user-provided callable.
         r"""
-        h_np = self._broadcast_to_state(self._to_numpy(h), state_shape)
+        dftype = brainstate.environ.dftype()
+        h_arr = jnp.broadcast_to(jnp.asarray(h, dtype=dftype), state_shape)
         if self.input_nonlinearity is None:
             g = self._broadcast_to_state(self._to_numpy(self.g), state_shape)
-            return g * h_np
-        y = self._call_nl(self.input_nonlinearity, h_np)
-        return self._broadcast_to_state(self._to_numpy(y), state_shape)
+            return g * h_arr
+        y = self._call_nl(self.input_nonlinearity, h_arr)
+        return jnp.broadcast_to(jnp.asarray(y, dtype=dftype), state_shape)
 
     def _mult_ex_transform(self, rate: np.ndarray, state_shape):
         r"""Compute excitatory multiplicative coupling factor :math:`H_\mathrm{ex}(X_\mathrm{noisy})`.
@@ -596,13 +602,14 @@ class rate_neuron_opn(_lin_rate_base):
         calls user-provided callable. Evaluated at the *noisy* rate (matching
         NEST ``rate_neuron_opn_impl.h``).
         r"""
-        rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
+        dftype = brainstate.environ.dftype()
+        rate_arr = jnp.broadcast_to(jnp.asarray(rate, dtype=dftype), state_shape)
         if self.mult_coupling_ex_fn is None:
             g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex), state_shape)
             theta_ex = self._broadcast_to_state(self._to_numpy(self.theta_ex), state_shape)
-            return g_ex * (theta_ex - rate_np)
-        y = self._call_nl(self.mult_coupling_ex_fn, rate_np)
-        return self._broadcast_to_state(self._to_numpy(y), state_shape)
+            return g_ex * (theta_ex - rate_arr)
+        y = self._call_nl(self.mult_coupling_ex_fn, rate_arr)
+        return jnp.broadcast_to(jnp.asarray(y, dtype=dftype), state_shape)
 
     def _mult_in_transform(self, rate: np.ndarray, state_shape):
         r"""Compute inhibitory multiplicative coupling factor :math:`H_\mathrm{in}(X_\mathrm{noisy})`.
@@ -627,13 +634,14 @@ class rate_neuron_opn(_lin_rate_base):
         calls user-provided callable. Evaluated at the *noisy* rate (matching
         NEST ``rate_neuron_opn_impl.h``).
         """
-        rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
+        dftype = brainstate.environ.dftype()
+        rate_arr = jnp.broadcast_to(jnp.asarray(rate, dtype=dftype), state_shape)
         if self.mult_coupling_in_fn is None:
             g_in = self._broadcast_to_state(self._to_numpy(self.g_in), state_shape)
             theta_in = self._broadcast_to_state(self._to_numpy(self.theta_in), state_shape)
-            return g_in * (theta_in + rate_np)
-        y = self._call_nl(self.mult_coupling_in_fn, rate_np)
-        return self._broadcast_to_state(self._to_numpy(y), state_shape)
+            return g_in * (theta_in + rate_arr)
+        y = self._call_nl(self.mult_coupling_in_fn, rate_arr)
+        return jnp.broadcast_to(jnp.asarray(y, dtype=dftype), state_shape)
 
     def _extract_event_fields(self, ev, default_delay_steps: int):
         r"""Extract ``(rate, weight, multiplicity, delay_steps)`` from event.
@@ -889,7 +897,7 @@ class rate_neuron_opn(_lin_rate_base):
 
         return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables for simulation.
 
         This method must be called before the first ``update()`` call. It
@@ -899,16 +907,8 @@ class rate_neuron_opn(_lin_rate_base):
 
         Parameters
         ----------
-        batch_size : int or None, optional
-            Batch dimension size for parallel simulation of multiple instances.
-            If ``None`` (default), state shape is ``self.varshape`` (single
-            instance). If ``int > 0``, state shape is
-            ``(batch_size,) + self.varshape`` (batched instances). For example,
-            if ``self.varshape=(10,)`` and ``batch_size=32``, the state shape
-            will be ``(32, 10)``. Default: ``None``.
         **kwargs
-            Additional keyword arguments (reserved for future use, currently
-            ignored).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -952,25 +952,16 @@ class rate_neuron_opn(_lin_rate_base):
 
         Examples
         --------
-        Initialize without batch dimension (single instance):
+        Initialize a single population:
 
         .. code-block:: python
 
            >>> import brainpy.state as bst
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms)
            >>> model.init_state()
            >>> print(model.rate.value.shape)
            (10,)
-
-        Initialize with batch dimension (32 parallel instances):
-
-        .. code-block:: python
-
-           >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms)
-           >>> model.init_state(batch_size=32)
-           >>> print(model.rate.value.shape)
-           (32, 10)
 
         Custom initializers:
 
@@ -990,9 +981,9 @@ class rate_neuron_opn(_lin_rate_base):
         --------
         update : Perform one simulation step after initialization.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
-        noise = braintools.init.param(self.noise_initializer, self.varshape, batch_size)
-        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape, batch_size)
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
+        noise = braintools.init.param(self.noise_initializer, self.varshape)
+        noisy_rate = braintools.init.param(self.noisy_rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
         noise_np = self._to_numpy(noise)
         noisy_rate_np = self._to_numpy(noisy_rate)
@@ -1009,7 +1000,8 @@ class rate_neuron_opn(_lin_rate_base):
         self._delayed_ex_queue = {}
         self._delayed_in_queue = {}
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
+    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
+               _precomputed_ex=None, _precomputed_in=None):
         r"""Perform one simulation step of output-noise rate dynamics.
 
         This method implements the core update algorithm for the output-noise
@@ -1205,24 +1197,36 @@ class rate_neuron_opn(_lin_rate_base):
         init_state : Initialize all state variables before first update.
         rate_neuron_ipn.update : Input-noise variant update method.
         """
-        h = float(u.math.asarray(brainstate.environ.get_dt() / u.ms))
-
-        state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs_template(
-            x=x,
-            instant_rate_events=instant_rate_events,
-            delayed_rate_events=delayed_rate_events,
-        )
+        h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
+        dftype = brainstate.environ.dftype()
+        state_shape = self.rate.value.shape
 
         tau = self._broadcast_to_state(self._to_numpy_ms(self.tau), state_shape)
         sigma = self._broadcast_to_state(self._to_numpy(self.sigma), state_shape)
         mu = self._broadcast_to_state(self._to_numpy(self.mu), state_shape)
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
+
+        if _precomputed_ex is not None:
+            # JIT-compatible path: bypass all Python queue operations.
+            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
+            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
+            instant_ex = jnp.zeros(state_shape, dtype=dftype)
+            instant_in = jnp.zeros(state_shape, dtype=dftype)
+            mu_ext = jnp.zeros(state_shape, dtype=dftype)
+        else:
+            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs_template(
+                x=x,
+                instant_rate_events=instant_rate_events,
+                delayed_rate_events=delayed_rate_events,
+            )
+            ditype = brainstate.environ.ditype()
+            self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
 
         if noise is None:
             xi = np.random.normal(size=state_shape)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         P1 = np.exp(-h / tau)
@@ -1233,8 +1237,8 @@ class rate_neuron_opn(_lin_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total
 
-        H_ex = np.ones_like(rate_prev)
-        H_in = np.ones_like(rate_prev)
+        H_ex = jnp.ones(state_shape, dtype=dftype)
+        H_in = jnp.ones(state_shape, dtype=dftype)
         if self.mult_coupling:
             H_ex = self._mult_ex_transform(noisy_rate, state_shape)
             H_in = self._mult_in_transform(noisy_rate, state_shape)
@@ -1257,6 +1261,4 @@ class rate_neuron_opn(_lin_rate_base):
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        ditype = brainstate.environ.ditype()
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new

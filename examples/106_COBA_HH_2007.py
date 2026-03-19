@@ -20,7 +20,7 @@
 #   Simulation of networks of spiking neurons: a review of tools and strategies., J. Comput. Neurosci., 23, 3, 349–98
 #
 
-import brainunit as u
+import saiunit as u
 import matplotlib.pyplot as plt
 import numpy as np
 

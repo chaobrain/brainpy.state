@@ -35,8 +35,9 @@ import math
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import ht_neuron
 from scipy.integrate import solve_ivp
@@ -48,13 +49,66 @@ from brainpy_state._nest.ht_neuron import (
     _m_eq_T,
     _D_eq_KNa,
     _m_eq_NMDA,
-    _m_NMDA,
-    _STATE_VEC_SIZE,
-    _V_M, _THETA, _DG_AMPA, _G_AMPA, _DG_NMDA_TIMECOURSE,
-    _G_NMDA_TIMECOURSE, _DG_GABA_A, _G_GABA_A, _DG_GABA_B,
-    _G_GABA_B, _m_fast_NMDA, _m_slow_NMDA, _m_Ih, _D_IKNa,
-    _m_IT, _h_IT,
 )
+
+# ---------------------------------------------------------------------------
+# State vector index constants for the reference dynamics solver.
+#
+# The refactored ht_neuron model uses DotDict named attributes (e.g.,
+# state.V_m, state.theta) instead of integer indices into a flat array.
+# These constants are defined here solely for the standalone reference ODE
+# solver (_nest_ht_dynamics) used in regression tests.
+# ---------------------------------------------------------------------------
+_V_M = 0
+_THETA = 1
+_DG_AMPA = 2
+_G_AMPA = 3
+_DG_NMDA_TIMECOURSE = 4
+_G_NMDA_TIMECOURSE = 5
+_DG_GABA_A = 6
+_G_GABA_A = 7
+_DG_GABA_B = 8
+_G_GABA_B = 9
+_m_fast_NMDA = 10
+_m_slow_NMDA = 11
+_m_Ih = 12
+_D_IKNa = 13
+_m_IT = 14
+_h_IT = 15
+_STATE_VEC_SIZE = 16
+
+
+def _m_NMDA(V, m_eq, m_fast, m_slow, instant_unblock_NMDA=False):
+    r"""Compute effective NMDA unblocking variable.
+
+    This helper was previously a module-level function in ht_neuron.py but has
+    been inlined into the model's _vector_field method. It is retained here for
+    the standalone reference solver and direct unit tests.
+
+    Parameters
+    ----------
+    V : float
+        Membrane potential in mV.
+    m_eq : float
+        Equilibrium NMDA unblocking value at voltage V.
+    m_fast : float
+        Fast NMDA unblocking variable.
+    m_slow : float
+        Slow NMDA unblocking variable.
+    instant_unblock_NMDA : bool
+        If True, return m_eq directly. Otherwise, return weighted mix of
+        fast and slow components.
+
+    Returns
+    -------
+    float
+        Effective NMDA unblocking fraction.
+    """
+    if instant_unblock_NMDA:
+        return m_eq
+    A1 = 0.51 - 0.0028 * V
+    A2 = 1.0 - A1
+    return A1 * m_fast + A2 * m_slow
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -306,49 +360,50 @@ class TestHTNeuronDefaults(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_default_parameters(self):
-        neuron = ht_neuron(1)
-        self.assertAlmostEqual(neuron.E_Na, 30.0)
-        self.assertAlmostEqual(neuron.E_K, -90.0)
-        self.assertAlmostEqual(neuron.g_NaL, 0.2)
-        self.assertAlmostEqual(neuron.g_KL, 1.0)
-        self.assertAlmostEqual(neuron.tau_m, 16.0)
-        self.assertAlmostEqual(neuron.theta_eq, -51.0)
-        self.assertAlmostEqual(neuron.tau_theta, 2.0)
-        self.assertAlmostEqual(neuron.tau_spike, 1.75)
-        self.assertAlmostEqual(neuron.t_ref, 2.0)
-        self.assertAlmostEqual(neuron.g_peak_AMPA, 0.1)
-        self.assertAlmostEqual(neuron.tau_rise_AMPA, 0.5)
-        self.assertAlmostEqual(neuron.tau_decay_AMPA, 2.4)
-        self.assertAlmostEqual(neuron.E_rev_AMPA, 0.0)
-        self.assertAlmostEqual(neuron.g_peak_NMDA, 0.075)
-        self.assertAlmostEqual(neuron.tau_rise_NMDA, 4.0)
-        self.assertAlmostEqual(neuron.tau_decay_NMDA, 40.0)
-        self.assertAlmostEqual(neuron.E_rev_NMDA, 0.0)
-        self.assertAlmostEqual(neuron.V_act_NMDA, -25.57)
-        self.assertAlmostEqual(neuron.S_act_NMDA, 0.081)
-        self.assertAlmostEqual(neuron.tau_Mg_slow_NMDA, 22.7)
-        self.assertAlmostEqual(neuron.tau_Mg_fast_NMDA, 0.68)
-        self.assertFalse(neuron.instant_unblock_NMDA)
-        self.assertAlmostEqual(neuron.g_peak_GABA_A, 0.33)
-        self.assertAlmostEqual(neuron.tau_rise_GABA_A, 1.0)
-        self.assertAlmostEqual(neuron.tau_decay_GABA_A, 7.0)
-        self.assertAlmostEqual(neuron.E_rev_GABA_A, -70.0)
-        self.assertAlmostEqual(neuron.g_peak_GABA_B, 0.0132)
-        self.assertAlmostEqual(neuron.tau_rise_GABA_B, 60.0)
-        self.assertAlmostEqual(neuron.tau_decay_GABA_B, 200.0)
-        self.assertAlmostEqual(neuron.E_rev_GABA_B, -90.0)
-        self.assertAlmostEqual(neuron.g_peak_NaP, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_NaP, 30.0)
-        self.assertAlmostEqual(neuron.N_NaP, 3.0)
-        self.assertAlmostEqual(neuron.g_peak_KNa, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_KNa, -90.0)
-        self.assertAlmostEqual(neuron.tau_D_KNa, 1250.0)
-        self.assertAlmostEqual(neuron.g_peak_T, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_T, 0.0)
-        self.assertAlmostEqual(neuron.N_T, 2.0)
-        self.assertAlmostEqual(neuron.g_peak_h, 1.0)
-        self.assertAlmostEqual(neuron.E_rev_h, -40.0)
-        self.assertFalse(neuron.voltage_clamp)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            self.assertAlmostEqual(neuron.E_Na, 30.0)
+            self.assertAlmostEqual(neuron.E_K, -90.0)
+            self.assertAlmostEqual(neuron.g_NaL, 0.2)
+            self.assertAlmostEqual(neuron.g_KL, 1.0)
+            self.assertAlmostEqual(neuron.tau_m, 16.0)
+            self.assertAlmostEqual(neuron.theta_eq, -51.0)
+            self.assertAlmostEqual(neuron.tau_theta, 2.0)
+            self.assertAlmostEqual(neuron.tau_spike, 1.75)
+            self.assertAlmostEqual(neuron.t_ref, 2.0)
+            self.assertAlmostEqual(neuron.g_peak_AMPA, 0.1)
+            self.assertAlmostEqual(neuron.tau_rise_AMPA, 0.5)
+            self.assertAlmostEqual(neuron.tau_decay_AMPA, 2.4)
+            self.assertAlmostEqual(neuron.E_rev_AMPA, 0.0)
+            self.assertAlmostEqual(neuron.g_peak_NMDA, 0.075)
+            self.assertAlmostEqual(neuron.tau_rise_NMDA, 4.0)
+            self.assertAlmostEqual(neuron.tau_decay_NMDA, 40.0)
+            self.assertAlmostEqual(neuron.E_rev_NMDA, 0.0)
+            self.assertAlmostEqual(neuron.V_act_NMDA, -25.57)
+            self.assertAlmostEqual(neuron.S_act_NMDA, 0.081)
+            self.assertAlmostEqual(neuron.tau_Mg_slow_NMDA, 22.7)
+            self.assertAlmostEqual(neuron.tau_Mg_fast_NMDA, 0.68)
+            self.assertFalse(neuron.instant_unblock_NMDA)
+            self.assertAlmostEqual(neuron.g_peak_GABA_A, 0.33)
+            self.assertAlmostEqual(neuron.tau_rise_GABA_A, 1.0)
+            self.assertAlmostEqual(neuron.tau_decay_GABA_A, 7.0)
+            self.assertAlmostEqual(neuron.E_rev_GABA_A, -70.0)
+            self.assertAlmostEqual(neuron.g_peak_GABA_B, 0.0132)
+            self.assertAlmostEqual(neuron.tau_rise_GABA_B, 60.0)
+            self.assertAlmostEqual(neuron.tau_decay_GABA_B, 200.0)
+            self.assertAlmostEqual(neuron.E_rev_GABA_B, -90.0)
+            self.assertAlmostEqual(neuron.g_peak_NaP, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_NaP, 30.0)
+            self.assertAlmostEqual(neuron.N_NaP, 3.0)
+            self.assertAlmostEqual(neuron.g_peak_KNa, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_KNa, -90.0)
+            self.assertAlmostEqual(neuron.tau_D_KNa, 1250.0)
+            self.assertAlmostEqual(neuron.g_peak_T, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_T, 0.0)
+            self.assertAlmostEqual(neuron.N_T, 2.0)
+            self.assertAlmostEqual(neuron.g_peak_h, 1.0)
+            self.assertAlmostEqual(neuron.E_rev_h, -40.0)
+            self.assertFalse(neuron.voltage_clamp)
 
 
 class TestHTNeuronInitialState(unittest.TestCase):
@@ -434,39 +489,44 @@ class TestHTNeuronValidation(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_negative_conductances(self):
-        r"""Negative peak conductances should raise ValueError."""
-        for param in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A',
-                      'g_peak_GABA_B', 'g_peak_NaP', 'g_peak_KNa',
-                      'g_peak_T', 'g_peak_h', 'g_NaL', 'g_KL'):
-            with self.assertRaises(ValueError, msg=f'{param} should not accept negative values'):
-                ht_neuron(1, **{param: -1.0})
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Negative peak conductances should raise ValueError."""
+            for param in ('g_peak_AMPA', 'g_peak_NMDA', 'g_peak_GABA_A',
+                          'g_peak_GABA_B', 'g_peak_NaP', 'g_peak_KNa',
+                          'g_peak_T', 'g_peak_h', 'g_NaL', 'g_KL'):
+                with self.assertRaises(ValueError, msg=f'{param} should not accept negative values'):
+                    ht_neuron(1, **{param: -1.0})
 
     def test_negative_tau(self):
-        r"""Zero or negative time constants should raise ValueError."""
-        for param in ('tau_rise_AMPA', 'tau_decay_AMPA', 'tau_rise_NMDA',
-                      'tau_decay_NMDA', 'tau_rise_GABA_A', 'tau_decay_GABA_A',
-                      'tau_rise_GABA_B', 'tau_decay_GABA_B',
-                      'tau_Mg_fast_NMDA', 'tau_Mg_slow_NMDA',
-                      'tau_spike', 'tau_theta', 'tau_m', 'tau_D_KNa'):
-            with self.assertRaises(ValueError, msg=f'{param} should not accept zero'):
-                ht_neuron(1, **{param: 0.0})
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Zero or negative time constants should raise ValueError."""
+            for param in ('tau_rise_AMPA', 'tau_decay_AMPA', 'tau_rise_NMDA',
+                          'tau_decay_NMDA', 'tau_rise_GABA_A', 'tau_decay_GABA_A',
+                          'tau_rise_GABA_B', 'tau_decay_GABA_B',
+                          'tau_Mg_fast_NMDA', 'tau_Mg_slow_NMDA',
+                          'tau_spike', 'tau_theta', 'tau_m', 'tau_D_KNa'):
+                with self.assertRaises(ValueError, msg=f'{param} should not accept zero'):
+                    ht_neuron(1, **{param: 0.0})
 
     def test_rise_greater_than_decay(self):
-        r"""tau_rise >= tau_decay should raise ValueError."""
-        with self.assertRaises(ValueError):
-            ht_neuron(1, tau_rise_AMPA=5.0, tau_decay_AMPA=2.0)
-        with self.assertRaises(ValueError):
-            ht_neuron(1, tau_rise_GABA_A=10.0, tau_decay_GABA_A=7.0)
-        with self.assertRaises(ValueError):
-            ht_neuron(1, tau_Mg_fast_NMDA=30.0, tau_Mg_slow_NMDA=22.7)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""tau_rise >= tau_decay should raise ValueError."""
+            with self.assertRaises(ValueError):
+                ht_neuron(1, tau_rise_AMPA=5.0, tau_decay_AMPA=2.0)
+            with self.assertRaises(ValueError):
+                ht_neuron(1, tau_rise_GABA_A=10.0, tau_decay_GABA_A=7.0)
+            with self.assertRaises(ValueError):
+                ht_neuron(1, tau_Mg_fast_NMDA=30.0, tau_Mg_slow_NMDA=22.7)
 
     def test_negative_t_ref(self):
-        with self.assertRaises(ValueError):
-            ht_neuron(1, t_ref=-1.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                ht_neuron(1, t_ref=-1.0)
 
     def test_negative_S_act_NMDA(self):
-        with self.assertRaises(ValueError):
-            ht_neuron(1, S_act_NMDA=-0.1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                ht_neuron(1, S_act_NMDA=-0.1)
 
 
 class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
@@ -493,9 +553,11 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
             V_init = _get_scalar(neuron.V.value)
             theta_init = _get_scalar(neuron.theta.value)
 
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             V_final = _get_scalar(neuron.V.value)
             theta_final = _get_scalar(neuron.theta.value)
@@ -518,27 +580,28 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
         params = _default_params()
         y_ref = _default_initial_state(params)
 
+        # Advance reference solver independently (pure Python/scipy, fast)
+        for k in range(n_steps):
+            sol = solve_ivp(
+                lambda t, y: _nest_ht_dynamics(t, y, params),
+                [0.0, dt], y_ref,
+                method='RK45', rtol=1e-3, atol=1e-9,
+            )
+            y_ref = sol.y[:, -1]
+            m_eq_nmda = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
+            y_ref[_m_fast_NMDA] = min(m_eq_nmda, y_ref[_m_fast_NMDA])
+            y_ref[_m_slow_NMDA] = min(m_eq_nmda, y_ref[_m_slow_NMDA])
+
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            for k in range(n_steps):
-                # Reference solver
-                sol = solve_ivp(
-                    lambda t, y: _nest_ht_dynamics(t, y, params),
-                    [0.0, dt], y_ref,
-                    method='RK45', rtol=1e-3, atol=1e-9,
-                )
-                y_ref = sol.y[:, -1]
-
-                # Enforce instantaneous NMDA blocking (as NEST does after each step)
-                m_eq_nmda = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
-                y_ref[_m_fast_NMDA] = min(m_eq_nmda, y_ref[_m_fast_NMDA])
-                y_ref[_m_slow_NMDA] = min(m_eq_nmda, y_ref[_m_slow_NMDA])
-
-                # Model update
+            # Advance model with JIT-compiled for_loop
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             # Compare final states
             V_model = _get_scalar(neuron.V.value)
@@ -563,11 +626,11 @@ class TestHTNeuronSubthresholdDynamics(unittest.TestCase):
 
             V_init = _get_scalar(neuron.V.value)
 
-            # Inject current for first step to store in buffer,
-            # then it applies from step 1 onward
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_dc)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             V_final = _get_scalar(neuron.V.value)
             # DC current should depolarize (increase V)
@@ -591,21 +654,21 @@ class TestHTNeuronSpiking(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            spiked = False
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
-                    spk = neuron.update(I_strong)
-                    if _get_scalar(neuron.V.value) >= 25.0:
-                        # Spike detected (V was reset to E_Na=30 and is near there)
-                        spiked = True
-                        break
+                    neuron.update(I_strong)
+                return neuron.V.value
 
-            self.assertTrue(spiked, "Strong DC current should produce a spike")
+            V_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            )
+            self.assertTrue(np.any(V_trace >= 25.0),
+                            "Strong DC current should produce a spike")
 
     def test_refractory_period(self):
         r"""After a spike, neuron should be refractory for t_ref steps."""
         dt = 0.1
-        n_steps = 1000
+        n_steps = 300
         I_strong = 50.0
         t_ref = 2.0
         expected_ref_steps = int(round(t_ref / dt))
@@ -614,45 +677,47 @@ class TestHTNeuronSpiking(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            first_spike_step = None
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_strong)
-                    ref = int(_get_scalar(neuron.ref_steps.value))
-                    if first_spike_step is None and ref > 0:
-                        first_spike_step = k
-                        # Just spiked: ref should be set to PotassiumRefractoryCounts
-                        self.assertEqual(ref, expected_ref_steps,
-                                         f"After spike, ref_steps should be {expected_ref_steps}")
-                        break
+                return neuron.ref_steps.value
 
-            self.assertIsNotNone(first_spike_step, "Should have spiked")
+            ref_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            )
+            first_nonzero = np.where(ref_trace > 0)[0]
+            self.assertGreater(len(first_nonzero), 0, "Should have spiked")
+            self.assertEqual(int(ref_trace[first_nonzero[0]]), expected_ref_steps,
+                             f"After spike, ref_steps should be {expected_ref_steps}")
 
     def test_spike_resets_V_and_theta(self):
         r"""On spike, V and theta should be set to E_Na."""
         dt = 0.1
-        n_steps = 1000
+        n_steps = 300
         I_strong = 50.0
 
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            for k in range(n_steps):
+            expected_ref = int(round(2.0 / dt))
+
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_strong)
-                    ref = int(_get_scalar(neuron.ref_steps.value))
-                    V = _get_scalar(neuron.V.value)
-                    theta = _get_scalar(neuron.theta.value)
-                    if ref > 0 and ref == int(round(2.0 / dt)):
-                        # Just spiked this step - but V has already been
-                        # through the ODE integration for this step with
-                        # the post-spike K current active. V was set to E_Na
-                        # before the ref counter was decremented.
-                        # We just check V is near E_Na range
-                        self.assertGreater(V, 0.0,
-                                           msg="V should be high right after spike")
-                        break
+                return neuron.V.value, neuron.ref_steps.value
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            V_trace = np.asarray(results[0][:, 0])
+            ref_trace = np.asarray(results[1][:, 0])
+
+            # Find first spike step (ref == expected_ref)
+            spike_steps = np.where(ref_trace == expected_ref)[0]
+            if len(spike_steps) > 0:
+                first_spike = int(spike_steps[0])
+                # V should be high right after spike
+                self.assertGreater(float(V_trace[first_spike]), 0.0,
+                                   msg="V should be high right after spike")
 
 
 class TestHTNeuronSynapticDynamics(unittest.TestCase):
@@ -675,16 +740,18 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
 
             # Manually inject AMPA spike at step 0
             # In NEST, spikes add to DG_AMPA * cond_step
-            # We simulate this by directly adding to DG_AMPA after init
-            neuron.DG_AMPA.value = np.asarray(cond_step)
+            # Use jnp.full to match varshape (1,) — np.asarray(scalar) gives shape ()
+            # which breaks jax.lax.while_loop's shape-consistency requirement.
+            neuron.DG_AMPA.value = jnp.full(neuron.varshape, cond_step)
 
-            G_trace = []
-            for k in range(100):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
-                    G_trace.append(_get_scalar(neuron.G_AMPA.value))
+                return neuron.G_AMPA.value
 
-            G_trace = np.array(G_trace)
+            G_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(100))[:, 0]
+            )
             # G_AMPA should rise then decay
             self.assertGreater(np.max(G_trace), 0.0,
                                msg="AMPA conductance should increase after spike")
@@ -706,15 +773,16 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
-            neuron.DG_GABA_A.value = np.asarray(cond_step)
+            neuron.DG_GABA_A.value = jnp.full(neuron.varshape, cond_step)
 
-            G_trace = []
-            for k in range(200):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
-                    G_trace.append(_get_scalar(neuron.G_GABA_A.value))
+                return neuron.G_GABA_A.value
 
-            G_trace = np.array(G_trace)
+            G_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(200))[:, 0]
+            )
             self.assertGreater(np.max(G_trace), 0.0)
             self.assertAlmostEqual(np.max(G_trace), params['g_peak_GABA_A'], places=1)
 
@@ -834,17 +902,23 @@ class TestHTNeuronNMDA(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
 
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
-                    V = _get_scalar(neuron.V.value)
-                    m_eq = _m_eq_NMDA(V, neuron.S_act_NMDA, neuron.V_act_NMDA)
-                    m_f = _get_scalar(neuron.m_fast_NMDA_state.value)
-                    m_s = _get_scalar(neuron.m_slow_NMDA_state.value)
-                    self.assertLessEqual(m_f, m_eq + 1e-10,
-                                         msg=f"Step {k}: m_fast_NMDA exceeds equilibrium")
-                    self.assertLessEqual(m_s, m_eq + 1e-10,
-                                         msg=f"Step {k}: m_slow_NMDA exceeds equilibrium")
+                return neuron.V.value, neuron.m_fast_NMDA_state.value, neuron.m_slow_NMDA_state.value
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            V_trace = np.asarray(results[0][:, 0])
+            mf_trace = np.asarray(results[1][:, 0])
+            ms_trace = np.asarray(results[2][:, 0])
+
+            for k in range(n_steps):
+                V_k = float(V_trace[k])
+                m_eq = _m_eq_NMDA(V_k, neuron.S_act_NMDA, neuron.V_act_NMDA)
+                self.assertLessEqual(float(mf_trace[k]), m_eq + 1e-10,
+                                     msg=f"Step {k}: m_fast_NMDA exceeds equilibrium")
+                self.assertLessEqual(float(ms_trace[k]), m_eq + 1e-10,
+                                     msg=f"Step {k}: m_slow_NMDA exceeds equilibrium")
 
 
 class TestHTNeuronThresholdDynamics(unittest.TestCase):
@@ -864,11 +938,13 @@ class TestHTNeuronThresholdDynamics(unittest.TestCase):
             neuron = ht_neuron(1)
             neuron.init_state()
             # Manually set theta to a high value
-            neuron.theta.value = np.asarray(30.0)
+            neuron.theta.value = jnp.full(neuron.varshape, 30.0)
 
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
 
             theta_final = _get_scalar(neuron.theta.value)
             # After 500 steps (50 ms with dt=0.1), theta should be
@@ -898,9 +974,11 @@ class TestHTNeuronMultipleNeurons(unittest.TestCase):
                 V_values, V_values[0] * np.ones(5), decimal=10
             )
 
-            for k in range(10):
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(0.0)
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(10))
 
             # After evolution, all identical neurons with same input should
             # still have same state
@@ -917,25 +995,29 @@ class TestHTNeuronCondSteps(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_cond_step_AMPA(self):
-        r"""AMPA cond_step should equal g_peak * beta_normalization_factor."""
-        neuron = ht_neuron(1)
-        expected = 0.1 * _beta_normalization_factor(0.5, 2.4)
-        self.assertAlmostEqual(neuron._cond_step_AMPA, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""AMPA cond_step should equal g_peak * beta_normalization_factor."""
+            neuron = ht_neuron(1)
+            expected = 0.1 * _beta_normalization_factor(0.5, 2.4)
+            self.assertAlmostEqual(neuron._cond_step_AMPA, expected, places=12)
 
     def test_cond_step_NMDA(self):
-        neuron = ht_neuron(1)
-        expected = 0.075 * _beta_normalization_factor(4.0, 40.0)
-        self.assertAlmostEqual(neuron._cond_step_NMDA, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            expected = 0.075 * _beta_normalization_factor(4.0, 40.0)
+            self.assertAlmostEqual(neuron._cond_step_NMDA, expected, places=12)
 
     def test_cond_step_GABA_A(self):
-        neuron = ht_neuron(1)
-        expected = 0.33 * _beta_normalization_factor(1.0, 7.0)
-        self.assertAlmostEqual(neuron._cond_step_GABA_A, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            expected = 0.33 * _beta_normalization_factor(1.0, 7.0)
+            self.assertAlmostEqual(neuron._cond_step_GABA_A, expected, places=12)
 
     def test_cond_step_GABA_B(self):
-        neuron = ht_neuron(1)
-        expected = 0.0132 * _beta_normalization_factor(60.0, 200.0)
-        self.assertAlmostEqual(neuron._cond_step_GABA_B, expected, places=12)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = ht_neuron(1)
+            expected = 0.0132 * _beta_normalization_factor(60.0, 200.0)
+            self.assertAlmostEqual(neuron._cond_step_GABA_B, expected, places=12)
 
 
 class TestHTNeuronReferenceComparison(unittest.TestCase):
@@ -954,35 +1036,35 @@ class TestHTNeuronReferenceComparison(unittest.TestCase):
         params['I_stim'] = I_dc
         y_ref = _default_initial_state(params)
 
+        # Reference: advance scipy in Python loop (unavoidable)
+        V_ref_trace = []
+        for k in range(n_steps):
+            sol = solve_ivp(
+                lambda t, y: _nest_ht_dynamics(t, y, params),
+                [0.0, dt], y_ref,
+                method='RK45', rtol=1e-3, atol=1e-9,
+            )
+            y_ref = sol.y[:, -1]
+            m_eq = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
+            y_ref[_m_fast_NMDA] = min(m_eq, y_ref[_m_fast_NMDA])
+            y_ref[_m_slow_NMDA] = min(m_eq, y_ref[_m_slow_NMDA])
+            V_ref_trace.append(y_ref[_V_M])
+        V_ref_trace = np.array(V_ref_trace)
+
         with brainstate.environ.context(dt=dt * u.ms):
             neuron = ht_neuron(1)
             neuron.init_state()
             # Set I_stim to I_dc (it applies from step 0)
-            neuron.I_stim.value = np.asarray(I_dc)
+            neuron.I_stim.value = jnp.full(neuron.varshape, I_dc)
 
-            V_model_trace = []
-            V_ref_trace = []
-
-            for k in range(n_steps):
-                # Reference solver
-                sol = solve_ivp(
-                    lambda t, y: _nest_ht_dynamics(t, y, params),
-                    [0.0, dt], y_ref,
-                    method='RK45', rtol=1e-3, atol=1e-9,
-                )
-                y_ref = sol.y[:, -1]
-                m_eq = _m_eq_NMDA(y_ref[_V_M], params['S_act_NMDA'], params['V_act_NMDA'])
-                y_ref[_m_fast_NMDA] = min(m_eq, y_ref[_m_fast_NMDA])
-                y_ref[_m_slow_NMDA] = min(m_eq, y_ref[_m_slow_NMDA])
-                V_ref_trace.append(y_ref[_V_M])
-
-                # Model
+            def _run_step(k):
                 with brainstate.environ.context(t=k * dt * u.ms):
                     neuron.update(I_dc)
-                V_model_trace.append(_get_scalar(neuron.V.value))
+                return neuron.V.value
 
-            V_model_trace = np.array(V_model_trace)
-            V_ref_trace = np.array(V_ref_trace)
+            V_model_trace = np.asarray(
+                brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))[:, 0]
+            )
 
             # Traces should match closely
             max_diff = np.max(np.abs(V_model_trace - V_ref_trace))

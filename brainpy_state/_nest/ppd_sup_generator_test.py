@@ -26,7 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 
 from brainpy_state._nest.ppd_sup_generator import ppd_sup_generator
@@ -71,9 +71,10 @@ def _run_bp_counts_and_spikes(
         )
         gen.init_state()
 
+        # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+        ditype = brainstate.environ.ditype()
         for step in range(n_steps):
-            with brainstate.environ.context(t=step * dt):
-                ditype = brainstate.environ.ditype()
+            with brainstate.environ.context(t=step * dt_ms):
                 out = np.asarray(gen.update(), dtype=ditype).reshape(-1)
                 totals[step] = float(out.sum())
                 if spike_chunks is not None:
@@ -349,9 +350,9 @@ class TestPPDSupGeneratorVsNEST(unittest.TestCase):
         nest.Connect(gens, sr)
         nest.Simulate(simtime_ms)
 
+        dftype = brainstate.environ.dftype()
         events = sr.get('events')
         if len(events['times']) == 0:
-            dftype = brainstate.environ.dftype()
             return np.zeros(n_steps, dtype=dftype)
 
         steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)

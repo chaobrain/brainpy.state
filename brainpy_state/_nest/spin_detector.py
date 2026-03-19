@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -136,18 +136,18 @@ class spin_detector(NESTDevice):
         Shape/size metadata consumed by :class:`brainstate.nn.Dynamics`.
         The detector is event-driven and does not return dense tensors, so
         ``in_size`` is retained for API compatibility only. Default is ``1``.
-    start : brainunit.Quantity or float, optional
+    start : saiunit.Quantity or float, optional
         Scalar relative exclusive lower bound of the recording window,
         convertible to ms. Must be finite and an integer multiple of ``dt``.
         The effective gate is ``stamp_step > (origin + start) / dt``.
         Default is ``0.0 * u.ms``.
-    stop : brainunit.Quantity, float, or None, optional
+    stop : saiunit.Quantity, float, or None, optional
         Scalar relative inclusive upper bound of the recording window,
         convertible to ms. Must be ``None`` or finite and aligned to ``dt``.
         Must satisfy ``stop >= start`` when not ``None``. The effective gate
         is ``stamp_step <= (origin + stop) / dt``. ``None`` means no upper
         bound (:math:`s_{\max} = +\infty`). Default is ``None``.
-    origin : brainunit.Quantity or float, optional
+    origin : saiunit.Quantity or float, optional
         Scalar global time-origin shift added to both ``start`` and ``stop``
         when constructing the active window, convertible to ms. Shifting the
         origin displaces the entire recording window without changing its
@@ -243,7 +243,7 @@ class spin_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.spin_detector(start=0.0 * u.ms, stop=1.0 * u.ms)
@@ -267,7 +267,7 @@ class spin_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.spin_detector(time_in_steps=True)
@@ -332,13 +332,13 @@ class spin_detector(NESTDevice):
     @property
     def events(self) -> dict[str, np.ndarray]:
         ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         out = {
             'senders': np.asarray(self._events_senders, dtype=ditype),
             'state': np.asarray(self._events_state, dtype=ditype),
         }
         if self.time_in_steps:
             out['times'] = np.asarray(self._events_times_steps, dtype=ditype)
-            dftype = brainstate.environ.dftype()
             out['offsets'] = np.asarray(self._events_offsets, dtype=dftype)
         else:
             out['times'] = np.asarray(self._events_times_ms, dtype=dftype)
@@ -410,7 +410,7 @@ class spin_detector(NESTDevice):
         offsets : ArrayLike or None, optional
             Per-event sub-step timing offsets :math:`\delta_j` in ms, shape
             ``(N,)`` or scalar broadcastable to ``(N,)``. Values may carry a
-            ``brainunit`` time unit and are converted to ms. Must contain only
+            ``saiunit`` time unit and are converted to ms. Must contain only
             finite values. Default is ``0.0 * u.ms`` for all entries.
         multiplicities : ArrayLike or None, optional
             Explicit non-negative integer event multiplicities cast to
@@ -672,10 +672,10 @@ class spin_detector(NESTDevice):
         size: int = None,
         unit=None,
     ) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            dftype = brainstate.environ.dftype()
             arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
@@ -706,10 +706,10 @@ class spin_detector(NESTDevice):
         default: int = None,
         size: int = None,
     ) -> np.ndarray:
+        ditype = brainstate.environ.ditype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            ditype = brainstate.environ.ditype()
             arr = np.asarray([default], dtype=ditype)
         else:
             arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)

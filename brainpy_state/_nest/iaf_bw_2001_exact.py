@@ -15,18 +15,19 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable, Hashable, Iterable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'iaf_bw_2001_exact',
@@ -151,7 +152,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     ``tau_rise_NMDA``            ``tau_rise_NMDA``        NMDA rise time (ms)
     ``tau_decay_NMDA``           ``tau_decay_NMDA``       NMDA decay time (ms)
     ``alpha``                    ``alpha``                NMDA coupling (1/ms)
-    ``conc_Mg2``                 ``conc_Mg2``             Mg²⁺ concentration (mM)
+    ``conc_Mg2``                 ``conc_Mg2``             Mg2+ concentration (mM)
     ``gsl_error_tol``            ``gsl_error_tol``        RKF45 tolerance (dimensionless)
     ============================ ======================== ============================================
 
@@ -177,7 +178,7 @@ class iaf_bw_2001_exact(NESTNeuron):
        I_{AMPA} &= (V_m - E_{ex}) s_{AMPA} \\
        I_{GABA} &= (V_m - E_{in}) s_{GABA}
 
-    NMDA current includes voltage-dependent Mg²⁺ blockade:
+    NMDA current includes voltage-dependent Mg2+ blockade:
 
     .. math::
 
@@ -241,9 +242,9 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     **Tuple formats:**
 
-    - ``(receptor, weight)`` — receptor ∈ {1, 2, 3} or {'AMPA', 'GABA', 'NMDA'}
-    - ``(receptor, weight, third)`` — ``third`` is multiplicity for AMPA/GABA, port for NMDA
-    - ``(receptor, weight, port, multiplicity)`` — full NMDA specification
+    - ``(receptor, weight)`` --- receptor in {1, 2, 3} or {'AMPA', 'GABA', 'NMDA'}
+    - ``(receptor, weight, third)`` --- ``third`` is multiplicity for AMPA/GABA, port for NMDA
+    - ``(receptor, weight, port, multiplicity)`` --- full NMDA specification
 
     **Dict format:**
 
@@ -261,24 +262,24 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     **Recordable Variables**
 
-    - ``V_m`` — Membrane potential (mV)
-    - ``s_AMPA`` — AMPA conductance state (nS)
-    - ``s_GABA`` — GABA conductance state (nS)
-    - ``s_NMDA`` — Weighted sum of NMDA gating variables (nS), :math:`\sum_j w_j s_j`
-    - ``I_AMPA`` — AMPA current (pA)
-    - ``I_GABA`` — GABA current (pA)
-    - ``I_NMDA`` — NMDA current (pA)
+    - ``V_m`` --- Membrane potential (mV)
+    - ``s_AMPA`` --- AMPA conductance state (nS)
+    - ``s_GABA`` --- GABA conductance state (nS)
+    - ``s_NMDA`` --- Weighted sum of NMDA gating variables (nS), :math:`\sum_j w_j s_j`
+    - ``I_AMPA`` --- AMPA current (pA)
+    - ``I_GABA`` --- GABA current (pA)
+    - ``I_NMDA`` --- NMDA current (pA)
 
     Additional State Variables
     --------------------------
 
-    - ``x_NMDA`` — NMDA rise variables for each port (shape: ``[*in_size, n_ports]``)
-    - ``s_NMDA_components`` — NMDA gating variables for each port (shape: ``[*in_size, n_ports]``)
-    - ``nmda_weights`` — Fixed weights for each NMDA port (shape: ``[*in_size, n_ports]``)
-    - ``refractory_step_count`` — Remaining refractory steps (int32)
-    - ``integration_step`` — Persistent RKF45 step size (ms)
-    - ``I_stim`` — One-step delayed external current buffer (pA)
-    - ``refractory`` — Boolean refractory indicator (only if ``ref_var=True``)
+    - ``x_NMDA`` --- NMDA rise variables for each port (shape: ``[*in_size, n_ports]``)
+    - ``s_NMDA_components`` --- NMDA gating variables for each port (shape: ``[*in_size, n_ports]``)
+    - ``nmda_weights`` --- Fixed weights for each NMDA port (shape: ``[*in_size, n_ports]``)
+    - ``refractory_step_count`` --- Remaining refractory steps (int32)
+    - ``integration_step`` --- Persistent RKF45 step size (ms)
+    - ``I_stim`` --- One-step delayed external current buffer (pA)
+    - ``refractory`` --- Boolean refractory indicator (only if ``ref_var=True``)
 
     **Performance Considerations:**
 
@@ -317,7 +318,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=10)
@@ -331,7 +332,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=5)
@@ -343,14 +344,14 @@ class iaf_bw_2001_exact(NESTNeuron):
         ... ]
         >>> spike = net(spike_events=events)
         >>> print(net.s_NMDA_components.value.shape)  # doctest: +SKIP
-        (5, 2)  # 5 neurons × 2 NMDA ports
+        (5, 2)  # 5 neurons x 2 NMDA ports
 
     **Mixing AMPA, GABA, and NMDA:**
 
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=1, V_th=-50*u.mV)
@@ -369,7 +370,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=3, ref_var=True, t_ref=5*u.ms)
@@ -403,7 +404,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     )
 
     _ATOL = 1e-3
-    _MIN_H = 1e-8  # ms
+    _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 10000
 
     def __init__(
@@ -449,7 +450,7 @@ class iaf_bw_2001_exact(NESTNeuron):
         self.tau_decay_NMDA = braintools.init.param(tau_decay_NMDA, self.varshape)
         self.alpha = braintools.init.param(alpha, self.varshape)
         self.conc_Mg2 = braintools.init.param(conc_Mg2, self.varshape)
-        self.gsl_error_tol = braintools.init.param(gsl_error_tol, self.varshape)
+        self.gsl_error_tol = gsl_error_tol
 
         self.V_initializer = V_initializer
         self.s_AMPA_initializer = s_AMPA_initializer
@@ -460,6 +461,21 @@ class iaf_bw_2001_exact(NESTNeuron):
         self._updates_started = False
 
         self._validate_parameters()
+
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
+
+        # other variable
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     @property
     def receptor_types(self):
@@ -482,48 +498,6 @@ class iaf_bw_2001_exact(NESTNeuron):
             ['V_m', 's_AMPA', 's_GABA', 's_NMDA', 'I_NMDA', 'I_AMPA', 'I_GABA'].
         """
         return list(self.RECORDABLES)
-
-    @staticmethod
-    def _value_to_float(x, unit=None):
-        r"""Convert quantity with units to float64 NumPy array.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            Input value, possibly with units.
-        unit : brainunit.Unit, optional
-            Target unit for division. If None, return dimensionless float.
-
-        Returns
-        -------
-        np.ndarray
-            Float64 array, dimensionless if unit is provided (x / unit), else raw conversion.
-        """
-        if unit is None:
-            dftype = brainstate.environ.dftype()
-            return np.asarray(u.math.asarray(x), dtype=dftype)
-        try:
-            return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-        except Exception:
-            return np.asarray(u.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        r"""Broadcast array to target state shape.
-
-        Parameters
-        ----------
-        x_np : np.ndarray
-            Input array.
-        shape : tuple of int
-            Target shape.
-
-        Returns
-        -------
-        np.ndarray
-            Broadcasted view of input array with target shape.
-        """
-        return np.broadcast_to(x_np, shape)
 
     @classmethod
     def _normalize_spike_receptor(cls, receptor):
@@ -604,33 +578,37 @@ class iaf_bw_2001_exact(NESTNeuron):
         ValueError
             If t_ref is negative.
         """
-        if np.any(self._value_to_float(self.V_reset, u.mV) >= self._value_to_float(self.V_th, u.mV)):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_AMPA)):
+            return
+
+        if np.any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if np.any(self._value_to_float(self.C_m, u.pF) <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._value_to_float(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self._value_to_float(self.tau_AMPA, u.ms) <= 0.0):
+        if np.any(self.tau_AMPA <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._value_to_float(self.tau_GABA, u.ms) <= 0.0):
+        if np.any(self.tau_GABA <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._value_to_float(self.tau_rise_NMDA, u.ms) <= 0.0):
+        if np.any(self.tau_rise_NMDA <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._value_to_float(self.tau_decay_NMDA, u.ms) <= 0.0):
+        if np.any(self.tau_decay_NMDA <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._value_to_float(self.alpha, 1 / u.ms) <= 0.0):
+        if np.any(self.alpha <= 0.0 / u.ms):
             raise ValueError('alpha > 0 required.')
-        if np.any(self._value_to_float(self.conc_Mg2, u.mM) <= 0.0):
+        if np.any(self.conc_Mg2 <= 0.0 * u.mM):
             raise ValueError('Mg2 concentration must be strictly positive.')
-        if np.any(self._value_to_float(self.gsl_error_tol, None) <= 0.0):
+        if np.any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
     def _nmda_num_ports(self):
         if hasattr(self, 'x_NMDA'):
-            return int(np.asarray(self.x_NMDA.value).shape[-1])
+            return int(self.x_NMDA.value.shape[-1])
         return 0
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables.
 
         Creates and initializes membrane potential, synaptic conductances, currents,
@@ -639,11 +617,8 @@ class iaf_bw_2001_exact(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size for state variables. Default: None (no batching).
-            If provided, adds a leading batch dimension to all state variables.
         **kwargs
-            Additional keyword arguments (currently unused).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -652,46 +627,39 @@ class iaf_bw_2001_exact(NESTNeuron):
         - Clears the internal ``_nmda_port_index`` registry
         - Resets ``_updates_started`` flag to False
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        s_ampa = braintools.init.param(self.s_AMPA_initializer, self.varshape, batch_size)
-        s_gaba = braintools.init.param(self.s_GABA_initializer, self.varshape, batch_size)
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+        dt = brainstate.environ.get_dt()
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
+        s_ampa = braintools.init.param(self.s_AMPA_initializer, self.varshape)
+        s_gaba = braintools.init.param(self.s_GABA_initializer, self.varshape)
 
         self.V = brainstate.HiddenState(V)
         self.s_AMPA = brainstate.HiddenState(s_ampa)
         self.s_GABA = brainstate.HiddenState(s_gaba)
 
-        state_shape = self.V.value.shape
-        dftype = brainstate.environ.dftype()
-        zeros = np.zeros(state_shape, dtype=dftype)
+        zeros = u.math.zeros(self.varshape, dtype=dftype)
 
         self.s_NMDA = brainstate.ShortTermState(zeros * u.nS)
         self.I_NMDA = brainstate.ShortTermState(zeros * u.pA)
         self.I_AMPA = brainstate.ShortTermState(zeros * u.pA)
         self.I_GABA = brainstate.ShortTermState(zeros * u.pA)
 
-        self.x_NMDA = brainstate.ShortTermState(np.zeros(state_shape + (0,), dtype=dftype))
-        self.s_NMDA_components = brainstate.ShortTermState(np.zeros(state_shape + (0,), dtype=dftype))
-        self.nmda_weights = brainstate.ShortTermState(np.zeros(state_shape + (0,), dtype=dftype))
+        self.x_NMDA = brainstate.ShortTermState(np.zeros(self.varshape + (0,), dtype=dftype))
+        self.s_NMDA_components = brainstate.ShortTermState(np.zeros(self.varshape + (0,), dtype=dftype))
+        self.nmda_weights = brainstate.ShortTermState(np.zeros(self.varshape + (0,), dtype=dftype))
 
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-
-        dt = brainstate.environ.get_dt()
-        self.integration_step = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
-        )
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0. * u.pA), self.varshape, batch_size)
-        )
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
         self._nmda_port_index = {}
         self._updates_started = False
 
         if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
     def reset_state(self, batch_size: int = None, **kwargs):
@@ -780,15 +748,10 @@ class iaf_bw_2001_exact(NESTNeuron):
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
-
     def _ensure_nmda_port(self, port: Hashable, weight_np: np.ndarray, state_shape):
+        dftype = brainstate.environ.dftype()
         if port in self._nmda_port_index:
             idx = self._nmda_port_index[port]
-            dftype = brainstate.environ.dftype()
             current_weight = np.asarray(self.nmda_weights.value[..., idx], dtype=dftype)
             if np.any(current_weight != weight_np):
                 raise ValueError('iaf_bw_2001_exact requires constant weights per NMDA port.')
@@ -901,226 +864,129 @@ class iaf_bw_2001_exact(NESTNeuron):
         return ds_ampa, ds_gaba
 
     @staticmethod
-    def _nmda_currents_scalar(v, s_ampa, s_gaba, s_nmda_sum, p):
-        r"""Compute synaptic currents for a single neuron (scalar computation).
+    def _value_to_float(x, unit=None):
+        r"""Convert quantity with units to float64 NumPy array.
 
         Parameters
         ----------
-        v : float
-            Membrane potential (mV).
-        s_ampa : float
-            AMPA conductance state (nS).
-        s_gaba : float
-            GABA conductance state (nS).
-        s_nmda_sum : float
-            Weighted sum of NMDA gating variables (nS), sum_j w_j s_j.
-        p : dict
-            Parameter dictionary with keys 'E_ex', 'E_in', 'conc_Mg2' (all floats in base units).
+        x : ArrayLike
+            Input value, possibly with units.
+        unit : saiunit.Unit, optional
+            Target unit for division. If None, return dimensionless float.
 
         Returns
         -------
-        i_ampa : float
-            AMPA current (pA).
-        i_gaba : float
-            GABA current (pA).
-        i_nmda : float
-            NMDA current with Mg2+ blockade (pA).
-
-        Notes
-        -----
-        NMDA Mg2+ blockade: denom = 1 + [Mg2+] * exp(-0.062 * V) / 3.57
+        np.ndarray
+            Float64 array, dimensionless if unit is provided (x / unit), else raw conversion.
         """
-        i_ampa = (v - p['E_ex']) * s_ampa
-        i_gaba = (v - p['E_in']) * s_gaba
-        denom = 1.0 + p['conc_Mg2'] * math.exp(-0.062 * v) / 3.57
-        i_nmda = (v - p['E_ex']) / denom * s_nmda_sum
-        return i_ampa, i_gaba, i_nmda
+        dftype = brainstate.environ.dftype()
+        if unit is None:
+            return np.asarray(u.math.asarray(x), dtype=dftype)
+        try:
+            return np.asarray(u.math.asarray(x / unit), dtype=dftype)
+        except Exception:
+            return np.asarray(u.math.asarray(x), dtype=dftype)
 
-    @classmethod
-    def _dynamics_scalar(cls, y, i_stim, p, nmda_weights):
-        r"""Compute ODE right-hand side for a single neuron (scalar computation).
+    @staticmethod
+    def _broadcast_to_state(x_np: np.ndarray, shape):
+        r"""Broadcast array to target state shape.
 
         Parameters
         ----------
-        y : np.ndarray
-            State vector with layout: [V_m, s_AMPA, s_GABA, x_0, ..., x_{n-1}, s_0, ..., s_{n-1}]
-            where n is the number of NMDA ports. Shape: (3 + 2*n_nmda,).
-        i_stim : float
-            External input current (pA).
-        p : dict
-            Parameter dictionary (all values in base units).
-        nmda_weights : np.ndarray
-            Fixed NMDA weights for each port (nS). Shape: (n_nmda,).
+        x_np : np.ndarray
+            Input array.
+        shape : tuple of int
+            Target shape.
 
         Returns
         -------
-        dy : np.ndarray
-            Time derivatives dy/dt with same shape as y.
-        i_ampa : float
-            AMPA current (pA).
-        i_gaba : float
-            GABA current (pA).
-        i_nmda : float
-            NMDA current (pA).
-        s_nmda_sum : float
-            Weighted NMDA sum (nS).
-
-        Notes
-        -----
-        ODE system:
-            dV/dt = (-g_L(V - E_L) - I_syn + I_stim) / C_m
-            ds_AMPA/dt = -s_AMPA / tau_AMPA
-            ds_GABA/dt = -s_GABA / tau_GABA
-            dx_j/dt = -x_j / tau_rise_NMDA
-            ds_j/dt = -s_j / tau_decay_NMDA + alpha * x_j * (1 - s_j)
+        np.ndarray
+            Broadcasted view of input array with target shape.
         """
-        n_nmda = int(nmda_weights.shape[0])
-        v = float(y[0])
-        s_ampa = float(y[1])
-        s_gaba = float(y[2])
+        return np.broadcast_to(x_np, shape)
 
-        if n_nmda > 0:
-            x_nmda = y[3:3 + n_nmda]
-            s_nmda = y[3 + n_nmda:]
-            s_nmda_sum = float(np.dot(s_nmda, nmda_weights))
-        else:
-            dftype = brainstate.environ.dftype()
-            x_nmda = np.zeros((0,), dtype=dftype)
-            s_nmda = np.zeros((0,), dtype=dftype)
-            s_nmda_sum = 0.0
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
 
-        i_ampa, i_gaba, i_nmda = cls._nmda_currents_scalar(v, s_ampa, s_gaba, s_nmda_sum, p)
+        The ODE is integrated freely without in-loop V clamping or spike reset.
+        Spike detection and refractory clamping are applied post-integration
+        in :meth:`update`, matching NEST's GSL-based integration semantics.
+
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, s_AMPA, s_GABA, x_NMDA, s_NMDA_components -- ODE state variables.
+        extra : DotDict
+            Keys: unstable, i_stim, nmda_weights -- auxiliary data.
+
+        Returns
+        -------
+        DotDict with same keys as ``state``, containing time derivatives.
+        """
+        v_eff = state.V  # V evolves freely; no refractory clamping in ODE
+
+        # Synaptic currents
+        i_ampa = state.s_AMPA * (v_eff - self.E_ex)
+        i_gaba = state.s_GABA * (v_eff - self.E_in)
+
+        # NMDA current with Mg2+ blockade
+        # nmda_weights shape: (*varshape, n_ports), s_NMDA_components shape: (*varshape, n_ports)
+        s_nmda_sum = u.math.sum(extra.nmda_weights * state.s_NMDA_components, axis=-1)
+        # Mg2+ voltage-dependent block: denom = 1 + [Mg2+] * exp(-0.062 * V_mV) / 3.57
+        v_mV = v_eff / u.mV
+        conc_Mg2_mM = self.conc_Mg2 / u.mM
+        denom = 1.0 + conc_Mg2_mM * u.math.exp(-0.062 * v_mV) / 3.57
+        i_nmda = (v_eff - self.E_ex) / denom * s_nmda_sum * u.nS
+
         i_syn = i_ampa + i_gaba + i_nmda
 
-        dy = np.zeros_like(y, dtype=dftype)
-        dy[0] = (-p['g_L'] * (v - p['E_L']) - i_syn + i_stim) / p['C_m']
-        dy[1] = -s_ampa / p['tau_AMPA']
-        dy[2] = -s_gaba / p['tau_GABA']
+        dV = (-self.g_L * (v_eff - self.E_L) - i_syn + extra.i_stim) / self.C_m
 
-        if n_nmda > 0:
-            dy[3:3 + n_nmda] = -x_nmda / p['tau_rise_NMDA']
-            dy[3 + n_nmda:] = -s_nmda / p['tau_decay_NMDA'] + p['alpha'] * x_nmda * (1.0 - s_nmda)
+        ds_AMPA = -state.s_AMPA / self.tau_AMPA
+        ds_GABA = -state.s_GABA / self.tau_GABA
 
-        return dy, i_ampa, i_gaba, i_nmda, s_nmda_sum
+        # NMDA dynamics: dx_j/dt = -x_j / tau_rise_NMDA
+        #                ds_j/dt = -s_j / tau_decay_NMDA + alpha * x_j * (1 - s_j)
+        # Expand tau/alpha for broadcasting over port dimension
+        tau_rise = u.math.expand_dims(self.tau_rise_NMDA, axis=-1)
+        tau_decay = u.math.expand_dims(self.tau_decay_NMDA, axis=-1)
+        alpha_exp = u.math.expand_dims(self.alpha, axis=-1)
 
-    def _rkf45_integrate_scalar(self, y0, i_stim, h0, dt, p, nmda_weights, atol):
-        r"""Integrate ODEs for a single neuron using adaptive RKF45 method.
+        dx_NMDA = -state.x_NMDA / tau_rise
+        ds_NMDA_components = -state.s_NMDA_components / tau_decay + alpha_exp * state.x_NMDA * (1.0 - state.s_NMDA_components)
 
-        Uses Runge-Kutta-Fehlberg (RKF45) with embedded 4th and 5th order methods
-        for local error estimation and adaptive step size control.
+        return DotDict(
+            V=dV,
+            s_AMPA=ds_AMPA,
+            s_GABA=ds_GABA,
+            x_NMDA=dx_NMDA,
+            s_NMDA_components=ds_NMDA_components,
+        )
+
+    def _event_fn(self, state, extra, accept):
+        """Track numerical instability only; no in-ODE spike/reset logic.
+
+        Spike detection and refractory clamping are handled post-integration
+        in :meth:`update` to match NEST's semantics (currents recorded from
+        freely-evolved, pre-reset V).
 
         Parameters
         ----------
-        y0 : np.ndarray
-            Initial state vector [V_m, s_AMPA, s_GABA, x_0, ..., s_0, ...]. Shape: (3 + 2*n_nmda,).
-        i_stim : float
-            External input current (pA).
-        h0 : float
-            Initial step size (ms).
-        dt : float
-            Total integration interval (ms).
-        p : dict
-            Parameter dictionary (all values in base units).
-        nmda_weights : np.ndarray
-            Fixed NMDA weights (nS). Shape: (n_nmda,).
-        atol : float
-            Absolute local error tolerance (dimensionless).
+        state : DotDict
+            Keys: V, s_AMPA, s_GABA, x_NMDA, s_NMDA_components.
+        extra : DotDict
+            Keys: unstable, i_stim, nmda_weights.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
 
         Returns
         -------
-        y : np.ndarray
-            Final state vector after integration.
-        h : float
-            Final adaptive step size (ms), used as initial step for next time step.
-        i_ampa : float
-            Final AMPA current (pA).
-        i_gaba : float
-            Final GABA current (pA).
-        i_nmda : float
-            Final NMDA current (pA).
-        s_nmda_sum : float
-            Final weighted NMDA sum (nS).
-
-        Notes
-        -----
-        **Adaptive step size control:**
-
-        - If local error < atol, accept step and increase h by factor <= 5
-        - If local error > atol, reject step and decrease h by factor >= 0.2
-        - Step size clipped to [MIN_H, dt - t] where MIN_H = 1e-8 ms
-        - Maximum iterations: 10,000 (to prevent infinite loops)
-
-        **RKF45 coefficients:**
-
-        - 4th order: Butcher tableau with (25/216, 0, 1408/2565, 2197/4104, -1/5, 0)
-        - 5th order: (16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55)
-        - Error estimate: max|y5 - y4|
-
-        **Persistence:**
-
-        - Returned step size h is stored in ``integration_step`` state
-        - Provides continuity across time steps for smooth adaptation
+        (state, new_extra) -- state is unchanged; extra has updated unstable flag.
         """
-        t = 0.0
-        h = max(h0, self._MIN_H)
-        dftype = brainstate.environ.dftype()
-        y = np.asarray(y0, dtype=dftype)
-        iters = 0
-
-        i_ampa = 0.0
-        i_gaba = 0.0
-        i_nmda = 0.0
-        s_nmda_sum = 0.0
-
-        while t < dt and iters < self._MAX_ITERS:
-            iters += 1
-            h = max(self._MIN_H, min(h, dt - t))
-
-            k1, *_ = self._dynamics_scalar(y, i_stim, p, nmda_weights)
-            k2, *_ = self._dynamics_scalar(y + h * (1.0 / 4.0) * k1, i_stim, p, nmda_weights)
-            k3, *_ = self._dynamics_scalar(
-                y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0),
-                i_stim,
-                p,
-                nmda_weights,
-            )
-            k4, *_ = self._dynamics_scalar(
-                y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0),
-                i_stim,
-                p,
-                nmda_weights,
-            )
-            k5, *_ = self._dynamics_scalar(
-                y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0),
-                i_stim,
-                p,
-                nmda_weights,
-            )
-            k6, *_ = self._dynamics_scalar(
-                y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0),
-                i_stim,
-                p,
-                nmda_weights,
-            )
-
-            y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-            y5 = y + h * (
-                16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0
-            )
-            err = float(np.max(np.abs(y5 - y4)))
-
-            if err <= atol or h <= self._MIN_H:
-                y = y5
-                t += h
-                fac = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * (atol / err) ** 0.2))
-                h = max(self._MIN_H, h * fac)
-            else:
-                fac = min(1.0, max(0.2, 0.9 * (atol / err) ** 0.25))
-                h = max(self._MIN_H, h * fac)
-
-            _, i_ampa, i_gaba, i_nmda, s_nmda_sum = self._dynamics_scalar(y, i_stim, p, nmda_weights)
-
-        return y, h, i_ampa, i_gaba, i_nmda, s_nmda_sum
+        unstable = extra.unstable | jnp.any(
+            accept & (u.get_mantissa(state.V) < -1e3)
+        )
+        return state, DotDict({**extra, 'unstable': unstable})
 
     def update(self, x=0. * u.pA, spike_events=None):
         r"""Advance neuron state by one simulation time step.
@@ -1172,7 +1038,7 @@ class iaf_bw_2001_exact(NESTNeuron):
         **Update sequence (matches NEST ordering):**
 
         1. **RKF45 integration**: Integrate V_m, s_AMPA, s_GABA, x_NMDA, s_NMDA on (t, t+dt]
-        2. **Spike jumps**: Add to s_AMPA, s_GABA (weight × multiplicity), x_NMDA (multiplicity only)
+        2. **Spike jumps**: Add to s_AMPA, s_GABA (weight x multiplicity), x_NMDA (multiplicity only)
         3. **Threshold check**: If V_m >= V_th and not refractory, emit spike and reset
         4. **Refractory update**: Decrement refractory countdown or clamp V_m to V_reset
         5. **Buffer stimulus**: Store current input in ``I_stim`` for next step (one-step delay)
@@ -1197,165 +1063,134 @@ class iaf_bw_2001_exact(NESTNeuron):
         - Threshold check bypassed while refractory
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        dt = float(u.math.asarray(dt_q / u.ms))
+        dt = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
 
         state_shape = self.V.value.shape
 
-        V = self._broadcast_to_state(self._value_to_float(self.V.value, u.mV), state_shape)
-        s_ampa = self._broadcast_to_state(self._value_to_float(self.s_AMPA.value, u.nS), state_shape)
-        s_gaba = self._broadcast_to_state(self._value_to_float(self.s_GABA.value, u.nS), state_shape)
+        # Read state variables with their natural units.
+        V = self.V.value  # mV
+        s_AMPA = self.s_AMPA.value  # nS
+        s_GABA = self.s_GABA.value  # nS
+        x_NMDA = self.x_NMDA.value  # dimensionless
+        s_NMDA_components = self.s_NMDA_components.value  # dimensionless
+        nmda_weights_val = self.nmda_weights.value  # nS (dimensionless float)
+        r = self.refractory_step_count.value  # int
+        i_stim = self.I_stim.value  # pA
+        h = self.integration_step.value  # ms
 
-        i_ampa_prev = self._broadcast_to_state(self._value_to_float(self.I_AMPA.value, u.pA), state_shape)
-        i_gaba_prev = self._broadcast_to_state(self._value_to_float(self.I_GABA.value, u.pA), state_shape)
-        i_nmda_prev = self._broadcast_to_state(self._value_to_float(self.I_NMDA.value, u.pA), state_shape)
+        # Current input for next step (one-step delay).
+        new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
 
-        ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), state_shape
-        )
-        i_stim = self._broadcast_to_state(self._value_to_float(self.I_stim.value, u.pA), state_shape)
-        h_int = self._broadcast_to_state(self._value_to_float(self.integration_step.value, u.ms), state_shape)
-
-        p = {
-            'E_L': self._broadcast_to_state(self._value_to_float(self.E_L, u.mV), state_shape),
-            'E_ex': self._broadcast_to_state(self._value_to_float(self.E_ex, u.mV), state_shape),
-            'E_in': self._broadcast_to_state(self._value_to_float(self.E_in, u.mV), state_shape),
-            'V_th': self._broadcast_to_state(self._value_to_float(self.V_th, u.mV), state_shape),
-            'V_reset': self._broadcast_to_state(self._value_to_float(self.V_reset, u.mV), state_shape),
-            'C_m': self._broadcast_to_state(self._value_to_float(self.C_m, u.pF), state_shape),
-            'g_L': self._broadcast_to_state(self._value_to_float(self.g_L, u.nS), state_shape),
-            'tau_AMPA': self._broadcast_to_state(self._value_to_float(self.tau_AMPA, u.ms), state_shape),
-            'tau_GABA': self._broadcast_to_state(self._value_to_float(self.tau_GABA, u.ms), state_shape),
-            'tau_rise_NMDA': self._broadcast_to_state(self._value_to_float(self.tau_rise_NMDA, u.ms), state_shape),
-            'tau_decay_NMDA': self._broadcast_to_state(self._value_to_float(self.tau_decay_NMDA, u.ms), state_shape),
-            'alpha': self._broadcast_to_state(self._value_to_float(self.alpha, 1 / u.ms), state_shape),
-            'conc_Mg2': self._broadcast_to_state(self._value_to_float(self.conc_Mg2, u.mM), state_shape),
-            'gsl_error_tol': self._broadcast_to_state(self._value_to_float(self.gsl_error_tol, None), state_shape),
-        }
-
+        # Parse spike events (AMPA/GABA weight deltas and NMDA multiplicities).
         ds_ampa_ev, ds_gaba_ev, dx_nmda_ev = self._parse_spike_events(spike_events, state_shape)
         ds_ampa_reg, ds_gaba_reg = self._parse_registered_spike_inputs(state_shape)
         ds_ampa = ds_ampa_ev + ds_ampa_reg
         ds_gaba = ds_gaba_ev + ds_gaba_reg
 
-        dftype = brainstate.environ.dftype()
-        x_nmda = np.asarray(self.x_NMDA.value, dtype=dftype)
-        s_nmda_components = np.asarray(self.s_NMDA_components.value, dtype=dftype)
-        nmda_weights = np.asarray(self.nmda_weights.value, dtype=dftype)
-        n_nmda = int(x_nmda.shape[-1])
+        n_nmda_pre = int(x_NMDA.shape[-1]) if len(x_NMDA.shape) > len(state_shape) else 0
+        # Re-read n_nmda and weights after parsing; new ports may have been registered.
+        n_nmda = int(self.x_NMDA.value.shape[-1]) if len(self.x_NMDA.value.shape) > len(state_shape) else 0
+        nmda_weights_val = self.nmda_weights.value
 
-        if dx_nmda_ev.shape[-1] != n_nmda:
+        # If new ports were registered during parsing, expand pre-integration arrays with zeros.
+        if n_nmda > n_nmda_pre:
+            n_new = n_nmda - n_nmda_pre
+            x_NMDA = np.concatenate(
+                [np.asarray(x_NMDA, dtype=dftype), np.zeros(state_shape + (n_new,), dtype=dftype)], axis=-1
+            )
+            s_NMDA_components = np.concatenate(
+                [np.asarray(s_NMDA_components, dtype=dftype), np.zeros(state_shape + (n_new,), dtype=dftype)], axis=-1
+            )
+
+        if n_nmda > 0 and dx_nmda_ev.shape[-1] != n_nmda:
             if dx_nmda_ev.shape[-1] < n_nmda:
                 pad = np.zeros(state_shape + (n_nmda - dx_nmda_ev.shape[-1],), dtype=dftype)
                 dx_nmda_ev = np.concatenate([dx_nmda_ev, pad], axis=-1)
             else:
                 dx_nmda_ev = dx_nmda_ev[..., :n_nmda]
 
-        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
-        new_i_stim = self._broadcast_to_state(self._value_to_float(new_i_stim_q, u.pA), state_shape)
-
-        v_for_spike = np.empty_like(V)
-        V_next = np.empty_like(V)
-        s_ampa_next = np.empty_like(s_ampa)
-        s_gaba_next = np.empty_like(s_gaba)
-        x_nmda_next = np.empty_like(x_nmda)
-        s_nmda_next = np.empty_like(s_nmda_components)
-        s_nmda_sum_next = np.zeros_like(V)
-
-        i_ampa_next = np.empty_like(i_ampa_prev)
-        i_gaba_next = np.empty_like(i_gaba_prev)
-        i_nmda_next = np.empty_like(i_nmda_prev)
-
-        r_next = np.empty_like(r)
-        h_next = np.empty_like(h_int)
-        last_spike = self._broadcast_to_state(self._value_to_float(self.last_spike_time.value, u.ms), state_shape)
-        last_spike_next = np.empty_like(last_spike)
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
-            state_shape,
+        # Adaptive RKF45 integration via generic integrator.
+        # V evolves freely (no in-ODE refractory clamp or spike reset)
+        # to match NEST's GSL integration semantics.
+        ode_state = DotDict(
+            V=V,
+            s_AMPA=s_AMPA,
+            s_GABA=s_GABA,
+            x_NMDA=x_NMDA,
+            s_NMDA_components=s_NMDA_components,
+        )
+        ode_extra = DotDict(
+            unstable=jnp.array(False),
+            i_stim=i_stim,
+            nmda_weights=nmda_weights_val,
         )
 
-        for idx in np.ndindex(state_shape):
-            local_p = {k: p[k][idx] for k in p}
-            w_nmda_i = np.asarray(nmda_weights[idx], dtype=dftype)
-            x_i = np.asarray(x_nmda[idx], dtype=dftype)
-            s_i = np.asarray(s_nmda_components[idx], dtype=dftype)
-            y0 = np.concatenate([
-                np.asarray([V[idx], s_ampa[idx], s_gaba[idx]], dtype=dftype),
-                x_i,
-                s_i,
-            ])
-            y_i, h_i, ia_i, ig_i, in_i, s_nmda_sum_i = self._rkf45_integrate_scalar(
-                y0=y0,
-                i_stim=i_stim[idx],
-                h0=h_int[idx],
-                dt=dt,
-                p=local_p,
-                nmda_weights=w_nmda_i,
-                atol=local_p['gsl_error_tol'],
-            )
+        ode_state, h, ode_extra = self.integrator(state=ode_state, h=h, extra=ode_extra)
+        V = ode_state.V        # freely-evolved post-ODE V (may exceed V_th)
+        s_AMPA = ode_state.s_AMPA
+        s_GABA = ode_state.s_GABA
+        x_NMDA = ode_state.x_NMDA
+        s_NMDA_components = ode_state.s_NMDA_components
+        unstable = ode_extra.unstable
 
-            sa_i = y_i[1] + ds_ampa[idx]
-            sg_i = y_i[2] + ds_gaba[idx]
-            if n_nmda > 0:
-                x_i = y_i[3:3 + n_nmda] + dx_nmda_ev[idx]
-                s_i = y_i[3 + n_nmda:]
-            else:
-                x_i = np.zeros((0,), dtype=dftype)
-                s_i = np.zeros((0,), dtype=dftype)
+        # Post-loop stability check.
+        brainstate.transform.jit_error_if(
+            jnp.any(unstable), 'Numerical instability in iaf_bw_2001_exact dynamics.'
+        )
 
-            v_i = y_i[0]
-            if r[idx] > 0:
-                v_for_spike[idx] = local_p['V_reset']
-                v_i = local_p['V_reset']
-                r_i = r[idx] - 1
-                t_last_i = last_spike[idx]
-            else:
-                v_for_spike[idx] = v_i
-                if v_i >= local_p['V_th']:
-                    v_i = local_p['V_reset']
-                    r_i = int(refr_counts[idx])
-                    t_last_i = float(u.math.asarray((t + dt_q) / u.ms))
-                else:
-                    r_i = 0
-                    t_last_i = last_spike[idx]
+        # Compute NMDA weighted sum and synaptic currents for recording.
+        # Use the freely-evolved post-ODE V (before any spike reset or refractory clamp),
+        # matching NEST's recording semantics where currents are snapshotted pre-reset.
+        if n_nmda > 0:
+            s_nmda_sum = u.math.sum(nmda_weights_val * s_NMDA_components, axis=-1)
+        else:
+            s_nmda_sum = u.math.zeros(self.varshape, dtype=dftype)
 
-            V_next[idx] = v_i
-            s_ampa_next[idx] = sa_i
-            s_gaba_next[idx] = sg_i
-            if n_nmda > 0:
-                x_nmda_next[idx] = x_i
-                s_nmda_next[idx] = s_i
-            s_nmda_sum_next[idx] = s_nmda_sum_i
+        v_for_current = V  # pre-reset, freely-evolved V
+        i_ampa = s_AMPA * (v_for_current - self.E_ex)
+        i_gaba = s_GABA * (v_for_current - self.E_in)
+        v_mV = v_for_current / u.mV
+        conc_Mg2_mM = self.conc_Mg2 / u.mM
+        denom = 1.0 + conc_Mg2_mM * u.math.exp(-0.062 * v_mV) / 3.57
+        i_nmda = (v_for_current - self.E_ex) / denom * s_nmda_sum * u.nS
 
-            i_ampa_next[idx] = ia_i
-            i_gaba_next[idx] = ig_i
-            i_nmda_next[idx] = in_i
+        # Apply synaptic spike inputs (applied after integration).
+        s_AMPA = s_AMPA + ds_ampa * u.nS
+        s_GABA = s_GABA + ds_gaba * u.nS
+        if n_nmda > 0:
+            x_NMDA = x_NMDA + dx_nmda_ev
 
-            r_next[idx] = r_i
-            h_next[idx] = h_i
-            last_spike_next[idx] = t_last_i
+        # Post-ODE spike detection and refractory handling (matches NEST ordering).
+        # Refractory neurons: clamp V to V_reset, decrement counter.
+        is_refractory = r > 0
+        V = u.math.where(is_refractory, self.V_reset, V)
+        r = u.math.where(is_refractory, r - 1, r)
 
-        self.V.value = V_next * u.mV
-        self.s_AMPA.value = s_ampa_next * u.nS
-        self.s_GABA.value = s_gaba_next * u.nS
-        self.s_NMDA.value = s_nmda_sum_next * u.nS
+        # Non-refractory neurons: check threshold, emit spike, reset V, enter refractoriness.
+        spike_mask = (~is_refractory) & (V >= self.V_th)
+        V = u.math.where(spike_mask, self.V_reset, V)
+        r = u.math.where(spike_mask & (self.ref_count > 0), self.ref_count, r)
 
-        self.x_NMDA.value = x_nmda_next
-        self.s_NMDA_components.value = s_nmda_next
-
-        self.I_AMPA.value = i_ampa_next * u.pA
-        self.I_GABA.value = i_gaba_next * u.pA
-        self.I_NMDA.value = i_nmda_next * u.pA
-
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
-        self.integration_step.value = h_next * u.ms
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_next * u.ms)
+        # Write back state.
+        self.V.value = V
+        self.s_AMPA.value = s_AMPA
+        self.s_GABA.value = s_GABA
+        self.s_NMDA.value = s_nmda_sum * u.nS
+        self.x_NMDA.value = x_NMDA
+        self.s_NMDA_components.value = s_NMDA_components
+        self.I_AMPA.value = i_ampa
+        self.I_GABA.value = i_gaba
+        self.I_NMDA.value = i_nmda
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
         self._updates_started = True
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=dftype) * u.mV)
+        return u.math.asarray(spike_mask, dtype=dftype)

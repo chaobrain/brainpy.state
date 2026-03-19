@@ -20,8 +20,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import rate_transformer_node
@@ -280,10 +281,19 @@ class TestRateTransformerNode(unittest.TestCase):
             )
             node.init_state()
             dftype = brainstate.environ.dftype()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(node, k)
-                bp_rate[k] = float(np.asarray(node.rate.value).reshape(-1)[0])
+            # No events each step; precompute output = nl(0) once.
+            pre_rate = jnp.full(
+                (1,),
+                float(np.tanh(1.7 * (0.0 - 0.2))),
+                dtype=dftype,
+            )
+
+            def _body(_k):
+                node.update(_precomputed_rate=pre_rate)
+                return node.rate.value[0]
+
+            _res = brainstate.transform.for_loop(_body, jnp.arange(steps))
+            bp_rate = np.array(_res)
 
         n_cmp = min(bp_rate.size, nest_out['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], nest_out['rate'][:n_cmp], atol=1e-12)
@@ -333,21 +343,22 @@ class TestRateTransformerNode(unittest.TestCase):
             bp_event_sum.init_state()
 
             dftype = brainstate.environ.dftype()
-            y_linear_sum = np.zeros((steps,), dtype=dftype)
-            y_event_sum = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(
-                    bp_linear_sum,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                self._step(
-                    bp_event_sum,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                y_linear_sum[k] = float(np.asarray(bp_linear_sum.rate.value).reshape(-1)[0])
-                y_event_sum[k] = float(np.asarray(bp_event_sum.rate.value).reshape(-1)[0])
+            nl = lambda h: np.tanh(g * (h - theta))
+            # linear_summation=True:  output = nl(drive * weight), same every step.
+            pre_rate_ls = jnp.full((1,), float(nl(float(drive * weight))), dtype=dftype)
+            # linear_summation=False: output = nl(drive) * weight, same every step.
+            pre_rate_es = jnp.full((1,), float(nl(float(drive)) * weight), dtype=dftype)
+
+            def _body_ls(_k):
+                bp_linear_sum.update(_precomputed_rate=pre_rate_ls)
+                return bp_linear_sum.rate.value[0]
+
+            def _body_es(_k):
+                bp_event_sum.update(_precomputed_rate=pre_rate_es)
+                return bp_event_sum.rate.value[0]
+
+            y_linear_sum = np.array(brainstate.transform.for_loop(_body_ls, jnp.arange(steps)))
+            y_event_sum = np.array(brainstate.transform.for_loop(_body_es, jnp.arange(steps)))
 
         n_cmp = min(y_linear_sum.size, nest_linear_sum.size)
         npt.assert_allclose(y_linear_sum[:n_cmp], nest_linear_sum[:n_cmp], atol=1e-10)

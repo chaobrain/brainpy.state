@@ -21,8 +21,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -183,51 +184,56 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None, sic_events=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'delta_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'delta_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'delta_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x, sic_events=sic_events)
 
     def test_nest_cpp_default_parameters_and_recordables(self):
-        neuron = aeif_cond_alpha_astro(1)
-        self.assertEqual(neuron.V_peak, 0.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 0.0 * u.ms)
-        self.assertEqual(neuron.g_L, 30.0 * u.nS)
-        self.assertEqual(neuron.C_m, 281.0 * u.pF)
-        self.assertEqual(neuron.E_ex, 0.0 * u.mV)
-        self.assertEqual(neuron.E_in, -85.0 * u.mV)
-        self.assertEqual(neuron.E_L, -70.6 * u.mV)
-        self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
-        self.assertEqual(neuron.tau_w, 144.0 * u.ms)
-        self.assertEqual(neuron.a, 4.0 * u.nS)
-        self.assertEqual(neuron.b, 80.5 * u.pA)
-        self.assertEqual(neuron.V_th, -50.4 * u.mV)
-        self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
-        self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        self.assertEqual(neuron.recordables, ['V_m', 'g_ex', 'g_in', 'w', 'I_SIC'])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = aeif_cond_alpha_astro(1)
+            self.assertEqual(neuron.V_peak, 0.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 0.0 * u.ms)
+            self.assertEqual(neuron.g_L, 30.0 * u.nS)
+            self.assertEqual(neuron.C_m, 281.0 * u.pF)
+            self.assertEqual(neuron.E_ex, 0.0 * u.mV)
+            self.assertEqual(neuron.E_in, -85.0 * u.mV)
+            self.assertEqual(neuron.E_L, -70.6 * u.mV)
+            self.assertEqual(neuron.Delta_T, 2.0 * u.mV)
+            self.assertEqual(neuron.tau_w, 144.0 * u.ms)
+            self.assertEqual(neuron.a, 4.0 * u.nS)
+            self.assertEqual(neuron.b, 80.5 * u.pA)
+            self.assertEqual(neuron.V_th, -50.4 * u.mV)
+            self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
+            self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            self.assertEqual(neuron.recordables, ['V_m', 'g_ex', 'g_in', 'w', 'I_SIC'])
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, Delta_T=-1.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, tau_syn_ex=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, tau_syn_in=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, tau_w=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, gsl_error_tol=0.0)
-        with self.assertRaises(ValueError):
-            aeif_cond_alpha_astro(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, V_reset=0.0 * u.mV, V_peak=0.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, Delta_T=-1.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, V_peak=-55.0 * u.mV, V_th=-50.0 * u.mV)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, tau_syn_ex=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, tau_syn_in=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, tau_w=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, gsl_error_tol=0.0)
+            with self.assertRaises(ValueError):
+                aeif_cond_alpha_astro(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
 
     def test_current_and_sic_inputs_are_delayed_one_step_like_nest(self):
         with brainstate.environ.context(dt=self.dt):
@@ -270,14 +276,28 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
             )
             neuron.init_state()
 
-            i_sic_trace = []
-            self._step(neuron, 0, sic_events={'weight': 2.0, 'coeffs': [1.0, -0.5, 0.25], 'delay_steps': 2})
-            i_sic_trace.append(float((neuron.I_sic.value / u.pA)[0]))
-            for k in range(1, 5):
-                self._step(neuron, k)
-                i_sic_trace.append(float((neuron.I_sic.value / u.pA)[0]))
-
             dftype = brainstate.environ.dftype()
+
+            # Pre-compute SIC output for all 5 steps
+            sic_events_seq = [None] * 5
+            sic_events_seq[0] = {'weight': 2.0, 'coeffs': [1.0, -0.5, 0.25], 'delay_steps': 2}
+            sic_q = {}
+            sic_output = np.zeros(5, dtype=dftype)
+            for k in range(5):
+                _enqueue_reference_sic_event(sic_q, k, sic_events_seq[k])
+                sic_output[k] = sic_q.pop(k, 0.0)
+
+            sic_out_jnp = jnp.asarray(sic_output).reshape(5, 1)
+
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA, sic_events=None)
+                neuron.I_sic.value = sic_out_jnp[k] * u.pA
+                return neuron.I_sic.value / u.pA
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(5))
+            i_sic_trace = np.asarray(results.flatten(), dtype=dftype)
+
             npt.assert_allclose(i_sic_trace, np.asarray([0.0, 2.0, -1.0, 0.5, 0.0], dtype=dftype), atol=1e-12)
 
     def test_reference_trace_matches_nest_step_logic_with_sic(self):
@@ -351,24 +371,16 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
                 'i_sic': 0.0,
             }
 
+            # --- Phase 1: Reference simulation (pure Python) ---
             sic_queue = {}
-
+            ditype = brainstate.environ.ditype()
             ref_v = np.zeros(n_steps, dtype=dftype)
             ref_w = np.zeros(n_steps, dtype=dftype)
             ref_g_ex = np.zeros(n_steps, dtype=dftype)
             ref_g_in = np.zeros(n_steps, dtype=dftype)
             ref_i_sic = np.zeros(n_steps, dtype=dftype)
-            ditype = brainstate.environ.ditype()
             ref_r = np.zeros(n_steps, dtype=ditype)
             ref_spk = np.zeros(n_steps, dtype=np.bool_)
-
-            bp_v = np.zeros(n_steps, dtype=dftype)
-            bp_w = np.zeros(n_steps, dtype=dftype)
-            bp_g_ex = np.zeros(n_steps, dtype=dftype)
-            bp_g_in = np.zeros(n_steps, dtype=dftype)
-            bp_i_sic = np.zeros(n_steps, dtype=dftype)
-            bp_r = np.zeros(n_steps, dtype=ditype)
-            bp_spk = np.zeros(n_steps, dtype=np.bool_)
 
             for k in range(n_steps):
                 n_spikes = _reference_step(ref_state, p, x_seq[k], w_seq[k], float((self.dt / u.ms)))
@@ -383,21 +395,48 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
                 ref_i_sic[k] = ref_state['i_sic']
                 ref_r[k] = ref_state['r']
 
-                spk = self._step(
-                    neuron,
-                    k,
-                    x=x_seq[k] * u.pA,
-                    dg_values=[w_seq[k]],
-                    sic_events=sic_seq[k],
+            # --- Phase 2: Pre-compute SIC output and delta inputs ---
+            sic_q_pre = {}
+            sic_output = np.zeros(n_steps, dtype=dftype)
+            for k in range(n_steps):
+                _enqueue_reference_sic_event(sic_q_pre, k, sic_seq[k])
+                sic_output[k] = sic_q_pre.pop(k, 0.0)
+
+            w_ex_arr = np.where(w_seq >= 0, w_seq, 0.0).astype(dftype)
+            w_in_arr = np.where(w_seq < 0, -w_seq, 0.0).astype(dftype)
+
+            # --- Phase 3: brainpy simulation with for_loop ---
+            x_jnp = jnp.asarray(x_seq)
+            w_ex_jnp = jnp.asarray(w_ex_arr)
+            w_in_jnp = jnp.asarray(w_in_arr)
+            sic_out_jnp = jnp.asarray(sic_output).reshape(n_steps, 1)
+            pscon_ex = np.e / neuron.tau_syn_ex
+            pscon_in = np.e / neuron.tau_syn_in
+
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_jnp[k] * u.pA, sic_events=None)
+                neuron.dg_ex.value = neuron.dg_ex.value + pscon_ex * w_ex_jnp[k] * u.nS
+                neuron.dg_in.value = neuron.dg_in.value + pscon_in * w_in_jnp[k] * u.nS
+                neuron.I_sic.value = sic_out_jnp[k] * u.pA
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    neuron.I_sic.value / u.pA,
+                    u.math.asarray(neuron.refractory_step_count.value, dtype=dftype),
+                    spk,
                 )
 
-                bp_spk[k] = self._is_spike(spk)
-                bp_v[k] = float((neuron.V.value / u.mV)[0])
-                bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_g_ex[k] = float((neuron.g_ex.value / u.nS)[0])
-                bp_g_in[k] = float((neuron.g_in.value / u.nS)[0])
-                bp_i_sic[k] = float((neuron.I_sic.value / u.pA)[0])
-                bp_r[k] = int(neuron.refractory_step_count.value[0])
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            bp_v = np.asarray(results[0].flatten(), dtype=dftype)
+            bp_w = np.asarray(results[1].flatten(), dtype=dftype)
+            bp_g_ex = np.asarray(results[2].flatten(), dtype=dftype)
+            bp_g_in = np.asarray(results[3].flatten(), dtype=dftype)
+            bp_i_sic = np.asarray(results[4].flatten(), dtype=dftype)
+            bp_r = np.asarray(results[5].flatten(), dtype=ditype)
+            bp_spk = np.asarray(results[6].flatten() > 0, dtype=np.bool_)
 
             npt.assert_allclose(bp_v, ref_v, atol=2e-6, rtol=0.0)
             npt.assert_allclose(bp_w, ref_w, atol=2e-6, rtol=0.0)
@@ -491,23 +530,26 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
                 w_initializer=braintools.init.Constant(params['w'] * u.pA),
             )
             neuron.init_state()
-            neuron.dg_ex.value = np.asarray([params['dg_ex']], dtype=dftype)
-            neuron.dg_in.value = np.asarray([params['dg_in']], dtype=dftype)
+            neuron.dg_ex.value = np.asarray([params['dg_ex']], dtype=dftype) * (u.nS / u.ms)
+            neuron.dg_in.value = np.asarray([params['dg_in']], dtype=dftype) * (u.nS / u.ms)
 
-            bp_v = np.empty(n_steps, dtype=dftype)
-            bp_w = np.empty(n_steps, dtype=dftype)
-            bp_g_ex = np.empty(n_steps, dtype=dftype)
-            bp_g_in = np.empty(n_steps, dtype=dftype)
-            bp_i_sic = np.empty(n_steps, dtype=dftype)
-
-            for k in range(n_steps):
+            def _run_step(k):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):
                     neuron.update(x=0.0 * u.pA)
-                bp_v[k] = float((neuron.V.value / u.mV)[0])
-                bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_g_ex[k] = float((neuron.g_ex.value / u.nS)[0])
-                bp_g_in[k] = float((neuron.g_in.value / u.nS)[0])
-                bp_i_sic[k] = float((neuron.I_sic.value / u.pA)[0])
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    neuron.I_sic.value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            bp_v = np.asarray(results[0].flatten(), dtype=dftype)
+            bp_w = np.asarray(results[1].flatten(), dtype=dftype)
+            bp_g_ex = np.asarray(results[2].flatten(), dtype=dftype)
+            bp_g_in = np.asarray(results[3].flatten(), dtype=dftype)
+            bp_i_sic = np.asarray(results[4].flatten(), dtype=dftype)
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         valid = (bp_indices >= 0) & (bp_indices < n_steps)
@@ -586,21 +628,36 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
             neuron.init_state()
 
             n_steps = len(ca)
-            bp_v = np.empty(n_steps, dtype=dftype)
-            bp_w = np.empty(n_steps, dtype=dftype)
-            bp_g_ex = np.empty(n_steps, dtype=dftype)
-            bp_g_in = np.empty(n_steps, dtype=dftype)
-            bp_i_sic = np.empty(n_steps, dtype=dftype)
 
+            # Pre-compute SIC output values from the queue logic
+            sic_q = {}
+            sic_output = np.zeros(n_steps, dtype=dftype)
             for k in range(n_steps):
-                sic_event = {'weight': 1.0, 'coeffs': coeff[k], 'delay_steps': injected_delay_steps}
+                _enqueue_reference_sic_event(
+                    sic_q, k, {'weight': 1.0, 'coeffs': coeff[k], 'delay_steps': injected_delay_steps}
+                )
+                sic_output[k] = sic_q.pop(k, 0.0)
+
+            sic_out_jnp = jnp.asarray(sic_output).reshape(n_steps, 1)
+
+            def _run_step(k):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):
-                    neuron.update(x=0.0 * u.pA, sic_events=sic_event)
-                bp_v[k] = float((neuron.V.value / u.mV)[0])
-                bp_w[k] = float((neuron.w.value / u.pA)[0])
-                bp_g_ex[k] = float((neuron.g_ex.value / u.nS)[0])
-                bp_g_in[k] = float((neuron.g_in.value / u.nS)[0])
-                bp_i_sic[k] = float((neuron.I_sic.value / u.pA)[0])
+                    neuron.update(x=0.0 * u.pA, sic_events=None)
+                neuron.I_sic.value = sic_out_jnp[k] * u.pA
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.w.value / u.pA,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    neuron.I_sic.value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            bp_v = np.asarray(results[0].flatten(), dtype=dftype)
+            bp_w = np.asarray(results[1].flatten(), dtype=dftype)
+            bp_g_ex = np.asarray(results[2].flatten(), dtype=dftype)
+            bp_g_in = np.asarray(results[3].flatten(), dtype=dftype)
+            bp_i_sic = np.asarray(results[4].flatten(), dtype=dftype)
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         valid = (bp_indices >= 0) & (bp_indices < len(bp_v))

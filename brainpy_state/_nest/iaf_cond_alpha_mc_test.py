@@ -19,7 +19,7 @@ import math
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import numpy as np
 
@@ -177,63 +177,66 @@ class TestIAFCondAlphaMC(unittest.TestCase):
             return neuron.update(x=x, spike_events=spike_events, current_events=current_events)
 
     def test_nest_cpp_default_parameters(self):
-        neuron = iaf_cond_alpha_mc(1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_cond_alpha_mc(1)
 
-        self.assertEqual(neuron.V_th, -55.0 * u.mV)
-        self.assertEqual(neuron.V_reset, -60.0 * u.mV)
-        self.assertEqual(neuron.t_ref, 2.0 * u.ms)
-        self.assertEqual(neuron.g_sp, 2.5 * u.nS)
-        self.assertEqual(neuron.g_pd, 1.0 * u.nS)
+            self.assertEqual(neuron.V_th, -55.0 * u.mV)
+            self.assertEqual(neuron.V_reset, -60.0 * u.mV)
+            self.assertEqual(neuron.t_ref, 2.0 * u.ms)
+            self.assertEqual(neuron.g_sp, 2.5 * u.nS)
+            self.assertEqual(neuron.g_pd, 1.0 * u.nS)
 
-        self.assertEqual(neuron.soma['g_L'], 10.0 * u.nS)
-        self.assertEqual(neuron.soma['C_m'], 150.0 * u.pF)
-        self.assertEqual(neuron.soma['tau_syn_ex'], 0.5 * u.ms)
-        self.assertEqual(neuron.soma['tau_syn_in'], 2.0 * u.ms)
+            self.assertEqual(neuron.soma['g_L'], 10.0 * u.nS)
+            self.assertEqual(neuron.soma['C_m'], 150.0 * u.pF)
+            self.assertEqual(neuron.soma['tau_syn_ex'], 0.5 * u.ms)
+            self.assertEqual(neuron.soma['tau_syn_in'], 2.0 * u.ms)
 
-        self.assertEqual(neuron.proximal['g_L'], 5.0 * u.nS)
-        self.assertEqual(neuron.proximal['C_m'], 75.0 * u.pF)
+            self.assertEqual(neuron.proximal['g_L'], 5.0 * u.nS)
+            self.assertEqual(neuron.proximal['C_m'], 75.0 * u.pF)
 
-        self.assertEqual(neuron.distal['g_L'], 10.0 * u.nS)
-        self.assertEqual(neuron.distal['C_m'], 150.0 * u.pF)
+            self.assertEqual(neuron.distal['g_L'], 10.0 * u.nS)
+            self.assertEqual(neuron.distal['C_m'], 150.0 * u.pF)
 
     def test_receptor_types_and_recordables_match_nest(self):
-        neuron = iaf_cond_alpha_mc(1)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_cond_alpha_mc(1)
 
-        self.assertEqual(
-            neuron.receptor_types,
-            {
-                'soma_exc': 1,
-                'soma_inh': 2,
-                'proximal_exc': 3,
-                'proximal_inh': 4,
-                'distal_exc': 5,
-                'distal_inh': 6,
-                'soma_curr': 7,
-                'proximal_curr': 8,
-                'distal_curr': 9,
-            },
-        )
-        self.assertEqual(
-            neuron.recordables,
-            [
-                'V_m.s', 'g_ex.s', 'g_in.s',
-                'V_m.p', 'g_ex.p', 'g_in.p',
-                'V_m.d', 'g_ex.d', 'g_in.d',
-                't_ref_remaining',
-            ],
-        )
+            self.assertEqual(
+                neuron.receptor_types,
+                {
+                    'soma_exc': 1,
+                    'soma_inh': 2,
+                    'proximal_exc': 3,
+                    'proximal_inh': 4,
+                    'distal_exc': 5,
+                    'distal_inh': 6,
+                    'soma_curr': 7,
+                    'proximal_curr': 8,
+                    'distal_curr': 9,
+                },
+            )
+            self.assertEqual(
+                neuron.recordables,
+                [
+                    'V_m.s', 'g_ex.s', 'g_in.s',
+                    'V_m.p', 'g_ex.p', 'g_in.p',
+                    'V_m.d', 'g_ex.d', 'g_in.d',
+                    't_ref_remaining',
+                ],
+            )
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha_mc(1, V_reset=-55.0 * u.mV, V_th=-55.0 * u.mV)
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha_mc(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha_mc(1, soma={'C_m': 0.0 * u.pF})
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha_mc(1, proximal={'tau_syn_ex': 0.0 * u.ms})
-        with self.assertRaises(ValueError):
-            iaf_cond_alpha_mc(1, distal={'tau_syn_in': 0.0 * u.ms})
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha_mc(1, V_reset=-55.0 * u.mV, V_th=-55.0 * u.mV)
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha_mc(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha_mc(1, soma={'C_m': 0.0 * u.pF})
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha_mc(1, proximal={'tau_syn_ex': 0.0 * u.ms})
+            with self.assertRaises(ValueError):
+                iaf_cond_alpha_mc(1, distal={'tau_syn_in': 0.0 * u.ms})
 
     def test_current_input_is_compartment_specific_and_delayed_by_one_step(self):
         zero_comp = {

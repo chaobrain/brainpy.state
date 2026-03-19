@@ -97,8 +97,8 @@ class MultiAreaNet(bp.Network):
         I_not_ref = bm.logical_not(self.I.refractory)
 
         # synapses from E
-        f_E2E = vmap(lambda spk, weight, seed: spk @ brainevent.JITCHomoC((weight, 0.1, seed), shape=(1600, 1600)))
-        f_E2I = vmap(lambda spk, weight, seed: spk @ brainevent.JITCHomoC((weight, 0.1, seed), shape=(1600, 400)))
+        f_E2E = vmap(lambda spk, weight, seed: brainevent.BinaryArray(spk) @ brainevent.JITCScalarC((weight, 0.1, seed), shape=(1600, 1600)))
+        f_E2I = vmap(lambda spk, weight, seed: brainevent.BinaryArray(spk) @ brainevent.JITCScalarC((weight, 0.1, seed), shape=(1600, 400)))
         for i in range(self.num_area):
             delayed_E_spikes = self.Edelay(self.E_delay_steps[i], i)
             self.E.V += f_E2E(delayed_E_spikes, self.E2E_weights[i], self.E2E_seed[i]) * E_not_ref  # E2E
@@ -106,9 +106,9 @@ class MultiAreaNet(bp.Network):
 
         # synapses from I
         delayed_I_spikes = self.Idelay(self.intra_delay_step)
-        f_I2E = vmap(lambda spk, seed: spk @ brainevent.JITCHomoC((self.intra_I2E_w, 0.1, seed), shape=(400, 1600)))
+        f_I2E = vmap(lambda spk, seed: brainevent.BinaryArray(spk) @ brainevent.JITCScalarC((self.intra_I2E_w, 0.1, seed), shape=(400, 1600)))
         self.E.V += f_I2E(delayed_I_spikes, self.intra_I2E_seed) * E_not_ref  # I2E
-        f_I2I = vmap(lambda spk, seed: spk @ brainevent.JITCHomoC((self.intra_I2I_w, 0.1, seed), shape=(400, 400)))
+        f_I2I = vmap(lambda spk, seed: brainevent.BinaryArray(spk) @ brainevent.JITCScalarC((self.intra_I2I_w, 0.1, seed), shape=(400, 400)))
         self.I.V += f_I2I(delayed_I_spikes, self.intra_I2I_seed) * I_not_ref  # I2I
 
         # updates
@@ -160,7 +160,7 @@ inputs, length = bp.inputs.section_input(values=[0, inps['value'], 0.],
                                          return_length=True)
 
 net = MultiAreaNet(hier, conn, delayMat, **pars)
-runner = bp.DSRunner(net, monitors={'E.spike': lambda tdi: net.E.spike.flatten()})
+runner = bp.DSRunner(net, monitors={'E.spike': lambda: net.E.spike.flatten()})
 runner.run(inputs=inputs)
 
 times, indices = np.where(runner.mon['E.spike'])

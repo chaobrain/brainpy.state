@@ -1,6 +1,7 @@
 from typing import Any
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -226,7 +227,7 @@ class sic_connection(NESTSynapse):
         delay_steps: ArrayLike = 1,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay_steps = self._validate_delay_steps(delay_steps)
 
@@ -856,7 +857,7 @@ class sic_connection(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Coefficient value(s). May be scalar, array, or brainunit Quantity.
+            Coefficient value(s). May be scalar, array, or saiunit Quantity.
 
         Returns
         -------
@@ -870,7 +871,7 @@ class sic_connection(NESTSynapse):
 
         Notes
         -----
-        - Strips units from brainunit Quantity objects.
+        - Strips units from saiunit Quantity objects.
         - Flattens multi-dimensional inputs to 1D.
         - Scalars are converted to shape ``(1,)`` arrays.
         """
@@ -889,7 +890,7 @@ class sic_connection(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be scalar, array, or brainunit Quantity).
+            Input value (may be scalar, array, or saiunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -905,7 +906,7 @@ class sic_connection(NESTSynapse):
 
         Notes
         -----
-        - Strips units from brainunit Quantity objects.
+        - Strips units from saiunit Quantity objects.
         - Flattens multi-dimensional inputs before checking size.
         """
         if isinstance(value, u.Quantity):
@@ -923,7 +924,7 @@ class sic_connection(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be scalar, array, or brainunit Quantity).
+            Input value (may be scalar, array, or saiunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -942,7 +943,7 @@ class sic_connection(NESTSynapse):
 
         Notes
         -----
-        - Strips units from brainunit Quantity objects.
+        - Strips units from saiunit Quantity objects.
         - Allows float inputs if they are integer-valued within 1e-12 tolerance.
         """
         if isinstance(value, u.Quantity):

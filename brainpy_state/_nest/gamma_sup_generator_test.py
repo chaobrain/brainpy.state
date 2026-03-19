@@ -26,7 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 
 from brainpy_state._nest.gamma_sup_generator import gamma_sup_generator
@@ -67,9 +67,11 @@ def _run_bp_counts_and_spikes(
         )
         gen.init_state()
 
+        # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+        ditype = brainstate.environ.ditype()
+
         for step in range(n_steps):
-            with brainstate.environ.context(t=step * dt):
-                ditype = brainstate.environ.ditype()
+            with brainstate.environ.context(t=step * dt_ms):
                 out = np.asarray(gen.update(), dtype=ditype).reshape(-1)
                 totals[step] = float(out.sum())
                 if spike_chunks is not None:
@@ -144,11 +146,12 @@ class TestGammaSupGeneratorOrdering(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 1.0 * u.ms
+        self.dt_ms = 1.0
 
     def _run_trace(self, gen, n_steps):
         trace = []
         for step in range(n_steps):
-            with brainstate.environ.context(t=step * self.dt):
+            with brainstate.environ.context(t=step * self.dt_ms):
                 trace.append(int(np.asarray(gen.update())[0]))
         return trace
 
@@ -182,7 +185,7 @@ class TestGammaSupGeneratorOrdering(unittest.TestCase):
 
             max_count = 0
             for step in range(300):
-                with brainstate.environ.context(t=step * 0.1 * u.ms):
+                with brainstate.environ.context(t=step * 0.1):
                     max_count = max(max_count, int(np.asarray(gen.update())[0]))
             self.assertGreater(max_count, 1)
 
@@ -316,9 +319,9 @@ class TestGammaSupGeneratorVsNEST(unittest.TestCase):
         nest.Connect(gens, sr)
         nest.Simulate(simtime_ms)
 
+        dftype = brainstate.environ.dftype()
         events = sr.get('events')
         if len(events['times']) == 0:
-            dftype = brainstate.environ.dftype()
             return np.zeros(n_steps, dtype=dftype)
 
         steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)

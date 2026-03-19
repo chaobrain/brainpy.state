@@ -19,7 +19,8 @@
 import math
 from collections.abc import Mapping
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -362,7 +363,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> # Create synapse with default FACETS hardware parameters
         >>> syn = bp.stdp_facetshw_synapse_hom(
@@ -576,9 +577,9 @@ class stdp_facetshw_synapse_hom(static_synapse):
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             unit = u.get_unit(value)
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(unit), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -754,7 +755,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(weight=10.0, delay=1.0 * u.ms)
             >>> syn.init_state()
@@ -863,7 +864,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(
             ...     weight=50.0,
@@ -1118,7 +1119,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(
             ...     weight=10.0,
@@ -1406,7 +1407,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>>
             >>> # Create synapse and postsynaptic target
             >>> syn = bp.stdp_facetshw_synapse_hom(
@@ -1607,7 +1608,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         .. code-block:: python
 
             >>> import brainpy.state as bp
-            >>> import brainunit as u
+            >>> import saiunit as u
             >>> import brainstate as bst
             >>>
             >>> # Setup simulation context

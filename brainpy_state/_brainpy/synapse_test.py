@@ -17,10 +17,10 @@
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import pytest
-from brainpy.state import Expon, STP, STD, AMPA, GABAa, BioNMDA
+from brainpy.state import Expon, STP, STD, AMPA, GABAa, BioNMDA, Alpha
 
 
 class TestSynapse(unittest.TestCase):
@@ -57,62 +57,97 @@ class TestSynapse(unittest.TestCase):
         out2 = call(constant_input)
         self.assertTrue(jnp.all(out2 > out1))  # Output should increase with constant input
 
-    @pytest.mark.skip(reason="Not implemented yet")
     def test_stp_synapse(self):
         tau_d = 200.0 * u.ms
         tau_f = 20.0 * u.ms
         U = 0.2
         synapse = STP(self.in_size, tau_d=tau_d, tau_f=tau_f, U=U)
-        inputs = self.generate_input()
 
-        # Test initialization
         self.assertEqual(synapse.in_size, (self.in_size,))
         self.assertEqual(synapse.out_size, (self.in_size,))
         self.assertEqual(synapse.tau_d, tau_d)
         self.assertEqual(synapse.tau_f, tau_f)
         self.assertEqual(synapse.U, U)
 
-        # Test forward pass
-        state = synapse.init_state(self.batch_size)
+        synapse.init_state(self.batch_size)
         call = brainstate.transform.jit(synapse)
-        for t in range(self.time_steps):
-            out = call(inputs[t])
-            self.assertEqual(out.shape, (self.batch_size, self.in_size))
+        # STP takes dimensionless spike inputs (0 or 1), not mS
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            for t in range(self.time_steps):
+                spike = (brainstate.random.rand(self.batch_size, self.in_size) > 0.8).astype(float)
+                out = call(spike)
+                self.assertEqual(out.shape, (self.batch_size, self.in_size))
 
-        # Test short-term plasticity
-        constant_input = jnp.ones((self.batch_size, self.in_size)) * u.mS
-        out1 = call(constant_input)
-        out2 = call(constant_input)
-        self.assertTrue(jnp.any(out2 != out1))  # Output should change due to STP
-
-    @pytest.mark.skip(reason="Not implemented yet")
     def test_std_synapse(self):
-        tau = 200.0
+        tau = 200.0 * u.ms
         U = 0.2
         synapse = STD(self.in_size, tau=tau, U=U)
-        inputs = self.generate_input()
 
-        # Test initialization
         self.assertEqual(synapse.in_size, (self.in_size,))
         self.assertEqual(synapse.out_size, (self.in_size,))
         self.assertEqual(synapse.tau, tau)
         self.assertEqual(synapse.U, U)
 
-        # Test forward pass
-        state = synapse.init_state(self.batch_size)
-        for t in range(self.time_steps):
-            out = synapse(inputs[t])
-            self.assertEqual(out.shape, (self.batch_size, self.in_size))
+        synapse.init_state(self.batch_size)
+        call = brainstate.transform.jit(synapse)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            for t in range(self.time_steps):
+                spike = (brainstate.random.rand(self.batch_size, self.in_size) > 0.8).astype(float)
+                out = call(spike)
+                self.assertEqual(out.shape, (self.batch_size, self.in_size))
 
-        # Test short-term depression
-        constant_input = jnp.ones((self.batch_size, self.in_size))
-        out1 = synapse(constant_input)
-        out2 = synapse(constant_input)
-        self.assertTrue(jnp.all(out2 < out1))  # Output should decrease due to STD
+    def test_alpha_synapse(self):
+        tau = 8.0 * u.ms
+        synapse = Alpha(self.in_size, tau=tau)
+
+        self.assertEqual(synapse.in_size, (self.in_size,))
+        self.assertEqual(synapse.out_size, (self.in_size,))
+        self.assertEqual(synapse.tau, tau)
+
+        synapse.init_state(self.batch_size)
+        call = brainstate.transform.jit(synapse)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            for t in range(self.time_steps):
+                out = call(self.generate_input()[0])
+                self.assertEqual(out.shape, (self.batch_size, self.in_size))
+
+    def test_alpha_two_state_variables(self):
+        """Alpha synapse should have both g and h state variables."""
+        synapse = Alpha(self.in_size, tau=5.0 * u.ms)
+        synapse.init_state(self.batch_size)
+        self.assertEqual(synapse.g.value.shape, (self.batch_size, self.in_size))
+        self.assertEqual(synapse.h.value.shape, (self.batch_size, self.in_size))
+
+    def test_alpha_reset_state(self):
+        synapse = Alpha(self.in_size)
+        synapse.init_state(self.batch_size)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            synapse.update(jnp.ones((self.batch_size, self.in_size)) * u.mS)
+        synapse.reset_state(self.batch_size)
+        self.assertTrue(u.math.allclose(synapse.g.value, 0. * u.mS))
+        self.assertTrue(u.math.allclose(synapse.h.value, 0. * u.mS))
+
+    def test_alpha_single_spike_response(self):
+        """After a single input pulse, conductance should eventually decay toward zero."""
+        synapse = Alpha(self.in_size, tau=5.0 * u.ms)
+        synapse.init_state(self.batch_size)
+        outputs = []
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            # apply impulse at t=0
+            out = synapse.update(jnp.ones((self.batch_size, self.in_size)) * u.mS)
+            outputs.append(u.get_magnitude(out / u.mS))
+            # let it evolve for 500 steps (50 ms = 10*tau)
+            for _ in range(500):
+                out = synapse.update()
+                outputs.append(u.get_magnitude(out / u.mS))
+        # After 10 time constants, output should be much smaller than the peak
+        peak_val = max(jnp.max(jnp.abs(o)) for o in outputs[:100])
+        final_val = jnp.max(jnp.abs(outputs[-1]))
+        self.assertTrue(final_val < 0.1 * peak_val)
 
     def test_keep_size(self):
         in_size = (2, 3)
-        for SynapseClass in [Expon, ]:
+        for SynapseClass in [Expon, Alpha]:
             synapse = SynapseClass(in_size)
             self.assertEqual(synapse.in_size, in_size)
             self.assertEqual(synapse.out_size, in_size)
@@ -123,6 +158,21 @@ class TestSynapse(unittest.TestCase):
             with brainstate.environ.context(dt=0.1 * u.ms):
                 for t in range(self.time_steps):
                     out = call(inputs[t])
+                    self.assertEqual(out.shape, (self.batch_size, *in_size))
+
+    def test_keep_size_stp_std(self):
+        in_size = (2, 3)
+        for SynapseClass in [STP, STD]:
+            synapse = SynapseClass(in_size)
+            self.assertEqual(synapse.in_size, in_size)
+            self.assertEqual(synapse.out_size, in_size)
+
+            synapse.init_state(self.batch_size)
+            call = brainstate.transform.jit(synapse)
+            with brainstate.environ.context(dt=0.1 * u.ms):
+                for t in range(self.time_steps):
+                    spike = (brainstate.random.rand(self.batch_size, *in_size) > 0.8).astype(float)
+                    out = call(spike)
                     self.assertEqual(out.shape, (self.batch_size, *in_size))
 
     def test_ampa_synapse(self):

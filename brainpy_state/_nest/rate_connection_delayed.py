@@ -1,6 +1,7 @@
 from typing import Any
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -131,7 +132,7 @@ class rate_connection_delayed(NESTSynapse):
 
     **Unit Handling**
 
-    All parameters accept ``brainunit.Quantity`` objects or plain numeric values. If a
+    All parameters accept ``saiunit.Quantity`` objects or plain numeric values. If a
     ``Quantity`` is provided, its mantissa is extracted. Internally, values are stored
     as dimensionless floats or integers.
 
@@ -229,7 +230,7 @@ class rate_connection_delayed(NESTSynapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> # Create rate neurons (assuming rate_neuron_ipn exists)
        >>> pre = bst.rate_neuron_ipn(size=10, tau=10.0*u.ms)
        >>> post = bst.rate_neuron_ipn(size=5, tau=10.0*u.ms)
@@ -253,7 +254,7 @@ class rate_connection_delayed(NESTSynapse):
         delay_steps: ArrayLike = 1,
         name: str | None = None,
     ):
-        self.name = name
+        super().__init__(in_size=1, name=name)
         self.weight = self._to_float_scalar(weight, name='weight')
         self.delay_steps = self._validate_delay_steps(delay_steps)
 
@@ -411,7 +412,7 @@ class rate_connection_delayed(NESTSynapse):
         Parameters
         ----------
         weight : float or array-like
-            New connection gain. Must be scalar. Accepts ``brainunit.Quantity``
+            New connection gain. Must be scalar. Accepts ``saiunit.Quantity``
             (mantissa will be extracted).
 
         Raises
@@ -437,7 +438,7 @@ class rate_connection_delayed(NESTSynapse):
         ----------
         delay : int or array-like
             New delay in simulation steps. Must be integer-valued scalar ``>= 1``.
-            Accepts ``brainunit.Quantity`` (mantissa will be extracted).
+            Accepts ``saiunit.Quantity`` (mantissa will be extracted).
 
         Raises
         ------
@@ -462,7 +463,7 @@ class rate_connection_delayed(NESTSynapse):
         ----------
         delay_steps : int or array-like
             New delay in simulation steps. Must be integer-valued scalar ``>= 1``.
-            Accepts ``brainunit.Quantity`` (mantissa will be extracted).
+            Accepts ``saiunit.Quantity`` (mantissa will be extracted).
 
         Raises
         ------
@@ -491,7 +492,7 @@ class rate_connection_delayed(NESTSynapse):
         coeffarray : array-like
             1D array of coefficients, shape ``(n,)``, representing rate contributions
             at ``n`` consecutive time lags. Must be non-empty. Accepts
-            ``brainunit.Quantity`` (mantissa will be extracted).
+            ``saiunit.Quantity`` (mantissa will be extracted).
 
         Returns
         -------
@@ -544,7 +545,7 @@ class rate_connection_delayed(NESTSynapse):
         ----------
         rate : float or array-like
             Rate value to transmit. Can be scalar (single rate) or array (multiple
-            rates). Accepts ``brainunit.Quantity`` (mantissa will be extracted).
+            rates). Accepts ``saiunit.Quantity`` (mantissa will be extracted).
         multiplicity : float or array-like, optional
             Scaling factor for stochastic or probabilistic connections. Must be
             scalar. Default: ``1.0``.
@@ -615,7 +616,7 @@ class rate_connection_delayed(NESTSynapse):
         coeffarray : array-like
             1D array of coefficients, shape ``(n,)``. Each element represents a rate
             contribution at a successive time lag. Must be non-empty. Accepts
-            ``brainunit.Quantity`` (mantissa will be extracted).
+            ``saiunit.Quantity`` (mantissa will be extracted).
         min_delay_steps : int or array-like, optional
             Minimum delay in the network (in simulation steps). Used to compute the
             base delay offset. Must be integer-valued scalar ``>= 1``. Default: ``1``.
@@ -736,7 +737,7 @@ class rate_connection_delayed(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value. Accepts ``brainunit.Quantity`` (mantissa extracted).
+            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
 
         Returns
         -------
@@ -763,7 +764,7 @@ class rate_connection_delayed(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value. Accepts ``brainunit.Quantity`` (mantissa extracted).
+            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
 
         Returns
         -------
@@ -786,7 +787,7 @@ class rate_connection_delayed(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value. Accepts ``brainunit.Quantity`` (mantissa extracted).
+            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
         name : str
             Parameter name for error messages.
 
@@ -815,7 +816,7 @@ class rate_connection_delayed(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value. Accepts ``brainunit.Quantity`` (mantissa extracted).
+            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
         name : str
             Parameter name for error messages.
 
@@ -850,7 +851,7 @@ class rate_connection_delayed(NESTSynapse):
         Parameters
         ----------
         delay_steps : array-like
-            Delay value in simulation steps. Accepts ``brainunit.Quantity``
+            Delay value in simulation steps. Accepts ``saiunit.Quantity``
             (mantissa extracted).
         name : str, optional
             Parameter name for error messages. Default: ``'delay_steps'``.

@@ -19,13 +19,15 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainstate.typing import ArrayLike, Size
+from brainstate.util import DotDict
 
 from ._base import NESTNeuron
+from ._utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'iaf_cond_beta',
@@ -94,28 +96,23 @@ class iaf_cond_beta(NESTNeuron):
     ODEs are integrated using the Runge-Kutta-Fehlberg (RKF45) adaptive-step method with
     embedded error control. The integrator maintains a persistent step size estimate
     (``integration_step``) across simulation steps, adjusting it based on local truncation
-    error to satisfy a fixed absolute tolerance (``_ATOL = 1e-3``).
+    error to satisfy a fixed absolute tolerance (``gsl_error_tol``).
 
     **4. Update Order (NEST Semantics)**
 
     Each simulation step executes the following operations in order:
 
     1. Integrate all ODEs on the interval :math:`(t, t+dt]` using RKF45.
-    2. Decrement refractory counter; check threshold; emit spike; reset voltage if needed.
-    3. Apply incoming spike weights to :math:`dg_\mathrm{ex}` and :math:`dg_\mathrm{in}`.
-    4. Store external current input ``x`` into the delayed buffer ``I_stim`` (affects next step).
+    2. Inside integration loop: apply refractory clamp and spike/reset.
+    3. After loop: decrement refractory counter once.
+    4. Apply incoming spike weights to :math:`dg_\mathrm{ex}` and :math:`dg_\mathrm{in}`.
+    5. Store external current input ``x`` into the delayed buffer ``I_stim`` (affects next step).
 
     This matches NEST's ring-buffer semantics: external currents applied at time :math:`t`
     take effect at time :math:`t + dt`.
 
     **5. Design Constraints and Assumptions**
 
-    - **Non-differentiable integration**: RKF45 uses Python loops and NumPy arrays,
-      preventing JAX gradient backpropagation through the dynamics. Surrogate gradients
-      are computed via ``spk_fun`` for spike output only.
-    - **Per-element integration**: Each neuron is integrated independently in a Python loop,
-      which is slow for large populations. This design prioritizes numerical accuracy and
-      exact NEST compatibility over performance.
     - **Refractory clamping**: During refractory period, voltage is fixed at :math:`V_\mathrm{reset}`
       and no integration occurs. NEST uses this approach for consistency with exact spike times.
     - **Beta normalization edge case**: When :math:`\tau_\mathrm{rise} \approx \tau_\mathrm{decay}`,
@@ -165,15 +162,17 @@ class iaf_cond_beta(NESTNeuron):
     I_e : ArrayLike, optional
         Constant external current. Default: ``0 pA``. Broadcast to ``in_size`` if scalar.
         Added to membrane current at every time step.
+    gsl_error_tol : ArrayLike
+        Unitless local RKF45 error tolerance, broadcastable and strictly positive.
     V_initializer : Callable, optional
         Initialization function for membrane voltage. Default: ``Constant(-70 mV)``.
-        Called as ``V_initializer(varshape, batch_size)`` during ``init_state()``.
+        Called as ``V_initializer(varshape)`` during ``init_state()``.
     g_ex_initializer : Callable, optional
         Initialization function for excitatory conductance. Default: ``Constant(0 nS)``.
-        Called as ``g_ex_initializer(varshape, batch_size)`` during ``init_state()``.
+        Called as ``g_ex_initializer(varshape)`` during ``init_state()``.
     g_in_initializer : Callable, optional
         Initialization function for inhibitory conductance. Default: ``Constant(0 nS)``.
-        Called as ``g_in_initializer(varshape, batch_size)`` during ``init_state()``.
+        Called as ``g_in_initializer(varshape)`` during ``init_state()``.
     spk_fun : Callable, optional
         Surrogate gradient function for spike generation. Default: ``ReluGrad()``.
         Applied to scaled voltage :math:`(V - V_\mathrm{th}) / (V_\mathrm{th} - V_\mathrm{reset})`
@@ -209,6 +208,7 @@ class iaf_cond_beta(NESTNeuron):
     ``tau_rise_in``      2.0 ms             :math:`\tau_{\mathrm{rise,in}}`          Inhibitory beta rise constant
     ``tau_decay_in``     2.0 ms             :math:`\tau_{\mathrm{decay,in}}`         Inhibitory beta decay constant
     ``I_e``              0 pA               :math:`I_\mathrm{e}`                     Constant external current
+    ``gsl_error_tol``    1e-6               —                                        RKF45 error tolerance
     ``V_initializer``    Constant(-70 mV)   —                                        Membrane initializer
     ``g_ex_initializer`` Constant(0 nS)     —                                        Excitatory conductance initializer
     ``g_in_initializer`` Constant(0 nS)     —                                        Inhibitory conductance initializer
@@ -234,13 +234,13 @@ class iaf_cond_beta(NESTNeuron):
 
 
     - ``V`` : brainstate.HiddenState
-        Membrane potential :math:`V_m` with shape ``(*in_size, *batch_shape)`` and units mV.
+        Membrane potential :math:`V_m` with shape ``(*in_size,)`` and units mV.
     - ``dg_ex`` : brainstate.ShortTermState
-        Excitatory beta auxiliary state (dimensionless, dtype ``float64``).
+        Excitatory beta auxiliary state (nS/ms).
     - ``g_ex`` : brainstate.HiddenState
         Excitatory synaptic conductance with units nS.
     - ``dg_in`` : brainstate.ShortTermState
-        Inhibitory beta auxiliary state (dimensionless, dtype ``float64``).
+        Inhibitory beta auxiliary state (nS/ms).
     - ``g_in`` : brainstate.HiddenState
         Inhibitory synaptic conductance with units nS.
     - ``refractory_step_count`` : brainstate.ShortTermState
@@ -282,7 +282,7 @@ class iaf_cond_beta(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate as bstate
         >>>
         >>> with bstate.environ.context(dt=0.1 * u.ms):
@@ -357,9 +357,8 @@ class iaf_cond_beta(NESTNeuron):
     """
     __module__ = 'brainpy.state'
 
-    _ATOL = 1e-3
-    _MIN_H = 1e-8  # ms
-    _MAX_ITERS = 10000
+    _MIN_H = 1e-8 * u.ms  # ms
+    _MAX_ITERS = 100000
     _EPS = np.finfo(np.float64).eps
 
     def __init__(
@@ -378,6 +377,7 @@ class iaf_cond_beta(NESTNeuron):
         tau_rise_in: ArrayLike = 2.0 * u.ms,
         tau_decay_in: ArrayLike = 2.0 * u.ms,
         I_e: ArrayLike = 0. * u.pA,
+        gsl_error_tol: ArrayLike = 1e-6,
         V_initializer: Callable = braintools.init.Constant(-70. * u.mV),
         g_ex_initializer: Callable = braintools.init.Constant(0. * u.nS),
         g_in_initializer: Callable = braintools.init.Constant(0. * u.nS),
@@ -401,6 +401,7 @@ class iaf_cond_beta(NESTNeuron):
         self.tau_rise_in = braintools.init.param(tau_rise_in, self.varshape)
         self.tau_decay_in = braintools.init.param(tau_decay_in, self.varshape)
         self.I_e = braintools.init.param(I_e, self.varshape)
+        self.gsl_error_tol = gsl_error_tol
 
         self.V_initializer = V_initializer
         self.g_ex_initializer = g_ex_initializer
@@ -409,17 +410,37 @@ class iaf_cond_beta(NESTNeuron):
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
+        self.integrator = AdaptiveRungeKuttaStep(
+            method='RKF45',
+            vf=self._vector_field,
+            event_fn=self._event_fn,
+            min_h=self._MIN_H,
+            max_iters=self._MAX_ITERS,
+            atol=self.gsl_error_tol,
+            dt=brainstate.environ.get_dt()
+        )
 
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
+        # other variable
+        ditype = brainstate.environ.ditype()
+        dt = brainstate.environ.get_dt()
+        self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
     @classmethod
     def _beta_normalization_factor_scalar(cls, tau_rise: float, tau_decay: float):
+        r"""Compute beta normalization factor for scalar time constants.
+
+        Parameters
+        ----------
+        tau_rise : float
+            Rise time constant in ms (unitless scalar).
+        tau_decay : float
+            Decay time constant in ms (unitless scalar).
+
+        Returns
+        -------
+        float
+            Normalization factor ensuring unit weight produces 1 nS peak conductance.
+        """
         tau_difference = tau_decay - tau_rise
         peak_value = 0.0
         if abs(tau_difference) > cls._EPS:
@@ -432,127 +453,70 @@ class iaf_cond_beta(NESTNeuron):
         return (1.0 / tau_rise - 1.0 / tau_decay) / peak_value
 
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.V_reset, u.mV) >= self._to_numpy(self.V_th, u.mV)):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated.
+        """
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m)):
+            return
+        if np.any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.t_ref, u.ms) < 0.0):
+        if np.any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self._to_numpy(self.tau_rise_ex, u.ms) <= 0.0) or np.any(
-            self._to_numpy(self.tau_decay_ex, u.ms) <= 0.0):
+        if np.any(self.tau_rise_ex <= 0.0 * u.ms) or np.any(
+            self.tau_decay_ex <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_rise_in, u.ms) <= 0.0) or np.any(
-            self._to_numpy(self.tau_decay_in, u.ms) <= 0.0):
+        if np.any(self.tau_rise_in <= 0.0 * u.ms) or np.any(
+            self.tau_decay_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
+        if np.any(self.gsl_error_tol <= 0.0):
+            raise ValueError('The gsl_error_tol must be strictly positive.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        r"""Initialize all state variables for the neuron population.
-
-        Creates and initializes state variables for membrane voltage, conductances, refractory
-        tracking, RKF45 integration bookkeeping, and delayed current buffering. Called automatically
-        by ``init_all_states()`` or manually for custom initialization workflows.
+    def init_state(self, **kwargs):
+        r"""Initialize persistent and short-term state variables.
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch dimension size for vectorized simulation. If ``None`` (default), creates
-            state variables with shape ``in_size`` only. If provided, appends batch dimension
-            to create shape ``(*in_size, batch_size)``.
         **kwargs
-            Reserved for future extensions. Currently unused.
+            Unused compatibility parameters accepted by the base-state API.
 
-        Notes
-        -----
-        State variables created:
-
-        - ``V`` : HiddenState, initialized using ``V_initializer``, units mV.
-        - ``dg_ex``, ``dg_in`` : ShortTermState, initialized to zero, dimensionless (float64).
-        - ``g_ex``, ``g_in`` : HiddenState, initialized using ``g_ex_initializer`` and ``g_in_initializer``, units nS.
-        - ``last_spike_time`` : ShortTermState, initialized to ``-1e7 ms`` (effectively :math:`-\infty`), units ms.
-        - ``refractory_step_count`` : ShortTermState, initialized to zero, integer (int32).
-        - ``integration_step`` : ShortTermState, initialized to current simulation ``dt``, units ms.
-        - ``I_stim`` : ShortTermState, initialized to zero, units pA.
-        - ``refractory`` : ShortTermState (optional, only if ``ref_var=True``), initialized to ``False``, boolean.
-
-        The ``dg_ex`` and ``dg_in`` states are stored as dimensionless NumPy float64 arrays for
-        numerical precision during RKF45 integration.
+        Raises
+        ------
+        ValueError
+            If an initializer cannot be broadcast to requested shape.
+        TypeError
+            If initializer outputs have incompatible units/dtypes for the
+            corresponding state variables.
         """
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        g_ex = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
-        g_in = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-
-        self.V = brainstate.HiddenState(V)
+        ditype = brainstate.environ.ditype()
         dftype = brainstate.environ.dftype()
-        self.dg_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
+        dt = brainstate.environ.get_dt()
+
+        g_ex = braintools.init.param(self.g_ex_initializer, self.varshape)
+        g_in = braintools.init.param(self.g_in_initializer, self.varshape)
+        V = braintools.init.param(self.V_initializer, self.varshape)
+        zeros = u.math.zeros(self.varshape, dtype=V.dtype) * (u.nS / u.ms)
+
+        self.dg_ex = brainstate.ShortTermState(zeros)
+        self.dg_in = brainstate.ShortTermState(zeros)
         self.g_ex = brainstate.HiddenState(g_ex)
-        self.dg_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
         self.g_in = brainstate.HiddenState(g_in)
+        self.V = brainstate.HiddenState(V)
 
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-
-        dt = brainstate.environ.get_dt()
-        self.integration_step = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(dt), self.varshape, batch_size)
-        )
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0. * u.pA), self.varshape, batch_size)
-        )
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(self.varshape, 0, dtype=ditype))
+        self.integration_step = brainstate.ShortTermState.init(braintools.init.Constant(dt), self.varshape)
+        self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
         if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
+            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
-
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset all state variables to their initial values.
-
-        Reinitializes all state variables using the same initializers and logic as ``init_state()``.
-        This is useful for restarting simulations or resetting a trained network to initial conditions
-        without recreating the neuron object.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            Batch dimension size for vectorized simulation. If ``None`` (default), uses the
-            shape from the original initialization. If provided, reshapes states to
-            ``(*in_size, batch_size)``.
-        **kwargs
-            Reserved for future extensions. Currently unused.
-
-        Notes
-        -----
-        All state variables are overwritten with fresh values from their respective initializers.
-        The ``integration_step`` is reset to the current simulation ``dt``, which may differ from
-        the value at ``init_state()`` if ``dt`` has changed. The refractory counter is reset to zero,
-        and ``last_spike_time`` is reset to ``-1e7 ms``.
-        """
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        self.g_ex.value = braintools.init.param(self.g_ex_initializer, self.varshape, batch_size)
-        self.g_in.value = braintools.init.param(self.g_in_initializer, self.varshape, batch_size)
-        zeros = u.math.zeros_like(u.math.asarray(self.V.value / u.mV))
-        dftype = brainstate.environ.dftype()
-        self.dg_ex.value = np.asarray(zeros, dtype=dftype)
-        self.dg_in.value = np.asarray(zeros, dtype=dftype)
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
-        )
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        ditype = brainstate.environ.ditype()
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
-        dt = brainstate.environ.get_dt()
-        self.integration_step.value = braintools.init.param(
-            braintools.init.Constant(dt), self.varshape, batch_size
-        )
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0. * u.pA), self.varshape, batch_size
-        )
-        if self.ref_var:
-            refractory = braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
-            self.refractory.value = refractory
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute differentiable spike output using surrogate gradients.
@@ -594,89 +558,72 @@ class iaf_cond_beta(NESTNeuron):
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
-    def _refractory_counts(self):
-        dt = brainstate.environ.get_dt()
-        ditype = brainstate.environ.ditype()
-        return u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
+    def _vector_field(self, state, extra):
+        """Unit-aware vectorized RHS for all neurons simultaneously.
 
-    def _sum_signed_delta_inputs(self):
-        w_ex = u.math.zeros_like(self.g_ex.value)
-        w_in = u.math.zeros_like(self.g_in.value)
-        if self.delta_inputs is None:
-            return w_ex, w_in
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, dg_ex, g_ex, dg_in, g_in -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim -- mutable
+            auxiliary data carried through the integrator.
 
-        for key in tuple(self.delta_inputs.keys()):
-            out = self.delta_inputs[key]
-            if callable(out):
-                out = out()
-            else:
-                self.delta_inputs.pop(key)
+        Returns
+        -------
+        DotDict with same keys as ``state``, containing time derivatives.
+        """
+        is_refractory = extra.r > 0
 
-            zero = u.math.zeros_like(out)
-            w_ex = w_ex + u.math.maximum(out, zero)
-            w_in = w_in + u.math.maximum(-out, zero)
-        return w_ex, w_in
+        v_eff = u.math.where(is_refractory, self.V_reset, u.math.minimum(state.V, self.V_th))
 
-    @staticmethod
-    def _dynamics_scalar(v, dg_ex, g_ex, dg_in, g_in, is_refractory, i_stim, p):
-        v_eff = p['V_reset'] if is_refractory else min(v, p['V_th'])
+        i_syn_exc = state.g_ex * (v_eff - self.E_ex)
+        i_syn_inh = state.g_in * (v_eff - self.E_in)
+        i_leak = self.g_L * (v_eff - self.E_L)
 
-        i_syn_exc = g_ex * (v_eff - p['E_ex'])
-        i_syn_inh = g_in * (v_eff - p['E_in'])
-        i_leak = p['g_L'] * (v_eff - p['E_L'])
-        dv = 0.0 if is_refractory else (
-                                           -i_leak - i_syn_exc - i_syn_inh + i_stim + p['I_e']
-                                       ) / p['C_m']
+        dV_raw = (
+                     -i_leak - i_syn_exc - i_syn_inh + self.I_e + extra.i_stim
+                 ) / self.C_m
+        dV = u.math.where(is_refractory, u.math.zeros_like(dV_raw), dV_raw)
 
-        ddg_ex = -dg_ex / p['tau_decay_ex']
-        dg_ex_dt = dg_ex - (g_ex / p['tau_rise_ex'])
-        ddg_in = -dg_in / p['tau_decay_in']
-        dg_in_dt = dg_in - (g_in / p['tau_rise_in'])
-        return dv, ddg_ex, dg_ex_dt, ddg_in, dg_in_dt
+        ddg_ex = -state.dg_ex / self.tau_decay_ex
+        dg_ex_dt = state.dg_ex - state.g_ex / self.tau_rise_ex
+        ddg_in = -state.dg_in / self.tau_decay_in
+        dg_in_dt = state.dg_in - state.g_in / self.tau_rise_in
 
-    def _rkf45_integrate_scalar(self, v0, dg_ex0, g_ex0, dg_in0, g_in0, is_refractory, i_stim, h0, dt, p):
-        t = 0.0
-        h = max(h0, self._MIN_H)
-        dftype = brainstate.environ.dftype()
-        y = np.asarray([v0, dg_ex0, g_ex0, dg_in0, g_in0], dtype=dftype)
-        iters = 0
+        return DotDict(V=dV, dg_ex=ddg_ex, g_ex=dg_ex_dt, dg_in=ddg_in, g_in=dg_in_dt)
 
-        def f(y_):
-            dftype = brainstate.environ.dftype()
-            return np.asarray(
-                self._dynamics_scalar(
-                    y_[0], y_[1], y_[2], y_[3], y_[4], is_refractory, i_stim, p
-                ),
-                dtype=dftype
-            )
+    def _event_fn(self, state, extra, accept):
+        """In-loop spike detection, reset, and refractory handling.
 
-        while t < dt and iters < self._MAX_ITERS:
-            iters += 1
-            h = max(self._MIN_H, min(h, dt - t))
+        Parameters
+        ----------
+        state : DotDict
+            Keys: V, dg_ex, g_ex, dg_in, g_in -- ODE state variables.
+        extra : DotDict
+            Keys: spike_mask, r, unstable, i_stim.
+        accept : array, bool
+            Mask of neurons whose RK substep was accepted.
 
-            k1 = f(y)
-            k2 = f(y + h * (1.0 / 4.0) * k1)
-            k3 = f(y + h * (3.0 * k1 / 32.0 + 9.0 * k2 / 32.0))
-            k4 = f(y + h * (1932.0 * k1 / 2197.0 - 7200.0 * k2 / 2197.0 + 7296.0 * k3 / 2197.0))
-            k5 = f(y + h * (439.0 * k1 / 216.0 - 8.0 * k2 + 3680.0 * k3 / 513.0 - 845.0 * k4 / 4104.0))
-            k6 = f(
-                y + h * (-8.0 * k1 / 27.0 + 2.0 * k2 - 3544.0 * k3 / 2565.0 + 1859.0 * k4 / 4104.0 - 11.0 * k5 / 40.0))
+        Returns
+        -------
+        (new_state, new_extra) DotDicts with updated spike/reset/refractory info.
+        """
+        unstable = extra.unstable | jnp.any(
+            accept & (state.V < -1e3 * u.mV)
+        )
 
-            y4 = y + h * (25.0 * k1 / 216.0 + 1408.0 * k3 / 2565.0 + 2197.0 * k4 / 4104.0 - k5 / 5.0)
-            y5 = y + h * (
-                    16.0 * k1 / 135.0 + 6656.0 * k3 / 12825.0 + 28561.0 * k4 / 56430.0 - 9.0 * k5 / 50.0 + 2.0 * k6 / 55.0)
-            err = float(np.max(np.abs(y5 - y4)))
+        refr_accept = accept & (extra.r > 0)
+        new_V = u.math.where(refr_accept, self.V_reset, state.V)
 
-            if err <= self._ATOL or h <= self._MIN_H:
-                y = y5
-                t += h
-                fac = 5.0 if err == 0.0 else min(5.0, max(0.2, 0.9 * (self._ATOL / err) ** 0.2))
-                h = max(self._MIN_H, h * fac)
-            else:
-                fac = min(1.0, max(0.2, 0.9 * (self._ATOL / err) ** 0.25))
-                h = max(self._MIN_H, h * fac)
+        spike_now = accept & (extra.r <= 0) & (new_V >= self.V_th)
+        spike_mask = extra.spike_mask | spike_now
+        new_V = u.math.where(spike_now, self.V_reset, new_V)
+        r = u.math.where(spike_now & (self.ref_count > 0), self.ref_count + 1, extra.r)
 
-        return y[0], y[1], y[2], y[3], y[4], h
+        new_state = DotDict({**state, 'V': new_V})
+        new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
+        return new_state, new_extra
 
     def update(self, x=0. * u.pA):
         r"""Advance neuron dynamics by one simulation time step.
@@ -689,44 +636,31 @@ class iaf_cond_beta(NESTNeuron):
         ----------
         x : ArrayLike, optional
             External current input for the **next** time step (one-step delayed). Default: ``0 pA``.
-            Must have shape compatible with ``(*in_size, *batch_shape)`` (broadcast-compatible).
+            Must have shape compatible with ``(*in_size,)`` (broadcast-compatible).
             Units: pA (picoamperes). This current is stored in ``I_stim`` and takes effect at
             time :math:`t + dt`, matching NEST's ring-buffer semantics.
 
         Returns
         -------
         spike : jax.Array
-            Binary spike output for the current time step, computed from the membrane voltage
-            **before** reset. Shape: ``(*in_size, *batch_shape)``. Dtype: ``float32``.
-            Values are typically in :math:`[0, 1]` when using surrogate gradients.
+            Binary spike output for the current time step. Shape: ``self.V.value.shape``.
+            Dtype: ``float64``. Values of ``1.0`` indicate at least one internal spike
+            event occurred during the integrated interval :math:`(t, t+dt]`.
 
         Notes
         -----
         **Update Order (NEST-compatible):**
 
         1. **ODE Integration**: Integrate all differential equations on :math:`(t, t+dt]` using
-           the Runge-Kutta-Fehlberg (RKF45) adaptive-step method with per-neuron state.
-        2. **Refractory Handling**: If ``refractory_step_count > 0``, decrement counter, clamp
-           voltage to ``V_reset``, and skip spike detection.
-        3. **Threshold Detection**: If voltage crosses ``V_th`` (and not refractory), emit spike,
-           reset voltage to ``V_reset``, and set refractory counter to
-           :math:`\lceil t_\mathrm{ref} / dt \rceil`.
+           the Runge-Kutta-Fehlberg (RKF45) adaptive-step method.
+        2. **Refractory Handling**: Inside integration loop, apply refractory clamp and
+           spike/reset events.
+        3. **Refractory Decrement**: After loop, decrement refractory counter once.
         4. **Synaptic Input Application**: Sum all incoming delta inputs (spike weights), split
            by sign into excitatory (positive) and inhibitory (negative) channels, multiply by
            beta normalization factors, and add to ``dg_ex`` and ``dg_in`` states.
         5. **External Current Buffering**: Store input ``x`` plus ``sum_current_inputs()`` into
            ``I_stim`` for use in the **next** time step.
-
-        **Numerical Integration Details:**
-
-        - Each neuron is integrated independently using a scalar RKF45 loop over state vector
-          :math:`[V, dg_\mathrm{ex}, g_\mathrm{ex}, dg_\mathrm{in}, g_\mathrm{in}]`.
-        - Adaptive step size starts from the previous ``integration_step`` value and adjusts
-          dynamically to satisfy ``_ATOL = 1e-3`` absolute error tolerance.
-        - If ``refractory_step_count > 0``, the voltage derivative is forced to zero and the
-          effective voltage for current computation is clamped to ``V_reset``.
-        - Integration step size is capped at :math:`[_MIN_H, dt]` and limited to ``_MAX_ITERS``
-          substeps to prevent infinite loops.
 
         **Spike Weight Handling:**
 
@@ -737,34 +671,6 @@ class iaf_cond_beta(NESTNeuron):
           :math:`\kappa(\tau_{\mathrm{rise,in}}, \tau_{\mathrm{decay,in}})` and added to ``dg_in``.
         - The beta normalization factor ensures unit weight produces a 1 nS peak conductance.
 
-        **State Updates:**
-
-        After integration and spike handling, the following states are updated:
-
-        - ``V.value``: Post-integration (and possibly post-reset) membrane voltage.
-        - ``dg_ex.value``, ``g_ex.value``: Updated excitatory beta states and conductance.
-        - ``dg_in.value``, ``g_in.value``: Updated inhibitory beta states and conductance.
-        - ``refractory_step_count.value``: Decremented or set to :math:`\lceil t_\mathrm{ref} / dt \rceil`.
-        - ``integration_step.value``: Adapted RKF45 step size for next iteration.
-        - ``I_stim.value``: Delayed external current buffer for next step.
-        - ``last_spike_time.value``: Set to :math:`t + dt` where spike occurred.
-        - ``refractory.value`` (optional): Boolean refractory indicator if ``ref_var=True``.
-
-        **Failure Modes**
-
-
-        - If RKF45 fails to converge within ``_MAX_ITERS`` substeps, the integration stops at
-          the current time and returns potentially inaccurate results. This typically indicates
-          stiff dynamics or extreme parameter values. Check for:
-
-          - Very small time constants (< 0.01 ms).
-          - Very large conductances or currents causing rapid voltage changes.
-          - Refractory period shorter than ``dt``.
-
-        - If ``dt`` changes between calls (via ``brainstate.environ.set_dt()``), the refractory
-          counter may become inaccurate because it's computed in grid steps. Reset state after
-          changing ``dt``.
-
         See Also
         --------
         init_state : Initialize state variables before calling ``update()``.
@@ -773,118 +679,84 @@ class iaf_cond_beta(NESTNeuron):
         sum_current_inputs : Aggregate external current sources.
         """
         t = brainstate.environ.get('t')
-        dt_q = brainstate.environ.get_dt()
-        dt = float(u.math.asarray(dt_q / u.ms))
-
-        v_shape = self.V.value.shape
-
-        V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape)
+        dt = brainstate.environ.get_dt()
         dftype = brainstate.environ.dftype()
-        dg_ex = self._broadcast_to_state(np.asarray(self.dg_ex.value, dtype=dftype), v_shape)
-        g_ex = self._broadcast_to_state(self._to_numpy(self.g_ex.value, u.nS), v_shape)
-        dg_in = self._broadcast_to_state(np.asarray(self.dg_in.value, dtype=dftype), v_shape)
-        g_in = self._broadcast_to_state(self._to_numpy(self.g_in.value, u.nS), v_shape)
         ditype = brainstate.environ.ditype()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype),
-            v_shape
-        )
-        i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape)
-        h_int = self._broadcast_to_state(self._to_numpy(self.integration_step.value, u.ms), v_shape)
 
-        tau_rise_ex = self._broadcast_to_state(self._to_numpy(self.tau_rise_ex, u.ms), v_shape)
-        tau_decay_ex = self._broadcast_to_state(self._to_numpy(self.tau_decay_ex, u.ms), v_shape)
-        tau_rise_in = self._broadcast_to_state(self._to_numpy(self.tau_rise_in, u.ms), v_shape)
-        tau_decay_in = self._broadcast_to_state(self._to_numpy(self.tau_decay_in, u.ms), v_shape)
+        # Read state variables with their natural units.
+        V = self.V.value  # mV
+        dg_ex = self.dg_ex.value  # nS/ms
+        g_ex = self.g_ex.value  # nS
+        dg_in = self.dg_in.value  # nS/ms
+        g_in = self.g_in.value  # nS
+        r = self.refractory_step_count.value  # int
+        i_stim = self.I_stim.value  # pA
+        h = self.integration_step.value  # ms
 
-        p = {
-            'V_th': self._broadcast_to_state(self._to_numpy(self.V_th, u.mV), v_shape),
-            'V_reset': self._broadcast_to_state(self._to_numpy(self.V_reset, u.mV), v_shape),
-            'E_L': self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape),
-            'E_ex': self._broadcast_to_state(self._to_numpy(self.E_ex, u.mV), v_shape),
-            'E_in': self._broadcast_to_state(self._to_numpy(self.E_in, u.mV), v_shape),
-            'C_m': self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape),
-            'g_L': self._broadcast_to_state(self._to_numpy(self.g_L, u.nS), v_shape),
-            'tau_rise_ex': tau_rise_ex,
-            'tau_decay_ex': tau_decay_ex,
-            'tau_rise_in': tau_rise_in,
-            'tau_decay_in': tau_decay_in,
-            'I_e': self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape),
-        }
-        refr_counts = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self._refractory_counts()), dtype=ditype),
-            v_shape,
+        # Current input for next step (one-step delay).
+        new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
+
+        # Adaptive RKF45 integration via generic integrator.
+        ode_state = DotDict(V=V, dg_ex=dg_ex, g_ex=g_ex, dg_in=dg_in, g_in=g_in)
+        extra = DotDict(
+            spike_mask=jnp.zeros(self.varshape, dtype=jnp.bool_),
+            r=r,
+            unstable=jnp.array(False),
+            i_stim=i_stim,
         )
 
-        w_ex_q, w_in_q = self._sum_signed_delta_inputs()
-        w_ex = self._broadcast_to_state(self._to_numpy(w_ex_q, u.nS), v_shape)
-        w_in = self._broadcast_to_state(self._to_numpy(w_in_q, u.nS), v_shape)
+        ode_state, h, extra = self.integrator(state=ode_state, h=h, extra=extra)
+        V, dg_ex, g_ex = ode_state.V, ode_state.dg_ex, ode_state.g_ex
+        dg_in, g_in = ode_state.dg_in, ode_state.g_in
+        spike_mask, r, unstable = extra.spike_mask, extra.r, extra.unstable
 
-        pscon_ex = np.empty_like(V)
-        pscon_in = np.empty_like(V)
-        for idx in np.ndindex(v_shape):
-            pscon_ex[idx] = self._beta_normalization_factor_scalar(tau_rise_ex[idx], tau_decay_ex[idx])
-            pscon_in[idx] = self._beta_normalization_factor_scalar(tau_rise_in[idx], tau_decay_in[idx])
-
-        new_i_stim_q = self.sum_current_inputs(x, self.V.value)
-        new_i_stim = self._broadcast_to_state(self._to_numpy(new_i_stim_q, u.pA), v_shape)
-
-        v_for_spike = np.empty_like(V)
-        spike_mask = np.zeros_like(V, dtype=bool)
-        V_next = np.empty_like(V)
-        dg_ex_next = np.empty_like(dg_ex)
-        g_ex_next = np.empty_like(g_ex)
-        dg_in_next = np.empty_like(dg_in)
-        g_in_next = np.empty_like(g_in)
-        r_next = np.empty_like(r)
-        h_next = np.empty_like(h_int)
-
-        for idx in np.ndindex(v_shape):
-            local_p = {k: p[k][idx] for k in p}
-            is_refractory = r[idx] > 0
-            v_i, dg_ex_i, g_ex_i, dg_in_i, g_in_i, h_i = self._rkf45_integrate_scalar(
-                V[idx], dg_ex[idx], g_ex[idx], dg_in[idx], g_in[idx], is_refractory,
-                i_stim[idx], h_int[idx], dt, local_p
-            )
-
-            # NEST ordering: refractory/spike handling before applying spike inputs.
-            if is_refractory:
-                v_for_spike[idx] = local_p['V_reset']
-                v_i = local_p['V_reset']
-                r_i = r[idx] - 1
-            else:
-                v_for_spike[idx] = v_i
-                if v_i >= local_p['V_th']:
-                    spike_mask[idx] = True
-                    v_i = local_p['V_reset']
-                    r_i = refr_counts[idx]
-                else:
-                    r_i = 0
-
-            dg_ex_i += pscon_ex[idx] * w_ex[idx]
-            dg_in_i += pscon_in[idx] * w_in[idx]
-
-            V_next[idx] = v_i
-            dg_ex_next[idx] = dg_ex_i
-            g_ex_next[idx] = g_ex_i
-            dg_in_next[idx] = dg_in_i
-            g_in_next[idx] = g_in_i
-            r_next[idx] = r_i
-            h_next[idx] = h_i
-
-        self.V.value = V_next * u.mV
-        self.dg_ex.value = dg_ex_next
-        self.g_ex.value = g_ex_next * u.nS
-        self.dg_in.value = dg_in_next
-        self.g_in.value = g_in_next * u.nS
-        self.refractory_step_count.value = jnp.asarray(r_next, dtype=ditype)
-        self.integration_step.value = h_next * u.ms
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
+        # Post-loop stability check.
+        brainstate.transform.jit_error_if(
+            jnp.any(unstable), 'Numerical instability in iaf_cond_beta dynamics.'
         )
+
+        # Decrement refractory counter.
+        r = u.math.where(r > 0, r - 1, r)
+
+        # Synaptic spike inputs (applied after integration).
+        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
+        w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
+
+        # Compute beta normalization factors.
+        # Extract unitless tau values for the scalar beta normalization computation.
+        tau_rise_ex_ms = float(u.get_mantissa(self.tau_rise_ex / u.ms)) if np.ndim(self.tau_rise_ex) == 0 else None
+        tau_decay_ex_ms = float(u.get_mantissa(self.tau_decay_ex / u.ms)) if np.ndim(self.tau_decay_ex) == 0 else None
+        tau_rise_in_ms = float(u.get_mantissa(self.tau_rise_in / u.ms)) if np.ndim(self.tau_rise_in) == 0 else None
+        tau_decay_in_ms = float(u.get_mantissa(self.tau_decay_in / u.ms)) if np.ndim(self.tau_decay_in) == 0 else None
+
+        if tau_rise_ex_ms is not None and tau_decay_ex_ms is not None:
+            pscon_ex = self._beta_normalization_factor_scalar(tau_rise_ex_ms, tau_decay_ex_ms) / u.ms
+        else:
+            # Fallback: use element-wise computation for array taus
+            pscon_ex = np.e / self.tau_decay_ex
+
+        if tau_rise_in_ms is not None and tau_decay_in_ms is not None:
+            pscon_in = self._beta_normalization_factor_scalar(tau_rise_in_ms, tau_decay_in_ms) / u.ms
+        else:
+            pscon_in = np.e / self.tau_decay_in
+
+        # Apply synaptic spike inputs.
+        dg_ex = dg_ex + pscon_ex * w_ex  # nS/ms + 1/ms * nS = nS/ms
+        dg_in = dg_in + pscon_in * w_in  # nS/ms + 1/ms * nS = nS/ms
+
+        # Write back state.
+        self.V.value = V
+        self.dg_ex.value = dg_ex
+        self.g_ex.value = g_ex
+        self.dg_in.value = dg_in
+        self.g_in.value = g_in
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(r), dtype=ditype)
+        self.integration_step.value = h
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)
 
-        return self.get_spike(u.math.asarray(v_for_spike, dtype=jnp.float32) * u.mV)
+        return u.math.asarray(spike_mask, dtype=dftype)

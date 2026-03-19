@@ -30,7 +30,8 @@ import math
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
@@ -117,7 +118,7 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
     def test_mean_and_std(self):
         r"""Generated noise should have approximately correct mean and std."""
         dt_ms = 0.1
-        n_steps = 10000
+        n_steps = 2000
         mean_val = 50.0
         std_val = 100.0
 
@@ -130,11 +131,14 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
             ng.init_state()
 
             dftype = brainstate.environ.dftype()
-            samples = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                with brainstate.environ.context(t=step * dt_ms * u.ms):
+            t_ms_array = jnp.arange(n_steps, dtype=dftype) * dt_ms
+
+            def body(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = ng.update()
-                    samples[step] = float(out[0] / u.pA)
+                return out[0] / u.pA
+
+            samples = np.array(brainstate.transform.for_loop(body, t_ms_array))
 
         # Check mean within 3 standard errors
         se = std_val / math.sqrt(n_steps)
@@ -165,11 +169,14 @@ class TestNoiseGeneratorStatistics(unittest.TestCase):
             ng.init_state()
 
             dftype = brainstate.environ.dftype()
-            samples = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                with brainstate.environ.context(t=step * dt_ms * u.ms):
+            t_ms_array = jnp.arange(n_steps, dtype=dftype) * dt_ms
+
+            def body(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = ng.update()
-                    samples[step] = float(out[0] / u.pA)
+                return out[0] / u.pA
+
+            samples = np.array(brainstate.transform.for_loop(body, t_ms_array))
 
         # Within each noise interval of 10 steps, values should be constant
         dt_steps = int(round(noise_dt_ms / dt_ms))

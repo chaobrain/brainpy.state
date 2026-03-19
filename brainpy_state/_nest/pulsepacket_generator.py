@@ -21,7 +21,7 @@ from collections import deque
 from typing import Sequence
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -138,7 +138,7 @@ class pulsepacket_generator(NESTDevice):
     pulse_times : Sequence[ArrayLike] or ArrayLike or None, optional
         Pulse center times in ms. Accepted inputs are any array-like values
         flattenable to shape ``(K,)`` after conversion, or a
-        :class:`brainunit.Quantity` convertible to ``u.ms``.
+        :class:`saiunit.Quantity` convertible to ``u.ms``.
         ``None`` creates an empty schedule. Values are sorted internally in
         ascending order. Default is ``None``.
     activity : ArrayLike, optional
@@ -262,7 +262,7 @@ class pulsepacket_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.pulsepacket_generator(
        ...         in_size=(2, 3),
@@ -280,7 +280,7 @@ class pulsepacket_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.pulsepacket_generator(activity=3, sdev=0.5 * u.ms)
        >>> gen.set_data_from_stimulation_backend([4.0, 0.8, 5.0, 15.0, 25.0])
        >>> params = gen.get()
@@ -360,10 +360,10 @@ class pulsepacket_generator(NESTDevice):
 
     @staticmethod
     def _to_time_array_ms(values: Sequence[ArrayLike] | ArrayLike) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if not isinstance(values, u.Quantity):
             arr0 = np.asarray(values)
             if arr0.size == 0:
-                dftype = brainstate.environ.dftype()
                 return np.asarray([], dtype=dftype)
         if isinstance(values, u.Quantity):
             arr = values.to_decimal(u.ms)
@@ -757,6 +757,7 @@ class pulsepacket_generator(NESTDevice):
         ):
             self._refresh_runtime_cache(dt_ms)
 
+        ditype = brainstate.environ.ditype()
         curr_t_ms = self._current_time_ms()
         curr_step = self._time_to_step(curr_t_ms, dt_ms)
 
@@ -764,7 +765,6 @@ class pulsepacket_generator(NESTDevice):
             (self._start_center_idx == self._pulse_times_ms.size and self._all_queues_empty())
             or (not self._is_active(curr_step))
         ):
-            ditype = brainstate.environ.ditype()
             return jnp.zeros(self.varshape, dtype=ditype)
 
         curr_tic = self._ms_to_tics(curr_t_ms)

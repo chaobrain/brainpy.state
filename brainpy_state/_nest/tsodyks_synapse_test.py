@@ -25,8 +25,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from brainpy.state import iaf_psc_exp_htum, tsodyks_synapse
@@ -75,6 +76,37 @@ def _run_tsodyks_vm_trace(
     C = Tau
 
     with brainstate.environ.context(dt=dt):
+        dftype = brainstate.environ.dftype()
+
+        # Pre-simulate synapse STP dynamics in pure Python to collect the per-step
+        # delta input that will be delivered to the neuron at each simulation step.
+        # tsodyks_synapse stores state as plain Python floats (not JAX arrays),
+        # so this fast Python loop replaces the JAX-un-traceable synapse calls.
+        delay_steps_int = int(round(0.1 / h_ms))
+        x_py, y_py, u_py, t_last_py = 1.0, 0.0, 0.0, 0.0
+        syn_queue: dict = {}
+        delta_inputs_arr = np.zeros(sim_steps, dtype=dftype)
+        for step in range(sim_steps):
+            delta_inputs_arr[step] = syn_queue.pop(step, 0.0)
+            if step in spike_steps:
+                t_spike = (step + 1) * h_ms
+                x_py, y_py, u_py, t_last_py, delta_y = _tsodyks_reference_step(
+                    x=x_py,
+                    y=y_py,
+                    u_state=u_py,
+                    t_last=t_last_py,
+                    t_spike=t_spike,
+                    tau_psc=Tau_psc,
+                    tau_fac=Tau_fac,
+                    tau_rec=Tau_rec,
+                    U=U,
+                )
+                ds = step + delay_steps_int
+                if ds < sim_steps:
+                    syn_queue[ds] = syn_queue.get(ds, 0.0) + delta_y * A
+        # pA-valued JAX array: delta_inputs_jax[k] is the current injected at step k
+        delta_inputs_jax = jnp.asarray(delta_inputs_arr, dtype=dftype) * u.pA
+
         neuron = iaf_psc_exp_htum(
             1,
             tau_m=Tau * u.ms,
@@ -91,38 +123,31 @@ def _run_tsodyks_vm_trace(
         )
         neuron.init_state()
 
-        syn = tsodyks_synapse(
-            tau_psc=Tau_psc * u.ms,
-            tau_rec=Tau_rec * u.ms,
-            tau_fac=Tau_fac * u.ms,
-            U=U,
-            delay=0.1 * u.ms,
-            weight=A * u.pA,
-            u=0.0,
-            x=1.0,
-            y=0.0,
-            post=neuron,
-        )
-        syn.init_state()
-
-        times = []
-        vm = []
-        for step in range(sim_steps):
-            pre_spike = 1.0 if step in spike_steps else 0.0
-            with brainstate.environ.context(t=step * dt):
-                syn.update(pre_spike=pre_spike)
+        def _step_body(k):
+            neuron.add_delta_input('syn', delta_inputs_jax[k])
+            with brainstate.environ.context(t=k * dt):
                 neuron.update(x=0.0 * u.pA)
+            return (neuron.V.value / u.mV)[0]
 
-            t_sample = (step + 1) * h_ms
-            ratio = t_sample / vm_interval_ms
-            if (
-                t_sample < (T_sim - 1e-12)
-                and math.isclose(ratio, round(ratio), rel_tol=0.0, abs_tol=1e-12)
-            ):
-                times.append(t_sample)
-                vm.append(float((neuron.V.value / u.mV)[0]))
+        v_all = brainstate.transform.for_loop(_step_body, jnp.arange(sim_steps))
 
-    return np.vstack([np.asarray(times, dtype=dftype), np.asarray(vm, dtype=dftype)]).T
+    # Extract sampled time points (every vm_interval_ms, excluding the final step)
+    sample_steps = [
+        step
+        for step in range(sim_steps)
+        if (
+            (step + 1) * h_ms < T_sim - 1e-12
+            and math.isclose(
+                (step + 1) * h_ms / vm_interval_ms,
+                round((step + 1) * h_ms / vm_interval_ms),
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+        )
+    ]
+    times = np.array([(step + 1) * h_ms for step in sample_steps], dtype=dftype)
+    vm = np.array([float(np.asarray(v_all[step])) for step in sample_steps], dtype=dftype)
+    return np.vstack([times, vm]).T
 
 
 def _tsodyks_reference_step(*, x, y, u_state, t_last, t_spike, tau_psc, tau_fac, tau_rec, U):

@@ -26,7 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 
 from brainpy_state._nest.poisson_generator_ps import poisson_generator_ps
@@ -220,9 +220,9 @@ class TestPoissonGeneratorPSVsNEST(unittest.TestCase):
         nest.Connect(gens, sr)
         nest.Simulate(simtime_ms)
 
+        dftype = brainstate.environ.dftype()
         events = sr.get('events')
         if len(events['times']) == 0:
-            dftype = brainstate.environ.dftype()
             return np.zeros(n_steps, dtype=dftype)
 
         steps = np.rint(np.asarray(events['times'], dtype=dftype) / dt_ms).astype(np.int64)

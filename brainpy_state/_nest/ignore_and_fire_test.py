@@ -33,7 +33,7 @@ os.environ.setdefault('JAX_ENABLE_X64', 'True')
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
@@ -45,27 +45,39 @@ def _collect_spike_times(neuron, n_steps, dt):
     r"""Run neuron for n_steps and return spike times (in ms) using NEST convention.
 
     NEST records spike time as the delivery time t + dt.
+    Uses brainstate.transform.for_loop for JIT-compiled simulation.
     """
-    spike_times = []
-    for step_idx in range(n_steps):
-        t = step_idx * dt
-        with brainstate.environ.context(t=t):
+    dt_ms = float(u.get_magnitude(dt / u.ms))
+    t_ms_arr = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+    def step_fn(t_ms):
+        with brainstate.environ.context(t=t_ms * u.ms):
             spike = neuron.update()
-        if float(spike) > 0.0:
-            spike_times.append(float(u.get_magnitude((t + dt) / u.ms)))
-    return np.array(spike_times)
+        return spike
+
+    all_spikes = brainstate.transform.for_loop(step_fn, t_ms_arr)
+    spike_mask = np.array(all_spikes).reshape(n_steps) > 0.5
+    # Replicate original: spike_time = step_idx * dt_ms + dt_ms (matches t + dt)
+    spike_step_indices = np.where(spike_mask)[0].astype(np.float64)
+    return spike_step_indices * dt_ms + dt_ms
 
 
 def _collect_spike_steps(neuron, n_steps, dt):
-    r"""Run neuron for n_steps and return step indices where spikes occur."""
-    spike_steps = []
-    for step_idx in range(n_steps):
-        t = step_idx * dt
-        with brainstate.environ.context(t=t):
+    r"""Run neuron for n_steps and return step indices where spikes occur.
+
+    Uses brainstate.transform.for_loop for JIT-compiled simulation.
+    """
+    dt_ms = float(u.get_magnitude(dt / u.ms))
+    t_ms_arr = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+    def step_fn(t_ms):
+        with brainstate.environ.context(t=t_ms * u.ms):
             spike = neuron.update()
-        if float(spike) > 0.0:
-            spike_steps.append(step_idx)
-    return spike_steps
+        return spike
+
+    all_spikes = brainstate.transform.for_loop(step_fn, t_ms_arr)
+    spike_mask = np.array(all_spikes).reshape(n_steps) > 0.5
+    return list(np.where(spike_mask)[0])
 
 
 class TestIgnoreAndFireDefaults(unittest.TestCase):
@@ -182,15 +194,19 @@ class TestIgnoreAndFireInputIgnored(unittest.TestCase):
             n2.init_state()
 
             n_steps = int(T / dt_val)
-            for step_idx in range(n_steps):
-                t = step_idx * dt
-                with brainstate.environ.context(t=t):
+            t_ms_arr = jnp.arange(n_steps, dtype=jnp.float64) * dt_val
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     s1 = n1.update()
                     s2 = n2.update(x=1000.0 * u.pA)
-                npt.assert_array_equal(
-                    np.asarray(s1), np.asarray(s2),
-                    err_msg=f"Spike mismatch at step {step_idx} when current input supplied."
-                )
+                return s1, s2
+
+            all_s1, all_s2 = brainstate.transform.for_loop(step_fn, t_ms_arr)
+            npt.assert_array_equal(
+                np.array(all_s1), np.array(all_s2),
+                err_msg="Spike mismatch when current input supplied."
+            )
 
     def test_spike_times_unaffected_by_delta_input(self):
         r"""Delta (spike) inputs should not change spike times."""
@@ -207,18 +223,25 @@ class TestIgnoreAndFireInputIgnored(unittest.TestCase):
             n2 = ignore_and_fire(1, rate=rate * u.Hz, phase=phase)
             n2.init_state()
 
+            # Pre-register a persistent delta input on n2.
+            # ignore_and_fire.update() ignores all inputs, so this
+            # must not change spike times.
+            n2.add_delta_input('test', jnp.array([50.0]))
+
             n_steps = int(T / dt_val)
-            for step_idx in range(n_steps):
-                t = step_idx * dt
-                # Add delta inputs to n2
-                n2.add_delta_input(f'test_{step_idx}', jnp.array([50.0]))
-                with brainstate.environ.context(t=t):
+            t_ms_arr = jnp.arange(n_steps, dtype=jnp.float64) * dt_val
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     s1 = n1.update()
                     s2 = n2.update()
-                npt.assert_array_equal(
-                    np.asarray(s1), np.asarray(s2),
-                    err_msg=f"Spike mismatch at step {step_idx} when delta input supplied."
-                )
+                return s1, s2
+
+            all_s1, all_s2 = brainstate.transform.for_loop(step_fn, t_ms_arr)
+            npt.assert_array_equal(
+                np.array(all_s1), np.array(all_s2),
+                err_msg="Spike mismatch when delta input supplied."
+            )
 
 
 class TestIgnoreAndFirePhaseSteps(unittest.TestCase):
@@ -310,16 +333,19 @@ class TestIgnoreAndFireBatch(unittest.TestCase):
             neuron = ignore_and_fire(2, rate=rate * u.Hz, phase=phases)
             neuron.init_state()
 
-            spike_steps_0 = []
-            spike_steps_1 = []
-            for step_idx in range(200):
-                t = step_idx * dt
-                with brainstate.environ.context(t=t):
+            n_steps = 200
+            t_ms_arr = jnp.arange(n_steps, dtype=jnp.float64) * dt_val
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     spike = neuron.update()
-                if float(spike[0]) > 0:
-                    spike_steps_0.append(step_idx)
-                if float(spike[1]) > 0:
-                    spike_steps_1.append(step_idx)
+                return spike  # shape (2,)
+
+            all_spikes = brainstate.transform.for_loop(step_fn, t_ms_arr)
+            all_spikes_np = np.array(all_spikes)  # (200, 2)
+
+            spike_steps_0 = list(np.where(all_spikes_np[:, 0] > 0.5)[0])
+            spike_steps_1 = list(np.where(all_spikes_np[:, 1] > 0.5)[0])
 
             # phase_steps for neuron 0: round(0.1/10*1000/1.0) = 10
             # phase_steps for neuron 1: round(0.5/10*1000/1.0) = 50

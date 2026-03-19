@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -159,7 +159,7 @@ class sinusoidal_poisson_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar baseline firing rate in spikes/s (Hz), shape ``()`` after
         conversion. Accepted inputs include scalar ``ArrayLike`` and
-        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        :class:`saiunit.Quantity` convertible to ``u.Hz``.
         Default is ``0.0 * u.Hz``.
     amplitude : ArrayLike, optional
         Scalar sinusoidal modulation amplitude in spikes/s (Hz), shape ``()``
@@ -278,7 +278,7 @@ class sinusoidal_poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.sinusoidal_poisson_generator(
        ...         in_size=4,
@@ -298,7 +298,7 @@ class sinusoidal_poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.sinusoidal_poisson_generator(
        ...         individual_spike_trains=False
@@ -631,17 +631,17 @@ class sinusoidal_poisson_generator(NESTDevice):
             shape=self.varshape,
         ).astype(jnp.int64)
 
-    def _sample_poisson_shared(self, lam: float) -> int:
+    def _sample_poisson_shared(self, lam) -> jax.Array:
         key, subkey = jax.random.split(self.rng_key.value)
         self.rng_key.value = key
         dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
         sample = jax.random.poisson(
             subkey,
             lam=jnp.asarray(lam, dtype=dftype),
             shape=(),
         ).astype(jnp.int64)
-        ditype = brainstate.environ.ditype()
-        return int(np.asarray(sample, dtype=ditype).reshape(()))
+        return jnp.full(self.varshape, sample, dtype=ditype)
 
     def update(self):
         r"""Advance generator by one simulation step and emit spike counts.
@@ -666,40 +666,56 @@ class sinusoidal_poisson_generator(NESTDevice):
             self.init_state()
 
         dt_ms = self._dt_ms()
-        curr_t_ms = self._current_time_ms()
         if (not np.isfinite(self._dt_cache_ms)) or (
             not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)
         ):
+            curr_t_ms = self._current_time_ms()
             self._refresh_timing_cache(dt_ms)
             self._refresh_step_rotation_cache(dt_ms)
             self._reset_oscillator_state(curr_t_ms)
 
-        curr_step = self._time_to_step(curr_t_ms, dt_ms)
-
-        # Update oscillator blocks in NEST ordering.
         dftype = brainstate.environ.dftype()
-        y0 = float(np.asarray(self.y_0.value, dtype=dftype).reshape(()))
-        y1 = float(np.asarray(self.y_1.value, dtype=dftype).reshape(()))
+        ditype = brainstate.environ.ditype()
 
-        rate_per_ms = self._rate_per_ms
-        new_y0 = self._cos_step * y0 - self._sin_step * y1
-        y1 = self._sin_step * y0 + self._cos_step * y1
-        y0 = new_y0
-        rate_per_ms += y1
-        if rate_per_ms < 0.0:
-            rate_per_ms = 0.0
+        # Get current time as a JAX-compatible scalar so this method works under
+        # jax.jit / brainstate.transform.for_loop tracing.
+        t = brainstate.environ.get('t', default=0. * u.ms)
+        if isinstance(t, u.Quantity):
+            t_ms_jax = t.to_decimal(u.ms)
+        else:
+            t_ms_jax = jnp.asarray(t, dtype=dftype)
+        curr_step_jax = jnp.rint(t_ms_jax / dt_ms).astype(jnp.int64)
 
-        self.y_0.value = jnp.asarray(y0, dtype=dftype)
-        self.y_1.value = jnp.asarray(y1, dtype=dftype)
-        self._recorded_rate_hz.value = jnp.asarray(rate_per_ms * 1000.0, dtype=dftype)
+        # Update oscillator state using JAX operations for JIT compatibility.
+        cos_s = jnp.asarray(self._cos_step, dtype=dftype)
+        sin_s = jnp.asarray(self._sin_step, dtype=dftype)
+        y0 = self.y_0.value
+        y1 = self.y_1.value
+        new_y0 = cos_s * y0 - sin_s * y1
+        new_y1 = sin_s * y0 + cos_s * y1
+        rate_val = jnp.maximum(
+            jnp.asarray(0.0, dtype=dftype),
+            jnp.asarray(self._rate_per_ms, dtype=dftype) + new_y1,
+        )
 
-        if rate_per_ms > 0.0 and self._is_active(curr_step):
-            lam = rate_per_ms * dt_ms
-            if self.individual_spike_trains:
-                return self._sample_poisson_individual(lam)
+        self.y_0.value = jnp.asarray(new_y0, dtype=dftype)
+        self.y_1.value = jnp.asarray(new_y1, dtype=dftype)
+        self._recorded_rate_hz.value = rate_val * jnp.asarray(1000.0, dtype=dftype)
 
-            n_spikes = self._sample_poisson_shared(lam)
-            ditype = brainstate.environ.ditype()
-            return jnp.full(self.varshape, n_spikes, dtype=ditype)
+        # Activity check using JAX comparisons for JIT compatibility.
+        shifted_step = curr_step_jax + jnp.asarray(2, dtype=jnp.int64)
+        t_min = jnp.asarray(self._t_min_step, dtype=jnp.int64)
+        t_max = jnp.asarray(self._t_max_step, dtype=jnp.int64)
+        active = jnp.logical_and(t_min < shifted_step, shifted_step <= t_max)
+        positive_rate = rate_val > jnp.asarray(0.0, dtype=dftype)
+        should_fire = jnp.logical_and(active, positive_rate)
 
-        return jnp.zeros(self.varshape, dtype=ditype)
+        # Always sample (masking via jnp.where keeps this JIT-compatible).
+        lam = rate_val * jnp.asarray(dt_ms, dtype=dftype)
+        if self.individual_spike_trains:
+            spikes = self._sample_poisson_individual(lam)
+        else:
+            spikes = self._sample_poisson_shared(lam)
+
+        zeros = jnp.zeros(self.varshape, dtype=ditype)
+        return jnp.where(should_fire, spikes, zeros)

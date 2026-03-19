@@ -20,9 +20,10 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
+import saiunit as u
 from brainpy.state import iaf_psc_exp
 
 jax.config.update('jax_enable_x64', True)
@@ -47,12 +48,6 @@ class TestIAFPscExp(unittest.TestCase):
     @staticmethod
     def _is_spike(spk):
         return bool(u.math.all(spk > 0.0))
-
-    def _step(self, neuron, step_idx, x=0.0 * u.pA, x_filtered=0.0 * u.pA, delta=None):
-        if delta is not None:
-            neuron.add_delta_input(f'delta_{step_idx}', delta)
-        with brainstate.environ.context(t=step_idx * self.dt):
-            return neuron.update(x=x, x_filtered=x_filtered)
 
     def test_nest_default_parameters(self):
         neuron = iaf_psc_exp(1)
@@ -96,8 +91,12 @@ class TestIAFPscExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            for k in range(80):
-                self._step(neuron, k)
+            def _run_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA, x_filtered=0.0 * u.pA)
+                return neuron.last_spike_time.value / u.ms
+
+            brainstate.transform.for_loop(_run_step, jnp.arange(80))
 
             # Same first-spike time as in NEST iaf_psc_exp DC test: 4.8 ms.
             t_spike = float((neuron.last_spike_time.value / u.ms)[0])
@@ -135,7 +134,33 @@ class TestIAFPscExp(unittest.TestCase):
             x0_seq = [10.0, 20.0, 0.0, 0.0, -5.0, 0.0, 0.0]
             x1_seq = [0.0, 40.0, 0.0, 10.0, 0.0, 0.0, 0.0]
             w_seq = [0.0, 30.0, -15.0, 0.0, 0.0, 20.0, -10.0]
+            n_steps = len(x0_seq)
 
+            # Pre-compute per-step inputs as JAX arrays.
+            x0_arr = jnp.array(x0_seq)
+            x1_arr = jnp.array(x1_seq)
+            w_arr = jnp.array(w_seq)
+
+            def _run_step(k):
+                neuron.add_delta_input('w', w_arr[k] * u.pA)
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x0_arr[k] * u.pA, x_filtered=x1_arr[k] * u.pA)
+                return (
+                    spk[0],
+                    (neuron.V.value / u.mV)[0],
+                    (neuron.i_syn_ex.value / u.pA)[0],
+                    (neuron.i_syn_in.value / u.pA)[0],
+                    neuron.refractory_step_count.value[0],
+                )
+
+            results = brainstate.transform.for_loop(_run_step, jnp.arange(n_steps))
+            spk_all = np.asarray(results[0])
+            vm_all = np.asarray(results[1])
+            iex_all = np.asarray(results[2])
+            iin_all = np.asarray(results[3])
+            r_all = np.asarray(results[4])
+
+            # Compute reference values using Python math (same order as NEST update).
             v = -67.0 - params['E_L']
             i0 = 0.0
             i1 = 0.0
@@ -151,11 +176,9 @@ class TestIAFPscExp(unittest.TestCase):
             p21in = _propagator_exp(params['tau_syn_in'], params['tau_m'], params['C_m'], 0.1)
             p20 = params['tau_m'] / params['C_m'] * (1.0 - p22)
             th = params['V_th'] - params['E_L']
-            reset = params['V_reset'] - params['E_L']
+            reset_v = params['V_reset'] - params['E_L']
 
             for k, (x0, x1, w) in enumerate(zip(x0_seq, x1_seq, w_seq)):
-                spk = self._step(neuron, k, x=x0 * u.pA, x_filtered=x1 * u.pA, delta=w * u.pA)
-
                 if r == 0:
                     v = v * p22 + iex * p21ex + iin * p21in + (params['I_e'] + i0) * p20
                 else:
@@ -170,16 +193,16 @@ class TestIAFPscExp(unittest.TestCase):
                 spike_ref = v >= th
                 if spike_ref:
                     r = refr
-                    v = reset
+                    v = reset_v
 
                 i0 = x0
                 i1 = x1
 
-                self.assertEqual(self._is_spike(spk), spike_ref)
-                self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), v + params['E_L'], delta=1e-11)
-                self.assertAlmostEqual(float((neuron.i_syn_ex.value / u.pA)[0]), iex, delta=1e-11)
-                self.assertAlmostEqual(float((neuron.i_syn_in.value / u.pA)[0]), iin, delta=1e-11)
-                self.assertEqual(int(neuron.refractory_step_count.value[0]), r)
+                self.assertEqual(bool(spk_all[k] > 0.0), spike_ref)
+                self.assertAlmostEqual(float(vm_all[k]), v + params['E_L'], delta=1e-11)
+                self.assertAlmostEqual(float(iex_all[k]), iex, delta=1e-11)
+                self.assertAlmostEqual(float(iin_all[k]), iin, delta=1e-11)
+                self.assertEqual(int(r_all[k]), r)
 
 
 if __name__ == '__main__':

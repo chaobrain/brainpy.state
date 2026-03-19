@@ -45,8 +45,10 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 
 import braintools
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
+jax.config.update('jax_enable_x64', True)
 import numpy as np
 
 from brainpy_state._nest.gif_cond_exp_multisynapse import gif_cond_exp_multisynapse
@@ -236,24 +238,25 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
     r"""Test that default parameters match NEST C++ source code values."""
 
     def test_nest_cpp_default_parameters(self):
-        neuron = gif_cond_exp_multisynapse(1)
-        self.assertEqual(neuron.g_L, 4.0 * u.nS)
-        self.assertEqual(neuron.E_L, -70.0 * u.mV)
-        self.assertEqual(neuron.C_m, 80.0 * u.pF)
-        self.assertEqual(neuron.V_reset, -55.0 * u.mV)
-        self.assertEqual(neuron.Delta_V, 0.5 * u.mV)
-        self.assertEqual(neuron.V_T_star, -35.0 * u.mV)
-        self.assertAlmostEqual(neuron.lambda_0, 0.001)  # 1/ms (= 1/s internally)
-        self.assertEqual(neuron.t_ref, 4.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0.0 * u.pA)
-        # Multisynapse defaults: single receptor with tau_syn=2.0, E_rev=0.0
-        self.assertEqual(neuron.tau_syn, (2.0,))
-        self.assertEqual(neuron.E_rev, (0.0,))
-        self.assertEqual(neuron.n_receptors, 1)
-        self.assertEqual(neuron.tau_sfa, ())
-        self.assertEqual(neuron.q_sfa, ())
-        self.assertEqual(neuron.tau_stc, ())
-        self.assertEqual(neuron.q_stc, ())
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = gif_cond_exp_multisynapse(1)
+            self.assertEqual(neuron.g_L, 4.0 * u.nS)
+            self.assertEqual(neuron.E_L, -70.0 * u.mV)
+            self.assertEqual(neuron.C_m, 80.0 * u.pF)
+            self.assertEqual(neuron.V_reset, -55.0 * u.mV)
+            self.assertEqual(neuron.Delta_V, 0.5 * u.mV)
+            self.assertEqual(neuron.V_T_star, -35.0 * u.mV)
+            self.assertAlmostEqual(neuron.lambda_0, 0.001)  # 1/ms (= 1/s internally)
+            self.assertEqual(neuron.t_ref, 4.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0.0 * u.pA)
+            # Multisynapse defaults: single receptor with tau_syn=2.0, E_rev=0.0
+            self.assertEqual(neuron.tau_syn, (2.0,))
+            self.assertEqual(neuron.E_rev, (0.0,))
+            self.assertEqual(neuron.n_receptors, 1)
+            self.assertEqual(neuron.tau_sfa, ())
+            self.assertEqual(neuron.q_sfa, ())
+            self.assertEqual(neuron.tau_stc, ())
+            self.assertEqual(neuron.q_stc, ())
 
     def test_initial_state_matches_nest(self):
         r"""V_m should be initialized to E_L, all conductances to 0."""
@@ -268,57 +271,68 @@ class TestGIFCondExpMultisynDefaultParams(unittest.TestCase):
             self.assertTrue(u.math.allclose(neuron.g[1].value, 0.0 * u.nS))
 
     def test_multiple_receptors(self):
-        r"""Verify model with multiple receptor ports."""
-        neuron = gif_cond_exp_multisynapse(
-            1, tau_syn=(2.0, 4.0, 8.0), E_rev=(0.0, -85.0, -65.0)
-        )
-        self.assertEqual(neuron.n_receptors, 3)
-        self.assertEqual(neuron.tau_syn, (2.0, 4.0, 8.0))
-        self.assertEqual(neuron.E_rev, (0.0, -85.0, -65.0))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Verify model with multiple receptor ports."""
+            neuron = gif_cond_exp_multisynapse(
+                1, tau_syn=(2.0, 4.0, 8.0), E_rev=(0.0, -85.0, -65.0)
+            )
+            self.assertEqual(neuron.n_receptors, 3)
+            self.assertEqual(neuron.tau_syn, (2.0, 4.0, 8.0))
+            self.assertEqual(neuron.E_rev, (0.0, -85.0, -65.0))
 
 
 class TestGIFCondExpMultisynParameterValidation(unittest.TestCase):
     r"""Test that invalid parameters raise appropriate errors."""
 
     def test_mismatched_tau_syn_E_rev_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(2.0, 4.0), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(2.0, 4.0), E_rev=(0.0,))
 
     def test_empty_tau_syn_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(), E_rev=())
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(), E_rev=())
 
     def test_mismatched_tau_sfa_q_sfa_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_sfa=[10.0], q_sfa=[1.0, 2.0])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_sfa=[10.0], q_sfa=[1.0, 2.0])
 
     def test_mismatched_tau_stc_q_stc_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_stc=[10.0, 20.0], q_stc=[1.0])
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_stc=[10.0, 20.0], q_stc=[1.0])
 
     def test_negative_capacitance_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, C_m=-80.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, C_m=-80.0 * u.pF)
 
     def test_negative_g_L_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, g_L=-1.0 * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, g_L=-1.0 * u.nS)
 
     def test_negative_Delta_V_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, Delta_V=-0.5 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, Delta_V=-0.5 * u.mV)
 
     def test_negative_lambda_0_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, lambda_0=-1.0)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, lambda_0=-1.0)
 
     def test_negative_tau_syn_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(-2.0,), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(-2.0,), E_rev=(0.0,))
 
     def test_zero_tau_syn_raises(self):
-        with self.assertRaises(ValueError):
-            gif_cond_exp_multisynapse(1, tau_syn=(0.0,), E_rev=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                gif_cond_exp_multisynapse(1, tau_syn=(0.0,), E_rev=(0.0,))
 
 
 class TestGIFCondExpMultisynSubthresholdDynamics(unittest.TestCase):
@@ -705,10 +719,13 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            for k in range(100):
-                spk = self._step(neuron, k)
-                self.assertEqual(float(spk[0]), 0.0,
-                                 f"No spike expected with lambda_0=0 at step {k}")
+            def _step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update()
+
+            all_spks = brainstate.transform.for_loop(_step, jnp.arange(100))
+            self.assertEqual(float(jnp.sum(all_spks)), 0.0,
+                             "No spikes expected with lambda_0=0")
 
     def test_high_lambda_produces_spikes(self):
         r"""With very high lambda_0, spikes should occur readily."""
@@ -724,12 +741,12 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_count = 0
-            for k in range(100):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_count += 1
+            def _step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return neuron.update()
 
+            all_spks = brainstate.transform.for_loop(_step, jnp.arange(100))
+            spike_count = int(jnp.sum(all_spks > 0))
             self.assertTrue(spike_count > 50,
                             f"Expected many spikes with high lambda, got {spike_count}")
 
@@ -750,11 +767,20 @@ class TestGIFCondExpMultisynStochasticSpiking(unittest.TestCase):
             n1.init_state()
             n2.init_state()
 
-            for k in range(50):
-                s1 = self._step(n1, k)
-                s2 = self._step(n2, k)
-                self.assertEqual(float(s1[0]), float(s2[0]),
-                                 f"Spike mismatch at step {k} with identical RNG")
+            def _step1(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n1.update()
+
+            def _step2(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    return n2.update()
+
+            s1_all = brainstate.transform.for_loop(_step1, jnp.arange(50))
+            s2_all = brainstate.transform.for_loop(_step2, jnp.arange(50))
+            self.assertTrue(
+                bool(jnp.all(s1_all == s2_all)),
+                "Spike mismatch with identical RNG keys",
+            )
 
 
 class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
@@ -800,6 +826,19 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
             tau_syn=tau_syn, E_rev=E_rev,
         )
 
+        # Pre-compute per-step inputs as JAX arrays for JIT-compatible loop.
+        dg0_arr = np.zeros(n_steps, dtype=np.float64)
+        dg1_arr = np.zeros(n_steps, dtype=np.float64)
+        for k, vals in enumerate(dg_seq):
+            for port, val in vals:
+                if port == 0:
+                    dg0_arr[k] += val
+                else:
+                    dg1_arr[k] += val
+        dg0_arr = jnp.array(dg0_arr)
+        dg1_arr = jnp.array(dg1_arr)
+        x_arr = jnp.array(i_stim_seq, dtype=jnp.float64)
+
         # Model
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
@@ -820,14 +859,21 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model, g0_model, g1_model = [], [], []
-            for k in range(n_steps):
-                x_pA = i_stim_seq[k]
-                dg_vals = [(port, val) for port, val in dg_seq[k]] if dg_seq[k] else None
-                self._step(neuron, k, x=x_pA * u.pA, dg_values=dg_vals)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                g0_model.append(float((neuron.g[0].value / u.nS)[0]))
-                g1_model.append(float((neuron.g[1].value / u.nS)[0]))
+            def _model_step(k):
+                neuron.add_delta_input('receptor_0', dg0_arr[k] * u.nS)
+                neuron.add_delta_input('receptor_1', dg1_arr[k] * u.nS)
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g[0].value / u.nS,
+                    neuron.g[1].value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
+            v_model = np.asarray(results[0]).reshape(n_steps)
+            g0_model = np.asarray(results[1]).reshape(n_steps)
+            g1_model = np.asarray(results[2]).reshape(n_steps)
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
@@ -898,12 +944,19 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model, g0_model, g1_model = [], [], []
-            for k in range(n_steps):
-                self._step(neuron, k, x=0.0 * u.pA)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                g0_model.append(float((neuron.g[0].value / u.nS)[0]))
-                g1_model.append(float((neuron.g[1].value / u.nS)[0]))
+            def _model_step(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g[0].value / u.nS,
+                    neuron.g[1].value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
+            v_model = np.asarray(results[0]).reshape(n_steps)
+            g0_model = np.asarray(results[1]).reshape(n_steps)
+            g1_model = np.asarray(results[2]).reshape(n_steps)
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,
@@ -952,6 +1005,13 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
             tau_syn=tau_syn, E_rev=E_rev,
         )
 
+        # Pre-compute per-step per-receptor dg arrays for JIT-compatible loop.
+        dg_np = np.zeros((3, n_steps), dtype=np.float64)
+        for k, vals in enumerate(dg_seq):
+            for port, val in vals:
+                dg_np[port, k] += val
+        dg_arrs = [jnp.array(dg_np[p]) for p in range(3)]
+
         with brainstate.environ.context(dt=self.dt):
             neuron = gif_cond_exp_multisynapse(
                 1,
@@ -973,14 +1033,21 @@ class TestGIFCondExpMultisynReferenceTrace(unittest.TestCase):
             )
             neuron.init_state()
 
-            v_model = []
-            g_model = [[] for _ in range(3)]
-            for k in range(n_steps):
-                dg_vals = [(port, val) for port, val in dg_seq[k]] if dg_seq[k] else None
-                self._step(neuron, k, x=0.0 * u.pA, dg_values=dg_vals)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
+            def _model_step(k):
                 for port in range(3):
-                    g_model[port].append(float((neuron.g[port].value / u.nS)[0]))
+                    neuron.add_delta_input(f'receptor_{port}', dg_arrs[port][k] * u.nS)
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g[0].value / u.nS,
+                    neuron.g[1].value / u.nS,
+                    neuron.g[2].value / u.nS,
+                )
+
+            results = brainstate.transform.for_loop(_model_step, jnp.arange(n_steps))
+            v_model = np.asarray(results[0]).reshape(n_steps)
+            g_model = [np.asarray(results[i + 1]).reshape(n_steps) for i in range(3)]
 
         for k in range(n_steps):
             self.assertAlmostEqual(v_model[k], v_ref[k], places=4,

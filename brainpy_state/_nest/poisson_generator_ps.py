@@ -17,7 +17,7 @@
 
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -106,7 +106,7 @@ class poisson_generator_ps(NESTDevice):
         to one independent output train. Default is ``1``.
     rate : ArrayLike, optional
         Scalar mean firing rate in spikes/s (Hz). Accepts any ``ArrayLike``
-        with exactly one element, optionally a :class:`brainunit.Quantity`
+        with exactly one element, optionally a :class:`saiunit.Quantity`
         convertible to ``u.Hz``. Must satisfy ``rate >= 0``.
         Default is ``0.0 * u.Hz``.
     dead_time : ArrayLike, optional
@@ -198,7 +198,7 @@ class poisson_generator_ps(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.poisson_generator_ps(
        ...         in_size=(2,),
@@ -215,7 +215,7 @@ class poisson_generator_ps(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.poisson_generator_ps(rate=500.0 * u.Hz)
        >>> gen.set(dead_time=0.8 * u.ms, stop=None)
        >>> params = gen.get()
@@ -353,7 +353,7 @@ class poisson_generator_ps(NESTDevice):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy.state import poisson_generator_ps
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     gen = poisson_generator_ps(in_size=4, rate=800.0 * u.Hz, rng_seed=7)
@@ -400,7 +400,7 @@ class poisson_generator_ps(NESTDevice):
         rate : ArrayLike or object, optional
             New scalar mean firing rate in spikes/s (Hz). Accepts any
             ``ArrayLike`` with exactly one element, or a
-            :class:`brainunit.Quantity` convertible to ``u.Hz``. Must satisfy
+            :class:`saiunit.Quantity` convertible to ``u.Hz``. Must satisfy
             ``rate >= 0`` after conversion. Setting this parameter resets
             ``next_spike_time`` state to ``-inf`` for all targets, matching
             NEST behavior. Omit to keep the current value.
@@ -442,7 +442,7 @@ class poisson_generator_ps(NESTDevice):
         .. code-block:: python
 
            >>> import brainpy
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> gen = brainpy.state.poisson_generator_ps(rate=500.0 * u.Hz)
            >>> gen.set(rate=1000.0 * u.Hz, dead_time=0.5 * u.ms)
            >>> params = gen.get()
@@ -516,7 +516,7 @@ class poisson_generator_ps(NESTDevice):
         Returned values are plain Python ``float`` scalars (``float64``
         precision). They mirror the internal scalar attributes set in
         :meth:`__init__` or updated by :meth:`set` and are not bound to any
-        ``brainunit`` quantities.
+        ``saiunit`` quantities.
 
         See Also
         --------
@@ -527,7 +527,7 @@ class poisson_generator_ps(NESTDevice):
         .. code-block:: python
 
            >>> import brainpy
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> gen = brainpy.state.poisson_generator_ps(
            ...     rate=800.0 * u.Hz,
            ...     dead_time=0.5 * u.ms,

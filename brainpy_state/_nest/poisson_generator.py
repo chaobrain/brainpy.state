@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -97,7 +97,7 @@ class poisson_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar firing rate in spikes/s (Hz). Accepted forms are any
         ``ArrayLike`` with exactly one element, optionally a
-        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        :class:`saiunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     start : ArrayLike, optional
         Scalar relative start time in ms (exclusive lower bound after adding
@@ -181,7 +181,7 @@ class poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.poisson_generator(
        ...         in_size=(2, 3),
@@ -197,7 +197,7 @@ class poisson_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.poisson_generator(rate=500.0 * u.Hz)
        >>> gen.set(start=2.0 * u.ms, stop=None, origin=1.0 * u.ms)
        >>> params = gen.get()
@@ -252,22 +252,22 @@ class poisson_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError('Time parameters must be scalar.')
         return float(arr.reshape(()))
 
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError('rate must be scalar.')
         return float(arr.reshape(()))
@@ -344,7 +344,7 @@ class poisson_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> from brainpy.state import poisson_generator
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     gen = poisson_generator(in_size=4, rate=800.0 * u.Hz, rng_seed=7)
@@ -371,7 +371,7 @@ class poisson_generator(NESTDevice):
         rate : ArrayLike or object, optional
             New scalar firing rate in spikes/s (Hz). Accepts any
             ``ArrayLike`` with exactly one element, or a
-            :class:`brainunit.Quantity` convertible to ``u.Hz``.
+            :class:`saiunit.Quantity` convertible to ``u.Hz``.
             Must satisfy ``rate >= 0`` after conversion. Omit to keep the
             current value.
         start : ArrayLike or object, optional
@@ -409,7 +409,7 @@ class poisson_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainpy
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> gen = brainpy.state.poisson_generator(rate=500.0 * u.Hz)
            >>> gen.set(rate=1000.0 * u.Hz, stop=50.0 * u.ms)
            >>> params = gen.get()
@@ -458,7 +458,7 @@ class poisson_generator(NESTDevice):
         Returned values are plain Python ``float`` scalars (``float64``
         precision). They mirror the internal scalar attributes set in
         :meth:`__init__` or updated by :meth:`set` and are not bound to any
-        ``brainunit`` quantities.
+        ``saiunit`` quantities.
 
         See Also
         --------
@@ -469,7 +469,7 @@ class poisson_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainpy
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> gen = brainpy.state.poisson_generator(
            ...     rate=800.0 * u.Hz,
            ...     start=5.0 * u.ms,
@@ -556,12 +556,21 @@ class poisson_generator(NESTDevice):
         not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)):
             self._refresh_timing_cache(dt_ms)
 
+        ditype = brainstate.environ.ditype()
+
         if self.rate <= 0.0:
-            ditype = brainstate.environ.ditype()
             return jax.numpy.zeros(self.varshape, dtype=ditype)
 
-        curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
-        if self._is_active(curr_step):
-            lam = self.rate * dt_ms / 1000.0
-            return self._sample_poisson(lam)
-        return jax.numpy.zeros(self.varshape, dtype=ditype)
+        # JAX-compatible activity check (works under jit / for_loop tracing).
+        # t may be a traced abstract value inside for_loop, so we avoid float().
+        t = brainstate.environ.get('t', default=0. * u.ms)
+        if isinstance(t, u.Quantity):
+            t_ms_num = t.to_decimal(u.ms)
+        else:
+            t_ms_num = jax.numpy.asarray(t)
+        curr_step = jax.numpy.rint(t_ms_num / dt_ms).astype(jax.numpy.int64)
+        is_active = (self._t_min_step < curr_step) & (curr_step <= self._t_max_step)
+
+        lam = self.rate * dt_ms / 1000.0
+        spikes = self._sample_poisson(lam)
+        return jax.numpy.where(is_active, spikes, jax.numpy.zeros(self.varshape, dtype=ditype))

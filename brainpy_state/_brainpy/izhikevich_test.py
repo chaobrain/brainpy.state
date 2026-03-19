@@ -19,7 +19,7 @@
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainpy.state import Izhikevich, IzhikevichRef

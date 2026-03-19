@@ -20,7 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -160,7 +160,7 @@ class correlation_detector(NESTDevice):
         is retained for API consistency and does not affect histogram shape.
         Default is ``1``.
     delta_tau : quantity (ms) or float or None, optional
-        Bin width :math:`\Delta_\tau`. Unitful ``brainunit`` quantities are
+        Bin width :math:`\Delta_\tau`. Unitful ``saiunit`` quantities are
         accepted and converted to ms; bare floats are interpreted as ms.
         Must be finite, strictly positive, and an integer multiple of
         simulation ``dt``. ``None`` auto-selects ``5 * dt``.
@@ -270,7 +270,7 @@ class correlation_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlation_detector(
@@ -293,7 +293,7 @@ class correlation_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlation_detector()
        ...     with brainstate.environ.context(t=0.0 * u.ms):
@@ -650,11 +650,11 @@ class correlation_detector(NESTDevice):
 
     def _reset_state(self):
         ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
         self._n_events = np.zeros((2,), dtype=ditype)
         self._incoming = [deque(), deque()]
 
         if self._calib is None:
-            dftype = brainstate.environ.dftype()
             self._histogram = np.zeros((0,), dtype=dftype)
             self._histogram_correction = np.zeros((0,), dtype=dftype)
             self._count_histogram = np.zeros((0,), dtype=ditype)
@@ -803,10 +803,10 @@ class correlation_detector(NESTDevice):
         size: int = None,
         unit=None,
     ) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            dftype = brainstate.environ.dftype()
             arr = np.asarray([default], dtype=dftype)
         else:
             if unit is not None and isinstance(x, u.Quantity):
@@ -837,10 +837,10 @@ class correlation_detector(NESTDevice):
         default: int = None,
         size: int = None,
     ) -> np.ndarray:
+        ditype = brainstate.environ.ditype()
         if x is None:
             if default is None:
                 raise ValueError(f'{name} cannot be None.')
-            ditype = brainstate.environ.ditype()
             arr = np.asarray([default], dtype=ditype)
         else:
             arr = np.asarray(u.math.asarray(x), dtype=ditype).reshape(-1)

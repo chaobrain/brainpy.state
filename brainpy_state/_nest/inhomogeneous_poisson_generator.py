@@ -20,7 +20,7 @@ import math
 from typing import Sequence
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -140,7 +140,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
     start : ArrayLike, optional
         Scalar relative start time :math:`t_{\mathrm{start,rel}}` in ms.
         Added to ``origin`` to form the exclusive lower bound of the active
-        interval. Unitless scalars are treated as ms; :class:`brainunit.Quantity`
+        interval. Unitless scalars are treated as ms; :class:`saiunit.Quantity`
         values are converted automatically. Default is ``0. * u.ms``.
     stop : ArrayLike or None, optional
         Scalar relative stop time :math:`t_{\mathrm{stop,rel}}` in ms. Added
@@ -209,7 +209,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
         time-like parameter is not scalar-convertible.
     TypeError
         If unit conversion or numeric coercion fails for any time or rate
-        input (e.g., incompatible ``brainunit.Quantity`` dimensions).
+        input (e.g., incompatible ``saiunit.Quantity`` dimensions).
     KeyError
         At runtime during :meth:`update`, if the simulation context accessed
         via ``brainstate.environ`` is missing the required ``dt`` key.
@@ -247,7 +247,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.inhomogeneous_poisson_generator(
        ...         in_size=4,
@@ -269,7 +269,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.inhomogeneous_poisson_generator(
        ...         allow_offgrid_times=True,
@@ -331,10 +331,10 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
     @staticmethod
     def _to_time_array_ms(values: Sequence[ArrayLike] | ArrayLike) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if not isinstance(values, u.Quantity):
             arr0 = np.asarray(values)
             if arr0.size == 0:
-                dftype = brainstate.environ.dftype()
                 return np.asarray([], dtype=dftype)
         if isinstance(values, u.Quantity):
             arr = values.to_decimal(u.ms)
@@ -344,10 +344,10 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
     @staticmethod
     def _to_rate_array_hz(values: Sequence[ArrayLike] | ArrayLike) -> np.ndarray:
+        dftype = brainstate.environ.dftype()
         if not isinstance(values, u.Quantity):
             arr0 = np.asarray(values)
             if arr0.size == 0:
-                dftype = brainstate.environ.dftype()
                 return np.asarray([], dtype=dftype)
         if isinstance(values, u.Quantity):
             arr = values.to_decimal(u.Hz)
@@ -471,7 +471,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
             if a time is off-grid and ``allow_offgrid_times`` is ``False``.
         TypeError
             If unit conversion fails for ``rate_times`` or ``rate_values``
-            inputs (e.g., incompatible ``brainunit.Quantity`` dimensions).
+            inputs (e.g., incompatible ``saiunit.Quantity`` dimensions).
         """
         times_given = rate_times is not _UNSET
         rates_given = rate_values is not _UNSET
@@ -500,11 +500,12 @@ class inhomogeneous_poisson_generator(NESTDevice):
         if times_ms.size != values_hz.size:
             raise ValueError('Rate times and values have to be the same size.')
 
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+
         if times_ms.size == 0:
-            dftype = brainstate.environ.dftype()
             self._rate_times_ms = np.asarray([], dtype=dftype)
             self._rate_values_hz = np.asarray([], dtype=dftype)
-            ditype = brainstate.environ.ditype()
             self._rate_steps = np.asarray([], dtype=ditype)
             if hasattr(self, '_rate_idx'):
                 self._rate_idx.value = jnp.asarray(0, dtype=ditype)
@@ -612,25 +613,59 @@ class inhomogeneous_poisson_generator(NESTDevice):
         if not hasattr(self, '_rate_idx'):
             self.init_state()
 
-        dt_ms = self._dt_ms()
-        curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
-
-        idx = int(self._rate_idx.value)
-        while idx < self._rate_steps.size and int(self._rate_steps[idx]) <= curr_step:
-            idx += 1
-
-        rate_hz = float(self._rate_hz.value)
-        if idx < self._rate_steps.size and curr_step + 1 == int(self._rate_steps[idx]):
-            rate_hz = float(self._rate_values_hz[idx])
-            idx += 1
-
         ditype = brainstate.environ.ditype()
-        self._rate_idx.value = jnp.asarray(idx, dtype=ditype)
         dftype = brainstate.environ.dftype()
-        self._rate_hz.value = jnp.asarray(rate_hz, dtype=dftype)
 
-        if rate_hz > 0.0 and self._is_active(curr_step, dt_ms):
-            lam = rate_hz * dt_ms / 1000.0
-            return self._sample_poisson(lam)
+        # Extract dt and t as JAX values (traced-compatible for for_loop).
+        dt = brainstate.environ.get_dt()
+        if isinstance(dt, u.Quantity):
+            dt_ms_jax = dt.to_decimal(u.ms)
+        else:
+            dt_ms_jax = jnp.asarray(dt, dtype=dftype)
 
-        return jnp.zeros(self.varshape, dtype=ditype)
+        t = brainstate.environ.get('t', default=0. * u.ms)
+        if t is None:
+            t_ms_jax = jnp.asarray(0.0, dtype=dftype)
+        elif isinstance(t, u.Quantity):
+            t_ms_jax = t.to_decimal(u.ms)
+        else:
+            t_ms_jax = jnp.asarray(t, dtype=dftype)
+
+        # curr_step as a JAX integer — works under both eager and JIT.
+        curr_step = jnp.asarray(jnp.rint(t_ms_jax / dt_ms_jax), dtype=ditype)
+
+        n_entries = self._rate_steps.size
+
+        if n_entries > 0:
+            rate_steps_jax = jnp.asarray(self._rate_steps, dtype=ditype)
+            rate_values_jax = jnp.asarray(self._rate_values_hz, dtype=dftype)
+
+            # Find first schedule index whose step > curr_step (skipping past entries).
+            new_idx = jnp.searchsorted(rate_steps_jax, curr_step, side='right')
+
+            # Clamp to valid range for safe indexing.
+            safe_idx = jnp.minimum(new_idx, n_entries - 1)
+
+            # Apply the next entry if it falls exactly one step ahead.
+            next_step_val = rate_steps_jax[safe_idx]
+            in_bounds = new_idx < n_entries
+            applies_next = in_bounds & (next_step_val == curr_step + 1)
+
+            new_rate = jnp.where(applies_next, rate_values_jax[safe_idx], self._rate_hz.value)
+            final_idx = jnp.where(applies_next, new_idx + 1, new_idx)
+
+            self._rate_idx.value = final_idx.astype(ditype)
+            self._rate_hz.value = new_rate.astype(dftype)
+
+        rate_hz = self._rate_hz.value
+
+        # Activity gating using JAX comparisons (no Python bool — JIT-safe).
+        t_min = jnp.asarray(self.origin + self.start, dtype=dftype)
+        t_max = jnp.asarray(self.origin + self.stop, dtype=dftype)
+        is_active = (t_ms_jax > t_min) & (t_ms_jax <= t_max)
+
+        # Always sample (RNG key advances every step); gate result with jnp.where.
+        lam = rate_hz * dt_ms_jax / 1000.0
+        samples = self._sample_poisson(lam)
+        zeros = jnp.zeros(self.varshape, dtype=ditype)
+        return jnp.where(is_active & (rate_hz > 0.0), samples, zeros)

@@ -15,15 +15,15 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Sequence
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'gif_pop_psc_exp',
@@ -195,7 +195,6 @@ class gif_pop_psc_exp(NESTNeuron):
     - The computational cost of this model is largely independent of the
       number N of neurons represented.
     - Defaults follow NEST C++ source for ``gif_pop_psc_exp``.
-    dftype = brainstate.environ.dftype()
     - ``lambda_0`` is specified in 1/s (as in NEST's Python interface); the
       conversion factor of 0.001 to 1/ms is applied in the update equations
       exactly as in NEST (the factor 0.0005 in the trapezoidal escape rate).
@@ -227,7 +226,7 @@ class gif_pop_psc_exp(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy.state as bp
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> pop = bp.gif_pop_psc_exp(1, N=100)
         >>> pop.init_all_states()
 
@@ -311,6 +310,9 @@ class gif_pop_psc_exp(NESTNeuron):
             and q_sfa; non-positive capacitance, time constants, N, or Delta_V;
             negative lambda_0 or t_ref.
         """
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.tau_m, self.Delta_V)):
+            return
         if len(self.tau_sfa) != len(self.q_sfa):
             raise ValueError(
                 f"'tau_sfa' and 'q_sfa' must have the same length. "
@@ -361,7 +363,7 @@ class gif_pop_psc_exp(NESTNeuron):
         """
         theta_tmp = 0.0
         for j in range(len(self.tau_sfa)):
-            theta_tmp += self.q_sfa[j] * math.exp(-k * h / self.tau_sfa[j])
+            theta_tmp += self.q_sfa[j] * np.exp(-k * h / self.tau_sfa[j])
         return theta_tmp
 
     def _get_history_size(self, h: float) -> int:
@@ -399,7 +401,7 @@ class gif_pop_psc_exp(NESTNeuron):
             k = int(self.t_ref / h) + 1
         return k
 
-    def _escrate(self, x: float) -> float:
+    def _escrate(self, x):
         r"""Escape rate (hazard function).
 
         Computes the instantaneous firing rate as an exponential function of
@@ -424,9 +426,9 @@ class gif_pop_psc_exp(NESTNeuron):
         This exponential hazard is the key ingredient of the GIF model,
         allowing for stochastic spike generation with a soft threshold.
         """
-        return self.lambda_0 * math.exp(x / self.Delta_V)
+        return self.lambda_0 * np.exp(x / self.Delta_V)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all population state variables and history buffers.
 
         Allocates and initializes circular buffers for tracking refractory
@@ -435,11 +437,8 @@ class gif_pop_psc_exp(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch size for state initialization. Not used in this model (all
-            states are scalars or 1D arrays). Default: None.
         **kwargs
-            Additional keyword arguments (ignored).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -449,16 +448,17 @@ class gif_pop_psc_exp(NESTNeuron):
         - Precomputes adaptation kernel values and propagator constants.
         - Resets the random number generator to rng_seed.
         """
+        dftype = brainstate.environ.dftype()
         dt = brainstate.environ.get_dt()
         h = float(u.math.asarray(dt / u.ms))
         self._h = h
 
         # Integration constants
         self._R = self.tau_m / self.C_m  # membrane resistance
-        self._P22 = math.exp(-h / self.tau_m)
+        self._P22 = np.exp(-h / self.tau_m)
         self._P20 = self.tau_m / self.C_m * (1.0 - self._P22)
-        self._P11_ex = math.exp(-h / self.tau_syn_ex)
-        self._P11_in = math.exp(-h / self.tau_syn_in)
+        self._P11_ex = np.exp(-h / self.tau_syn_ex)
+        self._P11_in = np.exp(-h / self.tau_syn_in)
 
         # Determine kernel length
         len_kernel = self.len_kernel
@@ -480,18 +480,17 @@ class gif_pop_psc_exp(NESTNeuron):
         self._u = np.zeros(len_kernel, dtype=dftype)  # mean of survivors
         self._lambda_buf = np.zeros(len_kernel, dtype=dftype)  # escape rates
 
-        # Adaptation kernel values
-        self._theta = np.zeros(len_kernel, dtype=dftype)
-        self._theta_tld = np.zeros(len_kernel, dtype=dftype)
-
-        # Procedure InitPopulations, see Fig. 11 of [1]
-        for k in range(len_kernel):
-            theta_tmp = self._adaptation_kernel(len_kernel - k, h)
-            self._theta[k] = theta_tmp  # line 4
-            self._theta_tld[k] = (
-                self.Delta_V * (1.0 - math.exp(-theta_tmp / self.Delta_V))
-                / float(self.N)
-            )  # line 5
+        # Adaptation kernel values (vectorized computation)
+        ks = np.arange(len_kernel)
+        reverse_ks = len_kernel - ks
+        theta_vals = np.zeros(len_kernel, dtype=dftype)
+        for j in range(len(self.tau_sfa)):
+            theta_vals += self.q_sfa[j] * np.exp(-reverse_ks * h / self.tau_sfa[j])
+        self._theta = theta_vals
+        self._theta_tld = (
+            self.Delta_V * (1.0 - np.exp(-theta_vals / self.Delta_V))
+            / float(self.N)
+        )
 
         # InitPopulations, line 7: last entry gets N
         self._n[len_kernel - 1] = float(self.N)
@@ -502,10 +501,10 @@ class gif_pop_psc_exp(NESTNeuron):
         self._z = 0.0
         self._k0 = 0  # rotating index
 
-        # Adaptation variables
-        self._Q30 = np.array([math.exp(-h / tau) for tau in self.tau_sfa], dtype=dftype)
+        # Adaptation variables (vectorized)
+        self._Q30 = np.array([np.exp(-h / tau) for tau in self.tau_sfa], dtype=dftype)
         self._Q30K = np.array([
-            self.q_sfa[j] * self.tau_sfa[j] * math.exp(-h * len_kernel / self.tau_sfa[j])
+            self.q_sfa[j] * self.tau_sfa[j] * np.exp(-h * len_kernel / self.tau_sfa[j])
             for j in range(len(self.tau_sfa))
         ], dtype=dftype)
         self._g = np.zeros(len(self.tau_sfa), dtype=dftype)
@@ -522,20 +521,19 @@ class gif_pop_psc_exp(NESTNeuron):
         # RNG
         self._rng = np.random.RandomState(self.rng_seed)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset all population state to initial conditions.
+    def reset_state(self, **kwargs):
+        r"""Reset all population state variables to initial conditions.
 
-        Equivalent to calling init_state. Resets all history buffers,
-        state variables, and the random number generator.
+        Equivalent to calling ``init_state()`` again: re-initializes all
+        history buffers, observable states, and the random number generator
+        to their values immediately after construction.
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch size for state initialization. Default: None.
         **kwargs
-            Additional keyword arguments passed to init_state.
+            Unused compatibility parameters accepted by the base-state API.
         """
-        self.init_state(batch_size=batch_size, **kwargs)
+        self.init_state(**kwargs)
 
     def _draw_binomial(self, n_expect: float) -> int:
         r"""Draw a binomial random number of spikes, matching NEST.
@@ -597,7 +595,7 @@ class gif_pop_psc_exp(NESTNeuron):
         elif n_expect > min_double:
             # If probability of any spike is indistinguishable from that of
             # one spike, use Bernoulli instead of Poisson
-            if 1.0 - (n_expect + 1.0) * math.exp(-n_expect) > min_double:
+            if 1.0 - (n_expect + 1.0) * np.exp(-n_expect) > min_double:
                 n_t = int(self._rng.poisson(n_expect))
             else:
                 n_t = int(self._rng.random() < n_expect)
@@ -655,11 +653,7 @@ class gif_pop_psc_exp(NESTNeuron):
         # Get input spikes from the ring buffer / external input
         # In NEST, spikes come from ring buffer weighted by synaptic weight.
         # Here we receive the total weighted input directly.
-        # Separate excitatory and inhibitory components
-        if isinstance(x, (int, float)):
-            x_val = float(x)
-        else:
-            x_val = float(x)
+        x_val = float(x)
 
         # Collect inputs: current inputs go to y0 for next step
         # Delta inputs (spikes) go to excitatory/inhibitory channels
@@ -737,49 +731,69 @@ class gif_pop_psc_exp(NESTNeuron):
         # line 3: membrane potential update
         self._V_m = (self._V_m - self.E_L) * self._P22 + h_tot
 
-        # Compute free adaptation state (lines 4-6)
-        for j in range(len(self.tau_sfa)):
-            g_j_tmp = (
-                (1.0 - self._Q30[j]) * self._n[self._k0]
-                / (float(self.N) * h)
-            )
-            self._g[j] = self._g[j] * self._Q30[j] + g_j_tmp  # line 5
-            self._theta_hat += self._Q30K[j] * self._g[j]  # line 6
+        # Compute free adaptation state (vectorized, lines 4-6)
+        n_k0 = self._n[self._k0]
+        g_j_tmp = (1.0 - self._Q30) * n_k0 / (float(self.N) * h)
+        self._g = self._g * self._Q30 + g_j_tmp
+        self._theta_hat += float(np.sum(self._Q30K * self._g))
 
         # Compute free escape rate (line 8)
         lambda_tld = self._escrate(self._V_m - self._theta_hat)
         # line 9: trapezoidal escape probability for free neurons
-        P_free = 1.0 - math.exp(-0.0005 * (self._lambda_free + lambda_tld) * h)
+        P_free = 1.0 - np.exp(-0.0005 * (self._lambda_free + lambda_tld) * h)
         self._lambda_free = lambda_tld  # line 10
         self._theta_hat -= self._n[0] * self._theta_tld[0]  # line 11
 
         # line 12: sum up all surviving neurons
-        for k_marked in range(self._len_kernel):
-            X_ += self._m[k_marked]
+        X_ = float(np.sum(self._m))
 
         # Use a local theta_hat to preserve S_.theta_hat_ for recording
         theta_hat_local = self._theta_hat
 
-        # lines 13-27: loop over non-refractory cohorts
-        for k_marked in range(self._len_kernel - self._k_ref):
-            k = (self._k0 + k_marked) % self._len_kernel  # line 14
-            theta = self._theta[k_marked] + theta_hat_local  # line 15
-            theta_hat_local += self._n[k] * self._theta_tld[k_marked]  # line 16
-            self._u[k] = (self._u[k] - self.E_L) * self._P22 + h_tot  # line 17
-            lambda_tld = self._escrate(self._u[k] - theta)  # line 18
+        # lines 13-27: loop over non-refractory cohorts (vectorized with numpy)
+        n_non_ref = self._len_kernel - self._k_ref
+        if n_non_ref > 0:
+            # Rotating indices for all non-refractory cohorts (line 14)
+            k_arr = (self._k0 + np.arange(n_non_ref)) % self._len_kernel
 
-            P_lambda_ = 0.0005 * (lambda_tld + self._lambda_buf[k]) * h
-            if P_lambda_ > 0.01:
-                P_lambda_ = 1.0 - math.exp(-P_lambda_)  # line 20
+            # Compute per-cohort thresholds (lines 15-16).
+            # theta_hat_local has a sequential cumulative dependency:
+            #   theta[i] = _theta[i] + theta_hat_local_init + sum(_n[k_arr[j]]*_theta_tld[j] for j<i)
+            # We use an exclusive prefix-sum to vectorize this.
+            n_contributions = self._n[k_arr] * self._theta_tld[:n_non_ref]
+            cumsum_excl = np.empty(n_non_ref, dtype=n_contributions.dtype)
+            cumsum_excl[0] = 0.0
+            if n_non_ref > 1:
+                cumsum_excl[1:] = np.cumsum(n_contributions[:-1])
+            theta_arr = self._theta[:n_non_ref] + theta_hat_local + cumsum_excl  # line 15
 
-            self._lambda_buf[k] = lambda_tld  # line 21
-            Y_ += P_lambda_ * self._v_buf[k]  # line 22
-            Z_ += self._v_buf[k]  # line 23
-            W_ += P_lambda_ * self._m[k]  # line 24
+            # Update mean survivor membrane potentials (line 17, no cross-dependencies)
+            self._u[k_arr] = (self._u[k_arr] - self.E_L) * self._P22 + h_tot
 
-            ompl = 1.0 - P_lambda_
-            self._v_buf[k] = ompl * ompl * self._v_buf[k] + P_lambda_ * self._m[k]
-            self._m[k] = ompl * self._m[k]  # line 26
+            # Escape rates (line 18) and trapezoidal probabilities (lines 19-20)
+            lambda_tld_arr = self.lambda_0 * np.exp(
+                (self._u[k_arr] - theta_arr) / self.Delta_V
+            )
+            P_lambda_arr = 0.0005 * (lambda_tld_arr + self._lambda_buf[k_arr]) * h
+            P_lambda_arr = np.where(
+                P_lambda_arr > 0.01,
+                1.0 - np.exp(-P_lambda_arr),
+                P_lambda_arr,
+            )
+
+            self._lambda_buf[k_arr] = lambda_tld_arr  # line 21
+
+            # Accumulate sums (lines 22-24)
+            Y_ = float(np.sum(P_lambda_arr * self._v_buf[k_arr]))
+            Z_ = float(np.sum(self._v_buf[k_arr]))
+            W_ = float(np.sum(P_lambda_arr * self._m[k_arr]))
+
+            # Update survival and variance buffers (lines 25-26)
+            ompl_arr = 1.0 - P_lambda_arr
+            self._v_buf[k_arr] = (
+                ompl_arr * ompl_arr * self._v_buf[k_arr] + P_lambda_arr * self._m[k_arr]
+            )
+            self._m[k_arr] = ompl_arr * self._m[k_arr]
 
         # line 28
         if (Z_ + self._z) > 0.0:

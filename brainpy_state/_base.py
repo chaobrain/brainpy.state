@@ -243,6 +243,7 @@ class Dynamics(brainstate.nn.Dynamics):
         init: Any,
         *args,
         label: Optional[str] = None,
+        pop: bool = True,
         **kwargs
     ):
         r"""
@@ -303,7 +304,8 @@ class Dynamics(brainstate.nn.Dynamics):
                             f'Error in current input value {key}: {out}\n'
                             f'Error: {e}'
                         ) from e
-                    self._current_inputs.pop(key)
+                    if pop:
+                        self._current_inputs.pop(key)
         return init
 
     def sum_delta_inputs(
@@ -311,6 +313,7 @@ class Dynamics(brainstate.nn.Dynamics):
         init: Any,
         *args,
         label: Optional[str] = None,
+        pop: bool = True,
         **kwargs
     ):
         r"""
@@ -371,7 +374,8 @@ class Dynamics(brainstate.nn.Dynamics):
                             f'Error in delta input value {key}: {out}\n'
                             f'Error: {e}'
                         ) from e
-                    self._delta_inputs.pop(key)
+                    if pop:
+                        self._delta_inputs.pop(key)
         return init
 
     def align_pre(self, dyn: Union[ParamDescriber[T], T]) -> T:
@@ -502,7 +506,7 @@ class Neuron(Dynamics):
     .. code-block:: python
 
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import braintools
         >>> import brainpy
         >>>
@@ -541,7 +545,7 @@ class Neuron(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> # Create a LIF neuron layer
         >>> neuron = brainpy.state.LIF(
@@ -567,7 +571,7 @@ class Neuron(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> # Create a network with multiple neuron types
         >>> class SpikingNet(brainstate.nn.Module):
@@ -710,7 +714,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import braintools
         >>>
         >>> class SimpleSynapse(brainpy.state.Synapse):
@@ -739,7 +743,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import jax
         >>>
         >>> # Create an exponential synapse
@@ -764,7 +768,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> class SynapticNetwork(brainstate.nn.Module):
         ...     def __init__(self):
@@ -805,7 +809,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>>
         >>> class EINetwork(brainstate.nn.Module):
         ...     def __init__(self, n_exc=800, n_inh=200):

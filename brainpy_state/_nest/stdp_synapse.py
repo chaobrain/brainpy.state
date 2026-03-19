@@ -18,7 +18,8 @@
 
 import math
 
-import brainunit as u
+import brainstate
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
@@ -338,7 +339,7 @@ class stdp_synapse(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> syn = bst.stdp_synapse(weight=0.5, delay=1.0 * u.ms)
        >>> syn.get()
        {'weight': 0.5, 'delay': 1.0, 'receptor_type': 0, 'tau_plus': 20.0,
@@ -437,12 +438,12 @@ class stdp_synapse(static_synapse):
 
     @staticmethod
     def _to_scalar_float(value: ArrayLike, *, name: str) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
             unit = u.get_unit(value)
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(unit), dtype=dftype)
         else:
-            arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
+            arr = np.asarray(u.math.asarray(value), dtype=dftype)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
         v = float(arr.reshape(()))
@@ -582,7 +583,7 @@ class stdp_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     syn = bst.stdp_synapse(weight=1.0)
            ...     syn.init_state()
@@ -954,7 +955,7 @@ class stdp_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     post_neuron = bst.LIF(1)
            ...     syn = bst.stdp_synapse(weight=1.0, post=post_neuron)
@@ -1109,7 +1110,7 @@ class stdp_synapse(static_synapse):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import brainunit as u
+           >>> import saiunit as u
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     pre = bst.LIF(1)
            ...     post = bst.LIF(1)

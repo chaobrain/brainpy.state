@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import numpy as np
 from brainstate.typing import Size
 
@@ -263,7 +263,7 @@ class rate_transformer_node(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy_state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> # Create a transformer node with 10 units
         >>> transformer = bst.rate_transformer_node(in_size=10, g=2.0)
@@ -301,7 +301,7 @@ class rate_transformer_node(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy_state as bst
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> import brainstate
         >>> transformer = bst.rate_transformer_node(in_size=3)
         >>> transformer.init_state()
@@ -375,6 +375,7 @@ class rate_transformer_node(NESTNeuron):
 
     @staticmethod
     def _to_numpy(x):
+        dftype = brainstate.environ.dftype()
         return np.asarray(u.math.asarray(x), dtype=dftype)
 
     @staticmethod
@@ -383,6 +384,7 @@ class rate_transformer_node(NESTNeuron):
 
     @staticmethod
     def _to_int_scalar(x, name: str):
+        dftype = brainstate.environ.dftype()
         arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
         if arr.size != 1:
             raise ValueError(f'{name} must be scalar.')
@@ -473,15 +475,18 @@ class rate_transformer_node(NESTNeuron):
         if step_idx in queue:
             queue[step_idx] = queue[step_idx] + value
         else:
+            dftype = brainstate.environ.dftype()
             queue[step_idx] = np.array(value, dtype=dftype, copy=True)
 
     def _drain_delayed_queue(self, step_idx: int, state_shape):
+        dftype = brainstate.environ.dftype()
         value = self._delayed_queue.pop(step_idx, None)
         if value is None:
             return np.zeros(state_shape, dtype=dftype)
         return np.array(self._broadcast_to_state(np.asarray(value, dtype=dftype), state_shape), copy=True)
 
     def _accumulate_instant_events(self, events, state_shape):
+        dftype = brainstate.environ.dftype()
         total = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             value, delay_steps = self._event_to_weighted_value(
@@ -495,6 +500,7 @@ class rate_transformer_node(NESTNeuron):
         return total
 
     def _schedule_delayed_events(self, events, step_idx: int, state_shape):
+        dftype = brainstate.environ.dftype()
         total_now = np.zeros(state_shape, dtype=dftype)
         for ev in self._coerce_events(events):
             value, delay_steps = self._event_to_weighted_value(
@@ -510,7 +516,7 @@ class rate_transformer_node(NESTNeuron):
                 self._queue_add(self._delayed_queue, step_idx + delay_steps, value)
         return total_now
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, **kwargs):
         r"""Initialize all state variables and reset the delayed event queue.
 
         Allocates ``rate``, ``instant_rate``, ``delayed_rate``, and internal timestep counter.
@@ -519,11 +525,8 @@ class rate_transformer_node(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Number of parallel simulation batches. If provided, state variables will have shape
-            ``(batch_size, *in_size)``. If ``None`` (default), shape is ``in_size``.
         **kwargs
-            Additional keyword arguments (ignored, present for API consistency).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -534,7 +537,9 @@ class rate_transformer_node(NESTNeuron):
         This method is typically called automatically by ``brainstate`` infrastructure, but can
         be invoked manually to reset the model to initial conditions.
         """
-        rate = braintools.init.param(self.rate_initializer, self.varshape, batch_size)
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+        rate = braintools.init.param(self.rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
 
         self.rate = brainstate.ShortTermState(rate_np)
@@ -544,7 +549,8 @@ class rate_transformer_node(NESTNeuron):
 
         self._delayed_queue = {}
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None):
+    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None,
+               _precomputed_rate=None):
         r"""Execute one timestep of the rate transformation algorithm.
 
         Processes incoming rate events (both instant and delayed), applies the configured
@@ -582,6 +588,21 @@ class rate_transformer_node(NESTNeuron):
             - ``delay_steps=0``: event applied immediately (equivalent to instant event)
             - ``delay_steps=d > 0``: event applied after ``d`` timesteps
             - Negative ``delay_steps`` raises ``ValueError``
+
+        _precomputed_rate : array_like or None, optional
+            **JIT-compatible fast path**: pre-computed output rate for the current timestep,
+            bypassing all Python-level event queue operations *and* the nonlinearity call.
+
+            The caller is responsible for computing the correct value outside the loop:
+
+            - For ``linear_summation=True``: ``nl(sum_j w_j * r_j)``
+            - For ``linear_summation=False``: ``sum_j w_j * nl(r_j)``
+
+            When provided, ``instant_rate_events``, ``delayed_rate_events``, and the
+            internal ``_step_count`` / ``_delayed_queue`` are all ignored. This allows the
+            body of a ``brainstate.transform.for_loop`` to be JIT-compiled without
+            requiring the user-supplied nonlinearity to handle JAX traced values.
+            Default: ``None`` (use standard Python-queue event processing).
 
         Returns
         -------
@@ -639,7 +660,20 @@ class rate_transformer_node(NESTNeuron):
         """
         del x  # NEST rate transformer has no intrinsic current input.
 
+        dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
+
+        if _precomputed_rate is not None:
+            # JIT-compatible path: bypass all Python queue, event-dict, and nonlinearity
+            # operations. The caller pre-computes the full output rate before the loop.
+            rate_new = u.math.asarray(_precomputed_rate, dtype=dftype)
+            rate_prev = u.math.asarray(self.rate.value, dtype=dftype)
+            self.rate.value = rate_new
+            self.delayed_rate.value = rate_prev
+            self.instant_rate.value = rate_new
+            return rate_new
+
+        ditype = brainstate.environ.ditype()
         step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
 
         delayed_total = self._drain_delayed_queue(step_idx, state_shape)

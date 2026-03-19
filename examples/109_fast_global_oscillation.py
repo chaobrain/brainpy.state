@@ -21,7 +21,7 @@
 #
 
 
-import brainunit as u
+import saiunit as u
 import jax
 import matplotlib.pyplot as plt
 

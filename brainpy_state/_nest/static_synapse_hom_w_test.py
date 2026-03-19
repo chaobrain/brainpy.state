@@ -23,8 +23,9 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 import unittest
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from brainpy.state import iaf_psc_alpha, static_synapse_hom_w
@@ -86,29 +87,34 @@ def _spike_steps_from_times(spike_times_ms, dt_ms):
 def _run_bp_vm_trace(*, dt_ms, delay_ms, weight_pA, spike_times_ms, sim_steps):
     dt = dt_ms * u.ms
     spike_steps = _spike_steps_from_times(spike_times_ms, dt_ms)
+    # Delay in steps using NEST ld_round: floor(delay_ms/dt_ms + 0.5).
+    delay_steps_count = int(np.floor(delay_ms / dt_ms + 0.5))
 
     with brainstate.environ.context(dt=dt):
         neuron = iaf_psc_alpha(1)
         neuron.init_state()
 
-        syn = static_synapse_hom_w(
-            weight=weight_pA * u.pA,
-            delay=delay_ms * u.ms,
-            post=neuron,
-            event_type='spike',
-        )
-        syn.init_state()
+        dftype = brainstate.environ.dftype()
+        # Pre-compute spike delivery schedule: spike_arr[k] = weight_pA when the
+        # spike (fired at some spike_step) is delivered to the neuron at step k,
+        # and 0 otherwise.  Bypass the Python-queue synapse so the loop is JIT-able.
+        spike_arr = jnp.zeros(sim_steps, dtype=dftype)
+        for s in spike_steps:
+            deliver_step = s + delay_steps_count
+            if 0 <= deliver_step < sim_steps:
+                spike_arr = spike_arr.at[deliver_step].set(weight_pA)
 
-        vm_trace = []
-        for step in range(sim_steps):
-            pre_spike = 1.0 if step in spike_steps else 0.0
-            with brainstate.environ.context(t=step * dt):
-                syn.update(pre_spike=pre_spike)
+        def _step(k):
+            # Inject pre-computed spike weight as a delta input, then advance neuron.
+            neuron.add_delta_input('_syn_spike', spike_arr[k] * u.pA)
+            with brainstate.environ.context(t=k * dt):
                 neuron.update(x=0.0 * u.pA)
-            vm_trace.append(float((neuron.V.value / u.mV)[0]))
+            return neuron.V.value / u.mV
+
+        results = brainstate.transform.for_loop(_step, jnp.arange(sim_steps))
 
     dftype = brainstate.environ.dftype()
-    return np.asarray(vm_trace, dtype=dftype)
+    return np.asarray(results, dtype=dftype).reshape(sim_steps)
 
 
 class TestStaticSynapseHomWParameters(unittest.TestCase):

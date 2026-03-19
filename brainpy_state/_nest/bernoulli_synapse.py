@@ -16,8 +16,8 @@
 # -*- coding: utf-8 -*-
 
 
-import brainunit as u
-import jax.numpy as jnp
+import brainstate
+import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -187,7 +187,7 @@ class bernoulli_synapse(static_synapse):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> post_neuron = bst.LIF(1)
        >>> syn = bst.bernoulli_synapse(
        ...     weight=5.0,

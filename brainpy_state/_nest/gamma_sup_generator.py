@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -127,7 +127,7 @@ class gamma_sup_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar component-process rate in spikes/s (Hz), shape ``()`` after
         conversion. Accepts a single-element numeric ``ArrayLike`` or a
-        :class:`brainunit.Quantity` convertible to ``u.Hz``.
+        :class:`saiunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     gamma_shape : ArrayLike, optional
         Scalar integer gamma shape :math:`k`, shape ``()`` after conversion.
@@ -235,7 +235,7 @@ class gamma_sup_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.gamma_sup_generator(
        ...         in_size=(2, 3),
@@ -253,7 +253,7 @@ class gamma_sup_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> gen = brainpy.state.gamma_sup_generator(rate=15.0 * u.Hz, gamma_shape=2)
        >>> gen.set(n_proc=20, stop=None, origin=1.0 * u.ms)
        >>> params = gen.get()
@@ -392,10 +392,13 @@ class gamma_sup_generator(NESTDevice):
         return self._to_scalar_time_ms(dt)
 
     def _current_time_ms(self) -> float:
-        t = brainstate.environ.get('t', default=0. * u.ms)
+        t = brainstate.environ.get('t', default=None)
         if t is None:
             return 0.0
-        return self._to_scalar_time_ms(t)
+        # Fast path for scalar Quantity (avoids np.asarray round-trip).
+        if isinstance(t, u.Quantity):
+            return float(t.to_decimal(u.ms))
+        return float(t)
 
     def _refresh_runtime_cache(self, dt_ms: float):
         self._assert_grid_time('origin', self.origin, dt_ms)
@@ -544,9 +547,10 @@ class gamma_sup_generator(NESTDevice):
     def _sample_binomial(self, n: int, p: float) -> int:
         return int(self._rng.binomial(n, p))
 
-    def _update_internal_states(self, occ_row: np.ndarray, transition_prob: float) -> int:
+    def _update_internal_states(self, occ_row: np.ndarray, transition_prob: float, ditype=None) -> int:
         n_bins = occ_row.size
-        ditype = brainstate.environ.ditype()
+        if ditype is None:
+            ditype = brainstate.environ.ditype()
         n_trans = np.zeros(n_bins, dtype=ditype)
 
         for i in range(n_bins):
@@ -574,15 +578,11 @@ class gamma_sup_generator(NESTDevice):
                     n_i = self._sample_binomial(occ_i, transition_prob)
             n_trans[i] = int(n_i)
 
-        for i in range(n_bins):
-            n_i = int(n_trans[i])
-            if n_i <= 0:
-                continue
-            occ_row[i] -= n_i
-            if i == n_bins - 1:
-                occ_row[0] += n_i
-            else:
-                occ_row[i + 1] += n_i
+        # Vectorized occupation update: subtract from source bins,
+        # add to destination bins (cyclic: last phase wraps to phase 0).
+        occ_row -= n_trans
+        occ_row[1:] += n_trans[:-1]
+        occ_row[0] += int(n_trans[-1])
 
         return int(n_trans[-1])
 
@@ -612,14 +612,12 @@ class gamma_sup_generator(NESTDevice):
         if not hasattr(self, 'occ'):
             self.init_state()
 
-        dt_ms = self._dt_ms()
-        if (not np.isfinite(self._dt_cache_ms)) or (
-            not math.isclose(dt_ms, self._dt_cache_ms, rel_tol=0.0, abs_tol=1e-15)
-        ):
-            self._refresh_runtime_cache(dt_ms)
+        if not np.isfinite(self._dt_cache_ms):
+            self._refresh_runtime_cache(self._dt_ms())
+        dt_ms = self._dt_cache_ms
 
+        ditype = brainstate.environ.ditype()
         if self.rate <= 0.0 or self._num_targets == 0:
-            ditype = brainstate.environ.ditype()
             return jnp.zeros(self.varshape, dtype=ditype)
 
         curr_step = self._time_to_step(self._current_time_ms(), dt_ms)
@@ -630,7 +628,7 @@ class gamma_sup_generator(NESTDevice):
         counts = np.zeros(self._num_targets, dtype=ditype)
 
         for idx in range(self._num_targets):
-            counts[idx] = self._update_internal_states(occ[idx], self._transition_prob)
+            counts[idx] = self._update_internal_states(occ[idx], self._transition_prob, ditype)
 
         self.occ.value = occ
-        return jnp.asarray(counts.reshape(self.varshape), dtype=ditype)
+        return jnp.array(counts.reshape(self.varshape), dtype=ditype)

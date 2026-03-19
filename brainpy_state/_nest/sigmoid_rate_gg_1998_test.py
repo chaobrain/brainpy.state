@@ -21,8 +21,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import sigmoid_rate_gg_1998_ipn
@@ -274,14 +275,16 @@ class TestSigmoidRateGG1998(unittest.TestCase):
             n0.init_state()
             n1.init_state()
 
-            dftype = brainstate.environ.dftype()
-            y0 = np.zeros(steps, dtype=dftype)
-            y1 = np.zeros(steps, dtype=dftype)
-            for k in range(steps):
-                self._step(n0, k, instant_rate_events=event)
-                self._step(n1, k, instant_rate_events=event)
-                y0[k] = float(np.asarray(n0.rate.value).reshape(-1)[0])
-                y1[k] = float(np.asarray(n1.rate.value).reshape(-1)[0])
+            def run_n0(_):
+                n0.update(instant_rate_events=event, noise=0.0)
+                return n0.rate.value.reshape(-1)[0]
+
+            def run_n1(_):
+                n1.update(instant_rate_events=event, noise=0.0)
+                return n1.rate.value.reshape(-1)[0]
+
+            y0 = np.asarray(brainstate.transform.for_loop(run_n0, np.zeros(steps)))
+            y1 = np.asarray(brainstate.transform.for_loop(run_n1, np.zeros(steps)))
 
         npt.assert_allclose(y0, y1, atol=1e-12)
 
@@ -318,13 +321,17 @@ class TestSigmoidRateGG1998(unittest.TestCase):
                 rate_initializer=braintools.init.Constant(-0.3),
             )
             ipn_bp.init_state()
-            dftype = brainstate.environ.dftype()
-            bp_rate = np.zeros((steps,), dtype=dftype)
-            bp_noise = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(ipn_bp, k)
-                bp_rate[k] = float(np.asarray(ipn_bp.rate.value).reshape(-1)[0])
-                bp_noise[k] = float(np.asarray(ipn_bp.noise.value).reshape(-1)[0])
+
+            def run_ipn(_):
+                ipn_bp.update(noise=0.0)
+                return (
+                    ipn_bp.rate.value.reshape(-1)[0],
+                    ipn_bp.noise.value.reshape(-1)[0],
+                )
+
+            ipn_results = brainstate.transform.for_loop(run_ipn, np.zeros(steps))
+            bp_rate = np.asarray(ipn_results[0])
+            bp_noise = np.asarray(ipn_results[1])
 
         n_cmp = min(bp_rate.size, ipn_nest['rate'].size)
         npt.assert_allclose(bp_rate[:n_cmp], ipn_nest['rate'][:n_cmp], atol=1e-12)
@@ -379,22 +386,18 @@ class TestSigmoidRateGG1998(unittest.TestCase):
             bp_linear_sum.init_state()
             bp_event_sum.init_state()
 
-            dftype = brainstate.environ.dftype()
-            y_linear_sum = np.zeros((steps,), dtype=dftype)
-            y_event_sum = np.zeros((steps,), dtype=dftype)
-            for k in range(steps):
-                self._step(
-                    bp_linear_sum,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                self._step(
-                    bp_event_sum,
-                    k,
-                    instant_rate_events=[{'rate': drive, 'weight': weight}],
-                )
-                y_linear_sum[k] = float(np.asarray(bp_linear_sum.rate.value).reshape(-1)[0])
-                y_event_sum[k] = float(np.asarray(bp_event_sum.rate.value).reshape(-1)[0])
+            event = [{'rate': drive, 'weight': weight}]
+
+            def run_linear(_):
+                bp_linear_sum.update(instant_rate_events=event, noise=0.0)
+                return bp_linear_sum.rate.value.reshape(-1)[0]
+
+            def run_event(_):
+                bp_event_sum.update(instant_rate_events=event, noise=0.0)
+                return bp_event_sum.rate.value.reshape(-1)[0]
+
+            y_linear_sum = np.asarray(brainstate.transform.for_loop(run_linear, np.zeros(steps)))
+            y_event_sum = np.asarray(brainstate.transform.for_loop(run_event, np.zeros(steps)))
 
         n_cmp = min(y_linear_sum.size, nest_linear_sum.size)
         npt.assert_allclose(y_linear_sum[:n_cmp], nest_linear_sum[:n_cmp], atol=1e-10)

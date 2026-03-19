@@ -30,10 +30,15 @@ import math
 import unittest
 
 import brainstate
-import brainunit as u
+import brainstate.transform as bst
+import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import ac_generator
+
+# Enable float64 precision for the whole module so that sin(pi) tests pass.
+brainstate.environ.set_precision(64)
 
 
 # ===================================================================
@@ -203,6 +208,7 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
         r"""AC generator output matches manual sin() computation at each step.
 
         Reproduces the logic of NEST's test_ac_generator.py.
+        Uses brainstate.transform.for_loop for JIT-compiled simulation.
         """
         dc = 1000.0  # pA offset
         ac = 550.0  # pA amplitude
@@ -227,27 +233,30 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            dftype = brainstate.environ.dftype()
-            ac_trace = np.empty(n_steps, dtype=dftype)
-            manual_trace = np.empty(n_steps, dtype=dftype)
+            t_array = jnp.arange(n_steps) * dt_ms
 
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            def get_ac_output(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = ac_gen.update()
-                    ac_trace[step] = float(out[0] / u.pA) if hasattr(out, '__len__') else float(out / u.pA)
+                return u.get_mantissa(out)[0]  # pA, float64
 
-                # Manual computation
-                if start <= t < stop:
-                    manual_trace[step] = math.sin(t * omega + phi_rad) * ac + dc
-                else:
-                    manual_trace[step] = 0.0
+            ac_trace = np.array(bst.for_loop(get_ac_output, t_array))
+
+        # Manual computation (vectorized)
+        t_np = np.array(t_array)
+        active = (t_np >= start) & (t_np < stop)
+        manual_trace = np.where(active,
+                                np.sin(t_np * omega + phi_rad) * ac + dc,
+                                0.0)
 
         npt.assert_allclose(ac_trace, manual_trace, atol=1e-10,
                             err_msg="AC generator does not match manual sine trace")
 
     def test_ac_full_range_frequencies(self):
-        r"""Test at various frequencies that the output matches sin()."""
+        r"""Test at various frequencies that the output matches sin().
+
+        Uses brainstate.transform.for_loop for JIT-compiled simulation.
+        """
         dt_ms = 0.1
         simtime = 20.0
         n_steps = int(round(simtime / dt_ms))
@@ -264,16 +273,22 @@ class TestACGeneratorVsStepCurrent(unittest.TestCase):
                     frequency=freq * u.Hz,
                 )
 
-                for step in range(n_steps):
-                    t = step * dt_ms
-                    with brainstate.environ.context(t=t * u.ms):
-                        out = ac_gen.update()
-                        out_val = float(out[0] / u.pA) if hasattr(out, '__len__') else float(out / u.pA)
+                t_array = jnp.arange(n_steps) * dt_ms
 
-                    expected = offset + amp * math.sin(omega * t)
-                    self.assertAlmostEqual(
-                        out_val, expected, places=10,
-                        msg=f"Mismatch at freq={freq} Hz, t={t} ms")
+                def get_ac_output(t_ms):
+                    with brainstate.environ.context(t=t_ms * u.ms):
+                        out = ac_gen.update()
+                    return u.get_mantissa(out)[0]  # pA
+
+                out_trace = np.array(bst.for_loop(get_ac_output, t_array))
+
+            t_np = np.array(t_array)
+            expected_trace = offset + amp * np.sin(omega * t_np)
+
+            npt.assert_allclose(
+                out_trace, expected_trace, atol=1e-10,
+                err_msg=f"Mismatch at freq={freq} Hz"
+            )
 
 
 # ===================================================================
@@ -297,7 +312,10 @@ class TestACGeneratorVsNEST(unittest.TestCase):
             return False
 
     def test_ac_current_trace_vs_nest(self):
-        r"""Compare AC current output trace against NEST ac_generator."""
+        r"""Compare AC current output trace against NEST ac_generator.
+
+        Uses brainstate.transform.for_loop for JIT-compiled simulation.
+        """
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -331,7 +349,7 @@ class TestACGeneratorVsNEST(unittest.TestCase):
         nest.Simulate(simtime)
         I_nest = np.array(mm.get("events", "I"))
 
-        # --- brainpy.state ---
+        # --- brainpy.state (JIT-compiled via for_loop) ---
         n_steps = int(round(simtime / self.dt_ms))
         with brainstate.environ.context(dt=self.dt):
             ac_gen = ac_generator(
@@ -343,20 +361,27 @@ class TestACGeneratorVsNEST(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            dftype = brainstate.environ.dftype()
-            I_bp = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
-                    out = ac_gen.update()
-                    I_bp[step] = float(out[0] / u.pA) if hasattr(out, '__len__') else float(out / u.pA)
+            t_array = jnp.arange(n_steps) * self.dt_ms
 
-        # NEST multimeter records from step 1 (t=0.1 ms), so align
+            def get_ac_output(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    out = ac_gen.update()
+                return u.get_mantissa(out)[0]  # pA
+
+            I_bp = np.array(bst.for_loop(get_ac_output, t_array))
+
+        # NEST multimeter records from t=dt (step 1), so align by skipping I_bp[0]
         npt.assert_allclose(I_bp[1:len(I_nest) + 1], I_nest, atol=1e-8,
                             err_msg="AC current trace differs from NEST")
 
     def test_ac_driven_neuron_vs_nest(self):
-        r"""Compare neuron V_m when driven by AC generator vs NEST."""
+        r"""Compare neuron V_m when driven by AC generator vs NEST.
+
+        Uses brainstate.transform.for_loop for JIT-compiled simulation.
+        NEST connection uses delay=dt to match brainpy's built-in one-step
+        current buffer (y0 in iaf_psc_alpha).  The correct comparison is
+        v_bp[0:len(v_nest)] vs v_nest (both indexed to the same physical times).
+        """
         if not self._is_nest_available():
             self.skipTest("NEST simulator not available")
 
@@ -371,7 +396,7 @@ class TestACGeneratorVsNEST(unittest.TestCase):
         stop = 6.0
         simtime = 10.0
 
-        # --- NEST ---
+        # --- NEST (minimal delay = dt so timing matches brainpy's y0 buffer) ---
         nest.ResetKernel()
         nest.resolution = self.dt_ms
 
@@ -382,12 +407,12 @@ class TestACGeneratorVsNEST(unittest.TestCase):
             "start": start, "stop": stop,
         })
         vm_rec = nest.Create("voltmeter", params={"interval": self.dt_ms})
-        nest.Connect(ac_nest, n_nest)
+        nest.Connect(ac_nest, n_nest, syn_spec={"delay": self.dt_ms})
         nest.Connect(vm_rec, n_nest)
         nest.Simulate(simtime)
         v_nest = np.array(vm_rec.get("events", "V_m"))
 
-        # --- brainpy.state ---
+        # --- brainpy.state (JIT-compiled via for_loop) ---
         n_steps = int(round(simtime / self.dt_ms))
         with brainstate.environ.context(dt=self.dt):
             ac_gen = ac_generator(
@@ -398,16 +423,29 @@ class TestACGeneratorVsNEST(unittest.TestCase):
             neuron = iaf_psc_alpha(1)
             neuron.init_state()
 
-            dftype = brainstate.environ.dftype()
-            v_bp = np.empty(n_steps, dtype=dftype)
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
-                    current = ac_gen.update()
-                    neuron.update(x=current)
-                    v_bp[step] = float(neuron.V.value[0] / u.mV)
+            t_array = jnp.arange(n_steps) * self.dt_ms
 
-        npt.assert_allclose(v_bp[1:len(v_nest) + 1], v_nest, atol=1e-8,
+            # Pre-compute all currents (shape: n_steps × 1, in pA mantissa)
+            def get_current(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    return u.get_mantissa(ac_gen.update())  # (1,) float64
+
+            all_currents = bst.for_loop(get_current, t_array)
+
+            # Neuron update loop: pass current and time together
+            def neuron_step(step_data):
+                t_ms, current_pA_mantissa = step_data
+                current = current_pA_mantissa * u.pA
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    neuron.update(x=current)
+                return neuron.V.value[0] / u.mV  # dimensionless float64
+
+            v_bp = np.array(bst.for_loop(neuron_step, (t_array, all_currents)))
+
+        # v_bp[k] = V after step k = V((k+1)*dt).  NEST v_nest[k] = V((k+1)*dt).
+        # iaf_psc_alpha has a built-in one-step y0 buffer so that x passed at
+        # step k is used at step k+1, matching NEST's delay=dt delivery.
+        npt.assert_allclose(v_bp[:len(v_nest)], v_nest, atol=1e-8,
                             err_msg="AC-driven V_m differs from NEST")
 
 

@@ -20,8 +20,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 from brainpy.state import iaf_cond_exp
 
@@ -119,35 +120,40 @@ class TestIAFCondExp(unittest.TestCase):
     def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
-                neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS)
+                if val >= 0:
+                    neuron.add_delta_input(f'dg_{k}_{i}', val * u.nS, label='w_ex')
+                else:
+                    neuron.add_delta_input(f'dg_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters(self):
-        neuron = iaf_cond_exp(1)
-        self.assertEqual(neuron.E_L, -70. * u.mV)
-        self.assertEqual(neuron.C_m, 250. * u.pF)
-        self.assertEqual(neuron.t_ref, 2. * u.ms)
-        self.assertEqual(neuron.V_th, -55. * u.mV)
-        self.assertEqual(neuron.V_reset, -60. * u.mV)
-        self.assertEqual(neuron.E_ex, 0. * u.mV)
-        self.assertEqual(neuron.E_in, -85. * u.mV)
-        self.assertEqual(neuron.g_L, 16.6667 * u.nS)
-        self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
-        self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
-        self.assertEqual(neuron.I_e, 0. * u.pA)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = iaf_cond_exp(1)
+            self.assertEqual(neuron.E_L, -70. * u.mV)
+            self.assertEqual(neuron.C_m, 250. * u.pF)
+            self.assertEqual(neuron.t_ref, 2. * u.ms)
+            self.assertEqual(neuron.V_th, -55. * u.mV)
+            self.assertEqual(neuron.V_reset, -60. * u.mV)
+            self.assertEqual(neuron.E_ex, 0. * u.mV)
+            self.assertEqual(neuron.E_in, -85. * u.mV)
+            self.assertEqual(neuron.g_L, 16.6667 * u.nS)
+            self.assertEqual(neuron.tau_syn_ex, 0.2 * u.ms)
+            self.assertEqual(neuron.tau_syn_in, 2.0 * u.ms)
+            self.assertEqual(neuron.I_e, 0. * u.pA)
 
     def test_parameter_validation(self):
-        with self.assertRaises(ValueError):
-            iaf_cond_exp(1, C_m=0.0 * u.pF)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp(1, tau_syn_ex=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp(1, tau_syn_in=0.0 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp(1, t_ref=-0.1 * u.ms)
-        with self.assertRaises(ValueError):
-            iaf_cond_exp(1, V_reset=-55. * u.mV, V_th=-55. * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                iaf_cond_exp(1, C_m=0.0 * u.pF)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp(1, tau_syn_ex=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp(1, tau_syn_in=0.0 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp(1, t_ref=-0.1 * u.ms)
+            with self.assertRaises(ValueError):
+                iaf_cond_exp(1, V_reset=-55. * u.mV, V_th=-55. * u.mV)
 
     def test_signed_spike_weights_split_into_ex_and_in(self):
         with brainstate.environ.context(dt=self.dt):
@@ -213,9 +219,13 @@ class TestIAFCondExp(unittest.TestCase):
             )
             neuron.init_state()
 
-            spikes = []
-            for k in range(5):
-                spikes.append(self._is_spike(self._step(neuron, k)))
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update()
+                return spk
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(5))
+            spikes = [bool(float(results[k, 0]) > 0.5) for k in range(5)]
 
             self.assertTrue(spikes[0])
             self.assertTrue((not spikes[1]) and (not spikes[2]) and (not spikes[3]))
@@ -243,14 +253,31 @@ class TestIAFCondExp(unittest.TestCase):
 
             x_seq = [0.0, 30.0, 0.0, 0.0, -20.0, 0.0, 0.0]
             dg_seq = [[4.0], [], [-2.0], [3.0, -1.0], [], [], [1.5]]
+            n_steps = len(x_seq)
 
-            v_model, ge_model, gi_model, s_model = [], [], [], []
-            for k in range(len(x_seq)):
-                spk = self._step(neuron, k, x=x_seq[k] * u.pA, dg_values=dg_seq[k])
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-                ge_model.append(float((neuron.g_ex.value / u.nS)[0]))
-                gi_model.append(float((neuron.g_in.value / u.nS)[0]))
-                s_model.append(self._is_spike(spk))
+            # Pre-compute per-step inputs as JAX arrays.
+            dftype = brainstate.environ.dftype()
+            x_arr = jnp.array(x_seq, dtype=dftype)
+            w_ex_arr = jnp.array([sum(v for v in dgs if v >= 0) for dgs in dg_seq], dtype=dftype)
+            w_in_arr = jnp.array([sum(-v for v in dgs if v < 0) for dgs in dg_seq], dtype=dftype)
+
+            def _body(k):
+                neuron.add_delta_input('w_ex', w_ex_arr[k] * u.nS, label='w_ex')
+                neuron.add_delta_input('w_in', w_in_arr[k] * u.nS, label='w_in')
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=x_arr[k] * u.pA)
+                return (
+                    neuron.V.value / u.mV,
+                    neuron.g_ex.value / u.nS,
+                    neuron.g_in.value / u.nS,
+                    spk,
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(results[0][k, 0]) for k in range(n_steps)]
+            ge_model = [float(results[1][k, 0]) for k in range(n_steps)]
+            gi_model = [float(results[2][k, 0]) for k in range(n_steps)]
+            s_model = [bool(float(results[3][k, 0]) > 0.5) for k in range(n_steps)]
 
             dt = 0.1
             p = {

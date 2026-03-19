@@ -20,7 +20,7 @@ from typing import Optional, Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 from brainstate.typing import Size, ArrayLike
 
 from brainpy_state._base import Synapse
@@ -91,7 +91,7 @@ class Alpha(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an alpha synapse with 8 ms time constant
         >>> syn = brainpy.state.Alpha(100, tau=8.*u.ms)
         >>> syn.init_state(batch_size=1)
@@ -217,7 +217,7 @@ class AMPA(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an AMPA synapse
         >>> ampa = brainpy.state.AMPA(100)
         >>> ampa.init_state(batch_size=1)
@@ -243,16 +243,16 @@ class AMPA(Synapse):
         self.T_duration = braintools.init.param(T_dur, self.varshape)
         self.g_initializer = g_initializer
 
-    def init_state(self, batch_size=None):
+    def init_state(self, batch_size=None, **kwargs):
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
         self.spike_arrival_time = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_or_mode=None, **kwargs):
-        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_or_mode)
+    def reset_state(self, batch_size=None, **kwargs):
+        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
         self.spike_arrival_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_or_mode
+            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
 
     def update(self, pre_spike):
@@ -346,7 +346,7 @@ class GABAa(AMPA):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create a GABAa synapse
         >>> gabaa = brainpy.state.GABAa(100)
         >>> gabaa.init_state(batch_size=1)
@@ -486,7 +486,7 @@ class BioNMDA(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import brainunit as u
+        >>> import saiunit as u
         >>> # Create an NMDA synapse
         >>> nmda = brainpy.state.BioNMDA(100)
         >>> nmda.init_state(batch_size=1)
@@ -518,18 +518,18 @@ class BioNMDA(Synapse):
         self.g_initializer = g_initializer
         self.x_initializer = x_initializer
 
-    def init_state(self, batch_size=None):
+    def init_state(self, batch_size=None, **kwargs):
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
         self.x = brainstate.HiddenState(braintools.init.param(self.x_initializer, self.varshape, batch_size))
         self.spike_arrival_time = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_or_mode=None, **kwargs):
-        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_or_mode)
-        self.x.value = braintools.init.param(self.x_initializer, self.varshape, batch_or_mode)
+    def reset_state(self, batch_size=None, **kwargs):
+        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
+        self.x.value = braintools.init.param(self.x_initializer, self.varshape, batch_size)
         self.spike_arrival_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_or_mode
+            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
         )
 
     def update(self, pre_spike):

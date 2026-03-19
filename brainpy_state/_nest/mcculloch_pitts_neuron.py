@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -179,7 +179,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> import brainpy_state as bst
        >>>
        >>> # Create a single McCulloch-Pitts neuron with threshold 0.5 mV
@@ -277,7 +277,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
         self.y_initializer = y_initializer
         self.stochastic_update = stochastic_update
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize neuron state variables.
 
         Allocates and initializes the binary output state ``y``, total synaptic input ``h``,
@@ -286,10 +286,10 @@ class mcculloch_pitts_neuron(NESTNeuron):
         Parameters
         ----------
         batch_size : int, optional
-            Number of parallel batches for vectorized simulation. If ``None``, state shape
-            is ``(in_size,)``. If provided, state shape is ``(batch_size, *in_size)``.
+            Batch size for batched simulation. If provided, state shapes will be
+            ``(batch_size, *in_size)`` instead of ``(in_size,)``.
         **kwargs
-            Additional keyword arguments (reserved for future use).
+            Unused compatibility parameters accepted by the base-state API.
 
         Notes
         -----
@@ -306,20 +306,15 @@ class mcculloch_pitts_neuron(NESTNeuron):
         dftype = brainstate.environ.dftype()
         self.y = brainstate.ShortTermState(u.math.asarray(y, dtype=dftype))
 
-        # Total synaptic input h
+        # Total synaptic input h — use same shape as y
         self.h = brainstate.ShortTermState(
-            u.math.zeros(self.varshape if batch_size is None else (batch_size, *self.varshape),
-                         dtype=dftype) * u.mV
+            u.math.zeros(self.y.value.shape, dtype=dftype) * u.mV
         )
 
         # Next update time for stochastic mode
         if self.stochastic_update:
             self.t_next = brainstate.ShortTermState(
-                u.math.full(
-                    self.varshape if batch_size is None else (batch_size, *self.varshape),
-                    -1e7,
-                    dtype=dftype
-                ) * u.ms
+                u.math.full(self.y.value.shape, -1e7, dtype=dftype) * u.ms
             )
 
     def _heaviside(self, h):
@@ -356,6 +351,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
           internal state variables.
         - The strict inequality means :math:`h = \theta` yields 0.0 (inactive state).
         """
+        dftype = brainstate.environ.dftype()
         dftype = brainstate.environ.dftype()
         return u.math.asarray(h > self.theta, dtype=dftype)
 
@@ -445,6 +441,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
             key = brainstate.environ.get('key', default=None)
             if key is not None:
                 exp_sample = jax.random.exponential(key, shape=self.y.value.shape)
+                dftype = brainstate.environ.dftype()
                 next_interval = exp_sample * u.math.asarray(self.tau_m / u.ms, dtype=dftype) * u.ms
                 self.t_next.value = u.math.where(
                     should_update,

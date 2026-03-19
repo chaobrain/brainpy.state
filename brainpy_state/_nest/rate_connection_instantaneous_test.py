@@ -20,8 +20,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import lin_rate_ipn, rate_connection_instantaneous
@@ -199,8 +200,6 @@ class TestRateConnectionInstantaneous(unittest.TestCase):
 
         replay_steps = min(nest_src.size, nest_tgt.size)
         dftype = brainstate.environ.dftype()
-        bp_src = np.zeros((replay_steps,), dtype=dftype)
-        bp_tgt = np.zeros((replay_steps,), dtype=dftype)
 
         with brainstate.environ.context(dt=self.dt):
             src = lin_rate_ipn(
@@ -223,14 +222,30 @@ class TestRateConnectionInstantaneous(unittest.TestCase):
             tgt.init_state()
             syn = rate_connection_instantaneous(weight=weight)
 
-            for k in range(replay_steps):
-                self._step(src, k, noise=0.0)
-                # NEST event delivery aligns instantaneous rate communication
-                # with the next scheduler slice (min-delay cycle).
-                event = syn.to_rate_event(rate=src.delayed_rate.value)
-                self._step(tgt, k, instant_rate_events=[event], noise=0.0)
-                bp_src[k] = self._to_scalar(src.rate.value)
-                bp_tgt[k] = self._to_scalar(tgt.rate.value)
+            zeros_1 = jnp.zeros((1,), dtype=dftype)
+
+            # Step 1: run src alone (no inputs) via JIT-compiled for_loop.
+            # Pass _precomputed_ex/in=zeros to bypass the Python dict-event path.
+            def src_step(_k):
+                src.update(_precomputed_ex=zeros_1, _precomputed_in=zeros_1, noise=0.0)
+                return src.rate.value, src.delayed_rate.value
+
+            src_rates_arr, src_delayed_arr = brainstate.transform.for_loop(
+                src_step, jnp.arange(replay_steps)
+            )
+
+            # Step 2: run tgt with pre-computed excitatory input = weight * src.delayed_rate.
+            # NEST event delivery aligns instantaneous rate communication
+            # with the next scheduler slice (min-delay cycle).
+            def tgt_step(delayed_rate_k):
+                instant_ex = delayed_rate_k * weight
+                tgt.update(_precomputed_ex=instant_ex, _precomputed_in=zeros_1, noise=0.0)
+                return tgt.rate.value
+
+            tgt_rates_arr = brainstate.transform.for_loop(tgt_step, src_delayed_arr)
+
+            bp_src = np.array(src_rates_arr, dtype=dftype).reshape(replay_steps)
+            bp_tgt = np.array(tgt_rates_arr, dtype=dftype).reshape(replay_steps)
 
         npt.assert_allclose(bp_src, nest_src[:replay_steps], atol=1e-12, rtol=0.0)
         npt.assert_allclose(bp_tgt, nest_tgt[:replay_steps], atol=1e-10, rtol=0.0)

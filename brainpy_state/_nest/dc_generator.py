@@ -17,7 +17,7 @@
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
@@ -167,7 +167,7 @@ class dc_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.dc_generator(
        ...         in_size=1,
@@ -182,7 +182,7 @@ class dc_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> dc1 = brainpy.state.dc_generator(
        ...     amplitude=300.0 * u.pA,
        ...     start=0.0 * u.ms,

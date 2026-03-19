@@ -20,8 +20,9 @@ import unittest
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import aeif_cond_alpha_astro, sic_connection
@@ -165,15 +166,52 @@ class TestSICConnection(unittest.TestCase):
             n_coeffarray.init_state()
             n_mapped.init_state()
 
-            trace_coeffarray = np.zeros((20,), dtype=dftype)
-            trace_mapped = np.zeros((20,), dtype=dftype)
-            for k in range(20):
-                events_coeff = event if k == 0 else None
-                events_mapped = mapped if k == 0 else None
-                self._step(n_coeffarray, k, sic_events=events_coeff)
-                self._step(n_mapped, k, sic_events=events_mapped)
-                trace_coeffarray[k] = float((n_coeffarray.I_sic.value / u.pA)[0])
-                trace_mapped[k] = float((n_mapped.I_sic.value / u.pA)[0])
+            n_steps = 20
+            v_shape = n_coeffarray.V.value.shape  # (1,)
+
+            # Pre-compute I_SIC schedules using Python queue simulation.
+            # i_sic_sched[k] = value popped from queue at step k
+            # (stored into I_sic.value at end of step k, used by ODE at step k+1).
+            i_sic_sched_coeff = np.zeros((n_steps,) + v_shape, dtype=dftype)
+            i_sic_sched_mapped = np.zeros((n_steps,) + v_shape, dtype=dftype)
+            for k in range(n_steps):
+                ev_c = event if k == 0 else None
+                ev_m = mapped if k == 0 else None
+                n_coeffarray._enqueue_sic_events(ev_c, v_shape)
+                i_sic_sched_coeff[k] = n_coeffarray._pop_sic_current(v_shape)
+                n_coeffarray._sic_step += 1
+                n_mapped._enqueue_sic_events(ev_m, v_shape)
+                i_sic_sched_mapped[k] = n_mapped._pop_sic_current(v_shape)
+                n_mapped._sic_step += 1
+
+            # Reset Python queues; the for_loop will inject I_sic via JAX arrays.
+            n_coeffarray._sic_queue = {}
+            n_coeffarray._sic_step = 0
+            n_mapped._sic_queue = {}
+            n_mapped._sic_step = 0
+
+            i_sic_coeff_jax = jnp.asarray(i_sic_sched_coeff)   # (n_steps, 1)
+            i_sic_mapped_jax = jnp.asarray(i_sic_sched_mapped)  # (n_steps, 1)
+            t_array = jnp.arange(n_steps, dtype=dftype) * self.dt_ms  # ms
+
+            def body(inputs):
+                t_k, i_sic_coeff_k, i_sic_mapped_k = inputs
+                with brainstate.environ.context(t=t_k * u.ms):
+                    # update() reads I_sic.value (set at previous step) for the ODE,
+                    # then sets I_sic.value = 0 (empty queue pop).
+                    n_coeffarray.update(x=0.0 * u.pA, sic_events=None)
+                    # Override with pre-computed value for next step's ODE.
+                    n_coeffarray.I_sic.value = i_sic_coeff_k * u.pA
+                    n_mapped.update(x=0.0 * u.pA, sic_events=None)
+                    n_mapped.I_sic.value = i_sic_mapped_k * u.pA
+                return (
+                    u.get_mantissa(n_coeffarray.I_sic.value)[0],
+                    u.get_mantissa(n_mapped.I_sic.value)[0],
+                )
+
+            results = brainstate.transform.for_loop(body, (t_array, i_sic_coeff_jax, i_sic_mapped_jax))
+            trace_coeffarray = np.array(results[0])
+            trace_mapped = np.array(results[1])
 
         npt.assert_allclose(trace_coeffarray, trace_mapped, atol=1e-12, rtol=0.0)
 
@@ -237,11 +275,31 @@ class TestSICConnection(unittest.TestCase):
             neuron.init_state()
 
             n_steps = ca.size
-            bp_i_sic = np.empty((n_steps,), dtype=dftype)
+            v_shape = neuron.V.value.shape  # (1,)
+
+            # Pre-compute I_SIC schedule using Python queue simulation.
+            i_sic_sched = np.zeros((n_steps,) + v_shape, dtype=dftype)
             for k in range(n_steps):
                 ev = syn.to_sic_event(coeff=coeff[k], min_delay_steps=1)
-                self._step(neuron, k, sic_events=ev)
-                bp_i_sic[k] = float((neuron.I_sic.value / u.pA)[0])
+                neuron._enqueue_sic_events(ev, v_shape)
+                i_sic_sched[k] = neuron._pop_sic_current(v_shape)
+                neuron._sic_step += 1
+
+            # Reset Python queue; inject I_sic via JAX array in for_loop.
+            neuron._sic_queue = {}
+            neuron._sic_step = 0
+
+            i_sic_jax = jnp.asarray(i_sic_sched)  # (n_steps, 1)
+            t_array = jnp.arange(n_steps, dtype=dftype) * dt_ms  # ms
+
+            def body(inputs):
+                t_k, i_sic_k = inputs
+                with brainstate.environ.context(t=t_k * u.ms):
+                    neuron.update(x=0.0 * u.pA, sic_events=None)
+                    neuron.I_sic.value = i_sic_k * u.pA
+                return u.get_mantissa(neuron.I_sic.value)[0]
+
+            bp_i_sic = np.array(brainstate.transform.for_loop(body, (t_array, i_sic_jax)))
 
         bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
         valid = (bp_indices >= 0) & (bp_indices < bp_i_sic.size)

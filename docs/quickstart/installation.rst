@@ -82,7 +82,7 @@ This includes:
 
 - ``brainpy-state``: Main framework
 - ``brainstate``: State management and compilation backend
-- ``brainunit``: Physical units system
+- ``saiunit``: Physical units system
 - ``braintools``: Utilities and tools
 - Additional ecosystem packages
 
@@ -95,7 +95,7 @@ To verify that ``brainpy.state`` is installed correctly:
 
    import brainpy.state
    import brainstate
-   import brainunit as u
+   import saiunit as u
 
    print(f"brainpy.state version: {brainpy.__version__}")
    print(f"BrainState version: {brainstate.__version__}")

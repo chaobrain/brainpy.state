@@ -30,7 +30,10 @@ Validates the brainpy.state ``spike_train_injector`` against:
 import unittest
 
 import brainstate
-import brainunit as u
+import brainstate as bst
+import jax.numpy as jnp
+import numpy as np
+import saiunit as u
 import numpy.testing as npt
 
 brainstate.environ.set(precision=64, platform='cpu')
@@ -270,13 +273,20 @@ class TestSpikeTrainInjectorSimulation(unittest.TestCase):
                 spike_times=[t * u.ms for t in spike_times_ms],
             )
 
-            recorded_spike_times = []
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = inj.update()
-                    if float(out[0]) > 0.5:
-                        recorded_spike_times.append(round(t, 4))
+                return u.get_mantissa(out)[0]
+
+            outputs = np.array(bst.transform.for_loop(step_fn, t_array))
+
+        recorded_spike_times = [
+            round(float(t_array[i]), 4)
+            for i in range(n_steps)
+            if outputs[i] > 0.5
+        ]
 
         npt.assert_allclose(recorded_spike_times, spike_times_ms, atol=1e-4,
                             err_msg="Recorded spike times don't match input")
@@ -297,13 +307,20 @@ class TestSpikeTrainInjectorSimulation(unittest.TestCase):
                 stop=stop * u.ms,
             )
 
-            recorded = []
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = inj.update()
-                    if float(out[0]) > 0.5:
-                        recorded.append(round(t, 4))
+                return u.get_mantissa(out)[0]
+
+            outputs = np.array(bst.transform.for_loop(step_fn, t_array))
+
+        recorded = [
+            round(float(t_array[i]), 4)
+            for i in range(n_steps)
+            if outputs[i] > 0.5
+        ]
 
         # Only spikes at 3.0, 5.0, 7.0 are in [3, 8)
         expected = [3.0, 5.0, 7.0]
@@ -324,14 +341,20 @@ class TestSpikeTrainInjectorSimulation(unittest.TestCase):
                 spike_multiplicities=multiplicities,
             )
 
-            recorded = {}
-            for step in range(n_steps):
-                t = step * dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = inj.update()
-                    val = float(out[0])
-                    if val > 0.5:
-                        recorded[round(t, 4)] = int(val)
+                return u.get_mantissa(out)[0]
+
+            outputs = np.array(bst.transform.for_loop(step_fn, t_array))
+
+        recorded = {
+            round(float(t_array[i]), 4): int(outputs[i])
+            for i in range(n_steps)
+            if outputs[i] > 0.5
+        }
 
         self.assertEqual(recorded.get(1.0), 3)
         self.assertEqual(recorded.get(2.0), 5)
@@ -384,13 +407,20 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
                 spike_times=[t * u.ms for t in spike_times_ms],
             )
 
-            bp_spike_times = []
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = inj.update()
-                    if float(out[0]) > 0.5:
-                        bp_spike_times.append(round(t, 4))
+                return u.get_mantissa(out)[0]
+
+            outputs = np.array(bst.transform.for_loop(step_fn, t_array))
+
+        bp_spike_times = [
+            round(float(t_array[i]), 4)
+            for i in range(n_steps)
+            if outputs[i] > 0.5
+        ]
 
         npt.assert_allclose(bp_spike_times, spike_times_ms, atol=1e-4,
                             err_msg="brainpy spike times don't match expected")
@@ -424,13 +454,20 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
                 spike_times=[t * u.ms for t in in_spike_times],
             )
 
-            bp_spike_times = []
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = inj.update()
-                    if float(out[0]) > 0.5:
-                        bp_spike_times.append(round(t, 4))
+                return u.get_mantissa(out)[0]
+
+            outputs = np.array(bst.transform.for_loop(step_fn, t_array))
+
+        bp_spike_times = [
+            round(float(t_array[i]), 4)
+            for i in range(n_steps)
+            if outputs[i] > 0.5
+        ]
 
         npt.assert_allclose(bp_spike_times, expected_spike_times, atol=1e-4,
                             err_msg="Rounded spike times don't match NEST")
@@ -474,14 +511,16 @@ class TestSpikeTrainInjectorVsNEST(unittest.TestCase):
                 spike_multiplicities=multiplicities,
             )
 
-            bp_total = 0
-            for step in range(n_steps):
-                t = step * self.dt_ms
-                with brainstate.environ.context(t=t * u.ms):
+            t_array = jnp.arange(n_steps) * self.dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
                     out = inj.update()
-                    val = float(out[0])
-                    if val > 0.5:
-                        bp_total += int(val)
+                return u.get_mantissa(out)[0]
+
+            outputs = np.array(bst.transform.for_loop(step_fn, t_array))
+
+        bp_total = int(np.sum(outputs[outputs > 0.5]))
 
         # brainpy total multiplicities should be 3 + 5 = 8
         self.assertEqual(bp_total, 8,

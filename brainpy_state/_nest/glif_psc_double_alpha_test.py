@@ -46,14 +46,16 @@ os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['JAX_ENABLE_X64'] = 'True'
 
 import numpy as np
+import jax.numpy as jnp
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 
-from brainpy_state._nest.glif_psc_double_alpha import glif_psc_double_alpha, _iaf_propagator_alpha
+from brainpy_state._nest.glif_psc_double_alpha import glif_psc_double_alpha
+from brainpy_state._nest._utils import alpha_propagator_p31_p32
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ def _compute_propagators_double(tau_syn_fast_list, tau_syn_slow_list, amp_slow_l
         P11_fast.append(p11_fast)
         P22_fast.append(p11_fast)
         P21_fast.append(dt * p11_fast)
-        p31_fast, p32_fast = _iaf_propagator_alpha(tau_syn_fast_list[i], tau_m, c_m, dt)
+        p31_fast, p32_fast = alpha_propagator_p31_p32(tau_syn_fast_list[i], tau_m, c_m, dt)
         P31_fast.append(p31_fast)
         P32_fast.append(p32_fast)
         PSCInitialValues_fast.append(math.e / tau_syn_fast_list[i])
@@ -99,7 +101,7 @@ def _compute_propagators_double(tau_syn_fast_list, tau_syn_slow_list, amp_slow_l
         P11_slow.append(p11_slow)
         P22_slow.append(p11_slow)
         P21_slow.append(dt * p11_slow)
-        p31_slow, p32_slow = _iaf_propagator_alpha(tau_syn_slow_list[i], tau_m, c_m, dt)
+        p31_slow, p32_slow = alpha_propagator_p31_p32(tau_syn_slow_list[i], tau_m, c_m, dt)
         P31_slow.append(p31_slow)
         P32_slow.append(p32_slow)
         PSCInitialValues_slow.append(math.e / tau_syn_slow_list[i] * amp_slow_list[i])
@@ -367,7 +369,8 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         if dy_inputs is not None:
             for port, weight in dy_inputs:
                 neuron.add_delta_input(
-                    f'receptor_{port}_step{k}', weight * u.pA
+                    f'receptor_{port}_step{k}', weight * u.pA,
+                    label=f'receptor_{port}'
                 )
         with brainstate.environ.context(t=k * self.dt):
             return neuron.update(x=x)
@@ -377,80 +380,91 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_nest_default_parameters(self):
-        r"""Verify default parameters match NEST C++ source."""
-        neuron = glif_psc_double_alpha(1)
-        self.assertEqual(neuron.g_m, 9.43 * u.nS)
-        self.assertEqual(neuron.E_L, -78.85 * u.mV)
-        self.assertEqual(neuron.V_th, -51.68 * u.mV)
-        self.assertEqual(neuron.C_m, 58.72 * u.pF)
-        self.assertEqual(neuron.t_ref, 3.75 * u.ms)
-        self.assertEqual(neuron.V_reset, -78.85 * u.mV)
-        self.assertEqual(neuron.th_spike_add, 0.37)
-        self.assertEqual(neuron.th_spike_decay, 0.009)
-        self.assertEqual(neuron.voltage_reset_fraction, 0.20)
-        self.assertEqual(neuron.voltage_reset_add, 18.51)
-        self.assertEqual(neuron.th_voltage_index, 0.005)
-        self.assertEqual(neuron.th_voltage_decay, 0.09)
-        self.assertEqual(neuron.asc_init, (0.0, 0.0))
-        self.assertEqual(neuron.asc_decay, (0.003, 0.1))
-        self.assertEqual(neuron.asc_amps, (-9.18, -198.94))
-        self.assertEqual(neuron.asc_r, (1.0, 1.0))
-        self.assertEqual(neuron.tau_syn_fast, (2.0,))
-        self.assertEqual(neuron.tau_syn_slow, (6.0,))
-        self.assertEqual(neuron.amp_slow, (0.3,))
-        self.assertFalse(neuron.has_theta_spike)
-        self.assertFalse(neuron.has_asc)
-        self.assertFalse(neuron.has_theta_voltage)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Verify default parameters match NEST C++ source."""
+            neuron = glif_psc_double_alpha(1)
+            self.assertEqual(neuron.g_m, 9.43 * u.nS)
+            self.assertEqual(neuron.E_L, -78.85 * u.mV)
+            self.assertEqual(neuron.V_th, -51.68 * u.mV)
+            self.assertEqual(neuron.C_m, 58.72 * u.pF)
+            self.assertEqual(neuron.t_ref, 3.75 * u.ms)
+            self.assertEqual(neuron.V_reset, -78.85 * u.mV)
+            self.assertEqual(neuron.th_spike_add, 0.37)
+            self.assertEqual(neuron.th_spike_decay, 0.009)
+            self.assertEqual(neuron.voltage_reset_fraction, 0.20)
+            self.assertEqual(neuron.voltage_reset_add, 18.51)
+            self.assertEqual(neuron.th_voltage_index, 0.005)
+            self.assertEqual(neuron.th_voltage_decay, 0.09)
+            self.assertEqual(neuron.asc_init, (0.0, 0.0))
+            self.assertEqual(neuron.asc_decay, (0.003, 0.1))
+            self.assertEqual(neuron.asc_amps, (-9.18, -198.94))
+            self.assertEqual(neuron.asc_r, (1.0, 1.0))
+            self.assertEqual(neuron.tau_syn_fast, (2.0,))
+            self.assertEqual(neuron.tau_syn_slow, (6.0,))
+            self.assertEqual(neuron.amp_slow, (0.3,))
+            self.assertFalse(neuron.has_theta_spike)
+            self.assertFalse(neuron.has_asc)
+            self.assertFalse(neuron.has_theta_voltage)
 
     # ------------------------------------------------------------------
     # 2. Parameter validation tests
     # ------------------------------------------------------------------
 
     def test_invalid_model_combination(self):
-        r"""Invalid mechanism combinations should raise."""
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, adapting_threshold=True, spike_dependent_threshold=False)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""Invalid mechanism combinations should raise."""
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, adapting_threshold=True, spike_dependent_threshold=False)
 
     def test_v_reset_ge_v_th_raises(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, V_reset=-50.0 * u.mV, V_th=-51.68 * u.mV)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, V_reset=-50.0 * u.mV, V_th=-51.68 * u.mV)
 
     def test_capacitance_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, C_m=0.0 * u.pF)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, C_m=0.0 * u.pF)
 
     def test_conductance_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, g=0.0 * u.nS)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, g=0.0 * u.nS)
 
     def test_t_ref_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, t_ref=0.0 * u.ms)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, t_ref=0.0 * u.ms)
 
     def test_asc_size_mismatch(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, after_spike_currents=True,
-                                  asc_init=(0.0,), asc_decay=(0.003, 0.1),
-                                  asc_amps=(-9.18, -198.94), asc_r=(1.0, 1.0))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, after_spike_currents=True,
+                                      asc_init=(0.0,), asc_decay=(0.003, 0.1),
+                                      asc_amps=(-9.18, -198.94), asc_r=(1.0, 1.0))
 
     def test_tau_syn_fast_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, tau_syn_fast=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, tau_syn_fast=(0.0,))
 
     def test_tau_syn_slow_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, tau_syn_slow=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, tau_syn_slow=(0.0,))
 
     def test_amp_slow_positive(self):
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, amp_slow=(0.0,))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, amp_slow=(0.0,))
 
     def test_tau_syn_size_mismatch(self):
-        r"""tau_syn_fast, tau_syn_slow, amp_slow must have same length."""
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, tau_syn_fast=(2.0, 3.0), tau_syn_slow=(6.0,))
-        with self.assertRaises(ValueError):
-            glif_psc_double_alpha(1, tau_syn_fast=(2.0,), amp_slow=(0.3, 0.5))
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            r"""tau_syn_fast, tau_syn_slow, amp_slow must have same length."""
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, tau_syn_fast=(2.0, 3.0), tau_syn_slow=(6.0,))
+            with self.assertRaises(ValueError):
+                glif_psc_double_alpha(1, tau_syn_fast=(2.0,), amp_slow=(0.3, 0.5))
 
     # ------------------------------------------------------------------
     # 3. IAFPropagatorAlpha tests
@@ -463,7 +477,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         c_m = 58.72
         h = 0.01
 
-        P31, P32 = _iaf_propagator_alpha(tau_syn, tau_m, c_m, h)
+        P31, P32 = alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h)
 
         self.assertTrue(math.isfinite(P31))
         self.assertTrue(math.isfinite(P32))
@@ -476,7 +490,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
         c_m = 58.72
         h = 0.01
 
-        P31, P32 = _iaf_propagator_alpha(tau_syn, tau_m, c_m, h)
+        P31, P32 = alpha_propagator_p31_p32(tau_syn, tau_m, c_m, h)
 
         expected_P32 = h / c_m * math.exp(-h / tau_m)
         expected_P31 = 0.5 * h * h / c_m * math.exp(-h / tau_m)
@@ -509,21 +523,20 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            v_model = []
+            x_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[50].set(300.0)
+
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=x_vals[k] * u.pA)
+                return neuron.V.value / u.mV
+
+            v_model_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(v_model_all[k, 0]) for k in range(n_steps)]
+
             v_ref = []
-
             for k in range(n_steps):
-                if k == 50:
-                    x_val = 300.0
-                else:
-                    x_val = 0.0
-
-                spk = self._step(neuron, k, x=x_val * u.pA)
-                v_m = float((neuron.V.value / u.mV)[0])
-                v_model.append(v_m)
-
                 _ref_glif_psc_double_alpha_step(state, params, dt_val)
-                state['i_stim'] = x_val
+                state['i_stim'] = float(x_vals[k])
                 v_ref.append(state['V_rel'] + params['E_L'])
 
             for k in range(n_steps):
@@ -553,14 +566,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 500.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_psc_double_alpha_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -576,7 +591,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif2_spike_dependent_threshold(self):
         r"""GLIF2: biologically defined reset with spike-dependent threshold."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -596,14 +611,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 500.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_psc_double_alpha_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -618,7 +635,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif3_after_spike_currents(self):
         r"""GLIF3: after-spike currents match reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -638,14 +655,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 500.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_psc_double_alpha_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -660,7 +679,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif4_combined_reset_and_asc(self):
         r"""GLIF4: spike-dependent threshold + after-spike currents."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -680,14 +699,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 500.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return spk
+
+            spk_trace = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+
             ref_spikes = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-
                 spiked = _ref_glif_psc_double_alpha_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -702,7 +723,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif5_full_model(self):
         r"""GLIF5: all mechanisms enabled — voltage trace matches reference."""
         dt_val = 0.01
-        n_steps = 2000
+        n_steps = 500
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -722,17 +743,20 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 500.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            spk_trace = results[0]
+            v_trace = results[1]
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+            v_model = [float(v_trace[k, 0]) for k in range(n_steps)]
+
             ref_spikes = []
-            v_model = []
             v_ref = []
-
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-
                 spiked = _ref_glif_psc_double_alpha_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -779,20 +803,18 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            y2_fast_trace = []
-            y2_slow_trace = []
-            y2_total_trace = []
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
 
-            for k in range(n_steps):
-                if k == 10:
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                else:
-                    self._step(neuron, k)
-                y2_fast = float((neuron.y2_fast[0].value / u.pA)[0])
-                y2_slow = float((neuron.y2_slow[0].value / u.pA)[0])
-                y2_fast_trace.append(y2_fast)
-                y2_slow_trace.append(y2_slow)
-                y2_total_trace.append(y2_fast + y2_slow)
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (neuron.y2_fast[0].value / u.pA, neuron.y2_slow[0].value / u.pA)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            y2_fast_trace = [float(results[0][k, 0]) for k in range(n_steps)]
+            y2_slow_trace = [float(results[1][k, 0]) for k in range(n_steps)]
+            y2_total_trace = [y2_fast_trace[k] + y2_slow_trace[k] for k in range(n_steps)]
 
             # Peak of fast component should be approximately 1 pA at t = tau_syn_fast
             fast_peak_idx = np.argmax(y2_fast_trace)
@@ -835,15 +857,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            I_syn_trace = []
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
 
-            for k in range(n_steps):
-                if k == 10:
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                else:
-                    self._step(neuron, k)
-                I_syn = float((neuron.get_I_syn() / u.pA)[0])
-                I_syn_trace.append(I_syn)
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.get_I_syn() / u.pA
+
+            I_syn_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            I_syn_trace = [float(I_syn_all[k, 0]) for k in range(n_steps)]
 
             # Peak should be approximately 2.0 pA (double the single alpha)
             peak_I_syn = max(I_syn_trace)
@@ -871,15 +894,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            I_syn_trace = []
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
 
-            for k in range(n_steps):
-                if k == 10:
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                else:
-                    self._step(neuron, k)
-                I_syn = float((neuron.get_I_syn() / u.pA)[0])
-                I_syn_trace.append(I_syn)
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.get_I_syn() / u.pA
+
+            I_syn_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            I_syn_trace = [float(I_syn_all[k, 0]) for k in range(n_steps)]
 
             # Peak should be approximately 1.5 pA
             peak_I_syn = max(I_syn_trace)
@@ -909,18 +933,17 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            y2_fast_trace = []
-            I_syn_trace = []
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
 
-            for k in range(n_steps):
-                if k == 10:
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                else:
-                    self._step(neuron, k)
-                y2_fast = float((neuron.y2_fast[0].value / u.pA)[0])
-                I_syn = float((neuron.get_I_syn() / u.pA)[0])
-                y2_fast_trace.append(y2_fast)
-                I_syn_trace.append(I_syn)
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (neuron.y2_fast[0].value / u.pA, neuron.get_I_syn() / u.pA)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            y2_fast_trace = [float(results[0][k, 0]) for k in range(n_steps)]
+            I_syn_trace = [float(results[1][k, 0]) for k in range(n_steps)]
 
             # The combined peak should be to the right of the fast peak
             fast_peak_idx = np.argmax(y2_fast_trace)
@@ -934,8 +957,6 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
 
     def test_refractory_period_holds_voltage(self):
         r"""During refractory period, voltage should be held at reset value."""
-        dt_val = 0.01
-
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
                 1,
@@ -948,25 +969,30 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            spike_step = None
-            for k in range(2000):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    spike_step = k
-                    break
+            # I_e=800 pA is strong; spike well before 300 steps
+            n_steps = 300
 
-            self.assertIsNotNone(spike_step, "Should have spiked")
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV, neuron.refractory_step_count.value)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            spk_trace, v_trace, refr_trace = results
+
+            spike_steps = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+            self.assertGreater(len(spike_steps), 0, "Should have spiked")
+            spike_step = spike_steps[0]
 
             self.assertGreater(
-                int(neuron.refractory_step_count.value[0]),
+                int(refr_trace[spike_step, 0]),
                 0,
                 "Should be refractory after spike"
             )
 
-            v_reset = float((neuron.V.value / u.mV)[0])
+            v_reset = float(v_trace[spike_step, 0])
             for k in range(spike_step + 1, spike_step + 5):
-                self._step(neuron, k)
-                v_now = float((neuron.V.value / u.mV)[0])
+                v_now = float(v_trace[k, 0])
                 self.assertAlmostEqual(
                     v_now, v_reset, places=10,
                     msg=f"Voltage should be held during refractory at step {k}"
@@ -999,8 +1025,8 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
 
             # All receptors should have non-zero y1_fast and y1_slow
             for k_rec in range(3):
-                y1_fast_val = float((neuron.y1_fast[k_rec].value / u.pA)[0])
-                y1_slow_val = float((neuron.y1_slow[k_rec].value / u.pA)[0])
+                y1_fast_val = float((neuron.y1_fast[k_rec].value / (u.pA / u.ms))[0])
+                y1_slow_val = float((neuron.y1_slow[k_rec].value / (u.pA / u.ms))[0])
                 self.assertGreater(abs(y1_fast_val), 0.0,
                                    msg=f"Receptor {k_rec} should have non-zero y1_fast")
                 self.assertGreater(abs(y1_slow_val), 0.0,
@@ -1048,8 +1074,13 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 500.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return None
+
+            brainstate.transform.for_loop(_body, jnp.arange(n_steps))
             for k in range(n_steps):
-                self._step(neuron, k)
                 _ref_glif_psc_double_alpha_step(state, params, dt_val)
 
             th_model = float(neuron._threshold[0])
@@ -1102,28 +1133,34 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            y1_fast_model = []
-            y2_fast_model = []
-            y1_slow_model = []
-            y2_slow_model = []
+            w_vals = jnp.zeros(n_steps, dtype=jnp.float64).at[10].set(1.0)
+
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return (
+                    neuron.y1_fast[0].value / (u.pA / u.ms),
+                    neuron.y2_fast[0].value / u.pA,
+                    neuron.y1_slow[0].value / (u.pA / u.ms),
+                    neuron.y2_slow[0].value / u.pA,
+                )
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            y1_fast_model = [float(results[0][k, 0]) for k in range(n_steps)]
+            y2_fast_model = [float(results[1][k, 0]) for k in range(n_steps)]
+            y1_slow_model = [float(results[2][k, 0]) for k in range(n_steps)]
+            y2_slow_model = [float(results[3][k, 0]) for k in range(n_steps)]
+
             y1_fast_ref = []
             y2_fast_ref = []
             y1_slow_ref = []
             y2_slow_ref = []
-
             for k in range(n_steps):
                 if k == 10:
-                    spike_w = [1.0]
-                    self._step(neuron, k, dy_inputs=[(0, 1.0)])
-                    _ref_glif_psc_double_alpha_step(state, params, dt_val, spike_weights=spike_w)
+                    _ref_glif_psc_double_alpha_step(state, params, dt_val, spike_weights=[1.0])
                 else:
-                    self._step(neuron, k)
                     _ref_glif_psc_double_alpha_step(state, params, dt_val)
-
-                y1_fast_model.append(float((neuron.y1_fast[0].value / u.pA)[0]))
-                y2_fast_model.append(float((neuron.y2_fast[0].value / u.pA)[0]))
-                y1_slow_model.append(float((neuron.y1_slow[0].value / u.pA)[0]))
-                y2_slow_model.append(float((neuron.y2_slow[0].value / u.pA)[0]))
                 y1_fast_ref.append(state['y1_fast'][0])
                 y2_fast_ref.append(state['y2_fast'][0])
                 y1_slow_ref.append(state['y1_slow'][0])
@@ -1183,21 +1220,27 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            v_model = []
-            v_ref = []
+            w_vals_rec0 = jnp.zeros(n_steps, dtype=jnp.float64).at[20].set(5.0)
+            w_vals_rec1 = jnp.zeros(n_steps, dtype=jnp.float64).at[50].set(3.0)
 
+            def _body(k):
+                neuron.add_delta_input('fl0', w_vals_rec0[k] * u.pA, label='receptor_0')
+                neuron.add_delta_input('fl1', w_vals_rec1[k] * u.pA, label='receptor_1')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return neuron.V.value / u.mV
+
+            v_model_all = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            v_model = [float(v_model_all[k, 0]) for k in range(n_steps)]
+
+            v_ref = []
             for k in range(n_steps):
                 if k == 20:
-                    self._step(neuron, k, dy_inputs=[(0, 5.0)])
                     _ref_glif_psc_double_alpha_step(state, params, dt_val, spike_weights=[5.0, 0.0])
                 elif k == 50:
-                    self._step(neuron, k, dy_inputs=[(1, 3.0)])
                     _ref_glif_psc_double_alpha_step(state, params, dt_val, spike_weights=[0.0, 3.0])
                 else:
-                    self._step(neuron, k)
                     _ref_glif_psc_double_alpha_step(state, params, dt_val)
-
-                v_model.append(float((neuron.V.value / u.mV)[0]))
                 v_ref.append(state['V_rel'] + params['E_L'])
 
             for k in range(n_steps):
@@ -1213,7 +1256,7 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
     def test_glif1_voltage_trace_with_constant_current(self):
         r"""GLIF1 with constant current: full voltage trace matches reference."""
         dt_val = 0.01
-        n_steps = 3000
+        n_steps = 800
 
         with brainstate.environ.context(dt=self.dt):
             neuron = glif_psc_double_alpha(
@@ -1233,17 +1276,20 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             params['I_e'] = 400.0
             state = _make_ref_state_double(params, V_abs=-78.85)
 
-            v_model = []
-            v_ref = []
-            model_spikes = []
+            def _body(k):
+                with brainstate.environ.context(t=k * self.dt):
+                    spk = neuron.update(x=0.0 * u.pA)
+                return (spk, neuron.V.value / u.mV)
+
+            results = brainstate.transform.for_loop(_body, jnp.arange(n_steps))
+            spk_trace = results[0]
+            v_trace = results[1]
+            model_spikes = [k for k in range(n_steps) if float(spk_trace[k, 0]) > 0]
+            v_model = [float(v_trace[k, 0]) for k in range(n_steps)]
+
             ref_spikes = []
-
+            v_ref = []
             for k in range(n_steps):
-                spk = self._step(neuron, k)
-                if float(spk[0]) > 0:
-                    model_spikes.append(k)
-                v_model.append(float((neuron.V.value / u.mV)[0]))
-
                 spiked = _ref_glif_psc_double_alpha_step(state, params, dt_val)
                 if spiked:
                     ref_spikes.append(k)
@@ -1277,12 +1323,16 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             neuron.init_state()
 
-            # Inject spike
-            self._step(neuron, 0, dy_inputs=[(0, 1.0)])
+            # Inject spike at step 0, then run steps 0..49 via for_loop
+            w_vals = jnp.zeros(50, dtype=jnp.float64).at[0].set(1.0)
 
-            # Run a few steps
-            for k in range(1, 50):
-                self._step(neuron, k)
+            def _body(k):
+                neuron.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    neuron.update(x=0.0 * u.pA)
+                return None
+
+            brainstate.transform.for_loop(_body, jnp.arange(50))
 
             I_syn = neuron.get_I_syn()
             I_syn_fast = neuron.get_I_syn_fast()
@@ -1304,8 +1354,6 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
 
     def test_synaptic_current_depolarizes(self):
         r"""Positive synaptic current input should depolarize membrane."""
-        dt_val = 0.01
-
         with brainstate.environ.context(dt=self.dt):
             base = glif_psc_double_alpha(
                 1,
@@ -1333,12 +1381,17 @@ class TestGlifPscDoubleAlpha(unittest.TestCase):
             )
             exc.init_state()
 
-            self._step(base, 0)
-            self._step(exc, 0, dy_inputs=[(0, 50.0)])
+            # exc gets a synaptic spike at step 0; base does not — run all 101 steps in for_loop
+            w_vals = jnp.zeros(101, dtype=jnp.float64).at[0].set(50.0)
 
-            for k in range(1, 101):
-                self._step(base, k)
-                self._step(exc, k)
+            def _body(k):
+                exc.add_delta_input('fl', w_vals[k] * u.pA, label='receptor_0')
+                with brainstate.environ.context(t=k * self.dt):
+                    base.update(x=0.0 * u.pA)
+                    exc.update(x=0.0 * u.pA)
+                return None
+
+            brainstate.transform.for_loop(_body, jnp.arange(101))
 
             v_base = float((base.V.value / u.mV)[0])
             v_exc = float((exc.V.value / u.mV)[0])

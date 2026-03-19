@@ -15,18 +15,18 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 
 __all__ = [
     'pp_psc_delta',
@@ -203,8 +203,6 @@ class pp_psc_delta(NESTNeuron):
     By adjusting ``c_1``, ``c_2``, and ``c_3``, the transfer function can be:
 
     - Linear: Set ``c_3 = 0``, ``c_1 > 0`` -- :math:`\text{rate} = c_1 V' + c_2`
-    dftype = brainstate.environ.dftype()
-    ditype = brainstate.environ.ditype()
     - Exponential: Set ``c_1 = 0`` -- :math:`\text{rate} = c_2 \exp(c_3 V')`
     - Mixed: All coefficients nonzero -- linear + exponential
 
@@ -313,8 +311,8 @@ class pp_psc_delta(NESTNeuron):
     ``refractory_step_count``      ShortTermState    Remaining dead time grid steps
     ``I_stim``                     ShortTermState    Buffered current applied in next step
     ``last_spike_time``            ShortTermState    Last spike time (for recording)
-    ``_q_elems``                   NumPy array       Adaptation kernel elements (internal)
-    ``_q_val``                     NumPy array       Total :math:`E_\mathrm{sfa}` (internal)
+    ``_q_elems``                   HiddenState       Adaptation kernel elements (internal)
+    ``_q_val``                     ShortTermState    Total :math:`E_\mathrm{sfa}` (internal)
     ``_rng_state``                 JAX PRNG key      Random number generator state (internal)
     ============================== ================= ==========================================
 
@@ -362,7 +360,7 @@ class pp_psc_delta(NESTNeuron):
     .. code-block:: python
 
        >>> import brainpy.state as bst
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> neurons = bst.pp_psc_delta(100)
        >>> neurons.init_all_states()
 
@@ -489,52 +487,6 @@ class pp_psc_delta(NESTNeuron):
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        r"""Convert brainunit quantity to NumPy array in specified units.
-
-        Parameters
-        ----------
-        x : Quantity or array-like
-            Input value (with or without units).
-        unit : Quantity
-            Target unit for conversion (e.g., ``u.mV``, ``u.ms``, ``u.pA``).
-
-        Returns
-        -------
-        numpy.ndarray
-            NumPy array with values in the specified unit, dtype=float64.
-
-        Notes
-        -----
-        This method strips units and converts to float64 for use in NumPy-based
-        numerical integration loops where brainunit operations would be too slow.
-        """
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        r"""Broadcast NumPy array to match state variable shape.
-
-        Parameters
-        ----------
-        x_np : numpy.ndarray
-            Input array (scalar or array).
-        shape : tuple
-            Target shape (including batch dimension if present).
-
-        Returns
-        -------
-        numpy.ndarray
-            Broadcasted array with shape matching ``shape``.
-
-        Notes
-        -----
-        This method ensures that scalar parameters (e.g., ``tau_m``) are
-        broadcast to match the full population shape for element-wise operations.
-        """
-        return np.broadcast_to(x_np, shape)
-
     def _validate_parameters(self):
         r"""Validate all model parameters.
 
@@ -556,9 +508,13 @@ class pp_psc_delta(NESTNeuron):
         - All elements of ``tau_sfa > 0`` (adaptation time constants must be positive)
         - ``len(tau_sfa) == len(q_sfa)`` (adaptation parameter lists must match)
         """
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
+            return
+
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_m, u.ms) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
         if self.dead_time < 0.0:
             raise ValueError('Dead time must not be negative.')
@@ -572,7 +528,71 @@ class pp_psc_delta(NESTNeuron):
             if tau <= 0.0:
                 raise ValueError('All SFA time constants must be strictly positive.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def _precompute_constants(self, state_shape):
+        r"""Pre-compute dt-dependent propagator constants for JIT compatibility.
+
+        Called from :meth:`init_state` while ``dt`` is still a concrete Python
+        value (not a JAX abstract tracer).  Storing these as plain Python floats
+        or static JAX arrays avoids ``ConcretizationTypeError`` inside
+        ``jax.lax.scan`` / ``brainstate.transform.for_loop``.
+
+        Parameters
+        ----------
+        state_shape : tuple
+            Shape of the membrane-potential state array (``V.shape`` after
+            initialization).  Used to pre-shape the adaptation-decay and
+            q_sfa-jump arrays for broadcasting against ``(n_sfa, *state_shape)``.
+        """
+        dt_q = brainstate.environ.get_dt()
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+
+        # ---- h in ms as a concrete Python float ----
+        # brainstate.environ.get_dt() returns a Python saiunit.Quantity, so
+        # dividing by u.ms yields a plain Python float — no JAX array created.
+        self._h_ms = float(dt_q / u.ms)
+
+        # ---- Membrane propagator (computed once, reused every step) ----
+        self._P33 = u.math.exp(-dt_q / self.tau_m)
+        self._P30 = (1.0 / self.C_m) * (1.0 - self._P33) * self.tau_m
+
+        # ---- Effective dead time (clamped to dt if nonzero but smaller) ----
+        dead_time = self.dead_time
+        if dead_time != 0.0 and dead_time < self._h_ms:
+            dead_time = self._h_ms
+        self._dead_time_eff = dead_time  # Python float constant
+
+        # ---- Dead time in grid steps (Python int constant) ----
+        if self._dead_time_eff > 0.0:
+            self._dead_time_counts = int(round(self._dead_time_eff / self._h_ms))
+        else:
+            self._dead_time_counts = 0
+
+        # ---- Adaptation decay factors (pre-shaped for broadcasting) ----
+        n_sfa = len(self.tau_sfa)
+        if n_sfa > 0:
+            P_sfa_1d = jnp.array(
+                [np.exp(-self._h_ms / tau) for tau in self.tau_sfa], dtype=dftype
+            )
+            # Reshape to (n_sfa,) + (1,) * len(state_shape) so it broadcasts
+            # against q_elems of shape (n_sfa, *state_shape).
+            P_sfa = P_sfa_1d
+            for _ in range(len(state_shape)):
+                P_sfa = jnp.expand_dims(P_sfa, axis=-1)
+            self._P_sfa = P_sfa
+        else:
+            self._P_sfa = None
+
+        # ---- q_sfa jump array (pre-shaped for broadcasting) ----
+        if n_sfa > 0:
+            q_sfa_arr = jnp.array(self.q_sfa, dtype=dftype)
+            for _ in range(len(state_shape)):
+                q_sfa_arr = jnp.expand_dims(q_sfa_arr, axis=-1)
+            self._q_sfa_arr = q_sfa_arr
+        else:
+            self._q_sfa_arr = None
+
+    def init_state(self, batch_size=None, **kwargs):
         r"""Initialize all state variables.
 
         Allocates and initializes membrane potential, spike times, refractory
@@ -581,9 +601,9 @@ class pp_psc_delta(NESTNeuron):
 
         Parameters
         ----------
-        batch_size : int, optional
-            Batch size for vectorized simulation. If None, no batch dimension
-            is added. Default: None.
+        batch_size : int or None, optional
+            If provided, states are created with shape ``(batch_size, *varshape)``
+            to support batched simulation. If None, states have shape ``varshape``.
         **kwargs : dict, optional
             Additional keyword arguments (ignored).
 
@@ -596,86 +616,44 @@ class pp_psc_delta(NESTNeuron):
         - Random number generator state is initialized from ``rng_key`` or
           a default key.
         """
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+
         V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        state_shape = V.shape
         self.V = brainstate.HiddenState(V)
 
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.last_spike_time = brainstate.ShortTermState(u.math.full(state_shape, -1e7 * u.ms))
+        self.refractory_step_count = brainstate.ShortTermState(u.math.full(state_shape, 0, dtype=ditype))
+        self.I_stim = brainstate.ShortTermState(u.math.full(state_shape, 0.0 * u.pA, dtype=dftype))
 
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count = brainstate.ShortTermState(u.math.asarray(ref_steps, dtype=ditype))
-
-        self.I_stim = brainstate.ShortTermState(
-            braintools.init.param(braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size)
-        )
-
-        # Adaptation state: q_elems array
+        # Adaptation state: q_elems array stored as JAX arrays (mV units)
         n_sfa = len(self.tau_sfa)
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        self._q_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
-        self._q_val = np.zeros(v_shape, dtype=dftype)  # total E_sfa
-
-        # Initialize remaining dead time from parameter
-        if self.t_ref_remaining > 0.0:
-            dt_q = brainstate.environ.get_dt()
-            h = float(u.math.asarray(dt_q / u.ms))
-            r_init = int(round(self.t_ref_remaining / h))
-            r_arr = np.full(v_shape, r_init, dtype=ditype)
-            self.refractory_step_count.value = jnp.asarray(r_arr, dtype=ditype)
-
-        # RNG state
-        if self._rng_key is not None:
-            self._rng_state = self._rng_key
+        if n_sfa > 0:
+            self._q_elems = brainstate.HiddenState(
+                u.math.zeros((n_sfa, *state_shape), dtype=dftype) * u.mV
+            )
         else:
-            self._rng_state = jax.random.PRNGKey(0)
-
-    def reset_state(self, batch_size: int = None, **kwargs):
-        r"""Reset all state variables to initial values.
-
-        Resets membrane potential, spike times, refractory counters, buffered
-        currents, adaptation kernels, and random number generator state to
-        their initial configurations.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            Batch size for vectorized simulation. If None, no batch dimension
-            is added. Default: None.
-        **kwargs : dict, optional
-            Additional keyword arguments (ignored).
-
-        Notes
-        -----
-        This method performs the same initialization as ``init_state``. It is
-        useful for resetting the model state during a simulation without
-        recreating the model instance.
-        """
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        self.last_spike_time.value = braintools.init.param(
-            braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
-        )
-        ref_steps = braintools.init.param(braintools.init.Constant(0), self.varshape, batch_size)
-        self.refractory_step_count.value = u.math.asarray(ref_steps, dtype=ditype)
-        self.I_stim.value = braintools.init.param(
-            braintools.init.Constant(0.0 * u.pA), self.varshape, batch_size
+            self._q_elems = None
+        self._q_val = brainstate.ShortTermState(
+            u.math.zeros(state_shape, dtype=dftype) * u.mV
         )
 
-        n_sfa = len(self.tau_sfa)
-        v_shape = self.varshape if batch_size is None else (batch_size, *self.varshape)
-        self._q_elems = np.zeros((n_sfa, *v_shape), dtype=dftype) if n_sfa > 0 else None
-        self._q_val = np.zeros(v_shape, dtype=dftype)
+        # Pre-compute dt-dependent propagator constants (must happen after
+        # state_shape is known, and while dt is still a concrete Python value).
+        self._precompute_constants(state_shape)
 
+        # Initialize remaining dead time from parameter (uses _h_ms from above)
         if self.t_ref_remaining > 0.0:
-            dt_q = brainstate.environ.get_dt()
-            h = float(u.math.asarray(dt_q / u.ms))
-            r_init = int(round(self.t_ref_remaining / h))
-            r_arr = np.full(v_shape, r_init, dtype=ditype)
-            self.refractory_step_count.value = jnp.asarray(r_arr, dtype=ditype)
+            r_init = int(round(self.t_ref_remaining / self._h_ms))
+            self.refractory_step_count.value = u.math.full(state_shape, r_init, dtype=ditype)
 
+        # RNG state wrapped in ShortTermState so for_loop carries it correctly
         if self._rng_key is not None:
-            self._rng_state = self._rng_key
+            rng = self._rng_key
         else:
-            self._rng_state = jax.random.PRNGKey(0)
+            rng = jax.random.PRNGKey(0)
+        self._rng_state = brainstate.ShortTermState(rng)
 
     def get_spike(self, V: ArrayLike = None):
         r"""Compute surrogate gradient spike output for backpropagation.
@@ -726,10 +704,9 @@ class pp_psc_delta(NESTNeuron):
         Returns
         -------
         spike : jax.Array
-            Binary spike output array. Shape: ``(batch_size, *in_size)`` if
-            batched, ``in_size`` otherwise. Values are 1.0 where spikes occurred,
-            0.0 otherwise. In Poisson mode (``dead_time = 0``), values can be
-            integers > 1 representing multiple spikes per step.
+            Binary spike output array. Shape: ``in_size``. Values are 1.0 where
+            spikes occurred, 0.0 otherwise. In Poisson mode (``dead_time = 0``),
+            values can be integers > 1 representing multiple spikes per step.
 
         Notes
         -----
@@ -781,134 +758,113 @@ class pp_psc_delta(NESTNeuron):
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
-        h = float(u.math.asarray(dt_q / u.ms))  # dt in ms as float
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
 
-        v_shape = self.V.value.shape
+        # Use pre-computed h_ms (Python float, safe inside JIT/scan).
+        # _precompute_constants() stored this in init_state() when dt was concrete.
+        h_ms = self._h_ms
 
-        # Extract state variables as numpy arrays (V_m is relative to resting potential)
-        V = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape).copy()
-        r = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.refractory_step_count.value), dtype=ditype), v_shape
-        ).copy()
-        i_stim = self._broadcast_to_state(self._to_numpy(self.I_stim.value, u.pA), v_shape).copy()
+        # Read state variables
+        V = self.V.value  # mV
+        r = self.refractory_step_count.value  # int
+        i_stim = self.I_stim.value  # pA
+        state_shape = V.shape  # (batch_size, *varshape) or varshape
 
-        # Extract parameters as numpy arrays
-        C_m = self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape)
-        tau_m = self._broadcast_to_state(self._to_numpy(self.tau_m, u.ms), v_shape)
-        I_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
+        # ---- Step 1: Update membrane potential via exact propagator ----
+        # Use pre-computed propagator coefficients (P33, P30 from init_state).
+        delta_v = self.sum_delta_inputs(u.math.zeros(self.varshape) * u.mV)
+        V = self._P30 * (i_stim + self.I_e) + self._P33 * V + delta_v
 
-        # Compute propagator coefficients (exact integration)
-        P33 = np.exp(-h / tau_m)
-        P30 = 1.0 / C_m * (1.0 - P33) * tau_m
-
-        # Compute exponential decay factors for adaptation
-        P_sfa = [math.exp(-h / tau) for tau in self.tau_sfa]
-
-        # Dead time parameters
-        dead_time = self.dead_time
-        # If dead_time > 0 but < h, clamp to h (matching NEST)
-        if dead_time != 0.0 and dead_time < h:
-            dead_time = h
-
-        if not self.dead_time_random and dead_time > 0.0:
-            # Fixed dead time: convert to steps (matching NEST Time::ms -> get_steps)
-            dead_time_counts = int(round(dead_time / h))
+        # ---- Step 2: Decay adaptation elements and compute total E_sfa ----
+        n_sfa = len(self.tau_sfa)
+        if n_sfa > 0 and self._q_elems is not None:
+            q_elems = self._q_elems.value  # (n_sfa, *state_shape) in mV
+            # Use pre-shaped P_sfa (shape: (n_sfa,) + (1,)*len(state_shape))
+            q_elems = q_elems * self._P_sfa
+            q_total = u.math.sum(q_elems, axis=0)  # shape: state_shape, in mV
         else:
-            dead_time_counts = 0
+            q_elems = None
+            q_total = u.math.zeros(self.varshape) * u.mV
 
-        if self.dead_time_random and dead_time > 0.0:
-            dt_rate = self.dead_time_shape / dead_time
-        else:
-            dt_rate = 0.0
+        # ---- Step 3: Spike check / refractory ----
+        not_refractory = r == 0
 
-        # Get delta (spike) inputs: these are voltage jumps in mV
-        delta_v = self._to_numpy(
-            self.sum_delta_inputs(u.math.zeros(v_shape) * u.mV), u.mV
-        )
+        # Compute effective potential and transfer function rate
+        V_eff = V - q_total  # mV
+        V_eff_raw = V_eff / u.mV  # unitless
 
-        # Get external current for NEXT step (NEST ring buffer semantics)
-        new_i_stim = self._broadcast_to_state(
-            self._to_numpy(self.sum_current_inputs(x, self.V.value), u.pA), v_shape
-        )
+        # Transfer function: rate = rect(c_1 * V_eff + c_2 * exp(c_3 * V_eff))
+        # Clip c_3 * V_eff to prevent overflow
+        exp_arg = jnp.clip(self.c_3 * V_eff_raw, -500.0, 500.0)
+        rate = self.c_1 * V_eff_raw + self.c_2 * jnp.exp(exp_arg)
+        rate = jnp.maximum(rate, 0.0)  # rectifier
 
         # Advance RNG state for this step
-        self._rng_state, subkey = jax.random.split(self._rng_state)
-        rand_vals = np.asarray(jax.random.uniform(subkey, shape=v_shape), dtype=dftype)
+        rng_state, subkey = jax.random.split(self._rng_state.value)
+        self._rng_state.value = rng_state
 
-        # For Poisson mode (dead_time == 0), we need Poisson random draws
-        # We'll compute them per-element in the loop if needed
+        # Use pre-computed effective dead time and grid-step count.
+        dead_time = self._dead_time_eff  # Python float constant
 
-        spike_mask = np.zeros(v_shape, dtype=bool)
-        n_spikes_arr = np.zeros(v_shape, dtype=ditype)
+        if dead_time > 0.0:
+            # With dead time: at most 1 spike per step
+            # spike_prob = 1 - exp(-rate * h * 1e-3)  = -expm1(-rate * h * 1e-3)
+            spike_prob = -jnp.expm1(-rate * h_ms * 1e-3)
+            rand_vals = jax.random.uniform(subkey, shape=state_shape, dtype=dftype)
 
-        for idx in np.ndindex(v_shape):
-            # ---- Step 1: Update membrane potential via exact propagator ----
-            V[idx] = P30[idx] * (i_stim[idx] + I_e[idx]) + P33[idx] * V[idx] + delta_v[idx]
+            spike_now = not_refractory & (rate > 0.0) & (rand_vals <= spike_prob)
 
-            # ---- Step 2: Decay adaptation elements and compute total E_sfa ----
-            q_total = 0.0
-            if self._q_elems is not None:
-                for i in range(len(self.tau_sfa)):
-                    self._q_elems[i][idx] *= P_sfa[i]
-                    q_total += self._q_elems[i][idx]
-            self._q_val[idx] = q_total
-
-            # ---- Step 3: Spike check / refractory ----
-            if r[idx] == 0:
-                # Neuron not refractory
-                V_eff = V[idx] - q_total
-
-                rate = self.c_1 * V_eff + self.c_2 * math.exp(self.c_3 * V_eff)
-
-                if rate > 0.0:
-                    n_spikes = 0
-
-                    if dead_time > 0.0:
-                        # With dead time: at most 1 spike per step
-                        spike_prob = -math.expm1(-rate * h * 1e-3)
-                        if rand_vals[idx] <= spike_prob:
-                            n_spikes = 1
-                    else:
-                        # Without dead time: Poisson-distributed spikes
-                        # Use numpy for Poisson draws
-                        lam_poisson = rate * h * 1e-3
-                        # Use a deterministic approach based on JAX random
-                        n_spikes = int(np.random.RandomState(
-                            int(rand_vals[idx] * 2 ** 31)
-                        ).poisson(lam_poisson))
-
-                    if n_spikes > 0:
-                        spike_mask[idx] = True
-                        n_spikes_arr[idx] = n_spikes
-
-                        # Set dead time
-                        if self.dead_time_random:
-                            # Gamma-distributed dead time
-                            gamma_sample = np.random.RandomState(
-                                int(rand_vals[idx] * 2 ** 30 + 1)
-                            ).gamma(self.dead_time_shape)
-                            r[idx] = max(1, int(round(gamma_sample / dt_rate / h)))
-                        elif dead_time > 0.0:
-                            r[idx] = dead_time_counts
-
-                        # Jump adaptation elements
-                        if self._q_elems is not None:
-                            for i in range(len(self.q_sfa)):
-                                self._q_elems[i][idx] += self.q_sfa[i] * n_spikes
-
-                        # Reset membrane potential if applicable
-                        if self.with_reset:
-                            V[idx] = 0.0
+            # Set dead time counter
+            if self.dead_time_random:
+                # Gamma-distributed dead time
+                _, gamma_key = jax.random.split(subkey)
+                gamma_samples = jax.random.gamma(
+                    gamma_key, self.dead_time_shape, shape=state_shape, dtype=dftype
+                )
+                dt_rate = self.dead_time_shape / dead_time
+                new_r_random = jnp.maximum(1, jnp.round(gamma_samples / dt_rate / h_ms).astype(ditype))
+                new_r = jnp.where(spike_now, new_r_random, r)
             else:
-                # Within dead time: decrement counter
-                r[idx] -= 1
+                new_r = jnp.where(spike_now, self._dead_time_counts, r)
 
-        # ---- Step 4: Update state ----
-        self.V.value = V * u.mV
-        self.refractory_step_count.value = jnp.asarray(r, dtype=ditype)
-        self.I_stim.value = new_i_stim * u.pA
-        self.last_spike_time.value = jax.lax.stop_gradient(
-            u.math.where(spike_mask, t + dt_q, self.last_spike_time.value)
-        )
+            n_spikes = jnp.where(spike_now, 1, 0).astype(ditype)
+        else:
+            # Without dead time (Poisson mode): multiple spikes per step possible
+            lam_poisson = rate * h_ms * 1e-3
+            n_spikes_raw = jax.random.poisson(subkey, lam_poisson, shape=state_shape, dtype=ditype)
+            n_spikes = jnp.where(not_refractory & (rate > 0.0), n_spikes_raw, 0)
+            spike_now = n_spikes > 0
+            new_r = r  # no dead time to set
 
-        return jnp.asarray(spike_mask, dtype=jnp.float32)
+        # Decrement refractory counter for neurons that did NOT spike
+        # (neurons still in refractory period)
+        refractory_and_no_spike = (r > 0) & ~spike_now
+        new_r = jnp.where(refractory_and_no_spike, r - 1, new_r)
+
+        # Jump adaptation elements on spike (use pre-shaped q_sfa_arr)
+        if n_sfa > 0 and q_elems is not None:
+            n_spikes_float = jnp.expand_dims(n_spikes.astype(dftype), axis=0)
+            q_elems = q_elems + (self._q_sfa_arr * n_spikes_float) * u.mV
+            q_total = u.math.sum(q_elems, axis=0)
+
+        # Reset membrane potential if applicable
+        if self.with_reset:
+            V = u.math.where(spike_now, 0.0 * u.mV, V)
+
+        # ---- Step 4: Get external current for NEXT step (NEST ring buffer semantics) ----
+        new_i_stim = self.sum_current_inputs(x, self.V.value)
+
+        # ---- Write back state ----
+        self.V.value = V
+        self.refractory_step_count.value = jnp.asarray(u.get_mantissa(new_r), dtype=ditype)
+        self.I_stim.value = new_i_stim + u.math.zeros(self.varshape) * u.pA
+        last_spike_time = u.math.where(spike_now, t + dt_q, self.last_spike_time.value)
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
+
+        if n_sfa > 0 and self._q_elems is not None:
+            self._q_elems.value = q_elems
+        self._q_val.value = q_total
+
+        spike_mask = spike_now if dead_time > 0.0 else (n_spikes > 0)
+        return u.math.asarray(spike_mask, dtype=dftype)

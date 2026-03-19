@@ -15,18 +15,18 @@
 
 # -*- coding: utf-8 -*-
 
-import math
 from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import brainunit as u
+import saiunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import is_tracer
 from .iaf_psc_alpha import iaf_psc_alpha
 
 __all__ = [
@@ -134,8 +134,8 @@ class iaf_psc_alpha_ps(NESTNeuron):
     - Runtime requires ``ceil(t_ref / dt) >= 1``; otherwise update fails.
     - ``x`` is ring-buffered current input: values supplied at step ``n`` are
       consumed as ``y_input`` in step ``n+1``.
-    - Update is per-neuron scalarized and iterates with ``np.ndindex`` over
-      ``self.varshape``; with ``K`` within-step events, cost is
+    - Update is vectorized over ``self.varshape`` using array operations.
+      With ``K`` within-step events, cost is
       :math:`O(|\mathrm{varshape}| \cdot K)`, plus root-search work when
       threshold is crossed.
 
@@ -313,7 +313,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_alpha_ps(in_size=(2,), I_e=220.0 * u.pA)
        ...     neu.init_state()
@@ -325,7 +325,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import brainunit as u
+       >>> import saiunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_alpha_ps(in_size=1)
        ...     neu.init_state()
@@ -388,72 +388,192 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
         self._validate_parameters()
 
-    @staticmethod
-    def _to_numpy(x, unit):
-        dftype = brainstate.environ.dftype()
-        return np.asarray(u.math.asarray(x / unit), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
-
     def _validate_parameters(self):
-        if np.any(self._to_numpy(self.V_reset, u.mV) >= self._to_numpy(self.V_th, u.mV)):
+        r"""Validate model parameters against NEST constraints.
+
+        Raises
+        ------
+        ValueError
+            If parameter inequalities or positivity constraints are violated.
+        """
+        # Skip validation when parameters are JAX tracers (e.g. during jit).
+        if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
+            return
+
+        if np.any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if self.V_min is not None and np.any(self._to_numpy(self.V_reset, u.mV) < self._to_numpy(self.V_min, u.mV)):
+        if self.V_min is not None and np.any(self.V_reset < self.V_min):
             raise ValueError('Reset potential must be greater equal minimum potential.')
-        if np.any(self._to_numpy(self.C_m, u.pF) <= 0.0):
+        if np.any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_m, u.ms) <= 0.0):
+        if np.any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self._to_numpy(self.tau_syn_ex, u.ms) <= 0.0) or np.any(self._to_numpy(self.tau_syn_in, u.ms) <= 0.0):
+        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
 
-    def init_state(self, batch_size: int = None, **kwargs):
-        V = braintools.init.param(self.V_initializer, self.varshape, batch_size)
-        zeros = u.math.zeros_like(u.math.asarray(V / u.mV))
-        spk_time = braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
-        last_step = braintools.init.param(braintools.init.Constant(-1), self.varshape, batch_size)
+    def init_state(self, **kwargs):
+        r"""Initialize persistent and short-term state variables.
+
+        Parameters
+        ----------
+        **kwargs
+            Unused compatibility parameters accepted by the base-state API.
+
+        Raises
+        ------
+        ValueError
+            If an initializer cannot be broadcast to requested shape.
+        TypeError
+            If initializer outputs have incompatible units/dtypes for the
+            corresponding state variables.
+        """
+        ditype = brainstate.environ.ditype()
+        dftype = brainstate.environ.dftype()
+
+        V = braintools.init.param(self.V_initializer, self.varshape)
+        zeros = u.math.zeros(self.varshape, dtype=V.dtype)
 
         self.V = brainstate.HiddenState(V)
         self.I_syn_ex = brainstate.ShortTermState(zeros * u.pA)
-        dftype = brainstate.environ.dftype()
-        self.dI_syn_ex = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
+        self.dI_syn_ex = brainstate.ShortTermState(u.math.zeros(self.varshape, dtype=dftype))
         self.I_syn_in = brainstate.ShortTermState(zeros * u.pA)
-        self.dI_syn_in = brainstate.ShortTermState(np.asarray(zeros, dtype=dftype))
+        self.dI_syn_in = brainstate.ShortTermState(u.math.zeros(self.varshape, dtype=dftype))
         self.y_input = brainstate.ShortTermState(zeros * u.pA)
-        self.is_refractory = brainstate.ShortTermState(np.zeros(V.shape, dtype=bool))
-        ditype = brainstate.environ.ditype()
-        self.last_spike_step = brainstate.ShortTermState(u.math.asarray(last_step, dtype=ditype))
-        self.last_spike_offset = brainstate.ShortTermState(zeros * u.ms)
-        self.last_spike_time = brainstate.ShortTermState(spk_time)
+        self.is_refractory = brainstate.ShortTermState(
+            braintools.init.param(braintools.init.Constant(False), self.varshape)
+        )
+        self.last_spike_step = brainstate.ShortTermState(
+            u.math.full(self.varshape, -1, dtype=ditype)
+        )
+        self.last_spike_offset = brainstate.ShortTermState(
+            u.math.zeros(self.varshape, dtype=dftype) * u.ms
+        )
+        self.last_spike_time = brainstate.ShortTermState(
+            u.math.full(self.varshape, -1e7 * u.ms)
+        )
 
         if self.ref_var:
-            self.refractory = brainstate.ShortTermState(np.zeros(V.shape, dtype=bool))
+            self.refractory = brainstate.ShortTermState(
+                braintools.init.param(braintools.init.Constant(False), self.varshape)
+            )
 
     def get_spike(self, V: ArrayLike = None):
+        r"""Evaluate surrogate spike output from membrane voltage.
+
+        Parameters
+        ----------
+        V : ArrayLike, optional
+            Voltage values with shape broadcastable to ``self.varshape`` and
+            units compatible with mV. If ``None``, uses current state
+            ``self.V.value``.
+
+        Returns
+        -------
+        ArrayLike
+            Surrogate spike activation produced by
+            ``spk_fun((V - V_th) / (V_th - V_reset))``.
+        """
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
 
-    def _parse_spike_events(self, spike_events: Iterable, v_shape):
+    @staticmethod
+    def _parse_spike_events(spike_events: Iterable, v_shape):
+        """Parse spike events into a list of (offset_ms, weight_np) tuples.
+
+        Parameters
+        ----------
+        spike_events : Iterable or None
+            Off-grid spike events within this step.
+        v_shape : tuple
+            Target state shape for broadcasting weights.
+
+        Returns
+        -------
+        list of (float, np.ndarray)
+            Parsed events as (offset_in_ms, weight_array) pairs.
+        """
         events = []
         if spike_events is None:
             return events
+        dftype = brainstate.environ.dftype()
         for ev in spike_events:
             if isinstance(ev, dict):
                 offs = ev.get('offset', 0.0 * u.ms)
                 w = ev.get('weight', 0.0 * u.pA)
             else:
                 offs, w = ev
-            off_ms = float(u.math.asarray(offs / u.ms))
-            dftype = brainstate.environ.dftype()
-            w_np = np.asarray(u.math.asarray(w / u.pA), dtype=dftype)
-            events.append((off_ms, np.broadcast_to(w_np, v_shape)))
+            off_ms = float(u.get_mantissa(offs / u.ms))
+            w_np = np.broadcast_to(
+                np.asarray(u.get_mantissa(w / u.pA), dtype=dftype),
+                v_shape,
+            )
+            events.append((off_ms, w_np))
         return events
+
+    def _precompute_constants(self, h, v_shape, dftype, ditype):
+        """Pre-compute constant numpy parameter arrays for use in update().
+
+        Caches all parameter-derived arrays that are invariant across
+        simulation steps (fixed dt, shape, and dtypes).  Subsequent
+        calls to update() reuse the cached arrays, eliminating per-step
+        JAX dispatch overhead for parameter conversions.
+
+        Parameters
+        ----------
+        h : float
+            Step size in ms.
+        v_shape : tuple
+            State array shape.
+        dftype : dtype
+            Float dtype for computations.
+        ditype : dtype
+            Integer dtype for step counters.
+        """
+        _tnp = lambda x, unit: np.broadcast_to(
+            np.asarray(u.get_mantissa(x / unit), dtype=dftype), v_shape
+        )
+
+        E_L = _tnp(self.E_L, u.mV)
+        refr_steps = np.broadcast_to(
+            np.asarray(np.ceil(_tnp(self.t_ref, u.ms) / h), dtype=ditype), v_shape
+        )
+        if np.any(refr_steps < 1):
+            raise ValueError('Refractory time must be at least one time step.')
+
+        self._c_E_L = E_L
+        self._c_tau_m = _tnp(self.tau_m, u.ms)
+        self._c_tau_ex = _tnp(self.tau_syn_ex, u.ms)
+        self._c_tau_in = _tnp(self.tau_syn_in, u.ms)
+        self._c_c_m = _tnp(self.C_m, u.pF)
+        self._c_i_e = _tnp(self.I_e, u.pA)
+        self._c_u_th = _tnp(self.V_th - self.E_L, u.mV)
+        self._c_u_reset = _tnp(self.V_reset - self.E_L, u.mV)
+        self._c_u_min = -np.inf * np.ones(v_shape, dtype=dftype)
+        if self.V_min is not None:
+            self._c_u_min = _tnp(self.V_min - self.E_L, u.mV)
+        self._c_refr_steps = refr_steps
+        self._c_psc_norm_ex = np.e / self._c_tau_ex
+        self._c_psc_norm_in = np.e / self._c_tau_in
+        # Cache key
+        self._c_key = (h, v_shape, dftype, ditype)
 
     @staticmethod
     def _bisect_root(f, t_hi: float):
+        """Find root of f in [0, t_hi] using bisection (64 iterations).
+
+        Parameters
+        ----------
+        f : callable
+            Scalar function to find root of.
+        t_hi : float
+            Upper bound of search interval.
+
+        Returns
+        -------
+        float
+            Approximate root location.
+        """
         lo = 0.0
         hi = float(t_hi)
         f_lo = f(lo)
@@ -471,6 +591,139 @@ class iaf_psc_alpha_ps(NESTNeuron):
                 hi = mid
             else:
                 lo = mid
+        return 0.5 * (lo + hi)
+
+    def _propagate_vectorized(self, dt_local, V_m, I_ex, dI_ex, I_in, dI_in,
+                              y0, tau_m, tau_ex, tau_in, c_m, i_e, u_min,
+                              is_refractory):
+        """Propagate all state variables forward by dt_local (vectorized).
+
+        Parameters
+        ----------
+        dt_local : np.ndarray
+            Local time step for each neuron.
+        V_m, I_ex, dI_ex, I_in, dI_in : np.ndarray
+            State variables.
+        y0 : np.ndarray
+            Buffered input current.
+        tau_m, tau_ex, tau_in, c_m, i_e : np.ndarray
+            Model parameters.
+        u_min : np.ndarray
+            Lower voltage clamp.
+        is_refractory : np.ndarray
+            Boolean refractory mask.
+
+        Returns
+        -------
+        tuple of np.ndarray
+            Updated (V_m, I_ex, dI_ex, I_in, dI_in).
+        """
+        active = dt_local > 0.0
+
+        # Membrane propagation (only for non-refractory neurons).
+        expm1_tm = np.where(active, np.expm1(-dt_local / tau_m), 0.0)
+        P30 = np.where(active, -tau_m / c_m * expm1_tm, 0.0)
+        P31e, P32e = iaf_psc_alpha._alpha_propagator_p31_p32(tau_ex, tau_m, c_m, dt_local)
+        P31i, P32i = iaf_psc_alpha._alpha_propagator_p31_p32(tau_in, tau_m, c_m, dt_local)
+
+        V_candidate = (
+            P30 * (i_e + y0)
+            + P31e * dI_ex
+            + P32e * I_ex
+            + P31i * dI_in
+            + P32i * I_in
+            + V_m * expm1_tm
+            + V_m
+        )
+        V_candidate = np.maximum(V_candidate, u_min)
+        V_new = np.where(active & ~is_refractory, V_candidate, V_m)
+
+        # Synaptic state propagation (always, regardless of refractory).
+        exp_ex = np.where(active, np.exp(-dt_local / tau_ex), 1.0)
+        exp_in = np.where(active, np.exp(-dt_local / tau_in), 1.0)
+        I_ex_new = np.where(active, exp_ex * dt_local * dI_ex + exp_ex * I_ex, I_ex)
+        dI_ex_new = np.where(active, exp_ex * dI_ex, dI_ex)
+        I_in_new = np.where(active, exp_in * dt_local * dI_in + exp_in * I_in, I_in)
+        dI_in_new = np.where(active, exp_in * dI_in, dI_in)
+
+        return V_new, I_ex_new, dI_ex_new, I_in_new, dI_in_new
+
+    def _threshold_distance_vectorized(self, dt_local, V_before, I_ex_before,
+                                       dI_ex_before, I_in_before, dI_in_before,
+                                       y0, tau_m, tau_ex, tau_in, c_m, i_e, u_th):
+        """Compute threshold distance after propagation by dt_local (vectorized).
+
+        Parameters
+        ----------
+        dt_local : np.ndarray or float
+            Local time step.
+        V_before, I_ex_before, dI_ex_before, I_in_before, dI_in_before : np.ndarray
+            State variables before propagation.
+        y0 : np.ndarray
+            Buffered input current.
+        tau_m, tau_ex, tau_in, c_m, i_e : np.ndarray
+            Model parameters.
+        u_th : np.ndarray
+            Threshold in relative coordinates.
+
+        Returns
+        -------
+        np.ndarray
+            V(t + dt_local) - u_th for each neuron.
+        """
+        expm1_tm = np.expm1(-dt_local / tau_m)
+        P30 = -tau_m / c_m * expm1_tm
+        P31e, P32e = iaf_psc_alpha._alpha_propagator_p31_p32(tau_ex, tau_m, c_m, dt_local)
+        P31i, P32i = iaf_psc_alpha._alpha_propagator_p31_p32(tau_in, tau_m, c_m, dt_local)
+        V_r = (
+            P30 * (i_e + y0)
+            + P31e * dI_ex_before
+            + P32e * I_ex_before
+            + P31i * dI_in_before
+            + P32i * I_in_before
+            + V_before * expm1_tm
+            + V_before
+        )
+        return V_r - u_th
+
+    def _bisect_vectorized(self, t_hi, V_before, I_ex_before, dI_ex_before,
+                           I_in_before, dI_in_before, y0, tau_m, tau_ex,
+                           tau_in, c_m, i_e, u_th, mask):
+        """Vectorized bisection to find threshold crossing time.
+
+        Parameters
+        ----------
+        t_hi : np.ndarray
+            Upper bound of search interval for each neuron.
+        V_before, I_ex_before, dI_ex_before, I_in_before, dI_in_before : np.ndarray
+            State variables before the ministep.
+        y0 : np.ndarray
+            Buffered input current.
+        tau_m, tau_ex, tau_in, c_m, i_e : np.ndarray
+            Model parameters.
+        u_th : np.ndarray
+            Threshold in relative coordinates.
+        mask : np.ndarray
+            Boolean mask of neurons to perform bisection on.
+
+        Returns
+        -------
+        np.ndarray
+            Approximate crossing times for each neuron (only valid where mask is True).
+        """
+        lo = np.zeros_like(t_hi)
+        hi = t_hi.copy()
+
+        for _ in range(64):
+            mid = 0.5 * (lo + hi)
+            f_mid = self._threshold_distance_vectorized(
+                mid, V_before, I_ex_before, dI_ex_before,
+                I_in_before, dI_in_before, y0, tau_m, tau_ex, tau_in, c_m, i_e, u_th,
+            )
+            crossed = f_mid > 0.0
+            hi = np.where(mask & crossed, mid, hi)
+            lo = np.where(mask & ~crossed, mid, lo)
+
         return 0.5 * (lo + hi)
 
     def update(self, x=0. * u.pA, spike_events=None):
@@ -518,243 +771,211 @@ class iaf_psc_alpha_ps(NESTNeuron):
         """
         t = brainstate.environ.get('t')
         dt_q = brainstate.environ.get_dt()
-        h = float(u.math.asarray(dt_q / u.ms))
-        t_ms = float(u.math.asarray(t / u.ms))
+        dftype = brainstate.environ.dftype()
+        ditype = brainstate.environ.ditype()
+        h = float(u.get_mantissa(dt_q / u.ms))
+        t_ms = float(u.get_mantissa(t / u.ms))
         step_idx = int(round(t_ms / h))
         eps = np.finfo(np.float64).eps
 
         v_shape = self.V.value.shape
 
-        E_L = self._broadcast_to_state(self._to_numpy(self.E_L, u.mV), v_shape)
-        V_m = self._broadcast_to_state(self._to_numpy(self.V.value, u.mV), v_shape) - E_L
-        I_ex = self._broadcast_to_state(self._to_numpy(self.I_syn_ex.value, u.pA), v_shape)
-        dftype = brainstate.environ.dftype()
-        dI_ex = self._broadcast_to_state(np.asarray(self.dI_syn_ex.value, dtype=dftype), v_shape)
-        I_in = self._broadcast_to_state(self._to_numpy(self.I_syn_in.value, u.pA), v_shape)
-        dI_in = self._broadcast_to_state(np.asarray(self.dI_syn_in.value, dtype=dftype), v_shape)
-        y_input = self._broadcast_to_state(self._to_numpy(self.y_input.value, u.pA), v_shape)
+        # Use cached constant parameter arrays; recompute only when key changes.
+        if not hasattr(self, '_c_key') or self._c_key != (h, v_shape, dftype, ditype):
+            self._precompute_constants(h, v_shape, dftype, ditype)
 
-        is_refractory = self._broadcast_to_state(np.asarray(u.math.asarray(self.is_refractory.value), dtype=bool),
-                                                 v_shape)
-        ditype = brainstate.environ.ditype()
-        last_spike_step = self._broadcast_to_state(
-            np.asarray(u.math.asarray(self.last_spike_step.value), dtype=ditype), v_shape)
-        last_spike_offset = self._broadcast_to_state(self._to_numpy(self.last_spike_offset.value, u.ms), v_shape)
-        last_spike_time_prev = self._broadcast_to_state(self._to_numpy(self.last_spike_time.value, u.ms), v_shape)
+        E_L = self._c_E_L
+        tau_m = self._c_tau_m
+        tau_ex = self._c_tau_ex
+        tau_in = self._c_tau_in
+        c_m = self._c_c_m
+        i_e = self._c_i_e
+        u_th = self._c_u_th
+        u_reset = self._c_u_reset
+        u_min = self._c_u_min
+        refr_steps = self._c_refr_steps
+        psc_norm_ex = self._c_psc_norm_ex
+        psc_norm_in = self._c_psc_norm_in
 
-        tau_m = self._broadcast_to_state(self._to_numpy(self.tau_m, u.ms), v_shape)
-        tau_ex = self._broadcast_to_state(self._to_numpy(self.tau_syn_ex, u.ms), v_shape)
-        tau_in = self._broadcast_to_state(self._to_numpy(self.tau_syn_in, u.ms), v_shape)
-        c_m = self._broadcast_to_state(self._to_numpy(self.C_m, u.pF), v_shape)
-        i_e = self._broadcast_to_state(self._to_numpy(self.I_e, u.pA), v_shape)
-        u_th = self._broadcast_to_state(self._to_numpy(self.V_th - self.E_L, u.mV), v_shape)
-        u_reset = self._broadcast_to_state(self._to_numpy(self.V_reset - self.E_L, u.mV), v_shape)
-        u_min = -np.inf * np.ones(v_shape, dtype=dftype)
-        if self.V_min is not None:
-            u_min = self._broadcast_to_state(self._to_numpy(self.V_min - self.E_L, u.mV), v_shape)
+        # Convert per-step state arrays to unitless numpy.
+        _tn_state = lambda x, unit: np.broadcast_to(
+            np.asarray(u.get_mantissa(x / unit), dtype=dftype), v_shape
+        )
 
-        refr_steps = self._broadcast_to_state(
-            np.asarray(np.ceil(self._to_numpy(self.t_ref, u.ms) / h), dtype=ditype),
+        V_m = _tn_state(self.V.value, u.mV) - E_L
+        I_ex = _tn_state(self.I_syn_ex.value, u.pA)
+        dI_ex = np.broadcast_to(np.asarray(self.dI_syn_ex.value, dtype=dftype), v_shape)
+        I_in = _tn_state(self.I_syn_in.value, u.pA)
+        dI_in = np.broadcast_to(np.asarray(self.dI_syn_in.value, dtype=dftype), v_shape)
+        y_input = _tn_state(self.y_input.value, u.pA)
+
+        is_refractory = np.broadcast_to(
+            np.asarray(self.is_refractory.value, dtype=bool), v_shape
+        ).copy()
+        last_spike_step = np.broadcast_to(
+            np.asarray(self.last_spike_step.value, dtype=ditype), v_shape
+        ).copy()
+        last_spike_offset = _tn_state(self.last_spike_offset.value, u.ms).copy()
+        last_spike_time_prev = _tn_state(self.last_spike_time.value, u.ms).copy()
+
+        # Parse spike events and add on-grid delta inputs.
+        events = self._parse_spike_events(spike_events, v_shape)
+        on_grid = np.broadcast_to(
+            np.asarray(u.get_mantissa(self.sum_delta_inputs(0. * u.pA) / u.pA), dtype=dftype),
             v_shape,
         )
-        if np.any(refr_steps < 1):
-            raise ValueError('Refractory time must be at least one time step.')
-
-        psc_norm_ex = math.e / tau_ex
-        psc_norm_in = math.e / tau_in
-
-        events = self._parse_spike_events(spike_events, v_shape)
-        on_grid = self._broadcast_to_state(self._to_numpy(self.sum_delta_inputs(0. * u.pA), u.pA), v_shape)
         events.append((0.0, on_grid))
         events.sort(key=lambda z: z[0], reverse=True)
         for off, _ in events:
             if off < 0.0 or off > h:
                 raise ValueError('All spike event offsets must satisfy 0 <= offset <= dt.')
 
-        y_input_next = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.V.value), u.pA), v_shape)
+        # Current input for next step (one-step delay).
+        y_input_next = np.broadcast_to(
+            np.asarray(u.get_mantissa(self.sum_current_inputs(x, self.V.value) / u.pA), dtype=dftype),
+            v_shape,
+        )
 
-        y_input_new = np.empty_like(y_input)
-        I_ex_new = np.empty_like(I_ex)
-        dI_ex_new = np.empty_like(dI_ex)
-        I_in_new = np.empty_like(I_in)
-        dI_in_new = np.empty_like(dI_in)
-        V_new = np.empty_like(V_m)
-        refr_new = np.empty_like(is_refractory)
-        last_step_new = np.empty_like(last_spike_step)
-        last_offset_new = np.empty_like(last_spike_offset)
-        last_time_new = np.empty_like(last_spike_time_prev)
+        # Working copies for mutation during event processing.
+        V_m = V_m.copy()
+        I_ex = I_ex.copy()
+        dI_ex = dI_ex.copy()
+        I_in = I_in.copy()
+        dI_in = dI_in.copy()
+
         spike_mask = np.zeros(v_shape, dtype=bool)
-        v_for_spike = np.empty_like(V_m)
 
-        for idx in np.ndindex(v_shape):
-            y0_i = float(y_input[idx])
-            Ie_i = float(I_ex[idx])
-            dIe_i = float(dI_ex[idx])
-            Ii_i = float(I_in[idx])
-            dIi_i = float(dI_in[idx])
-            V_i = float(V_m[idx])
-            refr_i = bool(is_refractory[idx])
-            last_step_i = int(last_spike_step[idx])
-            last_off_i = float(last_spike_offset[idx])
-            spike_time_i = float(last_spike_time_prev[idx])
+        # --- Handle neurons already above threshold at start of step ---
+        instant_spike = (~is_refractory) & (V_m >= u_th)
+        if np.any(instant_spike):
+            spike_off = h * (1.0 - eps)
+            last_spike_step = np.where(instant_spike, step_idx + 1, last_spike_step)
+            last_spike_offset = np.where(instant_spike, spike_off, last_spike_offset)
+            V_m = np.where(instant_spike, u_reset, V_m)
+            is_refractory = is_refractory | instant_spike
+            last_spike_time_prev = np.where(instant_spike, t_ms + h - spike_off, last_spike_time_prev)
+            spike_mask = spike_mask | instant_spike
 
-            tau_m_i = float(tau_m[idx])
-            tau_ex_i = float(tau_ex[idx])
-            tau_in_i = float(tau_in[idx])
-            c_m_i = float(c_m[idx])
-            i_e_i = float(i_e[idx])
-            u_th_i = float(u_th[idx])
-            u_reset_i = float(u_reset[idx])
-            u_min_i = float(u_min[idx])
-            refr_steps_i = int(refr_steps[idx])
-            pnorm_ex = float(psc_norm_ex[idx])
-            pnorm_in = float(psc_norm_in[idx])
+        # --- Build local events including refractory-release pseudo-event ---
+        # Determine which neurons need a refractory-release event.
+        refr_release = is_refractory & ((step_idx + 1 - last_spike_step) == refr_steps)
+        refr_release_offset = np.where(refr_release, last_spike_offset, -1.0)
 
-            did_spike = False
-            before = [y0_i, Ie_i, dIe_i, Ii_i, dIi_i, V_i]
+        # Combine external events with refractory-release events and sort.
+        # Process events from largest offset (step start) to smallest (step end).
+        all_offsets = [off for off, _ in events]
+        if np.any(refr_release):
+            unique_refr_offsets = np.unique(refr_release_offset[refr_release])
+            all_offsets = sorted(set(all_offsets) | set(unique_refr_offsets.tolist()), reverse=True)
+        else:
+            all_offsets = sorted(set(all_offsets), reverse=True)
 
-            def set_before():
-                before[0] = y0_i
-                before[1] = Ie_i
-                before[2] = dIe_i
-                before[3] = Ii_i
-                before[4] = dIi_i
-                before[5] = V_i
-
-            def threshold_distance(dt_local):
-                expm1_tm = math.expm1(-dt_local / tau_m_i)
-                P30 = -tau_m_i / c_m_i * expm1_tm
-                P31e, P32e = iaf_psc_alpha._alpha_propagator_p31_p32(
-                    np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local
-                )
-                P31i, P32i = iaf_psc_alpha._alpha_propagator_p31_p32(
-                    np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local
-                )
-                V_r = (
-                    P30 * (i_e_i + before[0])
-                    + P31e * before[2]
-                    + P32e * before[1]
-                    + P31i * before[4]
-                    + P32i * before[3]
-                    + before[5] * expm1_tm
-                    + before[5]
-                )
-                return V_r - u_th_i
-
-            def propagate(dt_local):
-                nonlocal Ie_i, dIe_i, Ii_i, dIi_i, V_i
-                if dt_local <= 0.0:
-                    return
-                if not refr_i:
-                    expm1_tm = math.expm1(-dt_local / tau_m_i)
-                    P30 = -tau_m_i / c_m_i * expm1_tm
-                    P31e, P32e = iaf_psc_alpha._alpha_propagator_p31_p32(
-                        np.asarray(tau_ex_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local
-                    )
-                    P31i, P32i = iaf_psc_alpha._alpha_propagator_p31_p32(
-                        np.asarray(tau_in_i), np.asarray(tau_m_i), np.asarray(c_m_i), dt_local
-                    )
-                    V_i = (
-                        P30 * (i_e_i + y0_i)
-                        + P31e * dIe_i
-                        + P32e * Ie_i
-                        + P31i * dIi_i
-                        + P32i * Ii_i
-                        + V_i * expm1_tm
-                        + V_i
-                    )
-                    V_i = max(V_i, u_min_i)
-
-                exp_ex = math.exp(-dt_local / tau_ex_i)
-                exp_in = math.exp(-dt_local / tau_in_i)
-                Ie_i = exp_ex * dt_local * dIe_i + exp_ex * Ie_i
-                dIe_i = exp_ex * dIe_i
-                Ii_i = exp_in * dt_local * dIi_i + exp_in * Ii_i
-                dIi_i = exp_in * dIi_i
-
-            def emit_spike(t0, dt_local):
-                nonlocal V_i, refr_i, last_step_i, last_off_i, spike_time_i, did_spike
-                root = self._bisect_root(threshold_distance, dt_local)
-                spike_off = h - (t0 + root)
-                spike_off = min(h, max(0.0, spike_off))
-                last_step_i = step_idx + 1
-                last_off_i = spike_off
-                V_i = u_reset_i
-                refr_i = True
-                spike_time_i = t_ms + h - spike_off
-                did_spike = True
-
-            def emit_instant_spike(spike_off):
-                nonlocal V_i, refr_i, last_step_i, last_off_i, spike_time_i, did_spike
-                so = min(h, max(0.0, spike_off))
-                last_step_i = step_idx + 1
-                last_off_i = so
-                V_i = u_reset_i
-                refr_i = True
-                spike_time_i = t_ms + h - so
-                did_spike = True
-
-            if (not refr_i) and (V_i >= u_th_i):
-                emit_instant_spike(h * (1.0 - eps))
-
-            local_events = [(off, w[idx], False) for off, w in events]
-            if refr_i and (step_idx + 1 - last_step_i == refr_steps_i):
-                local_events.append((last_off_i, 0.0, True))
-            local_events.sort(key=lambda z: z[0], reverse=True)
-
-            last_off = h
-            if len(local_events) == 0:
-                set_before()
-                propagate(h)
-                if V_i >= u_th_i:
-                    emit_spike(0.0, h)
+        # Build event lookup: for each offset, get the weight array (if any).
+        event_weight_map = {}
+        for off, w in events:
+            if off in event_weight_map:
+                event_weight_map[off] = event_weight_map[off] + w
             else:
-                for ev_off, ev_w, end_of_refract in local_events:
-                    ministep = last_off - ev_off
-                    if ministep > 0.0:
-                        set_before()
-                        propagate(ministep)
-                        if V_i >= u_th_i:
-                            emit_spike(h - last_off, ministep)
-                    if end_of_refract:
-                        refr_i = False
-                    else:
-                        if ev_w >= 0.0:
-                            dIe_i += pnorm_ex * ev_w
-                        else:
-                            dIi_i += pnorm_in * ev_w
-                    set_before()
-                    last_off = ev_off
-                if last_off > 0.0:
-                    set_before()
-                    propagate(last_off)
-                    if V_i >= u_th_i:
-                        emit_spike(h - last_off, last_off)
+                event_weight_map[off] = w.copy()
 
-            y0_i = float(y_input_next[idx])
-            y_input_new[idx] = y0_i
-            I_ex_new[idx] = Ie_i
-            dI_ex_new[idx] = dIe_i
-            I_in_new[idx] = Ii_i
-            dI_in_new[idx] = dIi_i
-            V_new[idx] = V_i
-            refr_new[idx] = refr_i
-            last_step_new[idx] = last_step_i
-            last_offset_new[idx] = last_off_i
-            last_time_new[idx] = spike_time_i
-            spike_mask[idx] = did_spike
-            v_for_spike[idx] = (u_th_i + 1e-12) if did_spike else min(V_i, u_th_i - 1e-12)
+        # Process all events in descending offset order.
+        last_off = np.full(v_shape, h, dtype=dftype)
 
-        self.y_input.value = y_input_new * u.pA
-        self.I_syn_ex.value = I_ex_new * u.pA
-        self.dI_syn_ex.value = dI_ex_new
-        self.I_syn_in.value = I_in_new * u.pA
-        self.dI_syn_in.value = dI_in_new
-        self.V.value = (V_new + E_L) * u.mV
-        self.is_refractory.value = jnp.asarray(refr_new, dtype=bool)
-        self.last_spike_step.value = jnp.asarray(last_step_new, dtype=ditype)
-        self.last_spike_offset.value = last_offset_new * u.ms
-        self.last_spike_time.value = jax.lax.stop_gradient(last_time_new * u.ms)
+        for ev_off in all_offsets:
+            ministep = last_off - ev_off
+
+            # Propagate where ministep > 0.
+            propagate_mask = ministep > 0.0
+            if np.any(propagate_mask):
+                dt_local = np.where(propagate_mask, ministep, 0.0)
+                V_before = V_m.copy()
+                I_ex_before = I_ex.copy()
+                dI_ex_before = dI_ex.copy()
+                I_in_before = I_in.copy()
+                dI_in_before = dI_in.copy()
+
+                V_m, I_ex, dI_ex, I_in, dI_in = self._propagate_vectorized(
+                    dt_local, V_m, I_ex, dI_ex, I_in, dI_in,
+                    y_input, tau_m, tau_ex, tau_in, c_m, i_e, u_min, is_refractory,
+                )
+
+                # Check for threshold crossing.
+                crossed = propagate_mask & (~is_refractory) & (V_m >= u_th)
+                if np.any(crossed):
+                    root = self._bisect_vectorized(
+                        dt_local, V_before, I_ex_before, dI_ex_before,
+                        I_in_before, dI_in_before, y_input, tau_m, tau_ex,
+                        tau_in, c_m, i_e, u_th, crossed,
+                    )
+                    spike_off = h - ((h - last_off) + root)
+                    spike_off = np.clip(spike_off, 0.0, h)
+                    last_spike_step = np.where(crossed, step_idx + 1, last_spike_step)
+                    last_spike_offset = np.where(crossed, spike_off, last_spike_offset)
+                    V_m = np.where(crossed, u_reset, V_m)
+                    is_refractory = is_refractory | crossed
+                    last_spike_time_prev = np.where(crossed, t_ms + h - spike_off, last_spike_time_prev)
+                    spike_mask = spike_mask | crossed
+
+            # Apply event: refractory release or synaptic weight.
+            is_refr_release_here = refr_release & (np.abs(refr_release_offset - ev_off) < 1e-15)
+            is_refractory = np.where(is_refr_release_here, False, is_refractory)
+
+            if ev_off in event_weight_map:
+                ev_w = event_weight_map[ev_off]
+                # Non-refractory-release neurons get synaptic input.
+                apply_weight = ~is_refr_release_here
+                dI_ex = np.where(apply_weight & (ev_w >= 0.0), dI_ex + psc_norm_ex * ev_w, dI_ex)
+                dI_in = np.where(apply_weight & (ev_w < 0.0), dI_in + psc_norm_in * ev_w, dI_in)
+
+            last_off = np.where(propagate_mask | is_refr_release_here, ev_off, last_off)
+
+        # --- Final propagation from last event to step end ---
+        final_ministep = last_off
+        propagate_final = final_ministep > 0.0
+        if np.any(propagate_final):
+            dt_local = np.where(propagate_final, final_ministep, 0.0)
+            V_before = V_m.copy()
+            I_ex_before = I_ex.copy()
+            dI_ex_before = dI_ex.copy()
+            I_in_before = I_in.copy()
+            dI_in_before = dI_in.copy()
+
+            V_m, I_ex, dI_ex, I_in, dI_in = self._propagate_vectorized(
+                dt_local, V_m, I_ex, dI_ex, I_in, dI_in,
+                y_input, tau_m, tau_ex, tau_in, c_m, i_e, u_min, is_refractory,
+            )
+
+            # Check for threshold crossing in final segment.
+            crossed = propagate_final & (~is_refractory) & (V_m >= u_th)
+            if np.any(crossed):
+                root = self._bisect_vectorized(
+                    dt_local, V_before, I_ex_before, dI_ex_before,
+                    I_in_before, dI_in_before, y_input, tau_m, tau_ex,
+                    tau_in, c_m, i_e, u_th, crossed,
+                )
+                spike_off = h - ((h - last_off) + root)
+                spike_off = np.clip(spike_off, 0.0, h)
+                last_spike_step = np.where(crossed, step_idx + 1, last_spike_step)
+                last_spike_offset = np.where(crossed, spike_off, last_spike_offset)
+                V_m = np.where(crossed, u_reset, V_m)
+                is_refractory = is_refractory | crossed
+                last_spike_time_prev = np.where(crossed, t_ms + h - spike_off, last_spike_time_prev)
+                spike_mask = spike_mask | crossed
+
+        # Construct spike output voltage for surrogate gradient.
+        v_for_spike = np.where(spike_mask, u_th + 1e-12, np.minimum(V_m, u_th - 1e-12))
+
+        # Write back state.
+        self.y_input.value = y_input_next * u.pA
+        self.I_syn_ex.value = I_ex * u.pA
+        self.dI_syn_ex.value = dI_ex
+        self.I_syn_in.value = I_in * u.pA
+        self.dI_syn_in.value = dI_in
+        self.V.value = (V_m + E_L) * u.mV
+        self.is_refractory.value = jnp.asarray(is_refractory, dtype=bool)
+        self.last_spike_step.value = jnp.asarray(last_spike_step, dtype=ditype)
+        self.last_spike_offset.value = last_spike_offset * u.ms
+        self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time_prev * u.ms)
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.is_refractory.value)
 
