@@ -217,9 +217,10 @@ class TestIAFPscDeltaPS(unittest.TestCase):
                     break
 
             self.assertIsNotNone(release_step)
-            # Model computes v_i in float64, but JAX stores as float32 (x64 disabled).
-            # Round expected to float32 to match stored precision.
-            expected_v = float(np.float32(-70.0 + buffered))
+            # Round expected value to the model's active floating-point dtype
+            # so the comparison works under both float32 and float64 precision.
+            dftype = brainstate.environ.dftype()
+            expected_v = float(np.asarray(-70.0 + buffered, dtype=dftype))
             self.assertAlmostEqual(float((neuron.V.value / u.mV)[0]), expected_v, delta=1e-9)
             self.assertAlmostEqual(float((neuron.refractory_spike_buffer.value / u.mV)[0]), 0.0, delta=1e-9)
 
