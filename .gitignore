@@ -221,3 +221,8 @@ cython_debug/
 /codex_logs_numpy_doc/
 /claude_logs_numpy_doc/
 /docs/jupyter_execute/
+
+# brainx-sphinx-header build artifacts
+docs/_brand/
+docs/_static/css/brainx-header.css
+docs/_static/js/brainx-header.js

@@ -54,8 +54,13 @@ extensions = [
     'sphinx_thebe',
     'sphinx_design',
     'sphinx_math_dollar',
+    'brainx_sphinx_header',
     # 'sphinx-mathjax-offline',
 ]
+
+
+
+html_baseurl = 'https://brainx.chaobrain.com/brainpy-state/'
 
 # Prefer NumPy-style docstrings across the API docs.
 napoleon_google_docstring = False
