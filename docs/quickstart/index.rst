@@ -15,7 +15,7 @@ This quickstart guide covers:
 
 - **Installation**: How to install BrainPy with the appropriate backend (CPU, GPU, TPU) for your needs
 - **5-Minute Tutorial**: A hands-on introduction to building your first neural network with ``brainpy.state``
-- **Core Concepts**: Understanding the fundamental concepts of State-based programming and how it differs from traditional approaches
+- **BrainPy-style Modeling Guide**: Understanding the fundamental concepts of building neural models with the BrainPy-style API
 
 
 Getting started
@@ -25,7 +25,7 @@ If you're new to ``brainpy.state``, we recommend following these steps:
 
 1. Start with :doc:`installation` to set up your environment
 2. Follow the :doc:`5min-tutorial` to build your first model
-3. Review :doc:`../core-concepts/index` to understand the underlying principles
+3. Review the :doc:`../brainpy-guide/index` to understand the underlying principles
 
 For experienced users, you can jump directly to the concepts overview or explore the tutorials and examples sections.
 

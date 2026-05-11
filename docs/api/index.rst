@@ -1,127 +1,108 @@
+:orphan:
+
 API Reference
 =============
 
-Complete API reference for ``brainpy.state``.
-
-The API is organized into three categories:
-
-- **Base Models** — abstract base classes that all models inherit from
-- **BrainPy-style Models** — high-level, composable building blocks for the `BrainPy <https://brainpy.readthedocs.io/>`_ models
-- **NEST-Compatible Models** — faithful re-implementations of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ models
+Complete API reference for ``brainpy.state``. The library exposes two distinct
+model families with different maturity levels — see the
+:doc:`landing page </index>` for the full maturity table.
 
 
-Organization
-------------
+Stable API
+----------
 
-**Base Models**
+The Stable API is the recommended entry point for production work and
+surrogate-gradient training. Public interfaces are stable for the 0.0.x series.
+
+**Base classes**
 
 .. grid:: 1 2 2 3
 
    .. grid-item-card:: :material-regular:`foundation;2em` Base Classes
       :link: base.html
 
-      Abstract base classes: Dynamics, Neuron, Synapse
+      Abstract base classes shared by all models: ``Dynamics``, ``Neuron``,
+      ``Synapse``.
 
-   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
-      :link: nest-base.html
-
-      NEST marker bases: NESTNeuron, NESTSynapse, NESTPlasticity, NESTDevice
-
-
-**BrainPy-style Models**
+**BrainPy-style models**
 
 .. grid:: 1 2 2 3
 
    .. grid-item-card:: :material-regular:`psychology;2em` Neurons
       :link: brainpy-neurons.html
 
-      Spiking neuron models (LIF, ALIF, Izhikevich, HH, etc.)
+      Spiking neuron models (LIF, ALIF, AdEx, HH, Izhikevich, …).
 
    .. grid-item-card:: :material-regular:`timeline;2em` Synapses
       :link: brainpy-synapses.html
 
-      Synaptic dynamics (Expon, Alpha, AMPA, GABA, NMDA)
+      Synaptic dynamics (Expon, Alpha, AMPA, GABA, NMDA).
 
    .. grid-item-card:: :material-regular:`account_tree;2em` Projections
       :link: brainpy-projections.html
 
-      Connect neural populations (AlignPostProj, DeltaProj, etc.)
+      Connect neural populations (``AlignPostProj``, ``DeltaProj``, …).
 
    .. grid-item-card:: :material-regular:`output;2em` Synaptic Outputs
       :link: brainpy-synouts.html
 
-      Convert conductances to currents (COBA, CUBA, MgBlock)
+      Convert conductances to currents (COBA, CUBA, MgBlock).
 
    .. grid-item-card:: :material-regular:`psychology_alt;2em` Short-Term Plasticity
       :link: brainpy-plasticity.html
 
-      Short-term synaptic plasticity (STP, STD)
+      Short-term synaptic plasticity (STP, STD).
 
    .. grid-item-card:: :material-regular:`sensors;2em` Readouts
       :link: brainpy-readouts.html
 
-      Readout layers (LeakyRateReadout)
+      Readout layers (``LeakyRateReadout``).
 
    .. grid-item-card:: :material-regular:`input;2em` Input Generators
       :link: brainpy-inputs.html
 
-      Spike and current generators (PoissonSpike, SpikeTime)
+      Spike and current generators (``PoissonSpike``, ``SpikeTime``).
 
 
-**NEST-Compatible Models**
+Experimental API (NEST-Compatible)
+----------------------------------
+
+.. warning::
+
+   The NEST-compatible model family is **under active development**. Parameter
+   names, defaults, numerical behavior, and the set of available models may
+   change without notice across 0.0.x releases. Start with the
+   :doc:`/nest-status/index` for current scope and limitations.
 
 .. grid:: 1 2 2 3
+
+   .. grid-item-card:: :material-regular:`info;2em` NEST-style Status
+      :link: ../nest-status/index.html
+
+      Scope, limitations, ongoing migration, and what users should not yet
+      rely on.
+
+   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
+      :link: nest-base.html
+
+      ``NESTNeuron``, ``NESTSynapse``, ``NESTPlasticity``, ``NESTDevice``.
 
    .. grid-item-card:: :material-regular:`hub;2em` NEST Neurons
       :link: nest-neurons.html
 
-      IAF, AdEx, GIF, GLIF, HH, Izhikevich, rate, and binary neurons
+      IAF, AdEx, GIF, GLIF, HH, Izhikevich, rate, and binary neurons.
 
    .. grid-item-card:: :material-regular:`sync_alt;2em` NEST Synapses
       :link: nest-synapses.html
 
-      Static synapses, gap junctions, and special connections
+      Static synapses, gap junctions, and special connections.
 
    .. grid-item-card:: :material-regular:`auto_awesome;2em` NEST Plasticity
       :link: nest-plasticity.html
 
-      STP, STDP, and voltage-based learning rules
+      STDP, STP, and voltage-based learning rules.
 
    .. grid-item-card:: :material-regular:`developer_board;2em` NEST Devices
       :link: nest-devices.html
 
-      Generators, recorders, and detectors
-
-
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: Base Models
-
-   base
-   nest-base
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: BrainPy-style Models
-
-   brainpy-neurons.rst
-   brainpy-synapses.rst
-   brainpy-projections.rst
-   brainpy-synouts.rst
-   brainpy-plasticity.rst
-   brainpy-readouts.rst
-   brainpy-inputs.rst
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: NEST-Compatible Models
-
-   nest-neurons
-   nest-synapses
-   nest-plasticity
-   nest-devices
+      Generators, recorders, and detectors.

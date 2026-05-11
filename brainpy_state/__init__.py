@@ -40,8 +40,7 @@ def _check_brainpy_compatibility():
 _check_brainpy_compatibility()
 del _check_brainpy_compatibility
 
-__version__ = "0.0.4"
-__version_info__ = tuple(map(int, __version__.split(".")))
+from ._version import __version_info__, __version__
 
 # =============================================================================
 # Base Models
@@ -98,6 +97,7 @@ from ._nest import (
     NESTSynapse,
     NESTDevice,
     NESTNeuron,
+    NESTPlasticity,
 
     # Stimulation devices - Current generators
     ac_generator,
@@ -318,7 +318,7 @@ __all__ = [
     # =========================================================================
 
     # Base classes
-    'NESTDevice', 'NESTNeuron', 'NESTSynapse',
+    'NESTDevice', 'NESTNeuron', 'NESTSynapse', 'NESTPlasticity',
 
     # Stimulation devices - Current generators
     'ac_generator',
