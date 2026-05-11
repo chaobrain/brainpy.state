@@ -7,7 +7,7 @@ build-backend = "flit_core.buildapi"
 name = "brainpy_state"
 description = "brainpy.state: stateful spiking neural network models in BrainPy"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "BrainX Team", email = "chao.brain@qq.com" }
 ]
@@ -18,7 +18,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -54,7 +53,7 @@ name = "brainpy_state"
 
 [project.urls]
 "Bug Tracker" = "https://github.com/chaobrain/brainpy.state/issues"
-"Documentation" = "https://brainpy-state.readthedocs.io/"
+"Documentation" = "https://brainx.chaobrain.com/brainpy-state/"
 "Source Code" = "https://github.com/chaobrain/brainpy.state"
 
 

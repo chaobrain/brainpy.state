@@ -18,7 +18,7 @@ Install the latest version of ``brainpy.state``:
 
 .. code-block:: bash
 
-   pip install brainpy-state -U
+   pip install brainpy.state -U
 
 This will install brainpy.state with CPU support by default.
 
@@ -34,7 +34,7 @@ For CPU-only installations:
 
 .. code-block:: bash
 
-   pip install brainpy-state[cpu] -U
+   pip install brainpy.state[cpu] -U
 
 This is suitable for development, testing, and small-scale simulations.
 
@@ -47,13 +47,13 @@ For NVIDIA GPU acceleration:
 
 .. code-block:: bash
 
-   pip install brainpy-state[cuda12] -U
+   pip install brainpy.state[cuda12] -U
 
 **CUDA 13.x:**
 
 .. code-block:: bash
 
-   pip install brainpy-state[cuda13] -U
+   pip install brainpy.state[cuda13] -U
 
 .. note::
    Make sure you have the appropriate CUDA toolkit installed on your system before installing the GPU version.
@@ -65,7 +65,7 @@ For Google Cloud TPU support:
 
 .. code-block:: bash
 
-   pip install brainpy-state[tpu] -U
+   pip install brainpy.state[tpu] -U
 
 This is typically used when running on Google Cloud Platform or Colab with TPU runtime.
 
@@ -80,7 +80,7 @@ To install ``brainpy.state`` along with the entire ecosystem of tools:
 
 This includes:
 
-- ``brainpy-state``: Main framework
+- ``brainpy.state``: Main framework
 - ``brainstate``: State management and compilation backend
 - ``saiunit``: Physical units system
 - ``braintools``: Utilities and tools
@@ -93,12 +93,13 @@ To verify that ``brainpy.state`` is installed correctly:
 
 .. code-block:: python
 
+   import brainpy_state
    import brainpy.state
    import brainstate
    import saiunit as u
 
-   print(f"brainpy.state version: {brainpy.__version__}")
-   print(f"BrainState version: {brainstate.__version__}")
+   print(f"brainpy.state version: {brainpy_state.__version__}")
+   print(f"brainstate version: {brainstate.__version__}")
 
    # Test basic functionality
    neuron = brainpy.state.LIF(10)
@@ -141,8 +142,8 @@ If you're upgrading from a previous version, you might need to uninstall the old
 
 .. code-block:: bash
 
-   pip uninstall brainpy-state
-   pip install brainpy-state -U
+   pip uninstall brainpy.state
+   pip install brainpy.state -U
 
 Getting Help
 ~~~~~~~~~~~~
@@ -150,7 +151,7 @@ Getting Help
 If you encounter issues:
 
 - Check the `GitHub Issues <https://github.com/chaobrain/brainpy.state/issues>`_
-- Read the documentation at `https://brainpy-state.readthedocs.io/ <https://brainpy-state.readthedocs.io/>`_
+- Read the documentation at `https://brainx.chaobrain.com/brainpy-state/ <https://brainx.chaobrain.com/brainpy-state/>`_
 - Join our community discussions
 
 Next Steps
@@ -159,5 +160,5 @@ Next Steps
 Now that you have brainpy.state installed, you can:
 
 - Follow the :doc:`5-minute tutorial <5min-tutorial>` for a quick introduction
-- Read about :doc:`core concepts <../core-concepts/index>` to understand brainpy.state's architecture
+- Read the :doc:`BrainPy-style modeling guide <../brainpy-guide/index>` to understand brainpy.state's architecture
 - Explore the `examples <https://github.com/chaobrain/brainpy.state/tree/main/examples>`_ for detailed guides

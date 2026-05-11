@@ -15,7 +15,7 @@ Thank you for your interest in contributing to brainpy.state! We welcome contrib
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to brainpy@foxmail.com.
+This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to chao.brain@qq.com.
 
 ## How Can I Contribute?
 
@@ -215,13 +215,68 @@ pytest --cov=brainpy_state brainpy_state/
 - Keep the API reference up to date
 - Fix typos and improve clarity
 
-For comprehensive contribution guidelines, see our [detailed documentation](https://brainpy-state.readthedocs.io/).
+### Documenting new APIs
+
+Every new public class or function must ship with documentation:
+
+- Use **NumPy-style docstrings** with `Parameters`, `Returns` (or `Yields`),
+  and at least one `Examples` block. The project's Sphinx config sets
+  `napoleon_numpy_docstring = True` and registers many custom sections
+  (e.g. `State Variables`, `Mathematical Model`, `Parameter Mapping`,
+  `Implementation Notes`) — use them where they help readers.
+- **BrainPy-style models** — add an `autosummary` entry to the appropriate
+  page under `docs/api/brainpy-*.rst`.
+- **NEST-compatible models** — add an `autosummary` entry to the appropriate
+  page under `docs/api/nest-*.rst`. Parameter names should match the upstream
+  NEST documentation. Document any deliberate deviation in the docstring
+  under a `Parameter Mapping` or `Implementation Notes` section.
+- For any new model file, also add a colocated `*_test.py` that exercises
+  default parameters and at least one parameter sweep.
+- Export the new symbol in `brainpy_state/__init__.py` (`__all__` plus the
+  import) so it appears in the public API surface.
+
+### Marking experimental features
+
+`brainpy.state` ships two model families with different maturity levels — see
+the README's "API status and maturity" section.
+
+- **NEST-compatible models** (anything under `brainpy_state/_nest/`) are
+  collectively considered **Experimental — In Development**. Individual
+  models do not need their own banner; the family-level banner on
+  `docs/api/nest-*.rst` and the [NEST status page](docs/nest-status/index.rst)
+  cover the whole set.
+- **BrainPy-style features** that are not yet stable must include a Sphinx
+  `.. warning::` admonition at the top of the docstring labelled
+  **Experimental — In Development**, and must be omitted from the README
+  maturity table until promoted to Stable.
+- **Promoting a feature from Experimental to Stable** requires:
+  1. Full test coverage including parameter validation.
+  2. Removal of the warning admonition from the docstring.
+  3. Addition to the README maturity table.
+  4. A CHANGELOG entry under "API stability".
+- When in doubt, ship as Experimental. Promotion is cheap; demoting silently
+  breaks users.
+
+### Documentation review checklist for PRs
+
+Before requesting review, confirm:
+
+- [ ] Docstrings present on all new public APIs (NumPy style).
+- [ ] New module exported via `__all__` in `brainpy_state/__init__.py`.
+- [ ] Added to the corresponding `docs/api/*.rst` page.
+- [ ] If NEST-compatible: parameter names match the upstream NEST documentation.
+- [ ] If experimental: no claims of stability in docstrings or README.
+- [ ] `pytest brainpy_state/` passes locally.
+- [ ] Any executable code block in updated docs or notebooks runs
+      end-to-end without errors.
+
+For the full rendered documentation, see <https://brainx.chaobrain.com/brainpy-state/>.
 
 ## Community
 
 ### Getting Help
 
-- **Documentation**: https://brainpy-state.readthedocs.io/
+- **Documentation**: https://brainx.chaobrain.com/brainpy-state/
 - **GitHub Discussions**: https://github.com/chaobrain/brainpy.state/discussions
 - **Issues**: https://github.com/chaobrain/brainpy.state/issues
 
