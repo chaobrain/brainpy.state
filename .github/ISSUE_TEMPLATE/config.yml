@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: 📚 Documentation
-    url: https://brainpy-state.readthedocs.io/
+    url: https://brainx.chaobrain.com/brainpy-state/
     about: Check the documentation for guides, tutorials, and API reference
   - name: 💬 GitHub Discussions
     url: https://github.com/chaobrain/brainpy.state/discussions
