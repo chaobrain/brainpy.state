@@ -67,3 +67,137 @@ class TestRuleProjBase(unittest.TestCase):
                 syn=Expon.desc(5, tau=5*u.ms),
                 out=COBA.desc(E=0*u.mV),
             )
+
+
+from brainpy_state._network._projections import (
+    AllToAllProj,
+    PairwiseBernoulliProj, SymmetricPairwiseBernoulliProj,
+    FixedIndegreeProj, FixedOutdegreeProj,
+    FixedTotalNumberProj, PairwisePoissonProj,
+)
+
+
+class TestAllToAllProj(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
+    def test_dense_weight_with_autapses(self):
+        pre = LIF(4); post = LIF(4)
+        proj = AllToAllProj(
+            pre, post, weight=0.5*u.nS,
+            syn=Expon.desc(4, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        self.assertTrue(jnp.allclose(W, jnp.full((4, 4), 0.5)))
+
+    def test_no_autapses_when_pre_is_post(self):
+        pop = LIF(4)
+        proj = AllToAllProj(
+            pop, pop, weight=0.5*u.nS,
+            syn=Expon.desc(4, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            allow_autapses=False,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        self.assertTrue(jnp.allclose(jnp.diag(W), 0.0))
+        off = W - jnp.diag(jnp.diag(W))
+        self.assertTrue(jnp.allclose(off, 0.5 * (1 - jnp.eye(4))))
+
+
+class TestBernoulliProjs(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
+    def test_pairwise_bernoulli_density_within_tolerance(self):
+        pre = LIF(80); post = LIF(80)
+        proj = PairwiseBernoulliProj(
+            pre, post, p=0.1, weight=1.0*u.nS,
+            syn=Expon.desc(80, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            seed=42,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        density = float(jnp.mean(W > 0))
+        self.assertAlmostEqual(density, 0.1, delta=0.025)
+
+    def test_pairwise_bernoulli_seed_determinism(self):
+        pre = LIF(40); post = LIF(40)
+        kw = dict(p=0.2, weight=1.0*u.nS,
+                  syn=Expon.desc(40, tau=5*u.ms),
+                  out=COBA.desc(E=0*u.mV),
+                  seed=7)
+        a = u.get_mantissa(PairwiseBernoulliProj(pre, post, **kw)._weight_matrix.value)
+        b = u.get_mantissa(PairwiseBernoulliProj(pre, post, **kw)._weight_matrix.value)
+        self.assertTrue(jnp.allclose(a, b))
+
+    def test_symmetric_pairwise_bernoulli_is_symmetric(self):
+        pop = LIF(40)
+        proj = SymmetricPairwiseBernoulliProj(
+            pop, pop, p=0.2, weight=1.0*u.nS,
+            syn=Expon.desc(40, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            seed=11,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value) > 0
+        self.assertTrue(jnp.array_equal(W, W.T))
+
+
+class TestFixedDegreeProjs(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
+    def test_fixed_indegree_each_post_has_K(self):
+        pre = LIF(50); post = LIF(20)
+        proj = FixedIndegreeProj(
+            pre, post, K=10, weight=1.0*u.nS,
+            syn=Expon.desc(20, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            seed=3, allow_multapses=False,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        for j in range(20):
+            self.assertEqual(int(jnp.sum(W[:, j] > 0)), 10)
+
+    def test_fixed_outdegree_each_pre_has_K(self):
+        pre = LIF(20); post = LIF(50)
+        proj = FixedOutdegreeProj(
+            pre, post, K=8, weight=1.0*u.nS,
+            syn=Expon.desc(50, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            seed=4, allow_multapses=False,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        for i in range(20):
+            self.assertEqual(int(jnp.sum(W[i, :] > 0)), 8)
+
+
+class TestFixedTotalAndPoisson(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
+    def test_fixed_total_number(self):
+        pre = LIF(50); post = LIF(50)
+        proj = FixedTotalNumberProj(
+            pre, post, N=137, weight=1.0*u.nS,
+            syn=Expon.desc(50, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            seed=8,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        # With allow_multapses=True (default), the W.at[].add() accumulates
+        # — count non-zero entries.
+        self.assertGreaterEqual(int(jnp.sum(W > 0)), 130)
+
+    def test_pairwise_poisson_mean(self):
+        pre = LIF(50); post = LIF(50)
+        proj = PairwisePoissonProj(
+            pre, post, mean=0.1, weight=1.0*u.nS,
+            syn=Expon.desc(50, tau=5*u.ms),
+            out=COBA.desc(E=0*u.mV),
+            seed=9,
+        )
+        W = u.get_mantissa(proj._weight_matrix.value)
+        # Expected count of edges ≈ 50*50*0.1 = 250.
+        # W accumulates per-pair counts via add(); mean per pair ≈ 0.1.
+        self.assertAlmostEqual(float(jnp.mean(W)), 0.1, delta=0.025)
