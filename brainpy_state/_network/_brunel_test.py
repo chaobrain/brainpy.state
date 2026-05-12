@@ -23,24 +23,30 @@ class TestBrunelIntegration(unittest.TestCase):
         K_I = int(eps * N_I)
 
         b = Builder()
-        exc = b.add('exc', LIF(N_E, tau=20*u.ms,
-                               V_th=-50*u.mV, V_reset=-60*u.mV,
-                               V_rest=-65*u.mV))
-        inh = b.add('inh', LIF(N_I, tau=20*u.ms,
-                               V_th=-50*u.mV, V_reset=-60*u.mV,
-                               V_rest=-65*u.mV))
+        exc = b.add('exc', LIF(N_E, tau=20 * u.ms,
+                               V_th=-50 * u.mV, V_reset=-60 * u.mV,
+                               V_rest=-65 * u.mV))
+        inh = b.add('inh', LIF(N_I, tau=20 * u.ms,
+                               V_th=-50 * u.mV, V_reset=-60 * u.mV,
+                               V_rest=-65 * u.mV))
 
         for src, tgt, w, K, label in [
-            (exc, exc, 0.1*u.nS, K_E, 'e2e'),
-            (exc, inh, 0.1*u.nS, K_E, 'e2i'),
-            (inh, exc, -0.5*u.nS, K_I, 'i2e'),
-            (inh, inh, -0.5*u.nS, K_I, 'i2i'),
+            (exc, exc, 0.1 * u.nS, K_E, 'e2e'),
+            (exc, inh, 0.1 * u.nS, K_E, 'e2i'),
+            (inh, exc, -0.5 * u.nS, K_I, 'i2e'),
+            (inh, inh, -0.5 * u.nS, K_I, 'i2i'),
         ]:
-            b.connect(src, tgt, rule=FixedIndegreeProj,
-                      K=K, weight=w,
-                      syn=Expon.desc(tgt.in_size, tau=5*u.ms),
-                      out=COBA.desc(E=0*u.mV),
-                      seed=42, allow_multapses=False)
+            b.connect(
+                src,
+                tgt,
+                rule=FixedIndegreeProj,
+                K=K,
+                weight=w,
+                syn=Expon.desc(tgt.in_size, tau=5 * u.ms),
+                out=COBA.desc(E=0 * u.mV),
+                seed=42,
+                allow_multapses=False
+            )
 
         brainstate.nn.init_all_states(b)
         out = b.simulate(
