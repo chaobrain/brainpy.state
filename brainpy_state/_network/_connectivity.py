@@ -211,14 +211,14 @@ def resolve_param(value, shape, key):
     if isinstance(value, Distribution):
         return value.sample(shape, key)
     if isinstance(value, u.Quantity):
-        mantissa = value.mantissa
+        mantissa = jnp.asarray(value.mantissa)
         if mantissa.ndim == 0 or mantissa.shape == (1,):
             return u.Quantity(jnp.broadcast_to(mantissa, shape), unit=value.unit)
         if tuple(mantissa.shape) != tuple(shape):
             raise ValueError(
                 f'parameter array shape {mantissa.shape} does not match target {shape}'
             )
-        return value
+        return u.Quantity(mantissa, unit=value.unit)
     arr = jnp.asarray(value)
     if arr.ndim == 0 or arr.shape == (1,):
         return jnp.broadcast_to(arr, shape)
