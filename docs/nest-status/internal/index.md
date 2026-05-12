@@ -189,8 +189,6 @@ Per spec §7 — not gaps:
 
 ## Methodology and classification reference
 
-- Methodology, taxonomy, and evidence rules: see
-  `../../superpowers/specs/2026-05-11-nest-gap-analysis-design.md` §3-5.
 - Status values: `implemented`, `unvalidated`, `partial`, `divergent`,
   `missing`, `unsupported`. Defined in spec §3.
 - Catalog snapshot: [nest-catalog-snapshot.md](nest-catalog-snapshot.md).
