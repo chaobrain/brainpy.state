@@ -328,3 +328,11 @@ must compose three separate projection objects.
 - **P2 — Visualization shims (`PlotLayer`, `PlotTargets`,
   `nest.raster_plot.from_device`).** [M]
   Acceptance: thin wrappers around matplotlib in `nest_compat.viz`.
+
+**Status note (post-Network-API):** the brainpy.state-native foundation
+(`Network`, `Builder`, eight `*Proj` rule classes, `Recorder`,
+`brainpy.state.dist`) shipped on 2026-05-12. The `brainpy_state.nest_compat`
+PyNEST-style facade tracked above can now be built as a thin shim over
+this layer. See `docs/brainpy-guide/network-api.md` for the user guide
+and `docs/superpowers/specs/2026-05-12-nest-network-api-design.md` for
+the design spec.
