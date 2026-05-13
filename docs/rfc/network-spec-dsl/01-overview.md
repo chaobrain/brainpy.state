@@ -140,7 +140,107 @@ the determinism contract.
 
 ---
 
-## 1.3 Primitive node kinds
+## 1.3 Description vs. implementation: the spec/backend boundary
+
+G1 ("describe *what* the network is, not *how* it steps") is not a
+slogan — it is a hard architectural rule that runs through every
+chapter of this RFC, every backend, and every domain extension
+(Chapter 10). This section makes it explicit.
+
+### 1.3.1 The rule
+
+The specification language describes **the model**: dynamics,
+topology, parameters with physical units, initial conditions,
+connectivity, inputs, observables. It does **not** describe **how to
+compute it**: numerical integrator, time-step discretization,
+compartmentalization policy, ring-buffer sizes, accelerator placement,
+gradient flavor, memory layout. Those are backend-side realization
+choices, and the same `NetIR` flows through every backend without
+encoding any of them.
+
+| In the spec (`NetIR` fields)                                      | In the backend (`build()` kwargs)                                  |
+|-------------------------------------------------------------------|---------------------------------------------------------------------|
+| Model kind and its parameters (with `saiunit` units)              | Solver / integrator (`"dopri5"`, `"staggered"`, `"exact"`, …)       |
+| Topology (`size`, connectivity rules, coupling matrices)          | Time step `dt`, integration tolerance, adaptive-step controllers    |
+| Dynamics terms — including noise / stochastic forcing             | Discretization (number of compartments, `cv_policy`, mesh)          |
+| Initial conditions and state-init distributions                   | Delay-buffer sizes, ring-buffer policy, memory layout               |
+| Spike threshold, reset rule, refractoriness (as model)            | JIT compilation flags, accelerator placement (CPU / GPU / TPU)      |
+| Inputs, schedules, what to observe                                | Gradient flavor (BPTT / event-prop / RTRL / eligibility)            |
+| Trainable markers (which leaves can be learned, §3.10)            | Optimizer, loss, batch sampling — supplied by user, never in the IR |
+
+A useful test when classifying a candidate field: ask whether two
+researchers running the *same biological model* could legitimately
+disagree on the value while both publishing it as "the same model."
+If yes (different solver, different `dt`, different `cv_policy`),
+the field belongs in `build()` kwargs. If no (different `tau_m`,
+different connectivity probability, different noise variance), the
+field belongs in the IR.
+
+### 1.3.2 Why this rule is load-bearing
+
+Three properties of the RFC stand or fall on it:
+
+1. **Training-paradigm pluralism (§1.1.1).** The novelty pitch — one
+   spec, four mathematically distinct gradient flavors — only works
+   if the gradient flavor is not baked into the model description.
+   The moment the spec carries a solver name, "switching to
+   event-prop" stops being a backend swap and becomes a model
+   rewrite.
+2. **Content-hash determinism (G4).** `(spec, backend, seed)` →
+   bit-identical artifact requires that the *spec* commit only to the
+   model. Numerical knobs change between runs of the same study; if
+   they were in the IR, every change would reshape the content hash
+   and break build-cache reuse, golden-IR fixtures, and sweep
+   deduplication.
+3. **Reproducibility across hardware.** A spec written on a laptop
+   and run on a multi-GPU cluster should produce the same model,
+   even if the cluster build picks a different solver and JIT layout.
+   That is only true when the spec is hardware- and realization-free.
+
+### 1.3.3 How numerical knobs reach the backend
+
+Backends accept two mappings as `build()` kwargs:
+
+```python
+sim = clock.build(
+    ir, seed=0, dt=0.1*u.ms,
+    # Per-node-kind defaults — apply to every node of this kind:
+    kind_options={
+        "brainpy.population":             dict(solver="exact"),
+        "braincell.morph_population":     dict(solver="staggered",
+                                              cv_policy="per_branch"),
+    },
+    # Per-node overrides keyed by IR node id:
+    node_options={
+        "L5_pyr": dict(solver="exp_euler"),
+    },
+)
+```
+
+Backends document their own option vocabulary and defaults; handlers
+read the merged view through `BuildContext.options_for(node)` (Chapter
+10 §10.7). Two builds of the same IR with different option mappings
+produce two artifacts with the same `content_hash` but different
+runtime behaviour — that is precisely the property the rule is
+designed to preserve.
+
+### 1.3.4 What this means for domain extensions
+
+The rule binds **every** node kind, built-in or contributed by a
+domain extension (Chapter 10). braincell's `MorphPopulation` does
+not carry a solver or a `cv_policy`; brainmass's `MassPopulation`
+does not carry an SDE solver or a delay-buffer size. Both pass those
+values through the backend's `kind_options` / `node_options` channel.
+A domain author who is tempted to put a numerical knob on a node
+should ask the same publication test (§1.3.1) and almost always come
+out on the backend side.
+
+The full enforcement of this rule for extensions lives in
+[Chapter 10 §10.1.1](./10-domain-extensions.md#1011-what-the-spec-describes--and-what-it-does-not) (table, examples, decision log entry D24a).
+
+---
+
+## 1.4 Primitive node kinds
 
 The spec is a tree (containment) plus an edge set (connectivity) of typed nodes:
 
@@ -156,7 +256,7 @@ Every node has: stable id, kind tag, frozen parameter dict (units carried),
 optional children. Nodes are **values**, not modules — they do not own JAX
 state. State is materialized by the backend at lowering time.
 
-### 1.3.1 Compound forms (sugar that lowers to primitives)
+### 1.4.1 Compound forms (sugar that lowers to primitives)
 
 | Compound form | Lowers to                                                                                   |
 |---------------|---------------------------------------------------------------------------------------------|
@@ -172,7 +272,7 @@ Tools (viz, diff, describe) use it; backends ignore it.
 
 ---
 
-## 1.4 Architecture overview
+## 1.5 Architecture overview
 
 Two frontends, one IR, two backend families plus visualization:
 

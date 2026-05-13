@@ -175,6 +175,17 @@ class BackendCapabilities:
     supported_input_kinds: frozenset[str]
 ```
 
+`supported_neuron_kinds`, `supported_rules`, etc. are the load-bearing
+fields when domain extensions are in play (Chapter 10). A backend
+that handles `braincell.morph_population` lists that string in
+`supported_neuron_kinds`; a backend that handles
+`brainmass.CouplingMatrix` lists it in `supported_rules`. The boolean
+`supports_*` flags continue to describe substrate features (delays,
+plasticity, distributions, …) and are extension-agnostic —
+extensions that need new boolean flags do not modify this dataclass,
+they validate their requirements inside their own node
+`validate()` methods and through the per-kind frozensets above.
+
 ---
 
 

@@ -512,6 +512,17 @@ For biophysically detailed networks, the model itself carries a
 morphology and a list of paint / place rules. This integrates the
 `braincell.Cell` ecosystem into the spec layer.
 
+> The `net.morph_population` verb, the `MorphPopulation` /
+> `CompartmentTargetedProjection` IR node kinds, the
+> `CompartmentViewHandle` view subtype, and the supporting region /
+> mechanism / channel classes shown in the examples below are
+> contributed by the **`braincell` extension**
+> ([Chapter 10 §10.9](./10-domain-extensions.md#109-worked-extension--braincell)).
+> The substrate exposes the `IRNode` / `ViewHandle` / builder-verb
+> protocols that braincell implements; the user-facing syntax below is
+> identical regardless of which package supplies the classes. None of
+> this code ships from `brainpy_state` itself.
+
 ```python
 import brainpy.state.spec.morph as morph
 import brainpy.state.spec.mech as mech
@@ -632,8 +643,11 @@ views (§3.7.1, §3.9.4).
 ### 3.6.3 Compartment-targeted rules
 
 When the post-side handle is a `CompartmentViewHandle` (§3.9.5), the
-rules from `braintools.conn._compartment` route synapses onto the
-selected compartments:
+compartment-targeted connectivity rules — contributed by the
+[`braincell` extension](./10-domain-extensions.md#109-worked-extension--braincell)
+through the connectivity registry plus a dedicated
+`CompartmentTargetedProjection` IR node kind — route synapses onto
+the selected compartments:
 
 ```python
 apical = pyr.compartments(morph.ApicalDendrite())
@@ -904,7 +918,12 @@ serialized mask; resolution to an index array happens at finalize.
 ### 3.9.5 Compartmental views — `compartments(region)`
 
 A compartmental view restricts an action to one or more compartments
-of a `Cell` population. Region selectors compose with `&`, `|`, `~`:
+of a `Cell` population. `CompartmentViewHandle` and its IR
+counterpart `CompartmentViewRef` are registered by the
+[`braincell` extension](./10-domain-extensions.md#109-worked-extension--braincell)
+through `@register_view_kind` / `@register_view_ref_kind`; the core
+substrate's canonical-JSON serializer dispatches on the `KIND` tag.
+Region selectors compose with `&`, `|`, `~`:
 
 ```python
 soma   = pyr.compartments(morph.SomaRegion())

@@ -1,8 +1,8 @@
-# Chapter 10 — Appendix: decision log, cheat sheet, open questions
+# Chapter 11 — Appendix: decision log, cheat sheet, open questions
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 10.1 Decision log
+## 11.1 Decision log
 
 | ID  | Decision                                                          | Resolution |
 |-----|-------------------------------------------------------------------|-----------|
@@ -33,7 +33,7 @@
 
 ---
 
-## 10.2 Cheat sheet — Python ↔ YAML
+## 11.2 Cheat sheet — Python ↔ YAML
 
 | Python (B)                                                                                             | YAML (D)                                                                                                          |
 |--------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
@@ -59,7 +59,7 @@
 
 ---
 
-## 10.3 Open questions
+## 11.3 Open questions
 
 - **Variable defaults vs. required flag for sweep ergonomics.** A
   declaration is either `default=<concrete>` (sweep-friendly: omitting
@@ -77,5 +77,5 @@
 
 ---
 
-**Previous:** [Chapter 9 — Implementation](./09-implementation.md)  
+**Previous:** [Chapter 10 — Domain extensions](./10-domain-extensions.md)  
 **Next:** [README](./README.md)
