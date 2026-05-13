@@ -31,6 +31,75 @@ We need a layer **above** the existing modules that lets users:
    training backend (BPTT / e-prop / event-prop), or an export backend
    (NIR / ONNX-Spike / Nengo / …) without touching the spec.
 
+### 1.1 Novelty and prior art
+
+The novelty of `brainpy.state.spec` is **not** the specification surface.
+PyNN, NESTML, Brian2, and Nengo have shown for over a decade that an SNN
+can be described declaratively, and we deliberately borrow conventions
+from that lineage (units-first parameters, frontend-agnostic IR, sparse
+projection rules). Treating the DSL itself as the contribution would be
+reinventing a well-known wheel.
+
+The novelty is that **the same network description drives four
+mathematically distinct SNN training paradigms from a single IR**:
+
+- **BPTT** with surrogate gradients (the snnTorch / Norse default),
+- **Event-prop** (Wunderlich & Pehle 2021) — exact gradients of the
+  spike times for clock-free training,
+- **RTRL / forward-mode autodiff** — online gradient estimation that
+  does not store the full unrolled graph,
+- **Eligibility-trace methods** — e-prop (Bellec et al. 2020) and
+  related local online learning rules.
+
+Every existing SNN framework commits to exactly one of these paradigms
+at model-definition time. Switching paradigms (e.g. comparing event-prop
+to BPTT on the same architecture) means rewriting the model in a
+different framework, with all of the unit, topology, and initialization
+drift that implies. In `brainpy.state.spec`, the gradient story is a
+backend kwarg: a researcher A/Bs paradigms by changing one line, while
+the spec, the seed, and the connectivity rules are bit-identical.
+
+NIR export (G11) is a fourth axis of pluralism — deployment — but is
+**not** the load-bearing novelty. NIR is a community standard
+(Neuromorphic Intermediate Representation, neuromorphs/NIR); we adopt
+it rather than invent it, and several frameworks above also ship a NIR
+exporter. The training-paradigm axis is what is genuinely new.
+
+#### 1.1.1 Prior-art comparison
+
+| Framework         | Modeling surface           | Training paradigm(s)                                    | Deployment              |
+|-------------------|----------------------------|---------------------------------------------------------|-------------------------|
+| snnTorch          | PyTorch modules            | BPTT (surrogate grad)                                   | PyTorch                 |
+| Norse             | PyTorch modules            | BPTT (surrogate grad)                                   | PyTorch                 |
+| BindsNET          | PyTorch modules            | BPTT + Hebbian / STDP                                   | PyTorch                 |
+| Nengo             | NEF Network DSL            | NEF / PES                                               | Nengo, Loihi            |
+| PyNN / Brian2     | Declarative DSL            | Plasticity rules only (no global gradient)              | NEST / NEURON / GPU     |
+| Lava (Intel)      | Process graph              | On-chip plasticity                                      | Loihi 2                 |
+| **brainpy.state** | **Declarative IR**         | **BPTT + event-prop + RTRL + eligibility-trace**        | **clock/event + NIR**   |
+
+Every row except the last commits to one column-2 entry. The bold row
+is the wedge: a single IR, four gradient flavors, deployment plurality
+on top.
+
+#### 1.1.2 Why this matters
+
+The load-bearing user story is the comparative study. SNN training is a
+moving target — event-prop is recent, RTRL variants are an active
+research area, and eligibility-trace methods are increasingly important
+for neuromorphic hardware that cannot afford BPTT's memory footprint.
+Researchers who currently want to compare these methods either
+re-implement their model in three frameworks (introducing drift) or
+pick one paradigm and never benchmark the others. The spec collapses
+the comparison into a backend swap, which is the same value
+proposition that JAX brought to autodiff and that ONNX brought to
+inference: **separate the model from the execution strategy**.
+
+This positioning also informs scope decisions throughout the rest of
+this document. Whenever a feature could land in either the spec or a
+specific training backend, the tie-breaker is: *does this feature
+preserve the spec's neutrality across the four paradigms?* If yes,
+it belongs in the spec; if no, it belongs in a backend.
+
 ---
 
 ## 2. Goals
@@ -2024,6 +2093,7 @@ What stays:
 | D25 | Quantized weights for hardware                                    | **Per-export-backend concern.** The core spec does not carry a `quantize` flag. Each export backend (e.g. a future Loihi-targeted exporter) may consume `Trainable.constraint` strings (e.g. `"int8"`, `"fixed:Q4.4"`) or apply its own quantization config. |
 | D26 | Post-definition parameter modification — interface               | One path language (§6.9.1) and one `ParamPatch` type (§6.9.2). Pre-build: `NetSpec.update` / `.with_` / `.patch` (immutable; new spec returned). Post-build: `Simulator.parameters` / `Trainer.parameters` of type `ParameterView` (mutating; in-place on the runtime). |
 | D27 | Live vs rebuild policy                                            | Three-class taxonomy `LIVE` / `LIVE_RESET` / `REBUILD` (§6.9.5). Live writes propagate in place; rebuild writes raise SPEC-024 with a hint to call `Simulator.rebuild_with(new_ir)`. Connectivity is never silently re-sampled. |
+| D28 | Novelty positioning                                               | The load-bearing novelty is **training-paradigm pluralism over a single IR** (BPTT, event-prop, RTRL/forward-mode, eligibility-trace), not the DSL surface (which intentionally inherits from PyNN/NESTML/Brian2/Nengo) and not NIR export (an adopted community standard). See §1.1. Scope ties are broken in favor of preserving spec neutrality across the four training paradigms. |
 
 ---
 
