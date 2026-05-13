@@ -16,11 +16,11 @@ into NIR transitively reaches all of them.
 ### 6.2 The export workflow
 
 ```python
-import brainpy.state.spec as sp
+import brainpy.state.spec as spec
 from brainpy.state import nir as bp_nir          # NIR export backend (top-level)
 import nir
 
-ir = sp.spec.load("brunel.netspec.yaml")
+ir = spec.load("brunel.netspec.yaml")
 result = bp_nir.export(ir, seed=0, strict=False)
 
 # result.artifact is a nir.NIRGraph
@@ -94,7 +94,7 @@ The exporter walks `NetIR` once and emits a `nir.NIRGraph`.
 | `brainpy.state` topology         | NIR encoding                                                                                |
 |----------------------------------|---------------------------------------------------------------------------------------------|
 | `ProjectionNode(pre, post, ...)` | Edge `(pre_node, syn_or_neuron_node)` + `(syn_or_neuron_node, post_node)` as needed.        |
-| Merged view `sp.merge(a, b)`     | Concat node: NIR currently has no native concat. The exporter emits a synthesized custom node `nir.brainx.Concat(axis=0)` under our reserved `nir.brainx.*` extension namespace. EXPORT-NIR-007 notice. |
+| Merged view `spec.merge(a, b)`   | Concat node: NIR currently has no native concat. The exporter emits a synthesized custom node `nir.brainx.Concat(axis=0)` under our reserved `nir.brainx.*` extension namespace. EXPORT-NIR-007 notice. |
 | Recurrent self-projection         | Edge from post-neuron output back to its own input. NIR supports cycles.                    |
 | `SubNetworkNode`                  | Inlined into the parent graph; the export preserves `id` namespacing.                       |
 | `SequentialMeta` ordering         | The exporter walks layers in declared order; NIR edge list reflects the sequential chain.   |
@@ -180,7 +180,7 @@ Every transformation in classes `RECORDED`–`UNSUPPORTED` emits an
 - `notices` — the same list returned in `ExportResult.notices`, for archival.
 
 The sidecar is written next to the `.nir` file as `<name>.nir.meta.json`
-by default. A loader (`sp.spec.import_.nir.load(nir_path, sidecar_path)`)
+by default. A loader (`spec.import_.nir.load(nir_path, sidecar_path)`)
 is provided to reconstruct as much of the original `NetIR` as is
 recoverable — useful for round-trip testing but not for production use,
 since `UNSUPPORTED` and `DROPPED` losses are not recoverable.

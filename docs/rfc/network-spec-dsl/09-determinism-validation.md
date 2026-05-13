@@ -20,7 +20,7 @@ Given a fixed `(NetIR, backend, seed, dt)`:
 7. **Export** is deterministic in `(ir, seed, strict)`: same inputs ⇒
    identical NIR artifact bytes and identical sidecar. The default
    `seed` for export inherits the simulator's default seed
-   (`sp.spec.DEFAULT_SEED`, currently `0`); it can be overridden via
+   (`spec.DEFAULT_SEED`, currently `0`); it can be overridden via
    the `seed=` kwarg in Python or the `--seed N` flag on the CLI.
 8. **Post-build mutation** (§3.14) is deterministic: applying the same
    `ParamPatch` list to identical `(NetSpec, NetIR)` inputs yields the

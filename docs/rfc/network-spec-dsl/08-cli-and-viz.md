@@ -37,12 +37,12 @@ brainpy viz <path>                                  \
 ```
 
 ```python
-import brainpy.state.spec as sp
-ir = sp.spec.load("brunel.netspec.yaml")
-sp.spec.viz(ir, mode="graph", renderer="graphviz", out="brunel.svg")
-sp.spec.viz(ir, mode="layers", renderer="matplotlib")
-fig = sp.spec.viz(ir, mode="matrix", return_figure=True)
-sp.spec.viz(ir, mode="nir", out="brunel.nir.svg")    # post-export graph view
+import brainpy.state.spec as spec
+ir = spec.load("brunel.netspec.yaml")
+spec.viz(ir, mode="graph", renderer="graphviz", out="brunel.svg")
+spec.viz(ir, mode="layers", renderer="matplotlib")
+fig = spec.viz(ir, mode="matrix", return_figure=True)
+spec.viz(ir, mode="nir", out="brunel.nir.svg")    # post-export graph view
 ```
 
 **Modes**

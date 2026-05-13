@@ -212,7 +212,7 @@ NetSpec.from_ir   ◄───── NetIR   ◄───── load ───�
 ```python
 ir1 = s.finalize()
 s.to_yaml("x.yaml")
-ir2 = sp.spec.load("x.yaml")
+ir2 = spec.load("x.yaml")
 assert ir1.content_hash() == ir2.content_hash()
 ```
 

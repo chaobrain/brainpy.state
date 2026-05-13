@@ -133,7 +133,7 @@ classes become thin facades over it.
   (one per SPEC-NNN code), `!include` cycle detection.
 - **Connectivity registry coverage** — parametrized test iterates every
   registered `braintools.conn` rule, builds a 2-population, 100-unit
-  spec using it, calls `spec.finalize()` and `clock.build(...)`, and
+  spec using it, calls `net.finalize()` and `clock.build(...)`, and
   asserts the `ConnectionResult` is non-empty and has expected
   dtypes / units. Supplementary rules tested by the same parametrization.
 - **View algebra** — slicing, indexing, merging, and reshape: each form
@@ -148,10 +148,10 @@ classes become thin facades over it.
   `brainstate.nn.Param`. `Trainable` on a non-trainable slot raises
   SPEC-018.
 - **Deep-SNN sequential** — golden test: a 3-layer spiking MLP and a
-  2-layer spiking CNN built via `spec.sequential(...)` finalize to an IR
+  2-layer spiking CNN built via `net.sequential(...)` finalize to an IR
   whose `compounds.sequentials` recovers the layer order. Spiking MLP on
   MNIST trains under `bptt` to ≥ 90% test accuracy in CI.
-- **Visualization determinism** — `sp.spec.viz(ir, mode=M, renderer=R, seed=S)`
+- **Visualization determinism** — `spec.viz(ir, mode=M, renderer=R, seed=S)`
   produces byte-identical output for `(M, R, S)` triples across Python
   versions in CI; golden artifacts checked in for one Mermaid and one
   Graphviz example.

@@ -5,7 +5,7 @@
 ## 4. Frontend B — YAML/JSON data DSL
 
 Spec is data. A YAML/JSON file is the canonical archival form; Python loads
-it with `sp.spec.load(path) -> NetIR`. Same IR, same backends.
+it with `spec.load(path) -> NetIR`. Same IR, same backends.
 
 ### 4.1 Top-level schema (informal)
 
@@ -139,10 +139,11 @@ Two supported patterns:
 1. **Python overrides** — keep the YAML, override at load time:
 
    ```python
+   import brainpy.state.spec as spec
    from brainpy.state import clock        # backend lives at brainpy.state.clock
    for g in [4.0, 4.5, 5.0]:
-       ir = sp.spec.load("brunel.netspec.yaml",
-                         overrides={"projections[2].rule.weight": f"-{0.1*g} nS"})
+       ir = spec.load("brunel.netspec.yaml",
+                      overrides={"projections[2].rule.weight": f"-{0.1*g} nS"})
        sim = clock.build(ir, seed=0, dt=0.1*u.ms)
    ```
 

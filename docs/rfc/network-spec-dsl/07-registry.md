@@ -77,7 +77,7 @@ The v1 set is the table in §3.11.5. Each macro declares:
 - `out_kind` — produced view shape.
 - Whether it materializes a Population (stateful) or only a Projection.
 
-`spec.sequential(...)` checks `layer[k].out_kind == layer[k+1].in_kind` and
+`net.sequential(...)` checks `layer[k].out_kind == layer[k+1].in_kind` and
 that numeric shapes broadcast; otherwise SPEC-020.
 
 ### 7.5 Third-party registration

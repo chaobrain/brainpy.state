@@ -176,10 +176,10 @@ Two frontends, one IR, three backend families:
 ```
   Frontend A (Python)            Frontend B (YAML/JSON)
   ──────────────────             ──────────────────────
-  spec = NetSpec("brunel")       brunel.netspec.yaml
-  exc = spec.population(...)     populations:
-  spec.project(exc, inh, ...)      exc: ...
-  ir = spec.finalize()           ir = sp.spec.load("brunel.netspec.yaml")
+  net = spec.NetSpec("brunel")   brunel.netspec.yaml
+  exc = net.population(...)      populations:
+  net.project(exc, inh, ...)       exc: ...
+  ir = net.finalize()            ir = spec.load("brunel.netspec.yaml")
             │                               │
             ▼                               ▼
                   ┌──────────────────────────┐

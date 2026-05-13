@@ -220,14 +220,14 @@ class NetSpec:
 Module-level helpers mirror the most common handle methods:
 
 ```python
-import brainpy.state.spec as sp
+import brainpy.state.spec as spec
 
-sp.merge(*handles)            -> MergedViewHandle
-sp.split(handle, sizes)       -> tuple[ViewHandle, ...]
-sp.concat(*handles, axis=0)   -> MergedViewHandle
-sp.train(value, *, name=None, constraint=None, required=False) -> Trainable
-sp.noise.Wiener(sigma)        -> Noise                     # §3.10.3
-sp.noise.OU(sigma, tau)       -> Noise
+spec.merge(*handles)            -> MergedViewHandle
+spec.split(handle, sizes)       -> tuple[ViewHandle, ...]
+spec.concat(*handles, axis=0)   -> MergedViewHandle
+spec.train(value, *, name=None, constraint=None, required=False) -> Trainable
+spec.noise.Wiener(sigma)        -> Noise                     # §3.10.3
+spec.noise.OU(sigma, tau)       -> Noise
 ```
 
 ---
@@ -369,40 +369,40 @@ future top-level node kind adds a new sibling handle.
 ## 3.4 Grounding example — Brunel
 
 ```python
-import brainpy.state.spec as sp
+import brainpy.state.spec as spec
 import brainpy.state.clock as clock          # backend lives at brainpy.state.clock
 import braintools.conn as conn
 import braintools.init as init
 import saiunit as u
 
-spec = sp.NetSpec("brunel")
+net = spec.NetSpec("brunel")
 
-neuron = sp.models.LIF(tau=20*u.ms, V_th=-50*u.mV,
+neuron = spec.models.LIF(tau=20*u.ms, V_th=-50*u.mV,
                        V_reset=-60*u.mV, V_rest=-65*u.mV)
-syn  = sp.models.Expon(tau=5*u.ms)
-coba = sp.models.COBA(E=0*u.mV)
+syn  = spec.models.Expon(tau=5*u.ms)
+coba = spec.models.COBA(E=0*u.mV)
 
-exc = spec.population("exc", neuron, size=8000, tags=("excitatory",))
-inh = spec.population("inh", neuron, size=2000, tags=("inhibitory",))
+exc = net.population("exc", neuron, size=8000, tags=("excitatory",))
+inh = net.population("inh", neuron, size=2000, tags=("inhibitory",))
 
 # Canonical: weight on the rule.
-spec.project(exc, exc, synapse=syn, output=coba,
+net.project(exc, exc, synapse=syn, output=coba,
              rule=conn.FixedProb(prob=0.1, allow_self_connections=False,
                                  weight=0.10*u.nS))
 # Sugar: weight as projection-level kwarg (merged at finalize).
-spec.project(exc, inh, synapse=syn, output=coba,
+net.project(exc, inh, synapse=syn, output=coba,
              rule=conn.FixedProb(prob=0.1), weight=0.10*u.nS)
-spec.project(inh, exc, synapse=syn, output=coba,
+net.project(inh, exc, synapse=syn, output=coba,
              rule=conn.FixedProb(prob=0.1), weight=-0.50*u.nS)
-spec.project(inh, inh, synapse=syn, output=coba,
+net.project(inh, inh, synapse=syn, output=coba,
              rule=conn.FixedProb(prob=0.1, allow_self_connections=False),
              weight=-0.50*u.nS)
 
-spec.input(exc, sp.input.Poisson(rate=20*u.Hz), weight=0.2*u.nS)
-spec.observe(exc.spikes)
-spec.observe(exc[:50].voltage)
+net.input(exc, spec.input.Poisson(rate=20*u.Hz), weight=0.2*u.nS)
+net.observe(exc.spikes)
+net.observe(exc[:50].voltage)
 
-ir  = spec.finalize()
+ir  = net.finalize()
 sim = clock.build(ir, seed=0, dt=0.1*u.ms)
 out = sim.run(1*u.second)
 ```
@@ -432,16 +432,16 @@ The default. `size` is an `int` or a shape tuple (used by deep-SNN
 layers, e.g. `(C, H, W)`).
 
 ```python
-exc = spec.population("exc", sp.models.LIF(...), size=8000)
-conv1 = spec.population("conv1", sp.models.LIF(...), size=(16, 28, 28))
+exc = net.population("exc", spec.models.LIF(...), size=8000)
+conv1 = net.population("conv1", spec.models.LIF(...), size=(16, 28, 28))
 ```
 
 Initial state distributions and per-unit parameter variation come
 from the value-wrapper layer (§3.10):
 
 ```python
-exc = spec.population("exc", neuron, size=1024,
-    init={"V": sp.train(init.Uniform(low=-65*u.mV, high=-55*u.mV))})
+exc = net.population("exc", neuron, size=1024,
+    init={"V": spec.train(init.Uniform(low=-65*u.mV, high=-55*u.mV))})
 ```
 
 ### 3.5.2 Spatial populations
@@ -461,29 +461,29 @@ class Geometry:
     def positions(self) -> u.Quantity: ...   # (N, ndim) array
 
 # Built-in geometries:
-sp.geometry.Grid1d(n, spacing, origin, periodic)
-sp.geometry.Grid2d(rows, cols, spacing, origin, periodic)
-sp.geometry.Grid3d(shape, spacing, origin, periodic)        # shape=(D,H,W)
-sp.geometry.HexGrid2d(rows, cols, spacing, periodic)
-sp.geometry.Free(positions, extent, periodic)               # arbitrary, from data
-sp.geometry.Layered(plane, layers)                          # 2D-plane × layer slabs
+spec.geometry.Grid1d(n, spacing, origin, periodic)
+spec.geometry.Grid2d(rows, cols, spacing, origin, periodic)
+spec.geometry.Grid3d(shape, spacing, origin, periodic)        # shape=(D,H,W)
+spec.geometry.HexGrid2d(rows, cols, spacing, periodic)
+spec.geometry.Free(positions, extent, periodic)               # arbitrary, from data
+spec.geometry.Layered(plane, layers)                          # 2D-plane × layer slabs
 ```
 
 Usage:
 
 ```python
-v1 = spec.population(
+v1 = net.population(
     "V1", neuron,
-    positions=sp.geometry.Grid2d(rows=50, cols=50, spacing=10*u.um,
+    positions=spec.geometry.Grid2d(rows=50, cols=50, spacing=10*u.um,
                                  periodic=(True, True)),
     tags=("visual_cortex", "L4"),
 )
 # size is inferred from positions.positions().shape[0]; passing both an
 # explicit size and incompatible positions raises SPEC-040.
 
-ca1 = spec.population(
+ca1 = net.population(
     "CA1", neuron,
-    positions=sp.geometry.Free(positions=np.load("ca1_xyz.npy")*u.um,
+    positions=spec.geometry.Free(positions=np.load("ca1_xyz.npy")*u.um,
                                extent=(2*u.mm, 0.5*u.mm, 0.5*u.mm)),
 )
 ```
@@ -501,7 +501,7 @@ morphology and a list of paint / place rules. This integrates the
 import brainpy.state.spec.morph as morph
 import brainpy.state.spec.mech as mech
 
-pyr_cell = sp.models.Cell(
+pyr_cell = spec.models.Cell(
     morphology=morph.from_swc("l5_pyr.swc"),     # or .from_asc, .from_neuroml
     paint=[
         (morph.AllRegion(),       mech.CableProperty(Cm=1*u.uF/u.cm**2,
@@ -510,7 +510,7 @@ pyr_cell = sp.models.Cell(
         (morph.SomaRegion(),      mech.Channel("INa_HH",  g_max=0.12*u.S/u.cm**2)),
         (morph.SomaRegion(),      mech.Channel("IKDR_HH", g_max=0.036*u.S/u.cm**2)),
         (morph.ApicalDendrite(),  mech.Channel("Ih",
-                                  g_max=sp.train(
+                                  g_max=spec.train(
                                       init.LogNormal(mean=0.005*u.S/u.cm**2,
                                                       std=0.001*u.S/u.cm**2)))),
         (morph.BasalDendrite(),   mech.Channel("ICaT",
@@ -525,7 +525,7 @@ pyr_cell = sp.models.Cell(
     spike_threshold=0*u.mV,
 )
 
-pyr = spec.population("L5_pyr", pyr_cell, size=500,
+pyr = net.population("L5_pyr", pyr_cell, size=500,
                       tags=("cortex", "L5", "pyramidal"))
 ```
 
@@ -535,7 +535,7 @@ variation is the same `Trainable[Initialization]` mechanism as point
 populations; the backend samples one value per unit. All cells in one
 population share the same morphology tree (identical compartment count
 and adjacency). To mix morphologies in one projection target, declare
-separate populations and use `sp.merge(...)`.
+separate populations and use `spec.merge(...)`.
 
 The `Cell` model has its own reachability constraints:
 
@@ -567,11 +567,11 @@ by PascalCase name (§7.1) and consumable as `rule=`:
 
 ```python
 # random / regular / topological — point connectivity, no positions needed
-spec.project(pre, post, rule=conn.FixedProb(prob=0.1, weight=0.1*u.nS),
+net.project(pre, post, rule=conn.FixedProb(prob=0.1, weight=0.1*u.nS),
              synapse=syn, output=coba)
-spec.project(pre, post, rule=conn.AllToAll(weight=init.XavierNormal()),
+net.project(pre, post, rule=conn.AllToAll(weight=init.XavierNormal()),
              synapse=syn, output=coba)
-spec.project(pre, post, rule=conn.SmallWorld(k=4, p=0.1, weight=...),
+net.project(pre, post, rule=conn.SmallWorld(k=4, p=0.1, weight=...),
              synapse=syn, output=coba)
 ```
 
@@ -584,22 +584,22 @@ becomes available. Two styles, both supported:
 
 ```python
 # (a) Use a packaged spatial rule directly.
-spec.project(v1, v1,
+net.project(v1, v1,
     rule=conn.Gaussian(
         sigma=80*u.um, prob_max=0.15, cutoff=240*u.um,
         weight=init.LogNormal(mean=0.1*u.nS, std=0.03*u.nS),
-        delay=sp.kernel.Linear(rate=1*u.ms / (100*u.um), base=0.5*u.ms),
+        delay=spec.kernel.Linear(rate=1*u.ms / (100*u.um), base=0.5*u.ms),
         allow_self_connections=False,
     ),
     synapse=syn, output=coba)
 
 # (b) Decompose into kernel × mask (NEST-readable).
-spec.project(v1, v1,
+net.project(v1, v1,
     rule=conn.DistanceDependent(
-        prob=sp.kernel.Gaussian(sigma=80*u.um, scale=0.15),
-        weight=sp.kernel.Exponential(decay=120*u.um, peak=0.2*u.nS),
-        delay=sp.kernel.Linear(rate=1*u.ms / (100*u.um), base=0.5*u.ms),
-        mask=sp.mask.Annular(inner=20*u.um, outer=240*u.um, periodic=True),
+        prob=spec.kernel.Gaussian(sigma=80*u.um, scale=0.15),
+        weight=spec.kernel.Exponential(decay=120*u.um, peak=0.2*u.nS),
+        delay=spec.kernel.Linear(rate=1*u.ms / (100*u.um), base=0.5*u.ms),
+        mask=spec.mask.Annular(inner=20*u.um, outer=240*u.um, periodic=True),
     ),
     synapse=syn, output=coba)
 ```
@@ -607,10 +607,10 @@ spec.project(v1, v1,
 Two new value-object namespaces, both registered like initializers
 and connectivities:
 
-| Module      | Members                                                                                         |
-|-------------|-------------------------------------------------------------------------------------------------|
-| `sp.kernel` | `Gaussian`, `Exponential`, `MexicanHat`, `Linear`, `Constant`, `Step`, `Custom(fn)`. Carry units. |
-| `sp.mask`   | `Circular(radius)`, `Annular(inner, outer)`, `Rectangular(width, height)`, `Wedge(angle_lo, angle_hi)`, `Grid(rows, cols, spacing)`, `PeriodicWrap(of=mask)`. |
+| Module        | Members                                                                                         |
+|---------------|-------------------------------------------------------------------------------------------------|
+| `spec.kernel` | `Gaussian`, `Exponential`, `MexicanHat`, `Linear`, `Constant`, `Step`, `Custom(fn)`. Carry units. |
+| `spec.mask`   | `Circular(radius)`, `Annular(inner, outer)`, `Rectangular(width, height)`, `Wedge(angle_lo, angle_hi)`, `Grid(rows, cols, spacing)`, `PeriodicWrap(of=mask)`. |
 
 The same kernels and masks are reused for spatial inputs and spatial
 views (§3.7.1, §3.9.4).
@@ -626,24 +626,24 @@ apical = pyr.compartments(morph.ApicalDendrite())
 basal  = pyr.compartments(morph.BasalDendrite())
 
 # Apical-tuft-targeted cortico-cortical input:
-spec.project(other_area, apical,
+net.project(other_area, apical,
     rule=conn.ApicalDendriteTargeting(
         prob=0.05,
-        distance_pref=sp.kernel.Gaussian(mu=400*u.um, sigma=80*u.um),
+        distance_pref=spec.kernel.Gaussian(mu=400*u.um, sigma=80*u.um),
         weight=0.2*u.nS),
     synapse=syn_AMPA, output=coba)
 
 # Basal-dendrite-targeted thalamic input:
-spec.project(thal, basal,
+net.project(thal, basal,
     rule=conn.BasalDendriteTargeting(prob=0.1, weight=0.5*u.nS),
     synapse=syn_AMPA, output=coba)
 
 # Morphology-distance rule:
-spec.project(pyr, pyr,
+net.project(pyr, pyr,
     rule=conn.MorphologyDistance(
         source_region="axon_terminal",
         target_region="basal_dendrite",
-        prob_kernel=sp.kernel.Gaussian(sigma=200*u.um, scale=0.1)),
+        prob_kernel=spec.kernel.Gaussian(sigma=200*u.um, scale=0.1)),
     synapse=syn, output=coba)
 ```
 
@@ -683,26 +683,26 @@ control / modulation values across nodes, and gate learning in time.
 ### 3.7.1 External input sources
 
 ```python
-spec.input(exc, sp.input.Poisson(rate=20*u.Hz), weight=0.2*u.nS)
-spec.input(exc, sp.input.SpikeTimes(times=spike_table, units=u.ms))
-spec.input(exc, sp.input.DC(amplitude=0.5*u.nA))
-spec.input(exc, sp.input.Step(amplitudes=..., times=...))
-spec.input(exc, sp.input.AC(amp=0.2*u.nA, freq=10*u.Hz, phase=0))
-spec.input(image_layer, sp.input.LayerImage(shape=(1, 28, 28)))
-spec.input(any_pop, sp.input.DataStream(...))
+net.input(exc, spec.input.Poisson(rate=20*u.Hz), weight=0.2*u.nS)
+net.input(exc, spec.input.SpikeTimes(times=spike_table, units=u.ms))
+net.input(exc, spec.input.DC(amplitude=0.5*u.nA))
+net.input(exc, spec.input.Step(amplitudes=..., times=...))
+net.input(exc, spec.input.AC(amp=0.2*u.nA, freq=10*u.Hz, phase=0))
+net.input(image_layer, spec.input.LayerImage(shape=(1, 28, 28)))
+net.input(any_pop, spec.input.DataStream(...))
 ```
 
 When the target population has `positions=`, **spatial input sources**
 are reachable. They mirror the kernel × mask vocabulary:
 
 ```python
-spec.input(v1, sp.input.SpatialDrive(
-    kernel=sp.kernel.Gaussian(sigma=30*u.um, peak=0.5*u.nA),
-    trajectory=sp.trajectory.Constant(center=(250*u.um, 250*u.um)),
+net.input(v1, spec.input.SpatialDrive(
+    kernel=spec.kernel.Gaussian(sigma=30*u.um, peak=0.5*u.nA),
+    trajectory=spec.trajectory.Constant(center=(250*u.um, 250*u.um)),
 ))
 
-spec.input(v1, sp.input.SpatialPoisson(
-    rate_field=sp.kernel.MexicanHat(center=(250*u.um, 250*u.um),
+net.input(v1, spec.input.SpatialPoisson(
+    rate_field=spec.kernel.MexicanHat(center=(250*u.um, 250*u.um),
                                     sigma_pos=30*u.um, sigma_neg=120*u.um,
                                     peak=50*u.Hz),
 ))
@@ -718,23 +718,23 @@ hidden global variables.
 
 ```python
 # Externally driven reward (RL loop):
-reward = spec.signal("reward",
-                     source=sp.signal.External(unit=u.dimensionless))
+reward = net.signal("reward",
+                     source=spec.signal.External(unit=u.dimensionless))
 
 # Neuromodulator derived from a population's firing rate:
-da = spec.signal("dopamine",
-                 source=sp.signal.PopulationRate(vta, tau=200*u.ms,
-                                                 transfer=sp.fn.Sigmoid(beta=5)))
+da = net.signal("dopamine",
+                 source=spec.signal.PopulationRate(vta, tau=200*u.ms,
+                                                 transfer=spec.fn.Sigmoid(beta=5)))
 
 # Shared eligibility trace consumed by many projections:
-etr = spec.signal("etr",
-                  source=sp.signal.EligibilityTrace(
+etr = net.signal("etr",
+                  source=spec.signal.EligibilityTrace(
                       kind="eprop", pre=hidden, post=hidden, tau=20*u.ms))
 
 # Custom signal — a user-supplied callable on existing state:
-ctrl = spec.signal("ctrl",
-                   source=sp.signal.FromState(of=ctrl_pop.rate,
-                                              transform=sp.fn.Tanh()))
+ctrl = net.signal("ctrl",
+                   source=spec.signal.FromState(of=ctrl_pop.rate,
+                                              transform=spec.fn.Tanh()))
 ```
 
 Signals appear as `SignalNode` in the IR (§3.16) and can carry
@@ -750,28 +750,28 @@ closes the experiment-protocol gap — ITI / stim / response windows
 and multi-condition randomization are expressible directly.
 
 ```python
-schedule = spec.schedule("epoch",
-    sp.schedule.Phases([
-        sp.schedule.Phase("warmup",   duration=200*u.ms,    learning=False),
-        sp.schedule.Phase("train",    duration=10*u.second, learning=True),
-        sp.schedule.Phase("probe",    duration=1*u.second,  learning=False),
-        sp.schedule.Phase("recovery", duration=500*u.ms,    learning=False),
+schedule = net.schedule("epoch",
+    spec.schedule.Phases([
+        spec.schedule.Phase("warmup",   duration=200*u.ms,    learning=False),
+        spec.schedule.Phase("train",    duration=10*u.second, learning=True),
+        spec.schedule.Phase("probe",    duration=1*u.second,  learning=False),
+        spec.schedule.Phase("recovery", duration=500*u.ms,    learning=False),
     ]))
 
 # Trial-structured (alternating ITI / stim / response):
-trial = spec.schedule("trial",
-    sp.schedule.Trial(
-        iti  = sp.schedule.Phase("iti",  duration=500*u.ms, learning=False),
-        stim = sp.schedule.Phase("stim", duration=200*u.ms, learning=True),
-        resp = sp.schedule.Phase("resp", duration=300*u.ms, learning=True),
+trial = net.schedule("trial",
+    spec.schedule.Trial(
+        iti  = spec.schedule.Phase("iti",  duration=500*u.ms, learning=False),
+        stim = spec.schedule.Phase("stim", duration=200*u.ms, learning=True),
+        resp = spec.schedule.Phase("resp", duration=300*u.ms, learning=True),
         n_trials=200,
         randomize="stim_id",
     ))
 
-spec.attach_schedule(trial)                 # global default for all plasticity
+net.attach_schedule(trial)                 # global default for all plasticity
 
 # Per-projection override:
-spec.project(..., plasticity=stdp,
+net.project(..., plasticity=stdp,
              plasticity_schedule=schedule.gated_on(["train"]))
 ```
 
@@ -782,21 +782,21 @@ spec.project(..., plasticity=stdp,
 ### 3.8.1 Standard quantities
 
 ```python
-spec.observe(exc.spikes)
-spec.observe(exc[:50].voltage)
-spec.observe(exc.current)
-spec.observe(exc.rate, every=10*u.ms, reducer="mean")
-spec.observe(exc.state("g_ampa"))          # arbitrary registered state variable
-spec.observe(projection_handle.weights, every=1*u.second)
+net.observe(exc.spikes)
+net.observe(exc[:50].voltage)
+net.observe(exc.current)
+net.observe(exc.rate, every=10*u.ms, reducer="mean")
+net.observe(exc.state("g_ampa"))          # arbitrary registered state variable
+net.observe(projection_handle.weights, every=1*u.second)
 ```
 
 Observables also accept compartmental and query handles directly:
 
 ```python
-spec.observe(pyr.compartments(morph.SomaRegion()).voltage)
-spec.observe(pyr.compartments(morph.ApicalDendrite()).state("Ca_concentration"),
+net.observe(pyr.compartments(morph.SomaRegion()).voltage)
+net.observe(pyr.compartments(morph.ApicalDendrite()).state("Ca_concentration"),
              every=1*u.ms)
-spec.observe(spec.where(tag="excitatory").spikes, name="exc_spikes")
+net.observe(net.where(tag="excitatory").spikes, name="exc_spikes")
 ```
 
 ### 3.8.2 Windowing and reducers
@@ -805,15 +805,15 @@ spec.observe(spec.where(tag="excitatory").spikes, name="exc_spikes")
 the time axis at write time.
 
 ```python
-spec.observe(it.voltage, every=0.5*u.ms,
+net.observe(it.voltage, every=0.5*u.ms,
              during=trial.window("stim"))                # phase-gated
-spec.observe(exc.spikes, reducer="rate", every=10*u.ms)  # spikes → rate
-spec.observe(exc.voltage, reducer="quantiles:0.1,0.5,0.9")
+net.observe(exc.spikes, reducer="rate", every=10*u.ms)  # spikes → rate
+net.observe(exc.voltage, reducer="quantiles:0.1,0.5,0.9")
 ```
 
 The reducer vocabulary is extensible — `mean`, `sum`, `max`, `min`,
 `rate`, `quantiles:p1,p2,…`, `last`, plus user callables via
-`reducer=sp.reduce.Custom(fn)`.
+`reducer=spec.reduce.Custom(fn)`.
 
 ---
 
@@ -839,12 +839,12 @@ view = conv1.reshape(-1)
 ### 3.9.2 Merging, splitting, concatenating
 
 ```python
-all_neurons = sp.merge(exc, inh)
-spec.project(all_neurons, readout,
+all_neurons = spec.merge(exc, inh)
+net.project(all_neurons, readout,
              rule=conn.AllToAll(weight=...), synapse=..., output=...)
 
 all_neurons = exc.concat(inh)              # equivalent
-e_part, i_part = sp.split(combined, sizes=[8000, 2000])
+e_part, i_part = spec.split(combined, sizes=[8000, 2000])
 ```
 
 Properties of merged views:
@@ -865,7 +865,7 @@ Groups are organizational labels with no semantic effect. They live in
 `compounds.groups` (§2) for tools.
 
 ```python
-spec.group("recurrent_core", [exc, inh], tags=("balanced_eI",))
+net.group("recurrent_core", [exc, inh], tags=("balanced_eI",))
 ```
 
 ### 3.9.4 Spatial views — `within(mask)`
@@ -874,12 +874,12 @@ A spatial view is "the indices of `pop` whose positions lie inside
 `mask`." It requires the population to carry `positions=`.
 
 ```python
-patch = v1.within(sp.mask.Circular(radius=100*u.um,
+patch = v1.within(spec.mask.Circular(radius=100*u.um,
                                     center=(250*u.um, 250*u.um)))
-spec.observe(patch.voltage, every=1*u.ms, reducer="mean")
+net.observe(patch.voltage, every=1*u.ms, reducer="mean")
 
 # As projection target:
-spec.project(driver, v1.within(sp.mask.Wedge(0, jnp.pi/4)),
+net.project(driver, v1.within(spec.mask.Wedge(0, jnp.pi/4)),
              rule=conn.FixedProb(prob=0.5, weight=...),
              synapse=..., output=...)
 ```
@@ -908,14 +908,14 @@ target of `attach_plasticity` for compartment-local rules.
 
 ```python
 # Tag-based (single tag, any-of, all-of):
-excitatory = spec.where(tag="excitatory")
-deep_e     = spec.where(tag=("cortex", "L5", "excitatory"), mode="all")
-either     = spec.where(tag=("cortex", "thalamus"),         mode="any")
+excitatory = net.where(tag="excitatory")
+deep_e     = net.where(tag=("cortex", "L5", "excitatory"), mode="all")
+either     = net.where(tag=("cortex", "thalamus"),         mode="any")
 
 # Predicate-based:
-big_pops = spec.filter(lambda p: p.size > 1000)
-lif_only = spec.filter(lambda p: p.model.kind == "LIF")
-named    = spec.filter(lambda p: p.id.startswith("aud_"))
+big_pops = net.filter(lambda p: p.size > 1000)
+lif_only = net.filter(lambda p: p.model.kind == "LIF")
+named    = net.filter(lambda p: p.id.startswith("aud_"))
 
 # Set-algebra on queries:
 big_exc  = excitatory & big_pops
@@ -923,7 +923,7 @@ big_or_e = excitatory | big_pops
 not_lif  = excitatory - lif_only
 
 # Iteration — get the matched handles back:
-for pop in spec.where(tag="excitatory"):
+for pop in net.where(tag="excitatory"):
     ...
 ```
 
@@ -935,9 +935,9 @@ views.
 **Tag management** (declaratively, after the fact):
 
 ```python
-spec.tag(pyr_pop, "cortex", "L5", "pyramidal")
-spec.untag(pyr_pop, "draft")
-spec.tag_where(spec.filter(lambda p: p.size > 5000), "large")
+net.tag(pyr_pop, "cortex", "L5", "pyramidal")
+net.untag(pyr_pop, "draft")
+net.tag_where(net.filter(lambda p: p.size > 5000), "large")
 ```
 
 **Caveats.** Predicate callables must be picklable for IR
@@ -963,13 +963,13 @@ determinism (G4).
 
 ```python
 # Same rule fans out over every excitatory–excitatory pair:
-spec.project(excitatory, excitatory,
+net.project(excitatory, excitatory,
              rule=conn.FixedProb(prob=0.05, weight=0.05*u.nS),
              synapse=syn, output=coba,
              broadcast="pairwise")
 
 # Cartesian thalamic × cortex routing:
-spec.project(spec.where(tag="thalamic"), spec.where(tag="cortex"),
+net.project(net.where(tag="thalamic"), net.where(tag="cortex"),
              rule=conn.Gaussian(sigma=200*u.um, prob_max=0.1, ...),
              synapse=syn, output=coba,
              broadcast="cross")
@@ -987,22 +987,22 @@ or `Trainable[<scalar with Noise>]`.
 ### 3.10.1 `Trainable` — gradient-bearing values
 
 ```python
-neuron = sp.models.LIF(
-    tau=sp.train(20*u.ms, constraint="positive"),
+neuron = spec.models.LIF(
+    tau=spec.train(20*u.ms, constraint="positive"),
     V_th=-50*u.mV, V_reset=-60*u.mV, V_rest=-65*u.mV,
 )
 
 rule = conn.FixedProb(
     prob=0.1,
-    weight=sp.train(init.Normal(mean=0.1*u.nS, std=0.05*u.nS),
+    weight=spec.train(init.Normal(mean=0.1*u.nS, std=0.05*u.nS),
                      name="exc_to_inh.W"),
 )
 
-exc = spec.population("exc", neuron, size=1024,
-    init={"V": sp.train(init.Uniform(low=-65*u.mV, high=-55*u.mV))})
+exc = net.population("exc", neuron, size=1024,
+    init={"V": spec.train(init.Uniform(low=-65*u.mV, high=-55*u.mV))})
 
-spec.project(exc, inh, rule=conn.FixedProb(prob=0.1),
-             synapse=..., output=..., weight=sp.train(0.1*u.nS))
+net.project(exc, inh, rule=conn.FixedProb(prob=0.1),
+             synapse=..., output=..., weight=spec.train(0.1*u.nS))
 ```
 
 **Mapping to `brainstate.nn.Param`.** At backend build, every
@@ -1061,7 +1061,7 @@ as `DistRef`:
 
 ```python
 weight=init.LogNormal(mean=0.1*u.nS, std=0.05*u.nS)   # accepted directly
-weight=sp.train(init.LogNormal(...))                   # trainable + distributed
+weight=spec.train(init.LogNormal(...))                   # trainable + distributed
 ```
 
 `DistRef` is materialized as a concrete array (with units) at backend
@@ -1080,33 +1080,33 @@ class Noise:
     params: Mapping[str, Any]
     seed_tag: Optional[str] = None     # override default fold-in tag
 
-sp.noise.Wiener(sigma)              # dW = sigma * sqrt(dt) * eta
-sp.noise.OU(sigma, tau)             # Ornstein–Uhlenbeck colored noise
-sp.noise.Multiplicative(sigma, of)  # x' += sigma * x * eta (used on weights)
-sp.noise.Poisson(rate, amp)         # shot noise — discrete kicks
-sp.noise.Custom(fn)                 # user callable; must be backend-pure
+spec.noise.Wiener(sigma)              # dW = sigma * sqrt(dt) * eta
+spec.noise.OU(sigma, tau)             # Ornstein–Uhlenbeck colored noise
+spec.noise.Multiplicative(sigma, of)  # x' += sigma * x * eta (used on weights)
+spec.noise.Poisson(rate, amp)         # shot noise — discrete kicks
+spec.noise.Custom(fn)                 # user callable; must be backend-pure
 ```
 
 `Noise` lives inside a model's `params` under the conventional key
 `"noise": { <state_var>: Noise(...), ... }`:
 
 ```python
-neuron = sp.models.LIF(
+neuron = spec.models.LIF(
     tau=20*u.ms, V_th=-50*u.mV, V_reset=-60*u.mV, V_rest=-65*u.mV,
-    noise={"V": sp.noise.OU(sigma=2*u.mV, tau=5*u.ms)},
+    noise={"V": spec.noise.OU(sigma=2*u.mV, tau=5*u.ms)},
 )
 
-adex = sp.models.AdEx(
+adex = spec.models.AdEx(
     ...,
     noise={
-        "V": sp.noise.Wiener(sigma=0.5*u.mV / u.ms**0.5),
-        "w": sp.noise.OU(sigma=10*u.pA, tau=50*u.ms),
+        "V": spec.noise.Wiener(sigma=0.5*u.mV / u.ms**0.5),
+        "w": spec.noise.OU(sigma=10*u.pA, tau=50*u.ms),
     },
 )
 
-plast = sp.plasticity.STDP(
+plast = spec.plasticity.STDP(
     A_pre=0.01, A_post=-0.0105, tau_pre=20*u.ms, tau_post=20*u.ms,
-    weight_noise=sp.noise.Multiplicative(sigma=0.005, of="w"),
+    weight_noise=spec.noise.Multiplicative(sigma=0.005, of="w"),
 )
 ```
 
@@ -1159,16 +1159,16 @@ violate G1 ("describe what, not how to step").
 ### 3.11.1 Subnetwork — parameterized inner spec
 
 ```python
-def column_spec(N: int, *, name: str) -> sp.NetSpec:
-    s = sp.NetSpec(name)
-    E = s.population("E", sp.models.LIF(...), size=int(0.8*N))
-    I = s.population("I", sp.models.LIF(...), size=int(0.2*N))
+def column_spec(N: int, *, name: str) -> spec.NetSpec:
+    s = spec.NetSpec(name)
+    E = s.population("E", spec.models.LIF(...), size=int(0.8*N))
+    I = s.population("I", spec.models.LIF(...), size=int(0.2*N))
     s.project(E, I, ...)
     s.project(I, E, ...)
     s.export(E=E, I=I)
     return s
 
-net = sp.NetSpec("multi_column")
+net = spec.NetSpec("multi_column")
 cols = [net.subnetwork(f"col_{k}", column_spec, N=1000) for k in range(4)]
 for a, b in zip(cols, cols[1:]):
     net.project(a.E, b.E,
@@ -1183,37 +1183,37 @@ own `SubNetworkNode` with the supplied params.
 ### 3.11.2 Sequential — linear stacks for deep SNNs
 
 ```python
-spec = sp.NetSpec("spiking_mnist", meta={"batch": 64})
+net = spec.NetSpec("spiking_mnist", meta={"batch": 64})
 
-stack = spec.sequential(
+stack = net.sequential(
     "encoder",
     [
-        sp.input.LayerImage(shape=(1, 28, 28)),
-        sp.layer.Conv2d(out_channels=16, kernel=3,
-                        neuron=sp.models.LIF(tau=10*u.ms,
+        spec.input.LayerImage(shape=(1, 28, 28)),
+        spec.layer.Conv2d(out_channels=16, kernel=3,
+                        neuron=spec.models.LIF(tau=10*u.ms,
                             V_th=-50*u.mV, V_reset=-60*u.mV, V_rest=-65*u.mV),
-                        weight=sp.train(init.KaimingNormal())),
-        sp.layer.MaxPool2d(kernel=2),
-        sp.layer.Conv2d(out_channels=32, kernel=3,
-                        neuron=sp.models.LIF(tau=10*u.ms,
+                        weight=spec.train(init.KaimingNormal())),
+        spec.layer.MaxPool2d(kernel=2),
+        spec.layer.Conv2d(out_channels=32, kernel=3,
+                        neuron=spec.models.LIF(tau=10*u.ms,
                             V_th=-50*u.mV, V_reset=-60*u.mV, V_rest=-65*u.mV),
-                        weight=sp.train(init.KaimingNormal())),
-        sp.layer.Flatten(),
-        sp.layer.Linear(out=10,
-                        neuron=sp.models.LeakyRateReadout(),
-                        weight=sp.train(init.XavierNormal())),
+                        weight=spec.train(init.KaimingNormal())),
+        spec.layer.Flatten(),
+        spec.layer.Linear(out=10,
+                        neuron=spec.models.LeakyRateReadout(),
+                        weight=spec.train(init.XavierNormal())),
     ],
 )
 
-spec.observe(stack.output.rate)
-ir = spec.finalize()
+net.observe(stack.output.rate)
+ir = net.finalize()
 
 from brainpy.state import bptt
 trainer = bptt.build(ir, seed=0, dt=1*u.ms,
-                     loss=sp.loss.cross_entropy)
+                     loss=spec.loss.cross_entropy)
 ```
 
-`spec.sequential(name, layers)` returns a `SequentialHandle` whose
+`net.sequential(name, layers)` returns a `SequentialHandle` whose
 `.output` is the `PopulationHandle` of the last layer. Each entry is
 one of:
 
@@ -1232,38 +1232,38 @@ and a parameterized connectivity rule (`Pool2d`, `Reshape`, …) but no
 output is the canonical way to express recurrence in a linear stack:
 
 ```python
-core = spec.sequential("rsnn", [
-    sp.layer.Linear(out=512, neuron=sp.models.ALIF(...),
-                    weight=sp.train(init.XavierNormal())),
+core = net.sequential("rsnn", [
+    spec.layer.Linear(out=512, neuron=spec.models.ALIF(...),
+                    weight=spec.train(init.XavierNormal())),
 ])
-spec.project(core.output, core.output,
+net.project(core.output, core.output,
              rule=conn.Random(prob=0.1,
-                              weight=sp.train(init.Normal(std=0.05))),
-             synapse=sp.models.Expon(tau=5*u.ms),
-             output=sp.models.CUBA())
+                              weight=spec.train(init.Normal(std=0.05))),
+             synapse=spec.models.Expon(tau=5*u.ms),
+             output=spec.models.CUBA())
 ```
 
-### 3.11.3 DAG — `spec.graph` and merge layers
+### 3.11.3 DAG — `net.graph` and merge layers
 
 Modern deep SNNs have skip connections, parallel branches, and
-multi-input ops. `spec.graph` is the explicit DAG form:
+multi-input ops. `net.graph` is the explicit DAG form:
 
 ```python
-g = spec.graph("encoder", meta={"batch": 64})
+g = net.graph("encoder", meta={"batch": 64})
 
-img = g.input(sp.input.LayerImage(shape=(1, 28, 28)))
-c1  = g.node("conv1", sp.layer.Conv2d(out=32, kernel=3, neuron=lif), inputs=img)
-p1  = g.node("pool1", sp.layer.MaxPool2d(2),                          inputs=c1)
-c2  = g.node("conv2", sp.layer.Conv2d(out=64, kernel=3, neuron=lif), inputs=p1)
-c3  = g.node("conv3", sp.layer.Conv2d(out=64, kernel=3, neuron=lif), inputs=c2)
+img = g.input(spec.input.LayerImage(shape=(1, 28, 28)))
+c1  = g.node("conv1", spec.layer.Conv2d(out=32, kernel=3, neuron=lif), inputs=img)
+p1  = g.node("pool1", spec.layer.MaxPool2d(2),                          inputs=c1)
+c2  = g.node("conv2", spec.layer.Conv2d(out=64, kernel=3, neuron=lif), inputs=p1)
+c3  = g.node("conv3", spec.layer.Conv2d(out=64, kernel=3, neuron=lif), inputs=c2)
 
 # Skip — 1x1 projection of p1 added to c3:
-proj = g.node("skip_proj", sp.layer.Conv2d(out=64, kernel=1, neuron=identity),
+proj = g.node("skip_proj", spec.layer.Conv2d(out=64, kernel=1, neuron=identity),
               inputs=p1)
-skip = g.node("skip_add", sp.layer.Add(), inputs=[c3, proj])
+skip = g.node("skip_add", spec.layer.Add(), inputs=[c3, proj])
 
-flat = g.node("flat",   sp.layer.Flatten(),                    inputs=skip)
-out  = g.node("logits", sp.layer.Linear(out=10, neuron=readout),
+flat = g.node("flat",   spec.layer.Flatten(),                    inputs=skip)
+out  = g.node("logits", spec.layer.Linear(out=10, neuron=readout),
               inputs=flat)
 g.export(output=out)
 ```
@@ -1292,19 +1292,19 @@ acyclic graph, not implicit broadcast.
 
 ```python
 # fork: one input, multiple parallel branches, merge at the end
-block = spec.fork(
+block = net.fork(
     p1,
     branches=[
-        sp.sequential(layers=[sp.layer.Conv2d(out=64, kernel=3, neuron=lif),
-                              sp.layer.Conv2d(out=64, kernel=3, neuron=lif)]),
-        sp.sequential(layers=[sp.layer.Conv2d(out=64, kernel=1, neuron=identity)]),
+        spec.sequential(layers=[spec.layer.Conv2d(out=64, kernel=3, neuron=lif),
+                              spec.layer.Conv2d(out=64, kernel=3, neuron=lif)]),
+        spec.sequential(layers=[spec.layer.Conv2d(out=64, kernel=1, neuron=identity)]),
     ],
-    merge=sp.layer.Add(),
+    merge=spec.layer.Add(),
 )
 
 # Operator sugar (returns a graph node):
-out = (c1 | sp.layer.Conv2d(out=64, kernel=3, neuron=lif)
-          | sp.layer.MaxPool2d(2))
+out = (c1 | spec.layer.Conv2d(out=64, kernel=3, neuron=lif)
+          | spec.layer.MaxPool2d(2))
 ```
 
 ### 3.11.4 Temporal semantics
@@ -1319,10 +1319,10 @@ explicit for cyclic graphs:
 
 ```python
 # Top-down feedback that closes a loop — must be next-step:
-spec.project(c3.output, c1.output,
-             rule=conn.AllToAll(weight=sp.train(init.XavierNormal())),
-             synapse=sp.models.Expon(tau=10*u.ms),
-             output=sp.models.CUBA(),
+net.project(c3.output, c1.output,
+             rule=conn.AllToAll(weight=spec.train(init.XavierNormal())),
+             synapse=spec.models.Expon(tau=10*u.ms),
+             output=spec.models.CUBA(),
              temporal_offset="next_step")
 ```
 
@@ -1359,11 +1359,11 @@ exist so that no class of learning rule forces a backend rewrite.
 The default. Pass any registered plasticity model as `plasticity=`:
 
 ```python
-stdp = sp.plasticity.STDP(tau_pre=20*u.ms, tau_post=20*u.ms,
+stdp = spec.plasticity.STDP(tau_pre=20*u.ms, tau_post=20*u.ms,
                           A_pre=0.01, A_post=-0.0105,
                           w_min=0*u.nS, w_max=1*u.nS)
 
-spec.project(pre, post,
+net.project(pre, post,
              rule=conn.FixedProb(prob=0.1, weight=...),
              synapse=syn, output=coba,
              plasticity=stdp)
@@ -1378,18 +1378,18 @@ A plasticity rule's `modulators=` mapping binds signal handles
 (§3.7.2) to role names declared by the rule kind:
 
 ```python
-reward = spec.signal("reward",
-                     source=sp.signal.External(unit=u.dimensionless))
-da     = spec.signal("dopamine",
-                     source=sp.signal.PopulationRate(vta, tau=200*u.ms))
+reward = net.signal("reward",
+                     source=spec.signal.External(unit=u.dimensionless))
+da     = net.signal("dopamine",
+                     source=spec.signal.PopulationRate(vta, tau=200*u.ms))
 
-stdp_da = sp.plasticity.RewardModulatedSTDP(
+stdp_da = spec.plasticity.RewardModulatedSTDP(
     tau_pre=20*u.ms, tau_post=20*u.ms,
     A_pre=0.01, A_post=-0.0105,
     modulators={"reward": reward, "baseline": 1.0},
 )
 
-spec.project(cortex, striatum,
+net.project(cortex, striatum,
              rule=conn.FixedProb(prob=0.1,
                                  weight=init.Uniform(0.05, 0.15)*u.nS),
              synapse=syn, output=coba,
@@ -1407,15 +1407,15 @@ different projection. Two roles:
 
 ```python
 # Eligibility owned by one projection (the trace producer):
-recurrent = spec.project(hidden, hidden, ...,
-    plasticity=sp.plasticity.EligibilitySource(
+recurrent = net.project(hidden, hidden, ...,
+    plasticity=spec.plasticity.EligibilitySource(
         name="etr", kind="eprop", tau=20*u.ms))
 
 # Read by another (the consumer):
-readout = spec.project(hidden, out, ...,
-    plasticity=sp.plasticity.EligibilityConsumer(
+readout = net.project(hidden, out, ...,
+    plasticity=spec.plasticity.EligibilityConsumer(
         trace="etr",                          # name reference
-        lr=sp.train(1e-3, constraint="positive"),
+        lr=spec.train(1e-3, constraint="positive"),
         modulators={"reward": reward}))
 ```
 
@@ -1428,16 +1428,16 @@ A schedule (§3.7.3) is attached globally with `spec.attach_schedule`,
 or per-projection via `plasticity_schedule=`:
 
 ```python
-trial = spec.schedule("trial", sp.schedule.Trial(
-    iti  = sp.schedule.Phase("iti",  duration=500*u.ms, learning=False),
-    stim = sp.schedule.Phase("stim", duration=200*u.ms, learning=True),
-    resp = sp.schedule.Phase("resp", duration=300*u.ms, learning=True),
+trial = net.schedule("trial", spec.schedule.Trial(
+    iti  = spec.schedule.Phase("iti",  duration=500*u.ms, learning=False),
+    stim = spec.schedule.Phase("stim", duration=200*u.ms, learning=True),
+    resp = spec.schedule.Phase("resp", duration=300*u.ms, learning=True),
     n_trials=2000, randomize="stim_id"))
 
-spec.attach_schedule(trial)   # global default for all plasticity
+net.attach_schedule(trial)   # global default for all plasticity
 
 # Per-projection override (only learn during "stim"):
-spec.project(it, str_d1, ...,
+net.project(it, str_d1, ...,
              plasticity=stdp_da,
              plasticity_schedule=trial.gated_on(["stim"]))
 ```
@@ -1448,10 +1448,10 @@ Edge sets become time-varying via a dedicated `structural_plasticity=`
 slot:
 
 ```python
-spec.project(exc, exc,
+net.project(exc, exc,
     rule=conn.FixedProb(prob=0.1, weight=...),
     synapse=..., output=...,
-    structural_plasticity=sp.plasticity.Structural(
+    structural_plasticity=spec.plasticity.Structural(
         kind="rewire_random",
         period=1*u.second,            # evaluate every 1s of sim time
         activity_target=10*u.Hz,      # homeostatic target rate
@@ -1477,17 +1477,17 @@ post-hoc (per-population, no projection target needed):
 
 ```python
 # Synaptic scaling on every excitatory population:
-for pop in spec.where(tag="excitatory"):
-    spec.attach_plasticity(pop,
-        sp.plasticity.SynapticScaling(
+for pop in net.where(tag="excitatory"):
+    net.attach_plasticity(pop,
+        spec.plasticity.SynapticScaling(
             target_rate=5*u.Hz, tau=1*u.minute,
-            activity=sp.signal.PopulationRate(pop, tau=10*u.second)))
+            activity=spec.signal.PopulationRate(pop, tau=10*u.second)))
 
 # BCM with sliding threshold (meta-plasticity):
-bcm = sp.plasticity.BCM(
-    threshold=sp.signal.RunningMean(of=post.rate, tau=10*u.second),
+bcm = spec.plasticity.BCM(
+    threshold=spec.signal.RunningMean(of=post.rate, tau=10*u.second),
     lr=1e-3)
-spec.project(..., plasticity=bcm)
+net.project(..., plasticity=bcm)
 ```
 
 ---
@@ -1604,27 +1604,27 @@ value:
 
 ```python
 # 1.1 Single-path .update(path, value):
-spec2 = spec.update("populations.exc.model.tau", 25*u.ms)
+net2 = net.update("populations.exc.model.tau", 25*u.ms)
 
 # 1.2 Mapping .update({path: value, ...}):
-spec2 = spec.update({
+net2 = net.update({
     "populations.exc.model.tau": 25*u.ms,
     "projections[0].rule.weight": 0.2*u.nS,
 })
 
 # 1.3 .with_() — Pythonic, builds the mapping for you:
-spec2 = spec.with_(populations={"exc": {"model": {"tau": 25*u.ms}}})
+net2 = net.with_(populations={"exc": {"model": {"tau": 25*u.ms}}})
 
 # 1.4 .patch(*patches) — richer operations:
-spec2 = spec.patch(
-    sp.spec.ParamPatch("populations.exc.model.tau", 25*u.ms),
-    sp.spec.ParamPatch("projections[*].rule.weight", 2.0, op="scale"),
-    sp.spec.ParamPatch("populations.inh.model.tau", None,
+net2 = net.patch(
+    spec.ParamPatch("populations.exc.model.tau", 25*u.ms),
+    spec.ParamPatch("projections[*].rule.weight", 2.0, op="scale"),
+    spec.ParamPatch("populations.inh.model.tau", None,
                         op="replace_with_trainable"),
 )
 ```
 
-All four are immutable — `spec` is unchanged, `spec2` is a new builder
+All four are immutable — `net` is unchanged, `net2` is a new builder
 with the edits applied. The corresponding methods on `NetIR` have
 identical semantics. The YAML loader's `overrides=` kwarg (§4.4) is
 exactly `NetIR.update(mapping)` after schema parsing.
@@ -1662,7 +1662,7 @@ sim = clock.build(ir, seed=0, dt=0.1*u.ms)
 sim.parameters.get("populations.exc.model.tau")            # 20 ms
 sim.parameters.set("populations.exc.model.tau", 25*u.ms)   # live update
 sim.parameters.apply(
-    sp.spec.ParamPatch("projections[*].rule.weight", 1.5, op="scale"),
+    spec.ParamPatch("projections[*].rule.weight", 1.5, op="scale"),
 )
 
 with sim.parameters.batch():
@@ -1701,7 +1701,7 @@ state.
 A convenience helper covers the common rebuild path:
 
 ```python
-sim2 = sim.rebuild_with(spec.update("populations.exc.size", 16000))
+sim2 = sim.rebuild_with(net.update("populations.exc.size", 16000))
 # Equivalent to:
 #   ir2  = sim.ir.update("populations.exc.size", 16000)
 #   sim2 = clock.build(ir2, seed=sim.seed, dt=sim.dt)
@@ -1748,7 +1748,7 @@ node matches:
 
 ```python
 # Make all LIF populations faster:
-spec.patch(sp.ParamPatch(
+net.patch(spec.ParamPatch(
     where=lambda node: getattr(node.model, "kind", None) == "LIF",
     path="tau",
     value=15*u.ms,
@@ -1756,7 +1756,7 @@ spec.patch(sp.ParamPatch(
 ))
 
 # Scale every learnable weight by 0.5 across all projections:
-spec.patch(sp.ParamPatch(
+net.patch(spec.ParamPatch(
     where=lambda node: isinstance(node.rule.params.get("weight"), Trainable),
     path="rule.weight.value",
     value=0.5, op="scale",
@@ -1764,7 +1764,7 @@ spec.patch(sp.ParamPatch(
 ```
 
 Predicates have the same picklability constraints as
-`spec.filter(...)` (§3.9.6). YAML uses the same predicate sub-grammar.
+`net.filter(...)` (§3.9.6). YAML uses the same predicate sub-grammar.
 
 ---
 
@@ -1784,32 +1784,32 @@ A 4-area cortex–striatum loop with:
   excitatory population by tag.
 
 ```python
-import brainpy.state.spec as sp
+import brainpy.state.spec as spec
 import brainpy.state.spec.morph as morph
 import brainpy.state.spec.mech as mech
 import braintools.conn as conn
 import braintools.init as init
 import saiunit as u
 
-spec = sp.NetSpec("cortex_striatum_loop", meta={"batch": 8})
+net = spec.NetSpec("cortex_striatum_loop", meta={"batch": 8})
 
 # ── 1. Populations with spatial layout ──────────────────────────────
-lif = sp.models.LIF(tau=20*u.ms, V_th=-50*u.mV,
+lif = spec.models.LIF(tau=20*u.ms, V_th=-50*u.mV,
                     V_reset=-60*u.mV, V_rest=-65*u.mV,
-                    noise={"V": sp.noise.OU(sigma=1.5*u.mV, tau=5*u.ms)})
+                    noise={"V": spec.noise.OU(sigma=1.5*u.mV, tau=5*u.ms)})
 
-v1 = spec.population("V1", lif,
-        positions=sp.geometry.Grid2d(rows=50, cols=50, spacing=10*u.um,
+v1 = net.population("V1", lif,
+        positions=spec.geometry.Grid2d(rows=50, cols=50, spacing=10*u.um,
                                      periodic=(True, True)),
         tags=("cortex", "V1", "excitatory"))
 
-v4 = spec.population("V4", lif,
-        positions=sp.geometry.Free(positions=load_v4_xyz(),
+v4 = net.population("V4", lif,
+        positions=spec.geometry.Free(positions=load_v4_xyz(),
                                     extent=(1*u.mm,)*2),
         tags=("cortex", "V4", "excitatory"))
 
 # ── 2. Morphological L5 pyramidals in IT ────────────────────────────
-pyr_cell = sp.models.Cell(
+pyr_cell = spec.models.Cell(
     morphology=morph.from_swc("l5_pyr.swc"),
     paint=[
         (morph.AllRegion(),      mech.CableProperty(Cm=1*u.uF/u.cm**2,
@@ -1817,112 +1817,112 @@ pyr_cell = sp.models.Cell(
         (morph.SomaRegion(),     mech.Channel("INa_HH",  g_max=0.12*u.S/u.cm**2)),
         (morph.SomaRegion(),     mech.Channel("IKDR_HH", g_max=0.036*u.S/u.cm**2)),
         (morph.ApicalDendrite(), mech.Channel("Ih",
-                                  g_max=sp.train(
+                                  g_max=spec.train(
                                       init.LogNormal(mean=0.005*u.S/u.cm**2,
                                                       std=0.001*u.S/u.cm**2)))),
     ],
     solver="staggered")
 
-it = spec.population("IT", pyr_cell, size=500,
+it = net.population("IT", pyr_cell, size=500,
                      tags=("cortex", "IT", "excitatory", "L5_pyramidal"))
 
 # ── 3. Striatum, 3D ─────────────────────────────────────────────────
-msn = sp.models.LIF(tau=10*u.ms, V_th=-45*u.mV,
+msn = spec.models.LIF(tau=10*u.ms, V_th=-45*u.mV,
                     V_reset=-55*u.mV, V_rest=-70*u.mV)
-str_d1 = spec.population("Str_D1", msn,
-            positions=sp.geometry.Grid3d(shape=(10, 20, 20), spacing=20*u.um),
+str_d1 = net.population("Str_D1", msn,
+            positions=spec.geometry.Grid3d(shape=(10, 20, 20), spacing=20*u.um),
             tags=("striatum", "D1", "inhibitory"))
 
 # ── 4. Reward / dopamine signals ────────────────────────────────────
-reward = spec.signal("reward",
-                     source=sp.signal.External(unit=u.dimensionless))
-da = spec.signal("dopamine",
-                 source=sp.signal.PopulationRate(spec.where(tag="VTA"),
+reward = net.signal("reward",
+                     source=spec.signal.External(unit=u.dimensionless))
+da = net.signal("dopamine",
+                 source=spec.signal.PopulationRate(net.where(tag="VTA"),
                                                   tau=200*u.ms,
-                                                  transfer=sp.fn.Sigmoid(beta=5)))
+                                                  transfer=spec.fn.Sigmoid(beta=5)))
 
 # ── 5. Visual stream — DAG encoder with skip ────────────────────────
-spec.input(v1, sp.input.LayerImage(shape=(1, 28, 28)),
-           weight=sp.train(init.KaimingNormal()))
+net.input(v1, spec.input.LayerImage(shape=(1, 28, 28)),
+           weight=spec.train(init.KaimingNormal()))
 
-enc = spec.graph("ResNet_encoder")
+enc = net.graph("ResNet_encoder")
 x  = enc.input_handle(v1)
-c1 = enc.node("c1",    sp.layer.Conv2d(out=64,  kernel=3, neuron=lif), inputs=x)
-p1 = enc.node("p1",    sp.layer.MaxPool2d(2),                          inputs=c1)
-c2 = enc.node("c2",    sp.layer.Conv2d(out=128, kernel=3, neuron=lif), inputs=p1)
-c3 = enc.node("c3",    sp.layer.Conv2d(out=128, kernel=3, neuron=lif), inputs=c2)
-sk = enc.node("sk",    sp.layer.Conv2d(out=128, kernel=1, neuron=lif), inputs=p1)
-mg = enc.node("merge", sp.layer.Add(),                                  inputs=[c3, sk])
+c1 = enc.node("c1",    spec.layer.Conv2d(out=64,  kernel=3, neuron=lif), inputs=x)
+p1 = enc.node("p1",    spec.layer.MaxPool2d(2),                          inputs=c1)
+c2 = enc.node("c2",    spec.layer.Conv2d(out=128, kernel=3, neuron=lif), inputs=p1)
+c3 = enc.node("c3",    spec.layer.Conv2d(out=128, kernel=3, neuron=lif), inputs=c2)
+sk = enc.node("sk",    spec.layer.Conv2d(out=128, kernel=1, neuron=lif), inputs=p1)
+mg = enc.node("merge", spec.layer.Add(),                                  inputs=[c3, sk])
 enc.export(output=mg)
-spec.project(enc.output, v4,
+net.project(enc.output, v4,
              rule=conn.FixedProb(prob=0.1,
-                                 weight=sp.train(init.XavierNormal())),
-             synapse=sp.models.Expon(tau=5*u.ms),
-             output=sp.models.COBA(E=0*u.mV))
+                                 weight=spec.train(init.XavierNormal())),
+             synapse=spec.models.Expon(tau=5*u.ms),
+             output=spec.models.COBA(E=0*u.mV))
 
 # ── 6. Spatial / compartmental projections ──────────────────────────
-spec.project(v1, v1,
+net.project(v1, v1,
     rule=conn.Gaussian(sigma=80*u.um, prob_max=0.15, cutoff=240*u.um,
                        weight=0.05*u.nS, allow_self_connections=False),
-    synapse=sp.models.Expon(tau=5*u.ms),
-    output=sp.models.COBA(E=0*u.mV))
+    synapse=spec.models.Expon(tau=5*u.ms),
+    output=spec.models.COBA(E=0*u.mV))
 
-spec.project(v4, it.compartments(morph.ApicalDendrite()),
+net.project(v4, it.compartments(morph.ApicalDendrite()),
     rule=conn.ApicalDendriteTargeting(prob=0.05,
-        distance_pref=sp.kernel.Gaussian(mu=400*u.um, sigma=80*u.um),
-        weight=sp.train(0.2*u.nS)),
-    synapse=sp.models.Expon(tau=5*u.ms),
-    output=sp.models.COBA(E=0*u.mV))
+        distance_pref=spec.kernel.Gaussian(mu=400*u.um, sigma=80*u.um),
+        weight=spec.train(0.2*u.nS)),
+    synapse=spec.models.Expon(tau=5*u.ms),
+    output=spec.models.COBA(E=0*u.mV))
 
 # ── 7. Plasticity with reward, schedule, eligibility ────────────────
-trial = spec.schedule("trial", sp.schedule.Trial(
-    iti  = sp.schedule.Phase("iti",  duration=500*u.ms, learning=False),
-    stim = sp.schedule.Phase("stim", duration=200*u.ms, learning=True),
-    resp = sp.schedule.Phase("resp", duration=300*u.ms, learning=True),
+trial = net.schedule("trial", spec.schedule.Trial(
+    iti  = spec.schedule.Phase("iti",  duration=500*u.ms, learning=False),
+    stim = spec.schedule.Phase("stim", duration=200*u.ms, learning=True),
+    resp = spec.schedule.Phase("resp", duration=300*u.ms, learning=True),
     n_trials=2000, randomize="stim_id"))
-spec.attach_schedule(trial)
+net.attach_schedule(trial)
 
-spec.project(it, str_d1,
+net.project(it, str_d1,
     rule=conn.FixedProb(prob=0.1,
-                        weight=sp.train(init.LogNormal(mean=0.05*u.nS,
+                        weight=spec.train(init.LogNormal(mean=0.05*u.nS,
                                                         std=0.02*u.nS))),
-    synapse=sp.models.Expon(tau=5*u.ms),
-    output=sp.models.COBA(E=0*u.mV),
-    plasticity=sp.plasticity.EligibilitySource(
+    synapse=spec.models.Expon(tau=5*u.ms),
+    output=spec.models.COBA(E=0*u.mV),
+    plasticity=spec.plasticity.EligibilitySource(
         name="ctx_str", kind="exp", tau=200*u.ms))
 
-spec.project(it, str_d1,
+net.project(it, str_d1,
     rule=conn.FixedProb(prob=0.1),
-    synapse=sp.models.Expon(tau=5*u.ms),
-    output=sp.models.COBA(E=0*u.mV),
-    plasticity=sp.plasticity.EligibilityConsumer(
+    synapse=spec.models.Expon(tau=5*u.ms),
+    output=spec.models.COBA(E=0*u.mV),
+    plasticity=spec.plasticity.EligibilityConsumer(
         trace="ctx_str",
-        lr=sp.train(1e-3, constraint="positive"),
+        lr=spec.train(1e-3, constraint="positive"),
         modulators={"reward": reward, "dopamine": da}),
     plasticity_schedule=trial.gated_on(["stim", "resp"]))
 
 # ── 8. Bulk homeostatic scaling on every excitatory pop ─────────────
-for pop in spec.where(tag="excitatory"):
-    spec.attach_plasticity(pop,
-        sp.plasticity.SynapticScaling(
+for pop in net.where(tag="excitatory"):
+    net.attach_plasticity(pop,
+        spec.plasticity.SynapticScaling(
             target_rate=5*u.Hz,
             tau=30*u.second,
-            activity=sp.signal.PopulationRate(pop, tau=10*u.second)))
+            activity=spec.signal.PopulationRate(pop, tau=10*u.second)))
 
 # ── 9. Observations ─────────────────────────────────────────────────
-spec.observe(spec.where(tag="excitatory").spikes,
+net.observe(net.where(tag="excitatory").spikes,
              name="exc_spikes", every=1*u.ms)
-spec.observe(it.compartments(morph.SomaRegion()).voltage,
+net.observe(it.compartments(morph.SomaRegion()).voltage,
              every=0.5*u.ms, during=trial.window("stim"))
-spec.observe(str_d1.rate, reducer="mean", every=10*u.ms)
+net.observe(str_d1.rate, reducer="mean", every=10*u.ms)
 
 # ── 10. Build ───────────────────────────────────────────────────────
 from brainpy.state import eprop          # top-level backend module
 
-ir = spec.finalize()
+ir = net.finalize()
 trainer = eprop.build(ir, seed=0, dt=0.5*u.ms,
                       reward_signal="reward",
-                      loss=sp.loss.policy_gradient)
+                      loss=spec.loss.policy_gradient)
 ```
 
 Every line is reachable from one of §3.5 – §3.12. Nothing is bespoke.
