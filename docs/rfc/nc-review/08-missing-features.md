@@ -1,22 +1,26 @@
-# Missing or Underdeveloped Features
+# Open Underdeveloped Features
 
-> Part of the editorial report on [`../network-spec-dsl.md`](../network-spec-dsl.md). See [README](./README.md) for navigation.
+> Part of the editorial report on [`../network-spec-dsl/`](../network-spec-dsl/). See [README](./README.md) for navigation. This file lists only currently open items. Features that have been added to the spec are removed.
 
-| Category | What's missing |
-|---|---|
-| Spatial primitives | Canonical 3D position field; spatial kernels beyond Conv2d; distance-dependent connectivity grounded in stored positions. |
-| Morphology | Compartmental / cable-equation models; integration with NEURON/Arbor. (Acceptable as explicit non-goal, but state it.) |
-| Plasticity | Third-factor / neuromodulator channels; cross-projection eligibility traces; scheduled plasticity phases; structural plasticity. |
-| Stochastic dynamics | Noise terms in neuron / synapse equations; not just stochastic inputs. |
-| Experiment protocol | Trial structure, ITI, baselines, warm-up, multi-condition randomization. |
-| Datasets | Canonical references, splits, preprocessing. |
-| Optimizer / loss / schedule | Currently deferred to user; reproducibility regresses. Either canonicalize or document the trade-off explicitly. |
-| DAG composability | Skip connections, parallel branches, merge points at the layer-macro level. |
-| Tag-driven and predicate-driven views | `spec.where(tag=...)`, `spec.filter(...)`. |
-| Constraint vocabulary | Biophysical priors (parameter coupling, ratios, monotonicity). |
-| Hardware constraints | Fan-in/out, core / chip placement hints, quantization vocabulary, time-discretization. |
-| Sweep strategies | Random / Sobol / Bayesian sweep beyond cartesian; resume / early stop. |
-| Streaming recording | Disk-backed observables; downsampling reducers beyond mean/sum (quantiles, custom callables). |
-| Provenance for trained artifacts | A canonical (IR, training-run, trained-parameter-set) bundle with its own hash. |
-| Schema evolution | Migration tooling, deprecation policy, version-skew warnings. |
-| Profiling / cost models | Memory and compute estimates from the IR (population × density × dt × duration). |
+| Category                          | What's missing                                                                                                                                          | Position                                                                                                                                                                       |
+|-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Datasets                          | Canonical references, splits, preprocessing; DVS-Gesture-style temporal-stream contract.                                                                | Deferred (§3.17). For the §1.1 comparative-study claim this still bites; recommend at least a thin reference convention (defer to `tonic` / `nengo_loihi` data conventions).   |
+| Optimizer / loss / scheduler      | No canonical interface for the optimizer / loss / scheduler in `bptt.build` / `eprop.build`; `loss=` is a plain Python callable.                       | Deferred (D21). Reproducibility for the comparative-study claim is user-discipline, not spec-enforced. Recommend a thin `spec.loss.*` / `spec.optim.*` namespace.              |
+| Constraint vocabulary             | Biophysical priors (parameter coupling τ_m = R_m·C_m, monotonicity along ion-channel kinetics, ratio constraints between rest / threshold / reset).      | `Trainable.constraint` currently names `"positive" \| "unit_norm" \| "clip:lo,hi"`. Widen to a constraint registry, or hand off to a third-party constraint package.            |
+| Hardware constraints              | Fan-in / fan-out per neuron, core / chip placement hints, quantization vocabulary, time-discretization for continuous-time models targeting cycle-based hardware. | Deferred per-export-backend (D25). The middle position ("thin and undeclared") weakens the contribution; recommend either honest-scoping (state G11 as graph-level export only) or landing one platform end-to-end. |
+| Trained-artifact provenance       | Canonical `(ir_hash, bound_variables_hash, trained_param_hash, training_log_hash)` archive bundle.                                                       | Pieces are present (`bound_variables` on artifact, IR `content_hash`); bundler is not. Deferred (§3.17).                                                                       |
+| Schema evolution                  | Migration tooling, deprecation policy, version-skew warnings on load.                                                                                    | Deferred to implementation (§3.17). The forward-compatibility invariant in §3.16 is the right shape but does not constitute a versioning policy.                              |
+| Sweep strategies beyond cartesian | Random / Sobol / Bayesian sweep; resume / early-stop hooks.                                                                                              | Scoped to `brainpy sweep` CLI (§3.17). The sweep-file grammar in §4.4 covers cartesian product over declared `variables`; richer strategies remain a CLI / sweep-tool concern. |
+| Disk-backed observables           | Streaming `TraceBundle` for long simulations; spill-to-disk reducers.                                                                                    | Deferred (§3.17). The reducer vocabulary itself is substantial (mean / sum / max / min / rate / quantiles / last + custom callables); only the streaming backend is missing.    |
+| Profiling / cost models           | Memory and compute estimates from the IR alone (population × density × dt × duration).                                                                   | Scoped to `brainpy estimate` CLI (§3.17), not the spec language.                                                                                                              |
+| Multi-simulator interop           | No reachable backends for NEST / NEURON / Brian.                                                                                                         | Out of scope by design (`clock` / `event` are JAX-native); a future bridge backend could consume the IR. This is acceptable but should be stated in §1.2.2 non-goals.          |
+
+## Summary
+
+The currently load-bearing missing pieces, ordered by what blocks NC submission:
+
+- **Datasets and optimizer / loss** (the dataset / optimizer half of the protocol-reproducibility story; the schedule half is closed).
+- **Trained-artifact provenance bundle** (necessary for archival reproducibility of the comparative-study claim).
+- **Constraint vocabulary** (the only widely-applicable feature gap that is not by design decision).
+
+The remaining items are deferred-by-design (hardware, sweep strategies, disk-backed observables, profiling, multi-simulator interop) and only need to be honestly stated in §1.2.2 non-goals or, in the case of hardware, scoped explicitly in G11.

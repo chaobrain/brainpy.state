@@ -1,14 +1,17 @@
-# Conceptual and Semantic Gaps
+# Open Conceptual and Semantic Gaps
 
-> Part of the editorial report on [`../network-spec-dsl.md`](../network-spec-dsl.md). See [README](./README.md) for navigation.
+> Part of the editorial report on [`../network-spec-dsl/`](../network-spec-dsl/). See [README](./README.md) for navigation. This file lists only currently open gaps. Resolved gaps are removed.
 
-1. **Time-step semantics on cross-backend translation.** `dt` is a backend kwarg (D1), yet event-driven, fixed-step, and adaptive-step backends interpret `dt` incompatibly. The IR should at minimum carry `time_resolution_hint` for archival.
-2. **Random-state hand-off across host/device boundaries.** Documented intent is JAX-key-based, but `braintools.conn.ConnectionResult` is host (NumPy). Spec the boundary.
-3. **Population indexing under merge views.** `MergedViewHandle` denormalizes to one `ProjectionNode` per member at finalize, which means a single user projection lowers to N projections at the IR level. Observables, gradients, and `ParamPatch` paths must address these consistently — the spec does not show what happens to `projections[i]` paths when `i` indexes a denormalized projection.
-4. **Wildcard semantics for `ParamPatch`.** `projections[*].rule.weight` is mentioned; the matching against denormalized merge-view projections, sequential-lowered projections, and sub-network-inlined projections is unspecified.
-5. **Sub-network parameterization with shared trainables.** When the same `column_spec` is instantiated four times with different `N`, are their `Trainable` weights shared or independent? The spec does not say (probably independent, but parameter tying is a normal request for weight-sharing CNNs and recurrent cores).
-6. **`Trainable` over `DistRef`** — does the trainable parameterize the distribution's hyperparameters (mean, std), or freeze the distribution sample and train the resulting tensor? The example `sp.train(init.Normal(...))` suggests the latter, but a user wanting to train `mean` itself has no syntax.
-7. **`init` semantics on re-build.** §6.9.5 says `LIVE_RESET` resets corresponding state variables. For Trainable initial states, does `sim.reset()` resample from the (now possibly stale) distribution, or reuse the last sample? Specify.
-8. **Versioning policy.** `netir/1.0` — no schema-evolution policy. State the compatibility rules: which changes are minor (additive fields, defaults), which are major.
-9. **Float canonicalization across platforms.** The hash law depends on float repr stability; specify a precise encoder.
-10. **Concurrency / re-entrancy of `ParameterView`.** Is `ParameterView.batch()` thread-safe? Re-entrant? What if a training step is mid-flight? Document the synchronization contract.
+1. **Time-step semantics on cross-backend translation.** `dt` is a backend kwarg (D1), yet event-driven, fixed-step, and adaptive-step backends interpret `dt` incompatibly. The IR should at minimum carry a `time_resolution_hint` (advisory; non-binding for backends that ignore it) for archival reproducibility across backend swaps.
+
+2. **Random-state hand-off across the host/device boundary.** §9.1 #5 explicitly bans backend-side random consumption outside the seed tree, and the spec requires `braintools.conn` rules to accept a JAX key. The contract should be promoted from "spec requirement" to a documented `braintools.conn.Connectivity` rule-side invariant — currently the rule-side enforcement is implicit.
+
+3. **Sub-network parameterization with shared trainables.** When the same `column_spec` is instantiated four times with different `N`, are their `Trainable` weights shared or independent? The spec does not say (probably independent, but parameter tying is a normal request for weight-sharing CNNs and recurrent cores). Recommend an explicit statement in §3.11.1, with a possible future extension via a `ShareWith(other)` value wrapper.
+
+4. **Versioning policy.** `netir/1.0` is fixed; the forward-compatibility invariant in §3.16 ("every new field defaults to 'absent' and round-trips unchanged") is the right shape but does not constitute a versioning policy. State what triggers a minor bump (additive optional fields, new value-wrapper kinds) vs a major bump (breaking field changes, removed fields, semantic redefinition), and the deprecation policy for retired field names.
+
+5. **Float canonicalization across platforms.** §5.2 says floats are formatted with `repr` (no trailing zeros). Python's `repr` is not bit-stable across builds for all corner cases (subnormals, format-crossover thresholds). Specify a precise encoder — `numpy.format_float_positional(precision=17)`, a fixed-precision rational encoding, or an explicit byte-level encoder. Without this the content-hash law has a corner-case failure mode.
+
+6. **Trained-artifact provenance hash.** `bound_variables` is recorded on the runtime artifact and the IR's `content_hash` covers structure + variable declarations / defaults, but there is no canonical `(ir_hash, bound_variables_hash, trained_param_hash, training_log_hash)` archive object. The pieces are present; the bundler is not.
+
+7. **Observable cadence under event-driven backends.** `Observable.every: u.ms` is dt-relative under `clock`; what does it mean under `event`? Either (a) lift to a backend-uniform "nearest event after T elapses" rule, or (b) document the per-backend interpretation explicitly in §5.1.3 capability declarations.
