@@ -48,12 +48,12 @@ Section numbering follows file numbering: chapter N's content is §N (with sub-s
 | [2 — The IR (`NetIR`)](./02-ir.md)                                    | Canonical frozen-dataclass IR: value wrappers (`Trainable`, `DistRef`, `ModelRef`, `ConnRule`), topological nodes, root container, connectivity/weight/delay semantics. |
 | [3 — Frontend A: Python `NetSpec` builder](./03-frontend-python.md)   | Fluent builder API, handles, view algebra (incl. spatial / compartmental / tag-predicate), value wrappers (`Trainable` / `DistRef` / `Noise` / `VariableRef`), populations (point / spatial / morphological), projections with spatial and compartment-targeted rules, inputs / signals / schedules, observables, composition forms (subnetwork / sequential / DAG), plasticity (per-projection through structural and homeostatic), construction-time errors, build-time variables (`net.variable`, `variables=` build kwarg). |
 | [4 — Frontend B: YAML/JSON DSL](./04-frontend-yaml.md)                | Top-level YAML schema, lexical conventions, JSON Schema, parameter sweeps.                                    |
-| [5 — Backend protocol & round-trip](./05-backends.md)                 | `Backend` protocol at `brainpy.state.backend`; backend implementations as top-level modules (`brainpy.state.clock` / `event` / `bptt` / `eprop` / `eventprop` / `ppprop`); third-party backends; capability declarations; IR round-trip and equivalence guarantees. |
-| [6 — Registry](./06-registry.md)                                      | Connectivity, initializer, neuron/synapse/output/input/plasticity, and layer registries. Third-party registration via entry points. |
-| [7 — CLI & visualization](./07-cli-and-viz.md)                        | `brainpy` CLI commands, visualization modes (graph, layers, matrix, params), renderers (Mermaid, Graphviz, HTML, Matplotlib). |
-| [8 — Determinism & validation](./08-determinism-validation.md)        | Determinism contract (G4), validation rule catalog (spec-level errors `SPEC-NNN`). |
-| [9 — Implementation](./09-implementation.md)                          | Mapping to the existing codebase (`_network/`, `_brainpy/`, `_nest/`), testing strategy, relationship to the existing module-level APIs. |
-| [10 — Domain extensions](./10-domain-extensions.md)                   | The DSL substrate: **`IRNode`, `ViewHandle`, builder-verb, codec, and backend-dispatch protocols** that adjacent domains apply. Full code interfaces for the [`braincell`](https://github.com/chaobrain/braincell) and [`brainmass`](https://github.com/chaobrain/brainmass) extensions — node kinds, view handles, builder verbs, backend handlers, and user-facing examples. |
+| [5 — Domain extensions](./05-domain-extensions.md)                    | The DSL substrate: **`IRNode`, `ViewHandle`, builder-verb, codec, and backend-dispatch protocols** that adjacent domains apply. Full code interfaces for the [`braincell`](https://github.com/chaobrain/braincell) and [`brainmass`](https://github.com/chaobrain/brainmass) extensions — node kinds, view handles, builder verbs, backend handlers, and user-facing examples. |
+| [6 — Backend protocol & round-trip](./06-backends.md)                 | `Backend` protocol at `brainpy.state.backend`; backend implementations as top-level modules (`brainpy.state.clock` / `event` / `bptt` / `eprop` / `eventprop` / `ppprop`); third-party backends; capability declarations; IR round-trip and equivalence guarantees. |
+| [7 — Registry](./07-registry.md)                                      | Connectivity, initializer, neuron/synapse/output/input/plasticity, and layer registries. Third-party registration via entry points. |
+| [8 — CLI & visualization](./08-cli-and-viz.md)                        | `brainpy` CLI commands, visualization modes (graph, layers, matrix, params), renderers (Mermaid, Graphviz, HTML, Matplotlib). |
+| [9 — Determinism & validation](./09-determinism-validation.md)        | Determinism contract (G4), validation rule catalog (spec-level errors `SPEC-NNN`). |
+| [10 — Implementation](./10-implementation.md)                         | Mapping to the existing codebase (`_network/`, `_brainpy/`, `_nest/`), testing strategy, relationship to the existing module-level APIs. |
 | [11 — Appendix](./11-appendix.md)                                     | Decision log (D1–D29), Python ↔ YAML cheat sheet, open questions.                                             |
 
 ---
@@ -65,15 +65,15 @@ Each goal (G1–G10 in [Chapter 1](./01-overview.md#12-goals)) has its primary c
 | Goal | Headline                                  | Primary chapter                             | Also relevant                                                |
 |------|-------------------------------------------|---------------------------------------------|--------------------------------------------------------------|
 | G1   | Declarative spec                          | [1](./01-overview.md), [3](./03-frontend-python.md) | [4](./04-frontend-yaml.md)                                   |
-| G2   | Backend pluralism                         | [5](./05-backends.md)                       | —                                                            |
+| G2   | Backend pluralism                         | [6](./06-backends.md)                       | —                                                            |
 | G3   | Physical-units-first                      | [2](./02-ir.md)                             | —                                                            |
-| G4   | Deterministic lowering                    | [8](./08-determinism-validation.md)         | [2](./02-ir.md), [5](./05-backends.md)                       |
+| G4   | Deterministic lowering                    | [9](./09-determinism-validation.md)         | [2](./02-ir.md), [6](./06-backends.md)                       |
 | G5   | Composable specs (subnetworks)            | [3](./03-frontend-python.md), [4](./04-frontend-yaml.md) | —                                                |
-| G6   | Inspectable IR                            | [2](./02-ir.md)                             | [7](./07-cli-and-viz.md)                                     |
-| G7   | Deep / neuromorphic SNNs                  | [3](./03-frontend-python.md) (§3.11)        | [6](./06-registry.md) (layer registry)                       |
+| G6   | Inspectable IR                            | [2](./02-ir.md)                             | [8](./08-cli-and-viz.md)                                     |
+| G7   | Deep / neuromorphic SNNs                  | [3](./03-frontend-python.md) (§3.11)        | [7](./07-registry.md) (layer registry)                       |
 | G8   | View algebra                              | [3](./03-frontend-python.md) (§3.9)         | —                                                            |
-| G9   | Trainable declarations                    | [3](./03-frontend-python.md) (§3.10)        | [2](./02-ir.md), [5](./05-backends.md)                       |
-| G10  | Visualization                             | [7](./07-cli-and-viz.md)                    | —                                                            |
+| G9   | Trainable declarations                    | [3](./03-frontend-python.md) (§3.10)        | [2](./02-ir.md), [6](./06-backends.md)                       |
+| G10  | Visualization                             | [8](./08-cli-and-viz.md)                    | —                                                            |
 
 The spec is immutable after `.finalize()`. Parameters that need to
 vary across runs are declared as build-time variables
@@ -88,9 +88,9 @@ is no post-definition mutation API on the IR or on built artifacts
 
 - **Reviewers / decision-makers:** start with [Chapter 1](./01-overview.md) (problem, novelty, goals, architecture), then [Chapter 11](./11-appendix.md) (decision log).
 - **DSL users:** [Chapter 3](./03-frontend-python.md) (Python) and [Chapter 4](./04-frontend-yaml.md) (YAML) are the user-facing surface; [Chapter 11](./11-appendix.md) has the Python ↔ YAML cheat sheet.
-- **Backend authors:** [Chapter 2](./02-ir.md) (IR contract), [Chapter 5](./05-backends.md) (protocol), [Chapter 6](./06-registry.md) (registration), [Chapter 8](./08-determinism-validation.md) (determinism guarantees).
-- **Implementers landing this in `brainpy_state`:** [Chapter 9](./09-implementation.md) (codebase mapping, tests, relationship to the existing `_network` / `_brainpy` / `_nest` modules).
-- **Domain-extension authors (out-of-tree braincell / brainmass / …):** [Chapter 10](./10-domain-extensions.md) is the substrate contract — `IRNode`, `ViewHandle`, builder verbs, codecs, backend dispatch — with full worked code for both braincell and brainmass. [Chapter 6](./06-registry.md) and [Chapter 5](./05-backends.md) cover the registry and backend protocols you plug into.
+- **Backend authors:** [Chapter 2](./02-ir.md) (IR contract), [Chapter 6](./06-backends.md) (protocol), [Chapter 7](./07-registry.md) (registration), [Chapter 9](./09-determinism-validation.md) (determinism guarantees).
+- **Implementers landing this in `brainpy_state`:** [Chapter 10](./10-implementation.md) (codebase mapping, tests, relationship to the existing `_network` / `_brainpy` / `_nest` modules).
+- **Domain-extension authors (out-of-tree braincell / brainmass / …):** [Chapter 5](./05-domain-extensions.md) is the substrate contract — `IRNode`, `ViewHandle`, builder verbs, codecs, backend dispatch — with full worked code for both braincell and brainmass. [Chapter 7](./07-registry.md) and [Chapter 6](./06-backends.md) cover the registry and backend protocols you plug into.
 
 Cross-references in chapter bodies use `§N.M.P` notation; the top-level
 component `N` is the chapter (= file) number.

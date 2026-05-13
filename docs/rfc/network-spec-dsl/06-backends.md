@@ -1,8 +1,8 @@
-# Chapter 5 — Backend protocol and round-trip equivalence
+# Chapter 6 — Backend protocol and round-trip equivalence
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 5.1 Backend protocol
+## 6.1 Backend protocol
 
 Two backend families (sim, train) share the same registry plumbing but have
 distinct contracts. The protocols live at **`brainpy_state.backend`**
@@ -61,7 +61,7 @@ class Trainer(Protocol):
 
 ```
 
-### 5.1.1 Module location
+### 6.1.1 Module location
 
 Backend implementations are **top-level modules under `brainpy.state`**,
 one per backend. The `brainpy.state.spec` module deliberately contains
@@ -108,7 +108,7 @@ Why not nest under `brainpy.state.spec.backends.*`? Two reasons:
    mirrors the load-bearing novelty pitched in
    [§1.1.1](./01-overview.md#111-novelty-and-prior-art).
 
-### 5.1.2 Third-party backends
+### 6.1.2 Third-party backends
 
 Entry points group all three families. Entry-point group names sit
 under `brainpy_state.backends.*` (the registry uses `backends` plural
@@ -144,7 +144,7 @@ party + entry-point loaded). `backend.get(name)` returns the module
 object — equivalent to `from brainpy.state import <name>` for shipped
 backends.
 
-### 5.1.3 Backend capabilities
+### 6.1.3 Backend capabilities
 
 Each backend declares a `capabilities` mapping. The loader validates
 the IR against the chosen backend's capabilities and raises
@@ -176,7 +176,7 @@ class BackendCapabilities:
 ```
 
 `supported_neuron_kinds`, `supported_rules`, etc. are the load-bearing
-fields when domain extensions are in play (Chapter 10). A backend
+fields when domain extensions are in play (Chapter 5). A backend
 that handles `braincell.morph_population` lists that string in
 `supported_neuron_kinds`; a backend that handles
 `brainmass.CouplingMatrix` lists it in `supported_rules`. The boolean
@@ -189,7 +189,7 @@ they validate their requirements inside their own node
 ---
 
 
-## 5.2 Round-trip and equivalence
+## 6.2 Round-trip and equivalence
 
 The two frontends are interchangeable:
 
@@ -227,4 +227,4 @@ export determinism, and sweep deduplication.
 ---
 
 **Previous:** [Chapter 4 — Frontend B: YAML/JSON DSL](./04-frontend-yaml.md)  
-**Next:** [Chapter 6 — Registry](./06-registry.md)
+**Next:** [Chapter 7 — Registry](./07-registry.md)

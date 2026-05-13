@@ -1,16 +1,16 @@
-# Chapter 7 — CLI tooling and visualization (G10)
+# Chapter 8 — CLI tooling and visualization (G10)
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 7. CLI tooling and visualization (G10)
+## 8. CLI tooling and visualization (G10)
 
-### 7.1 `brainpy` CLI
+### 8.1 `brainpy` CLI
 
 ```
 brainpy lint     <path.yaml>                 # JSON Schema + IR validation
 brainpy describe <path.yaml>                 # counts + parameter summary (--json available)
 brainpy diff     <a.yaml> <b.yaml>           # structural diff at the IR level
-brainpy viz      <path.yaml> -o net.svg      # see §7.2
+brainpy viz      <path.yaml> -o net.svg      # see §8.2
 brainpy build    <path.yaml> --backend NAME [--seed N] [--dt T] [--dry-run]
 brainpy run      <path.yaml> --backend clock --duration "1 s" --out runs/<hash>/
 brainpy sweep    <sweep.yaml> --backend clock --out runs/
@@ -21,7 +21,7 @@ brainpy run      <path.yaml> --patch patch.yaml --backend clock --duration "1 s"
 `build --dry-run` performs full IR construction + backend capability check
 without running.
 
-### 7.2 Visualization
+### 8.2 Visualization
 
 Visualization reads the IR (not the runtime) so the same view is available
 before any backend is built.
@@ -69,5 +69,5 @@ is deterministic in `(ir, mode, renderer, seed)` (G4).
 
 ---
 
-**Previous:** [Chapter 6 — Registry](./06-registry.md)  
-**Next:** [Chapter 8 — Determinism and validation](./08-determinism-validation.md)
+**Previous:** [Chapter 7 — Registry](./07-registry.md)  
+**Next:** [Chapter 9 — Determinism and validation](./09-determinism-validation.md)

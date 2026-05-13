@@ -145,7 +145,7 @@ the determinism contract.
 G1 ("describe *what* the network is, not *how* it steps") is not a
 slogan — it is a hard architectural rule that runs through every
 chapter of this RFC, every backend, and every domain extension
-(Chapter 10). This section makes it explicit.
+(Chapter 5). This section makes it explicit.
 
 ### 1.3.1 The rule
 
@@ -219,7 +219,7 @@ sim = clock.build(
 
 Backends document their own option vocabulary and defaults; handlers
 read the merged view through `BuildContext.options_for(node)` (Chapter
-10 §10.7). Two builds of the same IR with different option mappings
+10 §5.7). Two builds of the same IR with different option mappings
 produce two artifacts with the same `content_hash` but different
 runtime behaviour — that is precisely the property the rule is
 designed to preserve.
@@ -227,7 +227,7 @@ designed to preserve.
 ### 1.3.4 What this means for domain extensions
 
 The rule binds **every** node kind, built-in or contributed by a
-domain extension (Chapter 10). braincell's `MorphPopulation` does
+domain extension (Chapter 5). braincell's `MorphPopulation` does
 not carry a solver or a `cv_policy`; brainmass's `MassPopulation`
 does not carry an SDE solver or a delay-buffer size. Both pass those
 values through the backend's `kind_options` / `node_options` channel.
@@ -236,7 +236,7 @@ should ask the same publication test (§1.3.1) and almost always come
 out on the backend side.
 
 The full enforcement of this rule for extensions lives in
-[Chapter 10 §10.1.1](./10-domain-extensions.md#1011-what-the-spec-describes--and-what-it-does-not) (table, examples, decision log entry D24a).
+[Chapter 5 §5.1.1](./05-domain-extensions.md#511-what-the-spec-describes--and-what-it-does-not) (table, examples, decision log entry D24a).
 
 ---
 

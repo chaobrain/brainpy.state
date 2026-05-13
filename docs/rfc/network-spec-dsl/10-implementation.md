@@ -1,8 +1,8 @@
-# Chapter 9 — Implementation: codebase mapping, testing, and relationship to existing modules
+# Chapter 10 — Implementation: codebase mapping, testing, and relationship to existing modules
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 9.1 Mapping to the existing codebase
+## 10.1 Mapping to the existing codebase
 
 ```
 brainpy_state/                               (TOP-LEVEL package)
@@ -117,7 +117,7 @@ classes become thin facades over it.
 
 ---
 
-## 9.2 Testing strategy
+## 10.2 Testing strategy
 
 - **Unit** — every node dataclass: construction, repr, content hash
   stability, frozen-mutation rejection.
@@ -178,13 +178,13 @@ Test file layout follows the existing convention: colocated `*_test.py`.
 
 ---
 
-## 9.3 Relationship to the existing `_network` / `_brainpy` / `_nest` APIs
+## 10.3 Relationship to the existing `_network` / `_brainpy` / `_nest` APIs
 
 The spec module is a new layer **above** the existing modules; nothing
 under `brainpy_state._network`, `brainpy_state._brainpy`, or
 `brainpy_state._nest` is replaced. The relationship per subpackage:
 
-### 9.3.1 `_network/` — wiring layer
+### 10.3.1 `_network/` — wiring layer
 
 This subpackage is the imperative wiring substrate. The spec module
 treats it as the runtime of the `clock` backend:
@@ -217,7 +217,7 @@ treats it as the runtime of the `clock` backend:
   imported it must now import from `brainpy_state.spec.connect` or
   `braintools.conn`. (D16)
 
-### 9.3.2 `_brainpy/` — BrainPy-style point models
+### 10.3.2 `_brainpy/` — BrainPy-style point models
 
 This subpackage is the model library for the BrainPy-style lineage
 (LIF / ALIF / ExpIF / AdExIF / HH / Izhikevich / …, plus `Expon` /
@@ -225,7 +225,7 @@ This subpackage is the model library for the BrainPy-style lineage
 `MgBlock` outputs, `STP` / `STD` plasticity, and the input / readout
 generators). The spec module does **not** redefine any of these
 models; it references them by `kind` string through the registry
-(§6.3):
+(§7.3):
 
 - Each public class is auto-registered at import time. The PascalCase
   class name becomes the IR `kind`: `LIF` → `kind="LIF"`,
@@ -244,7 +244,7 @@ models; it references them by `kind` string through the registry
   is opt-in, and existing scripts that construct `LIF(...)` /
   `PoissonSpike(...)` / `Projection(...)` directly continue to work.
 
-### 9.3.3 `_nest/` — NEST-compatible models
+### 10.3.3 `_nest/` — NEST-compatible models
 
 This subpackage is the model library for NEST-compatible neurons,
 synapses, plasticity rules, and devices (`iaf_psc_alpha`,
@@ -288,5 +288,5 @@ What stays at the top level of `brainpy.state`:
 
 ---
 
-**Previous:** [Chapter 8 — Determinism and validation](./08-determinism-validation.md)  
-**Next:** [Chapter 10 — Domain extensions: the domain-pack contract](./10-domain-extensions.md)
+**Previous:** [Chapter 9 — Determinism and validation](./09-determinism-validation.md)  
+**Next:** [Chapter 5 — Domain extensions: the domain-pack contract](./05-domain-extensions.md)

@@ -425,7 +425,7 @@ out = sim.run(1*u.second)
 Backends live as **top-level modules under `brainpy.state`**, never under
 `brainpy.state.spec` — the spec module is the DSL surface and contains
 no execution code. The full backend module list is in
-[Chapter 5 §5.1.1](./05-backends.md#511-module-location); the rest of
+[Chapter 6 §6.1.1](./06-backends.md#611-module-location); the rest of
 this chapter imports them as `from brainpy.state import <backend>`
 (e.g. `clock`, `bptt`, `eprop`, `eventprop`).
 
@@ -517,7 +517,7 @@ morphology and a list of paint / place rules. This integrates the
 > `CompartmentViewHandle` view subtype, and the supporting region /
 > mechanism / channel classes shown in the examples below are
 > contributed by the **`braincell` extension**
-> ([Chapter 10 §10.9](./10-domain-extensions.md#109-worked-extension--braincell)).
+> ([Chapter 5 §5.9](./05-domain-extensions.md#59-worked-extension--braincell)).
 > The substrate exposes the `IRNode` / `ViewHandle` / builder-verb
 > protocols that braincell implements; the user-facing syntax below is
 > identical regardless of which package supplies the classes. None of
@@ -588,7 +588,7 @@ conflicting values raise `SPEC-016` / `SPEC-017` at finalize.
 ### 3.6.1 Standard connectivity rules
 
 Every public subclass of `braintools.conn.Connectivity` is registered
-by PascalCase name (§6.1) and consumable as `rule=`:
+by PascalCase name (§7.1) and consumable as `rule=`:
 
 ```python
 # random / regular / topological — point connectivity, no positions needed
@@ -644,7 +644,7 @@ views (§3.7.1, §3.9.4).
 
 When the post-side handle is a `CompartmentViewHandle` (§3.9.5), the
 compartment-targeted connectivity rules — contributed by the
-[`braincell` extension](./10-domain-extensions.md#109-worked-extension--braincell)
+[`braincell` extension](./05-domain-extensions.md#59-worked-extension--braincell)
 through the connectivity registry plus a dedicated
 `CompartmentTargetedProjection` IR node kind — route synapses onto
 the selected compartments:
@@ -920,7 +920,7 @@ serialized mask; resolution to an index array happens at finalize.
 A compartmental view restricts an action to one or more compartments
 of a `Cell` population. `CompartmentViewHandle` and its IR
 counterpart `CompartmentViewRef` are registered by the
-[`braincell` extension](./10-domain-extensions.md#109-worked-extension--braincell)
+[`braincell` extension](./05-domain-extensions.md#59-worked-extension--braincell)
 through `@register_view_kind` / `@register_view_ref_kind`; the core
 substrate's canonical-JSON serializer dispatches on the `KIND` tag.
 Region selectors compose with `&`, `|`, `~`:
@@ -1097,7 +1097,7 @@ weight=spec.train(init.LogNormal(...))                   # trainable + distribut
 ```
 
 `DistRef` is materialized as a concrete array (with units) at backend
-build, with seed derived from the projection's fold-in chain (§8.1).
+build, with seed derived from the projection's fold-in chain (§9.1).
 
 ### 3.10.3 `Noise` — stochastic values
 
@@ -1363,7 +1363,7 @@ A same-step cycle raises `SPEC-042` at finalize.
 ### 3.11.5 Layer macro registry
 
 The v1 set covers deep-SNN essentials. Third-party macros register
-via the `brainpy_state.spec.layers` entry point (§6.5).
+via the `brainpy_state.spec.layers` entry point (§7.5).
 
 | Macro                  | Connectivity rule used internally       | Stateful? |
 |------------------------|------------------------------------------|-----------|
@@ -1743,7 +1743,7 @@ hashes. This is intentional:
 - Tooling that caches on `content_hash` (build cache, golden-IR
   fixtures, sweep deduplication) keys correctly: a sweep over `g`
   reuses connectivity-sampling caches.
-- The determinism contract (§8.1) is restated as: given
+- The determinism contract (§9.1) is restated as: given
   `(NetIR, variables, backend, seed, dt)`, the resulting artifact is
   bit-identical.
 
@@ -2053,7 +2053,7 @@ factory.
 ## 3.17 Intentionally out of scope
 
 The following categories from
-[nc-review §5.1](../nc-review/08-missing-features.md) are deferred:
+[nc-review §6.1](../nc-review/08-missing-features.md) are deferred:
 
 | Deferred                                     | Reason                                                                                   |
 |----------------------------------------------|-------------------------------------------------------------------------------------------|
@@ -2063,7 +2063,7 @@ The following categories from
 | Streaming-recording reducers                 | Observable surface extension, parallel to but smaller than §3.7.3 schedules. Suggest separate addendum. |
 | Trained-artifact provenance bundle           | Already partially served by the artifact's `bound_variables` map + IR content hash (§3.14.5). A bundle helper is implementation, not spec. |
 | Schema evolution / migration tooling         | Implementation surface; spec covers version tag and round-trip determinism (G4). |
-| Profiling / cost models                      | Build-time analysis on the finalized IR. Belongs in CLI (§5.1) — `brainpy estimate`. |
+| Profiling / cost models                      | Build-time analysis on the finalized IR. Belongs in CLI (§6.1) — `brainpy estimate`. |
 
 Of the six extension axes covered in §3.5 – §3.12, three (spatial,
 plasticity, DAG) require **only additive surface changes** — no

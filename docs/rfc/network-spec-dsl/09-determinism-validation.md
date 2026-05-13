@@ -1,8 +1,8 @@
-# Chapter 8 — Determinism contract and validation rules
+# Chapter 9 — Determinism contract and validation rules
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 8.1 Determinism contract (G4)
+## 9.1 Determinism contract (G4)
 
 Given a fixed `(NetIR, variables, backend, seed, dt)`:
 
@@ -29,13 +29,13 @@ Acceptance test: for each backend, two builds with identical
 
 ---
 
-## 8.2 Validation rules catalog
+## 9.2 Validation rules catalog
 
 Every error has a stable code for documentation cross-reference. Codes
 are partitioned into spec-level (`SPEC-NNN`) and backend-capability
 (`SPEC-021`+).
 
-### 8.2.1 Spec-level errors
+### 9.2.1 Spec-level errors
 
 | Code     | Tier        | Rule                                                                 |
 |----------|-------------|----------------------------------------------------------------------|
@@ -71,5 +71,5 @@ are partitioned into spec-level (`SPEC-NNN`) and backend-capability
 
 ---
 
-**Previous:** [Chapter 7 — CLI and visualization](./07-cli-and-viz.md)  
-**Next:** [Chapter 9 — Implementation](./09-implementation.md)
+**Previous:** [Chapter 8 — CLI and visualization](./08-cli-and-viz.md)  
+**Next:** [Chapter 10 — Implementation](./10-implementation.md)

@@ -18,11 +18,11 @@ What remains is **evidence**, not design: the IR must visibly mechanize the §1.
 
 In order of priority:
 
-1. **`G13` line + IR markers for training-paradigm requirements.** Trace through Chapter 2 (IR), Chapter 5 (`BackendCapabilities` per-backend instantiation), and Chapter 9 (SPEC-NNN codes for IR × training-backend mismatch). See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #1.
-2. **Per-shipped-training-backend capability matrix.** Concrete rows for `clock` / `event` / `bptt` / `eprop` / `eventprop` / `ppprop` in §5.1. See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #2.
+1. **`G13` line + IR markers for training-paradigm requirements.** Trace through Chapter 2 (IR), Chapter 6 (`BackendCapabilities` per-backend instantiation), and Chapter 10 (SPEC-NNN codes for IR × training-backend mismatch). See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #1.
+2. **Per-shipped-training-backend capability matrix.** Concrete rows for `clock` / `event` / `bptt` / `eprop` / `eventprop` / `ppprop` in §6.1. See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #2.
 3. **Reproduce one published comparative-study benchmark** by single-line backend swap (event-prop vs BPTT on YinYang or N-MNIST, matching Wunderlich & Pehle 2021 within reported error bars). Ship as a notebook + CI smoke test. See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #3.
 4. **Engage the missing prior art** — Lava-DL, hxtorch.snn, EXODUS on the multi-paradigm axis; NeuroML / LEMS, SONATA, NMODL / NESTML, NIR-as-upstream-IR on the declarative-spec axis. See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #4.
-5. **Training-round-trip §10.x walkthrough.** `bptt.build → train → archive → eventprop.build → train`, including how trained weights are bound. See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #5.
+5. **Training-round-trip §5.x walkthrough.** `bptt.build → train → archive → eventprop.build → train`, including how trained weights are bound. See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #5.
 6. **Hardware story positioning.** Either an end-to-end exemplar (Loihi / SpiNNaker) or honest-scoped G11 ("graph-level NIR export; deployment is consumer-toolchain responsibility"). See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #6.
 7. **Versioning / schema-evolution policy.** See [`10-improvement-suggestions.md`](./10-improvement-suggestions.md) #7.
 

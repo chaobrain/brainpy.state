@@ -1,4 +1,4 @@
-# Chapter 10 — Domain extensions: applying the DSL to new domains
+# Chapter 5 — Domain extensions: applying the DSL to new domains
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
@@ -43,7 +43,7 @@ each repository would publish.
 
 ---
 
-## 10.1 The DSL is a substrate, not a schema
+## 5.1 The DSL is a substrate, not a schema
 
 Chapter 2 defines a `NetIR` with five typed node tuples
 (`populations`, `projections`, `inputs`, `observables`,
@@ -53,7 +53,7 @@ Chapter 2 defines a `NetIR` with five typed node tuples
 the RFC is built around. It is **not** a closed description of the
 DSL itself.
 
-### 10.1.1 What the spec describes — and what it does not
+### 5.1.1 What the spec describes — and what it does not
 
 The specification language describes **the model**: dynamics,
 topology, parameters, initial conditions, connectivity, inputs,
@@ -86,7 +86,7 @@ two artifacts with the same `content_hash` but different runtime
 behaviour. That separation is what makes the spec a portable
 description of the model rather than of a particular integration.
 
-The worked extensions in §10.9 and §10.10 obey this rule strictly:
+The worked extensions in §5.9 and §5.10 obey this rule strictly:
 neither `MorphPopulation` nor `MassPopulation` declares a solver,
 a discretization policy, or a delay-buffer size. Those are passed
 to `clock.build(...)` and `brainmass.build(...)` respectively.
@@ -95,14 +95,14 @@ The DSL itself is the set of mechanisms that make the SNN nodes work:
 
 - A **frozen-dataclass IR** with a stable canonicalization rule
   (Chapter 2 §2.1).
-- **Content-hash determinism** (G4, Chapter 5 §5.2).
+- **Content-hash determinism** (G4, Chapter 6 §6.2).
 - A **typed handle system** for symbolic references during building
   (Chapter 3 §3.3).
 - A **registry** that maps `kind` strings to implementations
-  (Chapter 6).
+  (Chapter 7).
 - A **builder** (`NetSpec`) that emits node values, not modules
   (Chapter 3 §3.1).
-- A **backend protocol** that consumes the IR (Chapter 5 §5.1).
+- A **backend protocol** that consumes the IR (Chapter 6 §6.1).
 - **Variables** for build-time parameter binding (Chapter 3 §3.14).
 
 Every one of these mechanisms is **node-kind-generic**: a frozen
@@ -134,7 +134,7 @@ domain extensions to look and feel as first-class as the built-ins.
 
 ---
 
-## 10.2 The five extension protocols
+## 5.2 The five extension protocols
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -174,7 +174,7 @@ kind. A full domain (brainmass) implements all five.
 
 ---
 
-## 10.3 `IRNode` — defining a node kind
+## 5.3 `IRNode` — defining a node kind
 
 The substrate exposes one abstract base class:
 
@@ -262,7 +262,7 @@ def node_kind(tag: str) -> type[IRNode]:
     return _NODE_KINDS[tag]
 ```
 
-### 10.3.1 The built-in node kinds are pre-registered
+### 5.3.1 The built-in node kinds are pre-registered
 
 `brainpy_state.spec.ir` re-exports the five SNN node dataclasses
 already documented in Chapter 2 with the `IRNode` base added and
@@ -296,7 +296,7 @@ class PopulationNode(IRNode):
 `SubNetworkNode`.) From this chapter on, *any* `IRNode` is treated
 uniformly by the substrate.
 
-### 10.3.2 The `NetIR` root sees nodes uniformly
+### 5.3.2 The `NetIR` root sees nodes uniformly
 
 ```python
 @dataclass(frozen=True)
@@ -341,7 +341,7 @@ difference between a built-in `PopulationNode` and a
 Both are `IRNode` subclasses; both are iterated over by `ir.nodes()`;
 both are validated; both contribute to the content hash.
 
-### 10.3.3 What an `IRNode` subclass looks like in practice
+### 5.3.3 What an `IRNode` subclass looks like in practice
 
 The full template a domain author writes:
 
@@ -383,7 +383,7 @@ resolution, frozen-dataclass equality.
 
 ---
 
-## 10.4 `ViewHandle` — sub-population references
+## 5.4 `ViewHandle` — sub-population references
 
 The same protocol pattern, scaled down, for view handles:
 
@@ -416,7 +416,7 @@ serializer dispatching on the `KIND` tag.
 
 ---
 
-## 10.5 Builder verbs — extending `NetSpec`
+## 5.5 Builder verbs — extending `NetSpec`
 
 `NetSpec` is open for extension via a decorator that attaches a
 function to the class as a method:
@@ -465,7 +465,7 @@ class NetSpec:
 not one of the five built-ins; otherwise into the matching typed
 tuple. The verb author does not branch on this.
 
-### 10.5.1 Why a decorator, not a mixin?
+### 5.5.1 Why a decorator, not a mixin?
 
 Mixins force every domain to instantiate `NetSpec` through a
 domain-specific subclass (`MassNetSpec(NetSpec)`), which is hostile to
@@ -478,7 +478,7 @@ not interact through inheritance; they interact through the registry.
 
 ---
 
-## 10.6 Codec — round-trip and content hash
+## 5.6 Codec — round-trip and content hash
 
 For every new `IRNode` subclass, the substrate generates a default
 codec from the dataclass shape:
@@ -520,7 +520,7 @@ kinds:
 def _encode_morph_pop(node: MorphPopulation) -> dict: ...
 ```
 
-Canonical JSON rules from Chapter 5 §5.2 are unchanged: keys sort
+Canonical JSON rules from Chapter 6 §6.2 are unchanged: keys sort
 lexicographically, floats use `repr`, `u.Quantity` renders as
 `{"_q": [mantissa, unit_str]}`, list order is semantic, the leading
 `_k` tag identifies the node kind. The content hash is SHA-256 over
@@ -528,10 +528,10 @@ this canonical form.
 
 ---
 
-## 10.7 Backend dispatch — handlers per node kind
+## 5.7 Backend dispatch — handlers per node kind
 
-A backend is a registered `SimBackend` / `TrainBackend` (Chapter 5
-§5.1) whose `build()` walks `ir.nodes()` and dispatches each node to
+A backend is a registered `SimBackend` / `TrainBackend` (Chapter 6
+§6.1) whose `build()` walks `ir.nodes()` and dispatches each node to
 a handler keyed on its `KIND`:
 
 ```python
@@ -550,7 +550,7 @@ class BuildContext(Protocol):
     """Per-build state passed to every NodeHandler.
 
     Exposes — among other things — the user-supplied numerical
-    realization options. Per §10.1.1 those live on the backend, not on
+    realization options. Per §5.1.1 those live on the backend, not on
     the IR; handlers query them through this surface.
     """
     ir: NetIR
@@ -588,7 +588,7 @@ sim = clock.build(
 Built-in backends pre-register handlers for the five built-in
 node kinds. Two patterns let a domain extend a backend:
 
-### 10.7.1 Pattern A — extend an existing backend
+### 5.7.1 Pattern A — extend an existing backend
 
 The domain ships a small module that registers handlers on a core
 backend it wants to support. Example: braincell registers handlers
@@ -602,7 +602,7 @@ from braincell.dsl import MorphPopulation, CompartmentTargetedProjection
 @clock.register_handler(MorphPopulation.KIND)
 def _build_morph_population(ctx, node: MorphPopulation) -> None:
     # Numerical realization knobs come from the backend's options
-    # mapping, never from the IR node (§10.1.1).
+    # mapping, never from the IR node (§5.1.1).
     opts = ctx.options_for(node)         # merges kind_options + node_options
     cell = braincell.Cell(
         morphology=_load_morph(node.morphology),
@@ -625,9 +625,9 @@ def _build_compartment_projection(ctx, node) -> None: ...
 The clock backend's `build()` walks `ir.nodes()` and looks up each
 node's handler. A node whose `KIND` has no handler raises
 `BackendCapabilityError` pointing at the responsible id — the same
-error class §5.1.3 uses today.
+error class §6.1.3 uses today.
 
-### 10.7.2 Pattern B — ship a dedicated backend
+### 5.7.2 Pattern B — ship a dedicated backend
 
 The domain ships a top-level peer of `brainpy.state.clock` / `.bptt`
 because its runtime is fundamentally different. brainmass does this:
@@ -684,9 +684,9 @@ existing capability dataclass already supports this directly.
 
 ---
 
-## 10.8 Discovery, activation, conflict
+## 5.8 Discovery, activation, conflict
 
-The same entry-point group used in §6.5 covers extensions:
+The same entry-point group used in §7.5 covers extensions:
 
 ```toml
 [project.entry-points."brainpy_state.spec.extensions"]
@@ -711,7 +711,7 @@ registration covers the case where the user wrote
 verbs and nodes are still available because the entry point already
 ran.
 
-### 10.8.1 Conflict resolution
+### 5.8.1 Conflict resolution
 
 | Situation                                                     | Resolution                                                    |
 |---------------------------------------------------------------|---------------------------------------------------------------|
@@ -726,13 +726,13 @@ incompatibly, before the user has a chance to construct a spec.
 
 ---
 
-## 10.9 Worked extension — `braincell`
+## 5.9 Worked extension — `braincell`
 
 This subsection is the **complete public interface** of the
 `braincell.dsl` module: every node kind, view handle, builder verb,
 and backend handler that braincell would ship to extend the spec.
 
-### 10.9.1 Node kinds
+### 5.9.1 Node kinds
 
 ```python
 # braincell/dsl/nodes.py
@@ -762,7 +762,7 @@ class MorphPopulation(IRNode):
     Describes the *model*: morphology, painted mechanisms, placed
     point processes, spike threshold. Numerical realization
     (compartmentalization policy, ODE solver, time step) is supplied
-    at backend build time via ``node_options`` — see §10.1.1.
+    at backend build time via ``node_options`` — see §5.1.1.
     """
 
     KIND: ClassVar[str] = "braincell.morph_population"
@@ -833,7 +833,7 @@ class CompartmentTargetedProjection(IRNode):
             )
 ```
 
-### 10.9.2 View handle
+### 5.9.2 View handle
 
 ```python
 # braincell/dsl/handles.py
@@ -883,7 +883,7 @@ class MorphPopulationHandle(PopulationHandle):
         return CompartmentViewHandle(self._spec, self.id, region)
 ```
 
-### 10.9.3 Builder verbs
+### 5.9.3 Builder verbs
 
 ```python
 # braincell/dsl/verbs.py
@@ -961,7 +961,7 @@ equally well dispatch from inside the built-in `project` verb on
 `isinstance(post, CompartmentViewHandle)`. The pattern is up to the
 extension author.
 
-### 10.9.4 Backend dispatch (clock + bptt)
+### 5.9.4 Backend dispatch (clock + bptt)
 
 ```python
 # braincell/dsl/backends/clock.py
@@ -1038,9 +1038,9 @@ backend's `kind_options` / `node_options` mapping. Backend-specific
 constraints (e.g. bptt's "differentiable solvers only") are enforced
 inside the handler with `BackendCapabilityError`.
 
-### 10.9.5 Capability declaration
+### 5.9.5 Capability declaration
 
-The clock backend already publishes `capabilities` (§5.1.3). The
+The clock backend already publishes `capabilities` (§6.1.3). The
 braincell extension adds entries:
 
 ```python
@@ -1070,7 +1070,7 @@ def _register():
 that returns a new capabilities object with the listed fields
 overridden — extensions never mutate built-in state.
 
-### 10.9.6 User-facing example
+### 5.9.6 User-facing example
 
 ```python
 import saiunit as u
@@ -1180,14 +1180,14 @@ call site.
 
 ---
 
-## 10.10 Worked extension — `brainmass`
+## 5.10 Worked extension — `brainmass`
 
 `brainmass` is the harder example: it introduces continuous-state
 populations, a different connectivity primitive (coupling matrix),
 and forward-model observables. It ships its own backend rather than
 extending the clock backend.
 
-### 10.10.1 Node kinds
+### 5.10.1 Node kinds
 
 ```python
 # brainmass/dsl/nodes.py
@@ -1209,7 +1209,7 @@ class MassPopulation(IRNode):
     parameters (with units), the noise term in the SDE, the initial
     conditions, and the number of parcels. Numerical realization
     (ODE / SDE solver, time step, delay-buffer sizes) is supplied
-    at backend build time via ``node_options`` — see §10.1.1.
+    at backend build time via ``node_options`` — see §5.1.1.
 
     Each unit along ``size`` is one mass-model evaluation point —
     typically one parcel in a brain atlas. State variables are
@@ -1349,7 +1349,7 @@ class MassInput(IRNode):
             )
 ```
 
-### 10.10.2 Builder verbs
+### 5.10.2 Builder verbs
 
 ```python
 # brainmass/dsl/verbs.py
@@ -1452,7 +1452,7 @@ def mass_input(
     return _make_input_handle(self, node.id)
 ```
 
-### 10.10.3 Dedicated backend
+### 5.10.3 Dedicated backend
 
 ```python
 # brainmass/dsl/backend.py
@@ -1602,7 +1602,7 @@ backend; a spec that uses them gets `BackendCapabilityError` with a
 clear message. The same is true the other way: a `MassPopulation`
 node has no handler on the SNN-domain `clock` backend.
 
-### 10.10.4 Registration plumbing
+### 5.10.4 Registration plumbing
 
 ```python
 # brainmass/dsl/__init__.py
@@ -1633,7 +1633,7 @@ the existing `brainpy_state.spec.neurons` / `connectivity` /
 `outputs` / `inputs` / `initializers` entry-point groups so the YAML
 frontend (Chapter 4) can resolve them by name.
 
-### 10.10.5 Entry points
+### 5.10.5 Entry points
 
 ```toml
 # brainmass/pyproject.toml
@@ -1669,7 +1669,7 @@ brainmass = "brainmass.dsl.backend:BACKEND"
 "brainmass.WhiteNoise"    = "brainmass.noise:WhiteNoise"
 ```
 
-### 10.10.6 User-facing example
+### 5.10.6 User-facing example
 
 ```python
 import numpy as np
@@ -1757,7 +1757,7 @@ bold = trace.observable("fwd_regions")       # the BOLD trace
 eeg  = trace.observable("fwd_regions_eeg")   # the EEG trace
 ```
 
-Same observation as in §10.9.6: no `extras`, no opt-in flags. The
+Same observation as in §5.9.6: no `extras`, no opt-in flags. The
 user writes mass-domain verbs alongside built-in verbs (`observe`,
 `net.variable`, `spec.train`) and the spec finalizes to an IR that
 the dedicated brainmass backend consumes. The IR is content-hashable
@@ -1766,7 +1766,7 @@ every node — `MassPopulation`, `CouplingNode`,
 `ForwardModelObservable`, `MassInput` — is an `IRNode` and the
 default codec covers their shapes.
 
-### 10.10.7 Mixed-domain specs are rejected at validate time
+### 5.10.7 Mixed-domain specs are rejected at validate time
 
 A spec that mixes mass and spike populations finalizes — the IR
 substrate is happy to hold both — but at backend `build()` the
@@ -1779,9 +1779,9 @@ clock-compatible specs.
 
 ---
 
-## 10.11 Constraints and invariants
+## 5.11 Constraints and invariants
 
-### 10.11.1 Hard constraints on extensions
+### 5.11.1 Hard constraints on extensions
 
 - **All IR nodes are `IRNode` subclasses.** No domain may add fields
   to existing node dataclasses, subclass them, or smuggle data
@@ -1801,7 +1801,7 @@ clock-compatible specs.
   same-name entries.** Extensions add; they do not replace. Same-name
   collisions raise `DomainError` at activation.
 
-### 10.11.2 Non-goals for this chapter
+### 5.11.2 Non-goals for this chapter
 
 - **Cross-domain coupling primitives** (mass-to-spike, spike-to-mass).
   Deferred — D27. Per-backend validation rejects mixed specs until
@@ -1818,18 +1818,18 @@ clock-compatible specs.
 
 ---
 
-## 10.12 Decision log additions
+## 5.12 Decision log additions
 
 | ID  | Decision                                                                                                                                                  | Resolution |
 |-----|------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
 | D24a| Spec/backend boundary for numerical-realization knobs.                                                                                                    | **Hard rule.** The IR carries the model, dynamics, topology, and architecture — never the integrator, time-step policy, discretization, ring-buffer sizes, or accelerator placement. Those reach backends through `backend.build(..., kind_options=..., node_options=...)` and are looked up by handlers through `BuildContext.kind_options(KIND)` / `BuildContext.node_options(id)` / `BuildContext.options_for(node)`. The same `NetIR` content-hash routes through different solvers without re-`finalize()`. This rule applies equally to core nodes and to every domain extension (D25). |
 | D25 | How adjacent domains (braincell, brainmass, …) extend the DSL.                                                                                            | The spec module exposes five extension protocols — `IRNode`, `ViewHandle`, builder-verb decorator, codec, backend-dispatch — and **every node in a NetIR is an `IRNode`**, built-in or otherwise. Domains register new node kinds, view handles, builder verbs, codecs, and backend handlers. Built-in SNN node kinds are themselves pre-registered instances of the same protocol; there is no special-casing between core and extension nodes once they are in the IR. The substrate is the contribution; the SNN content is one application. |
-| D26 | Where braincell- and brainmass-specific code lives.                                                                                                        | **Out of tree.** No `brainpy.state.spec.morph` / `.mech`. The planned morphological surface in §3.5.3, §3.6.3, §3.9.5 is supplied by the [`braincell`](https://github.com/chaobrain/braincell) repository as `braincell.dsl`. The brainmass surface ships from [`brainmass`](https://github.com/chaobrain/brainmass) as `brainmass.dsl`. Both register through the entry-point groups in §6.5 plus `brainpy_state.spec.extensions` for the top-level activation hook. |
+| D26 | Where braincell- and brainmass-specific code lives.                                                                                                        | **Out of tree.** No `brainpy.state.spec.morph` / `.mech`. The planned morphological surface in §3.5.3, §3.6.3, §3.9.5 is supplied by the [`braincell`](https://github.com/chaobrain/braincell) repository as `braincell.dsl`. The brainmass surface ships from [`brainmass`](https://github.com/chaobrain/brainmass) as `brainmass.dsl`. Both register through the entry-point groups in §7.5 plus `brainpy_state.spec.extensions` for the top-level activation hook. |
 | D27 | Cross-domain composition (spike ↔ mass, point ↔ morphology) in one IR.                                                                                    | **Deferred.** v1 allows both to coexist in a single IR — the substrate is uniform — but no cross-domain projection / coupling node kind is shipped. Backends reject what they can't handle at `build()`. A future RFC defines a `cross_project` node kind once the semantics (rate-to-spike, spike-to-rate) are settled. |
 | D28 | Should `extras` exist on built-in IR nodes?                                                                                                                | **No.** Domains add full node kinds, not opt-in side fields. The earlier proposal of namespaced `extras` is withdrawn: it forces domain semantics into core dataclasses and erodes the contract that every IR node is a typed value with its own validator. Domains that need cross-cutting metadata on a built-in population (e.g. attaching cell-level diagnostics to a `PopulationNode`) define a separate `IRNode` subclass that references the population by id. |
 | D29 | What to do with the existing §3.5.3 / §3.6.3 / §3.9.5 morphology examples in Chapter 3.                                                                   | They remain — they are user-facing examples and the call-site syntax is unchanged. The introductory paragraphs note that the verbs (`net.morph_population`, `compartments`) and classes (`bc.Cell`, `bc.MorphFromSWC`, `bc.ApicalDendrite`, etc.) are contributed by the `braincell` extension. The classes do not move to `brainpy.state.spec.morph` / `.mech`; they were never going to ship from this repository under the revised design. |
 
 ---
 
-**Previous:** [Chapter 9 — Implementation](./09-implementation.md)
+**Previous:** [Chapter 10 — Implementation](./10-implementation.md)
 **Next:** [Chapter 11 — Appendix: decisions, cheat sheet, open questions](./11-appendix.md)
