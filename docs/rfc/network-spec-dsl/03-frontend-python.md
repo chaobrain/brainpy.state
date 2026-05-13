@@ -517,7 +517,7 @@ morphology and a list of paint / place rules. This integrates the
 > `CompartmentViewHandle` view subtype, and the supporting region /
 > mechanism / channel classes shown in the examples below are
 > contributed by the **`braincell` extension**
-> ([Chapter 5 §5.9](./05-domain-extensions.md#59-worked-extension--braincell)).
+> ([Chapter 5 §5.9](05-frontend-domain-extensions.md#59-worked-extension--braincell)).
 > The substrate exposes the `IRNode` / `ViewHandle` / builder-verb
 > protocols that braincell implements; the user-facing syntax below is
 > identical regardless of which package supplies the classes. None of
@@ -644,7 +644,7 @@ views (§3.7.1, §3.9.4).
 
 When the post-side handle is a `CompartmentViewHandle` (§3.9.5), the
 compartment-targeted connectivity rules — contributed by the
-[`braincell` extension](./05-domain-extensions.md#59-worked-extension--braincell)
+[`braincell` extension](05-frontend-domain-extensions.md#59-worked-extension--braincell)
 through the connectivity registry plus a dedicated
 `CompartmentTargetedProjection` IR node kind — route synapses onto
 the selected compartments:
@@ -920,7 +920,7 @@ serialized mask; resolution to an index array happens at finalize.
 A compartmental view restricts an action to one or more compartments
 of a `Cell` population. `CompartmentViewHandle` and its IR
 counterpart `CompartmentViewRef` are registered by the
-[`braincell` extension](./05-domain-extensions.md#59-worked-extension--braincell)
+[`braincell` extension](05-frontend-domain-extensions.md#59-worked-extension--braincell)
 through `@register_view_kind` / `@register_view_ref_kind`; the core
 substrate's canonical-JSON serializer dispatches on the `KIND` tag.
 Region selectors compose with `&`, `|`, `~`:

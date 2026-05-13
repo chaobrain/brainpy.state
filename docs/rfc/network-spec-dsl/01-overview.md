@@ -236,7 +236,7 @@ should ask the same publication test (§1.3.1) and almost always come
 out on the backend side.
 
 The full enforcement of this rule for extensions lives in
-[Chapter 5 §5.1.1](./05-domain-extensions.md#511-what-the-spec-describes--and-what-it-does-not) (table, examples, decision log entry D24a).
+[Chapter 5 §5.1.1](05-frontend-domain-extensions.md#511-what-the-spec-describes--and-what-it-does-not) (table, examples, decision log entry D24a).
 
 ---
 

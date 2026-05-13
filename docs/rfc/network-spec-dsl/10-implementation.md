@@ -289,4 +289,4 @@ What stays at the top level of `brainpy.state`:
 ---
 
 **Previous:** [Chapter 9 — Determinism and validation](./09-determinism-validation.md)  
-**Next:** [Chapter 5 — Domain extensions: the domain-pack contract](./05-domain-extensions.md)
+**Next:** [Chapter 5 — Domain extensions: the domain-pack contract](05-frontend-domain-extensions.md)

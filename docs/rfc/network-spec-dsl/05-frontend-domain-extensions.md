@@ -28,18 +28,18 @@ each repository would publish.
 
 | §     | Topic                                          | Purpose                                                                                       |
 |-------|------------------------------------------------|-----------------------------------------------------------------------------------------------|
-| 10.1  | The DSL is a substrate, not a schema           | Reframe Chapters 2 – 9 as the SNN instance of a more general substrate.                       |
-| 10.2  | The five extension protocols                   | The minimum surface a domain implements.                                                      |
-| 10.3  | `IRNode` — defining a node kind                | Frozen-dataclass contract, content-hash, units, validation.                                   |
-| 10.4  | `ViewHandle` — sub-population references       | How a domain defines a new way to address a slice of a node.                                  |
-| 10.5  | Builder verbs — extending `NetSpec`            | The decorator that adds methods to the frontend.                                              |
-| 10.6  | Codec — round-trip and content hash            | JSON canonicalization for domain-defined nodes and handles.                                   |
-| 10.7  | Backend dispatch — handlers per node kind      | How a backend opts in to support a domain's node kinds.                                       |
-| 10.8  | Discovery, activation, conflict                | Entry points; import-time registration; name collisions.                                      |
-| 10.9  | Worked extension — `braincell`                 | Full code: IR nodes, view handles, builder verbs, backend dispatch, user-facing example.      |
-| 10.10 | Worked extension — `brainmass`                 | Full code: IR nodes, builder verbs, dedicated backend, user-facing example.                   |
-| 10.11 | Constraints and invariants                     | What extensions may not do.                                                                   |
-| 10.12 | Decision log additions                         | D25 – D29.                                                                                    |
+| 5.1  | The DSL is a substrate, not a schema           | Reframe Chapters 2 – 9 as the SNN instance of a more general substrate.                       |
+| 5.2  | The five extension protocols                   | The minimum surface a domain implements.                                                      |
+| 5.3  | `IRNode` — defining a node kind                | Frozen-dataclass contract, content-hash, units, validation.                                   |
+| 5.4  | `ViewHandle` — sub-population references       | How a domain defines a new way to address a slice of a node.                                  |
+| 5.5  | Builder verbs — extending `NetSpec`            | The decorator that adds methods to the frontend.                                              |
+| 5.6  | Codec — round-trip and content hash            | JSON canonicalization for domain-defined nodes and handles.                                   |
+| 5.7  | Backend dispatch — handlers per node kind      | How a backend opts in to support a domain's node kinds.                                       |
+| 5.8  | Discovery, activation, conflict                | Entry points; import-time registration; name collisions.                                      |
+| 5.9  | Worked extension — `braincell`                 | Full code: IR nodes, view handles, builder verbs, backend dispatch, user-facing example.      |
+| 5.10 | Worked extension — `brainmass`                 | Full code: IR nodes, builder verbs, dedicated backend, user-facing example.                   |
+| 5.11 | Constraints and invariants                     | What extensions may not do.                                                                   |
+| 5.12 | Decision log additions                         | D25 – D29.                                                                                    |
 
 ---
 

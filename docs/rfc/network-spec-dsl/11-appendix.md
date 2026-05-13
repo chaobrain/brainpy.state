@@ -77,5 +77,5 @@
 
 ---
 
-**Previous:** [Chapter 5 — Domain extensions](./05-domain-extensions.md)  
+**Previous:** [Chapter 5 — Domain extensions](05-frontend-domain-extensions.md)  
 **Next:** [README](./README.md)
