@@ -2,15 +2,15 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 12. CLI tooling and visualization (G10)
+## 8. CLI tooling and visualization (G10)
 
-### 12.1 `brainpy` CLI
+### 8.1 `brainpy` CLI
 
 ```
 brainpy lint     <path.yaml>                 # JSON Schema + IR validation
 brainpy describe <path.yaml>                 # counts + parameter summary (--json available)
 brainpy diff     <a.yaml> <b.yaml>           # structural diff at the IR level
-brainpy viz      <path.yaml> -o net.svg      # see §12.2
+brainpy viz      <path.yaml> -o net.svg      # see §8.2
 brainpy build    <path.yaml> --backend NAME [--seed N] [--dt T] [--dry-run]
 brainpy run      <path.yaml> --backend clock --duration "1 s" --out runs/<hash>/
 brainpy sweep    <sweep.yaml> --backend clock --out runs/
@@ -20,9 +20,9 @@ brainpy run      <path.yaml> --patch patch.yaml --backend clock --duration "1 s"
 ```
 
 `build --dry-run` performs full IR construction + backend capability check
-without running. `export` writes both the artifact and the sidecar (§9.4).
+without running. `export` writes both the artifact and the sidecar (§6.4).
 
-### 12.2 Visualization
+### 8.2 Visualization
 
 Visualization reads the IR (not the runtime) so the same view is available
 before any backend is built.
@@ -53,7 +53,7 @@ sp.spec.viz(ir, mode="nir", out="brunel.nir.svg")    # post-export graph view
 | `layers`| Vertical stack of layer macros (from `CompoundMeta.sequentials`). Each layer shows shape, neuron model, parameter count. Recurrent edges drawn as side loops. | Deep / neuromorphic SNNs.           |
 | `matrix`| Block-structured connectivity matrix per projection. Dense layers as dot density. Conv/Pool layers as kernel previews. | Topology check.                     |
 | `params`| Bar-chart of trainable vs frozen parameter counts per population / projection. Total parameter count for the whole IR. | Sanity-checking a deep model.       |
-| `nir`   | The NIR graph that `sp.backends.nir.export(...)` would produce, with lossy mappings highlighted. | Verifying export shape pre-deployment. |
+| `nir`   | The NIR graph that `brainpy.state.nir.export(...)` would produce, with lossy mappings highlighted. | Verifying export shape pre-deployment. |
 
 **Renderers**
 

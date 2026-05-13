@@ -2,7 +2,7 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 13. Determinism contract (G4)
+## 9.1 Determinism contract (G4)
 
 Given a fixed `(NetIR, backend, seed, dt)`:
 
@@ -22,7 +22,7 @@ Given a fixed `(NetIR, backend, seed, dt)`:
    `seed` for export inherits the simulator's default seed
    (`sp.spec.DEFAULT_SEED`, currently `0`); it can be overridden via
    the `seed=` kwarg in Python or the `--seed N` flag on the CLI.
-8. **Post-build mutation** (§6.9) is deterministic: applying the same
+8. **Post-build mutation** (§3.14) is deterministic: applying the same
    `ParamPatch` list to identical `(NetSpec, NetIR)` inputs yields the
    same content hash; applying it to a built `Simulator` / `Trainer`
    yields the same in-memory parameter values.
@@ -32,13 +32,13 @@ Acceptance test: for each backend, two builds with identical
 
 ---
 
-## 14. Validation rules catalog
+## 9.2 Validation rules catalog
 
 Every error has a stable code for documentation cross-reference. Codes
 are partitioned into spec-level (`SPEC-NNN`), backend-capability
 (`SPEC-021`+), and per-export-backend (`EXPORT-<KIND>-NNN`).
 
-### 14.1 Spec-level errors
+### 9.2.1 Spec-level errors
 
 | Code     | Tier        | Rule                                                                 |
 |----------|-------------|----------------------------------------------------------------------|
@@ -65,10 +65,10 @@ are partitioned into spec-level (`SPEC-NNN`), backend-capability
 | SPEC-021 | backend     | Backend declares no training support but the IR contains `Trainable(required=True)`. |
 | SPEC-022 | backend     | Backend rejects a layer macro kind.                                  |
 | SPEC-023 | mutation    | `ParamPatch.path` does not resolve to a valid IR leaf (or wildcard matches nothing). |
-| SPEC-024 | mutation    | `ParameterView.set(path, ...)` on a `REBUILD`-class leaf (§6.9.5). Raised as `ParameterChangeRequiresRebuild`. Hint to use `Simulator.rebuild_with(new_ir)`. |
+| SPEC-024 | mutation    | `ParameterView.set(path, ...)` on a `REBUILD`-class leaf (§3.14.5). Raised as `ParameterChangeRequiresRebuild`. Hint to use `Simulator.rebuild_with(new_ir)`. |
 | SPEC-025 | mutation    | `ParamPatch.op` not valid for the leaf type (e.g. `scale` on a categorical `kind` field). |
 
-### 14.2 NIR export notices (`EXPORT-NIR-NNN`)
+### 9.2.2 NIR export notices (`EXPORT-NIR-NNN`)
 
 | Code            | Class       | Trigger                                                                              |
 |-----------------|-------------|---------------------------------------------------------------------------------------|

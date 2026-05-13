@@ -2,41 +2,56 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 15. Mapping to the existing codebase
+## 10.1 Mapping to the existing codebase
 
 ```
-brainpy_state/spec/                          (NEW)
-├── __init__.py                              re-exports: NetSpec, load, NetIR, SpecError,
-│                                            train, merge, split, concat, ParamPatch
-├── ir.py                                    NetIR + all node dataclasses
-├── netspec.py                               Frontend A: NetSpec + handles
-├── yaml_loader.py                           Frontend B: load(), to_yaml()
-├── schema/
-│   └── netir-1.0.json                       JSON Schema
-├── registry.py                              neuron / synapse / output / input / layer /
-│                                            connectivity / initializer registries
-├── connect/
-│   ├── __init__.py                          re-exports: braintools.conn.* + supplementary
-│   └── supplementary.py                     FixedIndegree, FixedOutdegree,
-│                                            FixedTotalNumber, PairwisePoisson,
-│                                            SymmetricPairwiseBernoulli
-├── params.py                                ParamPatch, ParameterView (§6.9)
-├── backend.py                               Protocols (SimBackend, TrainBackend,
-│                                            ExportBackend), entry-point loader
+brainpy_state/                               (TOP-LEVEL package)
+├── __init__.py                              re-exports: spec, NetSpec, load, NetIR,
+│                                            ParamPatch, viz; and every backend
+│                                            (clock, event, bptt, eprop, eventprop,
+│                                             ppprop, nir, onnxspike)
+├── backend.py                               (NEW) Protocols (SimBackend,
+│                                            TrainBackend, ExportBackend),
+│                                            BackendCapabilities, entry-point loader,
+│                                            backend.list() / backend.get(name)
+│                                            — top-level, NOT under spec/
+│
+├── clock.py                                 sim backend — adapter over Network/Builder
+├── event.py                                 sim backend — event-driven simulator
+├── bptt.py                                  train backend — autodiff through surrogates
+├── eprop.py                                 train backend — eligibility-trace training
+├── eventprop.py                             train backend — event-based exact gradients
+├── ppprop.py                                train backend — see braintrace
+├── nir.py                                   export backend — Neuromorphic IR (§6)
+├── onnxspike.py                             export backend — ONNX-spike (future)
+│
+├── spec/                                    DSL surface ONLY — no execution code
+│   ├── __init__.py                          re-exports: NetSpec, load, NetIR, SpecError,
+│   │                                        train, merge, split, concat, ParamPatch.
+│   │                                        Does NOT re-export any backend.
+│   ├── ir.py                                NetIR + all node dataclasses
+│   ├── netspec.py                           Frontend A: NetSpec + handles
+│   ├── yaml_loader.py                       Frontend B: load(), to_yaml()
+│   ├── schema/
+│   │   └── netir-1.0.json                   JSON Schema
+│   ├── registry.py                          neuron / synapse / output / input / layer /
+│   │                                        connectivity / initializer registries
+│   ├── connect/
+│   │   ├── __init__.py                      re-exports: braintools.conn.* + supplementary
+│   │   └── supplementary.py                 FixedIndegree, FixedOutdegree,
+│   │                                        FixedTotalNumber, PairwisePoisson,
+│   │                                        SymmetricPairwiseBernoulli
+│   └── params.py                            ParamPatch, ParameterView (§3.14)
+│
 ├── viz/
 │   ├── graph.py
 │   ├── layers.py
 │   ├── matrix.py
 │   ├── params.py
 │   └── nir.py
+│
 ├── cli.py                                   brainpy entry point
-├── backends/
-│   ├── clock.py                             Adapter over Network/Builder
-│   ├── event.py                             Event-driven simulator
-│   ├── bptt.py                              Autodiff training
-│   ├── eprop.py                             E-prop training
-│   ├── event_prop.py                        Event-prop training
-│   └── nir.py                               NIR export (§9)
+│
 └── export_/
     ├── notices.py                           ExportNotice + code registry
     ├── sidecar.py                           Sidecar serialization
@@ -51,11 +66,19 @@ brainpy_state/_network/
 ├── _recorders.py                            (unchanged)
 └── _connectivity.py                         REMOVED — rules moved to spec/connect/
 
-    The _network module remains the runtime substrate of backends.clock.
+    The _network module remains the runtime substrate of brainpy_state.clock.
     Public symbols stay importable; users may keep using `Builder` directly.
 ```
 
-`backends.clock` does roughly:
+**Why backends are top-level, not nested under `spec/`.** The spec
+module is the paradigm-neutral DSL surface; backends commit to a
+specific runtime / gradient flavor and pull in heavyweight
+dependencies (JAX training, NIR libraries, event-prop machinery).
+Keeping them out of `spec/` means `import brainpy.state.spec` stays
+lightweight, and switching gradient paradigms is a one-line
+`from brainpy.state import <backend>` change (D29).
+
+`brainpy_state.clock` does roughly:
 
 ```python
 def build(ir: NetIR, *, seed: int, dt: u.Quantity, **_) -> Simulator:
@@ -98,7 +121,7 @@ classes become thin facades over it.
 
 ---
 
-## 16. Testing strategy
+## 10.2 Testing strategy
 
 - **Unit** — every node dataclass: construction, repr, content hash
   stability, frozen-mutation rejection.
@@ -153,7 +176,7 @@ classes become thin facades over it.
   for disjoint `set` paths and order-dependent (with documented order
   semantics) otherwise. `Simulator.parameters.diff()` round-trips
   through `apply(*diff())` to recover original values.
-- **Live vs rebuild classification** — for each leaf class in §6.9.5,
+- **Live vs rebuild classification** — for each leaf class in §3.14.5,
   the corresponding backend reports the expected classification.
   `REBUILD` writes raise SPEC-024 with a path-accurate message;
   `LIVE`/`LIVE_RESET` writes propagate to a subsequent `sim.run(...)`.
@@ -162,7 +185,7 @@ Test file layout follows the existing convention: colocated `*_test.py`.
 
 ---
 
-## 17. Relationship to the existing `_network` API
+## 10.3 Relationship to the existing `_network` API
 
 The new `brainpy_state.spec` module ships alongside today's
 `brainpy_state._network.Builder` and the rule-based `*Proj` classes,
@@ -191,14 +214,21 @@ with two deliberate changes to the existing tree:
 What stays:
 
 - `Builder` keeps working unchanged — it is now the substrate of
-  `backends.clock.build()`. User code that imports `Builder` directly
-  needs no changes.
+  `brainpy.state.clock.build()`. User code that imports `Builder`
+  directly needs no changes.
 - Documentation and examples migrate to `NetSpec` as the recommended
   entry point.
-- The `brainpy.state` top-level namespace gains `spec`, `NetSpec`,
-  `load`, `train`, `merge`, `split`, `concat`, `backends`, `viz`, and
-  `ParamPatch`. Existing symbols (`LIF`, `Expon`, `COBA`, `Builder`,
-  `OneToOneProj`, `FixedIndegreeProj`, …) keep their current paths.
+- The `brainpy.state` top-level namespace gains:
+  - DSL surface: `spec`, `NetSpec`, `load`, `train`, `merge`, `split`,
+    `concat`, `ParamPatch`, `viz`.
+  - Backend protocol and discovery: `backend` (singular —
+    `SimBackend`, `TrainBackend`, `ExportBackend`, `backend.list`,
+    `backend.get`).
+  - Backend implementations as **peer top-level modules**: `clock`,
+    `event`, `bptt`, `eprop`, `eventprop`, `ppprop`, `nir`,
+    `onnxspike`. None of these live under `brainpy.state.spec`.
+  - Existing symbols (`LIF`, `Expon`, `COBA`, `Builder`, `OneToOneProj`,
+    `FixedIndegreeProj`, …) keep their current paths.
 
 ---
 

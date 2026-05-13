@@ -2,7 +2,7 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 18. Decision log
+## 11.1 Decision log
 
 | ID  | Decision                                                          | Resolution |
 |-----|-------------------------------------------------------------------|-----------|
@@ -11,7 +11,7 @@
 | D3  | Module path                                                       | `brainpy_state.spec`, exported as `brainpy.state.spec`. Coexists with `brainpy.state.Builder`. |
 | D4  | CLI name                                                          | `brainpy`. |
 | D5  | Cross-ref style                                                   | IR uses strings (population ids, dotted paths); B uses handles; D uses string ids. |
-| D6  | Custom user models                                                | Registry decorators + entry-point groups (§11.5). |
+| D6  | Custom user models                                                | Registry decorators + entry-point groups (§7.5). |
 | D7  | YAML subnetwork parameterization                                  | `!include` + an explicit `params:` map per instance. Templating (Jinja / Hydra) is opt-in via `brainpy sweep`. |
 | D8  | Mutable parameters for training                                   | IR stays frozen. Trainers expose a `parameters()` view; updates happen in trainer state, not in the IR. |
 | D9  | View granularity                                                  | Slice / index / merge / reshape are fields on `ViewRef`. No separate `View` node type. Merge views denormalize into one `ProjectionNode` per member at finalize. |
@@ -20,10 +20,10 @@
 | D12 | Weight/delay precedence                                           | Canonical home is `ConnRule.params`. Projection-level `weight=` / `delay=` are sugar merged at finalize. Conflicts raise SPEC-016. |
 | D13 | Trainable surface                                                 | `Trainable` is a value-level wrapper, applicable to any leaf in `ModelRef.params`, `ConnRule.params`, `PopulationNode.init`, and `InputNode.weight` / `InputNode.source.params`. Trainability metadata lives in registry signatures. |
 | D14 | Trainable storage                                                 | Every `Trainable` materializes as `brainstate.nn.Param` on the synthesized `brainstate.nn.Module`. Trainers collect via `state.tree_states(brainstate.ParamState)`. |
-| D15 | Layer macros                                                      | Ship the §6.7 set covering deep-SNN essentials. Third-party macros via entry points. |
+| D15 | Layer macros                                                      | Ship the §3.11.5 set covering deep-SNN essentials. Third-party macros via entry points. |
 | D16 | Visualization default renderer                                    | Mermaid (no runtime deps) when Graphviz is not installed; Graphviz when available. HTML renderer for interactive `brainpy viz --renderer html`. |
 | D17 | NIR as the canonical export target                                | Yes. Other export targets (`onnx-spike`, `nengo`, `lava`) implement the same `ExportBackend` protocol but are not required to ship with the spec library. |
-| D18 | Lossy-export policy                                               | Six-class taxonomy (§9.4). Strict mode is opt-in (`--strict`) and elevates classes `APPROXIMATE`, `EXTENSION`, `DROPPED`, `UNSUPPORTED` to errors. Lenient mode is default and ships notices. |
+| D18 | Lossy-export policy                                               | Six-class taxonomy (§6.4). Strict mode is opt-in (`--strict`) and elevates classes `APPROXIMATE`, `EXTENSION`, `DROPPED`, `UNSUPPORTED` to errors. Lenient mode is default and ships notices. |
 | D19 | NIR units                                                         | NIR is unit-agnostic. The exporter strips to canonical SI and writes a sidecar (`<name>.nir.meta.json`) preserving the original units and trainable / seed / compound metadata. |
 | D20 | NIR import                                                        | Not in scope. The sidecar enables partial reconstruction for round-trip testing only; production round-trip is not supported because `UNSUPPORTED` and `DROPPED` losses are unrecoverable. |
 | D21 | Loss / optimizer integration                                      | **User-side.** Losses and optimizers are plain Python callables passed to `bptt.build(..., loss=...)`. No `brainpy.state.spec.loss` / `…optim` modules ship with the spec. |
@@ -31,13 +31,14 @@
 | D23 | Reverse-compatibility shim for `_network/_connectivity.py`        | **Removed.** Supplementary rules move to `brainpy_state/spec/connect/supplementary.py`. The legacy import path is dropped. |
 | D24 | Spike-time input encoding in NIR                                  | Emitted as a NIR extension node `nir.brainx.SpikeTimes(times=...)` under our reserved `nir.brainx.*` namespace. The sidecar mirrors the table for consumers that ignore extensions. |
 | D25 | Quantized weights for hardware                                    | **Per-export-backend concern.** The core spec does not carry a `quantize` flag. Each export backend (e.g. a future Loihi-targeted exporter) may consume `Trainable.constraint` strings (e.g. `"int8"`, `"fixed:Q4.4"`) or apply its own quantization config. |
-| D26 | Post-definition parameter modification — interface               | One path language (§6.9.1) and one `ParamPatch` type (§6.9.2). Pre-build: `NetSpec.update` / `.with_` / `.patch` (immutable; new spec returned). Post-build: `Simulator.parameters` / `Trainer.parameters` of type `ParameterView` (mutating; in-place on the runtime). |
-| D27 | Live vs rebuild policy                                            | Three-class taxonomy `LIVE` / `LIVE_RESET` / `REBUILD` (§6.9.5). Live writes propagate in place; rebuild writes raise SPEC-024 with a hint to call `Simulator.rebuild_with(new_ir)`. Connectivity is never silently re-sampled. |
-| D28 | Novelty positioning                                               | The load-bearing novelty is **training-paradigm pluralism over a single IR** (BPTT, event-prop, RTRL/forward-mode, eligibility-trace), not the DSL surface (which intentionally inherits from PyNN/NESTML/Brian2/Nengo) and not NIR export (an adopted community standard). See §1.1. Scope ties are broken in favor of preserving spec neutrality across the four training paradigms. |
+| D26 | Post-definition parameter modification — interface               | One path language (§3.14.1) and one `ParamPatch` type (§3.14.2). Pre-build: `NetSpec.update` / `.with_` / `.patch` (immutable; new spec returned). Post-build: `Simulator.parameters` / `Trainer.parameters` of type `ParameterView` (mutating; in-place on the runtime). |
+| D27 | Live vs rebuild policy                                            | Three-class taxonomy `LIVE` / `LIVE_RESET` / `REBUILD` (§3.14.5). Live writes propagate in place; rebuild writes raise SPEC-024 with a hint to call `Simulator.rebuild_with(new_ir)`. Connectivity is never silently re-sampled. |
+| D28 | Novelty positioning                                               | The load-bearing novelty is **training-paradigm pluralism over a single IR** (BPTT, event-prop, RTRL/forward-mode, eligibility-trace), not the DSL surface (which intentionally inherits from PyNN/NESTML/Brian2/Nengo) and not NIR export (an adopted community standard). See §1.1.1. Scope ties are broken in favor of preserving spec neutrality across the four training paradigms. |
+| D29 | Backend module location                                           | Backends live as **top-level modules under `brainpy.state`**: `brainpy.state.clock`, `brainpy.state.event`, `brainpy.state.bptt`, `brainpy.state.eprop`, `brainpy.state.eventprop`, `brainpy.state.ppprop`, `brainpy.state.nir`, `brainpy.state.onnxspike`. The spec module (`brainpy.state.spec`) does **not** contain any backend implementation — only the IR, frontends, registry, view algebra, and parameter-modification machinery. Backend protocols and discovery (`SimBackend`, `TrainBackend`, `ExportBackend`, `backend.list`, `backend.get`) live at `brainpy.state.backend` (singular, also top-level). Entry-point group names (`brainpy_state.backends.sim/.train/.export`) are unchanged. See [Chapter 5 §5.1.1](./05-backends.md#511-module-location). |
 
 ---
 
-## 19. Cheat sheet — Python ↔ YAML
+## 11.2 Cheat sheet — Python ↔ YAML
 
 | Python (B)                                                                                             | YAML (D)                                                                                                          |
 |--------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
@@ -57,7 +58,7 @@
 | `spec.sequential("enc", [sp.layer.Conv2d(...), sp.layer.MaxPool2d(2), ...])`                           | `sequentials: { enc: { layers: [ { kind: Conv2d, ... }, { kind: MaxPool2d, kernel: 2 }, ... ] } }`                |
 | `sp.layer.Linear(out=10, neuron=sp.models.LeakyRateReadout(), weight=sp.train(init.XavierNormal()))`   | `{ kind: Linear, out: 10, neuron: { kind: LeakyRateReadout }, weight: !train { kind: XavierNormal } }`            |
 | `sp.spec.viz(ir, mode="layers", renderer="mermaid", out="net.md")`                                     | (CLI) `brainpy viz path.yaml --mode layers --renderer mermaid -o net.md`                                          |
-| `sp.backends.nir.export(ir, seed=0, strict=False)`                                                     | (CLI) `brainpy export path.yaml --backend nir -o net.nir`                                                         |
+| `from brainpy.state import nir; nir.export(ir, seed=0, strict=False)`                                  | (CLI) `brainpy export path.yaml --backend nir -o net.nir`                                                         |
 | `spec2 = spec.update("populations.exc.model.tau", 25*u.ms)`                                            | (CLI) `brainpy patch path.yaml --from patches.yaml -o new.yaml`                                                   |
 | `spec.patch(ParamPatch("projections[*].rule.weight", 1.5, op="scale"))`                                | `patches: - { path: "projections[*].rule.weight", value: 1.5, op: scale }`                                        |
 | `sim.parameters.get("populations.exc.model.tau")`   *(read live)*                                       | n/a (runtime)                                                                                                     |
@@ -67,7 +68,7 @@
 
 ---
 
-## 20. Open questions
+## 11.3 Open questions
 
 - **NIR extension namespace coordination.** We claim a `nir.brainx.*`
   namespace for our custom extension nodes (`SpikeTimes`, `Concat`, and

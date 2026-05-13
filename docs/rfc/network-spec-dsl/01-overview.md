@@ -2,7 +2,7 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 1. Problem statement
+## 1.1 Problem statement
 
 Today, a `brainpy.state` model commits to a *runtime* at definition time:
 
@@ -26,7 +26,7 @@ We need a layer **above** the existing modules that lets users:
    training backend (BPTT / e-prop / event-prop), or an export backend
    (NIR / ONNX-Spike / Nengo / …) without touching the spec.
 
-### 1.1 Novelty and prior art
+### 1.1.1 Novelty and prior art
 
 The novelty of `brainpy.state.spec` is **not** the specification surface.
 PyNN, NESTML, Brian2, and Nengo have shown for over a decade that an SNN
@@ -60,7 +60,7 @@ NIR export (G11) is a fourth axis of pluralism — deployment — but is
 it rather than invent it, and several frameworks above also ship a NIR
 exporter. The training-paradigm axis is what is genuinely new.
 
-#### 1.1.1 Prior-art comparison
+#### 1.1.1.1 Prior-art comparison
 
 | Framework         | Modeling surface           | Training paradigm(s)                                    | Deployment              |
 |-------------------|----------------------------|---------------------------------------------------------|-------------------------|
@@ -76,7 +76,7 @@ Every row except the last commits to one column-2 entry. The bold row
 is the wedge: a single IR, four gradient flavors, deployment plurality
 on top.
 
-#### 1.1.2 Why this matters
+#### 1.1.1.2 Why this matters
 
 The load-bearing user story is the comparative study. SNN training is a
 moving target — event-prop is recent, RTRL variants are an active
@@ -97,7 +97,7 @@ it belongs in the spec; if no, it belongs in a backend.
 
 ---
 
-## 2. Goals
+## 1.2 Goals
 
 | ID  | Goal                                                                                     |
 |-----|------------------------------------------------------------------------------------------|
@@ -114,7 +114,7 @@ it belongs in the spec; if no, it belongs in a backend.
 | G11 | **Neuromorphic-IR export.** A spec lowers to the [Neuromorphic Intermediate Representation (NIR)](https://github.com/neuromorphs/NIR) for deployment on Loihi, SpiNNaker, Nengo, and other NIR-consuming platforms. The mapping is documented, deterministic, and surfaces lossy transformations explicitly. |
 | G12 | **Post-definition parameter modification.** After a spec is built (or after a backend has materialized it), users can read and write parameter values — both static (e.g. `tau`, `V_th`) and dynamic (e.g. synaptic weights changing during training) — through one uniform path-addressed interface. Modifications propagate consistently to the IR and to any running backend artifact. |
 
-### 2.1 User populations and example workloads
+### 1.2.1 User populations and example workloads
 
 The DSL targets two communities; the spec serves both without forking the language:
 
@@ -126,7 +126,7 @@ The DSL targets two communities; the spec serves both without forking the langua
 Both communities share the IR, the registry, validation, visualization, and
 the determinism contract.
 
-### 2.2 Non-goals
+### 1.2.2 Non-goals
 
 - A GUI / visual editor (the IR enables one; this spec ships the IR + CLI only).
 - Distributed multi-host execution (backend concern; the spec is host-agnostic).
@@ -137,7 +137,7 @@ the determinism contract.
 
 ---
 
-## 3. Primitive node kinds
+## 1.3 Primitive node kinds
 
 The spec is a tree (containment) plus an edge set (connectivity) of typed nodes:
 
@@ -153,23 +153,23 @@ Every node has: stable id, kind tag, frozen parameter dict (units carried),
 optional children. Nodes are **values**, not modules — they do not own JAX
 state. State is materialized by the backend at lowering time.
 
-### 3.1 Compound forms (sugar that lowers to primitives)
+### 1.3.1 Compound forms (sugar that lowers to primitives)
 
 | Compound form | Lowers to                                                                                   |
 |---------------|---------------------------------------------------------------------------------------------|
 | `Sequential`  | Ordered list of `(Population, Projection)` pairs. The output of each layer is the `pre` of the next. |
-| `Layer`       | One `Population` (or a stateless functional layer; §6.7) plus an inbound `Projection` configured from the previous layer's output. |
+| `Layer`       | One `Population` (or a stateless functional layer; §3.7) plus an inbound `Projection` configured from the previous layer's output. |
 | `MergedView`  | A `ViewRef` whose `population` is a synthesized id over multiple base populations; the backend de-references it as `concat`/`union` at materialization. |
 | `Trainable[…]`| A value wrapper, not a node. Carries a learnability marker through the IR; the backend chooses the storage (`brainstate.nn.Param`, frozen constant, …). |
 | `Group`       | A named, labelled bundle of populations / views — purely for organization and visualization. |
 
 Compound forms appear in the IR as their lowered primitive shape **plus** a
-`compounds: {...}` block on the root `NetIR` (§5) that records user intent.
+`compounds: {...}` block on the root `NetIR` (§2) that records user intent.
 Tools (viz, diff, describe, NIR export) use it; backends ignore it.
 
 ---
 
-## 4. Architecture overview
+## 1.4 Architecture overview
 
 Two frontends, one IR, three backend families:
 

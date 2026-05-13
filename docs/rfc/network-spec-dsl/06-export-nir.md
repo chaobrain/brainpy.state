@@ -2,9 +2,9 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 9. Export backends — Neuromorphic IR (G11)
+## 6. Export backends — Neuromorphic IR (G11)
 
-### 9.1 Why an Export backend family
+### 6.1 Why an Export backend family
 
 Sim and train backends produce trajectories or trained parameters; an
 **export** backend produces an artifact in a foreign IR format suitable
@@ -13,14 +13,15 @@ the lingua franca for spiking-network deployment across Loihi, SpiNNaker,
 Nengo, Norse, Rockpool, Lava, Sinabs, and others — a single export path
 into NIR transitively reaches all of them.
 
-### 9.2 The export workflow
+### 6.2 The export workflow
 
 ```python
 import brainpy.state.spec as sp
+from brainpy.state import nir as bp_nir          # NIR export backend (top-level)
 import nir
 
 ir = sp.spec.load("brunel.netspec.yaml")
-result = sp.backends.nir.export(ir, seed=0, strict=False)
+result = bp_nir.export(ir, seed=0, strict=False)
 
 # result.artifact is a nir.NIRGraph
 nir.write("brunel.nir", result.artifact)
@@ -41,13 +42,13 @@ CLI:
 brainpy export brunel.netspec.yaml --backend nir --strict -o brunel.nir
 ```
 
-### 9.3 Mapping: `NetIR` → NIR
+### 6.3 Mapping: `NetIR` → NIR
 
 NIR is a directed graph of typed nodes connected by edges. Each NIR node
 type is a concrete dataclass (`nir.LIF`, `nir.Linear`, `nir.Conv2d`, …).
 The exporter walks `NetIR` once and emits a `nir.NIRGraph`.
 
-#### 9.3.1 Neuron model mapping
+#### 6.3.1 Neuron model mapping
 
 | `brainpy.state` neuron model                | NIR node                   | Notes                                                                                           |
 |---------------------------------------------|----------------------------|-------------------------------------------------------------------------------------------------|
@@ -59,7 +60,7 @@ The exporter walks `NetIR` once and emits a `nir.NIRGraph`.
 | `HH(...)`                                   | —                                        | EXPORT-NIR-002: no NIR equivalent. Strict mode raises; lenient mode skips with notice.          |
 | `Izhikevich(...)`                           | —                                        | EXPORT-NIR-002 (same as HH).                                                                    |
 
-#### 9.3.2 Connectivity / projection mapping
+#### 6.3.2 Connectivity / projection mapping
 
 | `brainpy.state` shape                                     | NIR node                                              | Notes                                                  |
 |-----------------------------------------------------------|-------------------------------------------------------|--------------------------------------------------------|
@@ -75,7 +76,7 @@ The exporter walks `NetIR` once and emits a `nir.NIRGraph`.
 | Sparse `FixedProb` / `Random` / `FixedIndegree` / etc.    | `nir.Linear(weight=dense_W)` with zeros at non-edges  | Sparse rules densify at export. EXPORT-NIR-005 notice for matrices > 10⁷ entries to warn about size. |
 | `STDP`, `STP`, other plasticity                           | —                                                     | EXPORT-NIR-004: NIR is inference-only at present. Stripped with notice in lenient mode; strict mode raises. |
 
-#### 9.3.3 Input and output mapping
+#### 6.3.3 Input and output mapping
 
 | `brainpy.state` node                            | NIR node                                                    | Notes                                                                                            |
 |-------------------------------------------------|-------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
@@ -88,7 +89,7 @@ The exporter walks `NetIR` once and emits a `nir.NIRGraph`.
 | `ObservableNode(quantity=rate)`                 | `nir.Output(output_type=rate)`                              | Used for `LeakyRateReadout` outputs.                                                             |
 | `ObservableNode(quantity=weight, every=...)`    | —                                                           | EXPORT-NIR-006: weight tracing is a simulation concern, not deployable. Stripped with notice.    |
 
-#### 9.3.4 Topology mapping
+#### 6.3.4 Topology mapping
 
 | `brainpy.state` topology         | NIR encoding                                                                                |
 |----------------------------------|---------------------------------------------------------------------------------------------|
@@ -99,7 +100,7 @@ The exporter walks `NetIR` once and emits a `nir.NIRGraph`.
 | `SequentialMeta` ordering         | The exporter walks layers in declared order; NIR edge list reflects the sequential chain.   |
 | `GroupMeta`                       | Recorded in sidecar only; NIR has no group concept.                                         |
 
-#### 9.3.5 Parameter and unit handling
+#### 6.3.5 Parameter and unit handling
 
 NIR is unit-agnostic. Parameters are floats / tensors. The exporter:
 
@@ -107,14 +108,14 @@ NIR is unit-agnostic. Parameters are floats / tensors. The exporter:
    canonical SI base (`s` for time, `V` for voltage, `A` for current,
    `S` for conductance, `Hz` for rate).
 2. **Records the original units** in `sidecar.units[<node_id>.<param>]`
-   so a round-trip through the metadata sidecar (§9.4) restores them.
+   so a round-trip through the metadata sidecar (§6.4) restores them.
 3. **Materializes distributions** by sampling them with the build-time
    seed before stripping units.
 4. **Bakes `Trainable` values as constants**: the wrapper is unwrapped
    to its current value; `Trainable.name` is recorded in
    `sidecar.trainables`.
 
-#### 9.3.6 The exporter algorithm (sketch)
+#### 6.3.6 The exporter algorithm (sketch)
 
 ```python
 def to_nir(ir: NetIR, *, seed: int = 0, strict: bool = False) -> ExportResult:
@@ -150,10 +151,10 @@ def to_nir(ir: NetIR, *, seed: int = 0, strict: bool = False) -> ExportResult:
                          content_hash=_canonical_hash(graph, sidecar))
 ```
 
-### 9.4 Lossy mappings, strict mode, and the metadata sidecar
+### 6.4 Lossy mappings, strict mode, and the metadata sidecar
 
 NIR is intentionally a *minimum-common-denominator* IR. Some `NetIR`
-constructs have no direct NIR equivalent (table in §9.3); the exporter
+constructs have no direct NIR equivalent (table in §6.3); the exporter
 classifies each into one of:
 
 | Class    | Meaning                                                                                  | Strict mode | Lenient mode                                |
@@ -166,7 +167,7 @@ classifies each into one of:
 | `UNSUPPORTED`| No mapping exists for the node kind (HH, Izhikevich).                                | **raises** EXPORT-NIR-002 | node skipped, downstream edges rerouted; if rerouting is impossible, raises regardless |
 
 Every transformation in classes `RECORDED`–`UNSUPPORTED` emits an
-`ExportNotice` with a stable code (§14).
+`ExportNotice` with a stable code (§9.2).
 
 **The sidecar** is a plain-Python dict / JSON document recording:
 
@@ -184,7 +185,7 @@ is provided to reconstruct as much of the original `NetIR` as is
 recoverable — useful for round-trip testing but not for production use,
 since `UNSUPPORTED` and `DROPPED` losses are not recoverable.
 
-### 9.5 Other export targets
+### 6.5 Other export targets
 
 `nir` is the canonical export backend; the same `ExportBackend` protocol
 hosts further targets:

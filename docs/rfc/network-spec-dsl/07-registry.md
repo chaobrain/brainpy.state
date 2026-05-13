@@ -2,13 +2,13 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 11. Registry
+## 7. Registry
 
 Every model and rule is referenced by `kind` string. The registry maps
 each `kind` to its Python implementation and a parameter signature
 (names, units, defaults, trainability metadata).
 
-### 11.1 Connectivity registry
+### 7.1 Connectivity registry
 
 The canonical source is **`braintools.conn`**. At import time, every
 public subclass of `braintools.conn.Connectivity` is registered, keyed by
@@ -26,7 +26,7 @@ for _name in _bt_conn.__all__:
 Supplementary rules live in `brainpy_state/spec/connect/supplementary.py`
 as `braintools.conn.PointConnectivity` subclasses, registered under the
 same protocol. The legacy `brainpy_state._network._connectivity` module
-is removed (§17).
+is removed (§10.3).
 
 | Supplementary rule              | Status                                        |
 |---------------------------------|-----------------------------------------------|
@@ -38,7 +38,7 @@ is removed (§17).
 
 `brainpy_state.spec.connect` re-exports the full registered set.
 
-### 11.2 Initializer registry
+### 7.2 Initializer registry
 
 Distributions and weight/delay initializers are sourced from
 **`braintools.init`** with the same auto-registration mechanism. Every
@@ -47,7 +47,7 @@ Distributions and weight/delay initializers are sourced from
 `KaimingNormal`, `XavierNormal`, …). Lower-case aliases are accepted by
 the YAML loader and canonicalized.
 
-### 11.3 Neuron / synapse / output / input / plasticity registries
+### 7.3 Neuron / synapse / output / input / plasticity registries
 
 ```python
 @register_neuron("LIF", source="brainpy_state._brainpy.lif.LIF")
@@ -69,9 +69,9 @@ Trainability annotations:
 - `Trainability.BACKEND` — accepted, but specific backends may reject
   (raises SPEC-021 on that backend).
 
-### 11.4 Layer registry (for deep SNNs)
+### 7.4 Layer registry (for deep SNNs)
 
-The v1 set is the table in §6.7. Each macro declares:
+The v1 set is the table in §3.11.5. Each macro declares:
 
 - `in_kind` — accepted view shape (`flat`, `2d`, `3d`).
 - `out_kind` — produced view shape.
@@ -80,7 +80,7 @@ The v1 set is the table in §6.7. Each macro declares:
 `spec.sequential(...)` checks `layer[k].out_kind == layer[k+1].in_kind` and
 that numeric shapes broadcast; otherwise SPEC-020.
 
-### 11.5 Third-party registration
+### 7.5 Third-party registration
 
 ```toml
 [project.entry-points."brainpy_state.spec.neurons"]

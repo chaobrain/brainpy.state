@@ -2,12 +2,12 @@
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 7. Frontend B — YAML/JSON data DSL
+## 4. Frontend B — YAML/JSON data DSL
 
 Spec is data. A YAML/JSON file is the canonical archival form; Python loads
 it with `sp.spec.load(path) -> NetIR`. Same IR, same backends.
 
-### 7.1 Top-level schema (informal)
+### 4.1 Top-level schema (informal)
 
 ```yaml
 version: "netir/1.0"
@@ -67,7 +67,7 @@ meta:
   citation: "Brunel 2000"
 ```
 
-### 7.2 Lexical conventions
+### 4.2 Lexical conventions
 
 - **Unit strings.** A quantity is `"<number><whitespace><unit>"`, where
   `<unit>` is anything `saiunit` parses (`mV`, `ms`, `nS`, `Hz`, `pA*ms`,
@@ -93,7 +93,7 @@ meta:
 - **Anchors and aliases.** Standard YAML `&` / `*` is supported; resolved
   before schema validation.
 
-### 7.3 JSON Schema
+### 4.3 JSON Schema
 
 A full schema lives at `brainpy_state/spec/schema/netir-1.0.json`. Sketch:
 
@@ -132,17 +132,18 @@ A full schema lives at `brainpy_state/spec/schema/netir-1.0.json`. Sketch:
 The schema is used by `brainpy lint`, IDE integrations (YAML Language
 Server via `yaml.schemas`), and the loader's pre-validation pass.
 
-### 7.4 Parameter sweeps
+### 4.4 Parameter sweeps
 
 Two supported patterns:
 
 1. **Python overrides** — keep the YAML, override at load time:
 
    ```python
+   from brainpy.state import clock        # backend lives at brainpy.state.clock
    for g in [4.0, 4.5, 5.0]:
        ir = sp.spec.load("brunel.netspec.yaml",
                          overrides={"projections[2].rule.weight": f"-{0.1*g} nS"})
-       sim = sp.backends.clock.build(ir, seed=0, dt=0.1*u.ms)
+       sim = clock.build(ir, seed=0, dt=0.1*u.ms)
    ```
 
 2. **Sweep file** — a side file listing patches; the CLI expands the

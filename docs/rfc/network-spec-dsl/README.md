@@ -34,32 +34,34 @@ seed, and connectivity rules stay bit-identical. NIR export (deployment
 to Loihi, SpiNNaker, Nengo) is a fourth axis of pluralism but is not
 the load-bearing novelty — NIR is a community standard we adopt.
 
-See [§1.1 in Chapter 1](./01-overview.md#11-novelty-and-prior-art) for the
+See [§1.1.1 in Chapter 1](./01-overview.md#111-novelty-and-prior-art) for the
 prior-art comparison table.
 
 ---
 
 ## Table of contents
 
-| Chapter                                                               | Source sections        | What's in it                                                                                                  |
-|-----------------------------------------------------------------------|------------------------|---------------------------------------------------------------------------------------------------------------|
-| [1 — Overview](./01-overview.md)                                      | §1 · §1.1 · §2 · §3 · §4 | Problem statement, novelty pitch and prior-art table, goals (G1–G12), user populations, non-goals, primitive node kinds, architecture diagram. |
-| [2 — The IR (`NetIR`)](./02-ir.md)                                    | §5                     | Canonical frozen-dataclass IR: value wrappers (`Trainable`, `DistRef`, `ModelRef`, `ConnRule`), topological nodes, root container, connectivity/weight/delay semantics. |
-| [3 — Frontend A: Python `NetSpec` builder](./03-frontend-python.md)   | §6                     | Fluent builder API, handles, Brunel example, subnetworks, view algebra, trainable parameters, deep-SNN sequential composition, construction-time errors, post-definition parameter modification (G12) with path language, `ParamPatch`, `ParameterView`. |
-| [4 — Frontend B: YAML/JSON DSL](./04-frontend-yaml.md)                | §7                     | Top-level YAML schema, lexical conventions, JSON Schema, parameter sweeps.                                    |
-| [5 — Backend protocol & round-trip](./05-backends.md)                 | §8 · §10               | `Backend` protocol, third-party backends, capability declarations, IR round-trip and equivalence guarantees.   |
-| [6 — Export backends: Neuromorphic IR](./06-export-nir.md)            | §9                     | Why NIR export, the export workflow, mapping NetIR → NIR (neurons, projections, inputs, topology, units), lossy taxonomy, strict mode, metadata sidecar, other export targets. |
-| [7 — Registry](./07-registry.md)                                      | §11                    | Connectivity, initializer, neuron/synapse/output/input/plasticity, and layer registries. Third-party registration via entry points. |
-| [8 — CLI & visualization](./08-cli-and-viz.md)                        | §12                    | `brainpy` CLI commands, visualization modes (graph, layers, matrix, params), renderers (Mermaid, Graphviz, HTML, Matplotlib). |
-| [9 — Determinism & validation](./09-determinism-validation.md)        | §13 · §14              | Determinism contract (G4), validation rule catalog (spec-level errors `SPEC-NNN`, NIR export notices `EXPORT-NIR-NNN`). |
-| [10 — Implementation](./10-implementation.md)                         | §15 · §16 · §17        | Mapping to the existing codebase, testing strategy, relationship to the existing `_network` API.              |
-| [11 — Appendix](./11-appendix.md)                                     | §18 · §19 · §20        | Decision log (D1–D28), Python ↔ YAML cheat sheet, open questions.                                             |
+Section numbering follows file numbering: chapter N's content is §N (with sub-sections §N.x, §N.x.y, …).
+
+| Chapter                                                               | What's in it                                                                                                  |
+|-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| [1 — Overview](./01-overview.md)                                      | Problem statement, novelty pitch and prior-art table, goals (G1–G12), user populations, non-goals, primitive node kinds, architecture diagram. |
+| [2 — The IR (`NetIR`)](./02-ir.md)                                    | Canonical frozen-dataclass IR: value wrappers (`Trainable`, `DistRef`, `ModelRef`, `ConnRule`), topological nodes, root container, connectivity/weight/delay semantics. |
+| [3 — Frontend A: Python `NetSpec` builder](./03-frontend-python.md)   | Fluent builder API, handles, view algebra (incl. spatial / compartmental / tag-predicate), value wrappers (`Trainable` / `DistRef` / `Noise`), populations (point / spatial / morphological), projections with spatial and compartment-targeted rules, inputs / signals / schedules, observables, composition forms (subnetwork / sequential / DAG), plasticity (per-projection through structural and homeostatic), construction-time errors, post-definition parameter modification (G12) with path language, `ParamPatch`, `ParameterView`. |
+| [4 — Frontend B: YAML/JSON DSL](./04-frontend-yaml.md)                | Top-level YAML schema, lexical conventions, JSON Schema, parameter sweeps.                                    |
+| [5 — Backend protocol & round-trip](./05-backends.md)                 | `Backend` protocol at `brainpy.state.backend`; backend implementations as top-level modules (`brainpy.state.clock` / `event` / `bptt` / `eprop` / `eventprop` / `ppprop` / `nir` / `onnxspike`); third-party backends; capability declarations; IR round-trip and equivalence guarantees. |
+| [6 — Export backends: Neuromorphic IR](./06-export-nir.md)            | Why NIR export, the export workflow, mapping NetIR → NIR (neurons, projections, inputs, topology, units), lossy taxonomy, strict mode, metadata sidecar, other export targets. |
+| [7 — Registry](./07-registry.md)                                      | Connectivity, initializer, neuron/synapse/output/input/plasticity, and layer registries. Third-party registration via entry points. |
+| [8 — CLI & visualization](./08-cli-and-viz.md)                        | `brainpy` CLI commands, visualization modes (graph, layers, matrix, params), renderers (Mermaid, Graphviz, HTML, Matplotlib). |
+| [9 — Determinism & validation](./09-determinism-validation.md)        | Determinism contract (G4), validation rule catalog (spec-level errors `SPEC-NNN`, NIR export notices `EXPORT-NIR-NNN`). |
+| [10 — Implementation](./10-implementation.md)                         | Mapping to the existing codebase, testing strategy, relationship to the existing `_network` API.              |
+| [11 — Appendix](./11-appendix.md)                                     | Decision log (D1–D29), Python ↔ YAML cheat sheet, open questions.                                             |
 
 ---
 
 ## Goal map
 
-Each goal (G1–G12 in [Chapter 1](./01-overview.md#2-goals)) has its primary chapter and its supporting chapters:
+Each goal (G1–G12 in [Chapter 1](./01-overview.md#12-goals)) has its primary chapter and its supporting chapters:
 
 | Goal | Headline                                  | Primary chapter                             | Also relevant                                                |
 |------|-------------------------------------------|---------------------------------------------|--------------------------------------------------------------|
@@ -69,12 +71,12 @@ Each goal (G1–G12 in [Chapter 1](./01-overview.md#2-goals)) has its primary ch
 | G4   | Deterministic lowering                    | [9](./09-determinism-validation.md)         | [2](./02-ir.md), [5](./05-backends.md)                       |
 | G5   | Composable specs (subnetworks)            | [3](./03-frontend-python.md), [4](./04-frontend-yaml.md) | —                                                |
 | G6   | Inspectable IR                            | [2](./02-ir.md)                             | [8](./08-cli-and-viz.md)                                      |
-| G7   | Deep / neuromorphic SNNs                  | [3](./03-frontend-python.md) (§6.7)         | [7](./07-registry.md) (layer registry)                       |
-| G8   | View algebra                              | [3](./03-frontend-python.md) (§6.5)         | —                                                            |
-| G9   | Trainable declarations                    | [3](./03-frontend-python.md) (§6.6)         | [2](./02-ir.md), [5](./05-backends.md)                       |
+| G7   | Deep / neuromorphic SNNs                  | [3](./03-frontend-python.md) (§3.11)        | [7](./07-registry.md) (layer registry)                       |
+| G8   | View algebra                              | [3](./03-frontend-python.md) (§3.9)         | —                                                            |
+| G9   | Trainable declarations                    | [3](./03-frontend-python.md) (§3.10)        | [2](./02-ir.md), [5](./05-backends.md)                       |
 | G10  | Visualization                             | [8](./08-cli-and-viz.md)                    | —                                                            |
 | G11  | Neuromorphic-IR export                    | [6](./06-export-nir.md)                     | [9](./09-determinism-validation.md) (`EXPORT-NIR-*` notices) |
-| G12  | Post-definition parameter modification    | [3](./03-frontend-python.md) (§6.9)         | [11](./11-appendix.md) (D26, D27)                            |
+| G12  | Post-definition parameter modification    | [3](./03-frontend-python.md) (§3.14)        | [11](./11-appendix.md) (D26, D27)                            |
 
 ---
 
@@ -86,5 +88,5 @@ Each goal (G1–G12 in [Chapter 1](./01-overview.md#2-goals)) has its primary ch
 - **NIR / neuromorphic-hardware integrators:** [Chapter 6](./06-export-nir.md) end to end.
 - **Implementers landing this in `brainpy_state`:** [Chapter 10](./10-implementation.md) (codebase mapping, tests, relationship to existing `_network`).
 
-Cross-references in chapter bodies use the original `§N.M` notation; the
-table above maps each `§N` to the chapter that contains it.
+Cross-references in chapter bodies use `§N.M.P` notation; the top-level
+component `N` is the chapter (= file) number.
