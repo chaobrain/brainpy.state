@@ -6,23 +6,23 @@
 
 | §     | Topic                                                            | Purpose                                                       |
 |-------|------------------------------------------------------------------|---------------------------------------------------------------|
-| 6.1   | Design and extension model                                       | The seams along which extensions are added.                   |
-| 6.2   | The `NetSpec` API                                                | The builder's full surface.                                   |
-| 6.3   | Handles                                                          | Typed symbolic references; one subtype per view kind.         |
-| 6.4   | Grounding example — Brunel                                       | The minimal end-to-end shape of a spec.                       |
-| 6.5   | Populations                                                      | Point, spatial, and morphological populations.                |
-| 6.6   | Projections, connectivity, and synapses                          | Rule sources, spatial rules, compartment-targeted rules, per-edge attributes. |
-| 6.7   | Inputs, signals, schedules                                       | External drivers, third-factor / eligibility signals, learning phases / trial structure. |
-| 6.8   | Observables                                                      | Recording channels with windowing and reducers.               |
-| 6.9   | View algebra                                                     | Index / slice / merge / spatial / compartmental / tag / predicate views. |
-| 6.10  | Value wrappers                                                   | `Trainable`, `DistRef`, `Noise` — and how they compose.       |
-| 6.11  | Composition forms                                                | Subnetwork, sequential, DAG; temporal semantics; layer macros.|
-| 6.12  | Plasticity                                                       | Per-projection → modulated → eligibility → scheduled → structural → homeostatic. |
-| 6.13  | Construction-time errors                                         | Eager validation.                                             |
-| 6.14  | Build-time variables                                             | `net.variable(name, default)` declarations bound at `backend.build`. |
-| 6.15  | End-to-end example                                               | A cortex–striatum loop touching every extension.              |
-| 6.16  | IR delta and forward compatibility                               | Per-extension summary of IR additions and parameter class.    |
-| 6.17  | Intentionally out of scope                                       | What this chapter deliberately does not cover.                |
+| 3.1   | Design and extension model                                       | The seams along which extensions are added.                   |
+| 3.2   | The `NetSpec` API                                                | The builder's full surface.                                   |
+| 3.3   | Handles                                                          | Typed symbolic references; one subtype per view kind.         |
+| 3.4   | Grounding example — Brunel                                       | The minimal end-to-end shape of a spec.                       |
+| 3.5   | Populations                                                      | Point, spatial, and morphological populations.                |
+| 3.6   | Projections, connectivity, and synapses                          | Rule sources, spatial rules, compartment-targeted rules, per-edge attributes. |
+| 3.7   | Inputs, signals, schedules                                       | External drivers, third-factor / eligibility signals, learning phases / trial structure. |
+| 3.8   | Observables                                                      | Recording channels with windowing and reducers.               |
+| 3.9   | View algebra                                                     | Index / slice / merge / spatial / compartmental / tag / predicate views. |
+| 3.10  | Value wrappers                                                   | `Trainable`, `DistRef`, `Noise` — and how they compose.       |
+| 3.11  | Composition forms                                                | Subnetwork, sequential, DAG; temporal semantics; layer macros.|
+| 3.12  | Plasticity                                                       | Per-projection → modulated → eligibility → scheduled → structural → homeostatic. |
+| 3.13  | Construction-time errors                                         | Eager validation.                                             |
+| 3.14  | Build-time variables                                             | `net.variable(name, default)` declarations bound at `backend.build`. |
+| 3.15  | End-to-end example                                               | A cortex–striatum loop touching every extension.              |
+| 3.16  | IR delta and forward compatibility                               | Per-extension summary of IR additions and parameter class.    |
+| 3.17  | Intentionally out of scope                                       | What this chapter deliberately does not cover.                |
 
 ---
 
