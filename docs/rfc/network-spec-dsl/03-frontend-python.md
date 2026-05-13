@@ -427,7 +427,7 @@ Backends live as **top-level modules under `brainpy.state`**, never under
 no execution code. The full backend module list is in
 [Chapter 5 §5.1.1](./05-backends.md#511-module-location); the rest of
 this chapter imports them as `from brainpy.state import <backend>`
-(e.g. `clock`, `bptt`, `eprop`, `eventprop`, `nir`).
+(e.g. `clock`, `bptt`, `eprop`, `eventprop`).
 
 This is the **minimal** shape: point populations, random connectivity,
 Poisson drive, two observables. The rest of the chapter is what
@@ -560,7 +560,6 @@ The `Cell` model has its own reachability constraints:
 | `event`          | Not supported. Multi-compartment is not event-driven (capability error). |
 | `bptt`           | Supported when `solver` is differentiable (`staggered`, `exp_euler`); otherwise capability error. |
 | `eprop`, `event-prop` | Not supported (out of paradigm scope).                     |
-| `nir`            | Stripped to point with `EXPORT-NIR-LOSSY` notice.               |
 
 §3.9.5 covers compartment-resolved views on this population.
 
@@ -578,7 +577,7 @@ conflicting values raise `SPEC-016` / `SPEC-017` at finalize.
 ### 3.6.1 Standard connectivity rules
 
 Every public subclass of `braintools.conn.Connectivity` is registered
-by PascalCase name (§7.1) and consumable as `rule=`:
+by PascalCase name (§6.1) and consumable as `rule=`:
 
 ```python
 # random / regular / topological — point connectivity, no positions needed
@@ -1043,7 +1042,6 @@ class _MaterializedLIF(bs.nn.Module):
 | `event`  | Same as `clock`.                                                                                             |
 | `bptt`   | Becomes a `brainstate.nn.Param`. Collected via `Trainer.parameters()`.                                       |
 | `eprop`  | Honors the trainable kinds supported by the algorithm (recurrent / output weights, optionally neuron params). Unsupported trainables raise `BackendCapabilityError` (SPEC-013). |
-| `nir`    | Same as `clock`: trainables baked as constants at export time. Original `Trainable.name` recorded in the metadata sidecar (§6.4). |
 
 `parameters()` view:
 
@@ -1080,7 +1078,7 @@ weight=spec.train(init.LogNormal(...))                   # trainable + distribut
 ```
 
 `DistRef` is materialized as a concrete array (with units) at backend
-build, with seed derived from the projection's fold-in chain (§9.1).
+build, with seed derived from the projection's fold-in chain (§8.1).
 
 ### 3.10.3 `Noise` — stochastic values
 
@@ -1154,9 +1152,6 @@ violate G1 ("describe what, not how to step").
   `sigma`, `tau`, and `seed_tag` are baked into the resolved noise
   source. A `sigma` or `tau` declared as `net.variable(...)` is bound
   at this point.
-- **NIR export:** stripped with `EXPORT-NIR-LOSSY` notice; sidecar
-  records parameters so hardware-specific noise sources can be wired
-  manually.
 
 ### 3.10.4 Composition rules
 
@@ -1349,7 +1344,7 @@ A same-step cycle raises `SPEC-042` at finalize.
 ### 3.11.5 Layer macro registry
 
 The v1 set covers deep-SNN essentials. Third-party macros register
-via the `brainpy_state.spec.layers` entry point (§7.5).
+via the `brainpy_state.spec.layers` entry point (§6.5).
 
 | Macro                  | Connectivity rule used internally       | Stateful? |
 |------------------------|------------------------------------------|-----------|
@@ -1729,7 +1724,7 @@ hashes. This is intentional:
 - Tooling that caches on `content_hash` (build cache, golden-IR
   fixtures, sweep deduplication) keys correctly: a sweep over `g`
   reuses connectivity-sampling caches.
-- The determinism contract (§9.1) is restated as: given
+- The determinism contract (§8.1) is restated as: given
   `(NetIR, variables, backend, seed, dt)`, the resulting artifact is
   bit-identical.
 

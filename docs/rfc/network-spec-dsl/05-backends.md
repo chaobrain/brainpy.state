@@ -4,10 +4,12 @@
 
 ## 5.1 Backend protocol
 
-Three backend families share the same registry plumbing but have distinct
-contracts. The protocols live at **`brainpy_state.backend`** (top-level,
-**not** under `brainpy_state.spec`). The `spec` module is the DSL
-surface and contains no execution code — it only knows about the IR.
+Two backend families (sim, train) share the same registry plumbing but have
+distinct contracts. The protocols live at **`brainpy_state.backend`**
+(top-level, **not** under `brainpy_state.spec`). The `spec` module is the
+DSL surface and contains no execution code — it only knows about the IR.
+`NetIR` is the canonical, content-hashable contract every backend
+consumes; the spec module does not ship an exporter to any foreign IR.
 
 ```python
 # brainpy_state/backend.py                              (TOP-LEVEL module)
@@ -34,17 +36,6 @@ class TrainBackend(Protocol):
               variables: Mapping[str, Any] | None = None,    # §3.14
               **opts: Any) -> "Trainer": ...
 
-class ExportBackend(Protocol):
-    name: str
-    capabilities: "BackendCapabilities"
-    artifact_kind: str                     # "nir.NIRGraph", "onnx.ModelProto", ...
-
-    def export(self, ir: NetIR, *,
-               seed: int = 0,
-               strict: bool = False,
-               variables: Mapping[str, Any] | None = None,   # §3.14
-               **opts: Any) -> "ExportResult": ...
-
 class Simulator(Protocol):
     ir: NetIR
     seed: int
@@ -68,19 +59,6 @@ class Trainer(Protocol):
     #   non-trainable values, call backend.build again with a new
     #   variables={...} mapping.
 
-@dataclass(frozen=True)
-class ExportResult:
-    artifact: Any                          # backend-specific (e.g. nir.NIRGraph)
-    notices: tuple["ExportNotice", ...]    # lossy/skipped mappings
-    sidecar: Mapping[str, Any]             # round-trip metadata (units, names, seeds)
-    content_hash: str
-
-@dataclass(frozen=True)
-class ExportNotice:
-    code: str                              # "EXPORT-NIR-002", ...
-    node_id: str
-    message: str
-    severity: str                          # "info" | "warning" | "error"
 ```
 
 ### 5.1.1 Module location
@@ -88,7 +66,7 @@ class ExportNotice:
 Backend implementations are **top-level modules under `brainpy.state`**,
 one per backend. The `brainpy.state.spec` module deliberately contains
 no backend implementations — only the IR, frontends, registry, view
-algebra, and variable-declaration machinery (D29). The IR is
+algebra, and variable-declaration machinery (D22). The IR is
 immutable after `.finalize()`; cross-run variation is supplied
 through each backend's `variables=` build kwarg (§3.14).
 
@@ -100,8 +78,6 @@ through each backend's `variables=` build kwarg (§3.14).
 | train  | `eprop`      | `brainpy.state.eprop`        | Synaptic-eligibility-trace training; gradient-free recurrent updates.|
 | train  | `eventprop`  | `brainpy.state.eventprop`    | Event-based exact gradients. See `/mnt/d/codes/githubs/snn/eventax`. |
 | train  | `ppprop`     | `brainpy.state.ppprop`       | See `/mnt/d/codes/projects/braintrace`.                              |
-| export | `nir`        | `brainpy.state.nir`          | Neuromorphic IR (§6).                                                |
-| export | `onnx-spike` | `brainpy.state.onnxspike`    | ONNX with the spiking extension ops (future, same protocol).         |
 
 User code calls them directly:
 
@@ -119,9 +95,6 @@ trainer = eprop.build(ir, seed=0, dt=0.5*u.ms, reward_signal="reward")
 
 from brainpy.state import eventprop
 trainer = eventprop.build(ir, seed=0, dt=1*u.ms, loss=loss_fn)
-
-from brainpy.state import nir
-result = nir.export(ir, seed=0, strict=False)
 ```
 
 Why not nest under `brainpy.state.spec.backends.*`? Two reasons:
@@ -129,7 +102,7 @@ Why not nest under `brainpy.state.spec.backends.*`? Two reasons:
 1. **The spec is paradigm-neutral; the backends are not.** Keeping
    `spec` free of backend imports preserves the property that
    importing the DSL surface does not transitively pull in JAX
-   training runtimes, NIR libraries, or event-prop tooling.
+   training runtimes or event-prop tooling.
 2. **One symbol per backend at the top.** Switching gradient flavors
    is a one-line `from brainpy.state import <backend>` change, which
    mirrors the load-bearing novelty pitched in
@@ -147,9 +120,6 @@ my_sim = "mypkg.backend:MySimBackend"
 
 [project.entry-points."brainpy_state.backends.train"]
 my_train = "mypkg.backend:MyTrainBackend"
-
-[project.entry-points."brainpy_state.backends.export"]
-my_export = "mypkg.backend:MyExportBackend"
 ```
 
 A third-party backend ships its implementation at whatever import path
@@ -246,4 +216,4 @@ export determinism, and sweep deduplication.
 ---
 
 **Previous:** [Chapter 4 — Frontend B: YAML/JSON DSL](./04-frontend-yaml.md)  
-**Next:** [Chapter 6 — Export backends: Neuromorphic IR](./06-export-nir.md)
+**Next:** [Chapter 6 — Registry](./06-registry.md)

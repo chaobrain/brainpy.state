@@ -11,9 +11,8 @@ Today, a `brainpy.state` model commits to a *runtime* at definition time:
 - The gradient story is implicit: autodiff flows through surrogate spikes.
 
 Switching a model from clock-driven simulation to event-driven simulation,
-from BPTT to e-prop / event-prop, or exporting to a neuromorphic-hardware
-toolchain requires **rewriting the model**. The current
-`brainpy_state._network.Network` / `Builder` is an imperative
+or from BPTT to e-prop / event-prop, requires **rewriting the model**. The
+current `brainpy_state._network.Network` / `Builder` is an imperative
 `brainstate.nn.Module`; populations and projections store JAX state in-place
 and step in lockstep with `brainstate.environ['t']`.
 
@@ -22,9 +21,10 @@ We need a layer **above** the existing modules that lets users:
 1. **Describe the network once** — populations, synapses, projections, inputs,
    recorders, parameters with physical units, trainable markers, layer
    structure for deep SNNs.
-2. **Pick a runtime later** — choose a simulation backend (clock / event), a
-   training backend (BPTT / e-prop / event-prop), or an export backend
-   (NIR / ONNX-Spike / Nengo / …) without touching the spec.
+2. **Pick a runtime later** — choose a simulation backend (clock / event)
+   or a training backend (BPTT / e-prop / event-prop) without touching
+   the spec. `NetIR` is the canonical exchange format; backends consume
+   it directly.
 
 ### 1.1.1 Novelty and prior art
 
@@ -54,15 +54,16 @@ drift that implies. In `brainpy.state.spec`, the gradient story is a
 backend kwarg: a researcher A/Bs paradigms by changing one line, while
 the spec, the seed, and the connectivity rules are bit-identical.
 
-NIR export (G11) is a fourth axis of pluralism — deployment — but is
-**not** the load-bearing novelty. NIR is a community standard
-(Neuromorphic Intermediate Representation, neuromorphs/NIR); we adopt
-it rather than invent it, and several frameworks above also ship a NIR
-exporter. The training-paradigm axis is what is genuinely new.
+`NetIR` is `brainpy.state`'s canonical IR — the single contract every
+backend consumes. We deliberately do not adopt a foreign neuromorphic
+IR as the standard exchange format; the spec module owns its IR so
+unit-aware parameters, distributions, trainable markers, and seed
+provenance survive across simulation and training paradigms without
+the lossy conversion that a deployment-oriented IR would impose.
 
 #### 1.1.1.1 Prior-art comparison
 
-| Framework         | Modeling surface           | Training paradigm(s)                                    | Deployment              |
+| Framework         | Modeling surface           | Training paradigm(s)                                    | Runtime                 |
 |-------------------|----------------------------|---------------------------------------------------------|-------------------------|
 | snnTorch          | PyTorch modules            | BPTT (surrogate grad)                                   | PyTorch                 |
 | Norse             | PyTorch modules            | BPTT (surrogate grad)                                   | PyTorch                 |
@@ -70,11 +71,11 @@ exporter. The training-paradigm axis is what is genuinely new.
 | Nengo             | NEF Network DSL            | NEF / PES                                               | Nengo, Loihi            |
 | PyNN / Brian2     | Declarative DSL            | Plasticity rules only (no global gradient)              | NEST / NEURON / GPU     |
 | Lava (Intel)      | Process graph              | On-chip plasticity                                      | Loihi 2                 |
-| **brainpy.state** | **Declarative IR**         | **BPTT + event-prop + RTRL + eligibility-trace**        | **clock/event + NIR**   |
+| **brainpy.state** | **Declarative IR**         | **BPTT + event-prop + RTRL + eligibility-trace**        | **clock + event**       |
 
 Every row except the last commits to one column-2 entry. The bold row
-is the wedge: a single IR, four gradient flavors, deployment plurality
-on top.
+is the wedge: a single IR, four gradient flavors, plus a clock/event
+runtime pair under the same description.
 
 #### 1.1.1.2 Why this matters
 
@@ -111,7 +112,6 @@ it belongs in the spec; if no, it belongs in a backend.
 | G8  | **View algebra.** Slice, index, merge, concat, split populations. Views are first-class targets of projections, inputs, and observables. |
 | G9  | **Trainable declarations.** Any spec value (model parameter, weight, delay, initial state) can be marked trainable. The spec is the source of truth for *what* is learnable; backends decide *how* to gradient through it. Trainables materialize as `brainstate.nn.Param` at backend build. |
 | G10 | **Visualization.** The IR is the source for graph, layer-stack, connectivity-matrix, and parameter-summary visualizations. Python API + CLI, multiple renderers (Graphviz, Mermaid, Matplotlib, HTML). |
-| G11 | **Neuromorphic-IR export.** A spec lowers to the [Neuromorphic Intermediate Representation (NIR)](https://github.com/neuromorphs/NIR) for deployment on Loihi, SpiNNaker, Nengo, and other NIR-consuming platforms. The mapping is documented, deterministic, and surfaces lossy transformations explicitly. |
 
 The spec is **immutable after `.finalize()`**: the IR is a frozen, content-hashable value. There is no path-addressed mutation API for either the IR or a built backend artifact. Values that need to vary across runs — sweeps, A/B comparisons, hyperparameter binding — are declared up front as **variables** (§3.14) and bound by name at `backend.build(...)`. Gradient-trained parameters remain declared via `Trainable` (G9) and are updated by the trainer's optimizer; that is an internal training-state concern, not user-facing IR mutation.
 
@@ -122,7 +122,7 @@ The DSL targets two communities; the spec serves both without forking the langua
 | Community                       | Canonical example                                                            | Dominant patterns |
 |---------------------------------|------------------------------------------------------------------------------|-------------------|
 | Computational neuroscience      | Brunel 2000; cortical microcircuit; multi-area cortex                        | Sparse Bernoulli / fixed-indegree connectivity, biophysical units, recording-heavy, simulation-only. |
-| Brain-inspired ML / neuromorphic| Spiking MLP / CNN on MNIST, DVS-Gesture; spiking RNN / LSM; deployment to Loihi or SpiNNaker | Dense / Conv / Pool layers stacked sequentially; mini-batch axis; trainable weights and (optionally) neuron parameters; loss + optimizer; classification or regression readout; NIR export for hardware deployment. |
+| Brain-inspired ML / neuromorphic| Spiking MLP / CNN on MNIST, DVS-Gesture; spiking RNN / LSM                  | Dense / Conv / Pool layers stacked sequentially; mini-batch axis; trainable weights and (optionally) neuron parameters; loss + optimizer; classification or regression readout. |
 
 Both communities share the IR, the registry, validation, visualization, and
 the determinism contract.
@@ -133,8 +133,10 @@ the determinism contract.
 - Distributed multi-host execution (backend concern; the spec is host-agnostic).
 - Mixed clock-event hybrid scheduling within a single backend (a future
   hybrid backend may consume the IR; the spec does not encode scheduling).
-- Reverse (NIR-import) is **not** in scope. Specs lower to NIR; NIR does
-  not lift back to specs because NIR loses unit and randomness information.
+- Adopting a foreign neuromorphic IR as `brainpy.state`'s exchange format
+  is **not** in scope. `NetIR` is the standard; converters from `NetIR`
+  to third-party formats may exist as out-of-tree tools but are not part
+  of this spec.
 
 ---
 
@@ -166,13 +168,13 @@ state. State is materialized by the backend at lowering time.
 
 Compound forms appear in the IR as their lowered primitive shape **plus** a
 `compounds: {...}` block on the root `NetIR` (§2) that records user intent.
-Tools (viz, diff, describe, NIR export) use it; backends ignore it.
+Tools (viz, diff, describe) use it; backends ignore it.
 
 ---
 
 ## 1.4 Architecture overview
 
-Two frontends, one IR, three backend families:
+Two frontends, one IR, two backend families plus visualization:
 
 ```
   Frontend A (Python)            Frontend B (YAML/JSON)
@@ -186,13 +188,13 @@ Two frontends, one IR, three backend families:
                   ┌──────────────────────────┐
                   │         NetIR            │   canonical, frozen,
                   │   (frozen dataclass      │   JSON-able, content-hashable
-                  │    + version tag)        │
+                  │    + version tag)        │   — the standard exchange format
                   └──────────┬───────────────┘
-            ┌────────────────┼─────────────────────┬─────────────────┐
-            ▼                ▼                     ▼                 ▼
-       sim backends     train backends       export backends     visualization
-       (clock, event)   (bptt, eprop,        (nir, onnx-spike,   (graph, layers,
-                         event-prop)          nengo, …)           matrix, params)
+                  ┌──────────┼──────────────────────┐
+                  ▼          ▼                      ▼
+            sim backends     train backends     visualization
+            (clock, event)   (bptt, eprop,      (graph, layers,
+                              event-prop)        matrix, params)
 ```
 
 The IR is the contract. Frontends produce it; backends consume it.

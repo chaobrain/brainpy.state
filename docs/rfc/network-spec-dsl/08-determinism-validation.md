@@ -1,8 +1,8 @@
-# Chapter 9 — Determinism contract and validation rules
+# Chapter 8 — Determinism contract and validation rules
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 9.1 Determinism contract (G4)
+## 8.1 Determinism contract (G4)
 
 Given a fixed `(NetIR, variables, backend, seed, dt)`:
 
@@ -14,15 +14,10 @@ Given a fixed `(NetIR, variables, backend, seed, dt)`:
 3. **Init-state distributions** use `fold_in(pop_key, _SUBKEY_INIT)`.
 4. **Input sources** (e.g. Poisson) use `fold_in(input_key, step)`.
 5. **Backends must not consume randomness outside the seed tree.**
-6. **Visualization** (mode-dependent): `graph` / `layers` / `params` /
-   `nir` are deterministic in `(ir, mode, renderer)` alone; `matrix`
-   additionally takes `seed` (since it samples a `ConnectionResult`).
-7. **Export** is deterministic in `(ir, variables, seed, strict)`: same
-   inputs ⇒ identical artifact bytes and identical sidecar. The default
-   `seed` for export inherits the simulator's default seed
-   (`spec.DEFAULT_SEED`, currently `0`); it can be overridden via
-   the `seed=` kwarg in Python or the `--seed N` flag on the CLI.
-8. **Variable binding** (§3.14) is deterministic: building twice with
+6. **Visualization** (mode-dependent): `graph` / `layers` / `params` are
+   deterministic in `(ir, mode, renderer)` alone; `matrix` additionally
+   takes `seed` (since it samples a `ConnectionResult`).
+7. **Variable binding** (§3.14) is deterministic: building twice with
    the same `variables=` mapping yields bit-identical artifacts. The
    IR's `content_hash` covers the declared variables and their defaults
    but is independent of any particular binding; two distinct bindings
@@ -34,13 +29,13 @@ Acceptance test: for each backend, two builds with identical
 
 ---
 
-## 9.2 Validation rules catalog
+## 8.2 Validation rules catalog
 
 Every error has a stable code for documentation cross-reference. Codes
-are partitioned into spec-level (`SPEC-NNN`), backend-capability
-(`SPEC-021`+), and per-export-backend (`EXPORT-<KIND>-NNN`).
+are partitioned into spec-level (`SPEC-NNN`) and backend-capability
+(`SPEC-021`+).
 
-### 9.2.1 Spec-level errors
+### 8.2.1 Spec-level errors
 
 | Code     | Tier        | Rule                                                                 |
 |----------|-------------|----------------------------------------------------------------------|
@@ -71,28 +66,10 @@ are partitioned into spec-level (`SPEC-NNN`), backend-capability
 | SPEC-025 | build       | Supplied variable value violates the declared `constraint` (e.g. `"positive"`, `"unit_norm"`, `"clip:lo,hi"`). |
 | SPEC-026 | build       | Unknown key in `variables=` — no matching `net.variable(...)` declaration in the IR. |
 
-### 9.2.2 NIR export notices (`EXPORT-NIR-NNN`)
-
-| Code            | Class       | Trigger                                                                              |
-|-----------------|-------------|---------------------------------------------------------------------------------------|
-| EXPORT-NIR-001  | APPROXIMATE | `ALIF` exported as `nir.LIF` + custom adaptation node.                                |
-| EXPORT-NIR-002  | UNSUPPORTED | `HH`, `Izhikevich`, or other no-NIR-equivalent neuron model.                          |
-| EXPORT-NIR-003  | APPROXIMATE | `MaxPool2d` → `AvgPool2d` in lenient mode.                                            |
-| EXPORT-NIR-004  | DROPPED     | Plasticity (STDP / STP / …) stripped — NIR is inference-only.                         |
-| EXPORT-NIR-005  | RECORDED    | Sparse rule densified to a large `nir.Linear` matrix (> 10⁷ entries).                |
-| EXPORT-NIR-006  | DROPPED     | Weight observable stripped — not deployable.                                           |
-| EXPORT-NIR-007  | EXTENSION   | Merged view emitted as custom `nir.brainx.Concat` extension node.                     |
-| EXPORT-NIR-008  | RECORDED    | Physical units stripped; original units placed in sidecar.                            |
-| EXPORT-NIR-009  | RECORDED    | `Trainable` baked as constant; original `Trainable.name` placed in sidecar.           |
-| EXPORT-NIR-010  | RECORDED    | Stochastic input source's parameters placed in sidecar; NIR sees a placeholder Input. |
-
-Strict mode (`--strict`) elevates `APPROXIMATE`, `EXTENSION`, `DROPPED`,
-and `UNSUPPORTED` notices to errors.
-
 ---
 
 
 ---
 
-**Previous:** [Chapter 8 — CLI and visualization](./08-cli-and-viz.md)  
-**Next:** [Chapter 10 — Implementation](./10-implementation.md)
+**Previous:** [Chapter 7 — CLI and visualization](./07-cli-and-viz.md)  
+**Next:** [Chapter 9 — Implementation](./09-implementation.md)

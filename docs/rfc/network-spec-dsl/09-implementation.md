@@ -1,17 +1,17 @@
-# Chapter 10 — Implementation: codebase mapping, testing, and _network relationship
+# Chapter 9 — Implementation: codebase mapping, testing, and relationship to existing modules
 
 > Part of the [Network Specification DSL RFC](./README.md).
 
-## 10.1 Mapping to the existing codebase
+## 9.1 Mapping to the existing codebase
 
 ```
 brainpy_state/                               (TOP-LEVEL package)
 ├── __init__.py                              re-exports: spec, NetSpec, load, NetIR,
 │                                            VariableRef, viz; and every backend
 │                                            (clock, event, bptt, eprop, eventprop,
-│                                             ppprop, nir, onnxspike)
+│                                             ppprop)
 ├── backend.py                               (NEW) Protocols (SimBackend,
-│                                            TrainBackend, ExportBackend),
+│                                            TrainBackend),
 │                                            BackendCapabilities, entry-point loader,
 │                                            backend.list() / backend.get(name)
 │                                            — top-level, NOT under spec/
@@ -22,8 +22,6 @@ brainpy_state/                               (TOP-LEVEL package)
 ├── eprop.py                                 train backend — eligibility-trace training
 ├── eventprop.py                             train backend — event-based exact gradients
 ├── ppprop.py                                train backend — see braintrace
-├── nir.py                                   export backend — Neuromorphic IR (§6)
-├── onnxspike.py                             export backend — ONNX-spike (future)
 │
 ├── spec/                                    DSL surface ONLY — no execution code
 │   ├── __init__.py                          re-exports: NetSpec, load, NetIR, SpecError,
@@ -49,16 +47,9 @@ brainpy_state/                               (TOP-LEVEL package)
 │   ├── graph.py
 │   ├── layers.py
 │   ├── matrix.py
-│   ├── params.py
-│   └── nir.py
+│   └── params.py
 │
-├── cli.py                                   brainpy entry point
-│
-└── export_/
-    ├── notices.py                           ExportNotice + code registry
-    ├── sidecar.py                           Sidecar serialization
-    └── nir_extensions.py                    nir.brainx.* namespace
-                                             (SpikeTimes, Concat, …)
+└── cli.py                                   brainpy entry point
 
 brainpy_state/_network/
 ├── _base.py                                 (unchanged) Network base class
@@ -70,15 +61,18 @@ brainpy_state/_network/
 
     The _network module remains the runtime substrate of brainpy_state.clock.
     Public symbols stay importable; users may keep using `Builder` directly.
+
+brainpy_state/_brainpy/                      (unchanged)
+brainpy_state/_nest/                         (unchanged)
 ```
 
 **Why backends are top-level, not nested under `spec/`.** The spec
 module is the paradigm-neutral DSL surface; backends commit to a
 specific runtime / gradient flavor and pull in heavyweight
-dependencies (JAX training, NIR libraries, event-prop machinery).
-Keeping them out of `spec/` means `import brainpy.state.spec` stays
-lightweight, and switching gradient paradigms is a one-line
-`from brainpy.state import <backend>` change (D29).
+dependencies (JAX training, event-prop machinery). Keeping them out
+of `spec/` means `import brainpy.state.spec` stays lightweight, and
+switching gradient paradigms is a one-line
+`from brainpy.state import <backend>` change (D22).
 
 `brainpy_state.clock` does roughly:
 
@@ -123,7 +117,7 @@ classes become thin facades over it.
 
 ---
 
-## 10.2 Testing strategy
+## 9.2 Testing strategy
 
 - **Unit** — every node dataclass: construction, repr, content hash
   stability, frozen-mutation rejection.
@@ -159,15 +153,11 @@ classes become thin facades over it.
   Graphviz example.
 - **Backend equivalence** — Brunel runs on `clock` and `event` with
   population firing rates within 2 σ over 1 s @ 10 trials.
-- **NIR export** — every example in `docs/examples/` exports to NIR;
-  the resulting `nir.NIRGraph` round-trips through `nir.write` →
-  `nir.read` with byte equality on the file (artifact + sidecar). For
-  examples with `APPROXIMATE` / `EXTENSION` / `DROPPED` / `UNSUPPORTED`
-  notices, the strict-mode test asserts those codes are raised.
-- **NIR-to-platform smoke** (optional, gated by env var) — when a
-  NIR-consuming platform (e.g. `lava-nc`, `nengo`, `norse`) is
-  available, load the exported `.nir` into that platform and verify it
-  builds without error.
+- **Cross-module model coverage** — every neuron / synapse class
+  exported from `brainpy_state._brainpy` and `brainpy_state._nest` is
+  exercised through the spec surface: a `Population` referencing the
+  model by `kind` finalizes, builds on `clock`, and matches a direct
+  `_brainpy` / `_nest` construction byte-for-byte in trace output.
 - **Capability mismatch** — every backend declares `capabilities`; tests
   assert that a known-unsupported feature on each backend raises
   `BackendCapabilityError` with the expected node id.
@@ -188,55 +178,115 @@ Test file layout follows the existing convention: colocated `*_test.py`.
 
 ---
 
-## 10.3 Relationship to the existing `_network` API
+## 9.3 Relationship to the existing `_network` / `_brainpy` / `_nest` APIs
 
-The new `brainpy_state.spec` module ships alongside today's
-`brainpy_state._network.Builder` and the rule-based `*Proj` classes,
-with two deliberate changes to the existing tree:
+The spec module is a new layer **above** the existing modules; nothing
+under `brainpy_state._network`, `brainpy_state._brainpy`, or
+`brainpy_state._nest` is replaced. The relationship per subpackage:
 
-- **`brainpy_state/_network/_connectivity.py` is removed.** The samplers it
-  provides (`sample_one_to_one`, `sample_pairwise_bernoulli`,
-  `sample_fixed_indegree`, …) are duplicates of `braintools.conn` rules or
-  candidates for upstreaming. After this change:
-  - Rules already in `braintools.conn` (`OneToOne`, `AllToAll`,
-    `FixedProb`, `Random`, `Gaussian`, …) are used directly.
-  - Rules not yet in `braintools.conn` (`FixedIndegree`, `FixedOutdegree`,
-    `FixedTotalNumber`, `PairwisePoisson`, `SymmetricPairwiseBernoulli`)
-    move to `brainpy_state/spec/connect/supplementary.py` as
-    `braintools.conn.PointConnectivity` subclasses. Upstreaming them
-    eventually turns this file into a thin import-shim. The old
-    `brainpy_state._network._connectivity` import path is dropped — code
-    that referenced it must now import from `brainpy_state.spec.connect`
-    or `braintools.conn`.
-- **`brainpy_state/_network/_projections.py` is rewritten** as a thin
-  facade over `braintools.conn` rules + `Builder.connect_from_result`.
-  Public class signatures (`OneToOneProj`, `FixedIndegreeProj`,
-  `PairwiseBernoulliProj`, …) are preserved; their internals delegate to
-  the canonical rule of the same shape.
+### 9.3.1 `_network/` — wiring layer
 
-What stays:
+This subpackage is the imperative wiring substrate. The spec module
+treats it as the runtime of the `clock` backend:
 
-- `Builder` keeps working unchanged — it is now the substrate of
-  `brainpy.state.clock.build()`. User code that imports `Builder`
-  directly needs no changes.
-- Documentation and examples migrate to `NetSpec` as the recommended
-  entry point.
-- The `brainpy.state` top-level namespace gains:
-  - DSL surface: `spec`, `NetSpec`, `load`, `train`, `merge`, `split`,
-    `concat`, `VariableRef`, `viz`.
-  - Backend protocol and discovery: `backend` (singular —
-    `SimBackend`, `TrainBackend`, `ExportBackend`, `backend.list`,
-    `backend.get`).
-  - Backend implementations as **peer top-level modules**: `clock`,
-    `event`, `bptt`, `eprop`, `eventprop`, `ppprop`, `nir`,
-    `onnxspike`. None of these live under `brainpy.state.spec`.
-  - Existing symbols (`LIF`, `Expon`, `COBA`, `Builder`, `OneToOneProj`,
-    `FixedIndegreeProj`, …) keep their current paths.
+- **`Network`** (`_network/_base.py`) — unchanged. `brainpy.state.clock`
+  builds a `Network` from the IR and steps it via
+  `brainstate.environ['t']`. Direct `Network` users are unaffected.
+- **`Builder`** (`_network/_builder.py`) — kept; gains one helper,
+  `Builder.connect_from_result(...)`, that consumes a
+  `braintools.conn.ConnectionResult` directly. Existing
+  `Builder.add(...)` / `Builder.connect(...)` calls are unchanged.
+- **`*Proj` rule classes** (`_network/_projections.py`) — public class
+  signatures are preserved (`OneToOneProj`, `AllToAllProj`,
+  `PairwiseBernoulliProj`, `SymmetricPairwiseBernoulliProj`,
+  `FixedIndegreeProj`, `FixedOutdegreeProj`, `FixedTotalNumberProj`,
+  `PairwisePoissonProj`); their internals are rewritten as thin facades
+  over the canonical `braintools.conn` rule of the same shape plus
+  `Builder.connect_from_result`. User code importing these names
+  continues to work.
+- **`Recorder`** (`_network/_recorders.py`) — unchanged. The spec
+  observable nodes (§3.8) lower to `Recorder` invocations under
+  `clock`.
+- **`_connectivity.py`** — **removed**. The bare samplers
+  (`sample_one_to_one`, `sample_pairwise_bernoulli`,
+  `sample_fixed_indegree`, …) are duplicates of `braintools.conn`
+  rules. Anything not yet upstream moves to
+  `brainpy_state/spec/connect/supplementary.py` as
+  `braintools.conn.PointConnectivity` subclasses. The legacy import
+  path `brainpy_state._network._connectivity` is dropped — code that
+  imported it must now import from `brainpy_state.spec.connect` or
+  `braintools.conn`. (D16)
+
+### 9.3.2 `_brainpy/` — BrainPy-style point models
+
+This subpackage is the model library for the BrainPy-style lineage
+(LIF / ALIF / ExpIF / AdExIF / HH / Izhikevich / …, plus `Expon` /
+`Alpha` / `AMPA` / `GABAa` / `BioNMDA` synapses, `COBA` / `CUBA` /
+`MgBlock` outputs, `STP` / `STD` plasticity, and the input / readout
+generators). The spec module does **not** redefine any of these
+models; it references them by `kind` string through the registry
+(§6.3):
+
+- Each public class is auto-registered at import time. The PascalCase
+  class name becomes the IR `kind`: `LIF` → `kind="LIF"`,
+  `Expon` → `kind="Expon"`, `LeakyRateReadout` → `kind="LeakyRateReadout"`,
+  and so on.
+- The registry holds the parameter signature (names, units,
+  trainability metadata) alongside a `source=` pointer back to the
+  concrete class. `_instantiate_neuron`, `_instantiate_syn`, etc.
+  resolve the `kind` and call the underlying constructor with the
+  unit-bearing parameters from the IR.
+- `brainstate`-level state objects, `add_current_input` /
+  `add_delta_input` composition, surrogate gradients, and the existing
+  `update(x)` contract remain authoritative. The spec does not impose
+  a parallel implementation — it is metadata over the same classes.
+- Direct `brainpy_state._brainpy` users are unaffected: the spec layer
+  is opt-in, and existing scripts that construct `LIF(...)` /
+  `PoissonSpike(...)` / `Projection(...)` directly continue to work.
+
+### 9.3.3 `_nest/` — NEST-compatible models
+
+This subpackage is the model library for NEST-compatible neurons,
+synapses, plasticity rules, and devices (`iaf_psc_alpha`,
+`aeif_cond_exp`, `hh_psc_alpha`, `stdp_synapse`,
+`spike_recorder`, …). It plugs into the spec module on exactly the
+same terms as `_brainpy/`:
+
+- Each public class registers under its lowercase NEST-style `kind`
+  string (`iaf_psc_alpha`, `aeif_cond_exp`, …). The registry signature
+  declares unit-bearing parameters (`saiunit` quantities) and
+  trainability annotations.
+- `NESTDevice`, `NESTNeuron`, `NESTSynapse`, `NESTPlasticity`
+  (defined in `_nest/_base.py`) are the marker base classes the
+  registry uses to route a `Population` / `Projection` / `InputSource`
+  / `Observable` node to the right wiring code under `clock`.
+- The spec module reuses (does not duplicate) the existing NEST-side
+  conventions documented in [CLAUDE.md](../../../CLAUDE.md):
+  `saiunit` for units, `AdaptiveRungeKuttaStep` for ODE integration,
+  `DotDict` for state packing, `is_tracer()`-guarded validation,
+  `brainstate.transform.jit_error_if()` for JIT-safe errors.
+- A spec built around NEST-compatible kinds runs through the same
+  `clock` backend as a BrainPy-style spec — there is no separate
+  "NEST" backend. The two model families are interchangeable from the
+  spec's point of view; only the registered kind strings differ.
+
+What stays at the top level of `brainpy.state`:
+
+- DSL surface: `spec`, `NetSpec`, `load`, `train`, `merge`, `split`,
+  `concat`, `VariableRef`, `viz`.
+- Backend protocol and discovery: `backend` (singular —
+  `SimBackend`, `TrainBackend`, `backend.list`, `backend.get`).
+- Backend implementations as **peer top-level modules**: `clock`,
+  `event`, `bptt`, `eprop`, `eventprop`, `ppprop`. None of these live
+  under `brainpy.state.spec`.
+- Existing symbols (`LIF`, `Expon`, `COBA`, `Builder`, `OneToOneProj`,
+  `FixedIndegreeProj`, every `_brainpy` model, every `_nest` model)
+  keep their current import paths.
 
 ---
 
 
 ---
 
-**Previous:** [Chapter 9 — Determinism and validation](./09-determinism-validation.md)  
-**Next:** [Chapter 11 — Appendix: decisions, cheat sheet, open questions](./11-appendix.md)
+**Previous:** [Chapter 8 — Determinism and validation](./08-determinism-validation.md)  
+**Next:** [Chapter 10 — Appendix: decisions, cheat sheet, open questions](./10-appendix.md)
