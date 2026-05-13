@@ -4,19 +4,19 @@
 
 ## 12. CLI tooling and visualization (G10)
 
-### 12.1 `bp-spec` CLI
+### 12.1 `brainpy` CLI
 
 ```
-bp-spec lint     <path.yaml>                 # JSON Schema + IR validation
-bp-spec describe <path.yaml>                 # counts + parameter summary (--json available)
-bp-spec diff     <a.yaml> <b.yaml>           # structural diff at the IR level
-bp-spec viz      <path.yaml> -o net.svg      # see §12.2
-bp-spec build    <path.yaml> --backend NAME [--seed N] [--dt T] [--dry-run]
-bp-spec run      <path.yaml> --backend clock --duration "1 s" --out runs/<hash>/
-bp-spec sweep    <sweep.yaml> --backend clock --out runs/
-bp-spec export   <path.yaml> --backend nir [--strict] [--seed N] -o brunel.nir
-bp-spec patch    <path.yaml> --from patch.yaml -o new.yaml
-bp-spec run      <path.yaml> --patch patch.yaml --backend clock --duration "1 s"
+brainpy lint     <path.yaml>                 # JSON Schema + IR validation
+brainpy describe <path.yaml>                 # counts + parameter summary (--json available)
+brainpy diff     <a.yaml> <b.yaml>           # structural diff at the IR level
+brainpy viz      <path.yaml> -o net.svg      # see §12.2
+brainpy build    <path.yaml> --backend NAME [--seed N] [--dt T] [--dry-run]
+brainpy run      <path.yaml> --backend clock --duration "1 s" --out runs/<hash>/
+brainpy sweep    <sweep.yaml> --backend clock --out runs/
+brainpy export   <path.yaml> --backend nir [--strict] [--seed N] -o brunel.nir
+brainpy patch    <path.yaml> --from patch.yaml -o new.yaml
+brainpy run      <path.yaml> --patch patch.yaml --backend clock --duration "1 s"
 ```
 
 `build --dry-run` performs full IR construction + backend capability check
@@ -28,7 +28,7 @@ Visualization reads the IR (not the runtime) so the same view is available
 before any backend is built.
 
 ```sh
-bp-spec viz <path>                                  \
+brainpy viz <path>                                  \
     --mode    {graph,layers,matrix,params,nir}      \
     --renderer {graphviz,mermaid,matplotlib,html}   \
     --collapse-subnetworks                          \

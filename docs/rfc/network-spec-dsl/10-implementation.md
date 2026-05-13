@@ -29,7 +29,7 @@ brainpy_state/spec/                          (NEW)
 │   ├── matrix.py
 │   ├── params.py
 │   └── nir.py
-├── cli.py                                   bp-spec entry point
+├── cli.py                                   brainpy entry point
 ├── backends/
 │   ├── clock.py                             Adapter over Network/Builder
 │   ├── event.py                             Event-driven simulator

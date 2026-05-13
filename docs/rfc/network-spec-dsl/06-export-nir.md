@@ -38,7 +38,7 @@ with open("brunel.nir.meta.json", "w") as f:
 CLI:
 
 ```sh
-bp-spec export brunel.netspec.yaml --backend nir --strict -o brunel.nir
+brainpy export brunel.netspec.yaml --backend nir --strict -o brunel.nir
 ```
 
 ### 9.3 Mapping: `NetIR` → NIR

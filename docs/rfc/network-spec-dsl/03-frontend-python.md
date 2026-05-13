@@ -627,9 +627,9 @@ spec (units, distributions, trainables):
 ```
 
 ```sh
-bp-spec patch brunel.netspec.yaml --from brunel.patch.yaml -o brunel-v2.yaml
-bp-spec run   brunel.netspec.yaml --patch brunel.patch.yaml --backend clock --duration "1 s"
-bp-spec build brunel.netspec.yaml --patch brunel.patch.yaml --backend nir -o brunel.nir
+brainpy patch brunel.netspec.yaml --from brunel.patch.yaml -o brunel-v2.yaml
+brainpy run   brunel.netspec.yaml --patch brunel.patch.yaml --backend clock --duration "1 s"
+brainpy build brunel.netspec.yaml --patch brunel.patch.yaml --backend nir -o brunel.nir
 ```
 
 #### 6.9.7 Determinism and round-trip with patches

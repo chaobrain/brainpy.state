@@ -129,7 +129,7 @@ A full schema lives at `brainpy_state/spec/schema/netir-1.0.json`. Sketch:
 }
 ```
 
-The schema is used by `bp-spec lint`, IDE integrations (YAML Language
+The schema is used by `brainpy lint`, IDE integrations (YAML Language
 Server via `yaml.schemas`), and the loader's pre-validation pass.
 
 ### 7.4 Parameter sweeps
@@ -160,7 +160,7 @@ Two supported patterns:
    ```
 
    ```sh
-   bp-spec sweep brunel.sweep.yaml --backend clock --out runs/
+   brainpy sweep brunel.sweep.yaml --backend clock --out runs/
    ```
 
 The patch language is intentionally minimal (dotted/indexed path + value).

@@ -117,16 +117,15 @@ class BackendCapabilities:
 
 Shipped backends:
 
-| Family   | Backend     | Notes                                                                 |
-|----------|-------------|-----------------------------------------------------------------------|
-| sim      | `clock`     | Adapter to existing `_network.Network`/`Builder`.                     |
-| sim      | `event`     | Event-driven simulator; depends on `brainevent`.                      |
-| train    | `bptt`      | Autodiff through surrogate spikes; uses `brainstate.nn.Param`.        |
-| train    | `eprop`     | Synaptic-eligibility-trace training; gradient-free recurrent updates. |
-| train    | `event-prop`| Event-based exact gradients.                                          |
-| export   | `nir`       | Neuromorphic IR (§9).                                                 |
-| export   | `onnx-spike`| ONNX with the spiking extension ops (future, behind same protocol).   |
-| export   | `nengo`     | Direct Nengo `Network` artifact (future).                             |
+| Family   | Backend      | Notes                                                                 |
+|----------|--------------|-----------------------------------------------------------------------|
+| sim      | `clock`      | Adapter to existing `_network.Network`/`Builder`.                     |
+| train    | `bptt`       | Autodiff through surrogate spikes; uses `brainstate.nn.Param`.        |
+| train    | `eprop`      | Synaptic-eligibility-trace training; gradient-free recurrent updates. |
+| train    | `event-prop` | Event-based exact gradients. see `/mnt/d/codes/githubs/snn/eventax`   |
+| train    | `pp-prop`    | see `/mnt/d/codes/projects/braintrace`                                |
+| export   | `nir`        | Neuromorphic IR (§9).                                                 |
+| export   | `onnx-spike` | ONNX with the spiking extension ops (future, behind same protocol).   |
 
 ---
 
@@ -139,7 +138,7 @@ The two frontends are interchangeable:
 NetSpec   ──finalize──►   NetIR   ──to_yaml──►   .netspec.yaml
    ▲                        │                       │
    │                     to_dict                    │
-NetSpec.from_ir   ◄───── NetIR   ◄───── load ──────┘
+NetSpec.from_ir   ◄───── NetIR   ◄───── load ───────┘
 ```
 
 **Equivalence law.** For any spec `s`:
