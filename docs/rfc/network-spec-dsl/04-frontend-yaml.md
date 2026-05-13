@@ -134,21 +134,26 @@ Server via `yaml.schemas`), and the loader's pre-validation pass.
 
 ### 4.4 Parameter sweeps
 
+Sweeps bind **declared variables** (§3.14). The spec must declare
+every value the sweep varies under a `variables:` block; sites that
+should use a variable reference it with `!variable <name>`. The IR
+itself is loaded once and reused across the sweep.
+
 Two supported patterns:
 
-1. **Python overrides** — keep the YAML, override at load time:
+1. **Python binding** — keep the YAML, supply `variables=` at build:
 
    ```python
    import brainpy.state.spec as spec
    from brainpy.state import clock        # backend lives at brainpy.state.clock
+   ir = spec.load("brunel.netspec.yaml")
    for g in [4.0, 4.5, 5.0]:
-       ir = spec.load("brunel.netspec.yaml",
-                      overrides={"projections[2].rule.weight": f"-{0.1*g} nS"})
-       sim = clock.build(ir, seed=0, dt=0.1*u.ms)
+       sim = clock.build(ir, seed=0, dt=0.1*u.ms,
+                         variables={"W_inh": -0.10*g*u.nS})
    ```
 
-2. **Sweep file** — a side file listing patches; the CLI expands the
-   cartesian product:
+2. **Sweep file** — a side file listing the axes and the variable
+   bindings to compute per cell; the CLI expands the cartesian product:
 
    ```yaml
    # brunel.sweep.yaml
@@ -156,17 +161,20 @@ Two supported patterns:
    axes:
      g:    [4.0, 4.5, 5.0]
      seed: [0, 1, 2]
-   patches:
-     - path: "projections[2].rule.weight"
-       value: "${-0.1 * g} nS"
+   variables:
+     W_inh:  "${-0.1 * g} nS"
+     W_seed: "${seed}"
    ```
 
    ```sh
    brainpy sweep brunel.sweep.yaml --backend clock --out runs/
    ```
 
-The patch language is intentionally minimal (dotted/indexed path + value).
-Anything more complex stays in Python.
+Only values declared as variables in the spec can be swept. To sweep
+a value that wasn't declared, edit the source spec to add a
+declaration and re-`finalize`. The sweep-file expression language is
+intentionally minimal (axis interpolation + unit suffix); anything
+more complex stays in Python.
 
 ---
 

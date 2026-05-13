@@ -7,7 +7,7 @@
 ```
 brainpy_state/                               (TOP-LEVEL package)
 ├── __init__.py                              re-exports: spec, NetSpec, load, NetIR,
-│                                            ParamPatch, viz; and every backend
+│                                            VariableRef, viz; and every backend
 │                                            (clock, event, bptt, eprop, eventprop,
 │                                             ppprop, nir, onnxspike)
 ├── backend.py                               (NEW) Protocols (SimBackend,
@@ -27,7 +27,7 @@ brainpy_state/                               (TOP-LEVEL package)
 │
 ├── spec/                                    DSL surface ONLY — no execution code
 │   ├── __init__.py                          re-exports: NetSpec, load, NetIR, SpecError,
-│   │                                        train, merge, split, concat, ParamPatch.
+│   │                                        train, merge, split, concat, VariableRef.
 │   │                                        Does NOT re-export any backend.
 │   ├── ir.py                                NetIR + all node dataclasses
 │   ├── netspec.py                           Frontend A: NetSpec + handles
@@ -41,7 +41,9 @@ brainpy_state/                               (TOP-LEVEL package)
 │   │   └── supplementary.py                 FixedIndegree, FixedOutdegree,
 │   │                                        FixedTotalNumber, PairwisePoisson,
 │   │                                        SymmetricPairwiseBernoulli
-│   └── params.py                            ParamPatch, ParameterView (§3.14)
+│   └── variables.py                         VariableRef, VariableDecl, and the
+│                                            build-time resolver that substitutes
+│                                            bound values during backend.build (§3.14)
 │
 ├── viz/
 │   ├── graph.py
@@ -169,17 +171,18 @@ classes become thin facades over it.
 - **Capability mismatch** — every backend declares `capabilities`; tests
   assert that a known-unsupported feature on each backend raises
   `BackendCapabilityError` with the expected node id.
-- **Parameter modification (G12)** — for each `op` in `ParamPatch`:
-  applying it to a `NetSpec`, the resulting `NetIR`, and a built
-  `Simulator`/`Trainer` all yield consistent state.
-  `NetSpec.update(...) → finalize → content_hash` is order-independent
-  for disjoint `set` paths and order-dependent (with documented order
-  semantics) otherwise. `Simulator.parameters.diff()` round-trips
-  through `apply(*diff())` to recover original values.
-- **Live vs rebuild classification** — for each leaf class in §3.14.5,
-  the corresponding backend reports the expected classification.
-  `REBUILD` writes raise SPEC-024 with a path-accurate message;
-  `LIVE`/`LIVE_RESET` writes propagate to a subsequent `sim.run(...)`.
+- **Variable binding (§3.14)** — for every backend: building the same
+  IR with the same `variables={...}` mapping twice produces
+  bit-identical artifacts; building with two distinct mappings against
+  the same IR yields the same `content_hash`. Required variables not
+  supplied raise SPEC-023; wrong-dimension values raise SPEC-024;
+  constraint violations raise SPEC-025; unknown keys raise SPEC-026.
+  Each error names the offending variable.
+- **Spec immutability** — `NetIR` and `NetSpec` instances reject all
+  attribute writes after construction (`frozen=True` enforced); there
+  is no `update` / `patch` / `parameters.set` surface to test the
+  *absence* of, but the missing-method tests assert these names are
+  not present on either type.
 
 Test file layout follows the existing convention: colocated `*_test.py`.
 
@@ -220,7 +223,7 @@ What stays:
   entry point.
 - The `brainpy.state` top-level namespace gains:
   - DSL surface: `spec`, `NetSpec`, `load`, `train`, `merge`, `split`,
-    `concat`, `ParamPatch`, `viz`.
+    `concat`, `VariableRef`, `viz`.
   - Backend protocol and discovery: `backend` (singular —
     `SimBackend`, `TrainBackend`, `ExportBackend`, `backend.list`,
     `backend.get`).

@@ -19,7 +19,7 @@
 | 6.11  | Composition forms                                                | Subnetwork, sequential, DAG; temporal semantics; layer macros.|
 | 6.12  | Plasticity                                                       | Per-projection → modulated → eligibility → scheduled → structural → homeostatic. |
 | 6.13  | Construction-time errors                                         | Eager validation.                                             |
-| 6.14  | Post-definition parameter modification (G12)                     | Path language, `ParamPatch`, `ParameterView`, live vs rebuild.|
+| 6.14  | Build-time variables                                             | `net.variable(name, default)` declarations bound at `backend.build`. |
 | 6.15  | End-to-end example                                               | A cortex–striatum loop touching every extension.              |
 | 6.16  | IR delta and forward compatibility                               | Per-extension summary of IR additions and parameter class.    |
 | 6.17  | Intentionally out of scope                                       | What this chapter deliberately does not cover.                |
@@ -56,9 +56,11 @@ and what backward-compatibility burden it carries.
    randomness source.
 3. **Unit discipline (G3).** Every numeric leaf carries `saiunit`
    units; new value wrappers preserve them.
-4. **Backend declarative classification.** Every new IR leaf has an
-   explicit `LIVE` / `LIVE_RESET` / `REBUILD` class (§3.14.5). No leaf
-   is "rebuilds silently."
+4. **Immutability after `.finalize()`.** Every IR leaf is fixed by the
+   time `.finalize()` returns. New extensions never introduce a
+   path-addressed mutation API for the IR or for a built backend
+   artifact. Values that need to vary across runs are declared as
+   `Variable`s (§3.14) and bound at `backend.build(...)`.
 5. **Domain-specific features are opt-in.** Spatial positions,
    morphology, and signals appear only when the user asks for them;
    non-spatial point-neuron specs are unchanged.
@@ -211,11 +213,24 @@ class NetSpec:
     @classmethod
     def from_ir(cls, ir: NetIR) -> "NetSpec": ...
 
-    # ── Post-definition modification (§3.14) ──────────────────────────
-    def update(self, path_or_mapping, value=_MISSING, /) -> "NetSpec": ...
-    def with_(self, **subtrees: Any) -> "NetSpec": ...
-    def patch(self, *patches: "ParamPatch") -> "NetSpec": ...
+    # ── Build-time variables (§3.14) ──────────────────────────────────
+    def variable(
+        self,
+        name: str,
+        default: Any,
+        *,
+        constraint: str | None = None,
+        required: bool = False,
+    ) -> "VariableRef": ...
 ```
+
+The spec is **immutable after `.finalize()`**. `NetSpec` has no
+`.update()` / `.with_()` / `.patch()` API, and the built `NetIR` has
+no path-addressed mutation methods. The only way to alter a value
+*after* finalize is to bind a declared variable (§3.14) at
+`backend.build(...)`. The only way to alter anything *else* is to
+edit the source spec and call `.finalize()` again, producing a new
+IR with a new content hash.
 
 Module-level helpers mirror the most common handle methods:
 
@@ -1133,11 +1148,12 @@ and logs `InfoNotice("SDEIntegratorChosen", scheme="euler_maruyama")`.
 The choice is not user-configurable from the spec — that would
 violate G1 ("describe what, not how to step").
 
-**Backend classification.**
+**Backend treatment.**
 
-- **Live:** `sigma`, `tau` parameters of any `Noise`.
-- **Live-reset:** `seed_tag` (re-folds the stream).
-- **Rebuild:** noise `kind` (changes integrator selection).
+- **At build:** the integrator scheme is chosen from `Noise.kind`;
+  `sigma`, `tau`, and `seed_tag` are baked into the resolved noise
+  source. A `sigma` or `tau` declared as `net.variable(...)` is bound
+  at this point.
 - **NIR export:** stripped with `EXPORT-NIR-LOSSY` notice; sidecar
   records parameters so hardware-specific noise sources can be wired
   manually.
@@ -1148,9 +1164,11 @@ violate G1 ("describe what, not how to step").
   distribution. Common for weights.
 - `Trainable[<scalar>]` — learnable scalar parameter.
 - `<scalar with Noise>` — deterministic mean with intrinsic noise.
-- `Trainable` cannot wrap `Noise` directly; noise is a runtime
-  modification, not a learnable leaf. (Hyperparameters of `Noise`,
-  e.g. `sigma`, may themselves be `Trainable`.)
+- `Trainable` cannot wrap `Noise` directly; noise is a stochastic
+  process baked into the dynamics, not a learnable leaf.
+  (Hyperparameters of `Noise`, e.g. `sigma`, may themselves be
+  `Trainable` — or a `Variable` if they should be bound at build
+  rather than learned.)
 
 ---
 
@@ -1520,251 +1538,205 @@ Errors point at the offending Python source line.
 
 ---
 
-## 3.14 Post-definition parameter modification (G12)
+## 3.14 Build-time variables
 
-The spec is the source of truth for *what* a network is; users often
-need to change *values* without rewriting the spec. There are two
-settings:
+The spec is **immutable after `.finalize()`** — there is no
+path-addressed mutation API for the IR, and no `parameters` view on a
+built `Simulator` or `Trainer` that writes back into model state.
+Users who need a parameter to vary across runs (sweeps, A/B
+comparisons, hyperparameter search) declare it up front as a
+**variable** and bind it by name at `backend.build(...)`.
 
-- **Pre-build (offline)** — modify a `NetSpec` or a `NetIR` before
-  any backend has materialized it. The IR stays frozen; mutations
-  return a new IR. Same content hash whenever the same edits are
-  applied.
-- **Post-build (live)** — modify parameter values on an already-built
-  `Simulator` / `Trainer` without rebuilding. Trainers write to these
-  during gradient descent; users can also read and write them
-  imperatively.
+This decision is deliberate. Allowing post-definition parameter
+modification — whether on the IR or on a running backend artifact —
+makes specs harder to reason about, harder to reproduce, and easier to
+break in subtle ways: connectivity may silently re-sample, schedule
+windows may shift after observables have started recording, and the
+content hash that drives the determinism contract (G4) ceases to
+identify the network being run. Forcing the set of mutable values to
+be declared at spec-construction time keeps the IR a faithful
+description of the model and makes the variation surface explicit and
+auditable.
 
-Both settings share one **path language** and one **patch type**.
+The set of values that gradient-based training updates *is* declared
+at spec-construction time too — those leaves are wrapped in
+`Trainable` (§3.10.1). The trainer's optimizer updates them as part
+of its internal training state; that is a defined consequence of the
+declaration, not user-facing IR mutation.
 
-### 3.14.1 Path language
+### 3.14.1 Declaring a variable
 
-A path is a dotted / indexed string that addresses any leaf in the IR.
-Grammar:
-
-```
-path  = segment ("." segment)*
-segment = name | name "[" index "]"
-name   = identifier              # alphanumeric + underscore
-index  = integer | string         # integer = list index; string = dict key
-```
-
-Examples:
-
-```
-populations.exc.size
-populations.exc.model.tau
-populations.exc.model.noise.V.sigma           # leaf inside a Noise wrapper
-populations.exc.init.V
-populations.V1.positions.params.spacing       # leaf inside a Geometry
-projections[0].rule.weight
-projections[0].rule.prob
-projections[0].temporal_offset
-projections[2].synapse.tau
-inputs[0].source.rate
-signals.dopamine.source.tau
-schedules.trial.body.phases[1].duration
-sequentials.encoder.layers[1].weight
-graphs.encoder.nodes[3].layer.kernel
-subnetworks.col_0.params.N
-meta.author
-```
-
-`NetIR.select(path)` reads any addressable leaf; `NetIR.update(path,
-value)` returns a new `NetIR` with that leaf replaced. Wildcards
-(`projections[*].rule.weight`) are supported in `update` to broadcast
-a single value to many leaves.
-
-### 3.14.2 The `ParamPatch` type
-
-A patch is a value-level description of a change. It is
-JSON-serializable and round-trips through YAML/JSON, so the same
-patch can be applied to a spec, an IR, or a running backend.
+`net.variable(name, default, *, constraint=None, required=False)`
+returns a `VariableRef` placeholder usable anywhere a value (scalar,
+`u.Quantity`, or `DistRef`) is expected in the spec. The placeholder
+carries the units and shape of its `default`, so downstream validation
+(SPEC-006 unit dimension, SPEC-007 distribution shape) runs against
+the placeholder exactly as it would against a concrete value.
 
 ```python
-@dataclass(frozen=True)
-class ParamPatch:
-    path: str                          # dotted path; wildcards allowed
-    value: Any                         # scalar | u.Quantity | DistRef | Trainable | Noise | array
-    op:    str = "set"                 # "set" | "scale" | "add" | "replace_with_trainable"
-    where: Optional[Callable[..., bool]] = None    # predicate-driven (§3.14.8)
-    label: Optional[str] = None        # free-form annotation for logs / sweeps
+import brainpy.state.spec as spec
+import braintools.conn as conn
+import braintools.init as init
+import saiunit as u
+
+net = spec.NetSpec("brunel_2000")
+
+# Declare what is allowed to vary across runs.
+tau_exc = net.variable("tau_exc", default=20*u.ms)
+tau_inh = net.variable("tau_inh", default=10*u.ms)
+W_exc   = net.variable("W_exc",   default= 0.10*u.nS, constraint="positive")
+W_inh   = net.variable("W_inh",   default=-0.45*u.nS, constraint="negative")
+seed_W  = net.variable("W_seed",  default=None, required=True)   # must be supplied
+
+exc = net.population("exc",
+    spec.models.LIF(tau=tau_exc, V_th=-50*u.mV,
+                    V_reset=-60*u.mV, V_rest=-65*u.mV),
+    size=8000)
+inh = net.population("inh",
+    spec.models.LIF(tau=tau_inh, V_th=-50*u.mV,
+                    V_reset=-60*u.mV, V_rest=-65*u.mV),
+    size=2000)
+
+net.project(exc, inh,
+    rule=conn.FixedProb(prob=0.1, weight=W_exc, seed=seed_W),
+    synapse=spec.models.Expon(tau=5*u.ms),
+    output=spec.models.COBA(E=0*u.mV))
+
+net.project(inh, exc,
+    rule=conn.FixedProb(prob=0.1, weight=W_inh, seed=seed_W),
+    synapse=spec.models.Expon(tau=5*u.ms),
+    output=spec.models.COBA(E=-80*u.mV))
+
+ir = net.finalize()
 ```
 
-`op` lets a patch describe a transformation rather than a literal
-value:
+Each `VariableRef` is a leaf-level placeholder. Arithmetic over
+variables (e.g. `W_inh = -g * W_exc`) is not part of the DSL — a spec
+that needs derived parameters declares them as independent variables,
+or computes the derivation in user code before passing values to
+`backend.build(..., variables=...)`. The DSL stays a description of
+the network, not an expression language.
 
-- `"set"` — replace the value at `path`.
-- `"scale"` — multiply (for numeric / Quantity leaves).
-- `"add"` — additive shift (for numeric / Quantity leaves).
-- `"replace_with_trainable"` — wrap a static value with `Trainable[...]`
-  (or unwrap one if applied to a `Trainable`).
+`VariableRef` is one of the value wrappers alongside `Trainable`,
+`DistRef`, and `Noise` (§3.10). Wrapping rules:
 
-### 3.14.3 Pre-build mutation — four equivalent forms
+- `Trainable[VariableRef]` is **not** allowed — a leaf is either
+  trained (its run-time value is owned by the trainer) or bound at
+  build (fixed for the run). Choose one.
+- `Trainable[DistRef[..., VariableRef, ...]]` *is* allowed — a
+  trainable's initialization distribution may have variable-bound
+  hyperparameters, since those are consumed once at build time before
+  training begins.
+- `DistRef[..., VariableRef, ...]` is allowed — a distribution's
+  hyperparameters can be variables.
+- `Noise[..., VariableRef, ...]` is allowed — `sigma` / `tau` of a
+  noise process can be variables.
 
-```python
-# 1.1 Single-path .update(path, value):
-net2 = net.update("populations.exc.model.tau", 25*u.ms)
-
-# 1.2 Mapping .update({path: value, ...}):
-net2 = net.update({
-    "populations.exc.model.tau": 25*u.ms,
-    "projections[0].rule.weight": 0.2*u.nS,
-})
-
-# 1.3 .with_() — Pythonic, builds the mapping for you:
-net2 = net.with_(populations={"exc": {"model": {"tau": 25*u.ms}}})
-
-# 1.4 .patch(*patches) — richer operations:
-net2 = net.patch(
-    spec.ParamPatch("populations.exc.model.tau", 25*u.ms),
-    spec.ParamPatch("projections[*].rule.weight", 2.0, op="scale"),
-    spec.ParamPatch("populations.inh.model.tau", None,
-                        op="replace_with_trainable"),
-)
-```
-
-All four are immutable — `net` is unchanged, `net2` is a new builder
-with the edits applied. The corresponding methods on `NetIR` have
-identical semantics. The YAML loader's `overrides=` kwarg (§4.4) is
-exactly `NetIR.update(mapping)` after schema parsing.
-
-### 3.14.4 Post-build mutation — `ParameterView`
-
-A built `Simulator` or `Trainer` exposes a `parameters` attribute of
-type `ParameterView`. The view is the single read/write interface for
-both static and dynamic parameters.
-
-```python
-class ParameterView(Protocol):
-    # ── Read ────────────────────────────────────────────────────────
-    def get(self, path: str) -> Any: ...
-    def tree(self) -> Mapping[str, Any]: ...                  # full dict
-    def trainable(self) -> Mapping[str, "brainstate.ParamState"]: ...
-    def static(self) -> Mapping[str, Any]: ...
-
-    # ── Write ───────────────────────────────────────────────────────
-    def set(self, path: str, value: Any) -> None: ...
-    def apply(self, *patches: ParamPatch) -> None: ...
-
-    # ── Batching & rebuild policy ───────────────────────────────────
-    def batch(self) -> "ContextManager[ParameterView]": ...
-    def reset(self) -> None: ...                              # restore IR values
-    def diff(self) -> tuple[ParamPatch, ...]: ...             # current vs IR
-```
-
-Usage:
+### 3.14.2 Binding at build time
 
 ```python
 from brainpy.state import clock
-sim = clock.build(ir, seed=0, dt=0.1*u.ms)
 
-sim.parameters.get("populations.exc.model.tau")            # 20 ms
-sim.parameters.set("populations.exc.model.tau", 25*u.ms)   # live update
-sim.parameters.apply(
-    spec.ParamPatch("projections[*].rule.weight", 1.5, op="scale"),
-)
-
-with sim.parameters.batch():
-    sim.parameters.set("populations.exc.model.tau", 30*u.ms)
-    sim.parameters.set("populations.inh.model.tau", 35*u.ms)
-# any state rebuild happens once on context exit
+sim = clock.build(ir, seed=0, dt=0.1*u.ms,
+                  variables={"tau_exc": 25*u.ms,
+                             "W_inh":   -0.50*u.nS,
+                             "W_seed":  42})
+sim.run(1*u.second)
 ```
 
-For trainers, the same interface returns gradient-bearing
-`brainstate.ParamState` instances when `path` resolves to a
-`Trainable`; static parameters return plain values.
+Resolution at `backend.build` walks the IR once, substituting each
+`VariableRef` with the bound value (or its `default`). Validation:
+
+- Required variables (`required=True`) raise SPEC-023 if not supplied.
+- A supplied value with wrong unit dimension raises SPEC-024.
+- A supplied value violating `constraint=` raises SPEC-025.
+- Unknown keys in `variables=` (no matching declaration) raise SPEC-026.
+
+The resolved value flows through the rest of the build exactly as a
+literal would. After `backend.build` returns, the artifact carries
+concrete values; there is no `Simulator.parameters` interface, no
+`.set()`, no `.rebuild_with(new_ir)`. To run with different values,
+the user calls `backend.build(ir, ..., variables={...})` again.
+
+### 3.14.3 Sweeps and A/B comparisons
 
 ```python
-from brainpy.state import bptt
-trainer = bptt.build(ir, seed=0, loss=loss_fn, dt=1*u.ms)
-W = trainer.parameters.get("projections[0].rule.weight")   # a ParamState
-trainer.parameters.set("projections[0].rule.weight", new_W_array)
+for g in [4.0, 4.5, 5.0]:
+    for seed in [0, 1, 2]:
+        sim = clock.build(ir, seed=seed, dt=0.1*u.ms,
+                          variables={"W_inh": -0.10*g*u.nS,
+                                     "W_seed": seed})
+        sim.run(1*u.second)
 ```
 
-### 3.14.5 Live vs rebuild changes
+The same IR drives every cell of the sweep — only the build call
+differs. Content hash of the IR stays constant across the sweep,
+which is what makes the determinism contract usable for caching
+upstream artifacts that depend only on structure.
 
-Not every parameter can be changed in-place. The backend classifies
-each leaf as one of:
+### 3.14.4 YAML form
 
-| Class       | Examples                                                                          | Behavior on `.set()`                              |
-|-------------|-----------------------------------------------------------------------------------|---------------------------------------------------|
-| `LIVE`      | Scalar model parameters (`tau`, `V_th`, `R`); per-edge weight / delay arrays; `Trainable` values; `Noise` `sigma` / `tau`; schedule phase durations; tag metadata. | Update the underlying state in place; cheap. |
-| `LIVE_RESET`| Initial-state distributions (`init.V`); RNG-seeded leaves; positions array; schedule attach / detach. | Update + reset the corresponding state variables; cheap. |
-| `REBUILD`   | Population `size`; connectivity rule kind or hyperparameters (`prob`, `K`); synapse / output / plasticity `kind`; sequential layer membership; merge-view structure; modulator binding; morphology / paint / place; `Noise` kind; structural-plasticity on/off; `temporal_offset`. | Raise `ParameterChangeRequiresRebuild(path)` (SPEC-024). User must edit the IR and call `backend.build(new_ir, ...)` again. |
-
-The `ParameterView.set()` method consults the backend's
-parameter-class table (declared next to its `BackendCapabilities`). A
-`REBUILD` change never silently re-samples connectivity or reallocates
-state.
-
-A convenience helper covers the common rebuild path:
-
-```python
-sim2 = sim.rebuild_with(net.update("populations.exc.size", 16000))
-# Equivalent to:
-#   ir2  = sim.ir.update("populations.exc.size", 16000)
-#   sim2 = clock.build(ir2, seed=sim.seed, dt=sim.dt)
-# State is migrated where shapes are unchanged; reset otherwise.
-```
-
-### 3.14.6 YAML / CLI ergonomics
-
-Patches load from YAML through the same lexical conventions as the
-spec (units, distributions, trainables):
+Variables in YAML use a `variables:` block at the top level and the
+`!variable` tag (or `{var: <name>}` object form) at value sites:
 
 ```yaml
-# brunel.patch.yaml
-- { path: "populations.exc.model.tau",     value: "25 ms" }
-- { path: "projections[*].rule.weight",    value: 1.5, op: scale }
-- { path: "populations.inh.model.tau",     value: null,
-    op: replace_with_trainable, label: "explore-trainable-tau" }
+version: "netir/1.0"
+name: brunel_2000
+
+variables:
+  tau_exc:  { default: "20 ms" }
+  tau_inh:  { default: "10 ms" }
+  g:        { default: 4.5 }
+  W_exc:    { default: "0.10 nS", constraint: positive }
+  W_seed:   { required: true }
+
+populations:
+  exc:
+    model: { kind: LIF, tau: !variable tau_exc, V_th: "-50 mV", ... }
+    size: 8000
+  inh:
+    model: { kind: LIF, tau: !variable tau_inh, V_th: "-50 mV", ... }
+    size: 2000
+
+projections:
+  - pre: exc
+    post: inh
+    rule: { kind: FixedProb, prob: 0.1,
+            weight: !variable W_exc,
+            seed:   !variable W_seed }
+    synapse: { kind: Expon, tau: "5 ms" }
+    output:  { kind: COBA,  E:   "0 mV" }
 ```
+
+The CLI binds variables at run time:
 
 ```sh
-brainpy patch brunel.netspec.yaml --from brunel.patch.yaml -o brunel-v2.yaml
-brainpy run   brunel.netspec.yaml --patch brunel.patch.yaml --backend clock --duration "1 s"
-brainpy build brunel.netspec.yaml --patch brunel.patch.yaml --backend nir -o brunel.nir
+brainpy run brunel.netspec.yaml --backend clock --duration "1 s" \
+    --var tau_exc="25 ms" --var W_inh="-0.50 nS" --var W_seed=42
 ```
 
-### 3.14.7 Determinism and round-trip with patches
+See §4.4 for sweep-file shape.
 
-- Applying the same patch list to identical `(NetSpec, NetIR)` inputs
-  produces identical content hashes (G4).
-- Patches are commutative within `set` operations on disjoint paths;
-  ordering matters when paths overlap or when `scale`/`add` mix with
-  `set`. The IR records the applied patch list under
-  `NetIR.meta["applied_patches"]` for archival.
-- `ParameterView.diff()` returns the list of patches that would replay
-  the current runtime state back from the original IR. This is the
-  inverse of `apply` and is used by the CLI to print a "configuration
-  diff" after a training run.
+### 3.14.5 Determinism and content-hash semantics
 
-### 3.14.8 Predicate-driven patches
+The IR's `content_hash` captures only the *structure* of the spec,
+including which leaves are declared as variables and their declared
+defaults, **not** the bound values for a particular build. Two
+distinct builds against the same IR with different `variables={...}`
+binding maps produce different runtime artifacts but identical content
+hashes. This is intentional:
 
-`ParamPatch.where=` extends the path language with a predicate over
-the containing node. The `path` is then applied to every leaf whose
-node matches:
+- Tooling that caches on `content_hash` (build cache, golden-IR
+  fixtures, sweep deduplication) keys correctly: a sweep over `g`
+  reuses connectivity-sampling caches.
+- The determinism contract (§9.1) is restated as: given
+  `(NetIR, variables, backend, seed, dt)`, the resulting artifact is
+  bit-identical.
 
-```python
-# Make all LIF populations faster:
-net.patch(spec.ParamPatch(
-    where=lambda node: getattr(node.model, "kind", None) == "LIF",
-    path="tau",
-    value=15*u.ms,
-    label="speed_up_all_LIFs",
-))
-
-# Scale every learnable weight by 0.5 across all projections:
-net.patch(spec.ParamPatch(
-    where=lambda node: isinstance(node.rule.params.get("weight"), Trainable),
-    path="rule.weight.value",
-    value=0.5, op="scale",
-))
-```
-
-Predicates have the same picklability constraints as
-`net.filter(...)` (§3.9.6). YAML uses the same predicate sub-grammar.
+The bound `variables={...}` map is recorded on the runtime artifact
+(`Simulator.bound_variables` / `Trainer.bound_variables`) for logging
+and reproducibility. It is not stored on the IR itself, which remains
+binding-free.
 
 ---
 
@@ -2041,26 +2013,26 @@ class NetIR:
 ```
 
 `meta["noise_terms"]` enumerates every noise insertion point for the
-determinism contract; `meta["applied_patches"]` (existing) lists
-applied `ParamPatch`es.
+determinism contract.
 
-### 3.16.8 Parameter-class map
+`NetIR.variables` (root field, §2) enumerates every build-time
+variable declaration with its default, constraint, and `required`
+flag. Variables that are bound at `backend.build(...)` are recorded
+on the resulting artifact (`bound_variables`), not on the IR.
 
-| Extension                                | LIVE                                       | LIVE_RESET                       | REBUILD                                |
-|------------------------------------------|--------------------------------------------|----------------------------------|----------------------------------------|
-| Spatial positions (§3.5.2)               | —                                          | positions array                  | geometry kind                          |
-| Morphology (§3.5.3)                      | mechanism params (`g_max`, `Cm`, `Em`)     | place params                     | morphology, cv_policy, solver, region exprs |
-| Noise (§3.10.3)                          | `sigma`, `tau`                             | `seed_tag`                       | `kind`                                 |
-| Signals (§3.7.2)                         | source scalar params                       | bound trace state                | source `kind`                          |
-| Schedules (§3.7.3)                       | phase durations                            | schedule attach / detach         | schedule structure                     |
-| Plasticity (§3.12.1)                     | rule scalars                               | —                                | rule `kind`                            |
-| Modulators binding (§3.12.2)             | —                                          | —                                | `modulators={role: signal_id}`         |
-| Eligibility (§3.12.3)                    | `lr`                                       | trace state                      | trace `kind`                           |
-| Structural plasticity (§3.12.5)          | rule params (when enabled)                 | —                                | on/off, `mode`                         |
-| Graph (§3.11.3)                          | layer params                               | —                                | node membership, edges                 |
-| Temporal offset (§3.11.4)                | —                                          | —                                | `same_step` / `next_step`              |
-| Tags (§3.9.6)                            | tag metadata                               | —                                | —                                      |
-| Predicate-driven view (§3.9.6)           | —                                          | matched-id resolution            | predicate identity                     |
+### 3.16.8 Variable-eligible leaves
+
+Every numeric or distribution-valued leaf in the IR may be declared
+as a `VariableRef` (§3.14). Structural leaves — population `size`,
+connectivity `kind`, synapse / output / plasticity `kind`, sequential
+layer membership, merge-view structure, modulator binding, morphology
+/ paint / place, `Noise.kind`, structural-plasticity on/off,
+`temporal_offset`, graph node membership / edges, predicate identity —
+cannot be variables, because changing them would change the structure
+of the IR (and therefore its content hash) rather than parameterizing
+the same structure. A spec that needs to choose among structural
+variants does so by constructing distinct specs from a Python
+factory.
 
 ---
 
@@ -2075,7 +2047,7 @@ The following categories from
 | Hardware constraints (fan-in/out, placement) | Per-export-backend concern (D25 analogue). Loihi / SpiNNaker exporters consume them; the core spec does not encode them. |
 | Sweep strategies (Sobol, Bayesian, resume)   | Belongs in `brainpy sweep` (§4.x of Chapter 4) — not a spec-language concern. |
 | Streaming-recording reducers                 | Observable surface extension, parallel to but smaller than §3.7.3 schedules. Suggest separate addendum. |
-| Trained-artifact provenance bundle           | Already partially served by `NetIR.meta["applied_patches"]` (§3.14.7) + content hash. A bundle helper is implementation, not spec. |
+| Trained-artifact provenance bundle           | Already partially served by the artifact's `bound_variables` map + IR content hash (§3.14.5). A bundle helper is implementation, not spec. |
 | Schema evolution / migration tooling         | Implementation surface; spec covers version tag and round-trip determinism (G4). |
 | Profiling / cost models                      | Build-time analysis on the finalized IR. Belongs in CLI (§5.1) — `brainpy estimate`. |
 

@@ -4,7 +4,7 @@
 
 ## 9.1 Determinism contract (G4)
 
-Given a fixed `(NetIR, backend, seed, dt)`:
+Given a fixed `(NetIR, variables, backend, seed, dt)`:
 
 1. **Connectivity sampling** uses
    `jax.random.fold_in(jax.random.key(seed), proj_index)` per projection.
@@ -17,18 +17,20 @@ Given a fixed `(NetIR, backend, seed, dt)`:
 6. **Visualization** (mode-dependent): `graph` / `layers` / `params` /
    `nir` are deterministic in `(ir, mode, renderer)` alone; `matrix`
    additionally takes `seed` (since it samples a `ConnectionResult`).
-7. **Export** is deterministic in `(ir, seed, strict)`: same inputs ⇒
-   identical NIR artifact bytes and identical sidecar. The default
+7. **Export** is deterministic in `(ir, variables, seed, strict)`: same
+   inputs ⇒ identical artifact bytes and identical sidecar. The default
    `seed` for export inherits the simulator's default seed
    (`spec.DEFAULT_SEED`, currently `0`); it can be overridden via
    the `seed=` kwarg in Python or the `--seed N` flag on the CLI.
-8. **Post-build mutation** (§3.14) is deterministic: applying the same
-   `ParamPatch` list to identical `(NetSpec, NetIR)` inputs yields the
-   same content hash; applying it to a built `Simulator` / `Trainer`
-   yields the same in-memory parameter values.
+8. **Variable binding** (§3.14) is deterministic: building twice with
+   the same `variables=` mapping yields bit-identical artifacts. The
+   IR's `content_hash` covers the declared variables and their defaults
+   but is independent of any particular binding; two distinct bindings
+   against the same IR therefore share a content hash, which lets
+   sweeps reuse upstream structure-keyed caches.
 
 Acceptance test: for each backend, two builds with identical
-`(NetIR, backend, seed, dt)` produce bit-identical artifacts.
+`(NetIR, variables, backend, seed, dt)` produce bit-identical artifacts.
 
 ---
 
@@ -64,9 +66,10 @@ are partitioned into spec-level (`SPEC-NNN`), backend-capability
 | SPEC-020 | construction| Sequential layer-shape mismatch.                                     |
 | SPEC-021 | backend     | Backend declares no training support but the IR contains `Trainable(required=True)`. |
 | SPEC-022 | backend     | Backend rejects a layer macro kind.                                  |
-| SPEC-023 | mutation    | `ParamPatch.path` does not resolve to a valid IR leaf (or wildcard matches nothing). |
-| SPEC-024 | mutation    | `ParameterView.set(path, ...)` on a `REBUILD`-class leaf (§3.14.5). Raised as `ParameterChangeRequiresRebuild`. Hint to use `Simulator.rebuild_with(new_ir)`. |
-| SPEC-025 | mutation    | `ParamPatch.op` not valid for the leaf type (e.g. `scale` on a categorical `kind` field). |
+| SPEC-023 | build       | Required variable not supplied. A leaf was declared `net.variable(name, ..., required=True)` (or `default=None`) but `backend.build(ir, ..., variables={...})` did not bind it. |
+| SPEC-024 | build       | Supplied variable value has the wrong unit dimension for the declared default (or wrong shape for a `DistRef` default). |
+| SPEC-025 | build       | Supplied variable value violates the declared `constraint` (e.g. `"positive"`, `"unit_norm"`, `"clip:lo,hi"`). |
+| SPEC-026 | build       | Unknown key in `variables=` — no matching `net.variable(...)` declaration in the IR. |
 
 ### 9.2.2 NIR export notices (`EXPORT-NIR-NNN`)
 

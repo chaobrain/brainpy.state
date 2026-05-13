@@ -45,9 +45,9 @@ Section numbering follows file numbering: chapter N's content is §N (with sub-s
 
 | Chapter                                                               | What's in it                                                                                                  |
 |-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| [1 — Overview](./01-overview.md)                                      | Problem statement, novelty pitch and prior-art table, goals (G1–G12), user populations, non-goals, primitive node kinds, architecture diagram. |
+| [1 — Overview](./01-overview.md)                                      | Problem statement, novelty pitch and prior-art table, goals (G1–G11), user populations, non-goals, primitive node kinds, architecture diagram. |
 | [2 — The IR (`NetIR`)](./02-ir.md)                                    | Canonical frozen-dataclass IR: value wrappers (`Trainable`, `DistRef`, `ModelRef`, `ConnRule`), topological nodes, root container, connectivity/weight/delay semantics. |
-| [3 — Frontend A: Python `NetSpec` builder](./03-frontend-python.md)   | Fluent builder API, handles, view algebra (incl. spatial / compartmental / tag-predicate), value wrappers (`Trainable` / `DistRef` / `Noise`), populations (point / spatial / morphological), projections with spatial and compartment-targeted rules, inputs / signals / schedules, observables, composition forms (subnetwork / sequential / DAG), plasticity (per-projection through structural and homeostatic), construction-time errors, post-definition parameter modification (G12) with path language, `ParamPatch`, `ParameterView`. |
+| [3 — Frontend A: Python `NetSpec` builder](./03-frontend-python.md)   | Fluent builder API, handles, view algebra (incl. spatial / compartmental / tag-predicate), value wrappers (`Trainable` / `DistRef` / `Noise` / `VariableRef`), populations (point / spatial / morphological), projections with spatial and compartment-targeted rules, inputs / signals / schedules, observables, composition forms (subnetwork / sequential / DAG), plasticity (per-projection through structural and homeostatic), construction-time errors, build-time variables (`net.variable`, `variables=` build kwarg). |
 | [4 — Frontend B: YAML/JSON DSL](./04-frontend-yaml.md)                | Top-level YAML schema, lexical conventions, JSON Schema, parameter sweeps.                                    |
 | [5 — Backend protocol & round-trip](./05-backends.md)                 | `Backend` protocol at `brainpy.state.backend`; backend implementations as top-level modules (`brainpy.state.clock` / `event` / `bptt` / `eprop` / `eventprop` / `ppprop` / `nir` / `onnxspike`); third-party backends; capability declarations; IR round-trip and equivalence guarantees. |
 | [6 — Export backends: Neuromorphic IR](./06-export-nir.md)            | Why NIR export, the export workflow, mapping NetIR → NIR (neurons, projections, inputs, topology, units), lossy taxonomy, strict mode, metadata sidecar, other export targets. |
@@ -61,7 +61,7 @@ Section numbering follows file numbering: chapter N's content is §N (with sub-s
 
 ## Goal map
 
-Each goal (G1–G12 in [Chapter 1](./01-overview.md#12-goals)) has its primary chapter and its supporting chapters:
+Each goal (G1–G11 in [Chapter 1](./01-overview.md#12-goals)) has its primary chapter and its supporting chapters:
 
 | Goal | Headline                                  | Primary chapter                             | Also relevant                                                |
 |------|-------------------------------------------|---------------------------------------------|--------------------------------------------------------------|
@@ -76,7 +76,13 @@ Each goal (G1–G12 in [Chapter 1](./01-overview.md#12-goals)) has its primary c
 | G9   | Trainable declarations                    | [3](./03-frontend-python.md) (§3.10)        | [2](./02-ir.md), [5](./05-backends.md)                       |
 | G10  | Visualization                             | [8](./08-cli-and-viz.md)                    | —                                                            |
 | G11  | Neuromorphic-IR export                    | [6](./06-export-nir.md)                     | [9](./09-determinism-validation.md) (`EXPORT-NIR-*` notices) |
-| G12  | Post-definition parameter modification    | [3](./03-frontend-python.md) (§3.14)        | [11](./11-appendix.md) (D26, D27)                            |
+
+The spec is immutable after `.finalize()`. Parameters that need to
+vary across runs are declared as build-time variables
+(`net.variable(...)`, see [Chapter 3 §3.14](./03-frontend-python.md))
+and bound by name at `backend.build(ir, ..., variables={...})`. There
+is no post-definition mutation API on the IR or on built artifacts
+(decision log [D26 / D27](./11-appendix.md)).
 
 ---
 

@@ -112,7 +112,8 @@ it belongs in the spec; if no, it belongs in a backend.
 | G9  | **Trainable declarations.** Any spec value (model parameter, weight, delay, initial state) can be marked trainable. The spec is the source of truth for *what* is learnable; backends decide *how* to gradient through it. Trainables materialize as `brainstate.nn.Param` at backend build. |
 | G10 | **Visualization.** The IR is the source for graph, layer-stack, connectivity-matrix, and parameter-summary visualizations. Python API + CLI, multiple renderers (Graphviz, Mermaid, Matplotlib, HTML). |
 | G11 | **Neuromorphic-IR export.** A spec lowers to the [Neuromorphic Intermediate Representation (NIR)](https://github.com/neuromorphs/NIR) for deployment on Loihi, SpiNNaker, Nengo, and other NIR-consuming platforms. The mapping is documented, deterministic, and surfaces lossy transformations explicitly. |
-| G12 | **Post-definition parameter modification.** After a spec is built (or after a backend has materialized it), users can read and write parameter values — both static (e.g. `tau`, `V_th`) and dynamic (e.g. synaptic weights changing during training) — through one uniform path-addressed interface. Modifications propagate consistently to the IR and to any running backend artifact. |
+
+The spec is **immutable after `.finalize()`**: the IR is a frozen, content-hashable value. There is no path-addressed mutation API for either the IR or a built backend artifact. Values that need to vary across runs — sweeps, A/B comparisons, hyperparameter binding — are declared up front as **variables** (§3.14) and bound by name at `backend.build(...)`. Gradient-trained parameters remain declared via `Trainable` (G9) and are updated by the trainer's optimizer; that is an internal training-state concern, not user-facing IR mutation.
 
 ### 1.2.1 User populations and example workloads
 

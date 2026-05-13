@@ -20,6 +20,7 @@ class SimBackend(Protocol):
     def build(self, ir: NetIR, *,
               seed: int,
               dt: u.Quantity | None = None,
+              variables: Mapping[str, Any] | None = None,    # §3.14
               **opts: Any) -> "Simulator": ...
 
 class TrainBackend(Protocol):
@@ -30,6 +31,7 @@ class TrainBackend(Protocol):
               seed: int,
               loss: Callable,
               dt: u.Quantity | None = None,
+              variables: Mapping[str, Any] | None = None,    # §3.14
               **opts: Any) -> "Trainer": ...
 
 class ExportBackend(Protocol):
@@ -40,25 +42,31 @@ class ExportBackend(Protocol):
     def export(self, ir: NetIR, *,
                seed: int = 0,
                strict: bool = False,
+               variables: Mapping[str, Any] | None = None,   # §3.14
                **opts: Any) -> "ExportResult": ...
 
 class Simulator(Protocol):
     ir: NetIR
     seed: int
-    parameters: "ParameterView"            # §3.14
+    bound_variables: Mapping[str, Any]     # §3.14 — concrete values used at build
     def run(self, duration: u.Quantity) -> "TraceBundle": ...
     def reset(self) -> None: ...
     def state(self) -> Mapping[str, Any]: ...
-    def rebuild_with(self, new_ir: NetIR) -> "Simulator": ...
 
 class Trainer(Protocol):
     ir: NetIR
     seed: int
-    parameters: "ParameterView"            # §3.14; returns ParamState for Trainables
+    bound_variables: Mapping[str, Any]     # §3.14 — concrete values used at build
     def step(self, batch) -> "StepReport": ...
     def freeze(self, *paths: str) -> None: ...
     def unfreeze(self, *paths: str) -> None: ...
-    def rebuild_with(self, new_ir: NetIR) -> "Trainer": ...
+    def parameters(self) -> Mapping[str, "brainstate.ParamState"]: ...
+    # ^ Read-only enumeration of trainable leaves by dotted name. The
+    #   trainer's optimizer updates these as internal training state;
+    #   they are NOT a path-addressed mutation surface — there is no
+    #   .set / .apply / .rebuild_with. To run with different
+    #   non-trainable values, call backend.build again with a new
+    #   variables={...} mapping.
 
 @dataclass(frozen=True)
 class ExportResult:
@@ -80,7 +88,9 @@ class ExportNotice:
 Backend implementations are **top-level modules under `brainpy.state`**,
 one per backend. The `brainpy.state.spec` module deliberately contains
 no backend implementations — only the IR, frontends, registry, view
-algebra, and parameter-modification machinery (D29).
+algebra, and variable-declaration machinery (D29). The IR is
+immutable after `.finalize()`; cross-run variation is supplied
+through each backend's `variables=` build kwarg (§3.14).
 
 | Family | Backend      | Module path                  | Notes                                                                |
 |--------|--------------|------------------------------|----------------------------------------------------------------------|
@@ -97,10 +107,12 @@ User code calls them directly:
 
 ```python
 from brainpy.state import clock
-sim = clock.build(ir, seed=0, dt=0.1*u.ms)
+sim = clock.build(ir, seed=0, dt=0.1*u.ms,
+                  variables={"tau_exc": 25*u.ms})
 
 from brainpy.state import bptt
-trainer = bptt.build(ir, seed=0, loss=loss_fn, dt=1*u.ms)
+trainer = bptt.build(ir, seed=0, loss=loss_fn, dt=1*u.ms,
+                     variables={"W_init_std": 0.05})
 
 from brainpy.state import eprop
 trainer = eprop.build(ir, seed=0, dt=0.5*u.ms, reward_signal="reward")
