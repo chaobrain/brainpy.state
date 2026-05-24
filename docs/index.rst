@@ -5,7 +5,7 @@
 neural network models built on `JAX <https://github.com/jax-ml/jax>`_ and the
 `brainstate <https://github.com/chaobrain/brainstate>`_ state-management system.
 It is the point-neuron modeling layer of the
-`BrainX ecosystem <https://brainmodeling.readthedocs.io>`_.
+`BrainX ecosystem <https://brainx.chaobrain.com>`_.
 
 
 .. admonition:: API maturity
@@ -174,7 +174,7 @@ Learn more
 
       .. card:: :material-regular:`settings;2em` BrainX Ecosystem
          :class-card: sd-text-black sd-bg-light
-         :link: https://brainmodeling.readthedocs.io
+         :link: https://brainx.chaobrain.com
 
 
 ----
@@ -182,7 +182,7 @@ Learn more
 See also the ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``brainpy.state`` is one part of the `BrainX ecosystem <https://brainmodeling.readthedocs.io/>`__:
+``brainpy.state`` is one part of the `BrainX ecosystem <https://brainx.chaobrain.com/>`__:
 
 - `brainstate <https://github.com/chaobrain/brainstate>`_ — state management for JAX-based brain modeling
 - `saiunit <https://github.com/chaobrain/saiunit>`_ — physical units for neuroscience

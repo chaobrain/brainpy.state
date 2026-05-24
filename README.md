@@ -13,7 +13,7 @@
 </p>
 
 
-[`brainpy.state`](https://github.com/chaobrain/brainpy.state) provides **spiking neural network models** built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate). It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/).
+[`brainpy.state`](https://github.com/chaobrain/brainpy.state) provides **spiking neural network models** built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate). It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/).
 
 The library ships two model families:
 
@@ -172,7 +172,7 @@ features).
 
 ## Ecosystem
 
-`brainpy.state` is one part of the [BrainX ecosystem](https://brainmodeling.readthedocs.io/):
+`brainpy.state` is one part of the [BrainX ecosystem](https://brainx.chaobrain.com/):
 
 | Package | Description |
 |---------|-------------|
