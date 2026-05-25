@@ -330,7 +330,7 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bp
+       >>> from brainpy import state as bp
        >>> import saiunit as u
        >>> neuron = bp.aeif_cond_beta_multisynapse(
        ...     in_size=10,

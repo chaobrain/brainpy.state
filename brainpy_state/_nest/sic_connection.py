@@ -165,7 +165,7 @@ class sic_connection(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> conn = bp.sic_connection(weight=0.5, delay_steps=2)
         >>> conn.get_status()
         {'weight': 0.5, 'delay_steps': 2, 'delay': 2, ...}

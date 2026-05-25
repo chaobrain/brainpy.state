@@ -240,7 +240,7 @@ class izhikevich(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bp
+       >>> from brainpy import state as bp
        >>> import brainstate
        >>> import saiunit as u
        >>>

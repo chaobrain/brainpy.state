@@ -318,7 +318,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bps
+       >>> from brainpy import state as bps
        >>> import saiunit as u
        >>>
        >>> # Create synapse with power-law STDP
@@ -348,7 +348,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bps
+       >>> from brainpy import state as bps
        >>>
        >>> syn = bps.stdp_pl_synapse_hom(lambda_=0.05)
        >>>
@@ -559,7 +559,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(tau_minus=20*u.ms)
@@ -579,7 +579,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>> import brainstate as bst
            >>>
@@ -696,7 +696,7 @@ class stdp_pl_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(
@@ -765,7 +765,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(lambda_=0.1)
            >>>
@@ -776,7 +776,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(lambda_=0.1)
            >>>
@@ -879,7 +879,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(weight=1.0, lambda_=0.1)
@@ -895,7 +895,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom()
@@ -1031,7 +1031,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom(weight=1.0, lambda_=0.1, mu=0.4)
@@ -1051,7 +1051,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>>
            >>> class DummyReceiver:
            ...     def receive(self, weight, port, event_type):
@@ -1181,7 +1181,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>> import brainstate as bst
            >>>
@@ -1208,7 +1208,7 @@ class stdp_pl_synapse_hom(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bps
+           >>> from brainpy import state as bps
            >>> import saiunit as u
            >>>
            >>> syn = bps.stdp_pl_synapse_hom()

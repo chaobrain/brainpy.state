@@ -287,7 +287,7 @@ class aeif_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>>

@@ -234,7 +234,7 @@ class diffusion_connection(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bs
+        >>> from brainpy import state as bs
         >>> # Create two mean-field neurons (pseudo-code; siegert_neuron not yet implemented)
         >>> source = bs.siegert_neuron(1, mu=10.0, sigma=5.0)
         >>> target = bs.siegert_neuron(1, mu=5.0, sigma=3.0)
@@ -455,7 +455,7 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> status = conn.get_status()
             >>> print(status)
@@ -533,7 +533,7 @@ class diffusion_connection(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=1.0, diffusion_factor=1.0)
             >>> conn.set_status({'drift_factor': 0.8, 'diffusion_factor': 0.3})
             >>> assert conn.drift_factor == 0.8
@@ -650,7 +650,7 @@ class diffusion_connection(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> status = conn.get('status')
             >>> print(status)
@@ -725,7 +725,7 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=1.0)
             >>> conn.set_drift_factor(0.5)
             >>> assert conn.drift_factor == 0.5
@@ -758,7 +758,7 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(diffusion_factor=1.0)
             >>> conn.set_diffusion_factor(0.3)
             >>> assert conn.diffusion_factor == 0.3
@@ -795,7 +795,7 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection()
             >>> try:
             ...     conn.set_weight(2.0)
@@ -834,7 +834,7 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection()
             >>> try:
             ...     conn.set_delay(1.0)
@@ -916,7 +916,7 @@ class diffusion_connection(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> coeffs = np.array([10.0, 12.0, 11.5, 10.2, 9.8])
             >>> event = conn.prepare_secondary_event(coeffs)
@@ -1019,7 +1019,7 @@ class diffusion_connection(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> coeffs = np.array([10.0, 12.0, 11.5, 10.2, 9.8])
             >>> drift, diffusion = conn.project_coeffarray(coeffs)
@@ -1156,7 +1156,7 @@ class diffusion_connection(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> event = conn.to_siegert_event(coeff=15.0, delay_steps=5, multiplicity=1.0)
             >>> print(event)
@@ -1317,7 +1317,7 @@ class diffusion_connection(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> coeffs = np.array([10.0, 12.0, 11.5, 10.2, 9.8])
             >>> events = conn.coeffarray_to_step_events(coeffs, first_delay_steps=0)

@@ -395,7 +395,7 @@ class glif_psc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, spike_dependent_threshold=False,
@@ -407,7 +407,7 @@ class glif_psc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, spike_dependent_threshold=True,
@@ -419,7 +419,7 @@ class glif_psc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, tau_syn=(2.0, 5.0, 10.0))

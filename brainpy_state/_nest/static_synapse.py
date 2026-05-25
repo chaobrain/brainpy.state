@@ -257,7 +257,7 @@ class static_synapse(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bs
+        >>> from brainpy import state as bs
         >>> import saiunit as u
         >>> import brainstate
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
@@ -686,7 +686,7 @@ class static_synapse(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> import saiunit as u
             >>> syn = bs.static_synapse(weight=1.0, delay=1.0*u.ms)
             >>> syn.set(weight=2.5)  # Only weight changes
@@ -793,7 +793,7 @@ class static_synapse(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -862,7 +862,7 @@ class static_synapse(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> syn = bs.static_synapse(weight=1.0)
             >>> syn.set_weight(2.5)
             >>> assert syn.weight == 2.5
@@ -963,7 +963,7 @@ class static_synapse(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):
@@ -1168,7 +1168,7 @@ class static_synapse(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms, t=0.0*u.ms):

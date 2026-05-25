@@ -317,7 +317,7 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
@@ -331,7 +331,7 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
@@ -350,7 +350,7 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
@@ -369,7 +369,7 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)

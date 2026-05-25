@@ -220,7 +220,7 @@ class tsodyks_synapse_hom(static_synapse_hom_w):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bs
+        >>> from brainpy import state as bs
         >>> import saiunit as u
         >>> syn = bs.tsodyks_synapse_hom(
         ...     weight=2.0,

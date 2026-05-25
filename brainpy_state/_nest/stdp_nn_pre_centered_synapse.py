@@ -180,7 +180,7 @@ class stdp_nn_pre_centered_synapse(stdp_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bp
+       >>> from brainpy import state as bp
        >>> import saiunit as u
        >>> syn = bp.stdp_nn_pre_centered_synapse(
        ...     weight=0.5,
@@ -352,7 +352,7 @@ class stdp_nn_pre_centered_synapse(stdp_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bp
+           >>> from brainpy import state as bp
            >>> import saiunit as u
            >>> syn = bp.stdp_nn_pre_centered_synapse(
            ...     weight=1.0, delay=1.0 * u.ms, tau_plus=20.0 * u.ms

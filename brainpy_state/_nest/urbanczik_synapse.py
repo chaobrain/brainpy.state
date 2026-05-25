@@ -200,7 +200,7 @@ class urbanczik_synapse(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bp
+       >>> from brainpy import state as bp
        >>> # Create synapse with moderate learning rate
        >>> syn = bp.urbanczik_synapse(
        ...     weight=0.5,

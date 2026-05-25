@@ -269,7 +269,7 @@ class siegert_neuron(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms, tau_m=10*u.ms)
@@ -805,7 +805,7 @@ class siegert_neuron(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import numpy as np
             >>> import saiunit as u
             >>> model = bp.siegert_neuron(in_size=1, tau_m=10*u.ms, t_ref=2*u.ms, theta=15.0)
@@ -980,7 +980,7 @@ class siegert_neuron(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>> import brainstate
             >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms)

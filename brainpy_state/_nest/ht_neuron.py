@@ -689,7 +689,7 @@ class ht_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy as bp
-        >>> import brainpy.state as bps
+        >>> from brainpy import state as bps
         >>> import saiunit as u
         >>> import numpy as np
         >>> import matplotlib.pyplot as plt
@@ -1286,7 +1286,7 @@ class ht_neuron(NESTNeuron):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bps
+            >>> from brainpy import state as bps
             >>> import saiunit as u
             >>> import brainstate
             >>>

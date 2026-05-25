@@ -362,7 +362,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>>
         >>> # Create synapse with default FACETS hardware parameters
@@ -754,7 +754,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(weight=10.0, delay=1.0 * u.ms)
@@ -863,7 +863,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(
@@ -948,7 +948,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(tau_plus=20.0)
             >>>
@@ -1118,7 +1118,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>>
             >>> syn = bp.stdp_facetshw_synapse_hom(
@@ -1406,7 +1406,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>>
             >>> # Create synapse and postsynaptic target
@@ -1607,7 +1607,7 @@ class stdp_facetshw_synapse_hom(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>> import brainstate as bst
             >>>

@@ -245,7 +245,7 @@ class vogels_sprekeler_synapse(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> syn = bp.vogels_sprekeler_synapse()
         >>> syn.get_status()
         {'weight': 0.5, 'tau': 20.0, 'alpha': 0.12, 'eta': 0.001, ...}
@@ -642,7 +642,7 @@ class vogels_sprekeler_synapse(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> class MockTarget:
             ...     def get_history(self, t1, t2):
             ...         return [{'t_': 12.0}]  # One post spike at 12 ms
@@ -798,7 +798,7 @@ class vogels_sprekeler_synapse(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> class MockTarget:
             ...     def get_history(self, t1, t2):
             ...         # Postsynaptic spikes at 10, 30, 50 ms

@@ -407,7 +407,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate
         >>> import numpy as np
@@ -1147,7 +1147,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bp
+            >>> from brainpy import state as bp
             >>> import saiunit as u
             >>> import brainstate
             >>> import matplotlib.pyplot as plt

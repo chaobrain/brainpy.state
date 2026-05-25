@@ -165,7 +165,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bp
+       >>> from brainpy import state as bp
        >>> import saiunit as u
        >>> syn = bp.stdp_nn_symm_synapse(
        ...     weight=0.5,
@@ -334,7 +334,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bp
+           >>> from brainpy import state as bp
            >>> import saiunit as u
            >>> syn = bp.stdp_nn_symm_synapse(weight=1.0)
            >>> syn.set(lambda_=0.02, tau_plus=15.0 * u.ms)
@@ -424,7 +424,7 @@ class stdp_nn_symm_synapse(stdp_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bp
+           >>> from brainpy import state as bp
            >>> import saiunit as u
            >>> syn = bp.stdp_nn_symm_synapse(
            ...     weight=1.0, delay=1.0 * u.ms, tau_plus=20.0 * u.ms

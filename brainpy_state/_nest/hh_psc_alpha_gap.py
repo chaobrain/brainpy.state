@@ -535,7 +535,7 @@ class hh_psc_alpha_gap(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bs
+       >>> from brainpy import state as bs
        >>> import saiunit as u
        >>> neuron = bs.hh_psc_alpha_gap(in_size=1, E_L=-70*u.mV, C_m=40*u.pF)
        >>> neuron.init_all_states()

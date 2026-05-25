@@ -353,7 +353,7 @@ class iaf_chs_2007(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> import brainstate as bs
         >>> import brainevent as be

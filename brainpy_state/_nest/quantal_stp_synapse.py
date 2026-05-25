@@ -275,7 +275,7 @@ class quantal_stp_synapse(static_synapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> # Single release site, 50% release probability
         >>> syn = bp.quantal_stp_synapse(weight=1.0, U=0.5, n=1)

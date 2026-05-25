@@ -462,7 +462,7 @@ class hh_psc_alpha(NESTNeuron):
 
        >>> import brainstate as bst
        >>> import saiunit as u
-       >>> import brainpy.state as bps
+       >>> from brainpy import state as bps
        >>> import matplotlib.pyplot as plt
        >>> # Initialize simulation context
        >>> bst.environ.set(dt=0.1 * u.ms)

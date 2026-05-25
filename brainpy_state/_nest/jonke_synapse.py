@@ -208,7 +208,7 @@ class jonke_synapse(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> # Create synapse with standard STDP parameters
         >>> syn = bp.jonke_synapse(
         ...     weight=5.0,

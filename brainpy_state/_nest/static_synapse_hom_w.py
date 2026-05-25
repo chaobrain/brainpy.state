@@ -246,7 +246,7 @@ class static_synapse_hom_w(static_synapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bs
+        >>> from brainpy import state as bs
         >>> import saiunit as u
         >>> import brainstate
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
@@ -406,7 +406,7 @@ class static_synapse_hom_w(static_synapse):
         --------
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> import saiunit as u
             >>> import brainstate
             >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -487,7 +487,7 @@ class static_synapse_hom_w(static_synapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> syn = bs.static_synapse_hom_w(weight=1.0)
             >>>
             >>> # This raises ValueError
@@ -610,7 +610,7 @@ class static_synapse_hom_w(static_synapse):
 
         .. code-block:: python
 
-            >>> import brainpy.state as bs
+            >>> from brainpy import state as bs
             >>> syn = bs.static_synapse_hom_w(weight=1.0)
             >>>
             >>> # OK: delay and receptor_type can vary per-connection

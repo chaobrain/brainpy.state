@@ -249,7 +249,7 @@ class stdp_dopamine_synapse(static_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bp
+       >>> from brainpy import state as bp
        >>> import saiunit as u
        >>> # Create synapse with volume transmitter placeholder
        >>> syn = bp.stdp_dopamine_synapse(
@@ -1099,7 +1099,7 @@ class stdp_dopamine_synapse(static_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainpy.state as bp
+           >>> from brainpy import state as bp
            >>> import saiunit as u
            >>> # Create postsynaptic neuron and synapse
            >>> post_neuron = bp.LIF(1)
@@ -1354,7 +1354,7 @@ class stdp_dopamine_synapse(static_synapse):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bp
+           >>> from brainpy import state as bp
            >>> import saiunit as u
            >>> import brainstate as bs
            >>> # Setup

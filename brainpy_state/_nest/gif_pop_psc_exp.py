@@ -225,7 +225,7 @@ class gif_pop_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> import saiunit as u
         >>> pop = bp.gif_pop_psc_exp(1, N=100)
         >>> pop.init_all_states()

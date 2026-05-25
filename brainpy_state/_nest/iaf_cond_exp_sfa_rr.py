@@ -282,7 +282,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
 
         >>> import brainstate as bst
         >>> import saiunit as u
-        >>> import brainpy.state as bp
+        >>> from brainpy import state as bp
         >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=1)
         >>> with bst.environ.context(dt=0.1 * u.ms):
         ...     neuron.init_all_states()

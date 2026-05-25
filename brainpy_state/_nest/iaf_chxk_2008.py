@@ -427,7 +427,7 @@ class iaf_chxk_2008(NESTNeuron):
 
         >>> import brainstate as bs
         >>> import saiunit as u
-        >>> import brainpy.state as bps
+        >>> from brainpy import state as bps
         >>> neuron = bps.iaf_chxk_2008(1)
         >>> with bs.environ.context(dt=0.1 * u.ms):
         ...     neuron.init_state()
