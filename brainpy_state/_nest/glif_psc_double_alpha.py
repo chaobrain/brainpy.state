@@ -454,7 +454,7 @@ class glif_psc_double_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as st
+        >>> from brainpy import state as st
         >>> import brainstate as bst
         >>> import saiunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
