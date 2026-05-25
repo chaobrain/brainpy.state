@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — JIT-safe parameter validation for NEST neurons
+
+- Added `brainpy_state._nest._utils.cond_any`, a shared tracer-aware reduction
+  helper: it returns `False` when its condition is a JAX tracer (so `if`
+  validation checks are skipped during `jit`/`vmap`/`grad` tracing) and
+  `bool(np.any(...))` otherwise. All `NESTNeuron` parameter-validation checks
+  (`if np.any(...)` / `if u.math.any(...)`) now route through it.
+- `erfc_neuron` and `ginzburg_neuron`: removed a Python `if bool(any(...))`
+  branch inside `update()` that broke under `jax.jit`; the per-neuron update is
+  now always computed and masked with `where`, making both models JIT-compatible.
+- Added `brainpy_state/_nest/jit_compat_test.py` verifying every public
+  `NESTNeuron` subclass traces under `jit` (57 models), with architecturally
+  NumPy-scalar models (precise-spiking, mean-field, delay-queue) documented.
+
 ### Added — Network API for NEST-style models
 
 - `brainpy.state.Network` — `brainstate.nn.Module` subclass with

@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'aeif_cond_alpha_astro',
@@ -516,23 +516,23 @@ class aeif_cond_alpha_astro(NESTNeuron):
         if any(is_tracer(v) for v in (v_reset, v_peak, v_th, delta_t)):
             return
 
-        if np.any(v_reset >= v_peak):
+        if cond_any(v_reset >= v_peak):
             raise ValueError('Ensure that: V_reset < V_peak .')
-        if np.any(delta_t < 0.0):
+        if cond_any(delta_t < 0.0):
             raise ValueError('Delta_T must be positive.')
-        if np.any(v_peak < v_th):
+        if cond_any(v_peak < v_th):
             raise ValueError('V_peak >= V_th required.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self.tau_syn_ex <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_w <= 0.0 * u.ms):
+        if cond_any(self.tau_w <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
         # Mirror NEST overflow guard for exponential term at spike time.

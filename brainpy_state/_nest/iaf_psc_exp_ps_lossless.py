@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, propagator_exp
+from ._utils import is_tracer, propagator_exp, cond_any
 
 __all__ = [
     'iaf_psc_exp_ps_lossless',
@@ -446,19 +446,19 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
         if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
             return
 
-        if np.any(self.V_reset >= self.V_th):
+        if cond_any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if self.V_min is not None and np.any(self.V_reset < self.V_min):
+        if self.V_min is not None and cond_any(self.V_reset < self.V_min):
             raise ValueError('Reset potential must be greater than or equal to minimum potential.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
-        if np.any(self.tau_m <= 0.0 * u.ms) or np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms) or cond_any(self.tau_syn_ex <= 0.0 * u.ms) or cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_syn_ex != self.tau_syn_in):
+        if cond_any(self.tau_syn_ex != self.tau_syn_in):
             raise ValueError('tau_syn_ex == tau_syn_in is required in this implementation.')
-        if np.any(self.tau_m == self.tau_syn_ex) or np.any(self.tau_m == self.tau_syn_in):
+        if cond_any(self.tau_m == self.tau_syn_ex) or cond_any(self.tau_m == self.tau_syn_in):
             raise ValueError('Membrane and synapse time constants must differ.')
 
     def init_state(self, **kwargs):
@@ -790,7 +790,7 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
         refr_steps = np.broadcast_to(
             np.asarray(u.math.asarray(self.ref_count), dtype=ditype), v_shape
         )
-        if np.any(refr_steps < 0):
+        if cond_any(refr_steps < 0):
             raise ValueError('Refractory time must not be negative.')
 
         events = self._parse_spike_events(spike_events, v_shape)

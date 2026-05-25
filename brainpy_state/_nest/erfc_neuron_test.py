@@ -138,18 +138,18 @@ class TestErfcNeuron(unittest.TestCase):
                 rng_seed=0,
             )
 
+            # ``update`` now draws one uniform and one exponential sample on
+            # *every* step and masks the state with ``should_update`` (so it is
+            # jit-safe — no Python branch on a traced predicate).  The mocked
+            # draw sequences and the reference below therefore consume one of
+            # each per step; the first exponential draw is consumed by
+            # ``init_state`` to seed ``t_next``.
             dftype = brainstate.environ.dftype()
-            exp_samples = iter([
-                jnp.array([1.0], dtype=dftype),
-                jnp.array([2.0], dtype=dftype),
-                jnp.array([1.0], dtype=dftype),
-                jnp.array([1.0], dtype=dftype),
-            ])
-            uni_samples = iter([
-                jnp.array([0.2], dtype=dftype),
-                jnp.array([0.9], dtype=dftype),
-                jnp.array([0.1], dtype=dftype),
-            ])
+            step_exp = [2.0, 1.0, 1.0, 1.0, 1.0]
+            step_uni = [0.2, 0.9, 0.1, 0.5, 0.4]
+            exp_samples = iter([jnp.array([1.0], dtype=dftype)]
+                               + [jnp.array([v], dtype=dftype) for v in step_exp])
+            uni_samples = iter([jnp.array([v], dtype=dftype) for v in step_uni])
             neuron._sample_exponential = lambda shape: next(exp_samples)
             neuron._sample_uniform = lambda shape: next(uni_samples)
             neuron.init_state()
@@ -157,17 +157,17 @@ class TestErfcNeuron(unittest.TestCase):
             h = 0.0
             y = 0.0
             t_next = 0.1
-            ref_exp = iter([2.0, 1.0, 1.0])
-            ref_uni = iter([0.2, 0.9, 0.1])
             deltas = [0.0, 0.5, 0.0, -0.3, 0.0]
 
             for step, d_h in enumerate(deltas):
                 h += d_h
                 current_time = (step + 1) * 0.1
-                if current_time > t_next:
-                    p = 0.5 * math.erfc(-(h - 0.0) / (math.sqrt(2.0) * 1.0))
-                    y = 1.0 if next(ref_uni) < p else 0.0
-                    t_next += next(ref_exp) * 0.1
+                should_update = current_time > t_next
+                p = 0.5 * math.erfc(-(h - 0.0) / (math.sqrt(2.0) * 1.0))
+                new_y = 1.0 if step_uni[step] < p else 0.0
+                if should_update:
+                    y = new_y
+                    t_next += step_exp[step] * 0.1
 
                 delta = None if d_h == 0.0 else d_h * u.mV
                 out = self._step(neuron, step, delta=delta)

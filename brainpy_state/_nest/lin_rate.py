@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'lin_rate_ipn',
@@ -388,13 +388,13 @@ class lin_rate_ipn(_lin_rate_base):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.tau, self.sigma)):
             return
-        if np.any(self.tau <= 0.0 * u.ms):
+        if cond_any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self.lambda_ < 0.0):
+        if cond_any(self.lambda_ < 0.0):
             raise ValueError('Passive decay rate lambda must be >= 0.')
-        if np.any(self.sigma < 0.0):
+        if cond_any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
-        if np.any(self.rectify_rate < 0.0):
+        if cond_any(self.rectify_rate < 0.0):
             raise ValueError('Rectifying rate must be >= 0.')
 
     def init_state(self, **kwargs):
@@ -445,14 +445,14 @@ class lin_rate_ipn(_lin_rate_base):
             xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
-        if np.any(lambda_ > 0.0):
+        if cond_any(lambda_ > 0.0):
             P1 = np.exp(-lambda_ * h / tau)
             P2 = -np.expm1(-lambda_ * h / tau) / np.where(lambda_ == 0.0, 1.0, lambda_)
             input_noise_factor = np.sqrt(
                 -0.5 * np.expm1(-2.0 * lambda_ * h / tau) / np.where(lambda_ == 0.0, 1.0, lambda_)
             )
             zero_lambda = lambda_ == 0.0
-            if np.any(zero_lambda):
+            if cond_any(zero_lambda):
                 P1 = np.where(zero_lambda, 1.0, P1)
                 P2 = np.where(zero_lambda, h / tau, P2)
                 input_noise_factor = np.where(zero_lambda, np.sqrt(h / tau), input_noise_factor)
@@ -575,9 +575,9 @@ class lin_rate_opn(_lin_rate_base):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.tau, self.sigma)):
             return
-        if np.any(self.tau <= 0.0 * u.ms):
+        if cond_any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self.sigma < 0.0):
+        if cond_any(self.sigma < 0.0):
             raise ValueError('Noise parameter sigma must be >= 0.')
 
     def init_state(self, **kwargs):

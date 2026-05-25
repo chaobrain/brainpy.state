@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'mat2_psc_exp',
@@ -472,17 +472,17 @@ class mat2_psc_exp(NESTNeuron):
         if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
             return
 
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * u.ms) or cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('Synaptic time constants must be strictly positive.')
-        if np.any(self.t_ref <= 0.0 * u.ms):
+        if cond_any(self.t_ref <= 0.0 * u.ms):
             raise ValueError('Refractory time must be strictly positive.')
-        if np.any(self.tau_1 <= 0.0 * u.ms) or np.any(self.tau_2 <= 0.0 * u.ms):
+        if cond_any(self.tau_1 <= 0.0 * u.ms) or cond_any(self.tau_2 <= 0.0 * u.ms):
             raise ValueError('Adaptive threshold time constants must be strictly positive.')
-        if np.any(self.tau_m == self.tau_syn_ex) or np.any(self.tau_m == self.tau_syn_in):
+        if cond_any(self.tau_m == self.tau_syn_ex) or cond_any(self.tau_m == self.tau_syn_in):
             raise ValueError(
                 'Membrane and synapse time constant(s) must differ. '
                 'See note in documentation.'

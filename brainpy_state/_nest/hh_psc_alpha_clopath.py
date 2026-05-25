@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'hh_psc_alpha_clopath',
@@ -672,20 +672,20 @@ class hh_psc_alpha_clopath(NESTNeuron):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.C_m, self.t_ref, self.g_Na)):
             return
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * u.ms) or cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_u_bar_plus <= 0.0 * u.ms) or np.any(
-            self.tau_u_bar_minus <= 0.0 * u.ms) or np.any(
+        if cond_any(self.tau_u_bar_plus <= 0.0 * u.ms) or cond_any(
+            self.tau_u_bar_minus <= 0.0 * u.ms) or cond_any(
             self.tau_u_bar_bar <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.g_Na < 0.0 * u.nS) or np.any(self.g_K < 0.0 * u.nS) or np.any(
+        if cond_any(self.g_Na < 0.0 * u.nS) or cond_any(self.g_K < 0.0 * u.nS) or cond_any(
             self.g_L < 0.0 * u.nS):
             raise ValueError('All conductances must be non-negative.')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
     def init_state(self, **kwargs):

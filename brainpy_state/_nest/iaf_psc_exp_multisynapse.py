@@ -26,7 +26,7 @@ import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, propagator_exp
+from ._utils import is_tracer, propagator_exp, cond_any
 
 __all__ = [
     'iaf_psc_exp_multisynapse',
@@ -463,18 +463,18 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.V_reset, self.C_m)):
             return
-        if np.any(self.V_reset >= self.V_th):
+        if cond_any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be > 0.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self.tau_syn <= 0.0):
+        if cond_any(self.tau_syn <= 0.0):
             raise ValueError('All synaptic time constants must be strictly positive.')
         tau_m_ms = self.tau_m / u.ms
-        if np.any(np.isclose(self.tau_syn, tau_m_ms)):
+        if cond_any(np.isclose(self.tau_syn, tau_m_ms)):
             raise ValueError('Membrane and synapse time constants must differ.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
 
     def init_state(self, **kwargs):

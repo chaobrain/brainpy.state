@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'iaf_chxk_2008',
@@ -541,15 +541,15 @@ class iaf_chxk_2008(NESTNeuron):
         if any(is_tracer(v) for v in (self.C_m, self.tau_syn_ex, self.tau_ahp)):
             return
 
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_syn_ex <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_ahp <= 0.0 * u.ms):
+        if cond_any(self.tau_ahp <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
     def init_state(self, **kwargs):

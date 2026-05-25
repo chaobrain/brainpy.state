@@ -26,7 +26,7 @@ import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, propagator_exp
+from ._utils import is_tracer, propagator_exp, cond_any
 
 __all__ = [
     'iaf_psc_exp',
@@ -436,19 +436,19 @@ class iaf_psc_exp(NESTNeuron):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.V_reset, self.C_m)):
             return
-        if np.any(self.V_reset >= self.V_th):
+        if cond_any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * u.ms) or cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('Synaptic time constants must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
-        if np.any(self.rho < 0.0 / u.second):
+        if cond_any(self.rho < 0.0 / u.second):
             raise ValueError('Stochastic firing intensity rho must not be negative.')
-        if np.any(self.delta < 0.0 * u.mV):
+        if cond_any(self.delta < 0.0 * u.mV):
             raise ValueError('Threshold width delta must not be negative.')
 
     def init_state(self, **kwargs):

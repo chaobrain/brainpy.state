@@ -27,7 +27,7 @@ import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'iaf_psc_delta_ps',
@@ -442,15 +442,15 @@ class iaf_psc_delta_ps(NESTNeuron):
         if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
             return
 
-        if np.any(self.V_reset >= self.V_th):
+        if cond_any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if self.V_min is not None and np.any(self.V_reset < self.V_min):
+        if self.V_min is not None and cond_any(self.V_reset < self.V_min):
             raise ValueError('Reset potential must be greater or equal to minimum potential.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
 
     def init_state(self, batch_size=None, **kwargs):
@@ -821,7 +821,7 @@ class iaf_psc_delta_ps(NESTNeuron):
         )
 
         refr_steps = np.floor(t_ref / dt_ms).astype(np.int64)
-        if np.any(refr_steps < 1):
+        if cond_any(refr_steps < 1):
             raise ValueError('Refractory time must be at least one time step.')
 
         on_grid_delta = np.broadcast_to(

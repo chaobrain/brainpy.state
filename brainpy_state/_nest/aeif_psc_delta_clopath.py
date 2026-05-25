@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'aeif_psc_delta_clopath',
@@ -569,38 +569,38 @@ class aeif_psc_delta_clopath(NESTNeuron):
         if any(is_tracer(v) for v in (v_reset, v_peak, v_th_rest, v_th_max, delta_t)):
             return
 
-        if np.any(v_reset >= v_peak):
+        if cond_any(v_reset >= v_peak):
             raise ValueError('Ensure that V_reset < V_peak .')
-        if np.any(delta_t < 0.0):
+        if cond_any(delta_t < 0.0):
             raise ValueError('Delta_T must be greater than or equal to zero.')
-        if np.any(v_th_max < v_th_rest):
+        if cond_any(v_th_max < v_th_rest):
             raise ValueError('V_th_max >= V_th_rest required.')
-        if np.any(v_peak < v_th_rest):
+        if cond_any(v_peak < v_th_rest):
             raise ValueError('V_peak >= V_th_rest required.')
 
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Ensure that C_m > 0')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self.t_clamp < 0.0 * u.ms):
+        if cond_any(self.t_clamp < 0.0 * u.ms):
             raise ValueError('Ensure that t_clamp >= 0')
 
-        if np.any(self.tau_w <= 0.0 * u.ms):
+        if cond_any(self.tau_w <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_z <= 0.0 * u.ms):
+        if cond_any(self.tau_z <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_V_th <= 0.0 * u.ms):
+        if cond_any(self.tau_V_th <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_u_bar_plus <= 0.0 * u.ms):
+        if cond_any(self.tau_u_bar_plus <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_u_bar_minus <= 0.0 * u.ms):
+        if cond_any(self.tau_u_bar_minus <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.tau_u_bar_bar <= 0.0 * u.ms):
+        if cond_any(self.tau_u_bar_bar <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
 
-        if np.any(self.u_ref_squared <= 0.0):
+        if cond_any(self.u_ref_squared <= 0.0):
             raise ValueError('Ensure that u_ref_squared > 0')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
         # Mirror NEST overflow guard for exponential term at spike time.

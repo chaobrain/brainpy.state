@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'aeif_cond_alpha_multisynapse',
@@ -483,21 +483,21 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
 
         if self.E_rev.size != self.tau_syn.size:
             raise ValueError('The E_rev and tau_syn arrays must have the same size.')
-        if np.any(self.tau_syn <= 0.0):
+        if cond_any(self.tau_syn <= 0.0):
             raise ValueError('All synaptic time constants must be strictly positive.')
-        if np.any(v_peak < v_th):
+        if cond_any(v_peak < v_th):
             raise ValueError('V_peak >= V_th required.')
-        if np.any(v_reset >= v_peak):
+        if cond_any(v_reset >= v_peak):
             raise ValueError('Ensure that: V_reset < V_peak .')
-        if np.any(delta_t < 0.0):
+        if cond_any(delta_t < 0.0):
             raise ValueError('Delta_T must be positive.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
-        if np.any(self.tau_w <= 0.0 * u.ms):
+        if cond_any(self.tau_w <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
         # Mirror NEST overflow guard for exponential term at spike time.
@@ -570,7 +570,7 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
                 raise ValueError(f'Receptor type {receptor} out of range [1, {self.n_receptors}].')
 
             w_np = np.asarray(u.math.asarray(weight / u.nS), dtype=dftype)
-            if np.any(w_np < 0.0):
+            if cond_any(w_np < 0.0):
                 raise ValueError('Synaptic weights for conductance-based multisynapse models must be non-negative.')
             out[..., receptor - 1] += np.broadcast_to(w_np, v_shape)
         return out
@@ -759,10 +759,10 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
         w_default = np.asarray(w_default_val, dtype=dftype)
         w_default = np.broadcast_to(w_default, v_shape)
         if n_receptors > 0:
-            if np.any(w_default < 0.0):
+            if cond_any(w_default < 0.0):
                 raise ValueError('Synaptic weights for conductance-based multisynapse models must be non-negative.')
             w_by_rec[..., 0] += w_default
-        elif np.any(w_default != 0.0):
+        elif cond_any(w_default != 0.0):
             raise ValueError('No receptor ports available for incoming spike conductance.')
 
         # Apply synaptic spike inputs to dg per receptor.

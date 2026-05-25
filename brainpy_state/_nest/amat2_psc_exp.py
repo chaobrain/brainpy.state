@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'amat2_psc_exp',
@@ -522,26 +522,26 @@ class amat2_psc_exp(NESTNeuron):
         if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
             return
 
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
         tau_m_val = self.tau_m
         tau_ex_val = self.tau_syn_ex
         tau_in_val = self.tau_syn_in
         tau_v_val = self.tau_v
-        if np.any(tau_m_val <= 0.0 * u.ms) or np.any(tau_ex_val <= 0.0 * u.ms) or np.any(tau_in_val <= 0.0 * u.ms):
+        if cond_any(tau_m_val <= 0.0 * u.ms) or cond_any(tau_ex_val <= 0.0 * u.ms) or cond_any(tau_in_val <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.t_ref <= 0.0 * u.ms):
+        if cond_any(self.t_ref <= 0.0 * u.ms):
             raise ValueError('Refractory time must be strictly positive.')
-        if np.any(self.tau_1 <= 0.0 * u.ms) or np.any(self.tau_2 <= 0.0 * u.ms):
+        if cond_any(self.tau_1 <= 0.0 * u.ms) or cond_any(self.tau_2 <= 0.0 * u.ms):
             raise ValueError('Adaptive threshold time constants must be strictly positive.')
-        if np.any(tau_v_val <= 0.0 * u.ms):
+        if cond_any(tau_v_val <= 0.0 * u.ms):
             raise ValueError('tau_v must be strictly positive.')
-        if np.any(tau_m_val == tau_ex_val) or np.any(tau_m_val == tau_in_val) or np.any(tau_m_val == tau_v_val):
+        if cond_any(tau_m_val == tau_ex_val) or cond_any(tau_m_val == tau_in_val) or cond_any(tau_m_val == tau_v_val):
             raise ValueError(
                 'tau_m must differ from tau_syn_ex, tau_syn_in and tau_v. '
                 'See note in documentation.'
             )
-        if np.any(tau_v_val == tau_ex_val) or np.any(tau_v_val == tau_in_val):
+        if cond_any(tau_v_val == tau_ex_val) or cond_any(tau_v_val == tau_in_val):
             raise ValueError(
                 'tau_v must differ from tau_syn_ex, tau_syn_in and tau_m. '
                 'See note in documentation.'

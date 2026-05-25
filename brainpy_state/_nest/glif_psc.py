@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, alpha_propagator_p31_p32
+from ._utils import is_tracer, alpha_propagator_p31_p32, cond_any
 
 __all__ = [
     'glif_psc',
@@ -574,14 +574,14 @@ class glif_psc(NESTNeuron):
         E_L_val = self.E_L
         V_reset_rel = self.V_reset - E_L_val
         V_th_rel = self.V_th - E_L_val
-        if np.any(V_reset_rel >= V_th_rel):
+        if cond_any(V_reset_rel >= V_th_rel):
             raise ValueError("Reset potential must be smaller than threshold.")
 
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError("Capacitance must be strictly positive.")
-        if np.any(self.g_m <= 0.0 * u.nS):
+        if cond_any(self.g_m <= 0.0 * u.nS):
             raise ValueError("Membrane conductance must be strictly positive.")
-        if np.any(self.t_ref <= 0.0 * u.ms):
+        if cond_any(self.t_ref <= 0.0 * u.ms):
             raise ValueError("Refractory time constant must be strictly positive.")
 
         if self.has_theta_spike:
@@ -614,7 +614,7 @@ class glif_psc(NESTNeuron):
             if tau <= 0.0:
                 raise ValueError("All synaptic time constants must be strictly positive.")
 
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
     def init_state(self, **kwargs):

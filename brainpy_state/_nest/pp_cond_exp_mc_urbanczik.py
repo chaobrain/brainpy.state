@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
@@ -586,18 +586,18 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
             raise ValueError('Rate slope cannot be negative.')
         if self.phi_max < 0:
             raise ValueError('Maximum rate cannot be negative.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time cannot be negative.')
         for label, C_m in [('soma', self.soma_C_m), ('dendritic', self.dend_C_m)]:
-            if np.any(C_m <= 0.0 * u.pF):
+            if cond_any(C_m <= 0.0 * u.pF):
                 raise ValueError(f'Capacitance ({label}) must be strictly positive.')
         for label, tse, tsi in [
             ('soma', self.soma_tau_syn_ex, self.soma_tau_syn_in),
             ('dendritic', self.dend_tau_syn_ex, self.dend_tau_syn_in),
         ]:
-            if np.any(tse <= 0.0 * u.ms) or np.any(tsi <= 0.0 * u.ms):
+            if cond_any(tse <= 0.0 * u.ms) or cond_any(tsi <= 0.0 * u.ms):
                 raise ValueError('All time constants must be strictly positive.')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
     def init_state(self, **kwargs):

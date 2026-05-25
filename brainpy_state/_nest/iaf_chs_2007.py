@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'iaf_chs_2007',
@@ -435,11 +435,11 @@ class iaf_chs_2007(NESTNeuron):
         if any(is_tracer(v) for v in (self.V_epsp, self.V_reset, self.tau_epsp)):
             return
 
-        if np.any(self.V_epsp < 0.0):
+        if cond_any(self.V_epsp < 0.0):
             raise ValueError('EPSP amplitude V_epsp cannot be negative.')
-        if np.any(self.V_reset < 0.0):
+        if cond_any(self.V_reset < 0.0):
             raise ValueError('Reset magnitude V_reset cannot be negative.')
-        if np.any(self.tau_epsp <= 0.0 * u.ms) or np.any(self.tau_reset <= 0.0 * u.ms):
+        if cond_any(self.tau_epsp <= 0.0 * u.ms) or cond_any(self.tau_reset <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
 
     def _precompute_propagators(self):
@@ -641,12 +641,12 @@ class iaf_chs_2007(NESTNeuron):
         noise_term = u.math.zeros(self.varshape, dtype=dftype)
         if self._noise_jax is not None:
             use_noise = self.V_noise > 0.0
-            if np.any(np.asarray(use_noise)):
+            if cond_any(np.asarray(use_noise)):
                 if not is_tracer(pos):
                     # Python-level exhaustion check (raises IndexError for eager callers).
                     pos_np = np.asarray(u.math.asarray(pos), dtype=int)
                     use_mask = np.asarray(use_noise, dtype=bool)
-                    if np.any(pos_np[use_mask] >= self.noise.size):
+                    if cond_any(pos_np[use_mask] >= self.noise.size):
                         raise IndexError(
                             'Noise signal exhausted before end of simulation. '
                             'Provide a noise vector at least as long as all simulated steps.'
