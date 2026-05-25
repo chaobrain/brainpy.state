@@ -359,7 +359,7 @@ class pp_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> neurons = bst.pp_psc_delta(100)
        >>> neurons.init_all_states()

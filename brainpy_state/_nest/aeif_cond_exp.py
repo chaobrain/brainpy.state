@@ -285,7 +285,7 @@ class aeif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> import brainstate
         >>> # Create 100 AdEx neurons

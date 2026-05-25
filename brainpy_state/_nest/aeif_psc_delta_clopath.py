@@ -390,7 +390,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import brainstate as bs
        >>> import saiunit as u
        >>> import matplotlib.pyplot as plt
@@ -417,7 +417,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import brainstate as bs
        >>> import saiunit as u
        >>>

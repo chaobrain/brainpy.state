@@ -275,7 +275,7 @@ class clopath_synapse(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> synapse = bst.clopath_synapse(weight=0.5, tau_x=15.0, Wmin=0.0, Wmax=1.0)
         >>> synapse.get_status()
         {'weight': 0.5, 'tau_x': 15.0, 'Wmin': 0.0, 'Wmax': 1.0, ...}

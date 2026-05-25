@@ -352,7 +352,7 @@ class rate_neuron_ipn(_lin_rate_base):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> model = bst.rate_neuron_ipn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)

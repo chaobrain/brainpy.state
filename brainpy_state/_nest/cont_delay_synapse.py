@@ -248,7 +248,7 @@ class cont_delay_synapse(static_synapse):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import brainstate as bst
         >>> import saiunit as u
         >>> with bst.environ.context(dt=0.1 * u.ms):

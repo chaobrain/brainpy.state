@@ -338,7 +338,7 @@ class stdp_synapse(static_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> syn = bst.stdp_synapse(weight=0.5, delay=1.0 * u.ms)
        >>> syn.get()

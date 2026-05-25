@@ -344,7 +344,7 @@ class gif_cond_exp_multisynapse(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> # AMPA: fast excitatory, NMDA: slow excitatory, GABA_A: fast inhibitory
         >>> neuron = bst.gif_cond_exp_multisynapse(

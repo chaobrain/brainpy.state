@@ -206,7 +206,7 @@ class stdp_nn_restr_synapse(stdp_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> syn = bst.nn.stdp_nn_restr_synapse(
        ...     weight=0.5,

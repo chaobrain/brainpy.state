@@ -179,7 +179,7 @@ class rate_connection_delayed(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> conn = bst.rate_connection_delayed(weight=2.0, delay_steps=3)
        >>> conn.get_status()
        {'weight': 2.0, 'delay_steps': 3, 'delay': 3, 'has_delay': True, 'supports_wfr': False}
@@ -229,7 +229,7 @@ class rate_connection_delayed(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> # Create rate neurons (assuming rate_neuron_ipn exists)
        >>> pre = bst.rate_neuron_ipn(size=10, tau=10.0*u.ms)

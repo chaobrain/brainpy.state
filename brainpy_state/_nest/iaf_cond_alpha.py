@@ -286,7 +286,7 @@ class iaf_cond_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> neurons = bst.iaf_cond_alpha(
         ...     in_size=100,

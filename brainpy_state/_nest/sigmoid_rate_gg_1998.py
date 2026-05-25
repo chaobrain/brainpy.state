@@ -637,7 +637,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> import brainstate as bs
        >>> pop = bst.sigmoid_rate_gg_1998_ipn(

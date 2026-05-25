@@ -186,7 +186,7 @@ class bernoulli_synapse(static_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> post_neuron = bst.LIF(1)
        >>> syn = bst.bernoulli_synapse(

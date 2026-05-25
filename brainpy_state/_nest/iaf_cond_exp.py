@@ -255,7 +255,7 @@ class iaf_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> neurons = bst.iaf_cond_exp(100, V_th=-50*u.mV, t_ref=5*u.ms)
 

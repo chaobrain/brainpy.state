@@ -333,7 +333,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> import brainstate
        >>> import matplotlib.pyplot as plt
@@ -747,7 +747,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bst
+           >>> from brainpy import state as bst
            >>> neuron = bst.hh_cond_beta_gap_traub(5)
            >>> neuron.init_all_states()
            >>> print(neuron.V.value)  # Should be E_L = -60 mV
@@ -902,7 +902,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         .. code-block:: python
 
-           >>> import brainpy.state as bst
+           >>> from brainpy import state as bst
            >>> import saiunit as u
            >>> neuron = bst.hh_cond_beta_gap_traub(1)
            >>> neuron.init_all_states()

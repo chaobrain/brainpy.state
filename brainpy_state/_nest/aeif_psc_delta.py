@@ -270,7 +270,7 @@ class aeif_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> import brainstate as bs
         >>> import jax.numpy as jnp

@@ -389,7 +389,7 @@ class stdp_triplet_synapse(stdp_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> syn = bst.stdp_triplet_synapse(
        ...     weight=0.5,

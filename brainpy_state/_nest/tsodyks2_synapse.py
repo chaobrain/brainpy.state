@@ -351,7 +351,7 @@ class tsodyks2_synapse(static_synapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> syn = bst.tsodyks2_synapse(
        ...     weight=1.0,
@@ -551,7 +551,7 @@ class tsodyks2_synapse(static_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainpy.state as bst
+           >>> from brainpy import state as bst
            >>> import saiunit as u
            >>> syn = bst.tsodyks2_synapse(weight=2.0, U=0.4, tau_rec=500*u.ms)
            >>> syn.init_state()
@@ -639,7 +639,7 @@ class tsodyks2_synapse(static_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainpy.state as bst
+           >>> from brainpy import state as bst
            >>> import saiunit as u
            >>> syn = bst.tsodyks2_synapse(weight=1.0, U=0.5)
            >>> syn.init_state()
@@ -751,7 +751,7 @@ class tsodyks2_synapse(static_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainpy.state as bst
+           >>> from brainpy import state as bst
            >>> import saiunit as u
            >>> # Create synapse with target
            >>> class Target(bst.nn.Dynamics):
@@ -868,7 +868,7 @@ class tsodyks2_synapse(static_synapse):
         --------
         .. code-block:: python
 
-           >>> import brainpy.state as bst
+           >>> from brainpy import state as bst
            >>> import saiunit as u
            >>> # Create synapse with target
            >>> class Target(bst.nn.Dynamics):

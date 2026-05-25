@@ -310,7 +310,7 @@ class iaf_bw_2001(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> import brainstate
         >>>

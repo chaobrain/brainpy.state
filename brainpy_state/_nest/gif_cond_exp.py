@@ -311,7 +311,7 @@ class gif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> import brainstate as bs
         >>> bs.environ.context(dt=0.1 * u.ms)
@@ -323,7 +323,7 @@ class gif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy.state as bst
+        >>> from brainpy import state as bst
         >>> import saiunit as u
         >>> import brainstate as bs
         >>> bs.environ.context(dt=0.1 * u.ms)

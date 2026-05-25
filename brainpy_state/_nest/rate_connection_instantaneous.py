@@ -195,7 +195,7 @@ class rate_connection_instantaneous(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> conn = bst.rate_connection_instantaneous(weight=2.0)
        >>> conn.get_status()
        {'weight': 2.0, 'delay': 1, 'has_delay': False, 'supports_wfr': True}
@@ -257,7 +257,7 @@ class rate_connection_instantaneous(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> import saiunit as u
        >>> # Create rate neurons (assuming rate_neuron_ipn exists)
        >>> pre = bst.rate_neuron_ipn(size=10, tau=10.0*u.ms)

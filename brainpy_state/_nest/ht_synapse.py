@@ -152,7 +152,7 @@ class ht_synapse(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainpy.state as bst
+       >>> from brainpy import state as bst
        >>> syn = bst.ht_synapse(weight=2.5, tau_P=300.0, delta_P=0.2, P=1.0)
        >>> syn.get_status()
        {'weight': 2.5, 'delay_steps': 1, 'tau_P': 300.0, 'delta_P': 0.2,
