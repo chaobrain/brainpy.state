@@ -10,10 +10,10 @@ sphinx
 myst-nb
 sphinx_thebe
 sphinx-autodoc-typehints
-sphinx-book-theme>=1.0.1
+sphinx-book-theme>=1.2.0
 sphinx-copybutton>=0.5.2
 sphinx-remove-toctrees
 jupyter-sphinx>=0.5.3
 sphinx-design
 sphinx_math_dollar
-brainx-sphinx-header>=0.1.0
+brainx-sphinx-header>=0.4.0

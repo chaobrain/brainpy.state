@@ -67,4 +67,4 @@ These examples are based on influential papers in computational neuroscience. Se
 
 ## Documentation
 
-For more information, visit the [brainpy.state documentation](https://brainpy-state.readthedocs.io).
+For more information, visit the [brainpy.state documentation](https://brainx.chaobrain.com/brainpy-state).

@@ -38,7 +38,7 @@ Working through this guide will help you:
 - Use surrogate gradients to train BrainPy-style neurons end-to-end.
 - Manage simulation state and physical units (``saiunit``) idiomatically.
 - Integrate cleanly with the rest of the `BrainX ecosystem
-  <https://brainmodeling.readthedocs.io/>`_.
+  <https://brainx.chaobrain.com/>`_.
 
 The pages build on one another, so we recommend reading them in order if
 you're new to ``brainpy.state``.
