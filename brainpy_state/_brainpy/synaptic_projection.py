@@ -301,7 +301,7 @@ class AsymmetryGapJunction(Projection):
     --------
     .. code-block:: python
 
-        >>> import brainpy.state as brainpy
+        >>> from brainpy import state as brainpy
         >>> import saiunit as u
         >>> import numpy as np
         >>>
