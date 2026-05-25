@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import kaiserord, lfilter, firwin, hilbert
 
-import brainpy.state
+import brainpy
 import brainstate
 
 # Table 1: specific neuron model parameters

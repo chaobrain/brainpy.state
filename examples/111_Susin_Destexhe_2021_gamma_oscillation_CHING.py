@@ -24,7 +24,7 @@
 
 import saiunit as u
 
-import brainpy.state
+import brainpy
 import brainstate
 from Susin_Destexhe_2021_gamma_oscillation import (
     get_inputs, visualize_simulation_results, RS_par, FS_par, Ch_par, AdEx

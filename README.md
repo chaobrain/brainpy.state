@@ -79,7 +79,7 @@ pip install BrainX -U
 A small excitatory–inhibitory balanced network using the Stable BrainPy-style API:
 
 ```python
-import brainpy.state
+import brainpy
 import brainstate
 import braintools
 import saiunit as u

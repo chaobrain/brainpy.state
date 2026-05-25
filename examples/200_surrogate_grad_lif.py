@@ -28,7 +28,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-import brainpy.state
+import brainpy
 import brainstate
 import braintools
 

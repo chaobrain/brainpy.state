@@ -86,7 +86,7 @@ walkthrough.
 
 .. code-block:: python
 
-   import brainpy.state
+   import brainpy
    import brainstate
    import braintools
    import saiunit as u

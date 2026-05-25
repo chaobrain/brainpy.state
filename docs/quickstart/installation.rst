@@ -94,7 +94,7 @@ To verify that ``brainpy.state`` is installed correctly:
 .. code-block:: python
 
    import brainpy_state
-   import brainpy.state
+   import brainpy
    import brainstate
    import saiunit as u
 

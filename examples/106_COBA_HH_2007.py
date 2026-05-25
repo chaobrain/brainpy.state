@@ -24,7 +24,7 @@ import saiunit as u
 import matplotlib.pyplot as plt
 import numpy as np
 
-import brainpy.state
+import brainpy
 import brainstate
 
 # brainstate.environ.set(precision='bf16')

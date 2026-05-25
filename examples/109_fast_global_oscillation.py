@@ -25,7 +25,7 @@ import saiunit as u
 import jax
 import matplotlib.pyplot as plt
 
-import brainpy.state
+import brainpy
 import brainstate
 import braintools
 

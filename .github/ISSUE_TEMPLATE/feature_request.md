@@ -22,7 +22,7 @@ Explain the motivation for this feature and who would benefit from it.
 **Example use case:**
 
 ```python
-import brainpy.state
+import brainpy
 
 # Example code showing how you would like to use this feature
 # This helps us understand your vision
