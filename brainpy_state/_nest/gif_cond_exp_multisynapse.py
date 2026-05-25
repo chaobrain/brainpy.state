@@ -27,7 +27,7 @@ from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, AdaptiveRungeKuttaStep
+from ._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'gif_cond_exp_multisynapse',
@@ -480,13 +480,13 @@ class gif_cond_exp_multisynapse(NESTNeuron):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.C_m, self.g_L, self.Delta_V)):
             return
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.g_L <= 0.0 * u.nS):
+        if cond_any(self.g_L <= 0.0 * u.nS):
             raise ValueError('Membrane conductance must be strictly positive.')
-        if np.any(self.Delta_V <= 0.0 * u.mV):
+        if cond_any(self.Delta_V <= 0.0 * u.mV):
             raise ValueError('Delta_V must be strictly positive.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory time must not be negative.')
         if self.lambda_0 < 0.0:
             raise ValueError('lambda_0 must not be negative.')
@@ -499,7 +499,7 @@ class gif_cond_exp_multisynapse(NESTNeuron):
         for i, tau in enumerate(self.tau_stc):
             if tau <= 0.0:
                 raise ValueError(f'All STC time constants must be strictly positive (tau_stc[{i}]={tau}).')
-        if np.any(self.gsl_error_tol <= 0.0):
+        if cond_any(self.gsl_error_tol <= 0.0):
             raise ValueError('The gsl_error_tol must be strictly positive.')
 
     def init_state(self, **kwargs):

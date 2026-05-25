@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer, propagator_exp
+from ._utils import is_tracer, propagator_exp, cond_any
 
 __all__ = [
     'iaf_tum_2000',
@@ -609,30 +609,30 @@ class iaf_tum_2000(NESTNeuron):
         if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
             return
 
-        if np.any(self.V_reset >= self.V_th):
+        if cond_any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if np.any(self.C_m <= 0.0 * bu.pF):
+        if cond_any(self.C_m <= 0.0 * bu.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_m <= 0.0 * bu.ms):
+        if cond_any(self.tau_m <= 0.0 * bu.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self.tau_syn_ex <= 0.0 * bu.ms) or np.any(self.tau_syn_in <= 0.0 * bu.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * bu.ms) or cond_any(self.tau_syn_in <= 0.0 * bu.ms):
             raise ValueError('Synaptic time constants must be strictly positive.')
-        if np.any(self.tau_psc <= 0.0 * bu.ms) or np.any(self.tau_rec <= 0.0 * bu.ms):
+        if cond_any(self.tau_psc <= 0.0 * bu.ms) or cond_any(self.tau_rec <= 0.0 * bu.ms):
             raise ValueError('Tsodyks time constants tau_psc and tau_rec must be strictly positive.')
-        if np.any(self.tau_fac < 0.0 * bu.ms):
+        if cond_any(self.tau_fac < 0.0 * bu.ms):
             raise ValueError("'tau_fac' must be >= 0.")
-        if np.any(self.t_ref < 0.0 * bu.ms):
+        if cond_any(self.t_ref < 0.0 * bu.ms):
             raise ValueError('Refractory time must not be negative.')
-        if np.any(self.U < 0.0) or np.any(self.U > 1.0):
+        if cond_any(self.U < 0.0) or cond_any(self.U > 1.0):
             raise ValueError("'U' must be in [0,1].")
-        if np.any(self.rho < 0.0 * (1 / bu.second)):
+        if cond_any(self.rho < 0.0 * (1 / bu.second)):
             raise ValueError('Stochastic firing intensity rho must not be negative.')
-        if np.any(self.delta < 0.0 * bu.mV):
+        if cond_any(self.delta < 0.0 * bu.mV):
             raise ValueError('Threshold width delta must not be negative.')
 
-        if np.any(self.x_init + self.y_init > 1.0):
+        if cond_any(self.x_init + self.y_init > 1.0):
             raise ValueError('x + y must be <= 1.0.')
-        if np.any(self.u_init < 0.0) or np.any(self.u_init > 1.0):
+        if cond_any(self.u_init < 0.0) or cond_any(self.u_init > 1.0):
             raise ValueError("'u' must be in [0,1].")
 
     def init_state(self, **kwargs):

@@ -26,6 +26,7 @@ import jax.scipy.special as jspecial
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
+from ._utils import cond_any
 
 __all__ = [
     'erfc_neuron',
@@ -294,7 +295,7 @@ class erfc_neuron(NESTNeuron):
         super().__init__(in_size, name=name)
 
         self.tau_m = braintools.init.param(tau_m, self.varshape)
-        if u.math.any(self.tau_m <= 0. * u.ms):
+        if cond_any(self.tau_m <= 0. * u.ms):
             raise ValueError('tau_m must be strictly positive.')
 
         self.theta = braintools.init.param(theta, self.varshape)
@@ -471,21 +472,23 @@ class erfc_neuron(NESTNeuron):
             current_time = t + dt
             should_update = current_time > self.t_next.value
 
-            if bool(u.math.asarray(u.math.any(should_update))):
-                u_rand = self._sample_uniform(self.y.value.shape)
-                new_y = u.math.asarray(u_rand < p, dtype=dftype)
-                self.y.value = jax.lax.stop_gradient(u.math.where(should_update, new_y, self.y.value))
+            # Always compute the candidate update and mask per-neuron with
+            # ``where``; gating the whole block behind ``if any(should_update)``
+            # would break under jax.jit (Python branch on a traced predicate).
+            u_rand = self._sample_uniform(self.y.value.shape)
+            new_y = u.math.asarray(u_rand < p, dtype=dftype)
+            self.y.value = jax.lax.stop_gradient(u.math.where(should_update, new_y, self.y.value))
 
-                next_interval = (
-                    self._sample_exponential(self.y.value.shape)
-                    * u.math.asarray(self.tau_m / u.ms, dtype=dftype)
-                    * u.ms
-                )
-                self.t_next.value = u.math.where(
-                    should_update,
-                    self.t_next.value + next_interval,
-                    self.t_next.value
-                )
+            next_interval = (
+                self._sample_exponential(self.y.value.shape)
+                * u.math.asarray(self.tau_m / u.ms, dtype=dftype)
+                * u.ms
+            )
+            self.t_next.value = u.math.where(
+                should_update,
+                self.t_next.value + next_interval,
+                self.t_next.value
+            )
         else:
             u_rand = self._sample_uniform(self.y.value.shape)
             self.y.value = jax.lax.stop_gradient(

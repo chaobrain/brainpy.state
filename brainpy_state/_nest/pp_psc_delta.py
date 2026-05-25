@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'pp_psc_delta',
@@ -512,9 +512,9 @@ class pp_psc_delta(NESTNeuron):
         if any(is_tracer(v) for v in (self.C_m, self.tau_m)):
             return
 
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
         if self.dead_time < 0.0:
             raise ValueError('Dead time must not be negative.')

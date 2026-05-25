@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## Unreleased
+
+### Changed — JIT-safe parameter validation for NEST neurons
+
+- Added `brainpy_state._nest._utils.cond_any`, a shared tracer-aware reduction
+  helper: it returns `False` when its condition is a JAX tracer (so `if`
+  validation checks are skipped during `jit`/`vmap`/`grad` tracing) and
+  `bool(np.any(...))` otherwise. All `NESTNeuron` parameter-validation checks
+  (`if np.any(...)` / `if u.math.any(...)`) now route through it.
+- `erfc_neuron` and `ginzburg_neuron`: removed a Python `if bool(any(...))`
+  branch inside `update()` that broke under `jax.jit`; the per-neuron update is
+  now always computed and masked with `where`, making both models JIT-compatible.
+- Added `brainpy_state/_nest/jit_compat_test.py` verifying every public
+  `NESTNeuron` subclass traces under `jit` (57 models), with architecturally
+  NumPy-scalar models (precise-spiking, mean-field, delay-queue) documented.
+
+### Added — Network API for NEST-style models
+
+- `brainpy.state.Network` — `brainstate.nn.Module` subclass with
+  projection-first `update()` traversal and JIT-wrapped
+  `simulate(duration, monitor=...)`.
+- `brainpy.state.Builder` — imperative subclass exposing `add()` and
+  `connect()`; produces the same underlying module tree as a subclassed
+  `Network`.
+- Rule-based projections: `OneToOneProj`, `AllToAllProj`,
+  `PairwiseBernoulliProj`, `SymmetricPairwiseBernoulliProj`,
+  `FixedIndegreeProj`, `FixedOutdegreeProj`, `FixedTotalNumberProj`,
+  `PairwisePoissonProj`. Uniform constructor `(pre, post, *, weight,
+  delay=None, syn, out, allow_autapses, allow_multapses, seed,
+  **rule_kwargs)`. `delay=` support is deferred to a follow-up — v1
+  accepts `delay=None` only.
+- `brainpy.state.Recorder` — helper that wires a passive `NESTDevice`
+  recorder to a source population (string attribute or callable).
+- `brainpy.state.dist.{Normal, LogNormal, Uniform}` — distribution
+  objects sampled once at projection `__init__`.
+- Brunel flagship example at `examples/brunel.py`.
+
+See `docs/superpowers/specs/2026-05-12-nest-network-api-design.md` for
+the design and `docs/superpowers/plans/2026-05-12-nest-network-api.md`
+for the implementation plan.
+
+---
+
 ## [0.0.4] – 2025-02-21
 
 ### Highlights

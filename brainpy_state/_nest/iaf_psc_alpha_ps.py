@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 from .iaf_psc_alpha import iaf_psc_alpha
 
 __all__ = [
@@ -400,15 +400,15 @@ class iaf_psc_alpha_ps(NESTNeuron):
         if any(is_tracer(v) for v in (self.V_reset, self.C_m, self.tau_m)):
             return
 
-        if np.any(self.V_reset >= self.V_th):
+        if cond_any(self.V_reset >= self.V_th):
             raise ValueError('Reset potential must be smaller than threshold.')
-        if self.V_min is not None and np.any(self.V_reset < self.V_min):
+        if self.V_min is not None and cond_any(self.V_reset < self.V_min):
             raise ValueError('Reset potential must be greater equal minimum potential.')
-        if np.any(self.C_m <= 0.0 * u.pF):
+        if cond_any(self.C_m <= 0.0 * u.pF):
             raise ValueError('Capacitance must be strictly positive.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant must be strictly positive.')
-        if np.any(self.tau_syn_ex <= 0.0 * u.ms) or np.any(self.tau_syn_in <= 0.0 * u.ms):
+        if cond_any(self.tau_syn_ex <= 0.0 * u.ms) or cond_any(self.tau_syn_in <= 0.0 * u.ms):
             raise ValueError('All time constants must be strictly positive.')
 
     def init_state(self, **kwargs):
@@ -538,7 +538,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
         refr_steps = np.broadcast_to(
             np.asarray(np.ceil(_tnp(self.t_ref, u.ms) / h), dtype=ditype), v_shape
         )
-        if np.any(refr_steps < 1):
+        if cond_any(refr_steps < 1):
             raise ValueError('Refractory time must be at least one time step.')
 
         self._c_E_L = E_L
@@ -847,7 +847,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
         # --- Handle neurons already above threshold at start of step ---
         instant_spike = (~is_refractory) & (V_m >= u_th)
-        if np.any(instant_spike):
+        if cond_any(instant_spike):
             spike_off = h * (1.0 - eps)
             last_spike_step = np.where(instant_spike, step_idx + 1, last_spike_step)
             last_spike_offset = np.where(instant_spike, spike_off, last_spike_offset)
@@ -864,7 +864,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
         # Combine external events with refractory-release events and sort.
         # Process events from largest offset (step start) to smallest (step end).
         all_offsets = [off for off, _ in events]
-        if np.any(refr_release):
+        if cond_any(refr_release):
             unique_refr_offsets = np.unique(refr_release_offset[refr_release])
             all_offsets = sorted(set(all_offsets) | set(unique_refr_offsets.tolist()), reverse=True)
         else:
@@ -886,7 +886,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
             # Propagate where ministep > 0.
             propagate_mask = ministep > 0.0
-            if np.any(propagate_mask):
+            if cond_any(propagate_mask):
                 dt_local = np.where(propagate_mask, ministep, 0.0)
                 V_before = V_m.copy()
                 I_ex_before = I_ex.copy()
@@ -901,7 +901,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
                 # Check for threshold crossing.
                 crossed = propagate_mask & (~is_refractory) & (V_m >= u_th)
-                if np.any(crossed):
+                if cond_any(crossed):
                     root = self._bisect_vectorized(
                         dt_local, V_before, I_ex_before, dI_ex_before,
                         I_in_before, dI_in_before, y_input, tau_m, tau_ex,
@@ -932,7 +932,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
         # --- Final propagation from last event to step end ---
         final_ministep = last_off
         propagate_final = final_ministep > 0.0
-        if np.any(propagate_final):
+        if cond_any(propagate_final):
             dt_local = np.where(propagate_final, final_ministep, 0.0)
             V_before = V_m.copy()
             I_ex_before = I_ex.copy()
@@ -947,7 +947,7 @@ class iaf_psc_alpha_ps(NESTNeuron):
 
             # Check for threshold crossing in final segment.
             crossed = propagate_final & (~is_refractory) & (V_m >= u_th)
-            if np.any(crossed):
+            if cond_any(crossed):
                 root = self._bisect_vectorized(
                     dt_local, V_before, I_ex_before, dI_ex_before,
                     I_in_before, dI_in_before, y_input, tau_m, tau_ex,

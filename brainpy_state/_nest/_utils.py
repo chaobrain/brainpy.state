@@ -34,6 +34,8 @@ from brainstate.typing import PyTree
 from jax.interpreters.partial_eval import DynamicJaxprTracer
 
 __all__ = [
+    'is_tracer',
+    'cond_any',
     'validate_aeif_overflow',
     'propagator_exp',
     'alpha_propagator_p31_p32',
@@ -44,6 +46,35 @@ __all__ = [
 
 def is_tracer(x):
     return isinstance(x, (jax.ShapeDtypeStruct, jax.core.ShapedArray, DynamicJaxprTracer, jax.core.Tracer))
+
+
+def cond_any(condition) -> bool:
+    """Reduce a boolean *condition* to a Python ``bool`` for parameter validation.
+
+    This is the shared guard used by every NEST model's parameter-validation
+    code so that ``if`` checks remain safe under ``jax.jit``.  When *condition*
+    (or the array backing a unitful :class:`~saiunit.Quantity`) is a JAX tracer
+    -- i.e. the model is being constructed/traced under ``jit``, ``vmap``,
+    ``grad`` etc. -- the Python ``if`` cannot be evaluated, so this returns
+    ``False`` and the guarded validation branch is skipped.  For concrete
+    inputs it evaluates ``bool(np.any(...))`` exactly as before.
+
+    Parameters
+    ----------
+    condition : ArrayLike or Quantity
+        A boolean array/scalar (typically the result of a comparison such as
+        ``self.C_m <= 0 * u.pF``).  May be a NumPy array, a JAX array, a
+        saiunit Quantity, or a JAX tracer.
+
+    Returns
+    -------
+    bool
+        ``False`` if *condition* is a tracer; otherwise ``bool(np.any(condition))``.
+    """
+    cond = u.get_mantissa(condition)
+    if is_tracer(cond):
+        return False
+    return bool(np.any(np.asarray(cond)))
 
 
 # ---------------------------------------------------------------------------

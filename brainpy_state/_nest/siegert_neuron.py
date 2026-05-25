@@ -27,7 +27,7 @@ import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
-from ._utils import is_tracer
+from ._utils import is_tracer, cond_any
 
 __all__ = [
     'siegert_neuron',
@@ -531,15 +531,15 @@ class siegert_neuron(NESTNeuron):
         if any(is_tracer(v) for v in (self.tau, self.tau_m, self.tau_syn, self.t_ref, self.V_reset, self.theta)):
             return
 
-        if np.any(self.tau <= 0.0 * u.ms):
+        if cond_any(self.tau <= 0.0 * u.ms):
             raise ValueError('Time constant tau must be > 0.')
-        if np.any(self.tau_m <= 0.0 * u.ms):
+        if cond_any(self.tau_m <= 0.0 * u.ms):
             raise ValueError('Membrane time constant tau_m must be > 0.')
-        if np.any(self.tau_syn < 0.0 * u.ms):
+        if cond_any(self.tau_syn < 0.0 * u.ms):
             raise ValueError('Synaptic time constant tau_syn must be >= 0.')
-        if np.any(self.t_ref < 0.0 * u.ms):
+        if cond_any(self.t_ref < 0.0 * u.ms):
             raise ValueError('Refractory period t_ref must be >= 0.')
-        if np.any(self.V_reset >= self.theta):
+        if cond_any(self.V_reset >= self.theta):
             raise ValueError('Reset potential V_reset must be smaller than threshold theta.')
 
     def init_state(self, **kwargs):

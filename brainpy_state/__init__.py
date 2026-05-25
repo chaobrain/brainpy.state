@@ -89,6 +89,26 @@ from ._brainpy import (
 )
 
 # =============================================================================
+# Network API
+# =============================================================================
+
+from ._network import (
+    Network,
+    Builder,
+    Recorder,
+    OneToOneProj,
+    AllToAllProj,
+    PairwiseBernoulliProj,
+    SymmetricPairwiseBernoulliProj,
+    FixedIndegreeProj,
+    FixedOutdegreeProj,
+    FixedTotalNumberProj,
+    PairwisePoissonProj,
+)
+
+from . import _dist as dist  # noqa: F401  -- exposed as brainpy.state.dist
+
+# =============================================================================
 # NEST-Compatible Models
 # =============================================================================
 
@@ -488,4 +508,18 @@ __all__ = [
 
     # multi-compartment models
     'cm_default',
+
+    # Network API
+    'Network',
+    'Builder',
+    'Recorder',
+    'OneToOneProj',
+    'AllToAllProj',
+    'PairwiseBernoulliProj',
+    'SymmetricPairwiseBernoulliProj',
+    'FixedIndegreeProj',
+    'FixedOutdegreeProj',
+    'FixedTotalNumberProj',
+    'PairwisePoissonProj',
+    'dist',
 ]
