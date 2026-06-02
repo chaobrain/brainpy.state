@@ -710,7 +710,7 @@ class AdaptiveRungeKuttaStep:
 
             return (new_state, t_loc, h, extra, n_iters + 1)
 
-        carry_out = jax.lax.while_loop(_cond_fn, _body_fn, init_carry)
+        carry_out = brainstate.transform.while_loop(_cond_fn, _body_fn, init_carry)
         state, _, h, extra, _ = carry_out
 
         return state, h, extra

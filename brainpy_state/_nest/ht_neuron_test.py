@@ -741,7 +741,7 @@ class TestHTNeuronSynapticDynamics(unittest.TestCase):
             # Manually inject AMPA spike at step 0
             # In NEST, spikes add to DG_AMPA * cond_step
             # Use jnp.full to match varshape (1,) — np.asarray(scalar) gives shape ()
-            # which breaks jax.lax.while_loop's shape-consistency requirement.
+            # which breaks brainstate.transform.while_loop's shape-consistency requirement.
             neuron.DG_AMPA.value = jnp.full(neuron.varshape, cond_step)
 
             def _run_step(k):
