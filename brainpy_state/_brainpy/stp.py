@@ -156,11 +156,15 @@ class STP(Synapse):
 
         # --- simplified code:
         u = u + pre_spike * self.U * (1 - self.u.value)
+        # Released resources are ``u+ . x-`` with ``x-`` the resources available
+        # *before* this spike depletes them (Tsodyks-Markram). Capture it prior
+        # to the depletion below.
+        released = u * x
         x = x - pre_spike * u * self.x.value
 
         self.u.value = u
         self.x.value = x
-        return u * x * pre_spike
+        return released * pre_spike
 
 
 class STD(Synapse):
@@ -264,6 +268,9 @@ class STD(Synapse):
         # self.x.value = bm.where(pre_spike, x - self.U * self.x, x)
 
         # --- simplified code:
+        # ``g_syn = x`` is the resource fraction available *before* this spike
+        # depletes it, so the first spike of a train transmits undepressed.
+        released = x
         self.x.value = x - pre_spike * self.U * self.x.value
 
-        return self.x.value * pre_spike
+        return released * pre_spike

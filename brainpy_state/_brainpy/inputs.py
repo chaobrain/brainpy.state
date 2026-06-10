@@ -206,9 +206,19 @@ class SpikeTime(brainstate.nn.Dynamics):
                 i = jax.numpy.asarray(i, dtype=brainstate.environ.ditype())
 
         # Slice CSR row → dense spike vector of shape (n_cols,)
-        # Reshape to 1D for csr_slice_rows, then squeeze back
+        # Reshape to 1D for csr_slice_rows, then squeeze back.
+        # Steps outside [0, n_rows) carry no events: clamp the gather index to a
+        # valid row, then mask the result back to zeros. This keeps behaviour
+        # identical in eager mode (no IndexError) and under JIT (no silent clamp).
         ditype = brainstate.environ.ditype()
-        return self._csr[jnp.asarray(i, dtype=ditype).reshape(1)][0]
+        i = jnp.asarray(i, dtype=ditype)
+        n_rows = self._csr.shape[0]
+        row = self._csr[jnp.clip(i, 0, n_rows - 1).reshape(1)][0]
+        return jnp.where(
+            (i >= 0) & (i < n_rows),
+            row,
+            jnp.zeros(self.varshape, dtype=self._spk_dtype),
+        )
 
 
 class PoissonSpike(brainstate.nn.Dynamics):

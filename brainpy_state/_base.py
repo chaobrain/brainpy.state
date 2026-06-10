@@ -611,6 +611,10 @@ class Neuron(Dynamics):
         name: Optional[str] = None,
     ):
         super().__init__(in_size, name=name)
+        if spk_reset not in ('soft', 'hard'):
+            raise ValueError(
+                f'"spk_reset" must be either "soft" or "hard". Got {spk_reset!r}.'
+            )
         self.spk_reset = spk_reset
         self.spk_fun = spk_fun
 

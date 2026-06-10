@@ -655,6 +655,24 @@ class WangBuzsakiHH(Neuron):
         beta = 4. / u.ms * u.math.exp(-(V + 60. * u.mV) / (18. * u.mV))
         return alpha / (alpha + beta)
 
+    def h_alpha(self, V):
+        return 0.07 / u.ms * u.math.exp(-(V + 58. * u.mV) / (20. * u.mV))
+
+    def h_beta(self, V):
+        return 1. / u.ms / (u.math.exp(-0.1 * (V + 28. * u.mV) / u.mV) + 1.)
+
+    def h_inf(self, V):
+        return self.h_alpha(V) / (self.h_alpha(V) + self.h_beta(V))
+
+    def n_alpha(self, V):
+        return 0.1 / u.ms / u.math.exprel(-0.1 * (V + 34. * u.mV) / u.mV)
+
+    def n_beta(self, V):
+        return 0.125 / u.ms * u.math.exp(-(V + 44. * u.mV) / (80. * u.mV))
+
+    def n_inf(self, V):
+        return self.n_alpha(V) / (self.n_alpha(V) + self.n_beta(V))
+
     def init_state(self, batch_size: int = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.h = brainstate.HiddenState(braintools.init.param(self.h_initializer, self.varshape, batch_size))
@@ -690,12 +708,12 @@ class WangBuzsakiHH(Neuron):
             return (-I_Na - I_K - I_L + I_total) / self.C
 
         # Gating variable dynamics
-        h_alpha = 0.07 / u.ms * u.math.exp(-(last_V + 58. * u.mV) / (20. * u.mV))
-        h_beta = 1. / u.ms / (u.math.exp(-0.1 * (last_V + 28. * u.mV) / u.mV) + 1.)
+        h_alpha = self.h_alpha(last_V)
+        h_beta = self.h_beta(last_V)
         dh = lambda h: self.phi * (h_alpha * (1. - h) - h_beta * h)
 
-        n_alpha = 1. / u.ms / u.math.exprel(-0.1 * (last_V + 34. * u.mV) / u.mV)
-        n_beta = 0.125 / u.ms * u.math.exp(-(last_V + 44. * u.mV) / (80. * u.mV))
+        n_alpha = self.n_alpha(last_V)
+        n_beta = self.n_beta(last_V)
         dn = lambda n: self.phi * (n_alpha * (1. - n) - n_beta * n)
 
         V = brainstate.nn.exp_euler_step(dV, last_V)

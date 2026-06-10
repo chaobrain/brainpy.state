@@ -246,6 +246,19 @@ class TestHHNeuron(unittest.TestCase):
         else:
             self.assertTrue(jnp.all((m_inf >= 0) & (m_inf <= 1)))
 
+    def test_wang_buzsaki_n_alpha_rate(self):
+        r"""Regression: the K+ activation rate must match Wang & Buzsaki (1996),
+        ``alpha_n = 0.01 (V + 34) / (1 - exp(-0.1 (V + 34)))`` per ms, not 10x it.
+        """
+        neuron = WangBuzsakiHH(self.in_size)
+        neuron.init_state()
+        # Avoid the removable singularity at V = -34 mV.
+        V_test = jnp.linspace(-70., -40., self.in_size) * u.mV
+        v = u.get_magnitude(V_test / u.mV)
+        canonical = 0.01 * (v + 34.) / (1. - jnp.exp(-0.1 * (v + 34.))) / u.ms
+        ratio = u.get_magnitude(neuron.n_alpha(V_test) / canonical)
+        self.assertTrue(jnp.allclose(ratio, 1.0, rtol=1e-4))
+
     def test_different_parameters(self):
         # Test HH with different conductance values
         hh_custom = HH(

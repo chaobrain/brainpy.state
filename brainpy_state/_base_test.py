@@ -68,6 +68,14 @@ class TestNeuronBaseClass(unittest.TestCase):
         self.assertIs(neuron.spk_fun, custom_spk_fun)
         self.assertEqual(neuron.name, 'test_neuron')
 
+    def test_neuron_invalid_spk_reset_raises(self):
+        r"""An unknown spk_reset must be rejected at construction time."""
+        with self.assertRaises(ValueError):
+            Neuron(in_size=self.in_size, spk_reset='invalid')
+        # The two valid modes are accepted.
+        self.assertEqual(Neuron(in_size=self.in_size, spk_reset='soft').spk_reset, 'soft')
+        self.assertEqual(Neuron(in_size=self.in_size, spk_reset='hard').spk_reset, 'hard')
+
     def test_neuron_multidimensional_input_size(self):
         r"""Test initialization with multi-dimensional input size."""
         neuron = Neuron(in_size=self.in_size_2d)
