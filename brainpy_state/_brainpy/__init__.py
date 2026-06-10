@@ -47,7 +47,10 @@ from .lif import (
     AdExIF, AdExIFRef,
     QuaIF, AdQuaIF, AdQuaIFRef,
     Gif, GifRef,
+    CubaLIF, CobaLIF,
 )
+# Reduced models
+from .reduced import FitzHughNagumo, HindmarshRose
 # ---------------------------------------------------------------------------
 # Projections
 # ---------------------------------------------------------------------------
@@ -77,12 +80,16 @@ __all__ = [
     'AdExIF', 'AdExIFRef',
     'QuaIF', 'AdQuaIF', 'AdQuaIFRef',
     'Gif', 'GifRef',
+    'CubaLIF', 'CobaLIF',
 
     # Neuron models - Hodgkin-Huxley family
     'HH', 'MorrisLecar', 'WangBuzsakiHH',
 
     # Neuron models - Izhikevich family
     'Izhikevich', 'IzhikevichRef',
+
+    # Neuron models - reduced (FitzHugh-Nagumo, Hindmarsh-Rose)
+    'FitzHughNagumo', 'HindmarshRose',
 
     # Synapse models
     'Expon', 'DualExpon',

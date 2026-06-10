@@ -22,9 +22,11 @@ import brainstate
 import saiunit as u
 import jax
 import jax.numpy as jnp
+import numpy as np
+import numpy.testing as npt
 from brainpy.state import (
     IF, LIF, LIFRef, ALIF, ExpIF, ExpIFRef, AdExIF, AdExIFRef, QuaIF, AdQuaIF, AdQuaIFRef, Gif,
-    GifRef
+    GifRef, CubaLIF, CobaLIF
 )
 
 
@@ -412,6 +414,86 @@ class TestNeuron(unittest.TestCase):
                     with brainstate.environ.context(t=t * self.dt):
                         out = call(inputs[t])
                         self.assertEqual(out.shape, (self.batch_size, *in_size))
+
+
+class TestCubaLIF(unittest.TestCase):
+    r"""Current-based LIF with a bundled exponential synaptic current."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+        self.dt = 0.1 * u.ms
+
+    def test_construction(self):
+        m = CubaLIF(5)
+        m.init_state()
+        self.assertEqual(m.varshape, (5,))
+
+    def test_fires_under_external_current(self):
+        with brainstate.environ.context(dt=self.dt):
+            m = CubaLIF(1, R=1. * u.ohm, tau=5. * u.ms, V_th=1. * u.mV)
+            m.init_state()
+            n = 0
+            for i in range(200):
+                with brainstate.environ.context(i=i, t=i * self.dt):
+                    n += int(jnp.asarray(m.update(2. * u.mA)).sum())
+            self.assertGreater(n, 0)  # supra-threshold drive elicits spikes
+
+    def test_synaptic_current_decays(self):
+        with brainstate.environ.context(dt=self.dt):
+            m = CubaLIF(1, tau_syn=5. * u.ms)
+            m.init_state()
+            m.g.value = jnp.ones(1) * 1.0 * u.mA  # seed a synaptic current
+            with brainstate.environ.context(i=0, t=0. * u.ms):
+                m.update(0. * u.mA)
+            g1 = float(m.g.value.to_decimal(u.mA)[0])
+            with brainstate.environ.context(i=1, t=self.dt):
+                m.update(0. * u.mA)
+            g2 = float(m.g.value.to_decimal(u.mA)[0])
+            self.assertLess(g2, g1)   # decays toward zero without input
+            self.assertGreater(g2, 0.)
+
+    def test_delta_input_drives_synapse(self):
+        with brainstate.environ.context(dt=self.dt):
+            m = CubaLIF(1, tau_syn=5. * u.ms)
+            m.init_state()
+            with brainstate.environ.context(i=0, t=0. * u.ms):
+                m.add_delta_input('syn', 0.5 * u.mA)
+                m.update(0. * u.mA)
+            self.assertGreater(float(m.g.value.to_decimal(u.mA)[0]), 0.)
+
+
+class TestCobaLIF(unittest.TestCase):
+    r"""Conductance-based LIF with a bundled exponential synaptic conductance."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+        self.dt = 0.1 * u.ms
+
+    def test_construction(self):
+        m = CobaLIF(5)
+        m.init_state()
+        self.assertEqual(m.varshape, (5,))
+
+    def test_fires_under_external_current(self):
+        with brainstate.environ.context(dt=self.dt):
+            m = CobaLIF(1, R=1. * u.ohm, tau=5. * u.ms, V_th=1. * u.mV)
+            m.init_state()
+            n = 0
+            for i in range(200):
+                with brainstate.environ.context(i=i, t=i * self.dt):
+                    n += int(jnp.asarray(m.update(2. * u.mA)).sum())
+            self.assertGreater(n, 0)
+
+    def test_conductance_drives_membrane(self):
+        # A positive synaptic conductance with reversal above rest depolarizes V.
+        with brainstate.environ.context(dt=self.dt):
+            m = CobaLIF(1, E=10. * u.mV, V_rest=0. * u.mV, V_th=1e9 * u.mV)  # never spikes
+            m.init_state()
+            for i in range(50):
+                with brainstate.environ.context(i=i, t=i * self.dt):
+                    m.add_delta_input('syn', 0.2 * u.siemens)
+                    m.update(0. * u.mA)
+            self.assertGreater(float(m.V.value.to_decimal(u.mV)[0]), 0.)
 
 
 if __name__ == '__main__':

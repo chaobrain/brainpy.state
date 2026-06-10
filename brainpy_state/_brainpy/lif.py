@@ -27,7 +27,7 @@ from brainpy_state._base import Neuron
 
 __all__ = [
     'IF', 'LIF', 'ExpIF', 'ExpIFRef', 'AdExIF', 'AdExIFRef', 'LIFRef', 'ALIF',
-    'QuaIF', 'AdQuaIF', 'AdQuaIFRef', 'Gif', 'GifRef',
+    'QuaIF', 'AdQuaIF', 'AdQuaIFRef', 'Gif', 'GifRef', 'CubaLIF', 'CobaLIF',
 ]
 
 
@@ -2331,3 +2331,207 @@ class GifRef(Neuron):
                 u.math.logical_or(refractory, spike_cond)
             )
         return self.get_spike()
+
+
+class CubaLIF(Neuron):
+    r"""Current-based LIF neuron with a bundled exponential synaptic current.
+
+    A convenience model equivalent to wiring a :class:`LIF` to an :class:`Expon`
+    synapse with a :class:`CUBA` output, bundled into one neuron. An internal
+    synaptic current :math:`g` decays exponentially and is driven by the
+    neuron's *delta* inputs (presynaptic spikes); it then enters the membrane
+    equation directly (current-based):
+
+    .. math::
+
+        \tau_{syn} \frac{dg}{dt} &= -g \\
+        \tau \frac{dV}{dt}       &= -(V - V_{rest}) + R\,(g + I_{ext})
+
+    Delta inputs feed the synapse; current inputs and the ``x`` argument are the
+    external electrode current applied to the membrane.
+
+    Parameters
+    ----------
+    in_size : Size
+        Size of the neuron group.
+    R : ArrayLike, default=1. * u.ohm
+        Membrane resistance.
+    tau : ArrayLike, default=5. * u.ms
+        Membrane time constant.
+    tau_syn : ArrayLike, default=5. * u.ms
+        Synaptic-current decay time constant.
+    V_th, V_reset, V_rest : ArrayLike
+        Threshold, reset and resting potentials.
+    V_initializer, g_initializer : Callable
+        Initializers for the membrane potential and synaptic current.
+    spk_fun : Callable, default=surrogate.ReluGrad()
+        Surrogate gradient function.
+    spk_reset : str, default='soft'
+        Reset mechanism after a spike.
+    name : str, optional
+        Name of the neuron layer.
+
+    See Also
+    --------
+    CobaLIF : Conductance-based counterpart.
+    LIF : Plain leaky integrate-and-fire neuron.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(
+        self,
+        in_size: Size,
+        R: ArrayLike = 1. * u.ohm,
+        tau: ArrayLike = 5. * u.ms,
+        tau_syn: ArrayLike = 5. * u.ms,
+        V_th: ArrayLike = 1. * u.mV,
+        V_reset: ArrayLike = 0. * u.mV,
+        V_rest: ArrayLike = 0. * u.mV,
+        V_initializer: Callable = braintools.init.Constant(0. * u.mV),
+        g_initializer: Callable = braintools.init.Constant(0. * u.mA),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
+        spk_reset: str = 'soft',
+        name: str = None,
+    ):
+        super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
+        self.R = braintools.init.param(R, self.varshape)
+        self.tau = braintools.init.param(tau, self.varshape)
+        self.tau_syn = braintools.init.param(tau_syn, self.varshape)
+        self.V_th = braintools.init.param(V_th, self.varshape)
+        self.V_rest = braintools.init.param(V_rest, self.varshape)
+        self.V_reset = braintools.init.param(V_reset, self.varshape)
+        self.V_initializer = V_initializer
+        self.g_initializer = g_initializer
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
+        self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
+
+    def reset_state(self, batch_size: int = None, **kwargs):
+        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
+
+    def get_spike(self, V: ArrayLike = None):
+        V = self.V.value if V is None else V
+        v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
+        return self.spk_fun(v_scaled)
+
+    def update(self, x=0. * u.mA):
+        last_v = self.V.value
+        last_spk = self.get_spike(last_v)
+        V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_v)
+        V = last_v - (V_th - self.V_reset) * last_spk
+        # synaptic current: exponential decay driven by delta (spike) inputs
+        g = brainstate.nn.exp_euler_step(lambda g: -g / self.tau_syn, self.g.value)
+        g = self.sum_delta_inputs(g)
+        self.g.value = g
+        # membrane: synaptic current g plus external current inputs
+        dv = lambda v: (-(v - self.V_rest) + self.R * (g + self.sum_current_inputs(x, v))) / self.tau
+        V = brainstate.nn.exp_euler_step(dv, V)
+        self.V.value = V
+        return self.get_spike(V)
+
+
+class CobaLIF(Neuron):
+    r"""Conductance-based LIF neuron with a bundled exponential synaptic conductance.
+
+    A convenience model equivalent to wiring a :class:`LIF` to an :class:`Expon`
+    synapse with a :class:`COBA` output, bundled into one neuron. An internal
+    synaptic conductance :math:`g` decays exponentially and is driven by the
+    neuron's *delta* inputs (presynaptic spikes); the synaptic current is
+    :math:`g\,(E - V)`, so the drive depends on the membrane potential
+    (conductance-based):
+
+    .. math::
+
+        \tau_{syn} \frac{dg}{dt} &= -g \\
+        \tau \frac{dV}{dt}       &= -(V - V_{rest}) + R\,(g\,(E - V) + I_{ext})
+
+    ``E`` is the synaptic reversal potential (set above ``V_rest`` for excitation,
+    below for inhibition). Delta inputs feed the synapse; current inputs and the
+    ``x`` argument are the external electrode current.
+
+    Parameters
+    ----------
+    in_size : Size
+        Size of the neuron group.
+    R : ArrayLike, default=1. * u.ohm
+        Membrane resistance.
+    tau : ArrayLike, default=5. * u.ms
+        Membrane time constant.
+    tau_syn : ArrayLike, default=5. * u.ms
+        Synaptic-conductance decay time constant.
+    E : ArrayLike, default=0. * u.mV
+        Synaptic reversal potential.
+    V_th, V_reset, V_rest : ArrayLike
+        Threshold, reset and resting potentials.
+    V_initializer, g_initializer : Callable
+        Initializers for the membrane potential and synaptic conductance.
+    spk_fun : Callable, default=surrogate.ReluGrad()
+        Surrogate gradient function.
+    spk_reset : str, default='soft'
+        Reset mechanism after a spike.
+    name : str, optional
+        Name of the neuron layer.
+
+    See Also
+    --------
+    CubaLIF : Current-based counterpart.
+    LIF : Plain leaky integrate-and-fire neuron.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(
+        self,
+        in_size: Size,
+        R: ArrayLike = 1. * u.ohm,
+        tau: ArrayLike = 5. * u.ms,
+        tau_syn: ArrayLike = 5. * u.ms,
+        E: ArrayLike = 0. * u.mV,
+        V_th: ArrayLike = 1. * u.mV,
+        V_reset: ArrayLike = 0. * u.mV,
+        V_rest: ArrayLike = 0. * u.mV,
+        V_initializer: Callable = braintools.init.Constant(0. * u.mV),
+        g_initializer: Callable = braintools.init.Constant(0. * u.siemens),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
+        spk_reset: str = 'soft',
+        name: str = None,
+    ):
+        super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
+        self.R = braintools.init.param(R, self.varshape)
+        self.tau = braintools.init.param(tau, self.varshape)
+        self.tau_syn = braintools.init.param(tau_syn, self.varshape)
+        self.E = braintools.init.param(E, self.varshape)
+        self.V_th = braintools.init.param(V_th, self.varshape)
+        self.V_rest = braintools.init.param(V_rest, self.varshape)
+        self.V_reset = braintools.init.param(V_reset, self.varshape)
+        self.V_initializer = V_initializer
+        self.g_initializer = g_initializer
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
+        self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
+
+    def reset_state(self, batch_size: int = None, **kwargs):
+        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
+
+    def get_spike(self, V: ArrayLike = None):
+        V = self.V.value if V is None else V
+        v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
+        return self.spk_fun(v_scaled)
+
+    def update(self, x=0. * u.mA):
+        last_v = self.V.value
+        last_spk = self.get_spike(last_v)
+        V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_v)
+        V = last_v - (V_th - self.V_reset) * last_spk
+        # synaptic conductance: exponential decay driven by delta (spike) inputs
+        g = brainstate.nn.exp_euler_step(lambda g: -g / self.tau_syn, self.g.value)
+        g = self.sum_delta_inputs(g)
+        self.g.value = g
+        # membrane: conductance-based synaptic current g*(E - V) plus external current
+        dv = lambda v: (-(v - self.V_rest) + self.R * (g * (self.E - v) + self.sum_current_inputs(x, v))) / self.tau
+        V = brainstate.nn.exp_euler_step(dv, V)
+        self.V.value = V
+        return self.get_spike(V)

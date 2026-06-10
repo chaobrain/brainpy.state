@@ -54,6 +54,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   samples (noise scaled by `√dt`), and `OUProcessInput` matches the
   `braintools.input.ou_process` discretization.
 
+### Added — Reduced neuron models (`_brainpy`)
+
+- `FitzHughNagumo` (2-D excitable) and `HindmarshRose` (3-D bursting) reduced
+  models. Both are dimensionless systems with physical time constants and,
+  like the Hodgkin-Huxley family, **no reset** — so their spike output uses the
+  rising-edge detector (one spike per upward threshold crossing), not a per-step
+  threshold test.
+- `CubaLIF` and `CobaLIF`: convenience LIF neurons with a bundled exponential
+  synaptic term (current-based and conductance-based, respectively), so the
+  common `LIF + Expon + CUBA/COBA` wiring is available as a single model. Delta
+  inputs feed the built-in synapse; current inputs / the `x` argument are the
+  external membrane current.
+
 ### Added — Design notes
 
 - `DESIGN_delays_and_missing_features.md` — proposal for first-class synaptic
