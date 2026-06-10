@@ -13,7 +13,7 @@ maintainers can decide what to build next and in what order.
 
 | Area | Today | Gap | Recommended priority |
 |------|-------|-----|----------------------|
-| **Synaptic delays** | Only `DeltaProj` can take a low-level `PrefetchDelayAt`. `AlignPostProj`, `CurrentProj` and the gap junctions expose **no `delay=`**. | First-class, unit-carrying `delay=` on every projection; heterogeneous (per-connection) delays. | **P1 — highest** |
+| **Synaptic delays** | Only `DeltaProj` can take a low-level `PrefetchDelayAt`. `AlignPostProj`, `CurrentProj` and the gap junctions expose **no `delay=`**. | First-class, unit-carrying `delay=` on every projection at all three granularities — global, axonal (per-pre-neuron) **and heterogeneous per-connection** — via the diagonal gather `brainstate.nn.Delay` already supports. | **P1 — highest** |
 | **Input generators** | `SpikeTime`, `PoissonSpike`, `PoissonEncoder`, `PoissonInput`, `poisson_input`. | No constant/section, step, ramp, sinusoidal, Ornstein–Uhlenbeck, or Wiener current sources. | **P2** |
 | **Neuron models** | LIF family (incl. QuaIF/AdQuaIF/Gif), HH/MorrisLecar/WangBuzsaki, Izhikevich. | No FitzHugh–Nagumo, Hindmarsh–Rose, or a one-line conductance-based LIF (`CobaLIF`/`CubaLIF`). | **P3** |
 | **Architecture** | Input summation (`add_*_input`/`sum_*_inputs`) and projection patterns are sound. | The **delay seam** is the one genuine structural gap; everything else is additive. | see §4 |
@@ -36,104 +36,183 @@ Today a user cannot write `delay=1.5 * u.ms` on a standard projection.
 
 ### 1.2 What already exists (build on this, don't reinvent)
 
-`brainstate` ships the delay machinery:
+`brainstate` ships the delay machinery, and — importantly — it already supports
+**per-element (heterogeneous) reads**, so we do not need to build a buffer of our
+own:
 
-- `brainstate.nn.Delay` — rolling history buffer of a variable.
+- `brainstate.nn.Delay` — rolling history buffer of a variable. Two read APIs
+  carry an optional index argument:
+  - `retrieve_at_step(delay_steps, *indices)` — integer-step read.
+  - `retrieve_at_time(delay_time, *indices)` — time read (needs `t` in `environ`),
+    with sub-`dt` delays resolved by `interp_method` (default `'linear_interp'`).
+  - `register_entry(name, time, *idx)` + `at(name)` — pre-register a fixed access
+    pattern (including a per-connection index vector).
 - `brainstate.nn.StateWithDelay` — a `State` that also maintains a delay buffer.
-- `brainstate.nn.PrefetchDelayAt` / `PrefetchDelay` / `DelayAccess` — read a
-  module's state at `t − delay`.
+- `brainstate.nn.PrefetchDelayAt` / `PrefetchDelay` / `DelayAccess` — higher-level
+  read of a module's state at `t − delay` (the homogeneous case).
 
-`DeltaProj` already accepts these:
+The key behaviour (verified against the installed `brainstate`) is how
+`retrieve_at_step` combines a delay vector with indices:
+
+```text
+retrieve_at_step(steps)            -> outer product: buffer[steps[a], :]      shape (len(steps), N)
+retrieve_at_step(steps, idx)       -> diagonal gather: buffer[steps[k], idx[k]] shape (len(idx),)
+```
+
+The **diagonal gather** is exactly a heterogeneous, per-connection delayed read:
+connection `k` reads source neuron `idx[k]` at its own offset `steps[k]`.
+
+`DeltaProj` already accepts the homogeneous wrapper:
 
 ```python
 # brainpy_state/_brainpy/projection.py  (DeltaProj.__init__)
 self.prefetch = prefetch        # last element may be a PrefetchDelayAt
 ```
 
-So the primitive exists, but it is (a) only wired into `DeltaProj`, and (b)
-exposed as a raw positional `*prefetch` rather than an ergonomic `delay=`.
+So the primitive exists (including heterogeneous support), but it is (a) only
+wired into `DeltaProj`, (b) exposed as a raw positional `*prefetch` rather than an
+ergonomic `delay=`, and (c) the heterogeneous gather is not surfaced at all.
 
-### 1.3 Two distinct delay semantics
+### 1.3 Three delay granularities — all supported
 
-These are genuinely different and should be named, not conflated:
+The delay attaches to one shared history buffer of the pre-synaptic source; the
+granularities differ only in *how that buffer is read each step*. All three reduce
+to one `retrieve_at_step(delay_steps, indices)` call, so a single implementation
+covers them:
 
-1. **Axonal / output delay** — one delay per *pre-synaptic neuron* (or one
-   scalar for the whole projection). The pre-synaptic spike train is delayed
-   *before* the communication module. One shared buffer of depth
-   `ceil(max_delay / dt)`. Cheap: `O(N_pre)` memory, no gather.
+| Granularity | `delay` value | Read | Buffer | Per-step read cost |
+|-------------|---------------|------|--------|--------------------|
+| **Global / homogeneous** | scalar `Quantity` (`1.5*u.ms`) | `retrieve_at_step(k)` | depth × `N_pre` | none (slice) |
+| **Axonal (per-pre-neuron)** | array `(N_pre,)` | `retrieve_at_step(steps, arange(N_pre))` | depth × `N_pre` | `O(N_pre)` gather |
+| **Synaptic (per-connection, heterogeneous)** | array `(N_syn,)` | `retrieve_at_step(steps, pre_ids)` | depth × `N_pre` | `O(N_syn)` gather |
 
-2. **Synaptic delay** — one delay per *connection* (heterogeneous). Each synapse
-   reads the pre-synaptic history at its own offset. Requires a gather over the
-   delay buffer at per-connection indices. `O(N_pre · max_steps)` buffer +
-   `O(N_syn)` gather per step.
+The buffer is always over the pre-synaptic neurons (`N_pre`), so adding
+heterogeneity does **not** grow memory — only the read pattern changes. This is
+the property that lets us promote heterogeneous delays from "expensive, maybe
+later" to "supported from day one": NEST-style `delay` arrays and BrainPy 2.x
+heterogeneous synapses map onto the per-connection row directly.
 
-Most models need only (1). (2) is what NEST's `delay` array and BrainPy 2.x's
-heterogeneous-delay synapses provide, and is the harder, memory-heavier case.
+Heterogeneity is naturally **per-connection**, so it pairs with explicit /
+sparse connectivity (`pre_ids`/`post_ids`, event-driven `brainevent` operators)
+where a connection list exists. For a dense `comm` (e.g. `Linear`) a true
+per-(pre,post) delay would need an `N_pre × N_post` buffer and is intentionally
+**not** offered; the practical granularity for dense projections is axonal
+(per-pre-neuron). The API enforces this by accepting per-connection `delay` only
+on projections that own a connection index.
 
 ### 1.4 Proposed interface
 
-Add an optional, unit-carrying `delay=` to the projection classes. The seam is
-a single helper that turns `(source_module, state_name, delay)` into a delayed
-read, so every projection shares one implementation.
+Add an optional, unit-carrying `delay=` to the projection classes, backed by one
+delay seam. The buffer and the per-step read are encapsulated in a small module so
+every projection (and the gap junctions, later) shares one implementation.
 
 ```python
 # new: brainpy_state/_brainpy/_delay.py
-def delayed_prefetch(source, state: str, delay=None):
-    """Return a read of ``source.<state>`` at ``t - delay``.
+class DelayedSource(brainstate.nn.Module):
+    """Maintain a delay buffer over ``source.<state>`` and read it each step.
 
-    delay is None         -> direct prefetch (no buffer)
-    delay is a scalar     -> homogeneous axonal delay (one Delay buffer)
-    delay is an array     -> per-pre-neuron axonal delay (gather on read)
+    delay is None        -> no buffer; direct read (current behaviour, zero cost)
+    delay is scalar      -> global homogeneous delay
+    delay is (N_pre,)    -> axonal, per-pre-neuron
+    delay is (N_syn,)    -> synaptic, per-connection (requires ``indices`` = pre_ids)
     """
-    if delay is None:
-        return brainstate.nn.Prefetch(source, state)
-    return brainstate.nn.PrefetchDelayAt(source, state, delay)
+    def __init__(self, source, state, delay=None, indices=None):
+        super().__init__()
+        self.source, self.state, self.delay, self.indices = source, state, delay, indices
+        self._buf = None        # a brainstate.nn.Delay, sized at init_state
+        self._read_idx = None   # gather indices for the per-step read
+
+    def init_state(self, *args, **kwargs):
+        if self.delay is None:
+            return
+        value = getattr(self.source, self.state).value
+        dt = brainstate.environ.get_dt()
+        max_steps = int(u.math.ceil(u.math.max(self.delay) / dt))      # static at trace time
+        self._buf = brainstate.nn.Delay(value, time=max_steps * dt,
+                                        interp_method='linear_interp')
+        # Resolve the read pattern once (see §1.3):
+        #   scalar delay            -> no indices  (whole-population slice)
+        #   (N_pre,) axonal         -> arange(N_pre) so the read is the *diagonal*
+        #   (N_syn,) per-connection -> the supplied pre_ids
+        if u.math.ndim(self.delay) == 0:
+            self._read_idx = None
+        elif self.indices is not None:
+            self._read_idx = self.indices
+        else:
+            self._read_idx = jnp.arange(value.shape[-1])
+
+    def update(self):
+        value = getattr(self.source, self.state).value
+        if self.delay is None:
+            return value
+        self._buf.update(value)
+        steps = u.math.asarray(self.delay) / brainstate.environ.get_dt()   # per-element
+        # NOTE: a bare retrieve_at_step(vector) is the OUTER product, not what we
+        # want; the diagonal gather requires the index argument.
+        return (self._buf.retrieve_at_step(steps) if self._read_idx is None
+                else self._buf.retrieve_at_step(steps, self._read_idx))
 ```
 
 ```python
 # AlignPostProj / CurrentProj gain a keyword:
-proj = brainpy.state.AlignPostProj(
-    comm=comm, syn=syn, out=out, post=post,
-    delay=1.5 * u.ms,          # NEW — homogeneous axonal delay
-)
+proj = brainpy.state.AlignPostProj(comm, syn, out, post, delay=1.5 * u.ms)   # global
+proj = brainpy.state.AlignPostProj(comm, syn, out, post, delay=axonal_ms)    # (N_pre,)
+
+# Sparse / explicit-connectivity projection carries per-connection delays:
+proj = brainpy.state.SparseProj(conn=conn, ..., delay=syn_delays_ms)         # (N_syn,)
+# -> DelayedSource(pre, 'spike', delay=syn_delays_ms, indices=conn.pre_ids)
 ```
 
-Internally the projection wraps its pre-synaptic source access in
-`delayed_prefetch(...)`; when `delay is None` the behaviour is byte-for-byte the
-current path (zero overhead, full backward compatibility).
+When `delay is None` the projection takes its current code path verbatim — zero
+overhead, full backward compatibility. Fractional (sub-`dt`) delays are honoured
+through the buffer's `linear_interp`, so `delay` need not be an integer multiple
+of `dt`.
 
 ### 1.5 Phasing
 
-- **P1a — homogeneous axonal delay.** Scalar `delay=` (and per-pre-neuron array)
-  on `AlignPostProj` and `CurrentProj`, delegating to `PrefetchDelayAt`. Smallest
-  change, covers the majority of use-cases. The buffer depth is derived from
-  `delay` and the environment `dt` at `init_state`.
-- **P1b — heterogeneous synaptic delay.** Per-connection delay vector, read via a
-  gather over the history buffer. Land behind the same `delay=` keyword
-  (an array sized to the connection count selects this path). Document the memory
-  cost and provide a `max_delay` guard.
-- **P1c — gap-junction delay.** Out of scope initially; electrical coupling is
-  near-instantaneous. Document the omission rather than silently ignoring a
-  passed `delay`.
+Heterogeneous support is part of the **design** from the start (same keyword, same
+seam); the phases below are purely an *implementation* ordering, not a capability
+gate.
+
+- **P1a — homogeneous + axonal.** Scalar and `(N_pre,)` `delay=` on `AlignPostProj`
+  and `CurrentProj`. Smallest change; covers most networks.
+- **P1b — heterogeneous (per-connection).** `(N_syn,)` `delay=` on sparse /
+  explicit-connectivity projections, reading `retrieve_at_step(steps, pre_ids)`.
+  No extra buffer memory over P1a; only the gather index changes. Add a
+  `max_delay` guard and validate `len(delay) == N_syn`.
+- **P1c — gap-junction delay.** Electrical coupling is near-instantaneous, so this
+  stays out of scope; a passed `delay` must raise rather than be silently ignored.
 
 ### 1.6 Trade-offs & risks
 
-- **Memory:** buffer depth = `ceil(max_delay / dt)`. A 20 ms max delay at
-  `dt = 0.01 ms` is 2000 frames × `N_pre`. The API should accept `delay` in time
-  units (via `saiunit`) and convert with the *current* `dt`, failing loudly if
-  `dt` changes after the buffer is sized.
-- **JIT:** buffer depth must be static (Python int) at trace time — derive it
-  from `delay`/`dt` at `init_state`, not from a traced value.
+- **Memory** is set by buffer *depth* = `ceil(max_delay / dt)` × `N_pre`, and is
+  **independent of the delay granularity** (homogeneous, axonal and per-connection
+  share one `N_pre` buffer). A 20 ms max delay at `dt = 0.01 ms` is 2000 frames ×
+  `N_pre`. `delay` is given in time units (`saiunit`) and converted with the
+  *current* `dt`; buffer depth is sized from `max(delay)` at `init_state`.
+- **Compute:** per-connection delay adds an `O(N_syn)` gather per step on top of
+  the existing comm; homogeneous adds nothing (a slice).
+- **JIT:** buffer depth must be a static Python int at trace time — derive it from
+  `max(delay)`/`dt` in `init_state`, never from a traced value. The per-element
+  `delay_steps` passed to `retrieve_at_step` *may* be traced.
+- **`dt` changes:** the buffer is sized once; changing `dt` afterwards must fail
+  loudly (a stale buffer would silently misalign delays).
 - **Backward compatibility:** `delay=None` default ⇒ no behavioural change.
 
 ### 1.7 Test plan
 
-- A single spike through a projection with `delay=k·dt` appears at the post
-  population exactly `k` steps later (homogeneous).
-- Heterogeneous: a 3-connection projection with delays `[1, 5, 10]·dt` delivers
-  three offset pulses.
-- `delay=None` reproduces the current outputs bit-for-bit (regression guard).
-- Buffer depth is static under `jit`; changing `dt` after sizing raises.
+- **Homogeneous:** a single spike through `delay=k·dt` arrives at post exactly `k`
+  steps later.
+- **Axonal:** an `(N_pre,)` delay delays each pre-neuron's contribution
+  independently; pre-neuron `j` arrives after `round(delay[j]/dt)` steps.
+- **Heterogeneous:** a 3-connection projection with delays `[1, 5, 10]·dt` from a
+  single impulse delivers three pulses offset by 1, 5, 10 steps — directly
+  asserting the `retrieve_at_step(steps, pre_ids)` diagonal gather.
+- **Fractional:** `delay=0.5·dt` interpolates between adjacent frames
+  (`linear_interp`), value ≈ mean of the two bracketing samples.
+- **Regression:** `delay=None` reproduces current outputs bit-for-bit.
+- **JIT:** buffer depth is static under `jit`; changing `dt` after sizing raises;
+  per-connection `delay` of wrong length raises at construction.
 
 ---
 
@@ -206,11 +285,13 @@ What is already deep and should be left alone:
 The one **shallow / missing seam** is **delay**. Right now delay leaks through as
 a raw `*prefetch` argument on a single projection class — an interface nearly as
 complex as wiring `PrefetchDelayAt` by hand, with no locality (every call site
-re-derives it). A `delay=` keyword backed by one `delayed_prefetch` helper (§1.4)
-turns that into a deep seam: trivial interface (`delay=1.5*u.ms`), one
-implementation, all projections benefit. By the *deletion test*, removing the
-helper would scatter `PrefetchDelayAt` plumbing across every projection and every
-user network — i.e. it earns its keep.
+re-derives it, and the heterogeneous per-connection case is unreachable). A
+`delay=` keyword backed by one `DelayedSource` seam (§1.4) turns that into a deep
+module: trivial interface (`delay=1.5*u.ms` or a per-connection array), one
+implementation covering all three granularities, every projection benefits. By
+the *deletion test*, removing the seam would scatter `Delay`/`PrefetchDelayAt`
+plumbing — and a hand-rolled gather — across every projection and every user
+network; i.e. it earns its keep.
 
 **Secondary, optional hardening (not required):**
 
@@ -225,14 +306,17 @@ user network — i.e. it earns its keep.
 
 ## 5. Recommended sequencing
 
-1. **P1a** homogeneous axonal `delay=` on `AlignPostProj`/`CurrentProj` (+ tests).
-   Highest value, smallest change, unblocks timing-dependent networks.
-2. **P2** `section`/`constant`/`step`/`ramp`/`sinusoidal` inputs (pure, easy),
+1. **P1a** global + axonal `delay=` on `AlignPostProj`/`CurrentProj` via the
+   `DelayedSource` seam (+ tests). Highest value, smallest change, unblocks
+   timing-dependent networks.
+2. **P1b** heterogeneous per-connection `delay=` on sparse/explicit-connectivity
+   projections. A small delta over P1a — same buffer, same seam; only the read
+   becomes `retrieve_at_step(steps, pre_ids)` and `delay` is `(N_syn,)`. No extra
+   memory. Lands right after P1a because it reuses the same code.
+3. **P2** `section`/`constant`/`step`/`ramp`/`sinusoidal` inputs (pure, easy),
    then `ou`/`wiener` (stateful, apply the √dt + `brainstate.random` rules).
-3. **P1b** heterogeneous per-connection delay (memory-aware, behind the same
-   keyword).
 4. **P3** `CobaLIF`/`CubaLIF` (compose existing parts), then FitzHugh–Nagumo and
    Hindmarsh–Rose (reuse the rising-edge spike detector — do **not** regress B4).
 
 Each item is independently shippable and testable; none blocks the others except
-P1b building on P1a.
+P1b building on P1a (shared `DelayedSource` seam).
