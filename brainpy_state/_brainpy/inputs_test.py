@@ -820,9 +820,15 @@ class TestOUProcessInput(_AnalogInputTestBase):
         with brainstate.environ.context(dt=self.dt):
             brainstate.random.seed(0)
         out = self._run(gen, 5000, u.nA)[:, 0]
-        self.assertAlmostEqual(float(out.mean()), 0.0, delta=0.2)
-        # steady-state std = sigma * sqrt(tau / 2) for this discretization
-        self.assertLess(float(out.std()), 5.0)
+        # The sample mean of a finite OU trajectory has a standard error of
+        # ~sigma*sqrt(tau/2) / sqrt(T / (2*tau)) ~= 0.16 nA here, so assert mean
+        # reversion with a ~3.5-SEM tolerance. A tighter bound is flaky: the RNG
+        # stream (hence the exact mean) shifts with global float/x64 state that
+        # other tests in the suite may set, even with a fixed seed.
+        self.assertAlmostEqual(float(out.mean()), 0.0, delta=0.6)
+        # steady-state std = sigma * sqrt(tau / 2) ~= 1.58 nA for this discretization:
+        self.assertGreater(float(out.std()), 0.5)  # noise is present (not stuck at mean)
+        self.assertLess(float(out.std()), 5.0)      # and the process stays bounded
 
     def test_deterministic_with_seed(self):
         def run():
