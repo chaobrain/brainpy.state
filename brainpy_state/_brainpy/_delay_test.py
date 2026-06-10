@@ -196,6 +196,27 @@ class TestInputDelaySeam(unittest.TestCase):
         npt.assert_allclose(np.asarray(outs[2]), np.asarray(seq[0]), atol=1e-6)
         npt.assert_allclose(np.asarray(outs[4]), np.asarray(seq[2]), atol=1e-6)
 
+    def test_heterogeneous_per_connection_diagonal_gather(self):
+        # 3 connections from 3 distinct pre-neurons, delays [1, 5, 10] steps.
+        # A single impulse delivers three pulses offset by 1, 5, 10 steps,
+        # directly exercising retrieve_at_step(steps, pre_ids).
+        n_pre, T = 3, 12
+        pre_ids = jnp.array([0, 1, 2])
+        delays = jnp.array([1., 5., 10.]) * u.ms
+        seam = InputDelay(n_pre, delay=delays, indices=pre_ids)
+        brainstate.nn.init_all_states(seam)
+        seq = np.zeros((T, n_pre)); seq[0, :] = 1.0
+        out = np.asarray([np.asarray(seam.update(jnp.asarray(seq[k]))) for k in range(T)])  # (T, 3)
+        for k, d in enumerate([1, 5, 10]):
+            self.assertEqual(int(np.argmax(out[:, k])), d)
+            npt.assert_allclose(out[d, k], 1.0, atol=1e-6)
+            npt.assert_allclose(out[:, k].sum(), 1.0, atol=1e-6)  # exactly one pulse
+
+    def test_per_connection_length_mismatch_raises(self):
+        seam = InputDelay(3, delay=jnp.array([1., 5.]) * u.ms, indices=jnp.array([0, 1, 2]))
+        with self.assertRaises(ValueError):
+            brainstate.nn.init_all_states(seam)
+
 
 if __name__ == '__main__':
     unittest.main()

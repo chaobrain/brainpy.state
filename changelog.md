@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   delay is backed by a single shared `brainstate.nn.Delay` buffer over the
   pre-synaptic input (new internal `InputDelay` seam), sized once from
   `ceil(max(delay) / dt)` at `init_state`.
+- The `InputDelay` seam also implements the heterogeneous, per-connection read
+  (`delay` of shape `(N_syn,)` plus `indices=pre_ids`) via the diagonal gather
+  `retrieve_at_step(steps, pre_ids)` — the same buffer, only the gather index
+  changes — with `len(delay) == len(indices)` validated at `init_state`. This is
+  the mechanism intended to back explicit-connectivity projections; the
+  comm-callable `AlignPostProj`/`CurrentProj` expose the global and axonal
+  granularities. Gap junctions take no `delay=` (electrical coupling is treated
+  as instantaneous), so a passed delay raises rather than being silently ignored.
 
 ### Added — Analog current generators (`_brainpy`)
 

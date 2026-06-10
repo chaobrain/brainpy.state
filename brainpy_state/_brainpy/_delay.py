@@ -38,9 +38,15 @@ class InputDelay(brainstate.nn.Module):
       projection without a delay keeps its original behaviour at zero cost.
     - **scalar** ``delay`` (e.g. ``1.5 * u.ms``) — *global / homogeneous*: every
       pre-synaptic element is read at the same offset (a whole-frame slice).
-    - **vector** ``delay`` of shape ``(N_pre,)`` — *axonal*: each pre-synaptic
-      element is read at its own offset via the diagonal gather
+    - **vector** ``delay`` of shape ``(N_pre,)`` with ``indices=None`` — *axonal*:
+      each pre-synaptic element is read at its own offset via the diagonal gather
       ``retrieve_at_step(steps, arange(N_pre))``.
+    - **vector** ``delay`` of shape ``(N_syn,)`` with ``indices`` of the same
+      length — *heterogeneous / per-connection*: connection ``k`` reads
+      pre-synaptic element ``indices[k]`` at its own offset, via the diagonal
+      gather ``retrieve_at_step(steps, indices)``. The output is the per-connection
+      delayed signal of shape ``(N_syn,)``. No extra buffer memory over the axonal
+      case — only the gather index changes.
 
     The buffer is sized once at :meth:`init_state` from ``ceil(max(delay) / dt)``,
     so its depth is a static Python integer at trace time. Fractional (sub-``dt``)
@@ -54,15 +60,26 @@ class InputDelay(brainstate.nn.Module):
         Shape of the pre-synaptic signal (the communication module's input
         size). The last axis is the pre-synaptic neuron dimension.
     delay : ArrayLike or Quantity, optional
-        ``None`` for no delay, a scalar time for a global delay, or a
-        ``(N_pre,)`` array of times for an axonal (per-pre-neuron) delay.
+        ``None`` for no delay, a scalar time for a global delay, a ``(N_pre,)``
+        array for an axonal (per-pre-neuron) delay, or a ``(N_syn,)`` array for a
+        per-connection delay (requires ``indices``).
+    indices : ArrayLike, optional
+        Per-connection pre-synaptic indices (``pre_ids``) for a heterogeneous
+        delay. When given, ``delay`` must be a 1-D array of the same length;
+        connection ``k`` reads pre element ``indices[k]``.
     """
     __module__ = 'brainpy.state'
 
-    def __init__(self, in_size: Size, delay: Optional[Union[ArrayLike, u.Quantity]] = None):
+    def __init__(
+        self,
+        in_size: Size,
+        delay: Optional[Union[ArrayLike, u.Quantity]] = None,
+        indices: Optional[ArrayLike] = None,
+    ):
         super().__init__()
         self.in_size = (in_size,) if isinstance(in_size, int) else tuple(in_size)
         self.delay = delay
+        self.indices = indices
         self._buffer = None
         self._read_idx = None
 
@@ -77,9 +94,23 @@ class InputDelay(brainstate.nn.Module):
         self._buffer = brainstate.nn.Delay(example, time=max_steps * dt,
                                            interp_method='linear_interp')
         brainstate.nn.init_all_states(self._buffer)
-        # Scalar delay -> whole-frame slice; vector delay -> per-element diagonal
-        # gather (a bare retrieve_at_step(vector) would be the outer product).
-        self._read_idx = None if u.math.ndim(delay) == 0 else jnp.arange(self.in_size[-1])
+        # Resolve the per-step read index once (a bare retrieve_at_step(vector)
+        # would be the outer product; the diagonal gather needs the index arg):
+        #   scalar delay              -> None        (whole-population slice)
+        #   (N_syn,) + indices given  -> indices     (per-connection diagonal)
+        #   (N_pre,) axonal           -> arange(N_pre)
+        if self.indices is not None:
+            read_idx = jnp.asarray(self.indices)
+            if u.math.ndim(delay) != 1 or delay.shape[0] != read_idx.shape[0]:
+                raise ValueError(
+                    f'Per-connection delay must be a 1-D array of length '
+                    f'len(indices)={read_idx.shape[0]}, but got delay of shape {delay.shape}.'
+                )
+            self._read_idx = read_idx
+        elif u.math.ndim(delay) == 0:
+            self._read_idx = None
+        else:
+            self._read_idx = jnp.arange(self.in_size[-1])
 
     def update(self, x):
         if self.delay is None:
