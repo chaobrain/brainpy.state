@@ -150,6 +150,42 @@ class TestSymmetryGapJunction(unittest.TestCase):
         self.assertGreater(len(pre.current_inputs), 0)
         self.assertGreater(len(post.current_inputs), 0)
 
+    def test_input_key_stable_independent_of_other_inputs(self):
+        """Regression: the gap-junction input key must be stable per instance and
+        must not drift as unrelated inputs are registered on the target. A
+        count-derived key leaked a fresh slot (``gap_junction_post_0``, ``_2`` ...)
+        on every un-consumed update, silently accumulating stale currents."""
+        pre = IF(self.n)
+        post = IF(self.n)
+        pre.init_state()
+        post.init_state()
+        conn = make_conn([0], [0])
+        gj = SymmetryGapJunction(
+            couples=(pre, post), states=('V', 'V'), conn=conn,
+            weight=0.1 * u.mS,
+        )
+
+        def external(*args, **kwargs):
+            return u.math.zeros(post.varshape) * u.mA
+
+        # Unrelated persistent input already present on the target.
+        post.add_current_input('external_1', external)
+        with brainstate.environ.context(dt=self.dt):
+            gj.update()
+        keys_1 = sorted(k for k in post.current_inputs if k.startswith('gap_junction_post'))
+        # Consume both sides, as the per-step network loop does: pops the
+        # gap-junction array inputs, keeps the persistent callable.
+        post.sum_current_inputs(u.math.zeros(post.varshape) * u.mA)
+        pre.sum_current_inputs(u.math.zeros(pre.varshape) * u.mA)
+        # Register another unrelated input, shifting any positional index.
+        post.add_current_input('external_2', external)
+        with brainstate.environ.context(dt=self.dt):
+            gj.update()
+        keys_2 = sorted(k for k in post.current_inputs if k.startswith('gap_junction_post'))
+
+        self.assertEqual(len(keys_1), 1)
+        self.assertEqual(keys_1, keys_2)
+
 
 class TestAsymmetryGapJunction(unittest.TestCase):
     def setUp(self):
@@ -266,6 +302,37 @@ class TestAsymmetryGapJunction(unittest.TestCase):
             gj.update()
         self.assertIsNotNone(pre.current_inputs)
         self.assertIsNotNone(post.current_inputs)
+
+    def test_input_key_stable_independent_of_other_inputs(self):
+        """Regression: the gap-junction input key must be stable per instance and
+        must not drift as unrelated inputs are registered on the target."""
+        pre = IF(self.n)
+        post = IF(self.n)
+        pre.init_state()
+        post.init_state()
+        conn = make_conn([0], [0])
+        weight = jnp.array([0.1, 0.2]) * u.mS
+        gj = AsymmetryGapJunction(
+            pre=pre, pre_state='V', post=post, post_state='V',
+            conn=conn, weight=weight,
+        )
+
+        def external(*args, **kwargs):
+            return u.math.zeros(post.varshape) * u.mA
+
+        post.add_current_input('external_1', external)
+        with brainstate.environ.context(dt=self.dt):
+            gj.update()
+        keys_1 = sorted(k for k in post.current_inputs if k.startswith('gap_junction_post'))
+        post.sum_current_inputs(u.math.zeros(post.varshape) * u.mA)
+        pre.sum_current_inputs(u.math.zeros(pre.varshape) * u.mA)
+        post.add_current_input('external_2', external)
+        with brainstate.environ.context(dt=self.dt):
+            gj.update()
+        keys_2 = sorted(k for k in post.current_inputs if k.startswith('gap_junction_post'))
+
+        self.assertEqual(len(keys_1), 1)
+        self.assertEqual(keys_1, keys_2)
 
 
 class TestGapJunctionMissingState(unittest.TestCase):
