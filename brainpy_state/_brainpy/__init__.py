@@ -36,6 +36,8 @@ from .hh import HH, MorrisLecar, WangBuzsakiHH
 # Input generators
 # ---------------------------------------------------------------------------
 from .inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
+from .inputs import (SectionInput, ConstantInput, StepInput, RampInput,
+                     SinusoidalInput, OUProcessInput, WienerProcessInput)
 # Izhikevich family
 from .izhikevich import Izhikevich, IzhikevichRef
 # LIF family
@@ -45,7 +47,10 @@ from .lif import (
     AdExIF, AdExIFRef,
     QuaIF, AdQuaIF, AdQuaIFRef,
     Gif, GifRef,
+    CubaLIF, CobaLIF,
 )
+# Reduced models
+from .reduced import FitzHughNagumo, HindmarshRose
 # ---------------------------------------------------------------------------
 # Projections
 # ---------------------------------------------------------------------------
@@ -75,12 +80,16 @@ __all__ = [
     'AdExIF', 'AdExIFRef',
     'QuaIF', 'AdQuaIF', 'AdQuaIFRef',
     'Gif', 'GifRef',
+    'CubaLIF', 'CobaLIF',
 
     # Neuron models - Hodgkin-Huxley family
     'HH', 'MorrisLecar', 'WangBuzsakiHH',
 
     # Neuron models - Izhikevich family
     'Izhikevich', 'IzhikevichRef',
+
+    # Neuron models - reduced (FitzHugh-Nagumo, Hindmarsh-Rose)
+    'FitzHughNagumo', 'HindmarshRose',
 
     # Synapse models
     'Expon', 'DualExpon',
@@ -102,4 +111,6 @@ __all__ = [
 
     # Input generators
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+    'SectionInput', 'ConstantInput', 'StepInput', 'RampInput',
+    'SinusoidalInput', 'OUProcessInput', 'WienerProcessInput',
 ]

@@ -24,6 +24,10 @@ import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 from brainpy.state import SpikeTime, PoissonSpike, PoissonEncoder, poisson_input
+from brainpy.state import (
+    SectionInput, ConstantInput, StepInput, RampInput,
+    SinusoidalInput, OUProcessInput, WienerProcessInput,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -610,6 +614,24 @@ class TestPoissonInputFunction(unittest.TestCase):
                 original.to_decimal(u.mV)
             ))
 
+    def test_finite_when_rate_dt_exceeds_one(self):
+        r"""Regression: freq*dt > 1 must not yield NaN (per-bin probability is
+        bounded by 1 - exp(-freq*dt))."""
+        with brainstate.environ.context(dt=1.0 * u.ms):
+            V = brainstate.HiddenState(jnp.zeros(50) * u.mV)
+            poisson_input(freq=20000. * u.Hz, num_input=100, weight=0.1 * u.mV, target=V)
+            self.assertTrue(jnp.all(jnp.isfinite(V.value.to_decimal(u.mV))))
+
+    def test_gaussian_branch_nonnegative_integer_counts(self):
+        r"""Regression: in the Gaussian-approximation regime the injected
+        counts must be non-negative integers, like the binomial branch."""
+        with brainstate.environ.context(dt=self.dt):
+            V = brainstate.HiddenState(jnp.zeros(2000) * u.mV)
+            poisson_input(freq=5000. * u.Hz, num_input=1000, weight=1.0 * u.mV, target=V)
+            counts = V.value.to_decimal(u.mV)  # weight = 1 mV -> magnitude == count
+            self.assertTrue(jnp.all(counts >= 0.))
+            self.assertTrue(jnp.allclose(counts, jnp.round(counts)))
+
     def test_updates_target_specific_indices(self):
         with brainstate.environ.context(dt=self.dt):
             brainstate.random.seed(42)
@@ -667,6 +689,169 @@ class TestPoissonInputFunction(unittest.TestCase):
             val = V.value.to_decimal(u.mV)
             # With high freq, at least some should be nonzero
             self.assertGreater(float(jnp.abs(val).sum()), 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Analog current generators (per-step Modules)
+# ---------------------------------------------------------------------------
+
+class _AnalogInputTestBase(unittest.TestCase):
+    r"""Shared driver: step a generator through its own clock via ``environ['i']``."""
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+        self.dt = 0.1 * u.ms
+
+    def _run(self, gen, n_steps, unit):
+        out = []
+        with brainstate.environ.context(dt=self.dt):
+            brainstate.nn.init_all_states(gen)
+            for k in range(n_steps):
+                with brainstate.environ.context(i=k):
+                    out.append(np.asarray(gen.update().to_decimal(unit)))
+        return np.stack(out, axis=0)
+
+
+class TestConstantInput(_AnalogInputTestBase):
+    def test_value_within_and_zero_after_window(self):
+        gen = ConstantInput(3, 2.0 * u.nA, duration=0.5 * u.ms)  # 5 steps
+        out = self._run(gen, 7, u.nA)
+        self.assertEqual(out.shape, (7, 3))
+        npt.assert_allclose(out[:5], 2.0)
+        npt.assert_allclose(out[5:], 0.0)
+
+
+class TestRampInput(_AnalogInputTestBase):
+    def test_linear_then_zero(self):
+        gen = RampInput(1, 0.0 * u.nA, 10.0 * u.nA, duration=1.0 * u.ms)  # 10 steps
+        out = self._run(gen, 12, u.nA)[:, 0]
+        # value at step k (t=k*dt) is 10 * (t / 1ms) = k for k in [0, 10)
+        npt.assert_allclose(out[:10], np.arange(10), atol=1e-5)
+        npt.assert_allclose(out[10:], 0.0)
+
+    def test_t_start_offset(self):
+        gen = RampInput(1, 0.0 * u.nA, 10.0 * u.nA, duration=1.0 * u.ms, t_start=0.2 * u.ms)
+        out = self._run(gen, 4, u.nA)[:, 0]
+        npt.assert_allclose(out[:2], 0.0)            # before t_start
+        npt.assert_allclose(out[2], 0.0, atol=1e-5)  # at t_start, frac=0
+
+
+class TestStepInput(_AnalogInputTestBase):
+    def test_staircase_holds_last(self):
+        gen = StepInput(1, [0.0, 5.0, 10.0] * u.nA, [0.0, 0.3, 0.6] * u.ms)
+        out = self._run(gen, 11, u.nA)[:, 0]
+        npt.assert_allclose(out[0:3], 0.0)
+        npt.assert_allclose(out[3:6], 5.0)
+        npt.assert_allclose(out[6:11], 10.0)  # holds last amplitude past final step
+
+    def test_zero_before_first_step(self):
+        gen = StepInput(1, [5.0, 10.0] * u.nA, [0.2, 0.5] * u.ms)
+        out = self._run(gen, 6, u.nA)[:, 0]
+        npt.assert_allclose(out[0:2], 0.0)   # t < first step time
+        npt.assert_allclose(out[2:5], 5.0)
+
+
+class TestSectionInput(_AnalogInputTestBase):
+    def test_piecewise_constant_then_zero(self):
+        gen = SectionInput(1, [1.0, 2.0, 3.0] * u.nA, [0.2, 0.3, 0.2] * u.ms)
+        out = self._run(gen, 8, u.nA)[:, 0]
+        npt.assert_allclose(out[0:2], 1.0)   # [0, 0.2)
+        npt.assert_allclose(out[2:5], 2.0)   # [0.2, 0.5)
+        npt.assert_allclose(out[5:7], 3.0)   # [0.5, 0.7)
+        npt.assert_allclose(out[7], 0.0)     # past total duration
+
+
+class TestSinusoidalInput(_AnalogInputTestBase):
+    def test_matches_closed_form(self):
+        gen = SinusoidalInput(1, 2.0 * u.nA, 1000.0 * u.Hz, duration=2.0 * u.ms)
+        out = self._run(gen, 15, u.nA)[:, 0]
+        k = np.arange(15)
+        t_s = k * 1e-4  # dt = 0.1 ms in seconds
+        expected = 2.0 * np.sin(2 * np.pi * 1000.0 * t_s)
+        expected[t_s >= 2e-3] = 0.0  # outside [0, duration)
+        npt.assert_allclose(out, expected, atol=1e-5)
+
+    def test_bias_offset(self):
+        gen = SinusoidalInput(1, 2.0 * u.nA, 1000.0 * u.Hz, duration=2.0 * u.ms,
+                              bias=1.0 * u.nA)
+        out = self._run(gen, 10, u.nA)[:, 0]
+        k = np.arange(10)
+        expected = 1.0 + 2.0 * np.sin(2 * np.pi * 1000.0 * k * 1e-4)
+        npt.assert_allclose(out, expected, atol=1e-5)
+
+
+class TestWienerProcessInput(_AnalogInputTestBase):
+    def test_shape_and_zero_outside_window(self):
+        gen = WienerProcessInput(4, 2.0 * u.nA, duration=0.3 * u.ms)  # 3 steps
+        with brainstate.environ.context(dt=self.dt):
+            brainstate.random.seed(0)
+        out = self._run(gen, 6, u.nA)
+        self.assertEqual(out.shape, (6, 4))
+        npt.assert_allclose(out[3:], 0.0)  # past duration
+
+    def test_noise_scale(self):
+        gen = WienerProcessInput(1, 2.0 * u.nA, duration=10000.0 * u.ms)
+        with brainstate.environ.context(dt=self.dt):
+            brainstate.random.seed(0)
+        out = self._run(gen, 5000, u.nA)[:, 0]
+        # increment std = sigma * sqrt(dt_in_ms) = 2 * sqrt(0.1) ≈ 0.632
+        self.assertAlmostEqual(float(out.mean()), 0.0, delta=0.05)
+        self.assertAlmostEqual(float(out.std()), 2.0 * np.sqrt(0.1), delta=0.05)
+
+    def test_deterministic_with_seed(self):
+        def run():
+            gen = WienerProcessInput(2, 1.0 * u.nA, duration=1.0 * u.ms)
+            with brainstate.environ.context(dt=self.dt):
+                brainstate.random.seed(123)
+            return self._run(gen, 5, u.nA)
+        npt.assert_array_equal(run(), run())
+
+
+class TestOUProcessInput(_AnalogInputTestBase):
+    def test_zero_sigma_holds_mean(self):
+        gen = OUProcessInput(3, 1.5 * u.nA, 0.0 * u.nA, 10.0 * u.ms, duration=0.4 * u.ms)
+        out = self._run(gen, 6, u.nA)
+        self.assertEqual(out.shape, (6, 3))
+        npt.assert_allclose(out[:4], 1.5, atol=1e-5)  # sigma=0 => x stays at mean
+        npt.assert_allclose(out[4:], 0.0)             # past duration
+
+    def test_mean_reverting_bounded(self):
+        gen = OUProcessInput(1, 0.0 * u.nA, 1.0 * u.nA, 5.0 * u.ms, duration=10000.0 * u.ms)
+        with brainstate.environ.context(dt=self.dt):
+            brainstate.random.seed(0)
+        out = self._run(gen, 5000, u.nA)[:, 0]
+        # The sample mean of a finite OU trajectory has a standard error of
+        # ~sigma*sqrt(tau/2) / sqrt(T / (2*tau)) ~= 0.16 nA here, so assert mean
+        # reversion with a ~3.5-SEM tolerance. A tighter bound is flaky: the RNG
+        # stream (hence the exact mean) shifts with global float/x64 state that
+        # other tests in the suite may set, even with a fixed seed.
+        self.assertAlmostEqual(float(out.mean()), 0.0, delta=0.6)
+        # steady-state std = sigma * sqrt(tau / 2) ~= 1.58 nA for this discretization:
+        self.assertGreater(float(out.std()), 0.5)  # noise is present (not stuck at mean)
+        self.assertLess(float(out.std()), 5.0)      # and the process stays bounded
+
+    def test_deterministic_with_seed(self):
+        def run():
+            gen = OUProcessInput(2, 0.0 * u.nA, 1.0 * u.nA, 5.0 * u.ms, duration=1.0 * u.ms)
+            with brainstate.environ.context(dt=self.dt):
+                brainstate.random.seed(7)
+            return self._run(gen, 5, u.nA)
+        npt.assert_array_equal(run(), run())
+
+
+class TestAnalogInputUnderJit(_AnalogInputTestBase):
+    def test_ramp_runs_in_for_loop(self):
+        gen = RampInput(2, 0.0 * u.nA, 10.0 * u.nA, duration=1.0 * u.ms)
+
+        def step(i):
+            with brainstate.environ.context(i=i):
+                return gen.update()
+
+        with brainstate.environ.context(dt=self.dt):
+            brainstate.nn.init_all_states(gen)
+            ys = brainstate.transform.for_loop(step, np.arange(10))
+        self.assertEqual(ys.shape, (10, 2))
+        npt.assert_allclose(np.asarray(ys.to_decimal(u.nA))[:, 0], np.arange(10), atol=1e-5)
 
 
 if __name__ == '__main__':

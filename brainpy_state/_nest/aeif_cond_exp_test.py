@@ -419,7 +419,7 @@ class TestAEIFCondExp(unittest.TestCase):
 
             self.assertTrue(self._is_spike(spk))
             # The exact spike count differs between numpy reference and JAX
-            # jax.lax.while_loop due to floating-point precision differences.
+            # brainstate.transform.while_loop due to floating-point precision differences.
             # We verify: (1) spikes occurred, (2) w > 0 (adaptation happened),
             # (3) w is a multiple of b=1.0 pA.
             w_val = float((neuron.w.value / u.pA)[0])

@@ -22,6 +22,7 @@ import brainstate
 import braintools
 import saiunit as u
 from brainstate.typing import ArrayLike
+from brainstate.util import get_unique_name
 
 from brainpy_state._misc import set_module_as
 from .projection import Projection
@@ -38,14 +39,6 @@ class align_pre_ltp(Projection):
 
 class align_post_ltp(Projection):
     __module__ = 'brainpy.state'
-
-
-def get_gap_junction_post_key(i: int):
-    return f'gap_junction_post_{i}'
-
-
-def get_gap_junction_pre_key(i: int):
-    return f'gap_junction_pre_{i}'
 
 
 class SymmetryGapJunction(Projection):
@@ -140,6 +133,10 @@ class SymmetryGapJunction(Projection):
         self.post = post
         self.pre_ids, self.post_ids = conn(pre.out_size, post.out_size)
         self.weight = param_type(braintools.init.param(weight, (len(self.pre_ids),)))
+        # Stable per-instance input keys so repeated updates target the same slot
+        # instead of leaking a fresh, count-derived slot on each call.
+        self._post_key = get_unique_name('gap_junction_post')
+        self._pre_key = get_unique_name('gap_junction_pre')
 
     def update(self, *args, **kwargs):
         if not hasattr(self.pre, self.pre_state):
@@ -157,6 +154,8 @@ class SymmetryGapJunction(Projection):
             pre_ids=self.pre_ids,
             post_ids=self.post_ids,
             weight=self.weight.value,
+            post_key=self._post_key,
+            pre_key=self._pre_key,
         )
 
 
@@ -169,6 +168,8 @@ def symmetry_gap_junction_projection(
     pre_ids: ArrayLike,
     post_ids: ArrayLike,
     weight: ArrayLike,
+    post_key: str = 'gap_junction_post',
+    pre_key: str = 'gap_junction_pre',
 ):
     r"""
     Calculate symmetrical electrical coupling through gap junctions between neurons.
@@ -237,16 +238,14 @@ def symmetry_gap_junction_projection(
     post_inputs = post_inputs.at[..., post_ids].add(diff_mantissa)
     if diff_unit is not None:
         post_inputs = post_inputs * diff_unit
-    key = get_gap_junction_post_key(0 if post.current_inputs is None else len(post.current_inputs))
-    post.add_current_input(key, post_inputs)
+    post.add_current_input(post_key, post_inputs)
 
     # add to pre-synaptic neuron group
     pre_inputs = jnp.zeros(pre_shape)
     pre_inputs = pre_inputs.at[..., pre_ids].add(diff_mantissa)
     if diff_unit is not None:
         pre_inputs = pre_inputs * diff_unit
-    key = get_gap_junction_pre_key(0 if pre.current_inputs is None else len(pre.current_inputs))
-    pre.add_current_input(key, -pre_inputs)
+    pre.add_current_input(pre_key, -pre_inputs)
     return pre_inputs
 
 
@@ -347,6 +346,10 @@ class AsymmetryGapJunction(Projection):
         self.post = post
         self.pre_ids, self.post_ids = conn(pre.out_size, post.out_size)
         self.weight = param_type(braintools.init.param(weight, (len(self.pre_ids), 2)))
+        # Stable per-instance input keys so repeated updates target the same slot
+        # instead of leaking a fresh, count-derived slot on each call.
+        self._post_key = get_unique_name('gap_junction_post')
+        self._pre_key = get_unique_name('gap_junction_pre')
 
     def update(self, *args, **kwargs):
         if not hasattr(self.pre, self.pre_state):
@@ -364,6 +367,8 @@ class AsymmetryGapJunction(Projection):
             pre_ids=self.pre_ids,
             post_ids=self.post_ids,
             weight=self.weight.value,
+            post_key=self._post_key,
+            pre_key=self._pre_key,
         )
 
 
@@ -376,6 +381,8 @@ def asymmetry_gap_junction_projection(
     pre_ids: ArrayLike,
     post_ids: ArrayLike,
     weight: ArrayLike,
+    post_key: str = 'gap_junction_post',
+    pre_key: str = 'gap_junction_pre',
 ):
     r"""
     Calculate asymmetrical electrical coupling through gap junctions between neurons.
@@ -460,14 +467,12 @@ def asymmetry_gap_junction_projection(
     post_inputs = post_inputs.at[..., post_ids].add(pre2post_mantissa)
     if current_unit is not None:
         post_inputs = post_inputs * current_unit
-    key = get_gap_junction_post_key(0 if post.current_inputs is None else len(post.current_inputs))
-    post.add_current_input(key, post_inputs)
+    post.add_current_input(post_key, post_inputs)
 
     # add to pre-synaptic neuron group
     pre_inputs = jnp.zeros(pre_shape)
     pre_inputs = pre_inputs.at[..., pre_ids].add(post2pre_mantissa)
     if current_unit is not None:
         pre_inputs = pre_inputs * current_unit
-    key = get_gap_junction_pre_key(0 if pre.current_inputs is None else len(pre.current_inputs))
-    pre.add_current_input(key, -pre_inputs)
+    pre.add_current_input(pre_key, -pre_inputs)
     return pre_inputs

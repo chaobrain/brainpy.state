@@ -86,6 +86,21 @@ class TestSTP(unittest.TestCase):
         self.assertEqual(out.shape, (self.batch_size, self.in_size))
         self.assertTrue(jnp.all(out > 0))
 
+    def test_first_spike_releases_available_resources(self):
+        """Regression: STP releases ``u+ . x-`` (resources available *before*
+        this spike depletes them), not ``u+ . x+``. From rest x recovers to 1,
+        so the released amount equals the post-spike utilization ``u``.
+        """
+        stp = STP(self.in_size, U=0.15)
+        stp.init_state(self.batch_size)
+        spike = jnp.ones((self.batch_size, self.in_size))
+        with brainstate.environ.context(dt=self.dt):
+            out = stp.update(spike)
+        # x stays at 1.0 (already full), so released == u+ == stp.u.value.
+        self.assertTrue(jnp.allclose(out, stp.u.value))
+        # The buggy post-depletion output u+.(1-u+) would be strictly smaller.
+        self.assertTrue(jnp.all(out > stp.u.value * (1.0 - stp.u.value) + 1e-3))
+
     def test_u_decay_no_spike(self):
         """Without spikes, u should decay toward 0."""
         stp = STP(self.in_size)
@@ -252,6 +267,19 @@ class TestSTD(unittest.TestCase):
         with brainstate.environ.context(dt=self.dt):
             std.update(spike)
         self.assertTrue(jnp.all(std.x.value < 1.0))
+
+    def test_first_spike_transmits_full_resources(self):
+        """Regression: STD output is ``g_syn = x``, the resources available
+        *before* this spike depletes them. The first spike from rest is
+        therefore undepressed (~1.0), while the state still depresses to 1-U.
+        """
+        std = STD(self.in_size, U=0.2)
+        std.init_state(self.batch_size)
+        spike = jnp.ones((self.batch_size, self.in_size))
+        with brainstate.environ.context(dt=self.dt):
+            out = std.update(spike)
+        self.assertTrue(jnp.allclose(out, 1.0))
+        self.assertTrue(jnp.allclose(std.x.value, 0.8, atol=1e-3))
 
     def test_recovery_no_spike(self):
         """After depression, x should recover toward 1 without spikes."""

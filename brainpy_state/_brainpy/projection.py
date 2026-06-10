@@ -18,13 +18,16 @@ from typing import Optional
 
 import brainevent
 import brainstate
+import saiunit as u
 from brainstate import State
 from brainstate.mixin import JointTypes, ParamDescriber
 from brainstate.nn import init_maybe_prefetch
+from brainstate.typing import ArrayLike
 from brainstate.util import get_unique_name
 
 from brainpy_state._base import Dynamics
 from brainpy_state._mixin import BindCondData, AlignPost
+from ._delay import InputDelay
 from .synouts import SynOut
 
 __all__ = [
@@ -189,6 +192,14 @@ class AlignPostProj(Projection):
     label : str, optional
         Label for identifying this projection's contribution in the
         post-synaptic neuron's input dictionary.
+    delay : ArrayLike or Quantity, optional
+        Conduction delay applied to the pre-synaptic input. ``None`` (default)
+        keeps the original, zero-overhead code path. A scalar time
+        (e.g. ``1.5 * u.ms``) applies one global/homogeneous delay; a
+        ``(N_pre,)`` array applies an axonal, per-pre-neuron delay. Sub-``dt``
+        delays are linearly interpolated. The buffer is sized from
+        ``ceil(max(delay) / dt)`` at :meth:`init_state`, so ``dt`` must not
+        change afterwards.
 
     Raises
     ------
@@ -243,6 +254,7 @@ class AlignPostProj(Projection):
         out: Union[ParamDescriber[SynOut], SynOut],
         post: Dynamics,
         label: Optional[str] = None,
+        delay: Optional[Union[ArrayLike, u.Quantity]] = None,
     ):
         super().__init__(name=get_unique_name(self.__class__.__name__))
 
@@ -303,6 +315,10 @@ class AlignPostProj(Projection):
         self.out: BindCondData = out
         self.post: Dynamics = post
 
+        # optional axonal/global delay over the pre-synaptic input to ``comm``
+        self.delay = delay
+        self.delay_seam = InputDelay(comm.in_size, delay) if delay is not None else None
+
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for module in self.modules:
@@ -313,6 +329,9 @@ class AlignPostProj(Projection):
         for module in self.modules:
             x = call_module(module, *args)
             args = (x,)
+        # axonal/global delay on the pre-synaptic input
+        if self.delay_seam is not None:
+            args = (self.delay_seam.update(args[0]),)
         # communication module
         x = self.comm(*args)
         # add synapse input
@@ -458,6 +477,14 @@ class CurrentProj(Projection):
         to post-synaptic current.
     post : Dynamics
         Post-synaptic neural population.
+    delay : ArrayLike or Quantity, optional
+        Conduction delay applied to the pre-synaptic input. ``None`` (default)
+        keeps the original, zero-overhead code path. A scalar time
+        (e.g. ``1.5 * u.ms``) applies one global/homogeneous delay; a
+        ``(N_pre,)`` array applies an axonal, per-pre-neuron delay. Sub-``dt``
+        delays are linearly interpolated. The buffer is sized from
+        ``ceil(max(delay) / dt)`` at :meth:`init_state`, so ``dt`` must not
+        change afterwards.
 
     Raises
     ------
@@ -503,6 +530,7 @@ class CurrentProj(Projection):
         comm: Callable,
         out: SynOut,
         post: Dynamics,
+        delay: Optional[Union[ArrayLike, u.Quantity]] = None,
     ):
         super().__init__(name=get_unique_name(self.__class__.__name__))
 
@@ -531,6 +559,10 @@ class CurrentProj(Projection):
         # output initialization
         self.comm = comm
 
+        # optional axonal/global delay over the pre-synaptic input to ``comm``
+        self.delay = delay
+        self.delay_seam = InputDelay(comm.in_size, delay) if delay is not None else None
+
     @brainstate.nn.call_order(2)
     def init_state(self, *args, **kwargs):
         for prefetch in self.prefetch:
@@ -539,6 +571,9 @@ class CurrentProj(Projection):
     def update(self, *x):
         for prefetch in self.prefetch:
             x = (call_module(prefetch, *x),)
+        # axonal/global delay on the pre-synaptic input
+        if self.delay_seam is not None:
+            x = (self.delay_seam.update(x[0]),)
         x = self.comm(*x)
         self.out.bind_cond(x)
 

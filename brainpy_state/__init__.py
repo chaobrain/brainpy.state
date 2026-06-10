@@ -59,12 +59,16 @@ from ._brainpy import (
     AdExIF, AdExIFRef,
     QuaIF, AdQuaIF, AdQuaIFRef,
     Gif, GifRef,
+    CubaLIF, CobaLIF,
 
     # Neuron models - Hodgkin-Huxley family
     HH, MorrisLecar, WangBuzsakiHH,
 
     # Neuron models - Izhikevich family
     Izhikevich, IzhikevichRef,
+
+    # Neuron models - reduced (FitzHugh-Nagumo, Hindmarsh-Rose)
+    FitzHughNagumo, HindmarshRose,
 
     # Synapse models
     Expon, DualExpon,
@@ -86,6 +90,8 @@ from ._brainpy import (
 
     # Input generators
     SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input,
+    SectionInput, ConstantInput, StepInput, RampInput,
+    SinusoidalInput, OUProcessInput, WienerProcessInput,
 )
 
 # =============================================================================
@@ -305,12 +311,16 @@ __all__ = [
     'AdExIF', 'AdExIFRef',
     'QuaIF', 'AdQuaIF', 'AdQuaIFRef',
     'Gif', 'GifRef',
+    'CubaLIF', 'CobaLIF',
 
     # Neuron models - Hodgkin-Huxley family
     'HH', 'MorrisLecar', 'WangBuzsakiHH',
 
     # Neuron models - Izhikevich family
     'Izhikevich', 'IzhikevichRef',
+
+    # Neuron models - reduced (FitzHugh-Nagumo, Hindmarsh-Rose)
+    'FitzHughNagumo', 'HindmarshRose',
 
     # Synapse models
     'Expon', 'DualExpon',
@@ -332,6 +342,8 @@ __all__ = [
 
     # Input generators
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+    'SectionInput', 'ConstantInput', 'StepInput', 'RampInput',
+    'SinusoidalInput', 'OUProcessInput', 'WienerProcessInput',
 
     # =========================================================================
     # NEST-Compatible Models

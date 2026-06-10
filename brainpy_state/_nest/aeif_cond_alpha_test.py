@@ -64,7 +64,7 @@ def _rhs_jax(y, is_refractory, i_stim, p):
 
 
 def _reference_step_jax(y, r, h, i_stim, p, x_next, w_step, dt_ms):
-    """JAX-compatible reference step using jax.lax.while_loop.
+    """JAX-compatible reference step using brainstate.transform.while_loop.
 
     Parameters
     ----------
@@ -172,7 +172,7 @@ def _reference_step_jax(y, r, h, i_stim, p, x_next, w_step, dt_ms):
 
         return (t, h, y, r, spike_count, iters + 1)
 
-    _, h, y, r, spike_count, _ = jax.lax.while_loop(cond_fn, body_fn, init_carry)
+    _, h, y, r, spike_count, _ = brainstate.transform.while_loop(cond_fn, body_fn, init_carry)
 
     # Decrement refractory counter.
     r = jnp.where(r > 0, r - 1, r)
@@ -429,7 +429,7 @@ class TestAEIFCondAlpha(unittest.TestCase):
             self.assertTrue(self._is_spike(spk))
             # At least one spike should occur (w = b * n_spikes).
             # The exact spike count differs between numpy reference (4 spikes)
-            # and JAX jax.lax.while_loop (6 spikes) due to floating-point
+            # and JAX brainstate.transform.while_loop (6 spikes) due to floating-point
             # precision differences in the RKF45 adaptive step control.
             # The b_error-based error estimate (avoiding catastrophic
             # cancellation of y_high - y_low) may further shift the count.

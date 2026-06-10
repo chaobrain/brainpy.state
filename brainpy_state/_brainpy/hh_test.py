@@ -111,6 +111,49 @@ class TestHHNeuron(unittest.TestCase):
             spikes = neuron.get_spike(v)
             self.assertTrue(jnp.all((spikes >= 0) & (spikes <= 1)))
 
+    def test_no_repeat_spike_while_above_threshold(self):
+        """B4 regression: HH-family neurons do not reset V, so the membrane stays
+        above threshold for the whole action potential (~1-2 ms). A per-step
+        ``get_spike()`` therefore reported one spike on every step above threshold.
+        A neuron that starts a step already above threshold has no rising edge and
+        must emit no spike."""
+        for NeuronClass in [HH, MorrisLecar, WangBuzsakiHH]:
+            neuron = NeuronClass(1)
+            neuron.init_state()
+            # Force the membrane well above threshold (as during an AP plateau).
+            neuron.V.value = jnp.full(neuron.V.value.shape, 100.) * u.mV
+            with brainstate.environ.context(dt=self.dt):
+                spike = neuron.update()
+            self.assertAlmostEqual(
+                float(u.get_magnitude(spike).ravel()[0]), 0.0, places=6,
+                msg=f'{NeuronClass.__name__} re-emitted a spike while already above threshold',
+            )
+
+    def test_single_spike_per_action_potential(self):
+        """B4 regression: under constant drive the reported spike count must match
+        the number of threshold crossings (action potentials), not the number of
+        steps spent above threshold."""
+        with brainstate.environ.context(dt=0.01 * u.ms):
+            neuron = HH(1)
+            neuron.init_state()
+
+            def step(i):
+                s = neuron.update(x=10. * u.uA)
+                return u.get_magnitude(s).ravel()[0], u.get_magnitude(neuron.V.value).ravel()[0]
+
+            spikes, Vs = brainstate.transform.for_loop(step, jnp.arange(2500))
+
+        spikes = jnp.asarray(spikes)
+        Vs = jnp.asarray(Vs)
+        V_th = float(jnp.asarray(u.get_magnitude(neuron.V_th)).ravel()[0])
+        spike_steps = int((spikes > 0.5).sum())
+        above_steps = int((Vs > V_th).sum())
+        rising_edges = int(((Vs[1:] > V_th) & (Vs[:-1] <= V_th)).sum())
+
+        self.assertGreaterEqual(rising_edges, 1)        # it actually spiked
+        self.assertLess(spike_steps, above_steps)       # not one spike per above-step
+        self.assertEqual(spike_steps, rising_edges)     # exactly one spike per crossing
+
     def test_soft_reset(self):
         for NeuronClass in [HH, MorrisLecar, WangBuzsakiHH]:
             neuron = NeuronClass(self.in_size, spk_reset='soft')
@@ -245,6 +288,19 @@ class TestHHNeuron(unittest.TestCase):
             self.assertTrue(jnp.all((m_inf.mantissa >= 0) & (m_inf.mantissa <= 1)))
         else:
             self.assertTrue(jnp.all((m_inf >= 0) & (m_inf <= 1)))
+
+    def test_wang_buzsaki_n_alpha_rate(self):
+        r"""Regression: the K+ activation rate must match Wang & Buzsaki (1996),
+        ``alpha_n = 0.01 (V + 34) / (1 - exp(-0.1 (V + 34)))`` per ms, not 10x it.
+        """
+        neuron = WangBuzsakiHH(self.in_size)
+        neuron.init_state()
+        # Avoid the removable singularity at V = -34 mV.
+        V_test = jnp.linspace(-70., -40., self.in_size) * u.mV
+        v = u.get_magnitude(V_test / u.mV)
+        canonical = 0.01 * (v + 34.) / (1. - jnp.exp(-0.1 * (v + 34.))) / u.ms
+        ratio = u.get_magnitude(neuron.n_alpha(V_test) / canonical)
+        self.assertTrue(jnp.allclose(ratio, 1.0, rtol=1e-4))
 
     def test_different_parameters(self):
         # Test HH with different conductance values

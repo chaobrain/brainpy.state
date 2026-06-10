@@ -9,6 +9,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Correctness bugs in BrainPy-style (`_brainpy`) models
+
+- **HH-family spike output (`HH`, `MorrisLecar`, `WangBuzsakiHH`).** These models
+  do not reset the membrane potential after a spike, so `V` stays above threshold
+  for the whole action potential. `update()` previously returned a spike on *every*
+  step above threshold, counting a single action potential as dozens of spikes
+  (~55× over-count at `dt = 0.01 ms`). It now emits one spike per upward threshold
+  crossing (rising-edge detection), with no new state and a still-differentiable
+  surrogate gradient.
+- **Short-term plasticity (`STP`, `STD`).** Transmitted output is now computed from
+  the resources available *before* depletion, so the first spike releases the
+  correct amount instead of the already-depleted value.
+- **`WangBuzsakiHH` n-gate kinetics.** Corrected the K⁺ activation opening rate
+  `αₙ`, which was 10× too large.
+- **`SpikeTime`.** Out-of-bounds time indices no longer read invalid rows; steps
+  outside the defined window return zeros.
+- **`ExpIF` / `AdExIF` (and refractory variants).** The exponential spike-initiation
+  term is now guarded against overflow (clamped argument), preventing `inf`/`NaN`
+  for membrane potentials above the threshold slope factor.
+- **Poisson inputs (`PoissonSpike`, `PoissonEncoder`, `poisson_input`).** Use the
+  exact per-bin spike probability `1 − exp(−rate·dt)`; the Gaussian-approximation
+  branch no longer yields negative, fractional, or `NaN` spike counts when
+  `rate·dt` is large.
+- **`LeakyRateReadout`.** `tau` is now sized to `out_size` (the readout-state
+  dimension), so a per-unit `tau` works when `in_size != out_size`.
+- **Gap junctions (`SymmetryGapJunction`, `AsymmetryGapJunction`).** Current inputs
+  are registered under a stable per-instance key instead of one derived from the
+  live input count; repeated updates no longer leak new input slots or accumulate
+  stale currents.
+- **`Neuron` base class.** `spk_reset` is validated at construction (must be
+  `'soft'` or `'hard'`).
+
+### Added — Synaptic delays on projections (`_brainpy`)
+
+- `AlignPostProj` and `CurrentProj` now accept an optional, unit-carrying
+  `delay=` keyword. A scalar (e.g. `delay=1.5 * u.ms`) applies a global,
+  homogeneous conduction delay; a `(N_pre,)` array applies an axonal,
+  per-pre-neuron delay. Sub-`dt` delays are linearly interpolated, so the delay
+  need not be an integer multiple of `dt`. `delay=None` (the default) keeps the
+  original code path with zero overhead and bit-for-bit identical output. The
+  delay is backed by a single shared `brainstate.nn.Delay` buffer over the
+  pre-synaptic input (new internal `InputDelay` seam), sized once from
+  `ceil(max(delay) / dt)` at `init_state`.
+- The `InputDelay` seam also implements the heterogeneous, per-connection read
+  (`delay` of shape `(N_syn,)` plus `indices=pre_ids`) via the diagonal gather
+  `retrieve_at_step(steps, pre_ids)` — the same buffer, only the gather index
+  changes — with `len(delay) == len(indices)` validated at `init_state`. This is
+  the mechanism intended to back explicit-connectivity projections; the
+  comm-callable `AlignPostProj`/`CurrentProj` expose the global and axonal
+  granularities. Gap junctions take no `delay=` (electrical coupling is treated
+  as instantaneous), so a passed delay raises rather than being silently ignored.
+
+### Added — Analog current generators (`_brainpy`)
+
+- Per-step analog current sources (`brainpy.state` namespace): `SectionInput`,
+  `ConstantInput`, `StepInput`, `RampInput`, `SinusoidalInput`,
+  `WienerProcessInput`, and `OUProcessInput`. Unlike `braintools.input` (which
+  precomputes an offline array for a whole run), these are stateful `Module`s
+  that emit the instantaneous current at the network's current time, so they
+  compose with `add_current_input` and stay synchronized with the simulation
+  clock without materializing long arrays under `jit`. Scalar parameters
+  broadcast to `in_size`; the stochastic generators draw independent per-element
+  samples (noise scaled by `√dt`), and `OUProcessInput` matches the
+  `braintools.input.ou_process` discretization.
+
+### Added — Reduced neuron models (`_brainpy`)
+
+- `FitzHughNagumo` (2-D excitable) and `HindmarshRose` (3-D bursting) reduced
+  models. Both are dimensionless systems with physical time constants and,
+  like the Hodgkin-Huxley family, **no reset** — so their spike output uses the
+  rising-edge detector (one spike per upward threshold crossing), not a per-step
+  threshold test.
+- `CubaLIF` and `CobaLIF`: convenience LIF neurons with a bundled exponential
+  synaptic term (current-based and conductance-based, respectively), so the
+  common `LIF + Expon + CUBA/COBA` wiring is available as a single model. Delta
+  inputs feed the built-in synapse; current inputs / the `x` argument are the
+  external membrane current.
+
+### Added — Design notes
+
+- `DESIGN_delays_and_missing_features.md` — proposal for first-class synaptic
+  delays (`delay=` on projections, built on `brainstate` delay primitives), plus
+  missing input generators (section/step/ramp/sinusoidal/Ornstein–Uhlenbeck/Wiener)
+  and reduced neuron models (FitzHugh–Nagumo, Hindmarsh–Rose, `CobaLIF`/`CubaLIF`),
+  with an architecture assessment.
+
 ### Changed — JIT-safe parameter validation for NEST neurons
 
 - Added `brainpy_state._nest._utils.cond_any`, a shared tracer-aware reduction
