@@ -86,6 +86,8 @@ from ._brainpy import (
 
     # Input generators
     SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input,
+    SectionInput, ConstantInput, StepInput, RampInput,
+    SinusoidalInput, OUProcessInput, WienerProcessInput,
 )
 
 # =============================================================================
@@ -332,6 +334,8 @@ __all__ = [
 
     # Input generators
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+    'SectionInput', 'ConstantInput', 'StepInput', 'RampInput',
+    'SinusoidalInput', 'OUProcessInput', 'WienerProcessInput',
 
     # =========================================================================
     # NEST-Compatible Models

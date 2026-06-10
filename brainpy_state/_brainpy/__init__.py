@@ -36,6 +36,8 @@ from .hh import HH, MorrisLecar, WangBuzsakiHH
 # Input generators
 # ---------------------------------------------------------------------------
 from .inputs import SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input
+from .inputs import (SectionInput, ConstantInput, StepInput, RampInput,
+                     SinusoidalInput, OUProcessInput, WienerProcessInput)
 # Izhikevich family
 from .izhikevich import Izhikevich, IzhikevichRef
 # LIF family
@@ -102,4 +104,6 @@ __all__ = [
 
     # Input generators
     'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
+    'SectionInput', 'ConstantInput', 'StepInput', 'RampInput',
+    'SinusoidalInput', 'OUProcessInput', 'WienerProcessInput',
 ]

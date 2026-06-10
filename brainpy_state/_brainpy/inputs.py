@@ -31,7 +31,29 @@ __all__ = [
     'PoissonEncoder',
     'PoissonInput',
     'poisson_input',
+    'SectionInput',
+    'ConstantInput',
+    'StepInput',
+    'RampInput',
+    'SinusoidalInput',
+    'OUProcessInput',
+    'WienerProcessInput',
 ]
+
+
+def _now():
+    r"""Resolve the current simulation time as a ``saiunit`` quantity.
+
+    Mirrors :meth:`SpikeTime.update`: the step index ``i`` in
+    ``brainstate.environ`` is the primary clock (``t = i * dt``); ``t`` is used
+    as a fallback. This keeps every generator synchronized with the network's
+    clock rather than carrying an independent counter that could drift.
+    """
+    dt = brainstate.environ.get_dt()
+    i = brainstate.environ.get('i', default=None)
+    if i is not None:
+        return i * dt
+    return brainstate.environ.get('t')
 
 
 class SpikeTime(brainstate.nn.Dynamics):
@@ -757,3 +779,284 @@ def poisson_input(
         )
     else:
         target.value = data
+
+
+# ---------------------------------------------------------------------------
+# Analog current generators
+#
+# Per-step ``Module`` form (not the offline arrays produced by
+# ``braintools.input``): each :meth:`update` returns the instantaneous current
+# at the network's current time, so the signal can be wired into a population
+# via ``add_current_input`` and stays synchronized with the simulation clock.
+# Scalar parameters are broadcast to ``in_size``; the stochastic generators draw
+# independent samples per element.
+# ---------------------------------------------------------------------------
+
+
+class SectionInput(brainstate.nn.Dynamics):
+    r"""Piecewise-constant current built from sections of given value and duration.
+
+    Each section ``k`` holds current ``values[k]`` for ``durations[k]``; the
+    output is zero once the total duration has elapsed.
+
+    Parameters
+    ----------
+    in_size : Size
+        Output geometry. Scalar section values are broadcast to this shape.
+    values : sequence of Quantity
+        Per-section current amplitudes (each a scalar current quantity).
+    durations : sequence of Quantity
+        Per-section durations; same length as ``values``.
+    name : str, optional
+        Module name.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainpy, saiunit as u
+        >>> stim = brainpy.state.SectionInput(1, [0, 10, 0] * u.pA, [50, 100, 50] * u.ms)
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, values, durations, name=None):
+        super().__init__(in_size=in_size, name=name)
+        if len(values) != len(durations):
+            raise ValueError(f'"values" and "durations" must be the same length, '
+                             f'got {len(values)} != {len(durations)}.')
+        values = u.math.asarray(values)
+        self._mag, self._unit = u.split_mantissa_unit(values)
+        self._time_unit = u.get_unit(u.math.asarray(durations))
+        dur = u.math.asarray(durations).to_decimal(self._time_unit)
+        self._cum = jnp.asarray(np.cumsum(np.asarray(dur)))
+
+    def update(self):
+        t_d = _now().to_decimal(self._time_unit)
+        sec = jnp.searchsorted(self._cum, t_d, side='right')
+        in_win = sec < self._cum.shape[0]
+        mag = jnp.where(in_win, self._mag[jnp.clip(sec, 0, self._cum.shape[0] - 1)], 0.0)
+        return u.maybe_decimal(jnp.broadcast_to(mag, self.varshape) * self._unit)
+
+
+class ConstantInput(brainstate.nn.Dynamics):
+    r"""Constant current for a fixed duration, zero afterwards.
+
+    Parameters
+    ----------
+    in_size : Size
+        Output geometry; ``value`` is broadcast to this shape.
+    value : Quantity
+        Current amplitude.
+    duration : Quantity
+        Time window ``[0, duration)`` over which the current is applied.
+    name : str, optional
+        Module name.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, value, duration, name=None):
+        super().__init__(in_size=in_size, name=name)
+        self._mag, self._unit = u.split_mantissa_unit(value)
+        self._duration = duration
+
+    def update(self):
+        t = _now()
+        in_win = t < self._duration
+        mag = jnp.where(in_win, self._mag, 0.0)
+        return u.maybe_decimal(jnp.broadcast_to(mag, self.varshape) * self._unit)
+
+
+class StepInput(brainstate.nn.Dynamics):
+    r"""Staircase current: amplitude ``amplitudes[k]`` from ``step_times[k]`` onward.
+
+    Before the first step time the output is zero; after the last step time the
+    final amplitude is held.
+
+    Parameters
+    ----------
+    in_size : Size
+        Output geometry; scalar amplitudes are broadcast to this shape.
+    amplitudes : sequence of Quantity
+        Current amplitude for each step.
+    step_times : sequence of Quantity
+        Time at which each amplitude begins. Sorted automatically.
+    name : str, optional
+        Module name.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, amplitudes, step_times, name=None):
+        super().__init__(in_size=in_size, name=name)
+        if len(amplitudes) != len(step_times):
+            raise ValueError(f'"amplitudes" and "step_times" must be the same length, '
+                             f'got {len(amplitudes)} != {len(step_times)}.')
+        amplitudes = u.math.asarray(amplitudes)
+        self._mag, self._unit = u.split_mantissa_unit(amplitudes)
+        self._time_unit = u.get_unit(u.math.asarray(step_times))
+        times = np.asarray(u.math.asarray(step_times).to_decimal(self._time_unit))
+        order = np.argsort(times)
+        self._times = jnp.asarray(times[order])
+        self._mag = self._mag[order]
+
+    def update(self):
+        t_d = _now().to_decimal(self._time_unit)
+        idx = jnp.searchsorted(self._times, t_d, side='right') - 1
+        in_win = idx >= 0
+        mag = jnp.where(in_win, self._mag[jnp.clip(idx, 0, self._times.shape[0] - 1)], 0.0)
+        return u.maybe_decimal(jnp.broadcast_to(mag, self.varshape) * self._unit)
+
+
+class RampInput(brainstate.nn.Dynamics):
+    r"""Linear ramp from ``c_start`` to ``c_end`` over ``[t_start, t_start + duration)``.
+
+    The output is zero outside that window.
+
+    Parameters
+    ----------
+    in_size : Size
+        Output geometry; the ramp is broadcast to this shape.
+    c_start, c_end : Quantity
+        Start and end current amplitudes (same units).
+    duration : Quantity
+        Length of the ramp window.
+    t_start : Quantity, optional
+        When the ramp begins (default ``0``).
+    name : str, optional
+        Module name.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, c_start, c_end, duration, t_start=None, name=None):
+        super().__init__(in_size=in_size, name=name)
+        self._c_start, self._unit = u.split_mantissa_unit(c_start)
+        self._c_end = u.Quantity(c_end).to_decimal(self._unit)
+        self._time_unit = u.get_unit(duration)
+        self._duration = u.Quantity(duration).to_decimal(self._time_unit)
+        self._t_start = 0.0 if t_start is None else u.Quantity(t_start).to_decimal(self._time_unit)
+
+    def update(self):
+        t_d = _now().to_decimal(self._time_unit)
+        frac = (t_d - self._t_start) / self._duration
+        in_win = (t_d >= self._t_start) & (t_d < self._t_start + self._duration)
+        mag = jnp.where(in_win, self._c_start + (self._c_end - self._c_start) * frac, 0.0)
+        return u.maybe_decimal(jnp.broadcast_to(mag, self.varshape) * self._unit)
+
+
+class SinusoidalInput(brainstate.nn.Dynamics):
+    r"""Sinusoidal current ``bias + amplitude * sin(2*pi*frequency*t)``.
+
+    The phase starts at zero; the output is zero outside ``[0, duration)``.
+
+    Parameters
+    ----------
+    in_size : Size
+        Output geometry; the waveform is broadcast to this shape.
+    amplitude : Quantity
+        Peak current amplitude.
+    frequency : Quantity
+        Oscillation frequency (Hz).
+    duration : Quantity
+        Time window over which the drive is active.
+    bias : Quantity, optional
+        Constant current offset added within the window (default none).
+    name : str, optional
+        Module name.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, amplitude, frequency, duration, bias=None, name=None):
+        super().__init__(in_size=in_size, name=name)
+        self._amp, self._unit = u.split_mantissa_unit(amplitude)
+        self._bias = 0.0 if bias is None else u.Quantity(bias).to_decimal(self._unit)
+        self._freq_hz = u.Quantity(frequency).to_decimal(u.Hz)
+        self._duration_s = u.Quantity(duration).to_decimal(u.second)
+
+    def update(self):
+        t_s = _now().to_decimal(u.second)
+        in_win = (t_s >= 0.) & (t_s < self._duration_s)
+        sig = self._amp * jnp.sin(2 * jnp.pi * self._freq_hz * t_s) + self._bias
+        mag = jnp.where(in_win, sig, 0.0)
+        return u.maybe_decimal(jnp.broadcast_to(mag, self.varshape) * self._unit)
+
+
+class WienerProcessInput(brainstate.nn.Dynamics):
+    r"""White-noise (Wiener increment) current ``sigma * sqrt(dt) * N(0, 1)`` per step.
+
+    Independent samples are drawn per element each step (a memoryless process);
+    the output is zero outside ``[0, duration)``. The increment scales with
+    ``sqrt(dt)`` so its variance is ``sigma**2 * dt`` regardless of step size.
+
+    Parameters
+    ----------
+    in_size : Size
+        Number of independent noise channels.
+    sigma : Quantity
+        Noise standard-deviation scale (current units).
+    duration : Quantity
+        Time window over which the noise is active.
+    name : str, optional
+        Module name.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, sigma, duration, name=None):
+        super().__init__(in_size=in_size, name=name)
+        self._sigma, self._unit = u.split_mantissa_unit(sigma)
+        self._duration = duration
+
+    def update(self):
+        dt_mag, time_unit = u.split_mantissa_unit(brainstate.environ.get_dt())
+        in_win = _now() < self._duration
+        noise = brainstate.random.randn(*self.varshape) * self._sigma * jnp.sqrt(dt_mag)
+        mag = jnp.where(in_win, noise, 0.0)
+        return u.maybe_decimal(mag * self._unit)
+
+
+class OUProcessInput(brainstate.nn.Dynamics):
+    r"""Ornstein-Uhlenbeck (coloured-noise) current.
+
+    Integrates :math:`dx = (mean - x)\,dt/\tau + \sigma\,\sqrt{dt}\,N(0, 1)`,
+    initialised at ``mean``; the output is zero outside ``[0, duration)``. The
+    discretization matches :func:`braintools.input.ou_process`, so the
+    steady-state variance is ``sigma**2 * tau / 2``.
+
+    Parameters
+    ----------
+    in_size : Size
+        Number of independent OU channels.
+    mean : Quantity
+        Asymptotic mean (drift) current.
+    sigma : Quantity
+        Noise scale (current units).
+    tau : Quantity
+        Relaxation time constant.
+    duration : Quantity
+        Time window over which the process is active.
+    name : str, optional
+        Module name.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, in_size, mean, sigma, tau, duration, name=None):
+        super().__init__(in_size=in_size, name=name)
+        self._mean, self._unit = u.split_mantissa_unit(mean)
+        self._sigma = u.Quantity(sigma).to_decimal(self._unit)
+        self._tau = tau
+        self._duration = duration
+
+    def init_state(self, *args, **kwargs):
+        self.x = brainstate.HiddenState(jnp.broadcast_to(jnp.asarray(self._mean, dtype=float),
+                                                         self.varshape))
+
+    def update(self):
+        dt = brainstate.environ.get_dt()
+        dt_mag, time_unit = u.split_mantissa_unit(dt)
+        tau_d = u.Quantity(self._tau).to_decimal(time_unit)
+        in_win = _now() < self._duration
+        x = self.x.value
+        noise = brainstate.random.randn(*self.varshape)
+        x_new = x + (self._mean - x) * (dt_mag / tau_d) + self._sigma * jnp.sqrt(dt_mag) * noise
+        x_upd = jnp.where(in_win, x_new, x)
+        self.x.value = x_upd
+        mag = jnp.where(in_win, x_upd, 0.0)
+        return u.maybe_decimal(mag * self._unit)

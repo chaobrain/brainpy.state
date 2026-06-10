@@ -41,6 +41,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Neuron` base class.** `spk_reset` is validated at construction (must be
   `'soft'` or `'hard'`).
 
+### Added — Analog current generators (`_brainpy`)
+
+- Per-step analog current sources (`brainpy.state` namespace): `SectionInput`,
+  `ConstantInput`, `StepInput`, `RampInput`, `SinusoidalInput`,
+  `WienerProcessInput`, and `OUProcessInput`. Unlike `braintools.input` (which
+  precomputes an offline array for a whole run), these are stateful `Module`s
+  that emit the instantaneous current at the network's current time, so they
+  compose with `add_current_input` and stay synchronized with the simulation
+  clock without materializing long arrays under `jit`. Scalar parameters
+  broadcast to `in_size`; the stochastic generators draw independent per-element
+  samples (noise scaled by `√dt`), and `OUProcessInput` matches the
+  `braintools.input.ou_process` discretization.
+
 ### Added — Design notes
 
 - `DESIGN_delays_and_missing_features.md` — proposal for first-class synaptic
