@@ -115,7 +115,9 @@ class LeakyRateReadout(brainstate.nn.Module):
         # parameters
         self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
         self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
-        self.tau = braintools.init.param(tau, self.in_size)
+        # ``tau`` parameterises the leaky read-out state ``r``, which lives in
+        # the output space, so it is sized to ``out_size`` (not ``in_size``).
+        self.tau = braintools.init.param(tau, self.out_size)
         self.decay = u.math.exp(-brainstate.environ.get_dt() / self.tau)
 
         # weights

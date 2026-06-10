@@ -440,7 +440,11 @@ class ExpIF(Neuron):
         V = last_v - (V_th - self.V_reset) * last_spk
 
         def dv(v):
-            exp_term = self.delta_T * u.math.exp((v - self.V_T) / self.delta_T)
+            # Clamp the exponent to avoid overflow to inf/NaN once V runs far
+            # past V_T; exp(20) already dwarfs the reset, so dynamics below
+            # threshold are untouched.
+            exp_arg = u.math.minimum((v - self.V_T) / self.delta_T, 20.)
+            exp_term = self.delta_T * u.math.exp(exp_arg)
             return (-(v - self.V_rest) + exp_term + self.R * self.sum_current_inputs(x, v)) / self.tau
 
         V = brainstate.nn.exp_euler_step(dv, V)
@@ -592,7 +596,11 @@ class ExpIFRef(Neuron):
         v_reset = last_v - (V_th - self.V_reset) * last_spk
 
         def dv(v):
-            exp_term = self.delta_T * u.math.exp((v - self.V_T) / self.delta_T)
+            # Clamp the exponent to avoid overflow to inf/NaN once V runs far
+            # past V_T; exp(20) already dwarfs the reset, so dynamics below
+            # threshold are untouched.
+            exp_arg = u.math.minimum((v - self.V_T) / self.delta_T, 20.)
+            exp_term = self.delta_T * u.math.exp(exp_arg)
             return (-(v - self.V_rest) + exp_term + self.R * self.sum_current_inputs(x, v)) / self.tau
 
         V_candidate = brainstate.nn.exp_euler_step(dv, v_reset)
@@ -772,7 +780,11 @@ class AdExIF(Neuron):
         w = last_w + self.b * last_spk
 
         def dv(v):
-            exp_term = self.delta_T * u.math.exp((v - self.V_T) / self.delta_T)
+            # Clamp the exponent to avoid overflow to inf/NaN once V runs far
+            # past V_T; exp(20) already dwarfs the reset, so dynamics below
+            # threshold are untouched.
+            exp_arg = u.math.minimum((v - self.V_T) / self.delta_T, 20.)
+            exp_term = self.delta_T * u.math.exp(exp_arg)
             I_total = self.sum_current_inputs(x, v)
             return (-(v - self.V_rest) + exp_term - self.R * w + self.R * I_total) / self.tau
 
@@ -975,7 +987,11 @@ class AdExIFRef(Neuron):
         w_reset = last_w + self.b * last_spk
 
         def dv(v):
-            exp_term = self.delta_T * u.math.exp((v - self.V_T) / self.delta_T)
+            # Clamp the exponent to avoid overflow to inf/NaN once V runs far
+            # past V_T; exp(20) already dwarfs the reset, so dynamics below
+            # threshold are untouched.
+            exp_arg = u.math.minimum((v - self.V_T) / self.delta_T, 20.)
+            exp_term = self.delta_T * u.math.exp(exp_arg)
             I_total = self.sum_current_inputs(x, v)
             return (-(v - self.V_rest) + exp_term - self.R * w_reset + self.R * I_total) / self.tau
 

@@ -58,6 +58,18 @@ class TestReadoutModels(unittest.TestCase):
             self.assertTrue(jnp.all(decay > 0))
             self.assertTrue(jnp.all(decay < 1))
 
+    def test_LeakyRateReadout_per_unit_tau(self):
+        """Per-unit tau is sized to out_size (the readout state dimension),
+        so it works when in_size != out_size."""
+        with brainstate.environ.context(dt=0.1):
+            model = brainpy.state.LeakyRateReadout(
+                in_size=5, out_size=3, tau=jnp.array([2., 3., 4.])
+            )
+            self.assertEqual(model.decay.shape, (3,))
+            model.init_state(batch_size=self.batch_size)
+            out = model.update(jnp.ones((self.batch_size, 5)))
+            self.assertEqual(out.shape, (self.batch_size, 3))
+
     def test_LeakyRateReadout_accumulation(self):
         """With constant input, output should grow toward a steady state."""
         with brainstate.environ.context(dt=0.1):

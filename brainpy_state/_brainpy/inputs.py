@@ -221,6 +221,18 @@ class SpikeTime(brainstate.nn.Dynamics):
         )
 
 
+def _per_bin_spike_prob(freq):
+    r"""Exact per-bin spike probability of a Poisson process, ``1 - exp(-freq*dt)``.
+
+    Bounded in ``[0, 1)`` for any rate, unlike the linear ``freq*dt`` approximation
+    which exceeds 1 — and yields invalid binomial parameters / NaN — once
+    ``freq*dt > 1``.
+    """
+    rate_dt = freq * brainstate.environ.get_dt()
+    rate_dt = rate_dt.to_decimal() if isinstance(rate_dt, u.Quantity) else rate_dt
+    return -u.math.expm1(-rate_dt)
+
+
 class PoissonSpike(brainstate.nn.Dynamics):
     r"""Poisson spike generator with fixed firing rates.
 
@@ -298,7 +310,7 @@ class PoissonSpike(brainstate.nn.Dynamics):
         self.freqs = braintools.init.param(freqs, self.varshape, allow_none=False)
 
     def update(self):
-        spikes = brainstate.random.rand(*self.varshape) <= (self.freqs * brainstate.environ.get_dt())
+        spikes = brainstate.random.rand(*self.varshape) <= _per_bin_spike_prob(self.freqs)
         spikes = u.math.asarray(spikes, dtype=self.spk_type)
         return spikes
 
@@ -393,7 +405,7 @@ class PoissonEncoder(brainstate.nn.Dynamics):
         self.spk_type = spk_type
 
     def update(self, freqs: ArrayLike):
-        spikes = brainstate.random.rand(*self.varshape) <= (freqs * brainstate.environ.get_dt())
+        spikes = brainstate.random.rand(*self.varshape) <= _per_bin_spike_prob(freqs)
         spikes = u.math.asarray(spikes, dtype=self.spk_type)
         return spikes
 
@@ -655,8 +667,7 @@ def poisson_input(
     weight = brainstate.maybe_state(weight)
 
     assert isinstance(target, brainstate.State), 'The target must be a State.'
-    p = freq * brainstate.environ.get_dt()
-    p = p.to_decimal() if isinstance(p, u.Quantity) else p
+    p = _per_bin_spike_prob(freq)
     a = num_input * p
     b = num_input * (1 - p)
     tar_val = target.value
@@ -666,11 +677,9 @@ def poisson_input(
     if indices is None:
         # generate Poisson input
         branch1 = jax.tree.map(
-            lambda tar: brainstate.random.normal(
-                a,
-                std,
-                tar.shape,
-                dtype=tar.dtype
+            lambda tar: u.math.maximum(
+                u.math.round(brainstate.random.normal(a, std, tar.shape, dtype=tar.dtype)),
+                0.,
             ),
             tar_val,
             is_leaf=u.math.is_quantity
@@ -705,11 +714,9 @@ def poisson_input(
     else:
         # generate Poisson input
         branch1 = jax.tree.map(
-            lambda tar: brainstate.random.normal(
-                a,
-                std,
-                tar[indices].shape,
-                dtype=tar.dtype
+            lambda tar: u.math.maximum(
+                u.math.round(brainstate.random.normal(a, std, tar[indices].shape, dtype=tar.dtype)),
+                0.,
             ),
             tar_val,
             is_leaf=u.math.is_quantity

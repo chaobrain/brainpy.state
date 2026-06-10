@@ -610,6 +610,24 @@ class TestPoissonInputFunction(unittest.TestCase):
                 original.to_decimal(u.mV)
             ))
 
+    def test_finite_when_rate_dt_exceeds_one(self):
+        r"""Regression: freq*dt > 1 must not yield NaN (per-bin probability is
+        bounded by 1 - exp(-freq*dt))."""
+        with brainstate.environ.context(dt=1.0 * u.ms):
+            V = brainstate.HiddenState(jnp.zeros(50) * u.mV)
+            poisson_input(freq=20000. * u.Hz, num_input=100, weight=0.1 * u.mV, target=V)
+            self.assertTrue(jnp.all(jnp.isfinite(V.value.to_decimal(u.mV))))
+
+    def test_gaussian_branch_nonnegative_integer_counts(self):
+        r"""Regression: in the Gaussian-approximation regime the injected
+        counts must be non-negative integers, like the binomial branch."""
+        with brainstate.environ.context(dt=self.dt):
+            V = brainstate.HiddenState(jnp.zeros(2000) * u.mV)
+            poisson_input(freq=5000. * u.Hz, num_input=1000, weight=1.0 * u.mV, target=V)
+            counts = V.value.to_decimal(u.mV)  # weight = 1 mV -> magnitude == count
+            self.assertTrue(jnp.all(counts >= 0.))
+            self.assertTrue(jnp.allclose(counts, jnp.round(counts)))
+
     def test_updates_target_specific_indices(self):
         with brainstate.environ.context(dt=self.dt):
             brainstate.random.seed(42)

@@ -79,6 +79,24 @@ class TestNeuron(unittest.TestCase):
                 out = call(inputs[t])
                 self.assertEqual(out.shape, (self.batch_size, self.in_size))
 
+    def test_exp_family_finite_above_threshold(self):
+        r"""Regression: the spike-initiation exp term must not overflow to
+        inf/NaN when V is driven far above V_T (ExpIF/AdExIF family)."""
+        for cls in (ExpIF, ExpIFRef, AdExIF, AdExIFRef):
+            neuron = cls(5)
+            neuron.init_state()
+            neuron.V.value = jnp.full((5,), 1000.) * u.mV  # far above V_T
+            with brainstate.environ.context(dt=self.dt, t=0. * u.ms):
+                spk = neuron.update(0. * u.mA)
+            self.assertTrue(
+                jnp.all(jnp.isfinite(u.get_magnitude(neuron.V.value))),
+                msg=f'{cls.__name__}: V is not finite',
+            )
+            self.assertTrue(
+                jnp.all(jnp.isfinite(u.get_magnitude(spk))),
+                msg=f'{cls.__name__}: spike is not finite',
+            )
+
     def test_alif_neuron(self):
         tau = 20.0 * u.ms
         tau_ada = 100.0 * u.ms
