@@ -41,6 +41,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Neuron` base class.** `spk_reset` is validated at construction (must be
   `'soft'` or `'hard'`).
 
+### Added — Synaptic delays on projections (`_brainpy`)
+
+- `AlignPostProj` and `CurrentProj` now accept an optional, unit-carrying
+  `delay=` keyword. A scalar (e.g. `delay=1.5 * u.ms`) applies a global,
+  homogeneous conduction delay; a `(N_pre,)` array applies an axonal,
+  per-pre-neuron delay. Sub-`dt` delays are linearly interpolated, so the delay
+  need not be an integer multiple of `dt`. `delay=None` (the default) keeps the
+  original code path with zero overhead and bit-for-bit identical output. The
+  delay is backed by a single shared `brainstate.nn.Delay` buffer over the
+  pre-synaptic input (new internal `InputDelay` seam), sized once from
+  `ceil(max(delay) / dt)` at `init_state`.
+
 ### Added — Analog current generators (`_brainpy`)
 
 - Per-step analog current sources (`brainpy.state` namespace): `SectionInput`,
