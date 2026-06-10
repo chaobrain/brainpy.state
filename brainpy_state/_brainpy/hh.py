@@ -292,7 +292,11 @@ class HH(Neuron):
         self.m.value = m
         self.h.value = h
         self.n.value = n
-        return self.get_spike(V)
+        # Rising-edge detection: emit a spike only when the membrane crosses the
+        # threshold upward on this step. HH-family models do not reset V, so the
+        # membrane stays above threshold for the whole action potential; a plain
+        # per-step threshold test would report a spike on every one of those steps.
+        return self.get_spike(V) * (1. - self.get_spike(last_V))
 
 
 class MorrisLecar(Neuron):
@@ -491,7 +495,11 @@ class MorrisLecar(Neuron):
 
         self.V.value = V
         self.W.value = W
-        return self.get_spike(V)
+        # Rising-edge detection: emit a spike only when the membrane crosses the
+        # threshold upward on this step. HH-family models do not reset V, so the
+        # membrane stays above threshold for the whole action potential; a plain
+        # per-step threshold test would report a spike on every one of those steps.
+        return self.get_spike(V) * (1. - self.get_spike(last_V))
 
 
 class WangBuzsakiHH(Neuron):
@@ -724,4 +732,8 @@ class WangBuzsakiHH(Neuron):
         self.V.value = V
         self.h.value = h
         self.n.value = n
-        return self.get_spike(V)
+        # Rising-edge detection: emit a spike only when the membrane crosses the
+        # threshold upward on this step. HH-family models do not reset V, so the
+        # membrane stays above threshold for the whole action potential; a plain
+        # per-step threshold test would report a spike on every one of those steps.
+        return self.get_spike(V) * (1. - self.get_spike(last_V))
