@@ -55,7 +55,6 @@ exists.
 | `brunel_exp_multisynapse_nest.py` | missing | none | upstream | Exercises multi-port AdEx; cross-link `neurons-gap.md` multisynapse |
 | `brunel_siegert_nest.py` | missing | none | upstream | Mean-field comparison vs. spiking — uses `siegert_neuron` (already validated) |
 | `brunel_alpha_evolution_strategies.py` | missing | none | upstream | Optimizer-tuned Brunel |
-| `hpc_benchmark.py` | unsupported | none | upstream | Requires MPI; out of scope per spec §7 |
 
 ### 3.2 Single- and few-neuron demos
 
