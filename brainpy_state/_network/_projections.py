@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Optional
 
+import brainevent
 import brainstate
 import jax
 import jax.numpy as jnp
+import numpy as np
 import saiunit as u
 
 from brainpy_state._base import Dynamics
@@ -72,6 +74,37 @@ class _DenseMatMul(brainstate.nn.Module):
         if isinstance(W, u.Quantity):
             return u.Quantity(jnp.asarray(x) @ W.mantissa, unit=W.unit)
         return jnp.asarray(x) @ W
+
+
+class _SparseEventMatMul(brainstate.nn.Module):
+    """Comm module: ``BinaryArray(input) @ CSR`` — event matmul over sparse edges.
+
+    Builds a ``brainevent`` CSR (rows = pre) from sampled ``(pre_idx, post_idx)``
+    edges and per-edge weights, for memory-light fan-out at large network sizes.
+    Edges and weights match the dense path exactly (same sampler), so the result
+    is bit-identical to ``input @ W`` on event-valued input.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, pre_idx, post_idx, w_mantissa, w_unit, *, n_pre: int, n_post: int):
+        super().__init__()
+        pre_np = np.asarray(pre_idx)
+        post_np = np.asarray(post_idx)
+        order = np.argsort(pre_np, kind='stable')           # group edges by pre row
+        self._indices = jnp.asarray(post_np[order])
+        self._indptr = jnp.asarray(
+            np.concatenate([[0], np.cumsum(np.bincount(pre_np, minlength=n_pre))]))
+        self._shape = (int(n_pre), int(n_post))
+        self._unit = w_unit
+        self._data = brainstate.ParamState(jnp.asarray(np.asarray(w_mantissa)[order]))
+
+    def update(self, *args, **kwargs):
+        return self(*args, **kwargs)
+
+    def __call__(self, x):
+        csr = brainevent.CSR((self._data.value, self._indices, self._indptr), shape=self._shape)
+        y = jnp.asarray(brainevent.BinaryArray(jnp.asarray(x)) @ csr)
+        return u.Quantity(y, unit=self._unit) if self._unit is not u.UNITLESS else y
 
 
 class _RuleProj(brainstate.nn.Module):

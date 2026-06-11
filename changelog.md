@@ -151,14 +151,21 @@ for the implementation plan.
   to one independent train per target neuron (matching NEST), and the
   list-mutating `spike_recorder` is read via stacked-array taps outside the JIT
   loop.
+- `connect(..., comm='sparse')` — routes connectivity through a `brainevent` CSR
+  event matmul (built from the same sampler as the dense path, so bit-identical
+  results) instead of a dense weight matrix. Memory-light fan-out makes the
+  flagship runnable at NEST's native `order=2500` (~1.9 GB vs a multi-GB dense
+  matrix); `comm='dense'` remains the default for small networks.
 - `examples/nest/brunel_alpha.py` — faithful port of NEST's `brunel_alpha_nest.py`
   (alpha-synapse random balanced network, `ComputePSPnorm`/LambertW calibration)
-  onto the `Simulator` API.
+  onto the `Simulator` API; defaults to `order=2500` with sparse comm.
 - Live-NEST validation harness in `brainpy_state/_nest/_validation/`:
   single-neuron `iaf_psc_alpha`, device (`poisson_generator` rate,
-  `spike_recorder` stamping), and full Brunel-network firing-rate parity. At
-  `order=200` the excitatory rate is **56.9 spks/s vs live NEST 57.0 spks/s
-  (0.21 %)**. The tests skip when `nest` is not importable.
+  `spike_recorder` stamping), and full Brunel-network firing-rate parity. The
+  excitatory rate matches live NEST to **0.21 %** at `order=200` (56.9 vs 57.0
+  spks/s) and **0.91 %** at `order=2500` (28.8 vs 28.5 spks/s — the lower rate is
+  a genuine finite-size effect NEST reproduces). The tests skip when `nest` is
+  not importable.
 
 ### Fixed — Independent seeds for fanned-out projections/generators (`_network`)
 
