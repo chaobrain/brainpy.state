@@ -5,9 +5,7 @@
 **NEST reference version:** 3.x (latest stable on nest-simulator.readthedocs.io)
 **Audience:** brainpy.state maintainers. Not built into the public Sphinx site.
 
-This index rolls up the seven per-axis gap analyses in this directory. The
-authoritative spec for methodology, taxonomy, and evidence rules is at
-`../../superpowers/specs/2026-05-11-nest-gap-analysis-design.md`. Each per-axis
+This index rolls up the seven per-axis gap analyses in this directory. Each per-axis
 doc owns its own evidence table; this index owns the consolidated roadmap.
 
 ## Parity summary
