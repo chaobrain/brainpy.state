@@ -170,7 +170,7 @@ class EventPlasticProj(brainstate.nn.Module):
        ...     post_local_idx=jnp.arange(2), n_post_pop=2,
        ...     pre_idx=jnp.array([0, 1]), post_idx=jnp.array([0, 1]),
        ...     rule=_StaticTestRule(weight=jnp.array([3., 4.]) * u.pA))
-       >>> brainstate.nn.init_all_states(proj)
+       >>> _ = brainstate.nn.init_all_states(proj)
        >>> with brainstate.environ.context(t=0.1 * u.ms, i=1):
        ...     _ = proj.update()
        >>> u.get_mantissa(sink.last).tolist()
