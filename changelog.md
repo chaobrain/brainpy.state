@@ -179,6 +179,49 @@ for the implementation plan.
   `iaf_psc_alpha`, `poisson_generator`, and `spike_recorder` against live NEST
   3.x; all parity tests pass against the models unmodified.
 
+### Added — Brunel variant ports (`delta`, `exp_multisynapse`, `siegert`, evolution strategies)
+
+- `examples/nest/brunel_delta.py` — port of NEST's `brunel_delta_nest.py` driving
+  the real `iaf_psc_delta` neuron. Delta synapses deliver the weight as a direct
+  membrane-voltage jump (mV, via `sum_delta_inputs`), so connection weights are in
+  `u.mV` rather than pA. Reuses the `Simulator` unchanged. Live-NEST parity:
+  **58.5 vs 58.2 spks/s (0.55 %)** at `order=200`.
+- `examples/nest/brunel_exp_multisynapse.py` — port of NEST's
+  `brunel_exp_multisynapse_nest.py` driving `iaf_psc_exp_multisynapse` with 100
+  receptor ports (`tau_syn` spanning 0.1–1.09 ms). Each connection routes to a
+  uniformly-drawn port via a new `connect(..., receptor_type='uniform')` path. The
+  per-neuron rate is a steep function of the drawn port's time constant, so the
+  validation records the **full** excitatory population and averages over four RNG
+  seeds for a low-variance estimator: **25.8 vs 24.8 spks/s (≈4 %)**, within the
+  5 % bound.
+- `examples/nest/brunel_siegert.py` — port of NEST's `brunel_siegert_nest.py`, a
+  mean-field analysis of the `brunel_delta` network. Three real `siegert_neuron`
+  rate nodes (excitatory, inhibitory, constant drive) are integrated in
+  pseudo-time to the self-consistent fixed point (Hahne et al. 2017, eqs. 27–30);
+  the diffusion coupling carries `drift_factor`/`diffusion_factor` exactly as
+  NEST's `diffusion_connection`. The spiking `Simulator` does not apply, so the
+  three nodes are wired by hand. Asymptotic rate matches live NEST **exactly**
+  (32.03 vs 32.03 spks/s, 0.00 %).
+- `examples/nest/brunel_alpha_evolution_strategies.py` — port of NEST's
+  `brunel_alpha_evolution_strategies.py`. A separable Natural Evolution Strategies
+  optimizer (Wierstra et al. 2014; verbatim NumPy port) tunes the drive `eta` and
+  the inhibition ratio `g` of a Brunel alpha network toward target rate / CV /
+  correlation. Only the network `simulate()` is brainpy.state-specific (it reuses
+  the validated `iaf_psc_alpha` path); the optimizer and spike-statistics analysis
+  are model-agnostic. Validation: the network rate matches live NEST to **0.08 %**
+  (51.5 vs 51.5 spks/s) at a fixed operating point, and the optimizer ascends a
+  deterministic analytic objective to its maximizer.
+- `connect(..., receptor_type='uniform')` (`_network`) — multi-receptor routing
+  for neurons exposing `n_receptors`. A new `_ReceptorScatter` comm scatters each
+  edge's contribution into a `(n_post, n_receptors)` array, and the `Simulator`
+  feeds the per-receptor input through the neuron's existing, tested `w_by_rec`
+  update path (capability-dispatched on `n_receptors` + the `w_by_rec` signature),
+  so no model code changed.
+- **NEST model layer: no changes required.** `iaf_psc_delta`,
+  `iaf_psc_exp_multisynapse`, and `siegert_neuron` reproduce their respective
+  flagships against live NEST unmodified; every parity test passes with the models
+  untouched.
+
 ---
 
 ## [0.0.4] – 2025-02-21

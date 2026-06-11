@@ -47,16 +47,36 @@ Key pieces:
 
 ## Examples
 
+Each script ports one of NEST's Brunel variants and is paired with a live-NEST
+parity test (see [Validation](#validation)). Run any of them directly, e.g.:
+
+```bash
+python examples/nest/brunel_alpha.py
+```
+
 - **`brunel_alpha.py`** — Brunel (2000) random balanced network with alpha
-  synapses, a port of NEST's `brunel_alpha_nest.py`. Run it directly:
-
-  ```bash
-  python examples/nest/brunel_alpha.py
-  ```
-
-  It prints the excitatory/inhibitory rates and writes
-  `brunel_alpha_raster.png`. It defaults to NEST's native `order=2500`, so the
-  first run spends ~1–2 min sampling connectivity before simulating.
+  synapses (`iaf_psc_alpha`), a port of `brunel_alpha_nest.py`. Prints the
+  excitatory/inhibitory rates and writes `brunel_alpha_raster.png`. Defaults to
+  NEST's native `order=2500`, so the first run spends ~1–2 min sampling
+  connectivity before simulating.
+- **`brunel_delta.py`** — the delta-synapse variant (`iaf_psc_delta`), a port of
+  `brunel_delta_nest.py`. Synaptic weights are membrane-voltage jumps, so they are
+  given in `u.mV` rather than pA.
+- **`brunel_exp_multisynapse.py`** — the multi-receptor variant
+  (`iaf_psc_exp_multisynapse`), a port of `brunel_exp_multisynapse_nest.py`. Each
+  neuron exposes 100 receptor ports with time constants spanning 0.1–1.09 ms, and
+  every connection is routed to a uniformly-drawn port via
+  `connect(..., receptor_type='uniform')`.
+- **`brunel_siegert.py`** — the mean-field analysis (`siegert_neuron`), a port of
+  `brunel_siegert_nest.py`. Rather than simulating spikes, it integrates three
+  rate nodes (excitatory, inhibitory, drive) in pseudo-time to the self-consistent
+  firing-rate fixed point and writes `brunel_siegert_relaxation.png`. This network
+  is wired by hand (the spiking `Simulator` does not apply to rate units).
+- **`brunel_alpha_evolution_strategies.py`** — a Natural Evolution Strategies
+  optimizer (Wierstra et al. 2014) tuning `g` and `eta` of the alpha network
+  toward target rate / CV / correlation, a port of
+  `brunel_alpha_evolution_strategies_nest.py`. The optimizer and spike-statistics
+  analysis are model-agnostic; only `simulate()` builds the `Simulator` network.
 
 ## `order` and `comm`
 
@@ -78,8 +98,23 @@ not the sparse comm.
 
 Live-NEST parity tests live in
 [`brainpy_state/_nest/_validation/`](../../brainpy_state/_nest/_validation) and
-skip automatically when `nest` is not importable. The Brunel network test
-asserts the excitatory rate is within 5 % of live NEST. The committed test runs
-at `order=200` (**56.9 vs 57.0 spks/s, 0.21 %**); a manual `order=2500` check
-lands at **28.8 vs 28.5 spks/s (0.91 %)** — the lower rate is a genuine
-finite-size effect that NEST reproduces.
+skip automatically when `nest` is not importable. Each test builds the same
+network in live NEST and in brainpy.state and asserts the firing rate is within
+5 % — a statistical comparison (the RNG streams differ), never a per-neuron
+match. Representative figures:
+
+| Port | brainpy vs NEST | rel. |
+|---|---|---|
+| `brunel_alpha` (`order=200`) | 56.9 vs 57.0 spks/s | 0.21 % |
+| `brunel_delta` (`order=200`) | 58.5 vs 58.2 spks/s | 0.55 % |
+| `brunel_exp_multisynapse` (`order=200`, full pop, 4 seeds) | 25.8 vs 24.8 spks/s | ≈4 % |
+| `brunel_siegert` (mean-field, `order=2500`) | 32.03 vs 32.03 spks/s | 0.00 % |
+| `brunel_alpha_evolution_strategies` (`simulate`, `N=1000`) | 51.5 vs 51.5 spks/s | 0.08 % |
+
+The `exp_multisynapse` rate is a steep function of each neuron's randomly-drawn
+receptor time constant, so its population mean has the widest spread; recording
+the full excitatory population and averaging over four seeds keeps it inside the
+5 % bound. The `siegert` mean-field solves the same self-consistent equation in
+both simulators, so the asymptotic rate matches exactly. A manual `brunel_alpha`
+check at `order=2500` lands at **28.8 vs 28.5 spks/s (0.91 %)** — the lower rate
+is a genuine finite-size effect that NEST reproduces.
