@@ -138,4 +138,60 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
-_(no entries yet — the first `/goal` session writes here)_
+### 00-validation-harness — 2026-06-11
+
+- **Shipped:** the shared parity harness in `brainpy_state/_nest/_validation/`:
+  `tolerance_conventions.py` (A–E constants), `nest_compare.py` (compare engine),
+  `conftest.py` (`requires_nest` marker), `README.md`, + `tolerance_conventions_test.py`
+  / `nest_compare_test.py` (31 NEST-free unit tests, **100 %** line coverage on both
+  harness modules). Refactored the 5 existing parity tests onto it (thin glue: NEST
+  run logic + Simulator drive kept verbatim, only skip + compare/assert moved).
+  Branch `nest-goal/00-validation-harness`. Full dir: **43 passed** with live NEST.
+- **Parity:** all 5 pass live (brunel alpha/delta/multisynapse exc-rate within 5 % of
+  NEST; siegert mean-field exc+inh within 5 %; device Poisson within 5 % of configured
+  1000 Hz). Assertions are byte-for-byte the originals (5 %), now via documented tols.
+- **API discovered/changed** — the surface the next clusters import
+  (`from brainpy_state._nest._validation.nest_compare import …` /
+  `… .tolerance_conventions import CAT_*`):
+  - `compare_trace(reference, candidate, *, tol, metric="trace") -> ComparisonResult`
+    — deterministic; pass = division-free allclose `|a−b| ≤ atol + rtol·|ref|`; optional
+    `tol.align_steps` integer-shift search (recorder offset). Scalars are 0-d traces.
+  - `compare_distributional(reference_samples, candidate_samples, *, tol, metric="rate",
+    statistic="mean") -> ComparisonResult` — multi-seed **mean**, never per-sample;
+    zero-variance/zero-mean safe.
+  - `nest_compare(nest_fn, brainpy_fn, *, mode, tol, metric, seeds=None)` — runs both
+    callables (`mode='trace'` calls each once; `'distributional'` calls each per seed).
+  - `ComparisonResult(passed, error, bound, metric, detail)` + `.assert_()` (raises
+    `AssertionError(detail)`). `requires_nest` decorator (skip + pytest marker; reads
+    `HAS_NEST` at call time, so patchable/testable). `reference`=NEST (or analytic
+    ground-truth), `candidate`=brainpy.
+  - Tolerances: `CAT_A` adaptive trace (1e-3 mV), `CAT_B` analytic (1e-6 mV) +
+    `CAT_B_ALIGNED` (5e-2 mV, `align_steps=1`), `CAT_C` conductance/coupled (1e-3 mV) +
+    `CAT_C_RATE` mean-field rate (5 % rel), `CAT_D` distributional (5 % rate, ≥4 seeds),
+    `CAT_E` spike-time (|ΔN|≤2, |Δstep|≤1). `T_DEFAULT`/`DT_DEFAULT`/`N_SEEDS_DEFAULT`.
+    A/B/C numbers are from `numerical-validation-gap.md` §6; **D/E were referenced
+    (index.md P0 #4) but never defined — synthesized here** (by model/compare kind).
+- **Gotchas:**
+  - **Coverage + NEST:** a dotted `--cov=…nest_compare` pre-imports NEST under
+    coverage's C tracer and **core-dumps**. Measure by directory path
+    (`--cov=brainpy_state/_nest/_validation`) instead.
+  - `requires_nest` reads `HAS_NEST` at decoration time — patch the module global
+    *before* defining the class to test the skip path.
+  - Rates here are plain floats (not saiunit Quantities); V_m traces may be either.
+    The comparator strips units to the tolerance's unit (mV) or takes the mantissa —
+    pick the category whose unit matches the metric (mV for V_m, plain/Hz for rates).
+  - Division-free allclose reproduces both pure-abs (V_m) and pure-rel (rate) and is
+    zero-reference safe — do not reintroduce `|a−b|/ref`.
+  - `saiunit` has no `u.uV`; use `u.volt`/`u.mV`. NEST multimeter carries a one-step
+    recorder offset → `CAT_B_ALIGNED`/`align_steps` absorbs it (for 02's V_m traces).
+- **For next clusters:**
+  - **01** (PSC-amplitude train, static delivery): `compare_trace` + `CAT_A`/`CAT_B`;
+    `bernoulli` (06) is a distributional carve-out → `compare_distributional`/`CAT_D`.
+  - **02** (single-neuron demos, V_m, F-I): `compare_trace` + `CAT_B`/`CAT_B_ALIGNED`
+    for V_m (recorder alignment), `CAT_E` for spike-count/F-I. `iaf_psc_alpha_parity_test.py`
+    already shows the V_m max-abs + ±1-step pattern (kept un-refactored as a reference).
+  - **04/08** (weight trajectory over 5 s): `compare_trace` + `CAT_A`.
+  - Thin-glue convention: keep each test's own `_nest_*` fn (with its `ResetKernel`).
+    A shared ResetKernel/`setUp` helper was deferred (YAGNI) — add when a cluster needs it.
+  - `compare_distributional`'s autocorr/CV path is a stub (constants recorded, mean-only
+    comparator) — flesh out for binary-neuron / generator distributional tests (16).
