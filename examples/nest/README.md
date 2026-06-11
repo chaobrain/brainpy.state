@@ -55,21 +55,31 @@ Key pieces:
   ```
 
   It prints the excitatory/inhibitory rates and writes
-  `brunel_alpha_raster.png`.
+  `brunel_alpha_raster.png`. It defaults to NEST's native `order=2500`, so the
+  first run spends ~1–2 min sampling connectivity before simulating.
 
-## A note on `order`
+## `order` and `comm`
 
-`order` sets the network size (`NE = 4·order`, `NI = order`). The default
-`order=400` keeps the dense event projection memory-light. The dynamics are
-scaled (à la Brunel) so the mean rates are essentially order-independent, which
-is what the live-NEST parity test exploits (it compares at `order=200`). Running
-at NEST's native `order=2500` waits on the sparse-connectivity communication
-path; until then, prefer small-to-moderate `order`.
+`order` sets the network size (`NE = 4·order`, `NI = order`). `build(order=...,
+comm=...)` accepts `comm='sparse'` (the default) or `comm='dense'`:
+
+- `comm='sparse'` routes the recurrent `fixed_indegree` connectivity through a
+  `brainevent` CSR event matmul, so memory stays light (~1.9 GB at `order=2500`)
+  and the flagship runs at NEST's native size.
+- `comm='dense'` materialises a full weight matrix — fine for small networks,
+  but the `order=2500` recurrent matrices would need several GB.
+
+Both paths are built from the same sampler and seed, so they produce
+bit-identical results. Construction cost is dominated by the `fixed_indegree`
+sampler, which is `O(NE + NI)`; that is what makes the large-`order` build slow,
+not the sparse comm.
 
 ## Validation
 
 Live-NEST parity tests live in
 [`brainpy_state/_nest/_validation/`](../../brainpy_state/_nest/_validation) and
 skip automatically when `nest` is not importable. The Brunel network test
-asserts the excitatory rate is within 5 % of live NEST — it currently lands at
-**56.9 spks/s vs 57.0 spks/s (0.21 %)** at `order=200`.
+asserts the excitatory rate is within 5 % of live NEST. The committed test runs
+at `order=200` (**56.9 vs 57.0 spks/s, 0.21 %**); a manual `order=2500` check
+lands at **28.8 vs 28.5 spks/s (0.91 %)** — the lower rate is a genuine
+finite-size effect that NEST reproduces.

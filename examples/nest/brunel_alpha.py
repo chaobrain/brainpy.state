@@ -38,7 +38,7 @@ def ComputePSPnorm(tauMem, CMem, tauSyn):
                - t_max * np.exp(-t_max / tauSyn)))
 
 
-def build(order=400, simtime=1000.0):
+def build(order=2500, simtime=1000.0, comm='sparse'):
     dt, delay = 0.1, 1.5
     g, eta, epsilon = 5.0, 2.0, 0.1
     NE, NI = 4 * order, 1 * order
@@ -68,16 +68,20 @@ def build(order=400, simtime=1000.0):
     sim.connect(noise, ne, weight=J_ex * u.pA, delay=delay * u.ms, rule=all_to_all)
     sim.connect(noise, ni, weight=J_ex * u.pA, delay=delay * u.ms, rule=all_to_all)
     sim.connect(ne, ne + ni, weight=J_ex * u.pA, delay=delay * u.ms,
-                rule=fixed_indegree(CE), allow_multapses=True, seed=1)
+                rule=fixed_indegree(CE), comm=comm, allow_multapses=True, seed=1)
     sim.connect(ni, ne + ni, weight=J_in * u.pA, delay=delay * u.ms,
-                rule=fixed_indegree(CI), allow_multapses=True, seed=2)
+                rule=fixed_indegree(CI), comm=comm, allow_multapses=True, seed=2)
     sim.connect(ne[:N_rec], esr)
     sim.connect(ni[:N_rec], isr)
     return sim, esr, isr, N_rec, simtime
 
 
 def main():
-    sim, esr, isr, N_rec, simtime = build()
+    order = 2500
+    print(f"Brunel network: order={order} -> {4 * order} exc + {order} inh neurons, "
+          f"sparse comm.")
+    print("  Building (fixed-indegree sampling is O(N); ~1-2 min at this size)...")
+    sim, esr, isr, N_rec, simtime = build(order=order)
     res = sim.simulate(simtime * u.ms)
     erate = res.rate(esr.segments[0].population)
     irate = res.rate(isr.segments[0].population)

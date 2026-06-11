@@ -19,7 +19,7 @@ import saiunit as u
 from brainpy_state._brainpy._delay import InputDelay
 from brainpy_state._network._connectivity import resolve_param
 from brainpy_state._network._nodeview import _flat_size
-from brainpy_state._network._projections import _DenseMatMul
+from brainpy_state._network._projections import _DenseMatMul, _SparseEventMatMul
 from brainpy_state._network._rules import ConnRule, _OneToOne
 
 __all__ = ['EventProjection']
@@ -72,6 +72,7 @@ class EventProjection(brainstate.nn.Module):
         rule: ConnRule,
         weight,
         delay=None,
+        comm: str = 'dense',
         pre_is_post: bool = False,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
@@ -97,20 +98,23 @@ class EventProjection(brainstate.nn.Module):
             self._weight = weight
             self.comm = None
         else:
+            if comm not in ('dense', 'sparse'):
+                raise ValueError(f"comm must be 'dense' or 'sparse', got {comm!r}")
             spec = rule.sample(n_pre, n_post, key=k_conn, pre_is_post=pre_is_post,
                                allow_autapses=allow_autapses, allow_multapses=allow_multapses)
-            if spec.n_edges == 0:
-                W_with_unit = jnp.zeros((n_pre, n_post))
-            else:
-                w_edge = resolve_param(weight, (spec.n_edges,), k_w)
-                if isinstance(w_edge, u.Quantity):
-                    w_mant, w_unit = u.split_mantissa_unit(w_edge)
+            if comm == 'dense':
+                if spec.n_edges == 0:
+                    W_with_unit = jnp.zeros((n_pre, n_post))
                 else:
-                    w_mant, w_unit = jnp.asarray(w_edge), u.UNITLESS
-                W = jnp.zeros((n_pre, n_post), dtype=w_mant.dtype).at[spec.pre_idx, spec.post_idx].add(w_mant)
-                W_with_unit = u.Quantity(W, unit=w_unit) if w_unit is not u.UNITLESS else W
-            self._W = brainstate.ParamState(W_with_unit)
-            self.comm = _DenseMatMul(self._W)
+                    w_mant, w_unit = self._edge_weight(weight, spec.n_edges, k_w)
+                    W = jnp.zeros((n_pre, n_post), dtype=w_mant.dtype).at[spec.pre_idx, spec.post_idx].add(w_mant)
+                    W_with_unit = u.Quantity(W, unit=w_unit) if w_unit is not u.UNITLESS else W
+                self._W = brainstate.ParamState(W_with_unit)
+                self.comm = _DenseMatMul(self._W)
+            else:  # sparse CSR event matmul — memory-light for large fan-out
+                w_mant, w_unit = self._edge_weight(weight, spec.n_edges, k_w)
+                self.comm = _SparseEventMatMul(spec.pre_idx, spec.post_idx, w_mant, w_unit,
+                                               n_pre=n_pre, n_post=n_post)
 
         # Delay buffers the FULL pre-population vector (axonal granularity).
         self.delay_seam = InputDelay((self._n_pre_pop,), delay) if delay is not None else None
@@ -121,6 +125,14 @@ class EventProjection(brainstate.nn.Module):
             n_post == self._n_post_pop
             and bool(jnp.all(self.post_local_idx == jnp.arange(self._n_post_pop)))
         )
+
+    @staticmethod
+    def _edge_weight(weight, n_edges, key):
+        """Resolve ``weight`` to a per-edge ``(mantissa, unit)`` pair."""
+        w_edge = resolve_param(weight, (n_edges,), key)
+        if isinstance(w_edge, u.Quantity):
+            return u.split_mantissa_unit(w_edge)
+        return jnp.asarray(w_edge), u.UNITLESS
 
     def update(self):
         x_full = self.pre_spike()                       # (n_pre_pop,)
