@@ -12,6 +12,7 @@ the jitted loop).
 """
 from __future__ import annotations
 
+import copy
 import inspect
 import itertools
 from typing import Optional
@@ -22,6 +23,7 @@ import saiunit as u
 
 from brainpy_state._base import Neuron
 from brainpy_state._nest.spike_recorder import spike_recorder as _spike_recorder
+from brainpy_state._network._event_plastic import EventPlasticProj
 from brainpy_state._network._event_proj import EventProjection
 from brainpy_state._network._nodeview import NodeView, _Segment, _flat_size
 from brainpy_state._network._rules import all_to_all, one_to_one
@@ -152,7 +154,7 @@ class Simulator(brainstate.nn.Module):
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
                 weight=None, delay=None, comm: str = 'dense', receptor_type=None,
-                allow_autapses: bool = True,
+                synapse=None, allow_autapses: bool = True,
                 allow_multapses: bool = True, seed: Optional[int] = None):
         """Connect ``pre`` to ``post`` (or register a recorder tap).
 
@@ -162,6 +164,12 @@ class Simulator(brainstate.nn.Module):
 
         ``receptor_type='uniform'`` routes each edge to a uniformly-drawn receptor
         port of a multi-receptor post population (``iaf_psc_exp_multisynapse``).
+
+        ``synapse=<spec>`` builds a plastic :class:`EventPlasticProj` from a
+        rebuilt ``_nest`` synapse spec (``static_synapse``, the ``tsodyks*``
+        family, ``quantal_stp_synapse``); ``weight``/``delay`` here override the
+        spec's defaults. ``synapse=None`` (default) keeps the static
+        :class:`EventProjection` path unchanged.
         """
         if len(post.segments) == 1 and isinstance(post.segments[0].population, _spike_recorder):
             if len(pre.segments) != 1:
@@ -174,7 +182,8 @@ class Simulator(brainstate.nn.Module):
         for pre_seg in pre.segments:
             for post_seg in post.segments:
                 self._connect_pair(pre_seg, post_seg, rule, weight, delay,
-                                   allow_autapses, allow_multapses, seed, comm, receptor_type)
+                                   allow_autapses, allow_multapses, seed, comm,
+                                   receptor_type, synapse)
 
     @staticmethod
     def _derive_seed(base, ordinal: int) -> int:
@@ -188,11 +197,24 @@ class Simulator(brainstate.nn.Module):
         b = 0 if base is None else int(base)
         return (b * 1_000_003 + ordinal + 1) & 0x7FFFFFFF
 
+    @staticmethod
+    def _resolve_synapse(synapse, weight, delay):
+        """Shallow-copy a plastic synapse spec, applying connect-level overrides."""
+        spec = copy.copy(synapse)
+        if weight is not None:
+            spec.weight = weight if isinstance(weight, u.Quantity) else weight * u.pA
+            spec.weight_unit = u.get_unit(spec.weight)
+        if delay is not None:
+            spec.delay = delay
+        return spec
+
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
-                      receptor_type=None):
+                      receptor_type=None, synapse=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
+        post_holder = getattr(self, f'_holder_{id(post_pop)}', None)
+        post_reader = _holder_reader(post_holder) if post_holder is not None else None
         if isinstance(pre_seg, _GenSegment):
             n = int(post_seg.indices.shape[0])
             params = dict(pre_seg.spec.params)
@@ -202,22 +224,40 @@ class Simulator(brainstate.nn.Module):
             setattr(self, f'_node_{id(gen)}', gen)
             holder = _SpikeHolder(n)
             setattr(self, f'_holder_{id(gen)}', holder)
-            proj = EventProjection(
-                pre_spike=_holder_reader(holder), n_pre_pop=n,
-                pre_local_idx=jnp.arange(n), post=post_pop,
-                post_local_idx=post_seg.indices, rule=one_to_one, weight=weight,
-                delay=delay, receptor_type=receptor_type, seed=seed)
+            if synapse is not None:
+                proj = EventPlasticProj(
+                    pre_spike=_holder_reader(holder), n_pre_pop=n,
+                    pre_local_idx=jnp.arange(n), post=post_pop,
+                    post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
+                    post_spike=post_reader, rule=self._resolve_synapse(synapse, weight, delay),
+                    conn=one_to_one, seed=seed)
+            else:
+                proj = EventProjection(
+                    pre_spike=_holder_reader(holder), n_pre_pop=n,
+                    pre_local_idx=jnp.arange(n), post=post_pop,
+                    post_local_idx=post_seg.indices, rule=one_to_one, weight=weight,
+                    delay=delay, receptor_type=receptor_type, seed=seed)
         else:
             pre_pop = pre_seg.population
             holder = getattr(self, f'_holder_{id(pre_pop)}')
-            proj = EventProjection(
-                pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
-                pre_local_idx=pre_seg.indices, post=post_pop,
-                post_local_idx=post_seg.indices, rule=rule, weight=weight,
-                delay=delay, comm=comm, receptor_type=receptor_type,
-                pre_is_post=(pre_pop is post_pop),
-                allow_autapses=allow_autapses, allow_multapses=allow_multapses,
-                seed=self._derive_seed(seed, ordinal))
+            if synapse is not None:
+                proj = EventPlasticProj(
+                    pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
+                    pre_local_idx=pre_seg.indices, post=post_pop,
+                    post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
+                    post_spike=post_reader, rule=self._resolve_synapse(synapse, weight, delay),
+                    conn=rule, pre_is_post=(pre_pop is post_pop),
+                    allow_autapses=allow_autapses, allow_multapses=allow_multapses,
+                    seed=self._derive_seed(seed, ordinal))
+            else:
+                proj = EventProjection(
+                    pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
+                    pre_local_idx=pre_seg.indices, post=post_pop,
+                    post_local_idx=post_seg.indices, rule=rule, weight=weight,
+                    delay=delay, comm=comm, receptor_type=receptor_type,
+                    pre_is_post=(pre_pop is post_pop),
+                    allow_autapses=allow_autapses, allow_multapses=allow_multapses,
+                    seed=self._derive_seed(seed, ordinal))
         setattr(self, f'_proj_{ordinal}', proj)
 
     # -- run ---------------------------------------------------------------
@@ -226,11 +266,11 @@ class Simulator(brainstate.nn.Module):
         children = list(self.nodes(allowed_hierarchy=(1, 1)).values())
         # 1) projections route the previous step's spikes into delta inputs
         for m in children:
-            if isinstance(m, EventProjection):
+            if isinstance(m, (EventProjection, EventPlasticProj)):
                 m.update()
         # 2) drive neurons/generators and capture their output into holders
         for m in children:
-            if isinstance(m, (EventProjection, _SpikeHolder)):
+            if isinstance(m, (EventProjection, EventPlasticProj, _SpikeHolder)):
                 continue
             holder = getattr(self, f'_holder_{id(m)}', None)
             if holder is None:
