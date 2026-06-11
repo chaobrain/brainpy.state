@@ -134,6 +134,44 @@ See `docs/superpowers/specs/2026-05-12-nest-network-api-design.md` for
 the design and `docs/superpowers/plans/2026-05-12-nest-network-api.md`
 for the implementation plan.
 
+### Added — Explicit NEST-flavored `Simulator` API and Brunel flagship
+
+- `brainpy.state.Simulator` (also `brainpy.state.network.Simulator`) — an
+  explicit, NEST-vocabulary network builder: `create(model, size, params=...)`,
+  `connect(pre, post, *, rule, weight, delay, ...)`, and `simulate(duration)`
+  returning a `SimulationResult` with `rate()` / `n_events()` / `spikes()`. No
+  global kernel; the populations, generators, recorders, and projections form a
+  flat `brainstate` module graph run through one `for_loop`.
+- `NodeView` population algebra — concatenation (`ne + ni`) and slicing
+  (`ne[:N_rec]`) for addressing sub-populations, plus connection-rule objects
+  `all_to_all`, `one_to_one`, and `fixed_indegree(K)`.
+- `EventProjection` — delayed, weighted (pA) delta-event projection that feeds
+  `add_delta_input` the way NEST current-based neurons ingest spikes, with a
+  homogeneous axonal `delay=` realised through `InputDelay`. Generators fan out
+  to one independent train per target neuron (matching NEST), and the
+  list-mutating `spike_recorder` is read via stacked-array taps outside the JIT
+  loop.
+- `examples/nest/brunel_alpha.py` — faithful port of NEST's `brunel_alpha_nest.py`
+  (alpha-synapse random balanced network, `ComputePSPnorm`/LambertW calibration)
+  onto the `Simulator` API.
+- Live-NEST validation harness in `brainpy_state/_nest/_validation/`:
+  single-neuron `iaf_psc_alpha`, device (`poisson_generator` rate,
+  `spike_recorder` stamping), and full Brunel-network firing-rate parity. At
+  `order=200` the excitatory rate is **56.9 spks/s vs live NEST 57.0 spks/s
+  (0.21 %)**. The tests skip when `nest` is not importable.
+
+### Fixed — Independent seeds for fanned-out projections/generators (`_network`)
+
+- A single `connect()` fanning to several post segments, and a
+  `poisson_generator` fanned to several target populations, reused one base
+  seed. Because `jax.random` derives element `j` from counter `j` regardless of
+  array length, every target received bit-identical connectivity and external
+  drive — the Brunel excitatory and inhibitory recorders came out identical.
+  Each realised projection/generator now derives a distinct, reproducible seed.
+- **NEST model layer: no changes required.** Reproducing the flagship validated
+  `iaf_psc_alpha`, `poisson_generator`, and `spike_recorder` against live NEST
+  3.x; all parity tests pass against the models unmodified.
+
 ---
 
 ## [0.0.4] – 2025-02-21

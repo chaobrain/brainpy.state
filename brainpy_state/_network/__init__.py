@@ -13,6 +13,12 @@ from ._projections import (
     PairwisePoissonProj,
 )
 
+# NEST-flavored explicit Simulator API.
+from ._nodeview import NodeView
+from ._rules import ConnRule, all_to_all, one_to_one, fixed_indegree
+from ._event_proj import EventProjection
+from ._simulator import Simulator, SimulationResult
+
 __all__ = [
     'Network',
     'Builder',
@@ -25,4 +31,13 @@ __all__ = [
     'FixedOutdegreeProj',
     'FixedTotalNumberProj',
     'PairwisePoissonProj',
+    # NEST-flavored explicit Simulator API.
+    'NodeView',
+    'ConnRule',
+    'all_to_all',
+    'one_to_one',
+    'fixed_indegree',
+    'EventProjection',
+    'Simulator',
+    'SimulationResult',
 ]
