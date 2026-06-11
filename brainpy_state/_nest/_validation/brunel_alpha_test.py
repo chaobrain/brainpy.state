@@ -17,13 +17,14 @@ import saiunit as u
 
 try:
     import nest
-    _HAS_NEST = True
 except Exception:
-    _HAS_NEST = False
+    nest = None
+
+from brainpy_state._nest._validation.nest_compare import requires_nest, compare_distributional
+from brainpy_state._nest._validation.tolerance_conventions import CAT_D
 
 ORDER = 200          # NE=800, NI=200 -> dense-feasible, fast
 SIMTIME = 1000.0
-TOL = 0.05           # 5% mean-rate parity
 
 
 def _nest_rates(order, simtime):
@@ -66,7 +67,7 @@ def _nest_rates(order, simtime):
     return esr.n_events / simtime * 1000.0 / N_rec
 
 
-@unittest.skipUnless(_HAS_NEST, "live NEST not importable")
+@requires_nest
 class TestBrunelAlphaParity(unittest.TestCase):
     def test_excitatory_rate_within_5pct_of_nest(self):
         from examples.nest.brunel_alpha import build
@@ -75,7 +76,5 @@ class TestBrunelAlphaParity(unittest.TestCase):
         bp_rate = res.rate(esr.segments[0].population)
         nest_rate = _nest_rates(ORDER, SIMTIME)
         self.assertGreater(nest_rate, 0.0)
-        rel = abs(bp_rate - nest_rate) / nest_rate
-        self.assertLess(rel, TOL,
-                        f"exc rate brainpy={bp_rate:.2f} nest={nest_rate:.2f} "
-                        f"rel={rel:.3f} > {TOL}")
+        # PRNG-divergent network rate -> distributional (category D), single realization.
+        compare_distributional([nest_rate], [bp_rate], tol=CAT_D, metric="exc rate").assert_()
