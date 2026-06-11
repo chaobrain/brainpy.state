@@ -77,7 +77,7 @@ def _nest_rates(order, simtime):
 @requires_nest
 class TestBrunelSiegertParity(unittest.TestCase):
     def test_meanfield_rate_within_5pct_of_nest(self):
-        from examples.nest.brunel_siegert import run
+        from brainpy import run
         erate, irate, *_ = run(order=ORDER, simtime=SIMTIME)
         nest_ex, nest_in = _nest_rates(ORDER, SIMTIME)
         self.assertGreater(nest_ex, 0.0)

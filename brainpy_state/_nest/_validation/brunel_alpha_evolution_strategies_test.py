@@ -24,7 +24,6 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
-import saiunit as u
 
 try:
     import nest
@@ -95,7 +94,7 @@ def _nest_rate(parameters):
 class TestEvolutionStrategiesOptimizer(unittest.TestCase):
     def test_optimizer_ascends_to_analytic_optimum(self):
         # Verbatim-ported NES must maximize a concave quadratic toward its peak.
-        from examples.nest.brunel_alpha_evolution_strategies import optimize
+        from brainpy import optimize
         opt = np.array([1.5, 2.5])
 
         def func(g, eta):
@@ -114,7 +113,7 @@ class TestEvolutionStrategiesOptimizer(unittest.TestCase):
 @unittest.skipUnless(_HAS_NEST, "live NEST not importable")
 class TestBrunelAlphaESNetworkParity(unittest.TestCase):
     def test_simulate_rate_within_5pct_of_nest(self):
-        from examples.nest.brunel_alpha_evolution_strategies import (
+        from brainpy import (
             simulate, cut_warmup_time, compute_rate, compute_cv, sort_spikes,
         )
         espikes, ispikes = simulate(dict(PARAMS))

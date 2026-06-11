@@ -70,7 +70,7 @@ def _nest_rates(order, simtime):
 @requires_nest
 class TestBrunelAlphaParity(unittest.TestCase):
     def test_excitatory_rate_within_5pct_of_nest(self):
-        from examples.nest.brunel_alpha import build
+        from brainpy import build
         sim, esr, _isr, _n, _t = build(order=ORDER, simtime=SIMTIME)
         res = sim.simulate(SIMTIME * u.ms)
         bp_rate = res.rate(esr.segments[0].population)

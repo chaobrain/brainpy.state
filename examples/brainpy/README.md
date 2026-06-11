@@ -42,7 +42,7 @@ Examples demonstrating training of SNNs using surrogate gradient methods:
 Faithful ports of NEST-simulator reference networks onto the explicit
 `brainpy.state.Simulator` API (NEST vocabulary — `create` / `connect` /
 `simulate`), driving the real NEST-compatible models and validated against live
-NEST. See [`nest/README.md`](nest/README.md).
+NEST. See [`nest/README.md`](../nest/README.md).
 
 - **nest/brunel_alpha.py** - Brunel (2000) random balanced network with alpha
   synapses; excitatory rate matches live NEST to 0.21 % at `order=200`.

@@ -75,7 +75,7 @@ def _nest_rates(order, simtime, seed):
 class TestBrunelExpMultisynapseParity(unittest.TestCase):
     def test_excitatory_rate_within_5pct_of_nest(self):
         import numpy as np
-        from examples.nest.brunel_exp_multisynapse import build
+        from brainpy import build
         bp, ns = [], []
         for seed in range(N_SEEDS):
             sim, esr, _isr, _n, _t = build(order=ORDER, simtime=SIMTIME,
