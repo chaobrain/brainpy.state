@@ -107,6 +107,39 @@ class _SparseEventMatMul(brainstate.nn.Module):
         return u.Quantity(y, unit=self._unit) if self._unit is not u.UNITLESS else y
 
 
+class _ReceptorScatter(brainstate.nn.Module):
+    """Comm module: scatter per-edge spike events into ``(n_post, n_receptors)``.
+
+    Each edge carries a target post index and a receptor port index; the per-step
+    output places ``weight * pre_spike`` into ``out[post_idx, rec_idx]`` (summing
+    multapses). This drives multi-receptor neurons such as
+    ``iaf_psc_exp_multisynapse``, whose ports each integrate an exponential PSC
+    with their own time constant ``tau_syn[r]``.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, pre_idx, post_idx, rec_idx, w_mantissa, w_unit,
+                 *, n_post: int, n_receptors: int):
+        super().__init__()
+        self._pre_idx = jnp.asarray(np.asarray(pre_idx))
+        self._post_idx = jnp.asarray(np.asarray(post_idx))
+        self._rec_idx = jnp.asarray(np.asarray(rec_idx))
+        self._n_post = int(n_post)
+        self._n_receptors = int(n_receptors)
+        self._unit = w_unit
+        self._data = brainstate.ParamState(jnp.asarray(np.asarray(w_mantissa)))
+
+    def update(self, *args, **kwargs):
+        return self(*args, **kwargs)
+
+    def __call__(self, x):
+        active = jnp.asarray(x)[self._pre_idx]               # (n_edges,) pre-spike per edge
+        vals = active * self._data.value                     # (n_edges,)
+        out = jnp.zeros((self._n_post, self._n_receptors), dtype=vals.dtype)
+        out = out.at[self._post_idx, self._rec_idx].add(vals)
+        return u.Quantity(out, unit=self._unit) if self._unit is not u.UNITLESS else out
+
+
 class _RuleProj(brainstate.nn.Module):
     """Shared base for rule-based projections.
 

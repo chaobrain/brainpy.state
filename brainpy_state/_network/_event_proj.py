@@ -19,7 +19,7 @@ import saiunit as u
 from brainpy_state._brainpy._delay import InputDelay
 from brainpy_state._network._connectivity import resolve_param
 from brainpy_state._network._nodeview import _flat_size
-from brainpy_state._network._projections import _DenseMatMul, _SparseEventMatMul
+from brainpy_state._network._projections import _DenseMatMul, _ReceptorScatter, _SparseEventMatMul
 from brainpy_state._network._rules import ConnRule, _OneToOne
 
 __all__ = ['EventProjection']
@@ -73,6 +73,7 @@ class EventProjection(brainstate.nn.Module):
         weight,
         delay=None,
         comm: str = 'dense',
+        receptor_type=None,
         pre_is_post: bool = False,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
@@ -87,13 +88,30 @@ class EventProjection(brainstate.nn.Module):
         self._n_pre_pop = int(n_pre_pop)
         self._n_post_pop = _flat_size(post)
         self._one_to_one = isinstance(rule, _OneToOne)
+        # Per-receptor routing: each edge targets one of the post neuron's
+        # receptor ports (``iaf_psc_exp_multisynapse``), drawn uniformly.
+        self._receptor = receptor_type is not None
+        self._n_receptors = int(post.n_receptors) if self._receptor else 0
 
         n_pre = int(self.pre_local_idx.shape[0])
         n_post = int(self.post_local_idx.shape[0])
         key = jax.random.key(0 if seed is None else int(seed))
-        k_conn, k_w = jax.random.split(key, 2)
+        k_conn, k_w, k_rec = jax.random.split(key, 3)
 
-        if self._one_to_one:
+        if self._receptor:
+            if receptor_type != 'uniform':
+                raise ValueError(f"receptor_type must be 'uniform' or None, got {receptor_type!r}")
+            if self._one_to_one:
+                pre_idx, post_idx, n_edges = jnp.arange(n_pre), jnp.arange(n_post), n_pre
+            else:
+                spec = rule.sample(n_pre, n_post, key=k_conn, pre_is_post=pre_is_post,
+                                   allow_autapses=allow_autapses, allow_multapses=allow_multapses)
+                pre_idx, post_idx, n_edges = spec.pre_idx, spec.post_idx, spec.n_edges
+            rec_idx = jax.random.randint(k_rec, (n_edges,), 0, self._n_receptors)
+            w_mant, w_unit = self._edge_weight(weight, n_edges, k_w)
+            self.comm = _ReceptorScatter(pre_idx, post_idx, rec_idx, w_mant, w_unit,
+                                         n_post=n_post, n_receptors=self._n_receptors)
+        elif self._one_to_one:
             # Element-wise: a scalar pA weight applied per matched element.
             self._weight = weight
             self.comm = None
@@ -139,11 +157,15 @@ class EventProjection(brainstate.nn.Module):
         if self.delay_seam is not None:
             x_full = self.delay_seam.update(x_full)
         x_seg = jnp.asarray(x_full)[self.pre_local_idx]  # (n_pre,)
-        if self._one_to_one:
-            y = x_seg * self._weight                    # (n_post,) pA
+        if self._receptor:
+            y = self.comm(x_seg)                        # (n_post, n_receptors) pA
+            contrib = y if self._post_is_full else self._scatter_receptor(y)
         else:
-            y = self.comm(x_seg)                        # (n_post,) pA
-        contrib = y if self._post_is_full else self._scatter(y)
+            if self._one_to_one:
+                y = x_seg * self._weight                # (n_post,) pA
+            else:
+                y = self.comm(x_seg)                    # (n_post,) pA
+            contrib = y if self._post_is_full else self._scatter(y)
         self.post.add_delta_input(self._delta_key, contrib)
 
     def _scatter(self, y):
@@ -152,4 +174,13 @@ class EventProjection(brainstate.nn.Module):
             base = jnp.zeros(self._n_post_pop, dtype=y.mantissa.dtype)
             return u.Quantity(base.at[self.post_local_idx].add(y.mantissa), unit=y.unit)
         base = jnp.zeros(self._n_post_pop, dtype=y.dtype)
+        return base.at[self.post_local_idx].add(y)
+
+    def _scatter_receptor(self, y):
+        """Place per-segment (n_post, n_receptors) contributions into the full population."""
+        shape = (self._n_post_pop, self._n_receptors)
+        if isinstance(y, u.Quantity):
+            base = jnp.zeros(shape, dtype=y.mantissa.dtype)
+            return u.Quantity(base.at[self.post_local_idx].add(y.mantissa), unit=y.unit)
+        base = jnp.zeros(shape, dtype=y.dtype)
         return base.at[self.post_local_idx].add(y)

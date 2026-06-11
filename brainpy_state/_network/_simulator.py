@@ -151,7 +151,7 @@ class Simulator(brainstate.nn.Module):
 
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
-                weight=None, delay=None, comm: str = 'dense',
+                weight=None, delay=None, comm: str = 'dense', receptor_type=None,
                 allow_autapses: bool = True,
                 allow_multapses: bool = True, seed: Optional[int] = None):
         """Connect ``pre`` to ``post`` (or register a recorder tap).
@@ -159,6 +159,9 @@ class Simulator(brainstate.nn.Module):
         ``comm='sparse'`` routes the connectivity through a sparse CSR event
         matmul (memory-light for large fan-out); ``'dense'`` (default) uses a
         dense weight matrix. Both yield identical results for the same rule/seed.
+
+        ``receptor_type='uniform'`` routes each edge to a uniformly-drawn receptor
+        port of a multi-receptor post population (``iaf_psc_exp_multisynapse``).
         """
         if len(post.segments) == 1 and isinstance(post.segments[0].population, _spike_recorder):
             if len(pre.segments) != 1:
@@ -171,7 +174,7 @@ class Simulator(brainstate.nn.Module):
         for pre_seg in pre.segments:
             for post_seg in post.segments:
                 self._connect_pair(pre_seg, post_seg, rule, weight, delay,
-                                   allow_autapses, allow_multapses, seed, comm)
+                                   allow_autapses, allow_multapses, seed, comm, receptor_type)
 
     @staticmethod
     def _derive_seed(base, ordinal: int) -> int:
@@ -186,7 +189,8 @@ class Simulator(brainstate.nn.Module):
         return (b * 1_000_003 + ordinal + 1) & 0x7FFFFFFF
 
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
-                      allow_autapses, allow_multapses, seed, comm='dense'):
+                      allow_autapses, allow_multapses, seed, comm='dense',
+                      receptor_type=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
         if isinstance(pre_seg, _GenSegment):
@@ -202,7 +206,7 @@ class Simulator(brainstate.nn.Module):
                 pre_spike=_holder_reader(holder), n_pre_pop=n,
                 pre_local_idx=jnp.arange(n), post=post_pop,
                 post_local_idx=post_seg.indices, rule=one_to_one, weight=weight,
-                delay=delay, seed=seed)
+                delay=delay, receptor_type=receptor_type, seed=seed)
         else:
             pre_pop = pre_seg.population
             holder = getattr(self, f'_holder_{id(pre_pop)}')
@@ -210,7 +214,8 @@ class Simulator(brainstate.nn.Module):
                 pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
                 pre_local_idx=pre_seg.indices, post=post_pop,
                 post_local_idx=post_seg.indices, rule=rule, weight=weight,
-                delay=delay, comm=comm, pre_is_post=(pre_pop is post_pop),
+                delay=delay, comm=comm, receptor_type=receptor_type,
+                pre_is_post=(pre_pop is post_pop),
                 allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                 seed=self._derive_seed(seed, ordinal))
         setattr(self, f'_proj_{ordinal}', proj)
@@ -230,7 +235,14 @@ class Simulator(brainstate.nn.Module):
             holder = getattr(self, f'_holder_{id(m)}', None)
             if holder is None:
                 continue  # recorders / untracked devices have no holder
-            out = m.update()
+            if (isinstance(m, Neuron) and hasattr(m, 'n_receptors')
+                    and 'w_by_rec' in inspect.signature(type(m).update).parameters):
+                # Multi-receptor neuron: gather the per-port delta input and drive
+                # the model's JIT-safe ``w_by_rec`` path (its no-arg seam is numpy).
+                init = u.math.zeros(m.varshape + (int(m.n_receptors),)) * u.pA
+                out = m.update(w_by_rec=u.get_mantissa(m.sum_delta_inputs(init) / u.pA))
+            else:
+                out = m.update()
             if isinstance(m, Neuron):
                 val = (jnp.asarray(u.get_mantissa(out)) >= 0.5).astype(dftype)
             else:
