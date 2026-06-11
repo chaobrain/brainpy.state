@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from .static_synapse import _UNSET, static_synapse
+from ._legacy_imperative import _UNSET, ImperativeSynapseBase
 
 __all__ = [
     'stdp_dopamine_synapse',
@@ -34,7 +34,7 @@ __all__ = [
 _STDP_EPS = 1.0e-6
 
 
-class stdp_dopamine_synapse(static_synapse):
+class stdp_dopamine_synapse(ImperativeSynapseBase):
     r"""NEST-compatible ``stdp_dopamine_synapse`` connection model.
 
     Synapse type for dopamine-modulated spike-timing dependent plasticity following

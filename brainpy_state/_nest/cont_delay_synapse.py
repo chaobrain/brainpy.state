@@ -23,14 +23,14 @@ from collections.abc import Mapping, Sequence
 import saiunit as u
 from brainstate.typing import ArrayLike
 
-from .static_synapse import static_synapse
+from ._legacy_imperative import ImperativeSynapseBase
 
 __all__ = [
     'cont_delay_synapse',
 ]
 
 
-class cont_delay_synapse(static_synapse):
+class cont_delay_synapse(ImperativeSynapseBase):
     r"""NEST-compatible static synapse with continuous (off-grid) delays.
 
     This synapse model extends :class:`static_synapse` to support precise

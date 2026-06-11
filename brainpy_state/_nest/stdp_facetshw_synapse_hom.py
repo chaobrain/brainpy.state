@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from .static_synapse import _UNSET, static_synapse
+from ._legacy_imperative import _UNSET, ImperativeSynapseBase
 
 __all__ = [
     'stdp_facetshw_synapse_hom',
@@ -42,7 +42,7 @@ _DEFAULT_CONFIG_1 = (0, 1, 0, 0)
 _DEFAULT_RESET_PATTERN = (1, 1, 1, 1, 1, 1)
 
 
-class stdp_facetshw_synapse_hom(static_synapse):
+class stdp_facetshw_synapse_hom(ImperativeSynapseBase):
     r"""NEST-compatible ``stdp_facetshw_synapse_hom`` connection model.
 
     Implements hardware-constrained spike-timing dependent plasticity (STDP) designed for the
