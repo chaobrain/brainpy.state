@@ -17,6 +17,7 @@ from ._projections import (
 from ._nodeview import NodeView
 from ._rules import ConnRule, all_to_all, one_to_one, fixed_indegree
 from ._event_proj import EventProjection
+from ._event_plastic import EventPlasticProj
 from ._simulator import Simulator, SimulationResult
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     'one_to_one',
     'fixed_indegree',
     'EventProjection',
+    'EventPlasticProj',
     'Simulator',
     'SimulationResult',
 ]

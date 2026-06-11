@@ -21,7 +21,7 @@ import math
 import saiunit as u
 from brainstate.typing import ArrayLike
 
-from .static_synapse import _UNSET, static_synapse
+from ._legacy_imperative import _UNSET, ImperativeSynapseBase
 from .stdp_synapse import _STDP_EPS, stdp_synapse
 
 __all__ = [
@@ -598,7 +598,7 @@ class stdp_triplet_synapse(stdp_synapse):
            >>> print(params['weight'], params['Kplus_triplet'])
            1.5 0.0
         """
-        params = static_synapse.get(self)
+        params = ImperativeSynapseBase.get(self)
         params['tau_plus'] = float(self.tau_plus)
         params['tau_plus_triplet'] = float(self.tau_plus_triplet)
         params['tau_minus'] = float(self.tau_minus)
@@ -774,7 +774,7 @@ class stdp_triplet_synapse(stdp_synapse):
         if post is not _UNSET:
             super_kwargs['post'] = post
         if super_kwargs:
-            static_synapse.set(self, **super_kwargs)
+            ImperativeSynapseBase.set(self, **super_kwargs)
 
         self.tau_plus = float(new_tau_plus)
         self.tau_plus_triplet = float(new_tau_plus_triplet)

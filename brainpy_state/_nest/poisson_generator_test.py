@@ -143,10 +143,14 @@ class TestPoissonGeneratorOrdering(unittest.TestCase):
             )
             gen.init_state()
 
+            @brainstate.transform.jit
+            def _step(t):
+                with brainstate.environ.context(t=t):
+                    return gen.update()
+
             maxima = 0
             for step in range(300):
-                with brainstate.environ.context(t=step * dt):
-                    maxima = max(maxima, int(np.asarray(gen.update())[0]))
+                maxima = max(maxima, int(np.asarray(_step(step * dt))[0]))
             self.assertGreater(maxima, 1)
 
 

@@ -704,11 +704,16 @@ class _AnalogInputTestBase(unittest.TestCase):
 
     def _run(self, gen, n_steps, unit):
         out = []
+
+        @brainstate.transform.jit
+        def _step(i):
+            with brainstate.environ.context(i=i):
+                return gen.update()
+
         with brainstate.environ.context(dt=self.dt):
             brainstate.nn.init_all_states(gen)
             for k in range(n_steps):
-                with brainstate.environ.context(i=k):
-                    out.append(np.asarray(gen.update().to_decimal(unit)))
+                out.append(np.asarray(_step(k).to_decimal(unit)))
         return np.stack(out, axis=0)
 
 

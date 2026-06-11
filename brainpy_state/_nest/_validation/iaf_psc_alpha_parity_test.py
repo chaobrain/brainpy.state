@@ -38,13 +38,19 @@ def _bp_run(I_e, T_ms):
     """Step the neuron and return (V_m trace in mV, spike count)."""
     neu = _bp_neuron(I_e)
     n_steps = int(round(T_ms / 0.1))
+
+    @brainstate.transform.jit
+    def _step(t, i):
+        with brainstate.environ.context(t=t, i=i):
+            spk = neu.update()
+            return spk, neu.V.value[0]
+
     vs = []
     spikes = 0
     for k in range(n_steps):
-        with brainstate.environ.context(t=k * 0.1 * u.ms, i=k):
-            spk = neu.update()
-            spikes += int(np.asarray(u.get_mantissa(spk)).reshape(-1)[0] >= 0.5)
-            vs.append(float(u.get_mantissa(neu.V.value[0] / u.mV)))
+        spk, vk = _step(k * 0.1 * u.ms, k)
+        spikes += int(np.asarray(u.get_mantissa(spk)).reshape(-1)[0] >= 0.5)
+        vs.append(float(u.get_mantissa(vk / u.mV)))
     return np.asarray(vs), spikes
 
 

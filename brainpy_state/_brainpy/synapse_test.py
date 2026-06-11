@@ -132,13 +132,14 @@ class TestSynapse(unittest.TestCase):
         synapse = Alpha(self.in_size, tau=5.0 * u.ms)
         synapse.init_state(self.batch_size)
         outputs = []
+        jit_update = brainstate.transform.jit(synapse.update)
         with brainstate.environ.context(dt=0.1 * u.ms):
             # apply impulse at t=0
             out = synapse.update(jnp.ones((self.batch_size, self.in_size)) * u.mS)
             outputs.append(u.get_magnitude(out / u.mS))
             # let it evolve for 500 steps (50 ms = 10*tau)
             for _ in range(500):
-                out = synapse.update()
+                out = jit_update()
                 outputs.append(u.get_magnitude(out / u.mS))
         # After 10 time constants, output should be much smaller than the peak
         peak_val = max(jnp.max(jnp.abs(o)) for o in outputs[:100])
