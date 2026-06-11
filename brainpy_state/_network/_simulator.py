@@ -12,6 +12,7 @@ the jitted loop).
 """
 from __future__ import annotations
 
+import inspect
 import itertools
 from typing import Optional
 
@@ -166,12 +167,28 @@ class Simulator(brainstate.nn.Module):
                 self._connect_pair(pre_seg, post_seg, rule, weight, delay,
                                    allow_autapses, allow_multapses, seed)
 
+    @staticmethod
+    def _derive_seed(base, ordinal: int) -> int:
+        """Distinct, reproducible seed per realized projection/generator.
+
+        Fan-out (one ``connect`` to several post segments, or one generator to
+        several targets) must draw independently; ``jax.random`` derives element
+        ``j`` from counter ``j`` regardless of array length, so sharing a base
+        seed would otherwise duplicate trains/connectivity across segments.
+        """
+        b = 0 if base is None else int(base)
+        return (b * 1_000_003 + ordinal + 1) & 0x7FFFFFFF
+
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed):
+        ordinal = next(self._proj_counter)
         post_pop = post_seg.population
         if isinstance(pre_seg, _GenSegment):
             n = int(post_seg.indices.shape[0])
-            gen = pre_seg.spec.model_cls(n, **pre_seg.spec.params)
+            params = dict(pre_seg.spec.params)
+            if 'rng_seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
+                params['rng_seed'] = self._derive_seed(params.get('rng_seed'), ordinal)
+            gen = pre_seg.spec.model_cls(n, **params)
             setattr(self, f'_node_{id(gen)}', gen)
             holder = _SpikeHolder(n)
             setattr(self, f'_holder_{id(gen)}', holder)
@@ -188,8 +205,9 @@ class Simulator(brainstate.nn.Module):
                 pre_local_idx=pre_seg.indices, post=post_pop,
                 post_local_idx=post_seg.indices, rule=rule, weight=weight,
                 delay=delay, pre_is_post=(pre_pop is post_pop),
-                allow_autapses=allow_autapses, allow_multapses=allow_multapses, seed=seed)
-        setattr(self, f'_proj_{next(self._proj_counter)}', proj)
+                allow_autapses=allow_autapses, allow_multapses=allow_multapses,
+                seed=self._derive_seed(seed, ordinal))
+        setattr(self, f'_proj_{ordinal}', proj)
 
     # -- run ---------------------------------------------------------------
     def update(self, t=None):

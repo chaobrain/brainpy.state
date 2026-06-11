@@ -60,3 +60,27 @@ class TestSimulatorEndToEnd(unittest.TestCase):
         self.assertFalse(bool(jnp.any(jnp.isnan(spk))))
         self.assertGreaterEqual(res.n_events(esr), 0)
         self.assertGreater(float(jnp.sum(spk > 0)), 0.0)  # poisson drive -> some spikes
+
+    def test_fanout_populations_are_independent(self):
+        # A generator fanned to two equal-sized populations must deliver
+        # INDEPENDENT trains: bit-identical spikes mean the realized generators
+        # collided on one rng seed (and likewise for fanned-out connectivity).
+        npar = dict(C_m=250. * u.pF, tau_m=20. * u.ms, tau_syn_ex=0.5 * u.ms,
+                    tau_syn_in=0.5 * u.ms, t_ref=2. * u.ms, E_L=0. * u.mV,
+                    V_reset=0. * u.mV, V_th=20. * u.mV,
+                    V_initializer=braintools.init.Constant(0. * u.mV))
+        sim = Simulator(dt=0.1 * u.ms)
+        ne = sim.create(iaf_psc_alpha, 20, params=npar)
+        ni = sim.create(iaf_psc_alpha, 20, params=npar)
+        noise = sim.create(poisson_generator, rate=15000. * u.Hz)
+        esr = sim.create(spike_recorder)
+        isr = sim.create(spike_recorder)
+        sim.connect(noise, ne, weight=20. * u.pA, delay=1.5 * u.ms, rule=all_to_all)
+        sim.connect(noise, ni, weight=20. * u.pA, delay=1.5 * u.ms, rule=all_to_all)
+        sim.connect(ne[:20], esr)
+        sim.connect(ni[:20], isr)
+        res = sim.simulate(50. * u.ms)
+        a, b = res.spikes(esr), res.spikes(isr)
+        self.assertGreater(float(jnp.sum(a > 0)), 0.0)
+        self.assertFalse(bool(jnp.array_equal(a, b)),
+                         "fan-out populations received bit-identical spikes")
