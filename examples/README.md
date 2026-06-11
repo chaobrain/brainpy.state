@@ -37,6 +37,16 @@ Examples demonstrating training of SNNs using surrogate gradient methods:
 - **201_surrogate_grad_lif_fashion_mnist.py** - Fashion-MNIST classification with surrogate gradients
 - **202_mnist_lif_readout.py** - MNIST classification with LIF network and readout layer
 
+### NEST-style ports (`nest/`)
+
+Faithful ports of NEST-simulator reference networks onto the explicit
+`brainpy.state.Simulator` API (NEST vocabulary — `create` / `connect` /
+`simulate`), driving the real NEST-compatible models and validated against live
+NEST. See [`nest/README.md`](nest/README.md).
+
+- **nest/brunel_alpha.py** - Brunel (2000) random balanced network with alpha
+  synapses; excitatory rate matches live NEST to 0.21 % at `order=200`.
+
 ## Requirements
 
 ```bash
