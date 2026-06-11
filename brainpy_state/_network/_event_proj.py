@@ -8,6 +8,7 @@ sign-split into excitatory/inhibitory channels inside the neuron.
 """
 from __future__ import annotations
 
+import itertools
 from typing import Callable, Optional
 
 import brainstate
@@ -22,6 +23,10 @@ from brainpy_state._network._projections import _DenseMatMul
 from brainpy_state._network._rules import ConnRule, _OneToOne
 
 __all__ = ['EventProjection']
+
+# Unique delta-input keys per projection (brainstate does not auto-assign a
+# usable ``self.name`` here, and multiple projections target the same post).
+_DELTA_KEY_COUNTER = itertools.count()
 
 
 class EventProjection(brainstate.nn.Module):
@@ -73,6 +78,7 @@ class EventProjection(brainstate.nn.Module):
         seed: Optional[int] = None,
     ):
         super().__init__()
+        self._delta_key = f'event_proj_{next(_DELTA_KEY_COUNTER)}'
         self.pre_spike = pre_spike
         self.post = post
         self.pre_local_idx = jnp.asarray(pre_local_idx)
@@ -126,7 +132,7 @@ class EventProjection(brainstate.nn.Module):
         else:
             y = self.comm(x_seg)                        # (n_post,) pA
         contrib = y if self._post_is_full else self._scatter(y)
-        self.post.add_delta_input(self.name, contrib)
+        self.post.add_delta_input(self._delta_key, contrib)
 
     def _scatter(self, y):
         """Place per-segment contributions into a full (n_post_pop,) vector."""

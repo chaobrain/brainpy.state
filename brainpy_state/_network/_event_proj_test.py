@@ -2,8 +2,12 @@
 import unittest
 
 import brainstate
+import jax
 import jax.numpy as jnp
 import saiunit as u
+
+jax.config.update('jax_enable_x64', True)
+brainstate.environ.set(precision=64, platform='cpu')
 
 from brainpy_state import iaf_psc_alpha
 from brainpy_state._network import one_to_one
