@@ -24,14 +24,15 @@ import saiunit as u
 
 try:
     import nest
-    _HAS_NEST = True
 except Exception:
-    _HAS_NEST = False
+    nest = None
+
+from brainpy_state._nest._validation.nest_compare import requires_nest, compare_distributional
+from brainpy_state._nest._validation.tolerance_conventions import CAT_D
 
 ORDER = 200          # NE=800, NI=200 -> small/fast
 SIMTIME = 1000.0
 N_SEEDS = 4          # average rate over independent realizations (variance reduction)
-TOL = 0.05           # 5% parity on the seed-averaged, full-population mean rate
 
 
 def _nest_rates(order, simtime, seed):
@@ -70,7 +71,7 @@ def _nest_rates(order, simtime, seed):
     return esr.n_events / simtime * 1000.0 / NE
 
 
-@unittest.skipUnless(_HAS_NEST, "live NEST not importable")
+@requires_nest
 class TestBrunelExpMultisynapseParity(unittest.TestCase):
     def test_excitatory_rate_within_5pct_of_nest(self):
         import numpy as np
@@ -82,10 +83,6 @@ class TestBrunelExpMultisynapseParity(unittest.TestCase):
             res = sim.simulate(SIMTIME * u.ms)
             bp.append(res.rate(esr.segments[0].population))
             ns.append(_nest_rates(ORDER, SIMTIME, seed=seed + 1))
-        bp_rate, nest_rate = float(np.mean(bp)), float(np.mean(ns))
-        self.assertGreater(nest_rate, 0.0)
-        rel = abs(bp_rate - nest_rate) / nest_rate
-        self.assertLess(rel, TOL,
-                        f"exc rate brainpy={bp_rate:.2f} nest={nest_rate:.2f} "
-                        f"rel={rel:.3f} > {TOL} (per-seed bp={[round(x,1) for x in bp]} "
-                        f"nest={[round(x,1) for x in ns]})")
+        self.assertGreater(float(np.mean(ns)), 0.0)
+        # PRNG-divergent: average per-seed rates, compare the seed-mean (category D).
+        compare_distributional(ns, bp, tol=CAT_D, metric="exc rate").assert_()
