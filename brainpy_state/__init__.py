@@ -110,8 +110,16 @@ from ._network import (
     FixedOutdegreeProj,
     FixedTotalNumberProj,
     PairwisePoissonProj,
+    # NEST-flavored explicit Simulator API
+    Simulator,
+    SimulationResult,
+    NodeView,
+    all_to_all,
+    one_to_one,
+    fixed_indegree,
 )
 
+from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
 from . import _dist as dist  # noqa: F401  -- exposed as brainpy.state.dist
 
 # =============================================================================
@@ -533,5 +541,13 @@ __all__ = [
     'FixedOutdegreeProj',
     'FixedTotalNumberProj',
     'PairwisePoissonProj',
+    # NEST-flavored explicit Simulator API
+    'Simulator',
+    'SimulationResult',
+    'NodeView',
+    'all_to_all',
+    'one_to_one',
+    'fixed_indegree',
+    'network',
     'dist',
 ]

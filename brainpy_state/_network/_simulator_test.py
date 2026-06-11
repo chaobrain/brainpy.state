@@ -15,17 +15,23 @@ from brainpy_state._network import Simulator, fixed_indegree, all_to_all
 
 
 class TestNetworkPublicAPI(unittest.TestCase):
-    def test_public_names_importable(self):
-        from brainpy_state._network import (
+    def test_top_level_names_exposed(self):
+        # Exposed at brainpy.state.* (top level).
+        from brainpy_state import (
             Simulator, SimulationResult, NodeView,
             all_to_all, one_to_one, fixed_indegree,
         )
         self.assertTrue(callable(fixed_indegree))
-        self.assertIsNotNone(Simulator)
-        self.assertIsNotNone(SimulationResult)
-        self.assertIsNotNone(NodeView)
-        self.assertIsNotNone(all_to_all)
-        self.assertIsNotNone(one_to_one)
+        for obj in (Simulator, SimulationResult, NodeView, all_to_all, one_to_one):
+            self.assertIsNotNone(obj)
+
+    def test_network_namespace_alias(self):
+        # Exposed as brainpy.state.network.* (module alias).
+        import brainpy_state
+        from brainpy_state import network
+        self.assertIs(network, brainpy_state._network)
+        self.assertIs(network.Simulator, brainpy_state.Simulator)
+        self.assertTrue(hasattr(network, 'fixed_indegree'))
 
 
 class TestSimulatorEndToEnd(unittest.TestCase):
