@@ -15,9 +15,11 @@ import brainpy_state
 
 try:
     import nest
-    _HAS_NEST = True
 except Exception:
-    _HAS_NEST = False
+    nest = None
+
+from brainpy_state._nest._validation.nest_compare import requires_nest, compare_distributional
+from brainpy_state._nest._validation.tolerance_conventions import CAT_D
 
 
 class TestPoissonRate(unittest.TestCase):
@@ -39,11 +41,11 @@ class TestPoissonRate(unittest.TestCase):
         per_step = transform.for_loop(step, times, indices)
         total = float(jnp.sum(per_step))
         emp_rate = total / n_trains / (T_ms / 1000.0)
-        self.assertLess(abs(emp_rate - rate_hz) / rate_hz, 0.05,
-                        f"empirical rate {emp_rate:.1f} Hz vs configured {rate_hz} Hz")
+        # empirical Poisson rate vs configured ground-truth -> distributional (category D).
+        compare_distributional([rate_hz], [emp_rate], tol=CAT_D, metric="poisson rate").assert_()
 
 
-@unittest.skipUnless(_HAS_NEST, "live NEST not importable")
+@requires_nest
 class TestPoissonRateVsNest(unittest.TestCase):
     def test_mean_count_matches_nest_within_tolerance(self):
         nest.ResetKernel()
@@ -55,7 +57,8 @@ class TestPoissonRateVsNest(unittest.TestCase):
         nest.Connect(n, sr)
         nest.Simulate(1000.0)
         nest_rate = sr.n_events / 2000 / 1.0
-        self.assertLess(abs(nest_rate - 1000.) / 1000., 0.05, f"nest rate {nest_rate}")
+        # live-NEST Poisson rate vs configured ground-truth -> distributional (category D).
+        compare_distributional([1000.0], [nest_rate], tol=CAT_D, metric="nest poisson rate").assert_()
 
 
 class TestSpikeRecorderStamp(unittest.TestCase):

@@ -17,13 +17,14 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 try:
     import nest
-    _HAS_NEST = True
 except Exception:
-    _HAS_NEST = False
+    nest = None
+
+from brainpy_state._nest._validation.nest_compare import requires_nest, compare_trace
+from brainpy_state._nest._validation.tolerance_conventions import CAT_C_RATE
 
 ORDER = 2500         # the real Brunel order (mean-field cost is O(1) in N)
 SIMTIME = 50.0
-TOL = 0.05           # 5% parity on the asymptotic mean-field rate
 
 
 def _nest_rates(order, simtime):
@@ -73,7 +74,7 @@ def _nest_rates(order, simtime):
     return float(rex), float(rin)
 
 
-@unittest.skipUnless(_HAS_NEST, "live NEST not importable")
+@requires_nest
 class TestBrunelSiegertParity(unittest.TestCase):
     def test_meanfield_rate_within_5pct_of_nest(self):
         from examples.nest.brunel_siegert import run
@@ -81,8 +82,6 @@ class TestBrunelSiegertParity(unittest.TestCase):
         nest_ex, nest_in = _nest_rates(ORDER, SIMTIME)
         self.assertGreater(nest_ex, 0.0)
         self.assertGreater(nest_in, 0.0)
+        # Deterministic mean-field fixed point -> trace mode (category C, rate).
         for label, bp, ns in (("exc", erate, nest_ex), ("inh", irate, nest_in)):
-            rel = abs(bp - ns) / ns
-            self.assertLess(rel, TOL,
-                            f"{label} mean-field rate brainpy={bp:.2f} nest={ns:.2f} "
-                            f"rel={rel:.3f} > {TOL}")
+            compare_trace(ns, bp, tol=CAT_C_RATE, metric=f"{label} mean-field rate").assert_()
