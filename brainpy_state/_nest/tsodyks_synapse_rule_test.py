@@ -90,3 +90,15 @@ def test_weight_sign_passes_through():
     state = {k: jnp.array([float(v)]) for k, v in {**init, 'weight': -2.0}.items()}
     _, w_eff = s.update(state, _spike_ctx(50.))
     assert float(w_eff[0]) < 0.0   # inhibitory weight stays negative
+
+
+def test_non_scalar_initial_state_rejected():
+    # initial x/y/u must be scalars (per-edge broadcast happens in the substrate)
+    with pytest.raises(ValueError, match='must be scalar'):
+        tsodyks_synapse(x=[1.0, 0.5])
+
+
+def test_bare_number_time_constants_are_ms():
+    # to_ms interprets bare floats as milliseconds (no unit attached)
+    s = tsodyks_synapse(U=0.5, tau_psc=3.0, tau_rec=800.0, tau_fac=0.0)
+    assert s.tau_psc == 3.0 and s.tau_rec == 800.0 and s.tau_fac == 0.0

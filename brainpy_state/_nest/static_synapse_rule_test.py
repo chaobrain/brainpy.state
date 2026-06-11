@@ -57,6 +57,8 @@ def test_delay_validation():
         static_synapse(delay=-1.0 * u.ms)
     with pytest.raises(ValueError):
         static_synapse(delay=0.0 * u.ms)
+    with pytest.raises(ValueError, match='finite'):
+        static_synapse(delay=np.inf * u.ms)
 
 
 def test_receptor_type_validation():

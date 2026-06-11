@@ -164,6 +164,45 @@ def test_pre_trace_decays_and_gathers():
     assert np.allclose(np.asarray(proj.pre_trace.value), [np.exp(-0.1)], atol=1e-9)
 
 
+class _PostTraceTestRule(_StaticTestRule):
+    post_trace_tau = 10.0 * u.ms
+
+    def update(self, state, ctx):
+        # probe: deliver the gathered postsynaptic trace as the weight
+        return state, ctx.post_trace
+
+
+def test_post_trace_decays_and_gathers():
+    # Locks the post-trace seam of the kernel contract (used by STDP clusters):
+    # decay-then-add the full post spike vector, gather per edge.
+    brainstate.environ.set(dt=1.0 * u.ms)
+    sink = _Sink(1)
+    post_box = {'v': jnp.array([1.])}
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+        post_spike=lambda: post_box['v'],
+        rule=_PostTraceTestRule(weight=jnp.array([0.]) * u.pA))
+    brainstate.nn.init_all_states(proj)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()   # post_trace -> 1.0
+    assert np.allclose(np.asarray(proj.post_trace.value), [1.0])
+    post_box['v'] = jnp.array([0.])
+    with brainstate.environ.context(t=2.0 * u.ms, i=2):
+        proj.update()
+    assert np.allclose(np.asarray(proj.post_trace.value), [np.exp(-0.1)], atol=1e-9)
+
+
+def test_missing_edges_and_conn_raises():
+    # Neither explicit edges nor a connectivity rule -> construction error.
+    with pytest.raises(ValueError, match='explicit edges'):
+        EventPlasticProj(
+            pre_spike=lambda: jnp.zeros(2), n_pre_pop=2, pre_local_idx=jnp.arange(2),
+            post=None, post_local_idx=jnp.arange(2), n_post_pop=2,
+            rule=_StaticTestRule())
+
+
 # --------------------------------------------------------------------------
 # Task 1.5 — jit / vmap / grad smoke, delay buffer wrap
 # --------------------------------------------------------------------------
