@@ -35,22 +35,35 @@ from brainpy_state._network._rules import all_to_all, one_to_one
 
 __all__ = ['Simulator', 'SimulationResult']
 
-# NEST recordable name -> brainpy.state model State attribute. NEST exposes the
-# membrane potential as ``V_m`` while the models store it on ``self.V``; every
-# other recordable (``g_ex``, ``g_in``, ``w``, ``I_syn_ex``, …) maps to the
-# same attribute name.
-_RECORDABLE_ALIAS = {'V_m': 'V'}
+# NEST recordable name -> ordered candidate brainpy.state model State attributes.
+# NEST exposes the membrane potential as ``V_m`` while the models store it on
+# ``self.V``. Synaptic currents are spelled ``I_syn_ex``/``I_syn_in`` on the alpha
+# family (``iaf_psc_alpha``) but ``i_syn_ex``/``i_syn_in`` on the exp family
+# (``iaf_psc_exp``), so each maps to a tuple of candidate attributes tried in
+# order. Recordables not listed here (``g_ex``, ``g_in``, ``w``, …) resolve by
+# their own name via ``getattr`` (e.g. ``iaf_cond_alpha`` exposes ``g_ex``/``g_in``).
+_RECORDABLE_ALIAS = {
+    'V_m': ('V',),
+    'I_syn_ex': ('I_syn_ex', 'i_syn_ex'),
+    'I_syn_in': ('I_syn_in', 'i_syn_in'),
+}
 
 
 def _read_recordable(pop, name):
-    """Read a NEST recordable as the model's State value (Quantity or array)."""
-    attr = _RECORDABLE_ALIAS.get(name, name)
-    state = getattr(pop, attr, None)
-    if state is None:
-        raise KeyError(
-            f'recordable {name!r} (state {attr!r}) is not available on {type(pop).__name__}'
-        )
-    return state.value
+    """Read a NEST recordable as the model's State value (Quantity or array).
+
+    Resolves ``name`` to the first State attribute that exists among its candidate
+    spellings (``_RECORDABLE_ALIAS``), falling back to the recordable name itself.
+    """
+    candidates = _RECORDABLE_ALIAS.get(name, (name,))
+    for attr in candidates:
+        state = getattr(pop, attr, None)
+        if state is not None:
+            return state.value
+    raise KeyError(
+        f'recordable {name!r} (tried {candidates}) is not available on '
+        f'{type(pop).__name__}'
+    )
 
 
 class _SpikeHolder(brainstate.nn.Module):

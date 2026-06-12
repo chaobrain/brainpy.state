@@ -109,6 +109,83 @@ class TestCompareDistributional(unittest.TestCase):
             nc.compare_distributional([1.0], [1.0], tol=tc.CAT_D, statistic="median")
 
 
+class TestCompareDistributionalAutocorr(unittest.TestCase):
+    """The autocorr/covariance-function path (correlation-detector parity, 16 reuse)."""
+
+    def test_identical_functions_pass(self):
+        f = np.array([0.0, 0.5, 1.0, 0.5, 0.0])
+        r = nc.compare_distributional(f, f.copy(), tol=tc.CAT_D,
+                                      statistic="autocorr", metric="xcorr")
+        self.assertTrue(r.passed)
+        self.assertEqual(r.error, 0.0)
+
+    def test_within_autocorr_bound_passes(self):
+        f = np.array([0.0, 0.5, 1.0, 0.5, 0.0])
+        g = f + 0.01                                       # 0.01 < autocorr_max_diff 0.05
+        self.assertTrue(nc.compare_distributional(
+            f, g, tol=tc.CAT_D, statistic="autocorr").passed)
+
+    def test_out_of_bound_fails_and_names_lag(self):
+        f = np.zeros(7)
+        g = np.zeros(7)
+        g[4] = 0.2                                         # 0.2 > 0.05 bound, at lag 4
+        r = nc.compare_distributional(f, g, tol=tc.CAT_D,
+                                      statistic="autocorr", metric="cov")
+        self.assertFalse(r.passed)
+        self.assertIn("cov", r.detail)
+        self.assertIn("4", r.detail)                       # names the offending lag
+        self.assertAlmostEqual(r.error, 0.2)
+        with self.assertRaises(AssertionError):
+            r.assert_()
+
+    def test_per_seed_functions_are_averaged(self):
+        # mean of each side is [0, 1, 0]; per-sample they differ but the means match.
+        ref = [np.array([0.0, 1.0, 0.0]), np.array([0.0, 1.0, 0.0])]
+        cand = [np.array([0.0, 1.2, 0.0]), np.array([0.0, 0.8, 0.0])]
+        self.assertTrue(nc.compare_distributional(
+            ref, cand, tol=tc.CAT_D, statistic="autocorr").passed)
+
+    def test_unit_aware_functions_stripped(self):
+        f = np.array([0.0, 1.0, 0.0]) * u.mV
+        g = np.array([0.0, 1.0, 0.0]) * u.mV
+        self.assertTrue(nc.compare_distributional(
+            f, g, tol=tc.CAT_D, statistic="autocorr").passed)
+
+    def test_empty_functions_safe(self):
+        # an empty detector window (no events) -> zero-length function, no crash
+        r = nc.compare_distributional(np.array([]), np.array([]),
+                                      tol=tc.CAT_D, statistic="autocorr")
+        self.assertTrue(r.passed)
+        self.assertEqual(r.error, 0.0)
+
+    def test_mismatched_lengths_compare_shared_prefix(self):
+        f = np.array([0.0, 1.0, 0.0, 9.0])                # extra lag ignored
+        g = np.array([0.0, 1.0, 0.0])
+        self.assertTrue(nc.compare_distributional(
+            f, g, tol=tc.CAT_D, statistic="autocorr").passed)
+
+
+class TestCompareDistributionalCV(unittest.TestCase):
+    """The CV-of-ISI path: a normalized statistic compared on the seed mean."""
+
+    def test_cv_within_bound_passes(self):
+        ref = [0.95, 1.0, 1.05]                            # mean 1.0
+        cand = [0.96, 1.0, 1.02]                           # mean 0.9933 -> 0.67% < 2%
+        self.assertTrue(nc.compare_distributional(
+            ref, cand, tol=tc.CAT_D, statistic="cv").passed)
+
+    def test_cv_outside_bound_fails(self):
+        r = nc.compare_distributional([1.0, 1.0], [1.1, 1.1], tol=tc.CAT_D,
+                                      statistic="cv", metric="ISI CV")
+        self.assertFalse(r.passed)                         # 10% > 2% (mean_diff_pct)
+        self.assertIn("CV", r.detail)
+
+    def test_cv_zero_reference_safe(self):
+        r = nc.compare_distributional([0.0, 0.0], [0.0, 0.0], tol=tc.CAT_D, statistic="cv")
+        self.assertTrue(r.passed)
+        self.assertFalse(np.isnan(r.error))
+
+
 class TestNestCompareDispatch(unittest.TestCase):
     def test_trace_mode_runs_both_callables(self):
         r = nc.nest_compare(lambda: np.arange(5.0), lambda: np.arange(5.0),

@@ -88,15 +88,26 @@ per-generator weight vectors (multi-channel generator view).
 
 ### 3.4 Recording / device demos
 
+Five ported in cluster 03 (`Simulator` API, live-NEST parity); two are **blocked**
+and ship as skipped placeholders. The ports added one reusable extension — **E**
+eager imperative devices (`mip_generator`/`correlation_detector`/
+`correlospinmatrix_detector` driven post-hoc from State-tapped or
+`device.simulate()` spike data, never inside the `for_loop`) — and one
+validation-helper extension (`compare_distributional` `autocorr`/`cv` statistics).
+One `_nest` model fix was required: `mcculloch_pitts_neuron` now self-manages its
+PRNG (`environ.get('key')` is `None` inside a `for_loop`). The two blocked demos
+need connection-weight introspection (`GetConnections`/`SynapseCollection`,
+`network-api-gap.md` §3.1, §3.8).
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `multimeter_file.py` | missing | none | demonstrates file backend (which `devices-gap.md` flags as a P2 gap) |
-| `recording_demo.py` | missing | none | full recording-API tour |
-| `cross_check_mip_corrdet.py` | missing | none | `mip_generator` + `correlation_detector` regression |
-| `correlospinmatrix_detector_two_neuron.py` | missing | none | binary-neuron correlator demo |
-| `precise_spiking.py` | missing | none | exercises `*_ps` precise-spike-timing variants |
-| `plot_weight_matrices.py` | missing | none | uses `GetConnections` + viz |
-| `synapsecollection.py` | missing | none | API tour for `SynapseCollection` (absent — `network-api-gap.md`) |
+| `multimeter_file.py` | implemented | `examples/nest/multimeter_file.py` | in-memory `iaf_psc_exp`; `V_m`/`I_syn_ex`/`I_syn_in` `CAT_B_GEN` (ext. E); conductance recordables a follow-up |
+| `recording_demo.py` | implemented | `examples/nest/recording_demo.py` | `poisson_generator`→`iaf_psc_exp` recording tour; rate `CAT_D` (refractory-saturated) |
+| `cross_check_mip_corrdet.py` | implemented | `examples/nest/cross_check_mip_corrdet.py` | eager `mip_generator`+`correlation_detector`; cross-correlogram `CAT_D` autocorr (ext. E) |
+| `correlospinmatrix_detector_two_neuron.py` | implemented | `examples/nest/correlospinmatrix_detector_two_neuron.py` | `ginzburg`→`mcculloch_pitts` binary correlator; means/cov `CAT_D` (ext. E; fixed `mcculloch_pitts` rng) |
+| `precise_spiking.py` | implemented | `examples/nest/precise_spiking.py` | grid `iaf_psc_exp` vs precise `iaf_psc_exp_ps`; onset-aligned spikes `CAT_E` |
+| `plot_weight_matrices.py` | blocked | skipped placeholder | needs `GetConnections`/`SynapseCollection` (`network-api-gap.md` §3.1, §3.8) |
+| `synapsecollection.py` | blocked | skipped placeholder | needs `SynapseCollection` + named rules + `Parameter` weights (`network-api-gap.md` §3.8, §3.1, §3.9, §3.11) |
 
 ### 3.5 Single-neuron model demos
 

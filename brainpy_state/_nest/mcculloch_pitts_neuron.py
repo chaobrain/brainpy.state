@@ -267,6 +267,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
         theta: ArrayLike = 0. * u.mV,
         y_initializer: Callable = braintools.init.Constant(0.),
         stochastic_update: bool = False,
+        rng_seed: int = 0,
         name: str = None,
     ):
         super().__init__(in_size, name=name)
@@ -276,6 +277,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
         self.theta = braintools.init.param(theta, self.varshape)
         self.y_initializer = y_initializer
         self.stochastic_update = stochastic_update
+        self.rng_seed = int(rng_seed)
 
     def init_state(self, batch_size=None, **kwargs):
         r"""Initialize neuron state variables.
@@ -311,11 +313,35 @@ class mcculloch_pitts_neuron(NESTNeuron):
             u.math.zeros(self.y.value.shape, dtype=dftype) * u.mV
         )
 
-        # Next update time for stochastic mode
+        # Stochastic mode keeps a self-managed PRNG key (threaded as a for_loop
+        # carry) and a next-update time drawn from Exp(tau_m). Relying on
+        # ``brainstate.environ.key`` would silently break under
+        # ``brainstate.transform.for_loop``, which does not thread that key, so
+        # ``t_next`` would never advance and updates would fire every step.
         if self.stochastic_update:
-            self.t_next = brainstate.ShortTermState(
-                u.math.full(self.y.value.shape, -1e7, dtype=dftype) * u.ms
-            )
+            self.rng_key = brainstate.ShortTermState(jax.random.PRNGKey(self.rng_seed))
+            exp0 = self._sample_exponential(self.y.value.shape)
+            next_interval = exp0 * u.math.asarray(self.tau_m / u.ms, dtype=dftype) * u.ms
+            self.t_next = brainstate.ShortTermState(next_interval)
+
+    def _sample_exponential(self, shape):
+        r"""Draw rate-1 exponential samples, advancing the self-managed PRNG key.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Shape of the output array.
+
+        Returns
+        -------
+        jax.Array
+            Exponential samples (mean 1.0, ``float64``). Multiply by
+            :math:`\tau_m` to obtain inter-update intervals.
+        """
+        key, subkey = jax.random.split(self.rng_key.value)
+        self.rng_key.value = key
+        dftype = brainstate.environ.dftype()
+        return jax.random.exponential(subkey, shape=shape, dtype=dftype)
 
     def _heaviside(self, h):
         r"""Heaviside step function with strict inequality threshold test.
@@ -437,17 +463,16 @@ class mcculloch_pitts_neuron(NESTNeuron):
                 u.math.where(should_update, new_y, self.y.value)
             )
 
-            # Draw next update time from exponential distribution where update happened
-            key = brainstate.environ.get('key', default=None)
-            if key is not None:
-                exp_sample = jax.random.exponential(key, shape=self.y.value.shape)
-                dftype = brainstate.environ.dftype()
-                next_interval = exp_sample * u.math.asarray(self.tau_m / u.ms, dtype=dftype) * u.ms
-                self.t_next.value = u.math.where(
-                    should_update,
-                    self.t_next.value + next_interval,
-                    self.t_next.value
-                )
+            # Draw the next update time from Exp(tau_m) where an update happened,
+            # using the self-managed key so this works under for_loop tracing.
+            exp_sample = self._sample_exponential(self.y.value.shape)
+            dftype = brainstate.environ.dftype()
+            next_interval = exp_sample * u.math.asarray(self.tau_m / u.ms, dtype=dftype) * u.ms
+            self.t_next.value = u.math.where(
+                should_update,
+                self.t_next.value + next_interval,
+                self.t_next.value
+            )
         else:
             # Deterministic update: evaluate gain function every step
             # new_y = H(h + c - theta)
