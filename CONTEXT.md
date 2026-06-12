@@ -138,6 +138,113 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 03-recording-demos — 2026-06-12
+
+- **Shipped:** the 5 NEST §3.4 recording/device demos on the `Simulator` API
+  (`examples/nest/{multimeter_file,recording_demo,cross_check_mip_corrdet,
+  correlospinmatrix_detector_two_neuron,precise_spiking}.py`), each with a
+  live-NEST parity test (`_nest/_validation/<name>_test.py`). Drove **one reusable
+  pattern (E — eager imperative devices)** and **one validation-helper extension**
+  (`compare_distributional` `autocorr`/`cv` statistics). The 2 blocked demos
+  (`plot_weight_matrices`, `synapsecollection`) ship as **skipped placeholders**
+  that raise `NotImplementedError` with the gap reason (need `GetConnections`/
+  `SynapseCollection`, network-api-gap.md §3.1/§3.8). **One `_nest` model fix was
+  needed:** `mcculloch_pitts_neuron` now self-manages its PRNG (reproduced with a
+  unit test first — see Gotchas). NEST-free unit suites: the detector self-check in
+  `cross_check_mip_corrdet_test.py`, the structural tours in
+  `recording_demo_test.py` / `precise_spiking_test.py` /
+  `correlospinmatrix_..._test.py`, and the 2 placeholder marker tests. Branch
+  `nest-goal/03-recording-demos`.
+- **Parity (live NEST):**
+  - `multimeter_file`: `V_m`/`I_syn_ex`/`I_syn_in` traces match to **machine
+    precision** (`CAT_B_GEN` = `TraceTolerance` with `align_steps=2`).
+  - `recording_demo`: the 1 MHz drive pins `iaf_psc_exp` to its refractory-
+    saturated rate → **identical** across 4 seeds (`CAT_D`).
+  - `cross_check_mip_corrdet`: seed-mean normalized cross-correlogram within
+    `CAT_D.autocorr_max_diff` (5e-2); the built-in `correlation_detector`
+    reproduces the hand-written `corr_spikes_sorted` reference **exactly for
+    lag ≥ 0** (NEST's asymmetric half-bin pruning differs <2 % rel-L1 only at the
+    extreme negative lags — a boundary effect).
+  - `correlospinmatrix_..._two_neuron`: per-channel mean activities **|Δ| ≤ 0.013**
+    (bp `[0.500, 0.506]` vs NEST `[0.497, 0.493]`); 2×2 covariance **max|Δ| ≈
+    0.014** (`CAT_D`, 5 seeds).
+  - `precise_spiking`: spike **count exact** (`10 = 10`) for both grid and precise
+    across `dt ∈ {0.1, 0.5, 1.0}`; onset-aligned relative spike times within
+    `CAT_E` (≤ 1 step — grid exact, precise ~1e-4 ms). Grid first spikes
+    `7.7/8.0/8.0`; precise `7.77/8.17/8.67` (off-grid).
+- **API discovered/changed** — what later imperative-detector clusters reuse:
+  - **E. Eager imperative devices.** `mip_generator`, `correlation_detector`, and
+    `correlospinmatrix_detector` are NumPy-RNG / Python-loop host devices that
+    **cannot enter a JAX `for_loop`**. The pattern: obtain the spike data *first*
+    — a device's own `device.simulate(n_steps)` `(n_steps, k)` multiplicity matrix,
+    or a binary spin train State-tapped from a single `for_loop` — then drive the
+    detector **post-hoc**, feeding only event-carrying steps and stamping each at
+    `step + 1` (NEST's one-step delivery latency, which cancels in the lag/cross
+    difference). **Nothing imperative runs inside the `for_loop`** (the standing
+    constraint). `correlation_detector.update(spikes, receptor_ports, weights,
+    multiplicities, stamp_steps)` + `.get('count_histogram'|'histogram'|
+    'n_events')`; `correlospinmatrix_detector` consumes spike pairs incrementally
+    and exposes the `cc[i,j,τ]` tensor (mean activity = `cc[i,i,center]·dt/T`,
+    covariance = `cc[i,j]·dt/T − m_i·m_j`).
+  - **`compare_distributional` gained `statistic="autocorr"`** (seed-averages 1-D
+    functions, element-wise `max|Δ| ≤ autocorr_max_diff`) **and `"cv"`** (uses
+    `mean_diff_pct`) on top of `"mean"` (`rate_rtol`). Reuse `autocorr` for any
+    seed-mean correlogram / PSTH / kernel comparison.
+  - **Analog recordable aliases `I_syn_ex` / `I_syn_in`** on the State tap (a
+    `Simulator` seam): a `multimeter` records `iaf_psc_exp`'s two synaptic-current
+    ports, and a signed delta event splits by sign exactly as NEST routes a signed
+    weight to its ex/in port (so one `spike_generator` with `+w`/`−w` drives both).
+- **Gotchas (NEST fidelity + JAX):**
+  - **Binary/stochastic neurons must self-manage `rng_key` from `rng_seed`.**
+    `environ.get('key')` returns `None` inside a brainstate `for_loop`, so the old
+    `environ`-key path silently degenerated to **no stochasticity** (`mcculloch_
+    pitts` fired deterministically → n2 never Poisson-gated). Fix: store
+    `self.rng_key` (a `State` seeded from `rng_seed`) and split it in `update()`.
+    Reproduced with a unit test first; **fixed in `_nest/mcculloch_pitts_neuron.py`,
+    never worked around in the example.** This is the fix that makes n2 match NEST.
+  - **`correlospinmatrix` up-transitions must be fed as TWO multiplicity-1 spikes
+    at the same stamp**, not one multiplicity-2 event (down = one mult-1 spike).
+    NEST delivers a real spike *pair*; a single mult-2 event corrupts the detector's
+    `_last_change` self-confirmation (a channel's down gets confirmed by its own
+    next up), dragging ch0's mean to 0.38 vs the correct 0.51. This is an
+    **example-feeding** convention — the detector itself mirrors NEST bit-for-bit
+    (verified by `correlation_detector_test`); diagnosed via the detector's own
+    unit test, not patched in the device.
+  - **Binary coupling `h = w·y1` ⇒ read the *pre-update* spin** in the shared
+    `for_loop` step: `y1_prev = n1.y.value` **before** `n2.update(x=w*y1_prev)`,
+    then `y1 = n1.update()`. In brainpy the coupling current `x` is *transient*
+    (consumed that step) while delta inputs persist in `h`; n2's gain is
+    `H(h + c − θ)` with `c = w·y1_prev`. Seed each neuron's `rng_seed` distinctly
+    (offset the global `brainstate.random.seed`).
+  - **`precise_spiking` carries a constant dc-delay onset offset.** NEST's
+    `dc_generator` default *connection* delay is 1.0 ms; the eager precise model is
+    driven from t=0. The constant shift (11 steps at dt=0.1) exceeds the `CAT_E`
+    absolute bound, so compare **onset-aligned relative** spike times (subtract the
+    first spike) — exact for grid, ~1e-4 ms for precise. Off-grid time is read from
+    `neuron.last_spike_time` (also `last_spike_step`/`last_spike_offset`); the
+    precise model runs **eagerly** (plain Python loop, `update(x=…)` under
+    `environ.context(t=k*dt)`, spike via `bool(all(spk>0))`) because sub-step spike
+    timing is a host-side property, not a `for_loop` array.
+  - **Generator→neuron→multimeter analog traces carry a *two*-step delivery
+    offset** vs NEST (generator spike-holder one step + recorder one step), unlike
+    the one-step offset of an `I_e`/current-injected trace — use `align_steps=2`
+    (`CAT_B_GEN`) for any `spike_generator`-driven analog recording.
+  - **`multimeter_file` conductance gap.** The upstream records `g_ex`/`g_in` from
+    a conductance `iaf_cond_alpha`; driving conductance synapses from a spike source
+    needs a `w_ex`/`w_in` labelled-delta routing seam the explicit `Simulator`
+    lacks. Kept the demo *structure* on current-based `iaf_psc_exp`
+    (`V_m`/`I_syn_ex`/`I_syn_in`) — a documented follow-up.
+- **For next clusters:** the **E (eager-device)** pattern is the vocabulary for
+  every imperative detector/generator port (correlation, correlospinmatrix, spike-
+  train statistics) — tap State or run the device's own `.simulate()` first, then
+  post-process; never inside the `for_loop`. `compare_distributional` now covers
+  `mean`/`autocorr`/`cv` — reuse `autocorr` for any correlogram/PSTH/kernel. Two
+  demos stay **blocked** on connection introspection (`GetConnections`/
+  `SynapseCollection`, network-api-gap.md §3.1/§3.8) — a `nest_compat` facade
+  unblocks `plot_weight_matrices` + `synapsecollection` together. A conductance-
+  recordable seam (spike→`g_ex`/`g_in` on `iaf_cond_alpha`) would let
+  `multimeter_file` port to its exact upstream model.
+
 ### 02-single-neuron-demos — 2026-06-12
 
 - **Shipped:** the 7 NEST §3.2 single-/few-neuron demos on the `Simulator` API
