@@ -35,19 +35,21 @@ from brainpy_state._brainpy._delay import InputDelay
 __all__ = ['EventPlasticProj', 'KernelContext', 'PlasticSynapse']
 
 
-def _trace_spec(attr):
+def _trace_spec(attr, mode='all_to_all'):
     """Normalize a rule's per-side trace-tau declaration.
 
-    Returns ``None`` (no trace), ``('single', tau_ms)`` for a scalar
+    Returns ``None`` (no trace), ``('single', tau_ms, mode)`` for a scalar
     ``Quantity`` (cluster-01 contract: 1-D per-neuron State), or
-    ``('multi', (tau0_ms, ...))`` for a tuple/list of taus (``stdp_triplet``,
-    later clopath: one per-neuron column per tau).
+    ``('multi', (tau0_ms, ...), mode)`` for a tuple/list of taus (``stdp_triplet``,
+    later clopath: one per-neuron column per tau). ``mode`` is the per-side
+    pairing mode ``'all_to_all'`` (decay-then-add, the default) or ``'nearest'``
+    (reset-to-1 on spike; cluster-05 nearest-neighbour STDP).
     """
     if attr is None:
         return None
     if isinstance(attr, (tuple, list)):
-        return ('multi', tuple(float(u.Quantity(t).to_decimal(u.ms)) for t in attr))
-    return ('single', float(u.Quantity(attr).to_decimal(u.ms)))
+        return ('multi', tuple(float(u.Quantity(t).to_decimal(u.ms)) for t in attr), mode)
+    return ('single', float(u.Quantity(attr).to_decimal(u.ms)), mode)
 
 
 class KernelContext(NamedTuple):
@@ -109,6 +111,9 @@ class PlasticSynapse(Protocol):
     pre_trace_tau: object       # None | Quantity | tuple[Quantity,...] (multi-trace)
     post_trace_tau: object      # None | Quantity | tuple[Quantity,...] (multi-trace)
     weight_unit: object         # pA
+    # optional (default 'all_to_all'); 'nearest' resets the trace to 1 on each
+    # spike instead of accumulating (cluster-05 nearest-neighbour STDP):
+    # pre_trace_mode, post_trace_mode
 
     def edge_state_init(self) -> dict: ...
 
@@ -280,9 +285,11 @@ class EventPlasticProj(brainstate.nn.Module):
             and bool(jnp.all(self.post_local_idx == jnp.arange(self._n_post_pop)))
         )
 
-        # -- per-side trace specs (None | single | multi), fixed at trace time -
-        self._pre_trace_spec = _trace_spec(rule.pre_trace_tau)
-        self._post_trace_spec = _trace_spec(rule.post_trace_tau)
+        # -- per-side trace specs (None | single | multi) + mode, fixed at trace time
+        self._pre_trace_spec = _trace_spec(
+            rule.pre_trace_tau, getattr(rule, 'pre_trace_mode', 'all_to_all'))
+        self._post_trace_spec = _trace_spec(
+            rule.post_trace_tau, getattr(rule, 'post_trace_mode', 'all_to_all'))
 
     def init_state(self, *args, **kwargs):
         dftype = brainstate.environ.dftype()
@@ -301,29 +308,41 @@ class EventPlasticProj(brainstate.nn.Module):
         """Per-neuron trace State: 1-D ``(n,)`` for single tau, ``(n, k)`` for multi."""
         if spec is None:
             return None
-        kind, taus = spec
+        kind, taus, _mode = spec
         shape = (n,) if kind == 'single' else (n, len(taus))
         return brainstate.HiddenState(jnp.zeros(shape, dtype=dftype))
 
     @staticmethod
     def _advance_trace(state_obj, spec, x_full, dt, gather, E):
-        """Decay-then-add a per-neuron trace (current spike included), gather per edge.
+        """Decay a per-neuron trace, gather per edge; store per the trace mode.
 
         Returns ``(trace_edge (E,), traces_edge (E, k))``. ``spec`` ``None`` ->
-        zeros. Single tau keeps the 1-D State + ``(E,)`` gather (``(E, 1)``
-        matrix view); a tuple of taus decays each column by its own tau and
-        adds the spike vector to every column.
+        zeros. Single tau keeps the 1-D State + ``(E,)`` gather (``(E, 1)`` matrix
+        view); a tuple of taus decays each column by its own tau.
+
+        Both modes GATHER the same ``decayed + spike`` (so the cluster-04 kernel
+        exclusion ``k = ctx.trace - ctx.spike`` reduces to the strictly-prior
+        value, which for ``nearest`` is NEST's "second-latest preceding partner"
+        on a coinciding step); they differ only in what is STORED for the next
+        step -- ``all_to_all`` accumulates ``decayed + spike``, ``nearest`` resets
+        to 1 on the spike (``where(spike, 1, decayed)``).
         """
         if spec is None:
             return jnp.zeros((E,)), jnp.zeros((E, 0))
-        kind, taus = spec
+        kind, taus, mode = spec
         if kind == 'single':
-            state_obj.value = state_obj.value * jnp.exp(-dt / taus) + x_full
-            e = state_obj.value[gather]                              # (E,)
-            return e, e[:, None]                                     # (E, 1)
-        taus_arr = jnp.asarray(taus)                                 # (k,)
-        state_obj.value = state_obj.value * jnp.exp(-dt / taus_arr) + x_full[:, None]
-        g = state_obj.value[gather]                                  # (E, k)
+            decayed = state_obj.value * jnp.exp(-dt / taus)
+            accumulated = decayed + x_full                          # kernel-facing
+            state_obj.value = (jnp.where(x_full > 0, 1.0, decayed)
+                               if mode == 'nearest' else accumulated)
+            e = accumulated[gather]                                 # (E,)
+            return e, e[:, None]                                    # (E, 1)
+        taus_arr = jnp.asarray(taus)                                # (k,)
+        decayed = state_obj.value * jnp.exp(-dt / taus_arr)
+        accumulated = decayed + x_full[:, None]
+        state_obj.value = (jnp.where(x_full[:, None] > 0, 1.0, decayed)
+                           if mode == 'nearest' else accumulated)
+        g = accumulated[gather]                                     # (E, k)
         return g[:, 0], g
     @staticmethod
     def _t_dt_ms():

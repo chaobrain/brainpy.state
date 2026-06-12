@@ -304,6 +304,71 @@ def test_no_trace_gives_empty_traces_matrix():
     assert rule.seen['post_traces'].shape == (1, 0)
 
 
+# --------------------------------------------------------------------------
+# Task 0 (cluster 05) — per-side `nearest` trace mode (set-to-1 on spike).
+# Nearest-neighbour STDP needs a trace that RESETS to 1 on each spike instead of
+# accumulating (decay-then-add). The substrate stores the set-to-1 value but still
+# GATHERS `decayed + spike` for the kernel, so the cluster-04 exclusion
+# `k = ctx.trace - ctx.spike` is unchanged AND recovers the strictly-prior value
+# (NEST's "discard the coinciding pair, use the second-latest preceding partner").
+# --------------------------------------------------------------------------
+class _NearestPreTraceProbe(_StaticTestRule):
+    pre_trace_tau = 10.0 * u.ms
+    pre_trace_mode = 'nearest'
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = []
+
+    def update(self, state, ctx):
+        self.seen.append((np.asarray(ctx.pre_trace), np.asarray(ctx.pre_spike)))
+        return state, state['weight']
+
+
+def test_nearest_mode_stores_reset_to_one_and_gathers_decayed_plus_spike():
+    brainstate.environ.set(dt=1.0 * u.ms)            # tau=10 ms -> decay exp(-0.1)/step
+    rule = _NearestPreTraceProbe(weight=jnp.array([0.]) * u.pA)
+    proj = _build_probe(rule, post_spike=lambda: jnp.array([0.]))
+    d = np.exp(-0.1)
+
+    # step 1: pre fires. stored set-to-1; gathered = decayed(0)+spike(1) = 1.
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert np.allclose(np.asarray(proj.pre_trace.value), [1.0])
+    assert np.allclose(rule.seen[0][0], [1.0])
+
+    # step 2: no pre. stored decays to exp(-0.1); gathered = same (spike 0).
+    proj.pre_spike = lambda: jnp.array([0.])
+    with brainstate.environ.context(t=2.0 * u.ms, i=2):
+        proj.update()
+    assert np.allclose(np.asarray(proj.pre_trace.value), [d], atol=1e-9)
+    assert np.allclose(rule.seen[1][0], [d], atol=1e-9)
+
+    # step 3: pre fires again. NEAREST: stored RESETS to 1 (not exp(-0.2)+1 of
+    # all-to-all). Gathered = decayed(exp(-0.2)) + spike(1); the kernel exclusion
+    # `gathered - pre_spike` = exp(-0.2) = strictly-prior (the second-latest).
+    proj.pre_spike = lambda: jnp.array([1.])
+    with brainstate.environ.context(t=3.0 * u.ms, i=3):
+        proj.update()
+    assert np.allclose(np.asarray(proj.pre_trace.value), [1.0])              # reset, not 1.819
+    gathered, pre_spike = rule.seen[2]
+    assert np.allclose(gathered, [np.exp(-0.2) + 1.0], atol=1e-9)            # unified gather
+    assert np.allclose(gathered - pre_spike, [np.exp(-0.2)], atol=1e-9)      # second-latest
+
+
+def test_default_trace_mode_is_all_to_all_unchanged():
+    # No `pre_trace_mode` declared -> decay-then-add; a re-spike accumulates.
+    brainstate.environ.set(dt=1.0 * u.ms)
+    rule = _SingleTraceProbe(weight=jnp.array([0.]) * u.pA)   # no mode attr
+    proj = _build_probe(rule, post_spike=lambda: jnp.array([0.]))
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()                                         # -> 1.0
+    proj.pre_spike = lambda: jnp.array([1.])
+    with brainstate.environ.context(t=2.0 * u.ms, i=2):
+        proj.update()                                         # decay-then-add
+    assert np.allclose(np.asarray(proj.pre_trace.value), [np.exp(-0.1) + 1.0], atol=1e-9)
+
+
 def test_missing_edges_and_conn_raises():
     # Neither explicit edges nor a connectivity rule -> construction error.
     with pytest.raises(ValueError, match='explicit edges'):
