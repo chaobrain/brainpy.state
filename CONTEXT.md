@@ -138,6 +138,80 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 05-stdp-nearest-neighbour — 2026-06-13
+
+- **Shipped:** the **4 remaining nearest-neighbour / hardware STDP models** rebuilt as
+  frozen parameter spec + pure `update(state, ctx) -> (new_state, w_eff)` rule kernels on
+  the cluster-01 `EventPlasticProj` substrate, retiring their legacy imperative
+  subclasses from the active path (`_nest/{stdp_nn_symm_synapse,stdp_nn_restr_synapse,
+  stdp_nn_pre_centered_synapse,stdp_facetshw_synapse_hom}.py`). Each ships a NEST-free
+  `*_rule_test.py` (closed-form/host kernel + jit/vmap/grad) and a live-NEST
+  `_validation/*_parity_test.py`; the old eager `*_test.py` are deleted. One substrate
+  extension landed (the `nearest` trace mode, below). All 4 spec files at **100 %**
+  line+branch coverage. This closes the 04 entry's "a future cluster ports them" note.
+  Branch `nest-goal/05-stdp-nearest-neighbour`.
+- **Parity (live NEST 3.9.0):** all 4 match NEST to **machine precision** — single
+  spike-pair Δt sweeps + divergent-train scenarios at **CAT_B** (atol 1e-6, realised abs
+  err ~1e-13–1e-15) and 5 s trains at **CAT_A** (atol 1e-3). facetshw is **CAT_B exact**
+  throughout: its weight is discrete (`k * weight_per_lut_entry`), so once the charge
+  evaluations align both sides agree to 0 ULP.
+- **Core design — RESOLVED (do not relitigate):** hybrid. A reusable substrate
+  **`nearest` trace mode** supplies the nearest-neighbour K±; each scheme's divergence
+  (eligibility gating / accumulation / reset / readout) lives as **per-edge kernel state**
+  in `edge_state_init()`. Rejected: a bespoke per-edge trace per model (re-implements the
+  substrate decay and loses the unified-gather idiom below).
+- **API discovered/changed:**
+  - **Substrate `nearest` trace mode** (`_network/_event_plastic.py`): `pre_trace_mode` /
+    `post_trace_mode` ∈ `{'cumulative' (default), 'nearest'}`. `nearest` **stores**
+    `where(spike,1,decayed)` (reset-to-1) but still **gathers `decayed+spike`**
+    (accumulated), so the kernel's `k = ctx.trace - ctx.spike` recovers the
+    **second-latest** partner on an exactly-coinciding step *for free* — the same
+    +1-subtraction idiom cluster-04 used for simultaneity now also does the
+    nearest-neighbour reset. Default stays cumulative; cluster-01 + the 7 core specs untouched.
+  - **Per-edge eligibility flags** (restr): `pre_avail` / `post_avail`; each spike makes
+    its own side available and **consumes** the opposite — reproduces NEST's
+    `start != finish` one-pair-per-spike gate with no history scan.
+  - **Per-edge accumulate-then-reset trace** (pre_centered): `Kplus` carried in
+    `edge_state_init` (NOT a substrate per-neuron trace) because the **post** spike resets
+    it, so two edges from one pre reset at different times. `pre_trace_tau = None`; decay
+    in-kernel (`*exp(-dt/tau)` **before** the +1).
+  - **Charge+readout kernel** (facetshw): per-edge `{a_causal, a_acausal, causal_pending,
+    pre_seen, post_seen, next_readout}`; a readout (first pre past each
+    `readout_cycle_duration`) = quantise → 2× eval_function → LUT → reset → advance-clock.
+- **Gotchas (NEST fidelity):**
+  - **Phantom-pre-at-0 (symm & restr only).** NEST's first `send()` (`t_lastspike_=0`)
+    facilitates a post preceding the first pre against a *virtual* pre at t=0; the substrate
+    seeds traces/flags at 0 → models the physically-correct "no pre" and does NOT reproduce
+    it. pre_centered & facetshw are immune (their facilitation scales by a trace/flag that
+    starts 0). Parity dodges it via a leading pre or P0 ≥ 500 so the `exp(-(q+d)/tau)` term
+    sits below atol.
+  - **facetshw deferred accumulation is OBSERVABLE** (unlike the pair models). NEST runs
+    the readout BEFORE folding the triggering pair, so a readout never sees its own pair's
+    charge. Capture the causal term at the first post (`causal_pending`) and fold it + the
+    acausal term only at the next pre, **after** that pre's readout. Folding at the post
+    step (as the pair models harmlessly do) shifts one pairing across the boundary → flips a
+    threshold → visible weight divergence.
+  - **facetshw weight footgun:** `wple = Wmax/15 ≈ 6.667`; the default `weight=1.0`
+    quantises to index 0 and the first readout — which re-quantises **even on `(F,F)`** —
+    zeroes it. Use on-grid weights (`5*wple ≈ 33.33`).
+  - **facetshw NEST keys/scope:** common `tau_minus` is exposed as **`tau_minus_stdp`**;
+    `a_thresh_th/tl` are PER-SYNAPSE (syn_spec); `no_synapses`/`readout_cycle_duration`
+    auto-compute (don't set). A DENSE symmetric train drives BOTH charges over threshold →
+    `(T,T)` identity (no learning) — clean one-pair-per-cycle trains at a lowered threshold
+    separate the LUT branches (the threshold *value* doesn't affect NEST↔bp agreement).
+    **Single-driver scope only** (E ≤ `synapses_per_driver`).
+  - **Coverage:** the cluster-04 `--cov` segfault now also bites the directory/module forms
+    — tracing `install_exp_euler_patch()`'s C-path at import coredumps. Workaround: import
+    `brainpy_state` **untraced**, then `coverage.start()` + `importlib.reload` the spec
+    modules (covers their module-level lines) before running the rule tests in-process;
+    coverage is by file-line so the cached classes still trace method bodies.
+- **For next clusters:** the `nearest` mode + eligibility-flag + per-edge-trace +
+  charge/readout idioms now cover every nearest-neighbour and hardware-LUT shape by
+  **writing specs only**. Remaining legacy-imperative STDP: `stdp_dopamine` (needs a global
+  dopamine / eligibility-trace seam) and the non-STDP `bernoulli` / `cont_delay`. The one
+  deferred sub-feature is facetshw **multi-driver** round-robin (E > `synapses_per_driver`,
+  staggered per-synapse readout offsets).
+
 ### 04-stdp-core — 2026-06-12
 
 - **Shipped:** the **7 STDP-core synapse models** rebuilt as frozen parameter
