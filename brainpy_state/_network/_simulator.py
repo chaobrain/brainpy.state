@@ -158,12 +158,14 @@ class SimulationResult:
     """
     __module__ = 'brainpy.state'
 
-    def __init__(self, recordings: dict, duration, dt, *, traces=None, times=None):
+    def __init__(self, recordings: dict, duration, dt, *, traces=None, times=None,
+                 weights=None):
         self._rec = recordings          # {id(recorder): (T, n_rec) array}
         self._T = duration
         self._dt = dt
         self._traces = dict(traces or {})  # {f'{id(rec)}|{recordable}': (T, n) Quantity}
         self._times = times                # (T,) Quantity, the for_loop time axis
+        self._weights = dict(weights or {})  # {id(proj): (T, E) weight trajectory}
 
     @staticmethod
     def _key(node):
@@ -222,6 +224,35 @@ class SimulationResult:
             )
         return self._traces[key]
 
+    def weight_trace(self, proj):
+        """Per-step weight trajectory ``(n_steps, n_edges)`` for a recorded proj.
+
+        Parameters
+        ----------
+        proj : EventPlasticProj
+            The plastic-projection handle returned by ``connect(..., synapse=spec)``
+            and registered via :meth:`Simulator.record_weight` before the run.
+
+        Returns
+        -------
+        saiunit.Quantity
+            ``(n_steps, n_edges)`` weights in the synapse weight unit (pA), in CSR
+            (sorted-by-pre) edge order — the same order the rule kernel sees.
+
+        Raises
+        ------
+        KeyError
+            If this projection's weight was not recorded (no
+            :meth:`Simulator.record_weight` before :meth:`Simulator.simulate`).
+        """
+        rid = id(proj)
+        if rid not in self._weights:
+            raise KeyError(
+                "this projection's weight was not recorded; call "
+                'sim.record_weight(proj) before simulate()'
+            )
+        return self._weights[rid]
+
     @property
     def times(self):
         """The common time axis ``(n_steps,)`` of the run (saiunit Quantity)."""
@@ -260,6 +291,7 @@ class Simulator(brainstate.nn.Module):
         self._dt = dt
         self._taps = {}                       # id(recorder) -> (id(source), idx)
         self._analog_taps = {}                # id(recorder) -> (id(pop), idx, recordables)
+        self._weight_taps = {}                # id(proj) -> EventPlasticProj (weight tap)
         self._current_injectors = []          # (device, post_pop, post_idx, weight, key)
         self._proj_counter = itertools.count()
 
@@ -319,6 +351,14 @@ class Simulator(brainstate.nn.Module):
         reversed direction --- ``connect(recorder, pop)`` --- because the recorder
         *observes* the population. This registers a per-step State tap; no
         projection is built.
+
+        Returns
+        -------
+        EventProjection or EventPlasticProj or list or None
+            The projection handle(s) built by this call (a single handle when one
+            projection is built, a list for multi-segment fan-out). A plastic
+            handle (``synapse=spec``) can be passed to :meth:`record_weight`.
+            Recorder-tap connects (and current injectors) return ``None``.
         """
         if len(pre.segments) == 1 and isinstance(pre.segments[0].population, _multimeter):
             rec = pre.segments[0].population
@@ -329,7 +369,7 @@ class Simulator(brainstate.nn.Module):
             seg = post.segments[0]
             self._analog_taps[id(rec)] = (id(seg.population), seg.indices,
                                           tuple(rec.record_from))
-            return
+            return None
         if len(post.segments) == 1 and isinstance(post.segments[0].population, _spike_recorder):
             if len(pre.segments) != 1:
                 raise NotImplementedError(
@@ -337,13 +377,47 @@ class Simulator(brainstate.nn.Module):
                 )
             seg = pre.segments[0]
             self._taps[id(post.segments[0].population)] = (id(seg.population), seg.indices)
-            return
+            return None
         seg_weights = self._segment_weights(weight, len(pre.segments))
+        projs = []
         for pre_seg, w_seg in zip(pre.segments, seg_weights):
             for post_seg in post.segments:
-                self._connect_pair(pre_seg, post_seg, rule, w_seg, delay,
-                                   allow_autapses, allow_multapses, seed, comm,
-                                   receptor_type, synapse)
+                proj = self._connect_pair(pre_seg, post_seg, rule, w_seg, delay,
+                                          allow_autapses, allow_multapses, seed, comm,
+                                          receptor_type, synapse)
+                if proj is not None:
+                    projs.append(proj)
+        if not projs:
+            return None
+        return projs[0] if len(projs) == 1 else projs
+
+    def record_weight(self, proj):
+        """Register a per-step weight tap on a plastic projection.
+
+        ``proj`` is the handle returned by ``connect(..., synapse=spec)``. After
+        :meth:`simulate`, read the stacked ``(n_steps, n_edges)`` weight trajectory
+        (CSR sorted-by-pre edge order) via :meth:`SimulationResult.weight_trace`.
+        Mirrors the analog-recorder tap, but reads the projection's ``weight``
+        State rather than a population's recordable.
+
+        Returns
+        -------
+        EventPlasticProj
+            The same ``proj``, for chaining.
+
+        Raises
+        ------
+        TypeError
+            If ``proj`` is not a plastic projection (only ``connect(..., synapse=)``
+            builds one; the static path has no plastic ``weight`` State to record).
+        """
+        if not isinstance(proj, EventPlasticProj):
+            raise TypeError(
+                'record_weight requires a plastic projection handle from '
+                f'connect(..., synapse=spec); got {type(proj).__name__}'
+            )
+        self._weight_taps[id(proj)] = proj
+        return proj
 
     @staticmethod
     def _segment_weights(weight, n_seg: int):
@@ -435,6 +509,7 @@ class Simulator(brainstate.nn.Module):
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                     seed=self._derive_seed(seed, ordinal))
         setattr(self, f'_proj_{ordinal}', proj)
+        return proj
 
     def _wire_current_injector(self, pre_seg, post_seg, weight, ordinal):
         """Realize a current generator at the post size and register it as an injector.
@@ -531,6 +606,7 @@ class Simulator(brainstate.nn.Module):
         indices = u.math.arange(times.size)
         taps = dict(self._taps)
         analog = dict(self._analog_taps)
+        weight_taps = dict(self._weight_taps)
 
         def step(t, i):
             with brainstate.environ.context(t=t, i=i):
@@ -542,9 +618,17 @@ class Simulator(brainstate.nn.Module):
                     pop = getattr(self, f'_node_{sid}')
                     for name in names:
                         ana_out[SimulationResult._trace_key(rid, name)] = _read_recordable(pop, name)[idx]
-                return spk_out, ana_out
+                # weight taps read the projection's (post-update) weight State
+                w_out = {rid: proj.weight.value for rid, proj in weight_taps.items()}
+                return spk_out, ana_out, w_out
 
-        stacked_spk, stacked_ana = transform.for_loop(step, times, indices)
+        stacked_spk, stacked_ana, stacked_w = transform.for_loop(step, times, indices)
         recordings = {rid: jnp.asarray(stacked_spk[rid]) for rid in taps}
         traces = {key: stacked_ana[key] for key in stacked_ana}
-        return SimulationResult(recordings, duration, dt, traces=traces, times=times)
+        weights = {}
+        for rid, proj in weight_taps.items():
+            arr = jnp.asarray(stacked_w[rid])          # (T, E) mantissa
+            unit = getattr(proj, '_w_unit', u.UNITLESS)
+            weights[rid] = arr if unit is u.UNITLESS else u.maybe_decimal(arr * unit)
+        return SimulationResult(recordings, duration, dt, traces=traces, times=times,
+                                weights=weights)

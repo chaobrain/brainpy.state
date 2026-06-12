@@ -138,6 +138,104 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 04-stdp-core — 2026-06-12
+
+- **Shipped:** the **7 STDP-core synapse models** rebuilt as frozen parameter
+  spec + pure `update(state, ctx) -> (new_state, w_eff)` rule kernels on the
+  cluster-01 `EventPlasticProj` substrate — no imperative code in the active path
+  (`_nest/{stdp_synapse,stdp_synapse_hom,stdp_pl_synapse_hom,jonke_synapse,
+  vogels_sprekeler_synapse,ht_synapse,stdp_triplet_synapse}.py`, shared
+  `_nest/_plastic_base.py`). Each ships a NEST-free `*_rule_test.py` (kernel/host
+  closed-form, **110** rule tests) + a live-NEST `_validation/*_parity_test.py`
+  (**24** tests / **38** subtests). Two substrate/seam extensions landed
+  (below). The legacy imperative STDP stays **only** for out-of-cluster models
+  (`stdp_nn_*`, `stdp_dopamine`, `stdp_facetshw`, `bernoulli`, `cont_delay` →
+  `_legacy_imperative`/`_legacy_stdp_synapse`); the 7 core names now route to the
+  new specs. Spec files + `_plastic_base` at **100 %** line coverage. Branch
+  `nest-goal/04-stdp-core`.
+- **Parity (live NEST 3.9.0):** all 7 match NEST to **machine precision** —
+  single spike-pair Δt sweep (both signs) at **CAT_B** (atol 1e-6) and 5 s
+  weight-trajectory at **CAT_A** (atol 1e-3), with realised abs errors ~1e-13–1e-15.
+  - `stdp_synapse` (+`_hom` thin reuse): Δt sweep, coincident, Wmax clamp exact.
+  - `stdp_pl_synapse_hom` (power-law), `jonke_synapse` (exp weight-dep + `beta`):
+    trajectories step-for-step.
+  - `vogels_sprekeler_synapse` (symmetric inhibitory, constant per-pre depression):
+    pre-only + paired trains exact.
+  - `ht_synapse` (vesicle-pool depression): delivered `w·P` max|Δ| **1.4e-14**,
+    closed-form **0.0**.
+  - `stdp_triplet_synapse` (Pfister-Gerstner, multi-trace): single pairs **0.0**,
+    50 Hz + 5 s trains **2.7e-15**.
+- **API discovered/changed** — what 05/06/07 reuse:
+  - **Multi-trace seam (the substrate extension 01 anticipated).** `pre_trace_tau`/
+    `post_trace_tau` now accept `None | Quantity | tuple[Quantity,...]`. A tuple
+    allocates a per-neuron `(N, k)` trace State, decays each column by its own tau,
+    adds the (delayed) spike to every column, and gathers `(E, k)` into
+    `ctx.pre_traces` / `ctx.post_traces`; `ctx.pre_trace`/`post_trace` alias column 0
+    (**back-compat — cluster-01's 6 specs untouched**). `stdp_triplet_synapse` is the
+    first user (fast+slow per side). **Per-neuron storage (N·k) beats per-edge; this
+    is the foundation for 05-Clopath's per-post voltage filters** (a per-edge
+    `ctx.post_spike` cannot reconstruct them).
+  - **Weight-recording API** (`_network/_simulator.py`): `connect(synapse=spec)`
+    now **returns the proj handle**; `sim.record_weight(proj)` registers a tap;
+    `res.weight_trace(proj)` → `(T, E)` pA trajectory in CSR (sorted-by-pre) edge
+    order. Mirrors the analog-recorder State tap; independent of the parity harness.
+  - **`_stdp_drive.py` reusable parity harness** (`_validation/`): the decoupled-iaf
+    drive + dendritic-delay shift + common/per-conn routing for any pair/triplet/
+    pool STDP model. `bp_weight_trace(..., delivered=True)` samples the delivered
+    `w_eff` (for pool models whose stored weight is static); `nest_pair_run(...,
+    post_params=…)` sets extra post-node constants (e.g. `tau_minus_triplet`).
+- **Gotchas (NEST fidelity + JAX):**
+  - **Online ↔ NEST-deferred equality is the whole correctness argument.** NEST
+    `send()` defers potentiation to the next pre spike where the `weight_recorder`
+    samples; the online substrate potentiates **eagerly on post steps** + depresses
+    **on pre steps**. With no depression between pre spikes the cumulative op set/order
+    is identical ⇒ weight **coincides at every send (pre-spike) time**. Parity is
+    asserted there, not step-by-step.
+  - **`tau_minus` (and `tau_minus_triplet`) is a POST-NEURON param in NEST**, not a
+    synapse param — the `ArchivingNode` owns `K-`. Kept as a synapse-rule attr for
+    standalone fidelity; **documented in every trace-model docstring** (ht is
+    trace-free → explicitly exempt). The parity drive sets the post node's
+    `tau_minus`(+`tau_minus_triplet`) to match.
+  - **Decoupled archiving post — parrot relay pollution.** A `parrot_neuron` post
+    **relays the STDP-delivered pre spikes into its own archive** → phantom posts →
+    phantom facilitation (proven: 2-pre/no-post gave 5→13.47). Fix: a strong-driven
+    `iaf_psc_delta` post (`V_th=1e4`, driver weight `1e6`, STDP EPSP subthreshold),
+    record the actual pre/post fire times (spike_recorders) and replay them on brainpy.
+  - **Dendritic-delay convention:** a NEST STDP synapse of delay `d` behaves as if
+    each post spike's effect occurs at `q+d`. Reproduce by injecting each post spike
+    `d` later on the brainpy timeline **and** disabling the substrate's axonal
+    `InputDelay` (`rule.delay = None`; the kernel never reads it).
+  - **Simultaneous-spike exclusion via the trace's own +1.** The substrate's
+    decay-then-add feeds traces **including the current step's spike**, so the firing
+    side's trace is always `>= 1`; the kernel subtracts the spike
+    (`kplus = ctx.pre_trace - ctx.pre_spike`, and for triplet `r = pre_traces -
+    pre_spike`, `o = post_traces - post_spike`) to recover the strictly-prior
+    (`t-ε`) value. Rule-test inputs **must** keep the firing side `>= 1` or exclusion
+    goes negative (caught three red tests).
+  - **`ht_synapse` delivered-vs-stored observable.** Its stored weight is **static**
+    — depression lives in the vesicle pool `P`; NEST's `weight_recorder` logs the
+    **delivered** `w·P_send`. Sample the delivered amplitude (`delivered=True`), not
+    `proj.weight.value`. Inits `t_lastspike = 0.0` (**not** tsodyks2's `-1.0` skip)
+    so a *partial* initial `P` recovers from `t=0`, matching NEST (`P=1` makes the
+    first-spike recovery a natural no-op).
+  - **common vs per-connection params:** `stdp_synapse`, `jonke`, `ht`, `triplet`
+    accept plasticity params **per-connection**; `*_hom` and `vogels` require them as
+    **common** (CopyModel/SetDefaults). Using `common` is universally safe.
+  - **pytest runs unittest methods ALPHABETICALLY** — `-x` stops at the
+    alphabetically-first failing method (here `test_fixed_train...` masked passing
+    single-pair tests). Run `-v` **without** `-x` to see the real picture.
+  - **Coverage segfaults under the module-form `--cov`.** Measure by **directory
+    path** (`--cov=brainpy_state/_nest`), never `--cov=brainpy_state._nest.<mod>` —
+    the module form coredumps importing the package under instrumentation in this env.
+- **For next clusters:** build new plasticity by **writing specs only** — the
+  multi-trace seam + `_stdp_drive` harness + weight-recording API now cover
+  single-trace, multi-trace, stochastic (`ctx.key`), and depression-pool shapes.
+  **05-Clopath** layers a per-post *voltage* filter on the same per-neuron multi-trace
+  storage (voltage is a neuron State, not reconstructable per-edge). The remaining
+  STDP variants (`stdp_nn_*` nearest-neighbour, `stdp_dopamine`, `stdp_facetshw`)
+  still sit on the legacy imperative base — a future cluster ports them onto the
+  spec+rule pattern (each its own file; legacy bases stay for the non-STDP models).
+
 ### 03-recording-demos — 2026-06-12
 
 - **Shipped:** the 5 NEST §3.4 recording/device demos on the `Simulator` API
