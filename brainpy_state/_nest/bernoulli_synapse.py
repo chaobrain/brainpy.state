@@ -21,7 +21,7 @@ import saiunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from .static_synapse import static_synapse
+from ._legacy_imperative import ImperativeSynapseBase
 
 __all__ = [
     'bernoulli_synapse',
@@ -30,7 +30,7 @@ __all__ = [
 _UNSET = object()
 
 
-class bernoulli_synapse(static_synapse):
+class bernoulli_synapse(ImperativeSynapseBase):
     r"""NEST-compatible ``bernoulli_synapse`` connection model.
 
     Short description

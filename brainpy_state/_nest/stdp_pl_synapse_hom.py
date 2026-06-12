@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from .static_synapse import static_synapse
+from ._legacy_imperative import ImperativeSynapseBase
 
 __all__ = [
     'stdp_pl_synapse_hom',
@@ -35,7 +35,7 @@ _UNSET = object()
 _STDP_EPS = 1.0e-6
 
 
-class stdp_pl_synapse_hom(static_synapse):
+class stdp_pl_synapse_hom(ImperativeSynapseBase):
     r"""NEST-compatible ``stdp_pl_synapse_hom`` connection model.
 
     ``stdp_pl_synapse_hom`` implements the power-law spike-timing-dependent

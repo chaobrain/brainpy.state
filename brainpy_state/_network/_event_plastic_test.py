@@ -1,0 +1,270 @@
+# Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
+"""Unit tests for the ``EventPlasticProj`` substrate (NEST-free).
+
+Exercises the rule-kernel contract, rule-declared ``State`` allocation, CSR
+event-matmul delivery (vs a dense reference), multapse summation, per-neuron
+trace machinery, the zero-edge corner, axonal-delay buffering, and the
+jit/vmap/grad safety of the hot path.
+"""
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+jax.config.update('jax_enable_x64', True)
+
+import brainstate
+import saiunit as u
+
+brainstate.environ.set(precision=64, platform='cpu')
+
+from brainpy_state._network._event_plastic import (  # noqa: E402
+    EventPlasticProj,
+    KernelContext,
+    _StaticTestRule,
+)
+from brainpy_state._network._rules import all_to_all  # noqa: E402
+
+
+def _ctx(E, t=1.0, dt=0.1):
+    z = jnp.zeros(E)
+    return KernelContext(pre_spike=jnp.ones(E), post_spike=z, pre_trace=z,
+                         post_trace=z, t_now=jnp.asarray(t), dt=jnp.asarray(dt),
+                         key=jax.random.key(0))
+
+
+class _Sink:
+    """Minimal post stand-in capturing ``add_delta_input``."""
+
+    def __init__(self, n):
+        self.n = n
+        self.last = None
+
+    def add_delta_input(self, key, val):
+        self.last = val
+
+
+# --------------------------------------------------------------------------
+# Task 1.1 — contract types + trivial rule
+# --------------------------------------------------------------------------
+def test_static_rule_delivers_constant_weight():
+    rule = _StaticTestRule(weight=2.5)
+    state = {'weight': jnp.full((3,), 2.5)}
+    new_state, w_eff = rule.update(state, _ctx(3))
+    assert np.allclose(np.asarray(w_eff), 2.5)
+    assert np.allclose(np.asarray(new_state['weight']), 2.5)   # unchanged
+
+
+# --------------------------------------------------------------------------
+# Task 1.2 — construction + init_state (State shapes, zero-edge)
+# --------------------------------------------------------------------------
+def _build(n_pre, n_post, rule, delay=None, seed=0):
+    holder = {'pre': jnp.zeros(n_pre), 'post': jnp.zeros(n_post)}
+    proj = EventPlasticProj(
+        pre_spike=lambda: holder['pre'], n_pre_pop=n_pre, pre_local_idx=jnp.arange(n_pre),
+        post=None, post_local_idx=jnp.arange(n_post), n_post_pop=n_post,
+        post_spike=lambda: holder['post'], rule=rule, conn=all_to_all, seed=seed)
+    brainstate.nn.init_all_states(proj)
+    return proj, holder
+
+
+def test_weight_state_shape_matches_edges():
+    proj, _ = _build(2, 3, _StaticTestRule(weight=1.0))
+    assert proj.weight.value.shape == (6,)            # 2x3 all-to-all
+    assert np.allclose(np.asarray(proj.weight.value), 1.0)
+
+
+def test_zero_edge_projection_allocates_empty():
+    proj, _ = _build(2, 0, _StaticTestRule())
+    assert proj.weight.value.shape == (0,)
+
+
+def test_homogeneous_weight_is_scalar_state():
+    rule = _StaticTestRule(weight=2.0)
+    rule.is_homogeneous_weight = True
+    proj, _ = _build(2, 3, rule)
+    assert proj.weight.value.shape == ()
+    assert float(proj.weight.value) == 2.0
+
+
+# --------------------------------------------------------------------------
+# Task 1.3 — delivery (CSR event-matmul) == dense reference; multapses sum
+# --------------------------------------------------------------------------
+def test_delivery_equals_dense_reference():
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(3)
+    rule = _StaticTestRule(weight=jnp.array([1.0, 2.0]) * u.pA)
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1., 0.]), n_pre_pop=2,
+        pre_local_idx=jnp.arange(2), post=sink, post_local_idx=jnp.arange(3), n_post_pop=3,
+        pre_idx=jnp.array([0, 1]), post_idx=jnp.array([0, 2]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    with brainstate.environ.context(t=0.1 * u.ms, i=1):
+        proj.update()
+    got = u.get_mantissa(sink.last)
+    assert np.allclose(np.asarray(got), [1.0, 0.0, 0.0])   # only pre0 fired
+
+
+def test_multapses_sum():
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(1)
+    rule = _StaticTestRule(weight=jnp.array([1.0, 3.0]) * u.pA)
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0, 0]), post_idx=jnp.array([0, 0]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    with brainstate.environ.context(t=0.1 * u.ms, i=1):
+        proj.update()
+    assert np.allclose(np.asarray(u.get_mantissa(sink.last)), [4.0])
+
+
+def test_delivery_scatters_into_subsegment():
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(4)
+    rule = _StaticTestRule(weight=jnp.array([5.0]) * u.pA)
+    # target only post index 2 of a 4-neuron population
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.array([2]), n_post_pop=4,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    with brainstate.environ.context(t=0.1 * u.ms, i=1):
+        proj.update()
+    assert np.allclose(np.asarray(u.get_mantissa(sink.last)), [0.0, 0.0, 5.0, 0.0])
+
+
+# --------------------------------------------------------------------------
+# Task 1.4 — per-neuron trace machinery (synthetic trace rule)
+# --------------------------------------------------------------------------
+class _TraceTestRule(_StaticTestRule):
+    pre_trace_tau = 10.0 * u.ms
+
+    def update(self, state, ctx):
+        # deliver the gathered presynaptic trace as the weight (probe)
+        return state, ctx.pre_trace
+
+
+def test_pre_trace_decays_and_gathers():
+    brainstate.environ.set(dt=1.0 * u.ms)
+    sink = _Sink(1)
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+        rule=_TraceTestRule(weight=jnp.array([0.]) * u.pA))
+    brainstate.nn.init_all_states(proj)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()   # trace -> 1.0 (0*e + 1)
+    assert np.allclose(np.asarray(proj.pre_trace.value), [1.0])
+    # next step, no spike: trace -> exp(-1/10)
+    proj.pre_spike = lambda: jnp.array([0.])
+    with brainstate.environ.context(t=2.0 * u.ms, i=2):
+        proj.update()
+    assert np.allclose(np.asarray(proj.pre_trace.value), [np.exp(-0.1)], atol=1e-9)
+
+
+class _PostTraceTestRule(_StaticTestRule):
+    post_trace_tau = 10.0 * u.ms
+
+    def update(self, state, ctx):
+        # probe: deliver the gathered postsynaptic trace as the weight
+        return state, ctx.post_trace
+
+
+def test_post_trace_decays_and_gathers():
+    # Locks the post-trace seam of the kernel contract (used by STDP clusters):
+    # decay-then-add the full post spike vector, gather per edge.
+    brainstate.environ.set(dt=1.0 * u.ms)
+    sink = _Sink(1)
+    post_box = {'v': jnp.array([1.])}
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+        post_spike=lambda: post_box['v'],
+        rule=_PostTraceTestRule(weight=jnp.array([0.]) * u.pA))
+    brainstate.nn.init_all_states(proj)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()   # post_trace -> 1.0
+    assert np.allclose(np.asarray(proj.post_trace.value), [1.0])
+    post_box['v'] = jnp.array([0.])
+    with brainstate.environ.context(t=2.0 * u.ms, i=2):
+        proj.update()
+    assert np.allclose(np.asarray(proj.post_trace.value), [np.exp(-0.1)], atol=1e-9)
+
+
+def test_missing_edges_and_conn_raises():
+    # Neither explicit edges nor a connectivity rule -> construction error.
+    with pytest.raises(ValueError, match='explicit edges'):
+        EventPlasticProj(
+            pre_spike=lambda: jnp.zeros(2), n_pre_pop=2, pre_local_idx=jnp.arange(2),
+            post=None, post_local_idx=jnp.arange(2), n_post_pop=2,
+            rule=_StaticTestRule())
+
+
+# --------------------------------------------------------------------------
+# Task 1.5 — jit / vmap / grad smoke, delay buffer wrap
+# --------------------------------------------------------------------------
+def test_grad_flows_through_effective_weight():
+    rule = _StaticTestRule()
+
+    def loss(w):
+        state = {'weight': w}
+        _, w_eff = rule.update(state, _ctx(4))
+        return jnp.sum(w_eff)
+
+    g = jax.grad(loss)(jnp.ones(4))
+    assert np.allclose(np.asarray(g), 1.0)
+
+
+def test_vmap_over_weight_batch():
+    rule = _StaticTestRule()
+
+    def run(w):
+        _, w_eff = rule.update({'weight': w}, _ctx(4))
+        return w_eff
+
+    out = jax.vmap(run)(jnp.ones((5, 4)) * 2.0)
+    assert out.shape == (5, 4) and np.allclose(np.asarray(out), 2.0)
+
+
+def test_jit_step_runs():
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(2)
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1., 0.]), n_pre_pop=2,
+        pre_local_idx=jnp.arange(2), post=sink, post_local_idx=jnp.arange(2), n_post_pop=2,
+        pre_idx=jnp.array([0, 1]), post_idx=jnp.array([0, 1]),
+        rule=_StaticTestRule(weight=jnp.array([1., 1.]) * u.pA))
+    brainstate.nn.init_all_states(proj)
+
+    @jax.jit
+    def step():
+        with brainstate.environ.context(t=0.1 * u.ms, i=1):
+            return proj.update()
+
+    out = step()  # compiles + runs without host control-flow errors
+    assert np.allclose(np.asarray(u.get_mantissa(out)), [1.0, 0.0])
+
+
+def test_delay_delivers_after_buffer():
+    # delay=0.2 ms at dt=0.1 ms -> a spike at step i arrives 2 steps later.
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(1)
+    holder = {'pre': jnp.array([1.])}
+    rule = _StaticTestRule(weight=jnp.array([7.0]) * u.pA, delay=0.2 * u.ms)
+    proj = EventPlasticProj(
+        pre_spike=lambda: holder['pre'], n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    delivered = []
+    for i in range(1, 5):
+        with brainstate.environ.context(t=0.1 * i * u.ms, i=i):
+            proj.update()
+        delivered.append(float(u.get_mantissa(sink.last)[0]))
+        holder['pre'] = jnp.array([0.])   # only the first step has a spike
+    # full-delay convention: nothing on the first steps, the 7 pA lands after the buffer
+    assert delivered[0] == 0.0
+    assert max(delivered) == pytest.approx(7.0)

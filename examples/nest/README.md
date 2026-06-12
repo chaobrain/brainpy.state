@@ -44,6 +44,12 @@ Key pieces:
   events; `delay=` is a homogeneous axonal delay.
 - **Generators fan out** to one independent train per target neuron, matching
   NEST; recorders are read as stacked arrays after the run.
+- **Analog recording** — a `voltmeter`/`multimeter` is connected in NEST's
+  *reversed* direction (`connect(voltmeter, neuron)`, the recorder observes the
+  neuron) and read back with `res.trace(rec, 'V_m')` → `(T, N)` and `res.times`.
+- **Current devices** — `noise_`/`dc_`/`step_`/`ac_generator` inject a current
+  (pA) through the neuron's current ring buffer (a NEST-faithful one-step delay),
+  while `poisson_generator` and other spike sources deliver delayed delta events.
 
 ## Examples
 
@@ -77,6 +83,42 @@ python examples/nest/brunel_alpha.py
   toward target rate / CV / correlation, a port of
   `brunel_alpha_evolution_strategies_nest.py`. The optimizer and spike-statistics
   analysis are model-agnostic; only `simulate()` builds the `Simulator` network.
+
+## Single- and few-neuron demos (§3.2)
+
+Seven of NEST's single-/few-neuron tutorials, each a faithful port driven by a
+live-NEST parity test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any
+directly, e.g. `python examples/nest/one_neuron.py`.
+
+- **`one_neuron.py`** — an `iaf_psc_alpha` driven by a constant `I_e = 376 pA`,
+  observed by a `voltmeter`. The minimal analog-recording demo.
+- **`one_neuron_with_noise.py`** — the same neuron driven by a 2-channel
+  `poisson_generator` (80 kHz / 15 kHz) with signed per-channel weights
+  `[1.2, -1.0] pA`.
+- **`twoneurons.py`** — an `I_e`-driven `iaf_psc_alpha` connected to a second
+  through a static synapse (`w = 20 pA`, `d = 1 ms`); both `V_m` recorded.
+- **`testiaf.py`** — charge → spike → refractory → recovery, swept over the
+  resolutions `dt ∈ {0.1, 0.5, 1.0}` ms (rebuild-per-trial).
+- **`balancedneuron.py`** — SciPy `bisect` tunes the inhibitory Poisson rate so
+  the target neuron fires at the excitatory rate (≈ 5 Hz), re-simulating per
+  trial.
+- **`if_curve.py`** — the I-F surface of an `aeif_cond_exp` population driven by a
+  white-noise current (`noise_generator`) across an `(I_mean, I_std)` grid.
+- **`vinit_example.py`** — passive relaxation of an `iaf_cond_exp_sfa_rr` from
+  several initial membrane voltages.
+
+These ports drive four `Simulator` extensions reused by later clusters:
+
+- **A — analog recording.** `voltmeter`/`multimeter` State taps, read via
+  `res.trace(rec, recordable)` and `res.times` (all demos except as noted).
+- **B — current-injecting devices.** `noise_/dc_/step_/ac_generator` inject pA
+  through the neuron's current ring buffer (`if_curve`).
+- **C — sweep / rebuild-per-trial.** `simulate()` re-inits all state each run, so
+  a fresh `build()` + `simulate()` per trial sweeps a parameter (`testiaf`,
+  `balancedneuron`, `if_curve`, `vinit_example`).
+- **D — per-generator weight vectors.** `create(poisson_generator, k,
+  rate=[…])` → a `k`-segment view; `connect(gen, neuron, weight=[…])` applies one
+  signed weight per channel (`one_neuron_with_noise`, `balancedneuron`).
 
 ## `order` and `comm`
 
@@ -118,3 +160,25 @@ the full excitatory population and averaging over four seeds keeps it inside the
 both simulators, so the asymptotic rate matches exactly. A manual `brunel_alpha`
 check at `order=2500` lands at **28.8 vs 28.5 spks/s (0.91 %)** — the lower rate
 is a genuine finite-size effect that NEST reproduces.
+
+### Single- and few-neuron demos (§3.2)
+
+Deterministic ports are compared per-sample against live NEST (category B,
+one-step recorder alignment); Poisson/noise-driven ports are compared as a
+seed-mean statistic (category D, 5 %).
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `one_neuron` | `V_m` charge, max\|Δ\| | 2.8e-14 mV |
+| `twoneurons` | `V_m` (neuron_1 / neuron_2), max\|Δ\| | 2.8e-14 / 5.7e-14 mV |
+| `testiaf` (`dt∈{0.1,0.5,1.0}`) | `V_m` max\|Δ\| ; spike count | 2.8e-14 mV ; 16 = 16 |
+| `vinit_example` (5 initial `V_m`) | relaxation, worst max\|Δ\| | 1.4e-14 mV |
+| `one_neuron_with_noise` (4 seeds) | firing rate | 45.8 vs 46.0 spks/s (0.5 %) |
+| `if_curve` (`I=700,σ=0`) | rate, deterministic | 9.0 vs 9.0 spks/s |
+| `if_curve` (noisy, 4 seeds) | rate (e.g. `I=900,σ=200`) | 23.8 vs 23.9 spks/s |
+| `balancedneuron` | bisected inhibitory rate | 20.81 vs 20.81 Hz |
+
+The deterministic single-neuron traces match NEST to ~1e-14 mV because
+`iaf_psc_alpha`'s exact propagator and the analog State tap are bit-faithful; the
+`balancedneuron` objective is steep near the root, so the bisected inhibitory rate
+is identical to NEST despite the PRNG-divergent Poisson drive.
