@@ -1,199 +1,131 @@
-# Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+# Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
+r"""NEST-faithful ``stdp_nn_symm_synapse`` — symmetric nearest-neighbour STDP spec + rule.
 
-# -*- coding: utf-8 -*-
+Rebuilt as a frozen parameter spec plus a pure, vectorized
+``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
+:class:`~brainpy_state._network._event_plastic.EventPlasticProj`. The *symmetric*
+nearest-neighbour pairing scheme (Morrison, Diesmann & Gerstner 2008, fig. 7A) pairs
+each spike only with its nearest partner on the other side: a post spike facilitates
+with the nearest preceding pre spike, a pre spike depresses with the nearest preceding
+post spike. NEST realises this by having both traces **reset to 1 on their own spike**
+rather than accumulate (``stdp_nn_symm_synapse.h:66-71``); here both the per-pre ``K+``
+and per-post ``K-`` traces declare the substrate's ``'nearest'`` trace mode, so the
+rule kernel itself is **byte-identical to** :class:`stdp_synapse` — the nearest-ness
+lives entirely in what the substrate *stores*. The previous imperative implementation
+lived in :mod:`brainpy_state._nest._legacy_stdp_synapse`.
+"""
+from __future__ import annotations
 
-
-import math
-
+import jax.numpy as jnp
 import saiunit as u
 from brainstate.typing import ArrayLike
 
-from ._legacy_stdp_synapse import _STDP_EPS, stdp_synapse
+from ._plastic_base import (
+    frozen, to_ms, to_scalar_float, unit_of,
+    validate_delay, validate_receptor_type, weight_to_pa,
+)
 
-__all__ = [
-    'stdp_nn_symm_synapse',
-]
+__all__ = ['stdp_nn_symm_synapse']
 
 
-class stdp_nn_symm_synapse(stdp_synapse):
-    r"""NEST-compatible ``stdp_nn_symm_synapse`` connection model.
+def _nest_sign(v: float) -> int:
+    # NEST set_status sign check: (x >= 0) - (x < 0); zero counts as positive.
+    return int(v >= 0.0) - int(v < 0.0)
 
-    Short description
-    -----------------
 
-    Synapse type for spike-timing dependent plasticity with symmetric
-    nearest-neighbour spike pairing.
+class stdp_nn_symm_synapse:
+    r"""Symmetric nearest-neighbour STDP synapse spec (NEST ``stdp_nn_symm_synapse``).
 
-    Description
-    -----------
-
-    ``stdp_nn_symm_synapse`` mirrors NEST
-    ``models/stdp_nn_symm_synapse.h`` and implements the symmetric nearest-
-    neighbour pairing scheme from Morrison et al. (2007, 2008):
-
-    - on a presynaptic spike, depression uses the nearest preceding
-      postsynaptic spike,
-    - postsynaptic spikes since the previous presynaptic spike contribute
-      facilitation with nearest-neighbour trace factors.
-
-    Compared with :class:`stdp_synapse`, this model removes the running
-    presynaptic ``Kplus`` trace. Facilitation for each postsynaptic spike in
-    the readout window uses
-    :math:`\exp((t_{\mathrm{last}}-(t_{post}+d))/\tau_+)` directly.
-
-    **1. Mathematical Model**
-
-    The weight update follows the same functional forms as :class:`stdp_synapse`,
-    but with symmetric nearest-neighbor pairing:
+    Both the per-pre ``K+`` and per-post ``K-`` traces run in the substrate's
+    ``'nearest'`` mode — each **resets to 1 on its own spike** and decays otherwise
+    (``tau_plus`` / ``tau_minus``) — so the value gathered at a partner spike is the
+    single nearest preceding pairing, not the all-to-all sum. The kernel is the same
+    as :class:`stdp_synapse`:
 
     .. math::
-       \hat{w} \leftarrow \hat{w}
-       + \lambda (1-\hat{w})^{\mu_+}
-       \sum_{i} \exp((t_{\mathrm{last}}-(t_{\mathrm{post}}^{(i)}+d))/\tau_+)
 
-    .. math::
-       \hat{w} \leftarrow \hat{w}
-       - \alpha \lambda \hat{w}^{\mu_-} k_-^{\mathrm{NN}}
+       \hat w \leftarrow \hat w + \lambda (1-\hat w)^{\mu_+} K^+ \quad\text{(post spike)}
 
-    where :math:`\hat{w} = w / W_{\mathrm{max}}` is the normalized weight,
-    :math:`t_{\mathrm{post}}^{(i)}` are **all** postsynaptic spikes in the
-    interval :math:`(t_{\mathrm{last}}-d,\, t_{\mathrm{pre}}-d]`, and
+       \hat w \leftarrow \hat w - \alpha \lambda \hat w^{\mu_-} K^- \quad\text{(pre spike)}
 
-    .. math::
-       k_-^{\mathrm{NN}} = \begin{cases}
-       \exp((t_{\mathrm{post}}^{\mathrm{last}} - (t_{\mathrm{pre}}-d))/\tau_-)
-       & \text{if } \exists t_{\mathrm{post}}^{\mathrm{last}} < t_{\mathrm{pre}}-d \\
-       0 & \text{otherwise}
-       \end{cases}
-
-    Here :math:`t_{\mathrm{post}}^{\mathrm{last}}` denotes the **nearest preceding**
-    postsynaptic spike before :math:`t_{\mathrm{pre}}-d`.
-
-    The symmetric scheme differs from both the all-to-all :class:`stdp_synapse`
-    (which accumulates a running ``Kplus`` trace) and the pre-centered
-    :class:`stdp_nn_pre_centered_synapse` (which uses only the first postsynaptic
-    spike and resets ``Kplus``). Here, **all** postsynaptic spikes in the window
-    contribute to potentiation, but each uses an exponential factor computed
-    directly from :math:`t_{\mathrm{last}}` without a presynaptic trace variable.
-
-    **2. Update Order (NEST Source Equivalent)**
-
-    For a presynaptic spike at :math:`t_{\mathrm{pre}}` with dendritic delay
-    :math:`d`, NEST ``stdp_nn_symm_synapse::send`` performs:
-
-    1. Read postsynaptic history in
-       :math:`(t_{\mathrm{last}}-d,\, t_{\mathrm{pre}}-d]`.
-    2. For each postsynaptic spike in that interval, apply facilitation with
-       :math:`\exp((t_{\mathrm{last}}-(t_{\mathrm{post}}+d))/\tau_+)`.
-    3. Apply depression from nearest-neighbor postsynaptic trace at
-       :math:`t_{\mathrm{pre}}-d`:
-       :math:`\exp((t_{\mathrm{post}}^{\mathrm{nn}}-(t_{\mathrm{pre}}-d))/\tau_-)`.
-    4. Send event with updated ``weight``.
-    5. Set ``t_lastspike = t_pre``.
-
-    This implementation preserves that exact ordering.
-
-    **3. Coincidence Semantics**
-
-    Pairs with exact coincidence are discarded by strict time comparisons
-    (NEST ``stdp_eps`` behavior). If
-    :math:`t_{\mathrm{pre}} = t_{\mathrm{post}} + d` (within ``1e-6`` ms),
-    the coincident postsynaptic spike is not used for depression/facilitation;
-    earlier valid nearest neighbors are used instead.
+    with :math:`\hat w = w/W_{\max}`, the weight clamped to :math:`[0, W_{\max}]` inside
+    each update (NEST ``facilitate_``/``depress_``, ``stdp_nn_symm_synapse.h:210-227``).
+    Each side excludes the current step's own spike (``K+ = pre_trace - pre_spike``,
+    ``K- = post_trace - post_spike``): in the nearest mode this recovers the
+    **second-latest** preceding partner when a pair coincides exactly, matching NEST's
+    "pairs exactly coinciding ... are discarded; paired with the second latest"
+    convention (``stdp_nn_symm_synapse.h:60-64``).
 
     Parameters
     ----------
-    weight : ArrayLike, optional
-        Initial synaptic weight. Default: ``1.0``.
-    delay : ArrayLike, optional
-        Synaptic delay :math:`d` in ms. Default: ``1.0 * u.ms``.
+    weight : ArrayLike or Quantity, optional
+        Per-edge weight (pA; bare numbers are pA). Same sign as ``Wmax``. Default ``1.0`` pA.
+    delay : Quantity, optional
+        Homogeneous axonal delay (> 0). Default ``1.0 ms``.
     receptor_type : int, optional
-        Receiver port/receptor id. Default: ``0``.
-    tau_plus : ArrayLike, optional
-        Potentiation time constant :math:`\tau_+` in ms. Default: ``20.0 * u.ms``.
-    tau_minus : ArrayLike, optional
-        Depression trace time constant :math:`\tau_-` in ms.
-        In NEST this is a postsynaptic-neuron parameter; here it is stored on
-        the synapse for standalone compatibility. Default: ``20.0 * u.ms``.
-    lambda_ : ArrayLike, optional
-        Learning-rate parameter :math:`\lambda`. Default: ``0.01``.
-    alpha : ArrayLike, optional
-        Depression scaling parameter :math:`\alpha`. Default: ``1.0``.
-    mu_plus : ArrayLike, optional
-        Potentiation exponent :math:`\mu_+`. Default: ``1.0``.
-    mu_minus : ArrayLike, optional
-        Depression exponent :math:`\mu_-`. Default: ``1.0``.
-    Wmax : ArrayLike, optional
-        Maximum weight bound :math:`W_{\mathrm{max}}`. Must have same sign as
-        ``weight``. Default: ``100.0``.
-    post : object, optional
-        Default receiver object for spike transmission.
-    name : str, optional
-        Object name for debugging and serialization.
+        Postsynaptic receptor port (>= 0). Default ``0``.
+    tau_plus : Quantity, optional
+        Presynaptic ``K+`` trace constant (> 0). Default ``20.0 ms``.
+    tau_minus : Quantity, optional
+        Postsynaptic ``K-`` trace constant (> 0). Default ``20.0 ms``.
+    lambda_ : float, optional
+        Learning rate :math:`\lambda`. Default ``0.01``.
+    alpha : float, optional
+        Depression asymmetry :math:`\alpha`. Default ``1.0``.
+    mu_plus, mu_minus : float, optional
+        Potentiation/depression exponents (``0`` additive, ``1`` multiplicative
+        soft-bound). Default ``1.0``.
+    Wmax : float, optional
+        Weight bound (same sign as ``weight``). Default ``100.0``.
 
     Notes
     -----
-    - In NEST, ``tau_minus`` belongs to the postsynaptic archiving neuron.
-      This backend stores equivalent state locally for standalone
-      compatibility, while preserving update semantics.
-    - As in NEST, the model uses on-grid spike stamps and ignores sub-step
-      precise spike offsets for STDP updates.
-    - ``Kplus`` is not a public parameter for this model because it is not used
-      in the symmetric nearest-neighbor scheme. The constructor internally sets
-      ``Kplus=0.0`` in the parent class, but it plays no role in weight updates.
-    - The symmetric scheme produces different weight dynamics than all-to-all
-      STDP: each postsynaptic spike contributes independently to facilitation,
-      weighted by its temporal distance from the last presynaptic spike, rather
-      than being accumulated into a running trace.
+    **NEST divergence — ``tau_minus`` location.** In NEST ``tau_minus`` is a parameter
+    of the *postsynaptic neuron* (``ArchivingNode``), not the synapse; here it is a
+    synapse-spec attribute driving the substrate's per-post ``K-`` trace, so STDP runs
+    standalone. See ``CONTEXT.md`` Lessons (cluster 04). The live-NEST parity drive sets
+    the post node's ``tau_minus`` to match.
 
-    Examples
-    --------
-    Symmetric nearest-neighbor STDP with custom parameters:
+    **No ``Kplus`` parameter.** Unlike :class:`stdp_synapse`, the symmetric scheme has no
+    accumulating presynaptic trace to seed — the substrate resets ``K+`` to 1 on each pre
+    spike — so ``Kplus`` is intentionally absent from the constructor (it was dropped from
+    the public API in the legacy model too).
 
-    .. code-block:: python
-
-       >>> from brainpy import state as bp
-       >>> import saiunit as u
-       >>> syn = bp.stdp_nn_symm_synapse(
-       ...     weight=0.5,
-       ...     delay=1.5 * u.ms,
-       ...     tau_plus=16.8 * u.ms,
-       ...     tau_minus=33.7 * u.ms,
-       ...     lambda_=0.005,
-       ...     alpha=0.85,
-       ...     Wmax=5.0,
-       ... )
-       >>> syn.weight
-       0.5
+    The kernel is identical to :class:`stdp_synapse`; the nearest-neighbour behaviour
+    lives entirely in the substrate trace mode. The substrate potentiates eagerly at
+    post-spike steps, whereas NEST defers it to the next pre spike; the two coincide at
+    pre-spike (send) times, so parity is asserted there.
 
     References
     ----------
-    .. [1] NEST source: ``models/stdp_nn_symm_synapse.h`` and
-           ``models/stdp_nn_symm_synapse.cpp``.
-    .. [2] Morrison A, Aertsen A, Diesmann M (2007).
-           Spike-timing dependent plasticity in balanced random networks.
-           Neural Computation, 19:1437-1467.
-           DOI: 10.1162/089976607808742029
-    .. [3] Morrison A, Diesmann M, Gerstner W (2008).
-           Phenomenological models of synaptic plasticity based on spike timing.
-           Biological Cybernetics, 98:459-478.
-           DOI: 10.1007/s00422-008-0233-1
-    """
+    .. [1] NEST ``models/stdp_nn_symm_synapse.h`` (``send()`` lines 246-297; ``facilitate_``
+       at 280, nearest ``Kminus`` depress at 286-287). Morrison, Aertsen & Diesmann (2007)
+       Neural Comput. 19:1437-1467; Morrison, Diesmann & Gerstner (2008) Biol. Cybern.
+       98:459-478, fig. 7A.
 
+    See Also
+    --------
+    stdp_synapse, stdp_nn_restr_synapse, stdp_nn_pre_centered_synapse
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import saiunit as u
+       >>> from brainpy_state import stdp_nn_symm_synapse
+       >>> s = stdp_nn_symm_synapse(weight=1.0, tau_plus=20.0 * u.ms)
+       >>> s.is_homogeneous_weight, s.edge_state_init()
+       (False, {})
+       >>> s.pre_trace_mode, s.post_trace_mode
+       ('nearest', 'nearest')
+    """
     __module__ = 'brainpy.state'
+
+    is_homogeneous_weight = False
+    stochastic = False
+    # both traces pair nearest-neighbour: reset-to-1 on spike (substrate seam)
+    pre_trace_mode = 'nearest'
+    post_trace_mode = 'nearest'
 
     def __init__(
         self,
@@ -207,264 +139,51 @@ class stdp_nn_symm_synapse(stdp_synapse):
         mu_plus: ArrayLike = 1.0,
         mu_minus: ArrayLike = 1.0,
         Wmax: ArrayLike = 100.0,
-        post=None,
-        name: str | None = None,
     ):
-        super().__init__(
-            weight=weight,
-            delay=delay,
-            receptor_type=receptor_type,
-            tau_plus=tau_plus,
-            tau_minus=tau_minus,
-            lambda_=lambda_,
-            alpha=alpha,
-            mu_plus=mu_plus,
-            mu_minus=mu_minus,
-            Wmax=Wmax,
-            Kplus=0.0,
-            post=post,
-            name=name,
-        )
+        self.weight = weight_to_pa(weight)
+        self.weight_unit = unit_of(self.weight)
+        validate_delay(delay)
+        self.delay = delay
+        self.receptor_type = validate_receptor_type(receptor_type)
 
-    def _get_nearest_neighbor_K_value(self, t_ms: float) -> float:
-        r"""Compute nearest-neighbor depression trace value at time ``t_ms``.
+        self.tau_plus = to_ms(tau_plus, name='tau_plus') * u.ms
+        self.tau_minus = to_ms(tau_minus, name='tau_minus') * u.ms
+        self.lambda_ = to_scalar_float(lambda_, name='lambda')
+        self.alpha = to_scalar_float(alpha, name='alpha')
+        self.mu_plus = to_scalar_float(mu_plus, name='mu_plus')
+        self.mu_minus = to_scalar_float(mu_minus, name='mu_minus')
+        self.Wmax = to_scalar_float(Wmax, name='Wmax')
 
-        Matches NEST ``ArchivingNode::get_K_values`` nearest-neighbor behavior:
-        find the latest postsynaptic spike strictly before ``t_ms`` and return
-        :math:`\exp((t_{\mathrm{post}}^{\mathrm{last}} - t_{\mathrm{ms}})/\tau_-)`.
+        if to_ms(tau_plus, name='tau_plus') <= 0.0:
+            raise ValueError("'tau_plus' must be > 0.")
+        if to_ms(tau_minus, name='tau_minus') <= 0.0:
+            raise ValueError("'tau_minus' must be > 0.")
+        w0 = float(u.get_mantissa(self.weight))
+        if _nest_sign(w0) != _nest_sign(self.Wmax):
+            raise ValueError('Weight and Wmax must have same sign.')
 
-        Parameters
-        ----------
-        t_ms : float
-            Query time in milliseconds. Must be positive.
+        # per-side trace seams (substrate allocates + decays these, nearest mode)
+        self.pre_trace_tau = self.tau_plus
+        self.post_trace_tau = self.tau_minus
 
-        Returns
-        -------
-        float
-            Depression trace value :math:`k_-^{\mathrm{NN}}` computed from
-            the nearest preceding postsynaptic spike. Returns ``0.0`` if no
-            valid postsynaptic spike exists in history or if the nearest spike
-            is not strictly before ``t_ms`` (within ``1e-6`` ms tolerance).
+    def edge_state_init(self) -> dict:
+        return {}
 
-        Notes
-        -----
-        - This method iterates backward through ``self._post_hist_t`` to find
-          the most recent postsynaptic spike :math:`t_{\mathrm{post}}` such
-          that :math:`t_{\mathrm{ms}} - t_{\mathrm{post}} > 10^{-6}` ms.
-        - If no such spike exists, depression is zero (no LTD applied).
-        - The exponential decay uses ``self.tau_minus``, which in NEST belongs
-          to the postsynaptic neuron but is stored locally here.
-        - Unlike the presynaptic trace ``Kplus`` in other STDP models, this
-          computes a unit-amplitude trace decayed from a single postsynaptic
-          spike time, not an accumulated trace.
-        """
-        # Match ArchivingNode::get_K_values nearest-neighbor behavior:
-        # use latest post spike strictly before t and decay a unit trace.
-        for idx in range(len(self._post_hist_t) - 1, -1, -1):
-            t_post = self._post_hist_t[idx]
-            if (t_ms - t_post) > _STDP_EPS:
-                return math.exp((t_post - t_ms) / self.tau_minus)
-        return 0.0
+    # -- rule kernel (identical to stdp_synapse; nearest-ness is in the trace) --
+    def _facilitate(self, w, kplus):
+        norm_w = w / self.Wmax + self.lambda_ * (1.0 - w / self.Wmax) ** self.mu_plus * kplus
+        return jnp.where(norm_w < 1.0, norm_w * self.Wmax, self.Wmax)
 
-    def get(self) -> dict:
-        r"""Return current public parameters and mutable state.
+    def _depress(self, w, kminus):
+        norm_w = w / self.Wmax - self.alpha * self.lambda_ * (w / self.Wmax) ** self.mu_minus * kminus
+        return jnp.where(norm_w > 0.0, norm_w * self.Wmax, 0.0)
 
-        Returns a dictionary containing all synapse parameters and internal state
-        variables, excluding the unused ``Kplus`` parameter (which is not part of
-        the symmetric nearest-neighbor scheme).
-
-        Returns
-        -------
-        dict
-            Dictionary with keys ``'synapse_model'`` (str, set to
-            ``'stdp_nn_symm_synapse'``), ``'weight'`` (float), ``'delay'``
-            (float in ms), ``'receptor_type'`` (int), ``'tau_plus'`` (float in ms),
-            ``'tau_minus'`` (float in ms), ``'lambda'`` (float), ``'alpha'`` (float),
-            ``'mu_plus'`` (float), ``'mu_minus'`` (float), ``'Wmax'`` (float),
-            ``'t_lastspike'`` (float in ms), and internal history state.
-            The ``'Kplus'`` key is explicitly removed because it is not used.
-
-        Notes
-        -----
-        - The returned dictionary is a snapshot and does not dynamically reflect
-          subsequent state changes.
-        - This method is used for serialization, debugging, and NEST-API
-          compatibility (``GetStatus``).
-        - Unlike :class:`stdp_synapse` and :class:`stdp_nn_pre_centered_synapse`,
-          this model does not maintain a presynaptic trace ``Kplus``, so it is
-          excluded from the returned state.
-        """
-        params = super().get()
-        params.pop('Kplus', None)
-        params['synapse_model'] = 'stdp_nn_symm_synapse'
-        return params
-
-    def set(self, **kwargs):
-        r"""Set NEST-style public parameters and mutable state.
-
-        Updates synapse parameters dynamically. Rejects attempts to set ``Kplus``
-        because it is not part of the symmetric nearest-neighbor STDP model.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Parameter names and values to update. Valid keys include ``'weight'``,
-            ``'delay'``, ``'receptor_type'``, ``'tau_plus'``, ``'tau_minus'``,
-            ``'lambda'``, ``'alpha'``, ``'mu_plus'``, ``'mu_minus'``, ``'Wmax'``,
-            and ``'t_lastspike'``.
-
-        Raises
-        ------
-        ValueError
-            If ``'Kplus'`` is present in ``kwargs``. The symmetric nearest-neighbor
-            scheme does not use a presynaptic trace, so setting ``Kplus`` is invalid.
-
-        Notes
-        -----
-        - This method provides NEST-API compatibility (``SetStatus``).
-        - Parameter updates take effect immediately and apply to subsequent
-          plasticity updates.
-        - Unlike models with ``Kplus``, this model computes facilitation traces
-          directly from postsynaptic spike times without maintaining a running
-          presynaptic trace variable.
-
-        Examples
-        --------
-        Update learning rate and potentiation time constant:
-
-        .. code-block:: python
-
-           >>> from brainpy import state as bp
-           >>> import saiunit as u
-           >>> syn = bp.stdp_nn_symm_synapse(weight=1.0)
-           >>> syn.set(lambda_=0.02, tau_plus=15.0 * u.ms)
-           >>> syn.get()['lambda']
-           0.02
-        """
-        if 'Kplus' in kwargs:
-            raise ValueError('Kplus is not a parameter of stdp_nn_symm_synapse.')
-        super().set(**kwargs)
-
-    def send(
-        self,
-        multiplicity: ArrayLike = 1.0,
-        *,
-        post=None,
-        receptor_type: ArrayLike | None = None,
-    ) -> bool:
-        r"""Schedule one outgoing spike event with symmetric nearest-neighbor STDP.
-
-        This method implements the complete NEST ``stdp_nn_symm_synapse::send``
-        update sequence:
-
-        1. Query postsynaptic spike history in the interval
-           :math:`(t_{\mathrm{last}}-d,\, t_{\mathrm{spike}}-d]`.
-        2. For **each** postsynaptic spike :math:`t_{\mathrm{post}}^{(i)}` in
-           that interval, apply facilitation with:
-
-           .. math::
-              w \leftarrow w + \lambda (1-w/W_{\mathrm{max}})^{\mu_+}
-              \exp((t_{\mathrm{last}} - (t_{\mathrm{post}}^{(i)} + d))/\tau_+)
-
-           Unlike :class:`stdp_nn_pre_centered_synapse`, this uses **all**
-           postsynaptic spikes in the window, not just the first.
-
-        3. Apply depression from the **nearest preceding** postsynaptic spike:
-
-           .. math::
-              w \leftarrow w - \alpha \lambda (w/W_{\mathrm{max}})^{\mu_-}
-              \exp((t_{\mathrm{post}}^{\mathrm{last}} - (t_{\mathrm{spike}}-d))/\tau_-)
-
-        4. Enqueue a spike event with the updated weight for delivery at step
-           :math:`\mathrm{current\_step} + \mathrm{delay\_steps}`.
-        5. Update ``t_lastspike`` to the current spike time.
-
-        No presynaptic trace ``Kplus`` is updated because this model does not
-        use one.
-
-        Parameters
-        ----------
-        multiplicity : ArrayLike, optional
-            Spike multiplicity (weight scaling factor). If zero, no event is sent.
-            Default: ``1.0``.
-        post : object, optional
-            Target receiver object. If ``None``, uses the default receiver set
-            at construction.
-        receptor_type : ArrayLike or None, optional
-            Receptor port id for the event. If ``None``, uses
-            ``self.receptor_type``. Must be a non-negative integer.
-
-        Returns
-        -------
-        bool
-            ``True`` if the event was scheduled, ``False`` if ``multiplicity``
-            was zero and no event was sent.
-
-        Notes
-        -----
-        - The weight update occurs **before** the event is enqueued, so the
-          transmitted spike carries the plasticity-modified weight.
-        - **All** postsynaptic spikes in the facilitation window contribute
-          independently to potentiation, weighted by their temporal distance from
-          the last presynaptic spike. This is the "symmetric" aspect of the model.
-        - Depression uses a strict nearest-neighbor rule: only the most recent
-          postsynaptic spike before :math:`t_{\mathrm{spike}}-d` contributes.
-        - Coincident spikes (within ``1e-6`` ms tolerance) are excluded from
-          both facilitation and depression windows.
-        - Unlike :class:`stdp_synapse`, no presynaptic trace is maintained; unlike
-          :class:`stdp_nn_pre_centered_synapse`, the presynaptic trace is not reset
-          after facilitation (because it does not exist).
-        - This method is typically called by the presynaptic neuron's spike
-          transmission logic; it can also be invoked manually for testing or
-          standalone STDP simulation.
-
-        Examples
-        --------
-        Manually trigger a presynaptic spike event:
-
-        .. code-block:: python
-
-           >>> from brainpy import state as bp
-           >>> import saiunit as u
-           >>> syn = bp.stdp_nn_symm_synapse(
-           ...     weight=1.0, delay=1.0 * u.ms, tau_plus=20.0 * u.ms
-           ... )
-           >>> # Assume postsynaptic spikes have been recorded...
-           >>> success = syn.send(multiplicity=1.0)
-           >>> print(success)
-           True
-           >>> print(syn.weight)  # Weight has been updated by STDP
-        """
-        if not self._is_nonzero(multiplicity):
-            return False
-
-        dt_ms = self._refresh_delay_if_needed()
-        current_step = self._curr_step(dt_ms)
-
-        # NEST uses on-grid event stamps in this model.
-        t_spike = self._current_time_ms() + dt_ms
-        dendritic_delay = float(self.delay)
-
-        # Facilitation due to postsynaptic spikes in
-        # (t_lastspike - dendritic_delay, t_spike - dendritic_delay].
-        t1 = self.t_lastspike - dendritic_delay
-        t2 = t_spike - dendritic_delay
-        history = self._get_post_history_times(t1, t2)
-        for t_post in history:
-            minus_dt = self.t_lastspike - (t_post + dendritic_delay)
-            assert minus_dt < (-1.0 * _STDP_EPS)
-            self.weight = float(self._facilitate(float(self.weight), math.exp(minus_dt / self.tau_plus)))
-
-        # Depression from nearest preceding postsynaptic spike.
-        kminus_value = self._get_nearest_neighbor_K_value(t_spike - dendritic_delay)
-        self.weight = float(self._depress(float(self.weight), float(kminus_value)))
-
-        receiver = self._resolve_receiver(post)
-        rport = self.receptor_type if receptor_type is None else self._to_receptor_type(receptor_type)
-        weighted_payload = multiplicity * float(self.weight)
-
-        delivery_step = int(current_step + int(self._delay_steps))
-        self._queue[delivery_step].append((receiver, weighted_payload, int(rport), 'spike'))
-
-        self.t_lastspike = float(t_spike)
-        return True
+    def update(self, state, ctx):
+        w = state['weight']
+        # exclude this step's own spike from the opposite-side (nearest) trace
+        kplus = ctx.pre_trace - ctx.pre_spike
+        kminus = ctx.post_trace - ctx.post_spike
+        # potentiation on post spike, then depression on pre spike (NEST order)
+        w = frozen(ctx.post_spike > 0, self._facilitate(w, kplus), w)
+        w = frozen(ctx.pre_spike > 0, self._depress(w, kminus), w)
+        return {'weight': w}, w
