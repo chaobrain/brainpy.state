@@ -22,13 +22,35 @@ import jax.numpy as jnp
 import saiunit as u
 
 from brainpy_state._base import Neuron
+from brainpy_state._nest.ac_generator import ac_generator as _ac_generator
+from brainpy_state._nest.dc_generator import dc_generator as _dc_generator
+from brainpy_state._nest.multimeter import multimeter as _multimeter
+from brainpy_state._nest.noise_generator import noise_generator as _noise_generator
 from brainpy_state._nest.spike_recorder import spike_recorder as _spike_recorder
+from brainpy_state._nest.step_current_generator import step_current_generator as _step_current_generator
 from brainpy_state._network._event_plastic import EventPlasticProj
 from brainpy_state._network._event_proj import EventProjection
 from brainpy_state._network._nodeview import NodeView, _Segment, _flat_size
 from brainpy_state._network._rules import all_to_all, one_to_one
 
 __all__ = ['Simulator', 'SimulationResult']
+
+# NEST recordable name -> brainpy.state model State attribute. NEST exposes the
+# membrane potential as ``V_m`` while the models store it on ``self.V``; every
+# other recordable (``g_ex``, ``g_in``, ``w``, ``I_syn_ex``, …) maps to the
+# same attribute name.
+_RECORDABLE_ALIAS = {'V_m': 'V'}
+
+
+def _read_recordable(pop, name):
+    """Read a NEST recordable as the model's State value (Quantity or array)."""
+    attr = _RECORDABLE_ALIAS.get(name, name)
+    state = getattr(pop, attr, None)
+    if state is None:
+        raise KeyError(
+            f'recordable {name!r} (state {attr!r}) is not available on {type(pop).__name__}'
+        )
+    return state.value
 
 
 class _SpikeHolder(brainstate.nn.Module):
@@ -69,20 +91,76 @@ def _is_generator(model_cls) -> bool:
     return 'generator' in name or 'injector' in name
 
 
+# Generators that inject a *current* (pA) rather than emitting spike events. These
+# wire into the neuron's current-input seam (NEST current ring buffer, one-step
+# delay), not the delta-event path used by spike generators.
+_CURRENT_GENERATORS = (_noise_generator, _dc_generator, _step_current_generator,
+                       _ac_generator)
+
+
+def _is_current_generator(model_cls) -> bool:
+    return isinstance(model_cls, type) and issubclass(model_cls, _CURRENT_GENERATORS)
+
+
+def _n_channels(size) -> int:
+    """Flatten a ``create`` size spec to a scalar channel count."""
+    if isinstance(size, (tuple, list)):
+        n = 1
+        for s in size:
+            n *= int(s)
+        return n
+    return int(size)
+
+
+def _is_len_vector(val, k: int) -> bool:
+    """True if ``val`` is a length-``k`` 1-D vector (Quantity / array / sequence)."""
+    if isinstance(val, u.Quantity):
+        m = val.mantissa
+        return jnp.ndim(m) >= 1 and m.shape[0] == k
+    if isinstance(val, (list, tuple)):
+        return len(val) == k
+    return hasattr(val, 'shape') and jnp.ndim(val) >= 1 and val.shape[0] == k
+
+
+def _index_channel(val, i: int, k: int):
+    """Channel ``i`` of a length-``k`` vector ``val``; broadcast a scalar unchanged.
+
+    Splits a vector-valued generator parameter (e.g. ``rate=[r0, r1] * u.Hz``) or
+    a per-segment ``weight`` into one scalar per channel, preserving units.
+    """
+    if not _is_len_vector(val, k):
+        return val
+    if isinstance(val, u.Quantity):
+        return u.maybe_decimal(val.mantissa[i] * u.get_unit(val))
+    return val[i]
+
+
 class SimulationResult:
-    """Recorded spikes from a :meth:`Simulator.simulate` run."""
+    """Recorded spikes and analog traces from a :meth:`Simulator.simulate` run.
+
+    Spike recorders are read with :meth:`spikes` / :meth:`n_events` / :meth:`rate`.
+    Analog recorders (``voltmeter`` / ``multimeter``, connected in NEST's reversed
+    direction) are read with :meth:`trace`, and the common time axis with
+    :attr:`times`.
+    """
     __module__ = 'brainpy.state'
 
-    def __init__(self, recordings: dict, duration, dt):
+    def __init__(self, recordings: dict, duration, dt, *, traces=None, times=None):
         self._rec = recordings          # {id(recorder): (T, n_rec) array}
         self._T = duration
         self._dt = dt
+        self._traces = dict(traces or {})  # {f'{id(rec)}|{recordable}': (T, n) Quantity}
+        self._times = times                # (T,) Quantity, the for_loop time axis
 
     @staticmethod
     def _key(node):
         if isinstance(node, NodeView):
             return id(node.segments[0].population)
         return id(node)
+
+    @staticmethod
+    def _trace_key(rid, recordable):
+        return f'{rid}|{recordable}'
 
     def spikes(self, node):
         """Per-step spike matrix ``(n_steps, n_recorded)`` for a recorder/source."""
@@ -97,6 +175,44 @@ class SimulationResult:
         n = spk.shape[1]
         t_s = float(self._T.to_decimal(u.second))
         return float(jnp.sum(spk > 0)) / n / t_s
+
+    def trace(self, recorder, recordable: str = 'V_m'):
+        """Analog trace ``(n_steps, n_recorded)`` for an analog recorder.
+
+        Parameters
+        ----------
+        recorder : NodeView
+            The ``voltmeter`` / ``multimeter`` handle returned by
+            :meth:`Simulator.create` and connected via ``connect(recorder, pop)``.
+        recordable : str, optional
+            Recordable name (NEST vocabulary, e.g. ``'V_m'``, ``'g_ex'``).
+            Default is ``'V_m'``.
+
+        Returns
+        -------
+        saiunit.Quantity
+            ``(n_steps, n_recorded)`` trace in the model state's natural unit.
+
+        Raises
+        ------
+        KeyError
+            If ``recordable`` was not recorded by this recorder.
+        """
+        rid = self._key(recorder)
+        key = self._trace_key(rid, recordable)
+        if key not in self._traces:
+            available = sorted(k.split('|', 1)[1] for k in self._traces
+                               if k.startswith(f'{rid}|'))
+            raise KeyError(
+                f'recordable {recordable!r} was not recorded by this recorder; '
+                f'recorded: {available}'
+            )
+        return self._traces[key]
+
+    @property
+    def times(self):
+        """The common time axis ``(n_steps,)`` of the run (saiunit Quantity)."""
+        return self._times
 
 
 class Simulator(brainstate.nn.Module):
@@ -130,6 +246,8 @@ class Simulator(brainstate.nn.Module):
         brainstate.environ.set(dt=dt)
         self._dt = dt
         self._taps = {}                       # id(recorder) -> (id(source), idx)
+        self._analog_taps = {}                # id(recorder) -> (id(pop), idx, recordables)
+        self._current_injectors = []          # (device, post_pop, post_idx, weight, key)
         self._proj_counter = itertools.count()
 
     # -- node creation -----------------------------------------------------
@@ -142,10 +260,23 @@ class Simulator(brainstate.nn.Module):
         p = dict(params or {})
         p.update(kw)
         if _is_generator(model_cls):
+            k = _n_channels(size)
+            if k > 1:
+                # Multi-channel generator (Extension D2): one independent segment
+                # per channel, each a scalar-param spec. Vector params (e.g.
+                # ``rate=[r0, r1]``) are split per channel; scalars broadcast.
+                return NodeView([
+                    _GenSegment(_GeneratorSpec(
+                        model_cls, {key: _index_channel(v, i, k) for key, v in p.items()}))
+                    for i in range(k)
+                ])
             return NodeView([_GenSegment(_GeneratorSpec(model_cls, p))])
         mod = model_cls(size, **p)
         setattr(self, f'_node_{id(mod)}', mod)
-        if isinstance(mod, _spike_recorder):
+        # Recorders are tapped, not driven: spike recorders read captured spikes,
+        # analog recorders (voltmeter/multimeter) read model State per step. Neither
+        # gets a _SpikeHolder.
+        if isinstance(mod, (_spike_recorder, _multimeter)):
             return NodeView([_Segment(mod, jnp.arange(1))])
         holder = _SpikeHolder(_flat_size(mod))
         setattr(self, f'_holder_{id(mod)}', holder)
@@ -170,7 +301,22 @@ class Simulator(brainstate.nn.Module):
         family, ``quantal_stp_synapse``); ``weight``/``delay`` here override the
         spec's defaults. ``synapse=None`` (default) keeps the static
         :class:`EventProjection` path unchanged.
+
+        Analog recorders (``voltmeter`` / ``multimeter``) are connected in NEST's
+        reversed direction --- ``connect(recorder, pop)`` --- because the recorder
+        *observes* the population. This registers a per-step State tap; no
+        projection is built.
         """
+        if len(pre.segments) == 1 and isinstance(pre.segments[0].population, _multimeter):
+            rec = pre.segments[0].population
+            if len(post.segments) != 1:
+                raise NotImplementedError(
+                    'a voltmeter/multimeter records a single population segment'
+                )
+            seg = post.segments[0]
+            self._analog_taps[id(rec)] = (id(seg.population), seg.indices,
+                                          tuple(rec.record_from))
+            return
         if len(post.segments) == 1 and isinstance(post.segments[0].population, _spike_recorder):
             if len(pre.segments) != 1:
                 raise NotImplementedError(
@@ -179,11 +325,25 @@ class Simulator(brainstate.nn.Module):
             seg = pre.segments[0]
             self._taps[id(post.segments[0].population)] = (id(seg.population), seg.indices)
             return
-        for pre_seg in pre.segments:
+        seg_weights = self._segment_weights(weight, len(pre.segments))
+        for pre_seg, w_seg in zip(pre.segments, seg_weights):
             for post_seg in post.segments:
-                self._connect_pair(pre_seg, post_seg, rule, weight, delay,
+                self._connect_pair(pre_seg, post_seg, rule, w_seg, delay,
                                    allow_autapses, allow_multapses, seed, comm,
                                    receptor_type, synapse)
+
+    @staticmethod
+    def _segment_weights(weight, n_seg: int):
+        """One weight per pre-segment (Extension D2).
+
+        A ``weight`` vector whose length equals the number of pre-segments is
+        indexed per segment (``weight[i]`` -> segment ``i``); any other ``weight``
+        (scalar, or a per-edge vector for a single-segment ``all_to_all``) is
+        passed through unchanged to every segment.
+        """
+        if n_seg > 1 and _is_len_vector(weight, n_seg):
+            return [_index_channel(weight, i, n_seg) for i in range(n_seg)]
+        return [weight] * n_seg
 
     @staticmethod
     def _derive_seed(base, ordinal: int) -> int:
@@ -216,6 +376,9 @@ class Simulator(brainstate.nn.Module):
         post_holder = getattr(self, f'_holder_{id(post_pop)}', None)
         post_reader = _holder_reader(post_holder) if post_holder is not None else None
         if isinstance(pre_seg, _GenSegment):
+            if _is_current_generator(pre_seg.spec.model_cls):
+                self._wire_current_injector(pre_seg, post_seg, weight, ordinal)
+                return
             n = int(post_seg.indices.shape[0])
             params = dict(pre_seg.spec.params)
             if 'rng_seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
@@ -260,6 +423,45 @@ class Simulator(brainstate.nn.Module):
                     seed=self._derive_seed(seed, ordinal))
         setattr(self, f'_proj_{ordinal}', proj)
 
+    def _wire_current_injector(self, pre_seg, post_seg, weight, ordinal):
+        """Realize a current generator at the post size and register it as an injector.
+
+        Current generators (``dc_generator`` / ``step_current_generator`` /
+        ``noise_generator`` / ``ac_generator``) inject a *current* (pA) into the
+        post population's current-input seam each step --- the neuron's own
+        ``sum_current_inputs`` ring buffer (one-step delay, matching NEST's
+        current ring buffer) --- rather than the delta-event path used by spike
+        generators. No spike holder and no projection are built.
+
+        The device is realized at ``n = n_post`` so a single generator fans out
+        one independent channel per target (``noise_generator`` draws ``randn(n)``
+        each step); a per-connect derived seed keeps separate connects
+        independent.
+        """
+        post_pop = post_seg.population
+        n = int(post_seg.indices.shape[0])
+        params = dict(pre_seg.spec.params)
+        if 'seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
+            params['seed'] = self._derive_seed(params.get('seed'), ordinal)
+        device = pre_seg.spec.model_cls(n, **params)
+        setattr(self, f'_node_{id(device)}', device)
+        key = f'cur_inj_{ordinal}'
+        self._current_injectors.append((device, post_pop, post_seg.indices, weight, key))
+
+    @staticmethod
+    def _scatter_current(cur, pop, idx):
+        """Place a device's ``(n,)`` current into the post population's ``(n_pop,)`` frame.
+
+        ``cur`` is the generator's per-channel current (one entry per target,
+        in device order); it is scattered into a zero current vector over the
+        full population at ``idx`` so neurons outside the connection receive no
+        current. Works for full, partial, and reordered target views.
+        """
+        n_pop = _flat_size(pop)
+        mant = u.get_mantissa(cur)
+        base = jnp.zeros(n_pop, dtype=mant.dtype)
+        return u.maybe_decimal(base.at[idx].add(mant) * u.get_unit(cur))
+
     # -- run ---------------------------------------------------------------
     def update(self, t=None):
         dftype = brainstate.environ.dftype()
@@ -268,6 +470,17 @@ class Simulator(brainstate.nn.Module):
         for m in children:
             if isinstance(m, (EventProjection, EventPlasticProj)):
                 m.update()
+        # 1b) current-injecting devices (dc/step/noise/ac) push this step's
+        #     current into each post population's current-input seam. The neuron
+        #     consumes it in step 2 via ``sum_current_inputs`` (captured into
+        #     ``y0`` and applied on the *next* step --- a one-step ring buffer,
+        #     matching NEST's current buffer). Non-callable inputs are popped on
+        #     consumption, so the contribution is re-added every step.
+        for device, pop, idx, weight, key in self._current_injectors:
+            cur = device.update()
+            if weight is not None:
+                cur = cur * weight
+            pop.add_current_input(key, self._scatter_current(cur, pop, idx))
         # 2) drive neurons/generators and capture their output into holders
         for m in children:
             if isinstance(m, (EventProjection, EventPlasticProj, _SpikeHolder)):
@@ -290,7 +503,13 @@ class Simulator(brainstate.nn.Module):
             holder.spk.value = val
 
     def simulate(self, duration, *, dt=None) -> SimulationResult:
-        """Run for ``duration`` and return recorded spikes."""
+        """Run for ``duration`` and return recorded spikes and analog traces.
+
+        Spike recorders are stacked as ``(n_steps, n_recorded)`` arrays; analog
+        recorders (``voltmeter`` / ``multimeter``) tap their target population's
+        State each step (after the update) into ``(n_steps, n_recorded)`` traces
+        keyed by recordable. The run's time axis is exposed as ``res.times``.
+        """
         import brainstate.transform as transform
         if dt is None:
             dt = self._dt
@@ -298,13 +517,21 @@ class Simulator(brainstate.nn.Module):
         times = u.math.arange(0.0 * u.get_unit(dt), duration, dt)
         indices = u.math.arange(times.size)
         taps = dict(self._taps)
+        analog = dict(self._analog_taps)
 
         def step(t, i):
             with brainstate.environ.context(t=t, i=i):
                 self.update(t)
-                return {rid: getattr(self, f'_holder_{sid}').spk.value[idx]
-                        for rid, (sid, idx) in taps.items()}
+                spk_out = {rid: getattr(self, f'_holder_{sid}').spk.value[idx]
+                           for rid, (sid, idx) in taps.items()}
+                ana_out = {}
+                for rid, (sid, idx, names) in analog.items():
+                    pop = getattr(self, f'_node_{sid}')
+                    for name in names:
+                        ana_out[SimulationResult._trace_key(rid, name)] = _read_recordable(pop, name)[idx]
+                return spk_out, ana_out
 
-        stacked = transform.for_loop(step, times, indices)
-        recordings = {rid: jnp.asarray(stacked[rid]) for rid in taps}
-        return SimulationResult(recordings, duration, dt)
+        stacked_spk, stacked_ana = transform.for_loop(step, times, indices)
+        recordings = {rid: jnp.asarray(stacked_spk[rid]) for rid in taps}
+        traces = {key: stacked_ana[key] for key in stacked_ana}
+        return SimulationResult(recordings, duration, dt, traces=traces, times=times)

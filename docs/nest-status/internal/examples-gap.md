@@ -58,15 +58,22 @@ exists.
 
 ### 3.2 Single- and few-neuron demos
 
+All seven ported in cluster 02 (`Simulator` API, live-NEST parity). The ports
+forced four `Simulator` extensions reused downstream: **A** analog State-tap
+recording (`voltmeter`/`multimeter` + `res.trace`/`res.times`), **B**
+current-injecting devices (`noise_/dc_/step_/ac_generator` via the neuron's
+current ring buffer), **C** rebuild-per-trial sweep ergonomics, **D**
+per-generator weight vectors (multi-channel generator view).
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `one_neuron.py` | missing | none | minimal `iaf_psc_alpha` + dc + multimeter demo — would make a great `docs/nest-guide/` first example |
-| `one_neuron_with_noise.py` | missing | none | adds `noise_generator` to the above |
-| `twoneurons.py` | missing | none | static_synapse between two iaf_psc_alpha |
-| `testiaf.py` | missing | none | IAF correctness test |
-| `balancedneuron.py` | missing | none | single neuron with E + I Poisson inputs balancing to threshold |
-| `if_curve.py` | missing | none | F-I curve sweep — pedagogical |
-| `vinit_example.py` | missing | none | demonstrates `V_m` initialization via `SetStatus`/`Create` params |
+| `one_neuron.py` | implemented | `examples/nest/one_neuron.py` | `iaf_psc_alpha` + `I_e` + `voltmeter`; V_m charge `CAT_B_ALIGNED` (ext. A) |
+| `one_neuron_with_noise.py` | implemented | `examples/nest/one_neuron_with_noise.py` | 2-channel `poisson_generator`, signed weights `[1.2,-1.0]`; rate `CAT_D` 5 % (ext. A, D) |
+| `twoneurons.py` | implemented | `examples/nest/twoneurons.py` | static synapse `w=20 pA, d=1 ms`; both V_m traces `CAT_B_ALIGNED` (ext. A) |
+| `testiaf.py` | implemented | `examples/nest/testiaf.py` | charge→spike→refractory over `dt∈{0.1,0.5,1.0}`; V_m `CAT_B_ALIGNED` + count `CAT_E` (ext. C) |
+| `balancedneuron.py` | implemented | `examples/nest/balancedneuron.py` | SciPy `bisect` inhib rate→5 Hz; root matches NEST (ext. C, D) |
+| `if_curve.py` | implemented | `examples/nest/if_curve.py` | `aeif_cond_exp` + `noise_generator` F-I curve; rate `CAT_C_RATE`/`CAT_D` (ext. B, C) |
+| `vinit_example.py` | implemented | `examples/nest/vinit_example.py` | `iaf_cond_exp_sfa_rr` V_m-init sweep; relaxation ~1e-14 mV (ext. A) |
 
 ### 3.3 Plasticity demos
 
