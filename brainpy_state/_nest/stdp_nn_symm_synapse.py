@@ -21,7 +21,7 @@ import math
 import saiunit as u
 from brainstate.typing import ArrayLike
 
-from .stdp_synapse import _STDP_EPS, stdp_synapse
+from ._legacy_stdp_synapse import _STDP_EPS, stdp_synapse
 
 __all__ = [
     'stdp_nn_symm_synapse',

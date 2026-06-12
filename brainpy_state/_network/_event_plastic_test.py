@@ -194,6 +194,116 @@ def test_post_trace_decays_and_gathers():
     assert np.allclose(np.asarray(proj.post_trace.value), [np.exp(-0.1)], atol=1e-9)
 
 
+# --------------------------------------------------------------------------
+# Task 4.A — multi-trace per side (stdp_triplet / clopath seam)
+# `pre_trace_tau` / `post_trace_tau` accept a tuple of taus; the substrate
+# allocates one per-neuron column per tau and exposes them as ctx.pre_traces /
+# ctx.post_traces (E, k). Single-tau (1-D State, (E,) alias) and None stay as
+# the degenerate cases — cluster-01 specs are unaffected.
+# --------------------------------------------------------------------------
+class _MultiTraceProbe(_StaticTestRule):
+    pre_trace_tau = (10.0 * u.ms, 20.0 * u.ms)
+    post_trace_tau = (5.0 * u.ms, 15.0 * u.ms)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = {}
+
+    def update(self, state, ctx):
+        self.seen = dict(pre_traces=ctx.pre_traces, post_traces=ctx.post_traces,
+                         pre_trace=ctx.pre_trace, post_trace=ctx.post_trace)
+        return state, state['weight']
+
+
+def _build_probe(rule, post_spike=None):
+    sink = _Sink(1)
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1,
+        pre_local_idx=jnp.arange(1), post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+        post_spike=(post_spike if post_spike is not None else (lambda: jnp.array([1.]))),
+        rule=rule)
+    brainstate.nn.init_all_states(proj)
+    return proj
+
+
+def test_multi_trace_allocates_2d_state_and_gathers():
+    brainstate.environ.set(dt=1.0 * u.ms)
+    rule = _MultiTraceProbe(weight=jnp.array([0.]) * u.pA)
+    proj = _build_probe(rule)
+    assert proj.pre_trace.value.shape == (1, 2)       # one column per tau
+    assert proj.post_trace.value.shape == (1, 2)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert np.allclose(np.asarray(proj.pre_trace.value), [[1.0, 1.0]])   # +1 both cols
+    assert np.allclose(np.asarray(proj.post_trace.value), [[1.0, 1.0]])
+    assert rule.seen['pre_traces'].shape == (1, 2)
+    assert rule.seen['post_traces'].shape == (1, 2)
+    # the singular (E,) alias is the first column
+    assert np.allclose(np.asarray(rule.seen['pre_trace']),
+                       np.asarray(rule.seen['pre_traces'][:, 0]))
+    assert np.allclose(np.asarray(rule.seen['post_trace']),
+                       np.asarray(rule.seen['post_traces'][:, 0]))
+
+
+def test_multi_trace_columns_decay_with_distinct_taus():
+    brainstate.environ.set(dt=1.0 * u.ms)
+    rule = _MultiTraceProbe(weight=jnp.array([0.]) * u.pA)
+    proj = _build_probe(rule, post_spike=lambda: jnp.array([0.]))
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()                       # pre cols -> 1.0 each
+    proj.pre_spike = lambda: jnp.array([0.])
+    with brainstate.environ.context(t=2.0 * u.ms, i=2):
+        proj.update()                       # distinct decay per column
+    assert np.allclose(np.asarray(proj.pre_trace.value),
+                       [[np.exp(-0.1), np.exp(-0.05)]], atol=1e-9)
+
+
+class _SingleTraceProbe(_StaticTestRule):
+    pre_trace_tau = 10.0 * u.ms
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = {}
+
+    def update(self, state, ctx):
+        self.seen = dict(pre_traces=ctx.pre_traces, pre_trace=ctx.pre_trace)
+        return state, state['weight']
+
+
+def test_single_trace_back_compat_traces_alias():
+    # scalar tau keeps the 1-D State (cluster-01 contract) and exposes (E,1).
+    brainstate.environ.set(dt=1.0 * u.ms)
+    rule = _SingleTraceProbe(weight=jnp.array([0.]) * u.pA)
+    proj = _build_probe(rule)
+    assert proj.pre_trace.value.shape == (1,)         # unchanged 1-D
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert rule.seen['pre_traces'].shape == (1, 1)
+    assert np.allclose(np.asarray(rule.seen['pre_trace']),
+                       np.asarray(rule.seen['pre_traces'][:, 0]))
+
+
+class _NoTraceProbe(_StaticTestRule):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = {}
+
+    def update(self, state, ctx):
+        self.seen = dict(pre_traces=ctx.pre_traces, post_traces=ctx.post_traces)
+        return state, state['weight']
+
+
+def test_no_trace_gives_empty_traces_matrix():
+    brainstate.environ.set(dt=1.0 * u.ms)
+    rule = _NoTraceProbe(weight=jnp.array([0.]) * u.pA)
+    proj = _build_probe(rule)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert rule.seen['pre_traces'].shape == (1, 0)
+    assert rule.seen['post_traces'].shape == (1, 0)
+
+
 def test_missing_edges_and_conn_raises():
     # Neither explicit edges nor a connectivity rule -> construction error.
     with pytest.raises(ValueError, match='explicit edges'):

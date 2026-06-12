@@ -28,7 +28,7 @@ import saiunit as u
 import jax
 import numpy as np
 
-from brainpy.state import stdp_synapse_hom
+from brainpy_state._nest._legacy_stdp_synapse import stdp_synapse
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -86,7 +86,7 @@ def _depress_ref(*, w, kminus, alpha, lambda_, mu_minus, Wmax):
     return norm_w * Wmax if norm_w > 0.0 else 0.0
 
 
-def _stdp_hom_send_ref(
+def _stdp_send_ref(
     *,
     weight,
     Kplus,
@@ -150,7 +150,7 @@ def _run_bp_weight_trace(
     recv = _MockReceiver()
 
     with brainstate.environ.context(dt=dt):
-        syn = stdp_synapse_hom(
+        syn = stdp_synapse(
             delay=delay_ms * u.ms,
             tau_plus=tau_plus * u.ms,
             tau_minus=tau_minus * u.ms,
@@ -233,7 +233,7 @@ def _run_reference_weight_trace(
 
         pre_count = pre_counts.get(step, 0)
         if pre_count > 0:
-            current_weight, Kplus, t_lastspike, payload = _stdp_hom_send_ref(
+            current_weight, Kplus, t_lastspike, payload = _stdp_send_ref(
                 weight=current_weight,
                 Kplus=Kplus,
                 t_lastspike=t_lastspike,
@@ -257,13 +257,13 @@ def _run_reference_weight_trace(
     return np.asarray(send_times, dtype=dftype), np.asarray(payloads, dtype=dftype)
 
 
-class TestSTDPSynapseHomParameters(unittest.TestCase):
+class TestSTDPSynapseParameters(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_nest_like_defaults(self):
         with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
-            syn = stdp_synapse_hom()
+            syn = stdp_synapse()
             syn.init_state()
             syn.update(pre_spike=0.0, post_spike=0.0)
             params = syn.get()
@@ -281,38 +281,26 @@ class TestSTDPSynapseHomParameters(unittest.TestCase):
         self.assertEqual(params['mu_minus'], 1.0)
         self.assertEqual(params['Wmax'], 100.0)
         self.assertEqual(params['Kplus'], 0.0)
-        self.assertEqual(params['synapse_model'], 'stdp_synapse_hom')
+        self.assertEqual(params['synapse_model'], 'stdp_synapse')
         self.assertAlmostEqual(syn.t_lastspike, 0.0, delta=1e-12)
 
-    def test_common_properties_rejected_in_connect_syn_spec(self):
-        syn = stdp_synapse_hom()
-        for key in ('tau_plus', 'lambda', 'alpha', 'mu_plus', 'mu_minus', 'Wmax'):
-            with self.subTest(key=key):
-                with self.assertRaisesRegex(ValueError, f'{key} cannot be specified'):
-                    syn.check_synapse_params({'synapse_model': 'stdp_synapse_hom', key: 1.0})
+    def test_parameter_validation_matches_nest_semantics(self):
+        with self.assertRaisesRegex(ValueError, 'Weight and Wmax must have same sign'):
+            stdp_synapse(weight=-1.0, Wmax=100.0)
+        with self.assertRaisesRegex(ValueError, 'Kplus must be non-negative'):
+            stdp_synapse(Kplus=-1e-3)
 
-        syn.check_synapse_params({'synapse_model': 'stdp_synapse_hom', 'weight': 3.0})
-        syn.check_synapse_params({'synapse_model': 'stdp_synapse_hom', 'delay': 2.0})
-
-    def test_status_validation_matches_nest_hom_semantics(self):
-        with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
-            syn = stdp_synapse_hom(weight=-1.0, Wmax=100.0, Kplus=-0.5)
-            syn.init_state()
-            syn.update(pre_spike=0.0, post_spike=0.0)
-            params = syn.get()
-        self.assertEqual(params['weight'], -1.0)
-        self.assertEqual(params['Wmax'], 100.0)
-        self.assertEqual(params['Kplus'], -0.5)
-
-        syn.set(weight=2.0, Wmax=-5.0, Kplus=-1.25)
-        syn.set_weight(-7.5)
-        params = syn.get()
-        self.assertEqual(params['weight'], -7.5)
-        self.assertEqual(params['Wmax'], -5.0)
-        self.assertEqual(params['Kplus'], -1.25)
+        syn = stdp_synapse(weight=2.0, Wmax=5.0)
+        with self.assertRaisesRegex(ValueError, 'Weight and Wmax must have same sign'):
+            syn.set(weight=-1.0)
+        with self.assertRaisesRegex(ValueError, 'Kplus must be non-negative'):
+            syn.set(Kplus=-1.0)
+        with self.assertRaisesRegex(ValueError, 'post_spike must be an integer spike count'):
+            with brainstate.environ.context(dt=1.0 * u.ms, t=0.0 * u.ms):
+                syn.update(pre_spike=0.0, post_spike=0.25)
 
 
-class TestSTDPSynapseHomOrdering(unittest.TestCase):
+class TestSTDPSynapseOrdering(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
 
@@ -358,11 +346,13 @@ class TestSTDPSynapseHomOrdering(unittest.TestCase):
         self.assertTrue(all(label == 'receptor_2' for label in labels))
 
 
-class TestSTDPSynapseHomDynamics(unittest.TestCase):
+class TestSTDPSynapseDynamics(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_dynamics_match_nest_reference_logic(self):
+        # Mirrors the hardcoded edge-case spike trains from NEST
+        # testsuite/pytests/test_stdp_synapse.py.
         dftype = brainstate.environ.dftype()
         pre_spikes = np.asarray(
             [1.0, 5.0, 6.0, 7.0, 9.0, 11.0, 12.0, 13.0, 14.5, 16.1, 21.0, 25.0, 26.0, 27.0, 29.0, 31.0, 32.0, 33.0,
@@ -410,15 +400,53 @@ class TestSTDPSynapseHomDynamics(unittest.TestCase):
                 np.testing.assert_allclose(send_t_bp, send_t_ref, atol=1e-12, rtol=0.0)
                 np.testing.assert_allclose(payload_bp, payload_ref, atol=1e-12, rtol=0.0)
 
+    def test_inhibitory_case_matches_nest_reference_logic(self):
+        dftype = brainstate.environ.dftype()
+        pre_spikes = np.asarray([5.0, 12.0, 20.0, 29.0, 41.0], dtype=dftype)
+        post_spikes = np.asarray([7.0, 9.0, 16.0, 21.0, 35.0], dtype=dftype)
 
-class TestSTDPSynapseHomVsNEST(unittest.TestCase):
+        dt_ms = 0.1
+        sim_duration_ms = 60.0
+        params = dict(
+            tau_plus=20.0,
+            tau_minus=30.0,
+            lambda_=0.01,
+            alpha=1.1,
+            mu_plus=1.0,
+            mu_minus=1.0,
+            weight=-45.0,
+            Wmax=-90.0,
+        )
+
+        send_t_ref, payload_ref = _run_reference_weight_trace(
+            pre_spikes_ms=pre_spikes,
+            post_spikes_ms=post_spikes,
+            sim_duration_ms=sim_duration_ms,
+            dt_ms=dt_ms,
+            delay_ms=1.0,
+            **params,
+        )
+        send_t_bp, payload_bp, _labels = _run_bp_weight_trace(
+            pre_spikes_ms=pre_spikes,
+            post_spikes_ms=post_spikes,
+            sim_duration_ms=sim_duration_ms,
+            dt_ms=dt_ms,
+            delay_ms=1.0,
+            **params,
+        )
+
+        np.testing.assert_allclose(send_t_bp, send_t_ref, atol=1e-12, rtol=0.0)
+        np.testing.assert_allclose(payload_bp, payload_ref, atol=1e-12, rtol=0.0)
+
+
+class TestSTDPSynapseVsNEST(unittest.TestCase):
     @staticmethod
     def _is_nest_available():
         try:
             import nest
             if hasattr(nest, 'synapse_models'):
-                return 'stdp_synapse_hom' in nest.synapse_models
-            return 'stdp_synapse_hom' in nest.Models()
+                return 'stdp_synapse' in nest.synapse_models
+            return 'stdp_synapse' in nest.Models()
         except Exception:
             return False
 
@@ -464,9 +492,9 @@ class TestSTDPSynapseHomVsNEST(unittest.TestCase):
         )
         wr = nest.Create('weight_recorder')
 
-        model_name = f'stdp_synapse_hom_bpstate_{np.random.randint(1_000_000_000)}'
+        model_name = f'stdp_synapse_bpstate_{np.random.randint(1_000_000_000)}'
         nest.CopyModel(
-            'stdp_synapse_hom',
+            'stdp_synapse',
             model_name,
             {
                 'weight_recorder': wr,
@@ -481,6 +509,9 @@ class TestSTDPSynapseHomVsNEST(unittest.TestCase):
             },
         )
 
+        # ``spike_generator`` -> ``parrot_neuron`` introduces one static-synapse
+        # delay, so the effective pre/post spike times on the STDP connection are
+        # shifted by ``dt_ms``.
         nest.Connect(sg_pre, pre, syn_spec={'synapse_model': 'static_synapse', 'weight': 1.0, 'delay': float(dt_ms)})
         nest.Connect(sg_post, post, syn_spec={'synapse_model': 'static_synapse', 'weight': 1.0, 'delay': float(dt_ms)})
         nest.Connect(pre, post, syn_spec={'synapse_model': model_name, 'receptor_type': 1})
@@ -521,6 +552,8 @@ class TestSTDPSynapseHomVsNEST(unittest.TestCase):
             **params,
         )
 
+        # Effective spike times at the STDP synapse are shifted by dt due to
+        # spike_generator -> parrot static-synapse transmission.
         send_t_bp, payload_bp, _labels = _run_bp_weight_trace(
             pre_spikes_ms=pre_spikes + params['dt_ms'],
             post_spikes_ms=post_spikes + params['dt_ms'],

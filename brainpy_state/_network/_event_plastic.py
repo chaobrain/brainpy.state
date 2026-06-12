@@ -35,6 +35,21 @@ from brainpy_state._brainpy._delay import InputDelay
 __all__ = ['EventPlasticProj', 'KernelContext', 'PlasticSynapse']
 
 
+def _trace_spec(attr):
+    """Normalize a rule's per-side trace-tau declaration.
+
+    Returns ``None`` (no trace), ``('single', tau_ms)`` for a scalar
+    ``Quantity`` (cluster-01 contract: 1-D per-neuron State), or
+    ``('multi', (tau0_ms, ...))`` for a tuple/list of taus (``stdp_triplet``,
+    later clopath: one per-neuron column per tau).
+    """
+    if attr is None:
+        return None
+    if isinstance(attr, (tuple, list)):
+        return ('multi', tuple(float(u.Quantity(t).to_decimal(u.ms)) for t in attr))
+    return ('single', float(u.Quantity(attr).to_decimal(u.ms)))
+
+
 class KernelContext(NamedTuple):
     """Per-step inputs the substrate hands a rule kernel.
 
@@ -51,15 +66,24 @@ class KernelContext(NamedTuple):
         the projection has no post-spike reader).
     pre_trace : jax.Array
         ``(E,)`` presynaptic trace gathered per edge (zeros if the rule declares
-        no ``pre_trace_tau``).
+        no ``pre_trace_tau``). When the rule declares a *tuple* of taus this is
+        the first column of ``pre_traces``.
     post_trace : jax.Array
-        ``(E,)`` postsynaptic trace gathered per edge (zeros if none).
+        ``(E,)`` postsynaptic trace gathered per edge (zeros if none); first
+        column of ``post_traces`` for multi-trace rules.
     t_now : jax.Array
         Scalar current simulation time, ms mantissa.
     dt : jax.Array
         Scalar timestep, ms mantissa.
     key : jax.Array
         Per-step PRNG key (used by stochastic rules; deterministic rules ignore).
+    pre_traces : jax.Array
+        ``(E, k)`` all presynaptic traces gathered per edge, one column per tau
+        when ``pre_trace_tau`` is a tuple (``stdp_triplet`` / clopath seam).
+        ``(E, 1)`` for a scalar tau, ``(E, 0)`` for none. ``pre_trace`` aliases
+        column 0.
+    post_traces : jax.Array
+        ``(E, k)`` all postsynaptic traces gathered per edge (see ``pre_traces``).
     """
     pre_spike: jax.Array
     post_spike: jax.Array
@@ -68,6 +92,8 @@ class KernelContext(NamedTuple):
     t_now: jax.Array
     dt: jax.Array
     key: jax.Array
+    pre_traces: jax.Array = None
+    post_traces: jax.Array = None
 
 
 class PlasticSynapse(Protocol):
@@ -80,8 +106,8 @@ class PlasticSynapse(Protocol):
     delay: object               # homogeneous axonal delay (Quantity) or None
     is_homogeneous_weight: bool  # 'weight' State is a shared 0-d scalar
     stochastic: bool            # needs ctx.key
-    pre_trace_tau: object       # Quantity or None — enables the pre trace State
-    post_trace_tau: object      # Quantity or None — enables the post trace State
+    pre_trace_tau: object       # None | Quantity | tuple[Quantity,...] (multi-trace)
+    post_trace_tau: object      # None | Quantity | tuple[Quantity,...] (multi-trace)
     weight_unit: object         # pA
 
     def edge_state_init(self) -> dict: ...
@@ -254,6 +280,10 @@ class EventPlasticProj(brainstate.nn.Module):
             and bool(jnp.all(self.post_local_idx == jnp.arange(self._n_post_pop)))
         )
 
+        # -- per-side trace specs (None | single | multi), fixed at trace time -
+        self._pre_trace_spec = _trace_spec(rule.pre_trace_tau)
+        self._post_trace_spec = _trace_spec(rule.post_trace_tau)
+
     def init_state(self, *args, **kwargs):
         dftype = brainstate.environ.dftype()
         self.weight = brainstate.ParamState(jnp.asarray(self._w_init, dtype=dftype))
@@ -261,13 +291,40 @@ class EventPlasticProj(brainstate.nn.Module):
             name: brainstate.HiddenState(jnp.full((self._E,), float(v), dtype=dftype))
             for name, v in self.rule.edge_state_init().items()
         }
-        self.pre_trace = (brainstate.HiddenState(jnp.zeros(self._n_pre_pop, dtype=dftype))
-                          if self.rule.pre_trace_tau is not None else None)
-        self.post_trace = (brainstate.HiddenState(jnp.zeros(self._n_post_pop, dtype=dftype))
-                           if self.rule.post_trace_tau is not None else None)
+        self.pre_trace = self._alloc_trace(self._pre_trace_spec, self._n_pre_pop, dftype)
+        self.post_trace = self._alloc_trace(self._post_trace_spec, self._n_post_pop, dftype)
         self.rng = brainstate.State(jax.random.key(0)) if self.rule.stochastic else None
 
     # -- helpers -----------------------------------------------------------
+    @staticmethod
+    def _alloc_trace(spec, n, dftype):
+        """Per-neuron trace State: 1-D ``(n,)`` for single tau, ``(n, k)`` for multi."""
+        if spec is None:
+            return None
+        kind, taus = spec
+        shape = (n,) if kind == 'single' else (n, len(taus))
+        return brainstate.HiddenState(jnp.zeros(shape, dtype=dftype))
+
+    @staticmethod
+    def _advance_trace(state_obj, spec, x_full, dt, gather, E):
+        """Decay-then-add a per-neuron trace (current spike included), gather per edge.
+
+        Returns ``(trace_edge (E,), traces_edge (E, k))``. ``spec`` ``None`` ->
+        zeros. Single tau keeps the 1-D State + ``(E,)`` gather (``(E, 1)``
+        matrix view); a tuple of taus decays each column by its own tau and
+        adds the spike vector to every column.
+        """
+        if spec is None:
+            return jnp.zeros((E,)), jnp.zeros((E, 0))
+        kind, taus = spec
+        if kind == 'single':
+            state_obj.value = state_obj.value * jnp.exp(-dt / taus) + x_full
+            e = state_obj.value[gather]                              # (E,)
+            return e, e[:, None]                                     # (E, 1)
+        taus_arr = jnp.asarray(taus)                                 # (k,)
+        state_obj.value = state_obj.value * jnp.exp(-dt / taus_arr) + x_full[:, None]
+        g = state_obj.value[gather]                                  # (E, k)
+        return g[:, 0], g
     @staticmethod
     def _t_dt_ms():
         t = brainstate.environ.get('t')
@@ -299,19 +356,18 @@ class EventPlasticProj(brainstate.nn.Module):
 
         t_now, dt = self._t_dt_ms()
 
-        # per-neuron traces (decay-then-add, gather post-update)
-        if self.pre_trace is not None:
-            tau = u.Quantity(self.rule.pre_trace_tau).to_decimal(u.ms)
-            self.pre_trace.value = self.pre_trace.value * jnp.exp(-dt / tau) + x_full
-            pre_trace_edge = self.pre_trace.value[self.pre_local_idx[self._pre_idx]]
-        else:
-            pre_trace_edge = jnp.zeros((self._E,))
+        # per-neuron traces (decay-then-add, gather post-update). Single tau ->
+        # 1-D State + (E,) edge trace; a tuple of taus -> (N, k) State + (E, k).
+        pre_trace_edge, pre_traces_edge = self._advance_trace(
+            self.pre_trace, self._pre_trace_spec, x_full, dt,
+            self.pre_local_idx[self._pre_idx], self._E)
         if self.post_trace is not None and post_full is not None:
-            tau = u.Quantity(self.rule.post_trace_tau).to_decimal(u.ms)
-            self.post_trace.value = self.post_trace.value * jnp.exp(-dt / tau) + post_full
-            post_trace_edge = self.post_trace.value[self.post_local_idx[self._post_idx]]
+            post_trace_edge, post_traces_edge = self._advance_trace(
+                self.post_trace, self._post_trace_spec, post_full, dt,
+                self.post_local_idx[self._post_idx], self._E)
         else:
             post_trace_edge = jnp.zeros((self._E,))
+            post_traces_edge = jnp.zeros((self._E, 0))
 
         key = jax.random.key(0)
         if self.rng is not None:
@@ -321,7 +377,7 @@ class EventPlasticProj(brainstate.nn.Module):
 
         state = {'weight': self.weight.value, **{k: v.value for k, v in self.aux.items()}}
         ctx = KernelContext(pre_fired, post_fired, pre_trace_edge, post_trace_edge,
-                            t_now, dt, key)
+                            t_now, dt, key, pre_traces_edge, post_traces_edge)
         new_state, w_eff = self.rule.update(state, ctx)
         self.weight.value = new_state['weight']
         for k, v in self.aux.items():
