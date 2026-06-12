@@ -159,6 +159,7 @@ from .mat2_psc_exp import mat2_psc_exp
 from .mcculloch_pitts_neuron import mcculloch_pitts_neuron
 from .mip_generator import mip_generator
 from .multimeter import multimeter
+from .voltmeter import voltmeter
 from .noise_generator import noise_generator
 from .poisson_generator import poisson_generator
 from .poisson_generator_ps import poisson_generator_ps
@@ -255,6 +256,7 @@ __all__ = [
     'correlomatrix_detector',
     'correlospinmatrix_detector',
     'multimeter',
+    'voltmeter',
     'spike_recorder',
     'spin_detector',
     'volume_transmitter',
