@@ -356,5 +356,65 @@ class TestMcCullochPittsNeuron(unittest.TestCase):
             self.assertEqual(float(out[0]), 1.0)
 
 
+class TestMcCullochPittsStochasticForLoop(unittest.TestCase):
+    r"""Stochastic (Poisson-timed) updates must work inside ``for_loop``.
+
+    Regression tests for a bug where stochastic mode drew its inter-update
+    interval from ``brainstate.environ.get('key')``, which is *not* threaded by
+    ``brainstate.transform.for_loop``. With no key, ``t_next`` never advanced
+    (it stays at its ``-1e7`` init), so ``should_update`` was always true and the
+    neuron updated every step — collapsing the Poisson(tau_m) gate to
+    deterministic every-step dynamics and ignoring the seed entirely. The fix
+    gives the neuron a self-managed ``rng_key`` state (+ ``rng_seed`` argument),
+    mirroring ``ginzburg_neuron``.
+    """
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+        self.dt = 0.1 * u.ms
+        self.tau_m = 10.0 * u.ms
+
+    def _run(self, drive, rng_seed):
+        import numpy as np
+        from brainstate import transform, environ
+        n_steps = drive.shape[0]
+        times = u.math.arange(n_steps) * self.dt
+        brainstate.random.seed(rng_seed)
+        with environ.context(dt=self.dt):
+            neuron = mcculloch_pitts_neuron(1, theta=0.5 * u.mV, tau_m=self.tau_m,
+                                            stochastic_update=True, rng_seed=rng_seed)
+            brainstate.nn.init_all_states(neuron)
+
+            def step(t, x):
+                with environ.context(t=t):
+                    return neuron.update(x=x * u.mV)
+
+            return np.asarray(transform.for_loop(step, times, drive)).reshape(-1)
+
+    def test_stochastic_update_is_poisson_gated_in_for_loop(self):
+        import numpy as np
+        # A drive that flips 0<->1 every 50 steps (5 ms) over 2000 ms = 400 flips.
+        # A correctly Poisson(tau_m=10 ms)-gated neuron samples the drive only
+        # ~once per 100 steps, so it cannot track every flip; a buggy every-step
+        # neuron tracks all ~399 flips.
+        n_steps = 20000
+        drive = ((np.arange(n_steps) // 50) % 2).astype(float)
+        y = self._run(drive, rng_seed=0)
+        n_changes = int(np.sum(np.abs(np.diff(y)) > 0.5))
+        drive_flips = int(np.sum(np.abs(np.diff(drive)) > 0.5))
+        self.assertGreater(drive_flips, 350)               # the drive really does flip a lot
+        self.assertLess(n_changes, drive_flips - 100)      # but the neuron does NOT track every flip
+
+    def test_stochastic_update_depends_on_seed(self):
+        import numpy as np
+        # Constant supra-threshold drive: a Poisson-gated neuron turns on at its
+        # first (random) update time, which differs across seeds.
+        n_steps = 4000
+        drive = np.ones(n_steps)
+        y0 = self._run(drive, rng_seed=0)
+        y1 = self._run(drive, rng_seed=7)
+        self.assertFalse(np.array_equal(y0, y1))           # the seed must matter
+
+
 if __name__ == '__main__':
     unittest.main()

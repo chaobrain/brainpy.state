@@ -136,6 +136,45 @@ def _samples_to_array(samples):
          for x in samples], dtype=float))
 
 
+def _stack_functions(x):
+    """Coerce a correlation/covariance *function* to a 2-D ``(n_seeds, n_lags)`` array.
+
+    Accepts a single function (a 1-D sequence / :mod:`saiunit` quantity over lags)
+    -> ``(1, n_lags)``, or a sequence of per-seed functions -> ``(n_seeds, n_lags)``.
+    Units are stripped element-wise (a covariance function is compared on its bare
+    magnitude). Used by the ``autocorr`` statistic.
+    """
+    if isinstance(x, u.Quantity):
+        m = np.atleast_1d(np.asarray(u.get_mantissa(x), dtype=float))
+        return m[None, :] if m.ndim == 1 else m
+    seq = list(x)
+    if seq and isinstance(seq[0], (u.Quantity, np.ndarray, list, tuple)):
+        return np.asarray([_bare(f) for f in seq], dtype=float)   # per-seed functions
+    return _bare(seq)[None, :]                                     # single function
+
+
+def _seed_mean_compare(reference_samples, candidate_samples, *, bound_rtol, metric):
+    """Seed-aggregated relative comparison of two scalar samples (mean / CV paths).
+
+    The pass test on the seed mean is ``|mean(cand) - mean(ref)| <= bound_rtol *
+    |mean(ref)|`` (division-free, so an all-zero / zero-variance reference is safe);
+    ``error`` is the guarded relative difference. Shared by the ``mean`` and ``cv``
+    statistics, which differ only in the tolerance they pass as ``bound_rtol``.
+    """
+    ref = _samples_to_array(reference_samples)
+    cand = _samples_to_array(candidate_samples)
+    rmean, cmean = float(np.mean(ref)), float(np.mean(cand))
+    bound = bound_rtol * abs(rmean)
+    passed = bool(abs(cmean - rmean) <= bound)
+    rel = abs(cmean - rmean) / max(abs(rmean), _TINY)
+    if passed:
+        detail = f"[{metric}] ok (rel={rel:.4g} <= {bound_rtol:.3g}, n={ref.size})"
+    else:
+        detail = (f"[{metric}] mean cand={cmean:.6g} ref={rmean:.6g} rel={rel:.4g} "
+                  f"> rtol {bound_rtol:.3g} (n={ref.size}/{cand.size})")
+    return ComparisonResult(passed, rel, bound_rtol, metric, detail)
+
+
 def _mantissas(reference, candidate, atol):
     """Reduce (reference, candidate, atol) to plain float arrays in a common basis."""
     if isinstance(atol, u.Quantity):
@@ -217,50 +256,85 @@ def compare_distributional(reference_samples, candidate_samples, *, tol, metric=
     """Multi-seed statistical comparison: aggregate each side, then compare.
 
     PRNG streams diverge between NEST and JAX, so this **never** compares
-    per-sample. The pass test on the seed mean is
-    ``|mean(cand) - mean(ref)| <= rate_rtol * |mean(ref)|`` (division-free, so an
-    all-zero / zero-variance reference is safe). ``error`` reports the guarded
-    relative difference for readability.
+    per-sample. Three statistics are supported, selected by ``statistic``:
+
+    * ``"mean"`` (default) — seed-mean firing-rate / scalar parity. Pass test
+      ``|mean(cand) - mean(ref)| <= rate_rtol * |mean(ref)|`` (division-free, so an
+      all-zero / zero-variance reference is safe); ``error`` is the guarded
+      relative difference.
+    * ``"cv"`` — coefficient-of-variation (e.g. of ISIs). Same seed-mean test as
+      ``"mean"`` but against the tighter ``mean_diff_pct`` bound (CV is already a
+      normalized statistic).
+    * ``"autocorr"`` — auto-/cross-correlation or covariance **functions** (1-D
+      over lags) from the correlation detectors. Each side is a single function or
+      a per-seed sequence of functions; they are seed-averaged and compared
+      element-wise, ``max_lag |cand - ref| <= autocorr_max_diff`` (absolute).
 
     Parameters
     ----------
-    reference_samples, candidate_samples : sequence of float or saiunit.Quantity
-        One metric value per seed, from NEST (``reference``) and brainpy.state
-        (``candidate``).
+    reference_samples, candidate_samples : sequence of float / saiunit.Quantity, or function(s)
+        For ``"mean"``/``"cv"``: one metric value per seed, from NEST
+        (``reference``) and brainpy.state (``candidate``). For ``"autocorr"``: a
+        single correlation/covariance function (1-D over lags) or a sequence of
+        per-seed functions.
     tol : DistributionalTolerance
-        Tolerance (e.g. ``tolerance_conventions.CAT_D``).
+        Tolerance (e.g. ``tolerance_conventions.CAT_D``). ``"mean"`` reads
+        ``rate_rtol``, ``"cv"`` reads ``mean_diff_pct``, ``"autocorr"`` reads
+        ``autocorr_max_diff``.
     metric : str, optional
         Label for diagnostics.
-    statistic : str, optional
-        Aggregation statistic. Only ``"mean"`` is currently supported.
+    statistic : {"mean", "cv", "autocorr"}, optional
+        Aggregation statistic. Default ``"mean"``.
 
     Returns
     -------
     ComparisonResult
 
+    Raises
+    ------
+    ValueError
+        If ``statistic`` is not one of ``"mean"``, ``"cv"``, ``"autocorr"``.
+
     Examples
     --------
     .. code-block:: python
 
+        >>> import numpy as np
         >>> from brainpy_state._nest._validation import nest_compare as nc
         >>> from brainpy_state._nest._validation import tolerance_conventions as tc
         >>> nc.compare_distributional([10., 11., 9.], [10.1, 10.9, 9.1], tol=tc.CAT_D).passed
         True
+        >>> f = np.array([0.0, 0.5, 1.0, 0.5, 0.0])     # a covariance function
+        >>> nc.compare_distributional(f, f + 0.01, tol=tc.CAT_D, statistic="autocorr").passed
+        True
     """
-    if statistic != "mean":
-        raise ValueError(f"unsupported statistic {statistic!r} (only 'mean')")
-    ref = _samples_to_array(reference_samples)
-    cand = _samples_to_array(candidate_samples)
-    rmean, cmean = float(np.mean(ref)), float(np.mean(cand))
-    bound = tol.rate_rtol * abs(rmean)
-    passed = bool(abs(cmean - rmean) <= bound)
-    rel = abs(cmean - rmean) / max(abs(rmean), _TINY)
-    if passed:
-        detail = f"[{metric}] ok (rel={rel:.4g} <= {tol.rate_rtol:.3g}, n={ref.size})"
-    else:
-        detail = (f"[{metric}] mean cand={cmean:.6g} ref={rmean:.6g} rel={rel:.4g} "
-                  f"> rate_rtol {tol.rate_rtol:.3g} (n={ref.size}/{cand.size})")
-    return ComparisonResult(passed, rel, tol.rate_rtol, metric, detail)
+    if statistic == "mean":
+        return _seed_mean_compare(reference_samples, candidate_samples,
+                                  bound_rtol=tol.rate_rtol, metric=metric)
+    if statistic == "cv":
+        # Coefficient of variation is already a normalized statistic; compare the
+        # seed mean within the (tighter) per-cell mean tolerance.
+        return _seed_mean_compare(reference_samples, candidate_samples,
+                                  bound_rtol=tol.mean_diff_pct, metric=metric)
+    if statistic == "autocorr":
+        # Correlation/covariance *functions* (1-D over lags), seed-averaged, then
+        # compared element-wise against the absolute autocorrelation tolerance.
+        ref = _stack_functions(reference_samples).mean(axis=0)
+        cand = _stack_functions(candidate_samples).mean(axis=0)
+        n = min(ref.size, cand.size)
+        diff = np.abs(ref[:n] - cand[:n])
+        idx = int(np.argmax(diff)) if n else 0
+        err = float(diff[idx]) if n else 0.0
+        bound = float(tol.autocorr_max_diff)
+        passed = bool(err <= bound)
+        if passed:
+            detail = f"[{metric}] ok (max|Δ|={err:.4g} <= {bound:.3g}, lags={n})"
+        else:
+            detail = (f"[{metric}] max|Δ|={err:.6g} at lag {idx} "
+                      f"> autocorr_max_diff {bound:.3g} (lags={n})")
+        return ComparisonResult(passed, err, bound, metric, detail)
+    raise ValueError(
+        f"unsupported statistic {statistic!r} (expected 'mean', 'cv', or 'autocorr')")
 
 
 def nest_compare(nest_fn, brainpy_fn, *, mode, tol, metric="metric", seeds=None,

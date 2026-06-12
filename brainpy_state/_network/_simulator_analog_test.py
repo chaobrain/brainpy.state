@@ -100,6 +100,27 @@ class TestAnalogRecording(unittest.TestCase):
         # No synaptic input -> I_syn_ex stays zero throughout.
         self.assertTrue(np.allclose(np.asarray(u.get_mantissa(isyn / u.pA)), 0.0))
 
+    def test_iaf_psc_exp_isyn_recordables_via_alias(self):
+        # iaf_psc_exp stores synaptic currents as lowercase i_syn_ex/i_syn_in;
+        # recording the NEST 'I_syn_ex'/'I_syn_in' names must resolve via alias,
+        # while iaf_psc_alpha's capital I_syn_ex still resolves directly.
+        from brainpy_state import iaf_psc_exp, spike_generator
+        sim = Simulator(dt=0.1 * u.ms)
+        neu = sim.create(iaf_psc_exp, 1)
+        s_ex = sim.create(spike_generator, spike_times=np.array([5.0]) * u.ms)
+        s_in = sim.create(spike_generator, spike_times=np.array([10.0]) * u.ms)
+        mm = sim.create(multimeter, record_from=['V_m', 'I_syn_ex', 'I_syn_in'])
+        sim.connect(s_ex, neu, weight=50. * u.pA)
+        sim.connect(s_in, neu, weight=-50. * u.pA)
+        sim.connect(mm, neu)
+        res = sim.simulate(20. * u.ms)
+        self.assertEqual(res.trace(mm, 'V_m').shape, (200, 1))
+        iex = np.asarray(u.get_mantissa(res.trace(mm, 'I_syn_ex') / u.pA)).reshape(-1)
+        iin = np.asarray(u.get_mantissa(res.trace(mm, 'I_syn_in') / u.pA)).reshape(-1)
+        self.assertGreater(iex.max(), 40.0)        # ex spike drives i_syn_ex positive
+        self.assertLess(iin.min(), -40.0)          # in spike drives i_syn_in negative
+        self.assertTrue(np.all(iex >= -1e-9))      # excitatory current never negative
+
     def test_unknown_recordable_raises(self):
         sim = Simulator(dt=0.1 * u.ms)
         neu = sim.create(iaf_psc_alpha, 1, params={**NPAR, 'I_e': 200. * u.pA})

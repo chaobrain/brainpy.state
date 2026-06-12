@@ -120,6 +120,62 @@ These ports drive four `Simulator` extensions reused by later clusters:
   rate=[…])` → a `k`-segment view; `connect(gen, neuron, weight=[…])` applies one
   signed weight per channel (`one_neuron_with_noise`, `balancedneuron`).
 
+## Recording & device demos (§3.4)
+
+Five of NEST's recording/device tutorials, each paired with a live-NEST parity
+test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any directly, e.g.
+`python examples/nest/recording_demo.py`.
+
+- **`multimeter_file.py`** — a `multimeter` records three analog recordables
+  (`V_m`, `I_syn_ex`, `I_syn_in`) from an `iaf_psc_exp` driven by two
+  `spike_generator`s (excitatory `+80 pA`, inhibitory `−40 pA`). The upstream
+  records `V_m`/`g_ex`/`g_in` from a conductance `iaf_cond_alpha` to an `ascii`
+  file; brainpy.state has neither a file backend (`devices-gap.md` P2) nor a
+  spike→conductance routing seam (a documented follow-up), so this is the
+  **in-memory, current-based** equivalent — same demo shape, traces read with
+  `res.trace(mm, name)`.
+- **`recording_demo.py`** — the recording-API tour: a `poisson_generator` (1 MHz,
+  refractory-saturating) drives an `iaf_psc_exp` into a `spike_recorder` and a
+  `multimeter`. NEST's `record_to` backend axis (ascii vs memory) collapses to
+  in-memory; the `time_in_steps` axis is reproduced post-hoc by `read_spikes`,
+  which returns spikes as integer step indices or in ms.
+- **`cross_check_mip_corrdet.py`** — a `mip_generator` (one shared parent Poisson,
+  per-child copy probability) emits two correlated trains whose cross-correlogram
+  is computed **two independent ways** — the built-in `correlation_detector` and a
+  hand-written `corr_spikes_sorted` reference — and cross-checked bit-for-bit. Both
+  devices are imperative host devices, so the demo runs **eagerly** (post-hoc, no
+  `for_loop`).
+- **`correlospinmatrix_detector_two_neuron.py`** — two coupled binary neurons (a
+  `ginzburg_neuron` driving a `mcculloch_pitts_neuron`) whose spin trains feed a
+  `correlospinmatrix_detector`; the demo reads back per-channel mean activities and
+  the `2×2` covariance matrix. The neurons run in one `for_loop` (the `n1→n2`
+  coupling reads `n1`'s pre-update spin); the detector is driven eagerly from the
+  recorded trains.
+- **`precise_spiking.py`** — the grid model `iaf_psc_exp` vs its precise twin
+  `iaf_psc_exp_ps` under the same DC drive across resolutions `dt ∈ {0.1, 0.5,
+  1.0}` ms. The grid model fires *on* the resolution grid; the precise model
+  resolves the spike **between** grid points (read from `last_spike_time`), so its
+  firing period barely moves with `dt`.
+
+Two further §3.4 demos are **blocked** and ship as skipped placeholders that
+raise `NotImplementedError` with the gap reason:
+
+- **`plot_weight_matrices.py`** and **`synapsecollection.py`** both need post-hoc
+  connection introspection — `GetConnections` / `SynapseCollection` to enumerate
+  realized synapses and read per-edge weights (`network-api-gap.md` §3.1, §3.8) —
+  which the explicit `Simulator` does not expose. They will be ported once the
+  planned `nest_compat` facade lands.
+
+These ports add one reusable seam on top of the §3.2 vocabulary:
+
+- **E — eager imperative devices.** `mip_generator`, `correlation_detector`, and
+  `correlospinmatrix_detector` are NumPy-RNG / Python-loop host devices that cannot
+  enter a JAX `for_loop`. The pattern is to obtain the spike data first (a device
+  `.simulate(n_steps)` multiplicity matrix, or a State-tapped binary train) and
+  then drive the detector **post-hoc**, feeding only event-carrying steps and
+  stamping each at `step + 1` (NEST's one-step delivery latency, which cancels in
+  the lag difference). Nothing imperative runs inside the `for_loop`.
+
 ## `order` and `comm`
 
 `order` sets the network size (`NE = 4·order`, `NI = order`). `build(order=...,
@@ -182,3 +238,31 @@ The deterministic single-neuron traces match NEST to ~1e-14 mV because
 `iaf_psc_alpha`'s exact propagator and the analog State tap are bit-faithful; the
 `balancedneuron` objective is steep near the root, so the bisected inhibitory rate
 is identical to NEST despite the PRNG-divergent Poisson drive.
+
+### Recording & device demos (§3.4)
+
+Deterministic recordings are compared per-sample against live NEST; PRNG-driven
+detectors are compared as a seed-mean statistic (category D, 5 %); the precise
+spiking contrast is compared as an onset-aligned spike sequence (category E).
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `multimeter_file` | `V_m`/`I_syn_ex`/`I_syn_in` trace, max\|Δ\| | machine precision (`CAT_B_GEN`, 2-step align) |
+| `recording_demo` (4 seeds) | firing rate | refractory-saturated → identical |
+| `cross_check_mip_corrdet` (5 seeds) | normalized cross-correlogram, max\|Δ\| | within `CAT_D` (5e-2) |
+| `correlospinmatrix_..._two_neuron` (5 seeds) | mean activities ; covariance | means \|Δ\| ≤ 0.013 ; cov max\|Δ\| ≈ 0.014 |
+| `precise_spiking` (`dt∈{0.1,0.5,1.0}`) | onset-aligned spike times ; count | ≤ 1 step ; 10 = 10 |
+
+`multimeter_file`'s three recordables are exact analytic-propagator curves, so
+they match to machine precision once the constant two-step generator-delivery
+offset is aligned (`CAT_B_GEN`). `recording_demo`'s 1 MHz drive pins the neuron to
+its refractory-saturated rate, so the rate is identical across seeds despite the
+PRNG-divergent Poisson stream. The two correlation detectors are imperative host
+devices that mirror NEST bit-for-bit; the parity that PRNG-diverges is the
+*input* train, so `cross_check_mip_corrdet` and `correlospinmatrix` are compared
+as seed-mean correlograms / activities (`CAT_D`). `precise_spiking` is fully
+deterministic but the DC drive lands after a constant connection-delay onset
+(NEST's default 1 ms vs the Simulator one-step convention), so parity is asserted
+on the **onset-aligned** spike sequence — exact spike *count* and spike times
+*relative to the first spike* (the physically meaningful firing period and its
+resolution dependence).
