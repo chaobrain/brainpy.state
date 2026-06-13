@@ -138,6 +138,71 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 07-voltage-coupled-clopath — 2026-06-13
+
+- **Shipped:** **primitive #2 `VoltageCoupledPlasticProj`** (the post-state reader) +
+  the rebuilt voltage-based **`clopath_synapse`** spec+rule proven on it. The substrate
+  gains a post-neuron analog-State reader (`_network/_event_plastic.py`); `clopath_synapse`
+  becomes a frozen spec + pure `update(state, ctx) -> (new_state, w_eff)` kernel
+  (`_nest/clopath_synapse.py`, legacy history-buffer port moved to
+  `_legacy_clopath_synapse.py`); `Simulator.connect` dispatches to
+  `VoltageCoupledPlasticProj` when the spec declares `post_state_reads`. Ships a NEST-free
+  `clopath_synapse_rule_test.py` (**100 %** line coverage, 19 tests) and a live-NEST
+  `_validation/clopath_synapse_parity_test.py` (+ `_clopath_drive.py`). Branch
+  `nest-goal/07-voltage-coupled-clopath`.
+- **Parity (live NEST 3.9.0):** **neuron analog states** (`V`/`u_bar_plus`/`u_bar_minus`)
+  under a subthreshold dc drive match **sample-for-sample** (CAT_A, realised
+  `< 5e-7` mV — the Simulator+multimeter aligns to NEST's recorder with **no** index
+  shift). **Spike-pairing** (canonical `clopath_synapse_spike_pairing.py`, 10 trains
+  10–50 Hz): **stored weight within 3.31 %** of NEST (pure-LTD train **0.002 %**; LTP grows
+  with frequency), with **direction and frequency-ordering exact**. Voltage-clamp LTD
+  (sustained sub-θ₊ depolarization) near-exact.
+- **API discovered/changed (08-dopamine + Urbanczik reuse this verbatim):**
+  - **Post-state reader.** A rule declares `post_state_reads = (names…)`; the substrate
+    gathers those post-neuron State columns per edge each step into
+    **`ctx.post_states = {name: (E,)}`** — a named dict of **unit-stripped mantissas** in
+    sorted-by-pre (CSR) edge order, via `{n: u.get_mantissa(getattr(self.post, n).value)
+    [self._post_gather]}` with `_post_gather = post_local_idx[_post_idx]`. `EventPlasticProj`
+    keeps a no-op `_gather_post_states()->None` seam (primitive #1 sees `ctx.post_states is
+    None`); `VoltageCoupledPlasticProj` overrides it and **raises** without a `post`
+    population or a non-empty `post_state_reads`. Reads are **read-only gathers**.
+  - **Filters live on the neuron already.** Both Clopath neurons expose
+    `u_bar_plus`/`u_bar_minus`/`u_bar_bar` as `brainstate.HiddenState` — **no neuron change**
+    to surface them as reads (record once, reuse).
+  - **`x_bar = ctx.pre_trace / tau_x`** (declare `pre_trace_tau = tau_x`): NEST increments
+    `x_bar` by `1/tau_x` per spike, the substrate by 1 — divide to match.
+  - **mV weight for the delta neuron.** `aeif_psc_delta_clopath` is a *delta* model (input
+    seam is a **mV voltage jump**), so a bare `clopath_synapse` weight defaults to **mV**
+    (not pA); `connect`'s bare-weight override preserves the spec's unit. `hh_psc_alpha_clopath`
+    still wants explicit pA.
+- **Gotchas (NEST fidelity):**
+  - **LTP carries a `* dt`; LTD does not.** NEST `ClopathArchivingNode::write_LTP_history`
+    multiplies its per-step `dw` by `Time::get_resolution().get_ms()` (so the accumulated
+    potentiation is a resolution-independent **integral**); `write_LTD_history` has no such
+    factor. **Verify against the C++ source, not nominal unit docs** — `A_LTP` reads as
+    `1/mV²` which *looks* dt-free; dropping the factor made LTP ~10–20× too large. Caught by
+    measuring vs live NEST.
+  - **`A_LTD`/`A_LTP`/`theta_plus`/`theta_minus` are NEST *neuron* params** (the archiving
+    node precomputes Δw); the self-contained spec+rule moves them onto the **synapse spec**
+    (mirrors `stdp_synapse`'s `tau_minus` move). The filter constants `tau_u_bar_*` stay on
+    the neuron. Parity sets identical values on both.
+  - **`delay_u_bars` aligned to one step.** NEST evaluates LTP/LTD against ring-buffered post
+    voltages delayed by `delay_u_bars` (default **4.0 ms**); the online reader has no analog
+    ring buffer and reads the post State with the substrate's intrinsic **one-step** lag
+    (projections run before neurons), so parity sets `delay_u_bars = 0.1 ms`. The 4.0 ms
+    default is **not reproducible** online — documented divergence.
+  - **The residual LTP gap is structural, not a bug.** Our formula on NEST's *own* recorded
+    voltages (with the one-step u_bar delay) reproduces NEST's Δw to ~4.6 %; the rest is the
+    online-instantaneous-read vs NEST-deferred-history (decayed-`x_bar` per-LTP-entry sum) +
+    a one-step **event-delivery** lag on the post driver. It grows with pairing frequency, so
+    the parity test asserts a **documented 5 % band + exact direction/ordering**, not 1e-7.
+  - **Spec doctests + `--doctest-modules`.** A spec class sets `__module__='brainpy.state'`,
+    so `DocTestFinder` (filtering by `__module__`) **skips it** when scanning the file —
+    `--doctest-modules` collects 0. The `>>>` examples are still valid (verify by running
+    `DocTestFinder().find(cls)` directly); keep the 8-space code-block indent for consistency.
+  - **Coverage:** use the **directory-path** form `--cov=brainpy_state/_nest` (per cluster-04/05);
+    the module-dotted form coredumps.
+
 ### 05-stdp-nearest-neighbour — 2026-06-13
 
 - **Shipped:** the **4 remaining nearest-neighbour / hardware STDP models** rebuilt as
