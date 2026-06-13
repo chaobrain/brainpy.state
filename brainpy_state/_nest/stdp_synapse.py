@@ -87,6 +87,10 @@ class stdp_synapse:
     steps, whereas NEST defers it to the next pre spike; the two coincide at
     pre-spike (send) times, so parity is asserted there.
 
+    **Parity note.** The consolidated NEST vs. brainpy.state divergence reference
+    — trace-storage move, the family parameter-location map, and the parity-test
+    links — is in :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-tau-minus`).
+
     References
     ----------
     .. [1] NEST ``models/stdp_synapse.h``; Morrison et al. (2008); Guetig et al. (2003).

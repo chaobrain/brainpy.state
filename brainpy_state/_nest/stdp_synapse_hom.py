@@ -45,6 +45,10 @@ class stdp_synapse_hom(stdp_synapse):
     substrate's per-post ``K-`` trace so STDP runs standalone. See ``CONTEXT.md``
     Lessons (cluster 04).
 
+    **Parity note.** The consolidated NEST vs. brainpy.state divergence reference
+    — trace-storage move, the family parameter-location map, and the parity-test
+    links — is in :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-tau-minus`).
+
     References
     ----------
     .. [1] NEST ``models/stdp_synapse_hom.h``; Guetig et al. (2003); Morrison et al. (2008).

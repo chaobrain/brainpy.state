@@ -122,6 +122,11 @@ class clopath_synapse:
     the substrate's intrinsic one-step lag (projections run before neurons), so live
     parity aligns NEST's ``delay_u_bars`` to one resolution step.
 
+    **Parity note.** The parameter-location moves, the ``delay_u_bars`` divergence
+    and its 5 % band, and the parity test are documented in
+    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-param-location`,
+    :ref:`stdp-numerical-divergences`).
+
     References
     ----------
     .. [1] Clopath, Büsing, Vasilaki, Gerstner (2010). Connectivity reflects coding:

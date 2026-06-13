@@ -96,6 +96,10 @@ class stdp_nn_symm_synapse:
     post-spike steps, whereas NEST defers it to the next pre spike; the two coincide at
     pre-spike (send) times, so parity is asserted there.
 
+    **Parity note.** The exact nearest-neighbour pairing convention, the NEST
+    source citation, and the single-pair regression test are documented in
+    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-nn-symm`).
+
     References
     ----------
     .. [1] NEST ``models/stdp_nn_symm_synapse.h`` (``send()`` lines 246-297; ``facilitate_``

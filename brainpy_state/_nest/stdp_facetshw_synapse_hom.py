@@ -138,6 +138,10 @@ class stdp_facetshw_synapse_hom:
     pre's readout. Exact pre/post coincidence follows the substrate second-latest
     convention and is not asserted against NEST.
 
+    **Parity note.** The charge-accumulation / LUT-readout pairing convention, the
+    NEST keys and single-driver scope, and the parity test are documented in
+    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-facetshw`).
+
     References
     ----------
     .. [1] NEST ``models/stdp_facetshw_synapse_hom.h`` / ``_impl.h`` (``send()``: readout

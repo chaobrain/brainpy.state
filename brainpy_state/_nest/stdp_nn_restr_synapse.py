@@ -106,6 +106,10 @@ class stdp_nn_restr_synapse:
     identical at every send, so the trajectories coincide where the ``weight_recorder``
     samples (pre-spike steps).
 
+    **Parity note.** The exact nearest-neighbour pairing convention, the NEST
+    source citation, and the single-pair regression test are documented in
+    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-nn-restr`).
+
     References
     ----------
     .. [1] NEST ``models/stdp_nn_restr_synapse.h`` (``send()`` 244-307: facilitation gated
