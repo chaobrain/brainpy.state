@@ -128,6 +128,7 @@ from ._network import (
     all_to_all,
     one_to_one,
     fixed_indegree,
+    pairwise_bernoulli,
 )
 
 from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
@@ -563,6 +564,7 @@ __all__ = [
     'all_to_all',
     'one_to_one',
     'fixed_indegree',
+    'pairwise_bernoulli',
     'network',
     'dist',
 ]
