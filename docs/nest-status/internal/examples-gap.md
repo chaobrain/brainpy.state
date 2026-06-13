@@ -128,17 +128,36 @@ need connection-weight introspection (`GetConnections`/`SynapseCollection`,
 
 ### 3.5 Single-neuron model demos
 
+Seven ported in cluster 11 (`Simulator` API, live-NEST parity). The ports added
+two reusable connection seams plus a batch of recordable aliases. **F**
+multi-receptor routing: `connect(..., receptor_type=k)` selects a synaptic port;
+conductance models bridge it through a per-port `w_by_rec` weight (unit from
+`receptor_input_unit`), current-based GLIF models pull a keyed
+`sum_delta_inputs(label=f'receptor_{k}')`. **G** spike-multiplicity relay: the new
+`parrot_neuron` repeats every incoming spike *including* multiplicity, and the
+spike substrate honours a `_relays_multiplicity` flag so the relayed count is
+captured raw instead of binarised. The ports also extended `_RECORDABLE_ALIAS`
+with HH gating (`Act_m`/`Inact_h`/`Act_n`), GLIF threshold components
+(`threshold`/`threshold_spike`/`threshold_voltage`), per-port conductance (`g_k`,
+resolved from a list, a last-axis index, or a flat `g_syn`), `ASCurrents_sum`,
+summed PSC `I_syn`, and injected current `I`.
+
+`gif_pop_psc_exp.py` / `gif_population.py` are **deferred to cluster 12/14**: both
+are *population* (mean-field) GIF models, not single-neuron traces — they need a
+population-density update that is out of scope for the single-neuron parity
+harness this cluster builds.
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `hh_psc_alpha.py` | missing | partial: `examples/106_COBA_HH_2007.py` uses HH but in a network | |
-| `hh_phaseplane.py` | missing | none | HH phase-plane analysis — pedagogical |
-| `aeif_cond_beta_multisynapse.py` | missing | none | AdEx multi-receptor demo |
-| `gif_cond_exp_multisynapse.py` | missing | none | |
-| `gif_pop_psc_exp.py` | missing | none | population GIF |
-| `gif_population.py` | missing | none | |
-| `glif_cond_neuron.py` | missing | none | |
-| `glif_psc_neuron.py` | missing | none | |
-| `glif_psc_double_alpha_neuron.py` | missing | none | |
+| `hh_psc_alpha.py` | implemented | `examples/nest/hh_psc_alpha.py` | step-current + F–I sweep; subthreshold `V_m`+gating `CAT_A` (~1e-3 mV), spike counts match (seam A/B) |
+| `hh_phaseplane.py` | implemented | `examples/nest/hh_phaseplane.py` | V–n phase plane; `n`-nullcline within one grid step of analytic `n_inf(V)` (NEST-free) |
+| `aeif_cond_beta_multisynapse.py` | implemented | `examples/nest/aeif_cond_beta_multisynapse.py` | 4-receptor AdEx; `V_m` ~1e-6 mV, `g_1..g_4` machine precision (seam F). **`n=1` only** — see §5 broadcasting limitation |
+| `gif_cond_exp_multisynapse.py` | implemented | `examples/nest/gif_cond_exp_multisynapse.py` | multi-receptor GIF; subthreshold `V_m` machine precision (seam F) |
+| `gif_pop_psc_exp.py` | deferred | none | population GIF — deferred to cluster 12/14 (mean-field, not single-neuron) |
+| `gif_population.py` | deferred | none | population GIF — deferred to cluster 12/14 |
+| `glif_cond_neuron.py` | implemented | `examples/nest/glif_cond_neuron.py` | 5 mechanism levels; `g_1`/`g_2` full-trace + spike counts exact, subthreshold `V_m`/`threshold` ~1e-13 mV (seam F) |
+| `glif_psc_neuron.py` | implemented | `examples/nest/glif_psc_neuron.py` | 5 levels, current-based; `I_syn`/`I` full-trace ~2e-15 pA + counts exact, `V_m` ~0.03 mV (`CAT_B_ALIGNED`); Poisson window via parrot (seam F/G) |
+| `glif_psc_double_alpha_neuron.py` | implemented | `examples/nest/glif_psc_double_alpha_neuron.py` | 3 kernel configs; subthreshold `V_m`/`I_syn` full-trace ~1e-13 mV / ~1e-15 pA (seam F) |
 | `iaf_tum_2000_short_term_depression.py` | missing | none | LIF + integrated STP, depression regime |
 | `iaf_tum_2000_short_term_facilitation.py` | missing | none | LIF + integrated STP, facilitation regime |
 | `mc_neuron.py` | missing | none | multi-compartment demo — exercises `iaf_cond_alpha_mc` (flagged experimental) |
@@ -224,6 +243,14 @@ networks, COBA, and HH-COBA). Concretely:
   an end-to-end NEST-comparison test (firing rate, mean ISI, CV of ISI).
   Skipping the example means losing the regression — and losing the
   promotion-blocking parity check.
+- **`aeif_cond_beta_multisynapse` multi-receptor broadcasting (`n>1`).** The
+  `aeif_cond_beta_multisynapse.py` port (§3.5) drives a **single** neuron
+  (`n=1`). With `n>1` neurons *and* multiple receptor ports, the per-port
+  conductance state does not broadcast correctly against the population axis
+  (the receptor axis and the neuron axis collide), so a multi-neuron
+  multi-receptor AdEx population is not yet trustworthy. Single-neuron
+  multi-receptor traces are exact; the limitation is purely the `n>1 ×
+  receptors` shape. Fix belongs with the `aeif` model, not the example.
 - **Multimeter file-backend gap.** `multimeter_file.py` and `recording_demo.py`
   use NEST's `ascii` / `sionlib` backends; the repo doesn't have these
   (`devices-gap.md` P2). Ports either skip the file-backend step or rely on

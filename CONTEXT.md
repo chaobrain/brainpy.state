@@ -138,6 +138,96 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 11-single-neuron-models-1 — 2026-06-13
+
+- **Shipped:** the **§3.5 single-neuron model-demo cluster** — 7 ports under
+  `examples/nest/` each with a live-NEST trace-parity test in `_nest/_validation/`:
+  `hh_psc_alpha`, `hh_phaseplane`, `aeif_cond_beta_multisynapse`,
+  `gif_cond_exp_multisynapse`, and the three GLIF demos
+  (`glif_cond_neuron`, `glif_psc_neuron`, `glif_psc_double_alpha_neuron`). Cross-cutting
+  reusable seams: **(F)** a multi-receptor `connect(receptor_type=k)` deposit seam in
+  `_network/_event_proj.py` + a Simulator bridge in `_network/_simulator.py`; **(G)** a new
+  `parrot_neuron` model (`_nest/parrot_neuron.py`) with a spike-multiplicity relay honoured by
+  the substrate; and a batch of callable **recordable aliases** (HH gating, GLIF threshold
+  components, per-port `g_k`, `ASCurrents_sum`, summed PSC `I_syn`, injected `I`). Docs:
+  `examples/nest/README.md` §3.5 section + parity table, `examples-gap.md` §3.5 marked
+  implemented + `gif_pop` deferral + aeif `n>1` limitation. Branch
+  `worktree-nest-goal+11-single-neuron-models-1`; PR #57.
+- **Parity (one-step recorder align: drop bp[0], `align_steps=1`):**
+  - `hh_psc_alpha` — subthreshold `V_m`+`Act_m`/`Inact_h`/`Act_n` `CAT_A` (~1e-3 mV); F–I counts match.
+  - `hh_phaseplane` — NEST-free: `n`-nullcline within one grid step of analytic `n_inf(V)`.
+  - `aeif_cond_beta_multisynapse` — `V_m` ~1e-6 mV; `g_1..g_4` machine precision.
+  - `gif_cond_exp_multisynapse` — subthreshold `V_m` machine precision.
+  - `glif_cond_neuron` (5 levels) — `g_1`/`g_2` full-trace machine precision; `V_m`/`threshold`
+    ~1e-13 mV; spike counts exact.
+  - `glif_psc_neuron` (5 levels) — `I_syn`/`I` full-trace ~2e-15 pA + counts exact; `V_m`
+    ~0.03 mV (`CAT_B_ALIGNED`); 150 kHz Poisson window matches NEST in aggregate (59/88/27/26/26
+    vs 59/89/27/27/26) once the parrot relays multiplicity.
+  - `glif_psc_double_alpha_neuron` (3 cfgs) — sub-threshold `V_m`/`I_syn` full-trace ~1e-13 mV /
+    ~1e-15 pA.
+- **API discovered/changed (reusable by all multi-receptor / derived-recordable models):**
+  - **`connect(..., receptor_type=k)` is dual-mode, auto-detected by `inspect`-ing the post's
+    `update` signature.** Models exposing **`w_by_rec`** (`iaf`/`aeif`/`gif_cond_exp_multisynapse`)
+    take the **blob** path: one `add_delta_input(key, (N, n_receptors))` deposit, assembled by the
+    Simulator bridge, which scales the gathered mantissa by the post's **`receptor_input_unit`**
+    class attr (nS for conductance, pA for current). Models without it (the 3 GLIF models) take the
+    **label-keyed** path: one `add_delta_input(key, col_k, label='receptor_k')` per port; the model
+    self-pulls `sum_delta_inputs(label='receptor_k')`. 1-based `k` → internal port `k-1`;
+    `'uniform'` keeps the random draw; out-of-range int and non-`'uniform'` string both raise.
+  - **Callable `_RECORDABLE_ALIAS` entries.** `_read_recordable(pop, name)` invokes a callable
+    alias as `entry(pop)`: `_g_port(k)` (list / single-State-last-axis / `g_syn` fallback, else
+    clear `KeyError`), `_asc_sum`, `_psc_sum` (prefers `get_I_syn()`, else `Σ y2`), plus tuple
+    aliases (`Act_m`→`m`, `threshold*`, `'I'`→`I_stim`). Add per-model recordables here, not in the
+    neuron.
+  - **`_relays_multiplicity` substrate flag.** The phase-2 capture binarises `Neuron` outputs at
+    `>=0.5` **unless** the model sets `_relays_multiplicity=True` (then the raw per-step count is
+    kept). `parrot_neuron` uses it to relay `get_mantissa(inp)` verbatim. Because the relay reads
+    the *summed* delta input as the count, `EventProjection.__init__` **enforces the unit gate**:
+    a connection into a `_relays_multiplicity` post raises `ValueError` unless its weight is the
+    unitless `1.0` (NEST ignores weights into a parrot; a non-unit weight would silently scale the
+    relayed multiplicity).
+- **Gotchas:**
+  - **NEST `poisson_generator` emits Poisson *counts* (multiplicity >1/step):** `rate·dt`
+    (150000 Hz · 0.05 ms = 7.5). Two masked bugs collapsed this: the parrot's `get_spike` returned
+    a **binary** `(arrived != 0)`, *and* the substrate binarises **all** Neuron outputs at `>=0.5`
+    — so even a count-returning parrot was re-collapsed. Fix both (relay raw count + honour
+    `_relays_multiplicity`). **Lesson:** exercise the *general* input (count >1 per step), not just
+    1-spike-per-step, and trace the full substrate capture path — a unit test that only sends single
+    spikes hides multiplicity collapse. **The same gap recurred:** the pre-merge code review caught
+    that *every* multiplicity test used `weight=1.0`, hiding that a non-unit weight into the parrot
+    silently scaled the relayed count (it reads the weighted sum, not a raw multiplicity field). Fix
+    = the connect-time unit-gate guard above. Reinforced lesson: **test the adversarial value, not
+    the convenient one** — for any "weight is ignored / must be X" contract, assert the off-nominal
+    weight is actually rejected.
+  - **`glif_psc` `V_m` is one step off, not machine-precise (`glif_cond` is exact).** brainpy
+    computes `V` from the **pre**-propagation PSC (`y2_old`) while the recorded `I_syn` is the
+    **post**-propagation `y2` — so `V_m` and recorded `I_syn` sit one step apart vs NEST (which
+    reports both from the same `y2`). Not a bug; accept via `CAT_B_ALIGNED` (5e-2 mV). General
+    pattern: **linear filters of the fixed input** (`g_k`, `I_syn`) match full-trace regardless of
+    the neuron's own spike jitter → compare those over the whole trace; compare `V_m` only
+    **sub-threshold** and spiking behaviour by **exact count**.
+  - **GLIF threshold recordables live in the `E_L` frame** — compare as `bp['threshold'] + E_L`.
+  - **`aeif_cond_beta_multisynapse` has an `n>1`×multi-receptor broadcasting bug** (receptor axis
+    collides with the population axis); single-neuron multi-receptor traces are exact, so all demos
+    use `n=1`. Fix belongs with the model (examples-gap §5).
+  - **`hh_phaseplane` is an analysis demo, NEST-free.** Clamping `m`,`h` makes the reduced `(V,n)`
+    system non-excitable (relaxes to rest, no AP). NEST's own script has two latent nullcline
+    indexing bugs (`V_matrix[:][i]`, `index != len(n_vec)`) the port fixes — so it is *not* a
+    line-by-line port and there is nothing to trace-compare.
+  - **Touched-line coverage needs edge tests the `n=1` demos skip.** Parity demos only hit the
+    full-population fast path + happy routing; the `test(nest): cover receptor-seam edge paths`
+    commit pins the partial-population `_scatter_receptor` lift, `parrot.get_spike(None)`, the
+    invalid-string / one-to-one receptor branches, and the `g_k` `KeyError` (parrot 100%,
+    `_event_proj` 93%, both `_simulator` hunks 100%).
+- **For next clusters:** `gif_pop_psc_exp` / `gif_population` are **deferred to cluster 12/14** —
+  population/mean-field GIF needs a population-density update, out of scope for the single-neuron
+  parity harness. Remaining §3.5 singles: `iaf_tum_2000_short_term_{depression,facilitation}` (LIF
+  + integrated STP), `mc_neuron` (multi-compartment, `iaf_cond_alpha_mc` experimental),
+  `BrodyHopfield`, `CampbellSiegert`. Reuse the `connect(receptor_type=k)` seam + `receptor_input_unit`
+  + callable recordable aliases for any future multi-receptor or derived-recordable model, and
+  `parrot_neuron` + `_relays_multiplicity` for any count-faithful relay (e.g. feeding a shared
+  Poisson train to many targets).
+
 ### 13-plasticity-demos — 2026-06-13
 
 - **Shipped:** the **four implementable §3.3 plasticity demos** on the `Simulator` API,

@@ -392,6 +392,10 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
+    #: Unit the multi-receptor ``connect(receptor_type=k)`` bridge uses for the
+    #: gathered ``w_by_rec`` mantissa (current-based -> pA).
+    receptor_input_unit = u.pA
+
     def __init__(
         self,
         in_size: Size,

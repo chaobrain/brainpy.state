@@ -43,26 +43,107 @@ __all__ = ['Simulator', 'SimulationResult']
 # (``iaf_psc_exp``), so each maps to a tuple of candidate attributes tried in
 # order. Recordables not listed here (``g_ex``, ``g_in``, ``w``, …) resolve by
 # their own name via ``getattr`` (e.g. ``iaf_cond_alpha`` exposes ``g_ex``/``g_in``).
+def _asc_sum(pop):
+    """Total after-spike current: a precomputed sum state if present, else summed."""
+    state = getattr(pop, '_asc_sum_state', None)
+    if state is not None:
+        return state.value
+    return sum(s.value for s in pop._asc_states)
+
+
+def _psc_sum(pop):
+    """Total post-synaptic current ``I_syn``.
+
+    NEST reports ``I_syn`` as the sum of every receptor's PSC. Models expose this
+    differently: ``glif_psc`` keeps a single ``y2`` list of per-port PSC States
+    (``glif_psc.cpp``: ``S_.I_syn_ += S_.y2_[i]``), while ``glif_psc_double_alpha``
+    splits each port into fast/slow components and provides a ``get_I_syn()`` that
+    sums them. Prefer the model's own ``get_I_syn()`` when present, else sum ``y2``.
+    """
+    get = getattr(pop, 'get_I_syn', None)
+    if callable(get):
+        return get()
+    return sum(s.value for s in pop.y2)
+
+
+def _g_port(k):
+    """Resolver for NEST per-port conductance ``g_k`` (1-indexed).
+
+    The multi-receptor models lay conductance out three different ways: a
+    ``g_syn`` *list* of per-receptor States (``glif_cond*``), a ``g`` *list* of
+    per-receptor States (``gif_cond_exp_multisynapse``), or a single ``g`` State
+    with the receptor on the last axis (``aeif_cond_beta_multisynapse``). This
+    returns a ``pop -> value`` reader that handles all three.
+    """
+    idx = k - 1
+
+    def read(pop):
+        g_syn = getattr(pop, 'g_syn', None)
+        if g_syn is not None:                       # glif_cond: list of States
+            return g_syn[idx].value
+        g = getattr(pop, 'g', None)
+        if g is None:
+            raise KeyError(f'g_{k}: population exposes neither g_syn nor g')
+        if isinstance(g, (list, tuple)):            # gif: list of States
+            return g[idx].value
+        return g.value[..., idx]                     # aeif: single State, last axis
+
+    return read
+
+
+# Map NEST recordable names to brainpy.state State attributes. Most current-based
+# neurons store ``V`` (NEST ``V_m``); the exp family uses ``i_syn_ex`` where the
+# alpha family uses ``I_syn_ex``; so each maps either to a tuple of candidate attrs
+# tried in order, or to a callable ``pop -> value`` for derived/indexed recordables
+# (per-port conductance, summed adaptation currents). Recordables not listed here
+# resolve by their own name via ``getattr`` (e.g. ``iaf_cond_alpha`` exposes ``g_ex``).
 _RECORDABLE_ALIAS = {
     'V_m': ('V',),
+    # Injected current-generator input (NEST ``I`` = S_.I_ = currents_ ring buffer);
+    # the current-based models buffer it on the I_stim ShortTermState.
+    'I': ('I_stim',),
     'I_syn_ex': ('I_syn_ex', 'i_syn_ex'),
     'I_syn_in': ('I_syn_in', 'i_syn_in'),
+    # HH gating (NEST Act_m/Inact_h/Act_n -> brainpy m/h/n).
+    'Act_m': ('m',),
+    'Inact_h': ('h',),
+    'Act_n': ('n',),
+    # GIF adaptation (NEST E_sfa / I_stc).
+    'E_sfa': ('_sfa_val_state',),
+    'I_stc': ('_stc_val_state',),
+    # GLIF threshold components (relative to E_L; demos add E_L test-side).
+    'threshold': ('_threshold_state',),
+    'threshold_spike': ('_threshold_spike_state',),
+    'threshold_voltage': ('_threshold_voltage_state',),
+    # Per-port conductance g_k (glif_cond g_syn list, gif g list, aeif g last-axis)
+    # and total after-spike current.
+    'g_1': _g_port(1),
+    'g_2': _g_port(2),
+    'g_3': _g_port(3),
+    'g_4': _g_port(4),
+    'ASCurrents_sum': _asc_sum,
+    # glif_psc total post-synaptic current: sum of per-port PSC states (y2).
+    'I_syn': _psc_sum,
 }
 
 
 def _read_recordable(pop, name):
     """Read a NEST recordable as the model's State value (Quantity or array).
 
-    Resolves ``name`` to the first State attribute that exists among its candidate
-    spellings (``_RECORDABLE_ALIAS``), falling back to the recordable name itself.
+    Resolves ``name`` via ``_RECORDABLE_ALIAS``: a callable entry is invoked as
+    ``entry(pop)`` (for derived/indexed recordables), otherwise ``name`` maps to a
+    tuple of candidate attr spellings tried in order (falling back to the recordable
+    name itself).
     """
-    candidates = _RECORDABLE_ALIAS.get(name, (name,))
-    for attr in candidates:
+    entry = _RECORDABLE_ALIAS.get(name, (name,))
+    if callable(entry):
+        return entry(pop)
+    for attr in entry:
         state = getattr(pop, attr, None)
         if state is not None:
             return state.value
     raise KeyError(
-        f'recordable {name!r} (tried {candidates}) is not available on '
+        f'recordable {name!r} (tried {entry}) is not available on '
         f'{type(pop).__name__}'
     )
 
@@ -684,14 +765,19 @@ class Simulator(brainstate.nn.Module):
                     and 'w_by_rec' in inspect.signature(type(m).update).parameters):
                 # Multi-receptor neuron: gather the per-port delta input and drive
                 # the model's JIT-safe ``w_by_rec`` path (its no-arg seam is numpy).
-                init = u.math.zeros(m.varshape + (int(m.n_receptors),)) * u.pA
-                out = m.update(w_by_rec=u.get_mantissa(m.sum_delta_inputs(init) / u.pA))
+                # ``receptor_input_unit`` scales the gathered mantissa: pA for
+                # current-based (iaf), nS for conductance-based (aeif/gif) models.
+                runit = getattr(m, 'receptor_input_unit', u.pA)
+                init = u.math.zeros(m.varshape + (int(m.n_receptors),)) * runit
+                out = m.update(w_by_rec=u.get_mantissa(m.sum_delta_inputs(init) / runit))
             else:
                 out = m.update()
-            if isinstance(m, Neuron):
+            if isinstance(m, Neuron) and not getattr(m, '_relays_multiplicity', False):
                 val = (jnp.asarray(u.get_mantissa(out)) >= 0.5).astype(dftype)
             else:
-                val = jnp.asarray(out, dtype=dftype)
+                # Generators and multiplicity-relaying neurons (parrot_neuron)
+                # keep their raw per-step count instead of a binarised spike.
+                val = jnp.asarray(u.get_mantissa(out), dtype=dftype)
             holder.spk.value = val
 
     def simulate(self, duration, *, dt=None) -> SimulationResult:

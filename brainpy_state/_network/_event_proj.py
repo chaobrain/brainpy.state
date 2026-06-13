@@ -8,6 +8,7 @@ sign-split into excitatory/inhibitory channels inside the neuron.
 """
 from __future__ import annotations
 
+import inspect
 import itertools
 from typing import Callable, Optional
 
@@ -87,11 +88,25 @@ class EventProjection(brainstate.nn.Module):
         self.post_local_idx = jnp.asarray(post_local_idx)
         self._n_pre_pop = int(n_pre_pop)
         self._n_post_pop = _flat_size(post)
+        # A multiplicity-relaying post (parrot_neuron) reads its summed delta input
+        # AS the spike count, so an incoming connection MUST carry the unit gate
+        # weight 1.0 (unitless). NEST ignores weights into a parrot; a non-unit
+        # weight here would silently scale the relayed multiplicity, so reject it.
+        if getattr(post, '_relays_multiplicity', False):
+            self._check_unit_gate_weight(weight)
         self._one_to_one = isinstance(rule, _OneToOne)
-        # Per-receptor routing: each edge targets one of the post neuron's
-        # receptor ports (``iaf_psc_exp_multisynapse``), drawn uniformly.
+        # Per-receptor routing (multi-receptor post, e.g. ``iaf_psc_exp_multisynapse``):
+        # ``receptor_type='uniform'`` draws a port per edge, an int ``k`` (1-based,
+        # NEST convention) routes every edge to internal port ``k-1``.
         self._receptor = receptor_type is not None
         self._n_receptors = int(post.n_receptors) if self._receptor else 0
+        # Deposit mode. Models exposing ``w_by_rec`` in their update signature
+        # (``iaf``/``aeif``/``gif_cond_exp_multisynapse``) are Simulator-bridged
+        # from one ``(N, n_receptors)`` blob; all others (the GLIF models)
+        # self-pull each port via ``sum_delta_inputs(label='receptor_k')``.
+        self._receptor_keyed = self._receptor and (
+            'w_by_rec' not in inspect.signature(type(post).update).parameters
+        )
 
         n_pre = int(self.pre_local_idx.shape[0])
         n_post = int(self.post_local_idx.shape[0])
@@ -99,15 +114,23 @@ class EventProjection(brainstate.nn.Module):
         k_conn, k_w, k_rec = jax.random.split(key, 3)
 
         if self._receptor:
-            if receptor_type != 'uniform':
-                raise ValueError(f"receptor_type must be 'uniform' or None, got {receptor_type!r}")
             if self._one_to_one:
                 pre_idx, post_idx, n_edges = jnp.arange(n_pre), jnp.arange(n_post), n_pre
             else:
                 spec = rule.sample(n_pre, n_post, key=k_conn, pre_is_post=pre_is_post,
                                    allow_autapses=allow_autapses, allow_multapses=allow_multapses)
                 pre_idx, post_idx, n_edges = spec.pre_idx, spec.post_idx, spec.n_edges
-            rec_idx = jax.random.randint(k_rec, (n_edges,), 0, self._n_receptors)
+            # ``'uniform'`` draws a port per edge; an int ``k`` (1-based, NEST
+            # ``receptor_type`` convention) routes every edge to internal port ``k-1``.
+            if isinstance(receptor_type, str):
+                if receptor_type != 'uniform':
+                    raise ValueError(f"receptor_type string must be 'uniform', got {receptor_type!r}")
+                rec_idx = jax.random.randint(k_rec, (n_edges,), 0, self._n_receptors)
+            else:
+                k = int(receptor_type)
+                if not (1 <= k <= self._n_receptors):
+                    raise ValueError(f"receptor_type {k} out of range [1, {self._n_receptors}]")
+                rec_idx = jnp.full((n_edges,), k - 1, dtype=jnp.int32)
             w_mant, w_unit = self._edge_weight(weight, n_edges, k_w)
             self.comm = _ReceptorScatter(pre_idx, post_idx, rec_idx, w_mant, w_unit,
                                          n_post=n_post, n_receptors=self._n_receptors)
@@ -145,6 +168,46 @@ class EventProjection(brainstate.nn.Module):
         )
 
     @staticmethod
+    def _check_unit_gate_weight(weight):
+        """Enforce the parrot-relay contract: an incoming weight must be the unit gate.
+
+        A ``_relays_multiplicity`` post (``parrot_neuron``) re-emits the *summed*
+        delta input as the spike count, which only equals the true multiplicity when
+        every incoming edge carries weight ``1.0`` (unitless). NEST ignores weights
+        on connections into a parrot; a non-unit weight here would silently scale the
+        relayed count, so reject it eagerly with a clear message.
+
+        Parameters
+        ----------
+        weight : ArrayLike or Quantity or Callable or None
+            The connection weight passed to the projection. ``None`` and callable
+            initializers are not validated (no concrete value to check).
+
+        Raises
+        ------
+        ValueError
+            If ``weight`` carries a physical unit, or is a concrete value other
+            than ``1.0``.
+        """
+        if weight is None or callable(weight):
+            return  # no concrete scalar/array to validate
+        w = weight
+        if isinstance(w, u.Quantity):
+            mant, unit = u.split_mantissa_unit(w)
+            if unit is not u.UNITLESS:
+                raise ValueError(
+                    "connections into a parrot_neuron must use the unit gate weight "
+                    "1.0 (unitless): the relay reads the summed input as the spike "
+                    "count and NEST ignores weights into a parrot, but got a weight "
+                    f"with physical units ({weight!r}).")
+            w = mant
+        if not bool(jnp.all(jnp.asarray(w) == 1.0)):
+            raise ValueError(
+                "connections into a parrot_neuron must use the unit gate weight 1.0: "
+                "the relay reads the summed input as the spike count and NEST ignores "
+                f"weights into a parrot, but got weight={weight!r}.")
+
+    @staticmethod
     def _edge_weight(weight, n_edges, key):
         """Resolve ``weight`` to a per-edge ``(mantissa, unit)`` pair."""
         w_edge = resolve_param(weight, (n_edges,), key)
@@ -158,15 +221,24 @@ class EventProjection(brainstate.nn.Module):
             x_full = self.delay_seam.update(x_full)
         x_seg = jnp.asarray(x_full)[self.pre_local_idx]  # (n_pre,)
         if self._receptor:
-            y = self.comm(x_seg)                        # (n_post, n_receptors) pA
+            y = self.comm(x_seg)                        # (n_post, n_receptors)
             contrib = y if self._post_is_full else self._scatter_receptor(y)
+            if self._receptor_keyed:
+                # GLIF-style self-pull: one labelled deposit per port. The label
+                # composes to key ``'receptor_k // <delta_key>'``, which the post's
+                # ``sum_delta_inputs(label='receptor_k')`` selects.
+                for k in range(self._n_receptors):
+                    self.post.add_delta_input(self._delta_key, contrib[..., k], label=f'receptor_{k}')
+            else:
+                # Blob: one (n_post, n_receptors) deposit, assembled by the bridge.
+                self.post.add_delta_input(self._delta_key, contrib)
         else:
             if self._one_to_one:
                 y = x_seg * self._weight                # (n_post,) pA
             else:
                 y = self.comm(x_seg)                    # (n_post,) pA
             contrib = y if self._post_is_full else self._scatter(y)
-        self.post.add_delta_input(self._delta_key, contrib)
+            self.post.add_delta_input(self._delta_key, contrib)
 
     def _scatter(self, y):
         """Place per-segment contributions into a full (n_post_pop,) vector."""
