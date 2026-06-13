@@ -433,7 +433,7 @@ class Simulator(brainstate.nn.Module):
         self._taps = {}                       # id(recorder) -> (id(source), idx)
         self._analog_taps = {}                # id(recorder) -> (id(pop), idx, recordables)
         self._weight_taps = {}                # id(proj) -> EventPlasticProj (weight tap)
-        self._current_injectors = []          # (device, post_pop, post_idx, weight, key)
+        self._current_injectors = []          # (device, post_pop, post_idx, weight, key, comp, ncomp)
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
 
@@ -763,7 +763,8 @@ class Simulator(brainstate.nn.Module):
             plastic_extra['signal_sources'] = self._build_signal_sources(synapse, vt)
         if isinstance(pre_seg, _GenSegment):
             if _is_current_generator(pre_seg.spec.model_cls):
-                self._wire_current_injector(pre_seg, post_seg, weight, ordinal)
+                self._wire_current_injector(pre_seg, post_seg, weight, ordinal,
+                                            receptor_type)
                 return
             n = int(post_seg.indices.shape[0])
             params = dict(pre_seg.spec.params)
@@ -812,7 +813,7 @@ class Simulator(brainstate.nn.Module):
         setattr(self, f'_proj_{ordinal}', proj)
         return proj
 
-    def _wire_current_injector(self, pre_seg, post_seg, weight, ordinal):
+    def _wire_current_injector(self, pre_seg, post_seg, weight, ordinal, receptor_type=None):
         """Realize a current generator at the post size and register it as an injector.
 
         Current generators (``dc_generator`` / ``step_current_generator`` /
@@ -826,8 +827,15 @@ class Simulator(brainstate.nn.Module):
         one independent channel per target (``noise_generator`` draws ``randn(n)``
         each step); a per-connect derived seed keeps separate connects
         independent.
+
+        ``receptor_type`` selects a target compartment for a multi-compartment post
+        (``iaf_cond_alpha_mc``: 7=soma, 8=proximal, 9=distal); the resolved
+        ``(comp, ncomp)`` makes the injection land in one compartment instead of
+        broadcasting across all of them. It is ``(None, None)`` for an ordinary
+        single-compartment post.
         """
         post_pop = post_seg.population
+        comp, ncomp = self._resolve_current_compartment(post_pop, receptor_type)
         n = int(post_seg.indices.shape[0])
         params = dict(pre_seg.spec.params)
         if 'seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
@@ -835,7 +843,52 @@ class Simulator(brainstate.nn.Module):
         device = pre_seg.spec.model_cls(n, **params)
         setattr(self, f'_node_{id(device)}', device)
         key = f'cur_inj_{ordinal}'
-        self._current_injectors.append((device, post_pop, post_seg.indices, weight, key))
+        self._current_injectors.append(
+            (device, post_pop, post_seg.indices, weight, key, comp, ncomp))
+
+    @staticmethod
+    def _resolve_current_compartment(post_pop, receptor_type):
+        """Resolve a compartmental post's current ``receptor_type`` to ``(comp, ncomp)``.
+
+        A multi-compartment post (``iaf_cond_alpha_mc``) exposes
+        ``current_compartment_for_receptor`` and ``NCOMP``; its current generators MUST
+        name a target compartment via ``receptor_type`` (7=soma, 8=proximal, 9=distal)
+        so the injected current lands in one compartment instead of broadcasting across
+        all of them. A non-compartmental post takes no current ``receptor_type``.
+
+        Parameters
+        ----------
+        post_pop : Dynamics
+            The postsynaptic population.
+        receptor_type : int or None
+            The connection's NEST receptor type.
+
+        Returns
+        -------
+        tuple
+            ``(comp, ncomp)`` --- the target compartment index and compartment count for
+            a compartmental post, or ``(None, None)`` for an ordinary single-compartment
+            post.
+
+        Raises
+        ------
+        ValueError
+            If a compartmental post is given no ``receptor_type``, a non-compartmental
+            post is given one, or the receptor type is not a valid current receptor.
+        """
+        resolver = getattr(post_pop, 'current_compartment_for_receptor', None)
+        if resolver is None:
+            if receptor_type is not None:
+                raise ValueError(
+                    f'receptor_type={receptor_type} was given for current injection into '
+                    f'{type(post_pop).__name__}, which has no current receptors.')
+            return None, None
+        if receptor_type is None:
+            raise ValueError(
+                f'{type(post_pop).__name__} requires a current receptor_type for current '
+                f'input (soma_curr=7, proximal_curr=8, distal_curr=9); none was given.')
+        comp = resolver(receptor_type)            # raises for spike / out-of-range
+        return comp, int(post_pop.NCOMP)
 
     @staticmethod
     def _scatter_current(cur, pop, idx):
@@ -850,6 +903,21 @@ class Simulator(brainstate.nn.Module):
         mant = u.get_mantissa(cur)
         base = jnp.zeros(n_pop, dtype=mant.dtype)
         return u.maybe_decimal(base.at[idx].add(mant) * u.get_unit(cur))
+
+    @staticmethod
+    def _scatter_current_compartment(cur, pop, idx, comp, ncomp):
+        """Place a device's ``(n,)`` current into one compartment column of ``(n_pop, ncomp)``.
+
+        Like :meth:`_scatter_current`, but for a multi-compartment post: the current is
+        scattered into column ``comp`` of an otherwise-zero ``(n_pop, ncomp)`` frame, so
+        the neuron's ``sum_current_inputs`` (which reads a ``(*varshape, ncomp)`` array)
+        sees the current only in the targeted compartment, never broadcast across all of
+        them.
+        """
+        n_pop = _flat_size(pop)
+        mant = u.get_mantissa(cur)
+        base = jnp.zeros((n_pop, ncomp), dtype=mant.dtype)
+        return u.maybe_decimal(base.at[idx, comp].add(mant) * u.get_unit(cur))
 
     # -- run ---------------------------------------------------------------
     def update(self, t=None):
@@ -870,11 +938,15 @@ class Simulator(brainstate.nn.Module):
         #     ``y0`` and applied on the *next* step --- a one-step ring buffer,
         #     matching NEST's current buffer). Non-callable inputs are popped on
         #     consumption, so the contribution is re-added every step.
-        for device, pop, idx, weight, key in self._current_injectors:
+        for device, pop, idx, weight, key, comp, ncomp in self._current_injectors:
             cur = device.update()
             if weight is not None:
                 cur = cur * weight
-            pop.add_current_input(key, self._scatter_current(cur, pop, idx))
+            if comp is None:
+                pop.add_current_input(key, self._scatter_current(cur, pop, idx))
+            else:
+                pop.add_current_input(
+                    key, self._scatter_current_compartment(cur, pop, idx, comp, ncomp))
         # 2) drive neurons/generators and capture their output into holders
         for m in children:
             if isinstance(m, (EventProjection, EventPlasticProj, _SpikeHolder)):
