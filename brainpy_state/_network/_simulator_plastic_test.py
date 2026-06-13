@@ -13,10 +13,11 @@ brainstate.environ.set(precision=64, platform='cpu')
 import pytest
 
 from brainpy_state import (
-    Simulator, all_to_all, iaf_psc_exp, spike_generator, spike_recorder,
+    Simulator, aeif_psc_delta_clopath, all_to_all, clopath_synapse, dc_generator,
+    iaf_psc_exp, spike_generator, spike_recorder,
     static_synapse, tsodyks2_synapse, vogels_sprekeler_synapse,
 )
-from brainpy_state._network._event_plastic import EventPlasticProj
+from brainpy_state._network._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
 from brainpy_state._network._event_proj import EventProjection
 
 
@@ -119,3 +120,74 @@ def test_record_weight_rejects_non_plastic_projection():
     assert isinstance(proj, EventProjection)
     with pytest.raises(TypeError):
         sim.record_weight(proj)
+
+
+# -- voltage-coupled dispatch (primitive #2 / clopath_synapse) --------------
+def test_connect_clopath_builds_voltage_coupled_proj():
+    # a synapse spec declaring post_state_reads dispatches to VoltageCoupledPlasticProj
+    sim = Simulator(dt=0.1 * u.ms)
+    gen = sim.create(spike_generator, spike_times=[5., 10.] * u.ms)
+    post = sim.create(aeif_psc_delta_clopath, 1)
+    proj = sim.connect(gen, post, synapse=clopath_synapse(weight=50. * u.mV),
+                       delay=1.0 * u.ms)
+    assert isinstance(proj, VoltageCoupledPlasticProj)
+    assert isinstance(proj, EventPlasticProj)          # superset of primitive #1
+
+
+def test_connect_clopath_population_pre_builds_voltage_coupled_proj():
+    # the population-pre branch of _connect_pair dispatches too
+    sim = Simulator(dt=0.1 * u.ms)
+    pre = sim.create(iaf_psc_exp, 2)
+    post = sim.create(aeif_psc_delta_clopath, 3)
+    proj = sim.connect(pre, post, synapse=clopath_synapse(weight=20. * u.mV),
+                       delay=1.0 * u.ms, rule=all_to_all)
+    assert isinstance(proj, VoltageCoupledPlasticProj)
+
+
+def test_connect_non_voltage_synapse_is_plain_plastic():
+    # a spec WITHOUT post_state_reads stays primitive #1 (no over-dispatch)
+    sim = Simulator(dt=0.1 * u.ms)
+    pre = sim.create(iaf_psc_exp, 1)
+    post = sim.create(iaf_psc_exp, 1)
+    proj = sim.connect(pre, post, synapse=tsodyks2_synapse(weight=100. * u.pA),
+                       delay=1.0 * u.ms, rule=all_to_all)
+    assert isinstance(proj, EventPlasticProj)
+    assert not isinstance(proj, VoltageCoupledPlasticProj)
+
+
+def test_clopath_connect_records_depressing_weight_trace():
+    # end-to-end: spike_generator -> clopath_synapse -> aeif_psc_delta_clopath post,
+    # held depolarized (>theta_minus) by a DC bias so LTD fires on every pre spike.
+    # A_LTP=0 isolates depression -> the recorded weight is monotone non-increasing
+    # and ends below the start, proving the post-V read reaches the kernel.
+    sim = Simulator(dt=0.1 * u.ms)
+    gen = sim.create(spike_generator, spike_times=[6., 9., 12., 15., 18., 21.] * u.ms)
+    post = sim.create(aeif_psc_delta_clopath, 1)
+    bias = sim.create(dc_generator, amplitude=800. * u.pA)
+    sim.connect(bias, post)
+    proj = sim.connect(gen, post,
+                       synapse=clopath_synapse(weight=80. * u.mV, A_LTP=0.0),
+                       delay=1.0 * u.ms)
+    sim.record_weight(proj)
+    res = sim.simulate(30. * u.ms)
+    wt = res.weight_trace(proj)
+    assert u.get_unit(wt) == u.mV                         # delta-model weight unit
+    n_steps = res.times.size
+    assert wt.shape == (n_steps, 1)
+    w = u.get_mantissa(wt)[:, 0]
+    assert float(w[0]) == pytest.approx(80.0, abs=1e-9)   # starts at the spec weight
+    assert np.all(np.isfinite(w))
+    assert np.all(np.diff(w) <= 1e-12)                    # LTD-only -> never increases
+    assert float(w[-1]) < 80.0                            # net depression occurred
+
+
+def test_clopath_connect_level_bare_weight_override_stays_mv():
+    # a bare connect-level weight override preserves the clopath spec's mV unit
+    # (not coerced to pA), so it still drives the delta-model post correctly.
+    sim = Simulator(dt=0.1 * u.ms)
+    pre = sim.create(iaf_psc_exp, 1)
+    post = sim.create(aeif_psc_delta_clopath, 1)
+    proj = sim.connect(pre, post, synapse=clopath_synapse(), weight=5.0,
+                       delay=1.0 * u.ms, rule=all_to_all)
+    assert proj.rule.weight_unit == u.mV
+    assert float(u.get_mantissa(proj.rule.weight)) == 5.0

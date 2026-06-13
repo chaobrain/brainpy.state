@@ -28,7 +28,7 @@ from brainpy_state._nest.multimeter import multimeter as _multimeter
 from brainpy_state._nest.noise_generator import noise_generator as _noise_generator
 from brainpy_state._nest.spike_recorder import spike_recorder as _spike_recorder
 from brainpy_state._nest.step_current_generator import step_current_generator as _step_current_generator
-from brainpy_state._network._event_plastic import EventPlasticProj
+from brainpy_state._network._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
 from brainpy_state._network._event_proj import EventProjection
 from brainpy_state._network._nodeview import NodeView, _Segment, _flat_size
 from brainpy_state._network._rules import all_to_all, one_to_one
@@ -449,11 +449,29 @@ class Simulator(brainstate.nn.Module):
         """Shallow-copy a plastic synapse spec, applying connect-level overrides."""
         spec = copy.copy(synapse)
         if weight is not None:
-            spec.weight = weight if isinstance(weight, u.Quantity) else weight * u.pA
+            if isinstance(weight, u.Quantity):
+                spec.weight = weight
+            else:
+                # preserve the spec's own weight unit (pA for current synapses,
+                # mV for the delta-model clopath_synapse) instead of assuming pA
+                spec.weight = weight * u.get_unit(spec.weight)
             spec.weight_unit = u.get_unit(spec.weight)
         if delay is not None:
             spec.delay = delay
         return spec
+
+    @staticmethod
+    def _plastic_proj_cls(synapse):
+        """Pick the plastic-projection primitive for a synapse spec.
+
+        A spec declaring a non-empty ``post_state_reads`` (e.g. ``clopath_synapse``)
+        samples post-neuron analog State per edge and needs the voltage-coupled
+        reader (primitive #2); every other plastic spec uses the event-driven
+        primitive #1.
+        """
+        if getattr(synapse, 'post_state_reads', ()):
+            return VoltageCoupledPlasticProj
+        return EventPlasticProj
 
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
@@ -475,7 +493,7 @@ class Simulator(brainstate.nn.Module):
             holder = _SpikeHolder(n)
             setattr(self, f'_holder_{id(gen)}', holder)
             if synapse is not None:
-                proj = EventPlasticProj(
+                proj = self._plastic_proj_cls(synapse)(
                     pre_spike=_holder_reader(holder), n_pre_pop=n,
                     pre_local_idx=jnp.arange(n), post=post_pop,
                     post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
@@ -491,7 +509,7 @@ class Simulator(brainstate.nn.Module):
             pre_pop = pre_seg.population
             holder = getattr(self, f'_holder_{id(pre_pop)}')
             if synapse is not None:
-                proj = EventPlasticProj(
+                proj = self._plastic_proj_cls(synapse)(
                     pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
                     pre_local_idx=pre_seg.indices, post=post_pop,
                     post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
