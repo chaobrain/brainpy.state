@@ -91,6 +91,56 @@ def _g_port(k):
     return read
 
 
+def _adaptive_threshold(pop):
+    """NEST ``V_th`` recordable for the multi-timescale adaptive-threshold family.
+
+    ``mat2_psc_exp``/``amat2_psc_exp`` do not store the firing threshold; it is
+    *computed* as ``V_th = omega + V_th_1 + V_th_2`` (mat2_psc_exp.cpp), where
+    ``omega`` is a parameter (absolute mV) and ``V_th_1``/``V_th_2`` are States
+    that jump by ``alpha_1``/``alpha_2`` on the model's own spikes and decay back.
+    ``amat2_psc_exp`` adds the voltage-dependent component ``V_th_v``.
+
+    Models that instead expose the threshold *directly* as a ``V_th`` State (e.g.
+    ``aeif_psc_delta_clopath``) fall through to that State, so this single alias
+    serves both the computed-threshold and stored-threshold conventions.
+    """
+    omega = getattr(pop, 'omega', None)
+    if omega is not None and getattr(pop, 'V_th_1', None) is not None:
+        total = omega + pop.V_th_1.value + pop.V_th_2.value
+        v_th_v = getattr(pop, 'V_th_v', None)        # amat2 only
+        if v_th_v is not None:
+            total = total + v_th_v.value
+        return total
+    state = getattr(pop, 'V_th', None)               # clopath: threshold is a State
+    if state is not None and hasattr(state, 'value'):
+        return state.value
+    raise KeyError(
+        'V_th: population is neither a MAT model (omega + V_th_1 + V_th_2) nor '
+        f'exposes a V_th State on {type(pop).__name__}'
+    )
+
+
+def _mc_comp(attr, idx):
+    """Resolver for a multi-compartment recordable ``<attr>.<s|p|d>``.
+
+    ``iaf_cond_alpha_mc`` stacks the three compartments on the *last axis* of a
+    single State (SOMA=0, PROX=1, DIST=2); NEST spells the per-compartment
+    recordables ``V_m.s``/``V_m.p``/``V_m.d``, ``g_ex.s``/…, ``g_in.s``/…. This
+    returns a ``pop -> value`` reader selecting one compartment column, preserving
+    the leading (neuron) axis so the analog tap can index by neuron ordinal.
+    """
+    def read(pop):
+        state = getattr(pop, attr, None)
+        if state is None:
+            raise KeyError(
+                f'{attr!r} compartment recordable: {type(pop).__name__} has no '
+                f'{attr!r} stacked-compartment State'
+            )
+        return state.value[..., idx]
+
+    return read
+
+
 # Map NEST recordable names to brainpy.state State attributes. Most current-based
 # neurons store ``V`` (NEST ``V_m``); the exp family uses ``i_syn_ex`` where the
 # alpha family uses ``I_syn_ex``; so each maps either to a tuple of candidate attrs
@@ -124,6 +174,15 @@ _RECORDABLE_ALIAS = {
     'ASCurrents_sum': _asc_sum,
     # glif_psc total post-synaptic current: sum of per-port PSC states (y2).
     'I_syn': _psc_sum,
+    # izhikevich recovery variable (NEST ``U_m`` -> brainpy ``U``).
+    'U_m': ('U',),
+    # MAT family adaptive threshold (computed: omega + V_th_1 + V_th_2 [+ V_th_v]);
+    # falls back to a directly-stored ``V_th`` State for non-MAT models (clopath).
+    'V_th': _adaptive_threshold,
+    # iaf_cond_alpha_mc per-compartment recordables (SOMA=0, PROX=1, DIST=2).
+    'V_m.s': _mc_comp('V', 0), 'V_m.p': _mc_comp('V', 1), 'V_m.d': _mc_comp('V', 2),
+    'g_ex.s': _mc_comp('g_ex', 0), 'g_ex.p': _mc_comp('g_ex', 1), 'g_ex.d': _mc_comp('g_ex', 2),
+    'g_in.s': _mc_comp('g_in', 0), 'g_in.p': _mc_comp('g_in', 1), 'g_in.d': _mc_comp('g_in', 2),
 }
 
 
