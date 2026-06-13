@@ -1055,6 +1055,38 @@ class TestIzhikevich(unittest.TestCase):
             # Should spike on almost every step due to massive delta input
             self.assertGreater(spike_count, 5, "Should be able to spike on consecutive steps")
 
+    def test_for_loop_with_default_scalar_x_keeps_state_shape(self):
+        r"""Regression: driving ``update()`` with the default scalar ``x`` under for_loop.
+
+        The Simulator drives an injector-less neuron by calling ``update()`` with the
+        default ``x = 0 pA`` (a scalar). The buffered-current write
+        ``self.I.value = sum_current_inputs(x, V_post)`` must stay shaped to
+        ``varshape`` -- otherwise the ``(1,) -> ()`` collapse breaks the
+        ``jax.lax.scan`` carry ("carry input and output must have equal types"). This
+        mirrors ``iaf_psc_exp``, which broadcasts the same write to ``varshape``.
+        """
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = izhikevich(
+                1, a=0.02, b=0.2, c=-65. * u.mV, d=8. * u.mV,
+                I_e=10. * u.pA, V_th=30. * u.mV, consistent_integration=True,
+                V_initializer=braintools.init.Constant(-70. * u.mV),
+            )
+            neuron.init_state()
+
+            def _step(k):
+                with brainstate.environ.context(t=k * 0.1 * u.ms):
+                    neuron.update()                 # default scalar x = 0 pA
+                return neuron.V.value
+
+            # Before the fix this raised TypeError (scan carry shape mismatch).
+            vs = brainstate.transform.for_loop(_step, jnp.arange(200))
+            self.assertEqual(neuron.I.value.shape, (1,))
+            self.assertEqual(np.asarray(u.get_mantissa(vs)).shape, (200, 1))
+            # Sanity: under 10 pA the neuron charges and spikes (recorded V <= V_th).
+            v = np.asarray(u.get_mantissa(vs / u.mV)).reshape(-1)
+            self.assertLessEqual(float(v.max()), 30.0)
+            self.assertGreater(float(v.max()), -70.0)
+
 
 if __name__ == '__main__':
     unittest.main()
