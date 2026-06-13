@@ -47,9 +47,20 @@ def test_spec_attributes_and_defaults():
     assert float(u.Quantity(s.pre_trace_tau).to_decimal(u.ms)) == TAU_X
     assert s.edge_state_init() == {}
     assert float(u.get_mantissa(s.weight)) == 1.0
-    assert u.get_unit(s.weight) == u.pA
+    assert u.get_unit(s.weight) == u.mV     # delta-model default (aeif_psc_delta_clopath)
     assert s.Wmax == 100.0 and s.Wmin == 0.0
     assert s.A_LTP == A_LTP and s.A_LTD == A_LTD
+
+
+def test_weight_unit_defaults_to_mv_and_preserves_explicit():
+    # bare weight -> mV (voltage-jump delta synapse, aeif_psc_delta_clopath)
+    assert u.get_unit(clopath_synapse(weight=2.0).weight) == u.mV
+    # explicit pA honored (current-based hh_psc_alpha_clopath)
+    s = clopath_synapse(weight=3.0 * u.pA)
+    assert u.get_unit(s.weight) == u.pA
+    assert float(u.get_mantissa(s.weight)) == 3.0
+    # explicit mV honored
+    assert u.get_unit(clopath_synapse(weight=4.0 * u.mV).weight) == u.mV
 
 
 def test_validation_tau_x_positive():

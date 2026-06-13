@@ -24,7 +24,7 @@ from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
-    validate_delay, validate_receptor_type, weight_to_pa,
+    validate_delay, validate_receptor_type,
 )
 
 __all__ = ['clopath_synapse']
@@ -78,8 +78,10 @@ class clopath_synapse:
     Parameters
     ----------
     weight : ArrayLike or Quantity, optional
-        Per-edge weight (pA; bare numbers are pA). Same sign as ``Wmax``/``Wmin``
-        under NEST's sign tests. Default ``1.0`` pA.
+        Per-edge weight. Bare numbers default to **mV** — the reference neuron
+        ``aeif_psc_delta_clopath`` is a delta model whose input is a voltage jump;
+        pass an explicit pA ``Quantity`` for the current-based ``hh_psc_alpha_clopath``.
+        Same sign as ``Wmax``/``Wmin`` under NEST's sign tests. Default ``1.0`` mV.
     delay : Quantity, optional
         Axonal/dendritic delay (> 0). Default ``1.0 ms``.
     receptor_type : int, optional
@@ -160,7 +162,11 @@ class clopath_synapse:
         theta_plus: ArrayLike = -45.3 * u.mV,
         theta_minus: ArrayLike = -70.6 * u.mV,
     ):
-        self.weight = weight_to_pa(weight)
+        # Clopath's reference neuron aeif_psc_delta_clopath is a *delta* model
+        # whose input seam is a voltage jump (mV), so a bare weight defaults to mV
+        # (unlike the pA current synapses). An explicit Quantity is honored as-is,
+        # e.g. pA for the current-based hh_psc_alpha_clopath.
+        self.weight = weight if isinstance(weight, u.Quantity) else weight * u.mV
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)
         self.delay = delay
