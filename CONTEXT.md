@@ -138,6 +138,40 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### fix-brunel-es-import — 2026-06-13
+
+- **Shipped:** repaired `brunel_alpha_evolution_strategies_test.py` (the lone red on `main`
+  across many merges). Its ES helpers (`optimize`, `simulate`, `cut_warmup_time`,
+  `compute_rate`, `compute_cv`, `sort_spikes`) were imported `from brainpy` — names that do
+  not exist in the installed `brainpy` package; they live in
+  `examples/nest/brunel_alpha_evolution_strategies.py`. Repointed both imports to
+  `from examples.nest.brunel_alpha_evolution_strategies import ...` (the house pattern its
+  siblings `balancedneuron_test` / `correlospinmatrix_detector_two_neuron_test` already use)
+  and **restored** the `TestEvolutionStrategiesOptimizer` optimizer-math test that PR #54
+  (`70080d0`) had *deleted* to silence CI. Branch `fix/brunel-es-test-import`; test-only (+20/−1).
+- **Parity:** the NEST-gated `TestBrunelAlphaESNetworkParity` had **never run to completion**
+  (it ImportError'd before the comparison); with the import fixed it now runs a live 1000 ms
+  Brunel-alpha NEST run vs brainpy.state and passes the **5 %** rate band. Optimizer test
+  converges (`|μ−opt| < 0.1`, seed 0).
+- **API discovered/changed:** none (test wiring only).
+- **Gotchas:**
+  - **A NEST-gated test hides import bugs in CI.** CI has no NEST, so `@skipUnless(_HAS_NEST)`
+    tests are skipped — a broken `from brainpy import …` inside one stays green in CI yet fails
+    in any NEST-equipped env (local). Only the *always-run* sibling exposed it; deleting that
+    sibling (PR #54's band-aid) turned CI green while leaving the latent bug **and** dropping the
+    optimizer-math coverage CI actually exercised.
+  - **`examples` is importable from tests via pytest prepend-mode.** Repo root has no
+    `__init__.py`, so the basedir for `brainpy_state/...` tests is the repo root → it lands on
+    `sys.path` → `import examples.nest.<m>` resolves (`examples` is a PEP-420 namespace pkg;
+    `examples/nest/__init__.py` exists). Verified under both `python -m pytest` and the bare
+    `pytest` entrypoint CI uses.
+  - **Band-aid vs fix:** when a port's test fails on a bad import, repoint it to the real source —
+    do not delete the test.
+- **For next clusters:** NEST-example ports import helpers `from examples.nest.<module>` (the
+  established pattern), never `from brainpy`. Keep a no-NEST companion test alongside any
+  NEST-gated one so CI still exercises the importable surface. `main` was red for many merges on
+  this single test — watch `gh run list --branch main` after merging.
+
 ### 10-stdp-docs — 2026-06-13
 
 - **Shipped:** the **STDP parity reference page** — the discrete-synapse divergences
