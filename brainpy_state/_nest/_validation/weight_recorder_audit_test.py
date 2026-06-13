@@ -39,12 +39,13 @@ from brainpy_state import (
     stdp_synapse, stdp_synapse_hom, stdp_pl_synapse_hom, jonke_synapse,
     vogels_sprekeler_synapse, stdp_triplet_synapse, ht_synapse,
     stdp_nn_symm_synapse, stdp_nn_restr_synapse, stdp_nn_pre_centered_synapse,
-    stdp_facetshw_synapse_hom,
+    stdp_facetshw_synapse_hom, stdp_dopamine_synapse,
 )
 from brainpy_state._network import send_steps_from_pre, weight_recorder_events
 from brainpy_state._nest._validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest._validation import tolerance_conventions as tc
 from brainpy_state._nest._validation import _stdp_drive as drv
+from brainpy_state._nest._validation import _stdp_dopamine_drive as ddrv
 
 _D = drv.DEND_D * u.ms          # the dendritic delay every rule is built with
 WPLE = 100.0 / 15.0             # facetshw weight_per_lut_entry (Wmax=100, 16-entry LUT)
@@ -214,6 +215,26 @@ def _stdp_rule(weight=5.0, lambda_=0.1):
                         mu_plus=1.0, mu_minus=1.0, Wmax=100.0)
 
 
+# Dopamine (Group 3) config — common dopamine properties + the documented weight band
+# (the online one-step-n-lag vs NEST deferred-integral residual), copied from
+# stdp_dopamine_synapse_parity_test.py.
+_DOPA_INIT_W = 50.0
+_DOPA_TAU_MINUS = 20.0
+_DOPA_COMMON = dict(A_plus=1.0, A_minus=1.5, tau_plus=20.0, tau_c=1000.0, tau_n=200.0,
+                    b=0.0, Wmin=-1.0e9, Wmax=1.0e9)
+_DOPA_BAND = tc.TraceTolerance(3e-2, 2e-3, label="dopamine",
+                               note="online one-step-n-lag vs NEST deferred integral")
+
+
+def _dopamine_rule():
+    return stdp_dopamine_synapse(
+        weight=_DOPA_INIT_W * u.pA, A_plus=_DOPA_COMMON['A_plus'],
+        A_minus=_DOPA_COMMON['A_minus'], tau_plus=_DOPA_COMMON['tau_plus'] * u.ms,
+        tau_minus=_DOPA_TAU_MINUS * u.ms, tau_c=_DOPA_COMMON['tau_c'] * u.ms,
+        tau_n=_DOPA_COMMON['tau_n'] * u.ms, b=_DOPA_COMMON['b'],
+        Wmin=_DOPA_COMMON['Wmin'], Wmax=_DOPA_COMMON['Wmax'])
+
+
 @requires_nest
 class TestWeightRecorderAudit(unittest.TestCase):
     """Send-triggered ``weight_recorder`` parity across the plastic family."""
@@ -334,6 +355,39 @@ class TestWeightRecorderAudit(unittest.TestCase):
             self.assertAlmostEqual(ev_ms, 100.0, places=6)
         # ... while the integer step index doubles when dt halves.
         self.assertEqual(seen[1][1], 2 * seen[0][1])
+
+    # -- Group 3: dopamine-modulated stdp_dopamine_synapse --------------------
+    def test_dopamine_send_event_count_timing_value(self):
+        # A modest sustained LTP pairing under a steady dopa train: the broadcast n
+        # converts the eligibility trace into a rising weight, logged at every pre send.
+        pre = list(np.arange(60.0, 400.0, 60.0))
+        post = [p + 10.0 for p in pre]
+        dopa = list(np.arange(30.0, 400.0, 50.0))
+        T = 420.0
+        n_steps = int(round(T / ddrv.DT))
+        pre_fire, post_fire, nest_w, wr_t, _final = ddrv.nest_dopamine_run(
+            dict(weight=_DOPA_INIT_W), _DOPA_COMMON, _DOPA_TAU_MINUS, pre, post, dopa, T)
+        w_trace = ddrv.bp_dopamine_weight_trace(
+            _dopamine_rule(), pre_fire, post_fire, dopa, n_steps, tau_n=_DOPA_COMMON['tau_n'])
+
+        pre_arr = np.zeros((n_steps, 1))
+        pre_arr[ddrv.steps(pre_fire), 0] = 1.0
+        send_steps = send_steps_from_pre(pre_arr)
+        np.testing.assert_array_equal(
+            send_steps, ddrv.steps(pre_fire), err_msg="dopamine: send mask != pre steps")
+
+        ev_steps, ev_w = weight_recorder_events(w_trace, send_steps)
+        # (count) one event per pre send == NEST weight_recorder event count.
+        self.assertEqual(len(ev_steps), len(pre_fire), "dopamine: event count vs pre")
+        self.assertEqual(len(nest_w), len(pre_fire), "dopamine: NEST count vs pre")
+        # (timing) NEST stamps at the pre-spike step; events sit on the same steps.
+        np.testing.assert_array_equal(
+            ddrv.steps(wr_t), ddrv.steps(pre_fire), err_msg="dopamine: NEST stamp != pre")
+        np.testing.assert_array_equal(
+            ev_steps, ddrv.steps(wr_t), err_msg="dopamine: event steps != NEST stamps")
+        # (value) the masked online integral reproduces NEST's recorded weights in-band.
+        compare_trace(nest_w, ev_w, tol=_DOPA_BAND, metric="dopamine audit").assert_()
+        self.assertGreater(float(ev_w[-1]), _DOPA_INIT_W, "dopamine LTP must raise the weight")
 
 
 if __name__ == "__main__":
