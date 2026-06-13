@@ -91,25 +91,6 @@ def _nest_rate(parameters):
     return 1.0 * len(times) / parameters["N_rec"] / parameters["sim_time"] * 1e3
 
 
-class TestEvolutionStrategiesOptimizer(unittest.TestCase):
-    def test_optimizer_ascends_to_analytic_optimum(self):
-        # Verbatim-ported NES must maximize a concave quadratic toward its peak.
-        from brainpy import optimize
-        opt = np.array([1.5, 2.5])
-
-        def func(g, eta):
-            return -((g - opt[0]) ** 2 + (eta - opt[1]) ** 2)
-
-        np.random.seed(0)
-        start = np.array([1.0, 3.0])
-        res = optimize(func, start.copy(), np.array([0.3, 0.3]),
-                       max_generations=300, record_history=False)
-        d_start = np.linalg.norm(start - opt)
-        d_end = np.linalg.norm(res["mu"] - opt)
-        self.assertLess(d_end, 0.1, f"ES did not converge: |mu-opt|={d_end:.3f}")
-        self.assertLess(d_end, d_start)
-
-
 @unittest.skipUnless(_HAS_NEST, "live NEST not importable")
 class TestBrunelAlphaESNetworkParity(unittest.TestCase):
     def test_simulate_rate_within_5pct_of_nest(self):

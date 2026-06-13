@@ -197,6 +197,68 @@ objection into a Lessons entry, do **not** silently diverge.
   `sic_connection` + the rate neurons, `ContinuousCoupledProj`). Reuse the introspection-test
   + doctest-in-`.rst` pattern for its docs.
 
+### 09-weight-recorder-audit — 2026-06-13
+
+- **Shipped:** the **send-view `weight_recorder` seam** — two pure `_network` functions
+  (`brainpy_state/_network/_weight_recorder_view.py`): `send_steps_from_pre(pre_spikes,
+  pre_of_edge=None, *, lag=0)` derives the per-edge send mask from a pre spike train
+  (single-pre, multi-pre CSR, relay `lag`), and `weight_recorder_events(weight_trace,
+  send_steps)` masks the per-step weight trajectory to those steps (1-D, 2-D shared,
+  per-edge list). No new device, **no Simulator/substrate change** — weight recording
+  reuses the analog State-tap (CONTEXT Part 2.7), masked at the send steps. Plus the
+  family-wide **live audit** (`_validation/weight_recorder_audit_test.py`): emitted event
+  **count + timing + value** vs NEST for all **13 plastic rules** (11 STDP-family via
+  `_stdp_drive`, `stdp_dopamine_synapse` via `_stdp_dopamine_drive`, `clopath_synapse`
+  via two additive `_clopath_drive` captures `nest_pairing_weights_full` /
+  `our_pairing_weight_trace`) + 5 edge-case methods. NEST-free: `_weight_recorder_view_test.py`
+  (17 + 2 doctests, **100 % branch**). Closed `synapses-plasticity-gap.md` §2/§6 + P0
+  weight-recorder, `devices-gap.md` weight_recorder row + §5 + P1. Part B (STP) was
+  already shipped by cluster-01 — confirmed live (12 passed), not re-implemented.
+  Branch `nest-goal/09-weight-recorder-audit`.
+- **Parity (live NEST):** **8 audit methods + 11 subtests** pass. Every rule's recorder
+  series reproduced: **count** == #pre sends == NEST event count; **timing** ==
+  `steps(wr_times)` == pre-emission steps (`e.get_stamp()`, **no** delay offset);
+  **value** within each rule's existing band — STDP family `CAT_B` (near-exact, ~1e-6),
+  `ht_synapse` delivered `w·P` `CAT_B`, `clopath` 5 %, `stdp_dopamine` ~0.2 %. The goal's
+  flagged "most likely bug" (before/after-update ordering) was **de-risked by C++ reading
+  and RED-proven**: NEST logs the **post-send** weight, so masking our **post-update**
+  `weight_trace` at the send steps is the apples-to-apples value (the seam unit test
+  `test_samples_post_update_value_at_send_step` fails if you read `trace[step-1]`).
+- **API discovered/changed (reuse verbatim):**
+  - **Send-view is the `weight_recorder` analogue — a mask, not a hook.** `send_steps_from_pre`
+    → `weight_recorder_events` compose; both are pure array indexing (`vmap`/`grad`-safe on
+    the trace-generation path, ragged per-edge extraction host-side). Add a plastic rule to
+    the audit by appending one `Row` (model, fresh-rule factory, per_conn/common,
+    post_tau_minus, pre/post/T, band) — the `_audit` helper does count/timing/value.
+  - **The `lag` parameter is the relay-offset knob.** Direct-feed drives (`_stdp_drive`,
+    `_stdp_dopamine_drive` feed the projection in-step) → `lag=0`. A drive whose pre relays
+    `sg→parrot` one step *without* pre-offsetting the generator (clopath's `RELAY_D`) stamps
+    the send at `steps(s_pre)+1` → `lag=1`. `send_steps_from_pre(pre_arr, lag=1)` reproduces
+    `steps(wr_times)` exactly — the live cross-check of the lag alignment.
+- **Gotchas (NEST fidelity):**
+  - **Per-rule logged value differs.** STDP family + clopath + dopamine log the **stored**
+    weight (`delivered=False`); `ht_synapse` logs the **delivered** amplitude `w·P`
+    (`delivered=True`, the depression pool's `w_eff`). Dopamine logs the weight integrated
+    to `t_spike` *before* this pre's impulse mutates `c_` — our post-update trace at the send
+    step still matches (the impulse touches only the future `c`).
+  - **A change strictly after the last send is invisible to the recorder** (NEST logs only at
+    sends, so it misses a post-last-send LTP too) — it lives in `weight_trace[-1]`, not the
+    event series. Asserted live (`test_change_after_last_send_is_invisible`).
+  - **nn_* phantom-pre-at-0 dodge.** A **causal** audit protocol (post after pre, so no post
+    precedes the first pre send) sidesteps the symm/restr phantom-pre-at-0 facilitation the
+    substrate doesn't model — no large `P0` needed when the pairing is causal.
+  - **Coverage × JAX/NEST coredumps** (C tracer, sysmon, and `--timid` all abort once
+    `import brainpy_state`/`nest` runs under coverage). The pure-numpy seam has **no** JAX
+    dependency → measure it by loading the file via `importlib` (bypassing the package
+    `__init__`) under `coverage.Coverage(include=[file], branch=True)` → 100 %. The live
+    drive additions are straight-line code fully executed by the GREEN audit.
+  - **NumPy-2 scalar repr in doctests:** `list(np_int_array)` prints `[np.int64(2)]`; use
+    `.tolist()` for clean `[2, 5]` output.
+- **For next clusters:** any new plastic rule gets recorder parity for free — append a `Row`
+  to the audit and (if its drive relays the pre) set the matching `lag`. The send-view seam
+  is the canonical way to compare event-emitting devices against a per-step State-tap; the
+  same mask-at-event-steps shape fits `spike_recorder` / `multimeter` gating audits.
+
 ### 08-dopamine-vt — 2026-06-13
 
 - **Shipped:** the **broadcast-modulator seam** — primitive #2's `VoltageCoupledPlasticProj`

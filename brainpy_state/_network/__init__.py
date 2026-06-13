@@ -19,6 +19,7 @@ from ._rules import ConnRule, all_to_all, one_to_one, fixed_indegree
 from ._event_proj import EventProjection
 from ._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
 from ._simulator import Simulator, SimulationResult
+from ._weight_recorder_view import send_steps_from_pre, weight_recorder_events
 
 __all__ = [
     'Network',
@@ -43,4 +44,6 @@ __all__ = [
     'VoltageCoupledPlasticProj',
     'Simulator',
     'SimulationResult',
+    'send_steps_from_pre',
+    'weight_recorder_events',
 ]

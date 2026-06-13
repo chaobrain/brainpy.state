@@ -25,10 +25,18 @@ Lead implementations actually read for this analysis:
 
 ## 2. Parity summary
 
-Most static and STDP synapses have NEST-comparison tests. The entire STP
-family (`tsodyks*`, `quantal_stp_synapse`) and `volume_transmitter` are
-unvalidated. The e-prop synapse family (4 variants) plus `weight_optimizer`
-are entirely missing.
+Most static and STDP synapses have NEST-comparison tests. The e-prop synapse
+family (4 variants) plus `weight_optimizer` are entirely missing.
+
+> **Update (cluster-09).** The STP family and `volume_transmitter` are no longer
+> unvalidated: live-NEST parity now lives in the `_validation` harness, not the
+> per-module `<module>_test.py` (which stay NEST-free rule tests). Closed:
+> `tsodyks*`/`tsodyks2` via `_validation/stp_parity_test.py`, `quantal_stp_synapse`
+> via `_validation/quantal_stp_parity_test.py`, `volume_transmitter` +
+> `stdp_dopamine_synapse` via `_validation/volume_transmitter_parity_test.py` /
+> `stdp_dopamine_synapse_parity_test.py` (cluster-07/08). The family-wide
+> **`weight_recorder` send-event audit** (`_validation/weight_recorder_audit_test.py`)
+> asserts event count + timing + value against NEST for all 13 plastic rules.
 
 | Bucket | Count | Notes |
 |---|---:|---|
@@ -149,17 +157,25 @@ has no `brainpy.state` analog. Tracked in `network-api-gap.md`.
 
 ## 6. Validation gaps
 
-- 5 of 28 ported synapse/plasticity modules have **no** `import nest` in their
-  test file (`quantal_stp_synapse`, `tsodyks_synapse`, `tsodyks_synapse_hom`,
-  `tsodyks2_synapse`, `volume_transmitter`).
+- The per-module `<module>_test.py` for `quantal_stp_synapse`, `tsodyks_synapse`,
+  `tsodyks_synapse_hom`, `tsodyks2_synapse`, `volume_transmitter` have **no**
+  `import nest` — but this no longer means "unvalidated": live-NEST parity for
+  each moved to the `_validation` harness (`stp_parity_test.py`,
+  `quantal_stp_parity_test.py`, `volume_transmitter_parity_test.py`). ~~Resolved
+  cluster-01/07.~~
 - The 23 modules that **do** import `nest` lack a documented tolerance +
   duration convention in test headers.
-- No NEST-comparison test exists for the **weight-recorder hook** wiring per
-  plasticity rule — i.e., the test does not verify that a `weight_recorder`
-  attached to the synapse records weights at the same biological times as
-  NEST's weight_recorder.
-- No NEST-comparison test stresses the **eligibility trace + volume-transmitter
-  latency** of `stdp_dopamine_synapse`.
+- ~~No NEST-comparison test exists for the **weight-recorder hook** wiring per
+  plasticity rule.~~ **Resolved (cluster-09).** `_validation/weight_recorder_audit_test.py`
+  reproduces NEST's `weight_recorder` send-event series through a thin send-view
+  over the per-step weight trajectory (`brainpy_state._network.weight_recorder_events`
+  / `send_steps_from_pre`) and asserts emitted event **count + timing + value**
+  against NEST for all 13 plastic rules (the STDP family, `ht_synapse`,
+  `clopath_synapse`, `stdp_dopamine_synapse`).
+- ~~No NEST-comparison test stresses the **eligibility trace + volume-transmitter
+  latency** of `stdp_dopamine_synapse`.~~ **Resolved (cluster-08/09):**
+  `stdp_dopamine_synapse_parity_test.py` (eligibility window + sustained
+  trajectory + clamp) and the dopamine row of the weight-recorder audit.
 
 ## 7. Prioritized roadmap
 
@@ -171,24 +187,24 @@ has no `brainpy.state` analog. Tracked in `network-api-gap.md`.
   `tau_minus` in NEST vs. brainpy.state, with example. Linked from every
   `stdp_*_synapse` docstring.
 
-- **P0 — Validate the STP family.** [M]
-  Rationale: 5 STP plasticity rules are entirely unvalidated. STP is
-  widely used. Acceptance: each of `tsodyks_synapse`, `tsodyks_synapse_hom`,
-  `tsodyks2_synapse`, `quantal_stp_synapse`, `volume_transmitter` gains a
-  NEST-comparison test using the shared harness from `neurons-gap.md` P0.
-  Tolerance documented per test.
+- **P0 — Validate the STP family.** ✅ **Done (cluster-01).**
+  `_validation/stp_parity_test.py` (`tsodyks_synapse` / `_hom` / `tsodyks2_synapse`,
+  EPSP-amplitude train vs NEST) and `_validation/quantal_stp_parity_test.py`
+  (`quantal_stp_synapse`, distributional, 6 seeds); `volume_transmitter` via
+  `_validation/volume_transmitter_parity_test.py`. Tolerances documented per test.
 
-- **P0 — Validate `stdp_dopamine_synapse` + `volume_transmitter` against NEST.** [M]
-  Rationale: dopamine-modulated plasticity is the most-divergence-prone STDP
-  variant due to relay timing. Acceptance: a 3-neuron, 1-VT regression test
-  with a known dopamine pulse pattern reproduces NEST weight trajectory within
-  documented tolerance over 5 s.
+- **P0 — Validate `stdp_dopamine_synapse` + `volume_transmitter` against NEST.** ✅ **Done (cluster-08).**
+  `_validation/stdp_dopamine_synapse_parity_test.py` reproduces the NEST weight
+  trajectory (eligibility window + multi-second sustained LTP/LTD + clamp) within
+  the documented one-step-`n`-lag band; layered on the `volume_transmitter` `n(t)`
+  precondition.
 
-- **P0 — Audit weight-recorder hookup per STDP variant.** [M]
-  Rationale: a NEST workflow expects to attach a `weight_recorder` and see
-  weight updates emitted. Acceptance: each `stdp_*` variant has a test that
-  attaches `weight_recorder` and verifies emitted event count + timing matches
-  NEST.
+- **P0 — Audit weight-recorder hookup per STDP variant.** ✅ **Done (cluster-09).**
+  `_validation/weight_recorder_audit_test.py` asserts emitted event **count +
+  timing + value** against NEST for all 13 plastic rules via the send-view seam
+  (`brainpy_state._network.weight_recorder_events` / `send_steps_from_pre`). The
+  seam masks the per-step weight trajectory to its send (pre-spike) steps — no
+  imperative device, honouring the analog-recording State-tap posture.
 
 - **P1 — Document spike-pairing-convention parity per `stdp_nn_*` variant.** [S]
   Acceptance: docstring of each NN variant cites the NEST source line / paper

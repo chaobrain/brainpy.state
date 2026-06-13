@@ -157,6 +157,78 @@ def our_pairing_weight(s_pre, s_post):
     return float(u.get_mantissa(res.weight_trace(proj))[-1, 0])
 
 
+def nest_pairing_weights_full(s_pre, s_post):
+    """Full ``weight_recorder`` series for the canonical pairing protocol, in live NEST.
+
+    Like :func:`nest_pairing_weight` but returns **every** logged send event (one per
+    pre spike), not just the final weight — the input the send-event audit needs to
+    check event count and timing as well as value.
+
+    Parameters
+    ----------
+    s_pre, s_post : sequence of float
+        Presynaptic / postsynaptic-driver spike times (ms).
+
+    Returns
+    -------
+    weights : ndarray
+        Weight at each ``weight_recorder`` send, ordered by send time.
+    wr_times : ndarray
+        The send times (ms), ordered ascending. NEST stamps each at the pre-spike
+        emission step (``s_pre`` relayed by ``RELAY_D`` through the parrot).
+    """
+    import nest
+    nest.ResetKernel()
+    nest.resolution = DT
+    nest.set_verbosity("M_ERROR")
+    nrn = nest.Create("aeif_psc_delta_clopath", 1, NRN_PARAMS)
+    parrot = nest.Create("parrot_neuron", 1)
+    sg_pre = nest.Create("spike_generator", 1, {"spike_times": list(s_pre)})
+    nest.Connect(sg_pre, parrot, syn_spec={"delay": RELAY_D})
+    sg_post = nest.Create("spike_generator", 1, {"spike_times": list(s_post)})
+    nest.Connect(sg_post, nrn, syn_spec={"delay": RELAY_D, "weight": DRIVE_W})
+    wr = nest.Create("weight_recorder", 1)
+    nest.CopyModel("clopath_synapse", "clopath_synapse_full_rec", {"weight_recorder": wr})
+    nest.Connect(parrot, nrn, syn_spec={"synapse_model": "clopath_synapse_full_rec",
+                                        "weight": INIT_W, "delay": RELAY_D})
+    nest.Simulate(10.0 + max(s_pre[-1], s_post[-1]))
+    ev = wr.get("events")
+    order = np.argsort(np.asarray(ev["times"]))
+    return np.asarray(ev["weights"])[order], np.asarray(ev["times"])[order]
+
+
+def our_pairing_weight_trace(s_pre, s_post):
+    """Full per-step Clopath ``weight_trace`` for the pairing protocol, in brainpy.state.
+
+    Like :func:`our_pairing_weight` but returns the whole per-step weight trajectory
+    (single edge, ``(T,)``) rather than just its last value, so the send-event audit
+    can mask it at the send steps via the send-view seam.
+
+    Parameters
+    ----------
+    s_pre, s_post : sequence of float
+        Presynaptic / postsynaptic-driver spike times (ms).
+
+    Returns
+    -------
+    ndarray
+        Post-update stored weight at every step (``(T,)``; bare mV mantissa).
+    """
+    import saiunit as u
+    from brainpy_state import (Simulator, spike_generator, clopath_synapse,
+                               static_synapse)
+    sim = Simulator(dt=DT * u.ms)
+    post = _our_clopath_neuron(sim)
+    sg_pre = sim.create(spike_generator, spike_times=np.asarray(s_pre) * u.ms)
+    sg_post = sim.create(spike_generator, spike_times=np.asarray(s_post) * u.ms)
+    sim.connect(sg_post, post, synapse=static_synapse(weight=DRIVE_W * u.mV), delay=RELAY_D * u.ms)
+    proj = sim.connect(sg_pre, post, synapse=clopath_synapse(weight=INIT_W * u.mV),
+                       delay=RELAY_D * u.ms)
+    sim.record_weight(proj)
+    res = sim.simulate((10.0 + max(s_pre[-1], s_post[-1])) * u.ms)
+    return np.asarray(u.get_mantissa(res.weight_trace(proj)))[:, 0]
+
+
 # -- voltage-clamp LTD sanity (sustained subthreshold depolarization) ------
 def nest_clamp_weight(I_e, s_pre, T):
     """Pre spikes onto a post held subthreshold by ``I_e`` (no post driver), live NEST.
