@@ -145,6 +145,7 @@ from .iaf_tum_2000 import iaf_tum_2000
 # Other spiking neurons
 # ---------------------------------------------------------------------------
 from .ignore_and_fire import ignore_and_fire
+from .parrot_neuron import parrot_neuron
 # ---------------------------------------------------------------------------
 # Stimulation devices - Poisson generators
 # ---------------------------------------------------------------------------
@@ -358,6 +359,7 @@ __all__ = [
 
     # Other spiking neurons
     'ignore_and_fire',
+    'parrot_neuron',
 
     # Static synapses
     'bernoulli_synapse',

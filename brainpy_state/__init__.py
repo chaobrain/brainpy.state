@@ -273,6 +273,7 @@ from ._nest import (
 
     # Other spiking neurons
     ignore_and_fire,
+    parrot_neuron,
 
     # Static synapses
     bernoulli_synapse,
@@ -501,6 +502,7 @@ __all__ = [
 
     # Other spiking neurons
     'ignore_and_fire',
+    'parrot_neuron',
 
     # Static synapses
     'bernoulli_synapse',
