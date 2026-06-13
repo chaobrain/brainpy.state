@@ -166,20 +166,39 @@ harness this cluster builds.
 
 ### 3.6 Network demos
 
+Five spiking-network demos ported in cluster 14 (`Simulator` API, live-NEST
+**distributional** parity), plus the Wang decision neuron validated and its network
+deferred. Network parity is distributional by construction — chaotic / balanced /
+metastable nets PRNG-diverge from NEST, so each test compares a seed-**mean** (or, for
+`ei_clustered`, a seed-**median** robust to a rare globally-synchronized seed) of a
+population observable within a documented band, plus the qualitative law the demo
+exists to show. Bands are wider than the single-neuron 5 % because a *balanced* rate
+sits on a near-cancellation of large E/I currents → hypersensitive to sub-percent
+scatter. The ports added one neuron seam — **the `iaf_cond_exp` multi-receptor
+routing** (`n_receptors=2`, `receptor_input_unit=u.nS`, a `w_by_rec` branch: receptor
+1→`g_ex`, 2→`g_in`) so COBA excitation/inhibition route through `connect(receptor_type=k)`
+(extends the §3.5 seam F to a conductance LIF) — and one connection rule,
+**`pairwise_bernoulli(p)`** (Phase 0).
+
+The rate-neuron (`lin_rate_ipn_network`, `rate_neuron_dm`), gap-junction
+(`gap_junctions_*`), and `ht_neuron` (`intrinsic_currents_*`) demos are **out of scope
+for this cluster** — each needs a primitive the spiking-network harness does not build
+(rate-neuron connections, gap-junction coupling, `ht_neuron` intrinsic currents).
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `EI_clustered_network/` (subdir) | missing | partial: `examples/110-113_*` Susin-Destexhe gamma series is conceptually adjacent | |
-| `brette_et_al_2007/` (subdir) | missing | partial: `examples/106_COBA_HH_2007.py` overlaps | the Brette benchmark family |
-| `lin_rate_ipn_network.py` | missing | none | `lin_rate` + rate connections |
-| `rate_neuron_dm.py` | missing | none | rate-network decision-making |
-| `wang_decision_making.py` | missing | none | classic Wang 2002 NMDA network — uses `iaf_bw_2001` (currently unvalidated) |
-| `artificial_synchrony.py` | missing | none | |
-| `repeated_stimulation.py` | missing | none | |
-| `sensitivity_to_perturbation.py` | missing | none | |
-| `gap_junctions_two_neurons.py` | missing | none | uses `hh_psc_alpha_gap` + `gap_junction` |
-| `gap_junctions_inhibitory_network.py` | missing | none | |
-| `intrinsic_currents_spiking.py` | missing | none | uses `ht_neuron` |
-| `intrinsic_currents_subthreshold.py` | missing | none | uses `ht_neuron` |
+| `brette_et_al_2007/` (subdir) | implemented | `examples/nest/brette_et_al_2007.py` | IF benchmarks 1 (COBA `iaf_cond_exp`) + 2 (CUBA `iaf_psc_exp`), one consolidated script; steady-state E/I rate band 15 %/12 % (COBA E 8.9 %, CUBA E 1.5 %); needed the COBA receptor seam. HH benchmark-3 sibling `examples/brainpy_like/106_COBA_HH_2007.py` (cross-linked) |
+| `EI_clustered_network/` (subdir) | implemented | `examples/nest/ei_clustered_network.py` | Litwin-Kumar/Rostami clustered RBN; rep=1 median E/I rate `CAT_D` 12 % (meas. ~1–3 %) + ISI-CV 8 % (meas. <4 %); rep=6 clustering signature (`std6>3·std1`, `CV6>CV1`) both sims. Uses `pairwise_bernoulli` |
+| `artificial_synchrony.py` | implemented | `examples/nest/artificial_synchrony.py` | Golomb–Rinzel Σ vs coupling; uncoupled baseline exact, Σ↑ monotone both sims, sensitive strengths ~10 % band (grid branch) |
+| `repeated_stimulation.py` | implemented | `examples/nest/repeated_stimulation.py` | gated `poisson_generator` over repeated trials; active-window spike count `CAT_D` 5 %; zero-rate → silent |
+| `sensitivity_to_perturbation.py` | implemented | `examples/nest/sensitivity_to_perturbation.py` | Brunel-style balanced net; AI rate 14.95 vs 15.17 Hz (1.45 %, `CAT_D`); 1-spike perturbation decorrelates >0.9 of net after `t_stim`, 0 before (both sims) |
+| `wang_decision_making.py` | deferred | `examples/nest/wang_decision_making.py` (placeholder) | `iaf_bw_2001` neuron **validated** vs live NEST (AMPA+GABA single-cell + 2-neuron NMDA, machine precision; `iaf_bw_2001_nest_parity_test.py`). Network deferred: recurrent NMDA deposits `weight·sender_spike_offset` (presynaptic-state-gated) — needs an offset-aware event projection the generic `weight·spike` projection cannot express |
+| `lin_rate_ipn_network.py` | missing | none | out of scope (cluster 14): `lin_rate` + rate connections |
+| `rate_neuron_dm.py` | missing | none | out of scope (cluster 14): rate-network decision-making |
+| `gap_junctions_two_neurons.py` | missing | none | out of scope (cluster 14): `hh_psc_alpha_gap` + `gap_junction` coupling |
+| `gap_junctions_inhibitory_network.py` | missing | none | out of scope (cluster 14): gap-junction coupling |
+| `intrinsic_currents_spiking.py` | missing | none | out of scope (cluster 14): `ht_neuron` intrinsic currents |
+| `intrinsic_currents_subthreshold.py` | missing | none | out of scope (cluster 14): `ht_neuron` |
 
 ### 3.7 Generator-pattern demos
 

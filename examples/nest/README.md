@@ -290,6 +290,68 @@ These ports add a multi-receptor seam and a relay primitive on top of the
   Poisson window drives a chosen receptor port at NEST-faithful magnitude via
   `poisson_generator → parrot_neuron → connect(receptor_type=k)`.
 
+## Network demos (§3.6)
+
+Five of NEST's spiking-network tutorials (NEST §3.6), each a faithful port driven
+by a live-NEST **distributional** parity test — population rate, synchrony, or
+perturbation divergence within a documented band — plus a no-NEST companion that
+runs in CI. Run any directly, e.g. `python examples/nest/brette_et_al_2007.py`.
+
+- **`repeated_stimulation.py`** — a `poisson_generator` gated to an active window
+  (`start`/`stop`) drives a neuron across repeated trials (NEST's `origin` shift);
+  the per-trial spike count inside the window tracks NEST (≈ `rate·(stop−start)`),
+  and a zero-rate trial is silent.
+- **`artificial_synchrony.py`** — a population of `iaf_psc_alpha` neurons fanned
+  out across the sub-threshold band and recurrently coupled; the Golomb–Rinzel
+  synchrony measure `Σ = var_t(mean_n V) / mean_n(var_t V)` rises monotonically with
+  coupling strength. The brainpy port is the fixed-`dt` **grid** branch of NEST's
+  demo, so it reproduces NEST's grid (not precise) synchrony curve.
+- **`sensitivity_to_perturbation.py`** — a Brunel-style sparse balanced
+  (`iaf_psc_delta`) network in the asynchronous-irregular state, run twice from the
+  same seed with a **single extra spike** injected at `t_stim`; the two runs are
+  identical before the perturbation and decorrelate across most of the network
+  after it — the spiking-network signature of deterministic chaos.
+- **`ei_clustered_network.py`** — a Litwin-Kumar/Rostami `iaf_psc_exp` balanced
+  network whose E and I populations are split into `Q` clusters with in-cluster
+  synapses potentiated (`J+`) and out-cluster depressed (`J−`). Above a clustering
+  threshold the clusters spontaneously wax and wane (winner-take-all), raising
+  across-cluster rate heterogeneity and irregularity over the homogeneous control.
+- **`brette_et_al_2007.py`** — the integrate-and-fire benchmarks 1 (**COBA**,
+  `iaf_cond_exp`) and 2 (**CUBA**, `iaf_psc_exp`) of the Brette et al. (2007)
+  simulator review (Vogels–Abbott self-sustained E/I network), one consolidated
+  script building both. A brief Poisson kick ignites the network, which then
+  self-sustains an asynchronous-irregular state after the kick ends. The
+  Hodgkin–Huxley variant (benchmark 3) is the sibling
+  `examples/brainpy_like/106_COBA_HH_2007.py`.
+
+A sixth, **`wang_decision_making.py`**, is a **documented deferred placeholder**.
+Its `iaf_bw_2001` neuron is fully validated against live NEST (single-cell AMPA+GABA
+and the two-neuron NMDA presynaptic-offset coupling match to machine precision), and
+the script ships a runnable demonstration of that validated recurrent-NMDA building
+block — but the full competing-populations decision network awaits a Simulator seam:
+recurrent NMDA deposits `weight · sender_spike_offset` (a *presynaptic*-state-gated
+synapse), which the generic `weight · spike` event projection cannot yet express.
+
+These ports add a conductance-LIF receptor seam and a Bernoulli connection rule on
+top of the Brunel-family population vocabulary:
+
+- **COBA receptor routing.** `connect(E, ne+ni, receptor_type=1)` /
+  `connect(I, ne+ni, receptor_type=2)` route excitation into `g_ex` and inhibition
+  into `g_in` of `iaf_cond_exp` through the multi-receptor `w_by_rec` bridge (the
+  §3.5 seam F, now extended to a conductance LIF). The inhibitory **conductance**
+  weight is a *positive* magnitude (`67 nS`); the reversal does the sign. CUBA's
+  `iaf_psc_exp` instead splits excitation/inhibition by weight **sign** internally
+  (inhibitory weight negative, no receptor) — matching NEST on both sides.
+- **`pairwise_bernoulli(p)`.** A named connection rule wiring each pre→post pair
+  independently with probability `p` — the random-balanced-network primitive behind
+  the clustered and perturbation demos.
+
+Parity is **distributional by construction**: these networks are chaotic, balanced,
+or metastable, so their PRNG streams diverge from NEST's and a per-neuron match is
+meaningless. Each test compares a seed-**mean** (or, for `ei_clustered`, a seed-
+**median** robust to a rare globally-synchronized seed) of a population observable
+within a documented band, and asserts the qualitative law the demo exists to show.
+
 ## `order` and `comm`
 
 `order` sets the network size (`NE = 4·order`, `NI = order`). `build(order=...,
@@ -440,3 +502,38 @@ rather than the machine-precision band the linear currents and the spike-free
 from per-sample parity (independent PRNG streams) but tracks NEST in aggregate
 once the parrot relays spike multiplicity (≈59/88/27/26/26 vs 59/89/27/27/26
 spikes across the five levels).
+
+### Network demos (§3.6)
+
+These networks are chaotic, balanced, or metastable, so they are compared
+**distributionally**: a seed-mean (or seed-median) population observable within a
+documented band, plus the qualitative law the demo exists to demonstrate — never a
+per-neuron match (the RNG streams diverge from NEST's). Bands are wider than the
+single-neuron 5 % because a *balanced* rate sits on a near-cancellation of large
+E/I currents and is hypersensitive to sub-percent current scatter.
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `repeated_stimulation` | per-trial active-window spike count | within `CAT_D` 5 % ; zero-rate → silent |
+| `artificial_synchrony` | synchrony Σ vs coupling | uncoupled baseline exact ; Σ↑ monotone both sims ; sensitive strengths in ~10 % band |
+| `sensitivity_to_perturbation` | AI-state rate ; perturbation divergence | 14.95 vs 15.17 Hz (1.45 %) ; > 0.9 of net decorrelates after `t_stim`, 0 before (both sims) |
+| `ei_clustered_network` | rep=1 median E/I rate ; median ISI-CV ; rep=6 signature | rate ≤ 12 % (meas. ~1–3 %) ; CV ≤ 8 % (meas. < 4 %) ; `std6>3·std1` & `CV6>CV1` both |
+| `brette_et_al_2007` COBA | steady-state E / I rate (3-seed mean) | 13.77 / 14.03 vs 15.12 / 14.44 Hz (E 8.9 % / I 2.8 %, band 15 %) |
+| `brette_et_al_2007` CUBA | steady-state E / I rate (3-seed mean) | 3.97 / 3.99 vs 4.03 / 4.01 Hz (E 1.5 % / I 0.5 %, band 12 %) |
+| `iaf_bw_2001` (Wang neuron) | AMPA+GABA `V_m`/gating ; 2-neuron NMDA `s_NMDA`/`I_NMDA`/`V_m` | machine precision (direct align) |
+
+`brette_et_al_2007` compares the **second-half (steady-state) rate** over
+`[simtime/2, simtime]` — the kick-independent observable; the full-window rate is
+dominated by an ignition transient whose magnitude differs between simulators (a
+kick-response detail, not the benchmark's self-sustained-rate point). The COBA
+receptor seam is therefore validated at network scale, not just single-cell.
+`ei_clustered_network` uses the **median** over seeds because a rare seed falls into
+a globally synchronized state (CV≈0) that NEST does not share at that seed; the
+median reports the typical AI-state realization while the mean would chase that
+outlier. `sensitivity_to_perturbation`'s chaotic divergence is asserted only
+qualitatively (the perturbed neuron and connectivity PRNG-differ, so the per-seed
+divergence trajectory is not matched — only that *both* simulators decorrelate the
+bulk of the network after `t_stim` and neither before). `wang_decision_making` ships
+no network parity test — its neuron is validated by `iaf_bw_2001_nest_parity_test.py`
+and the network is deferred pending an offset-aware NMDA event projection (the demo
+documents the exact seam gap).
