@@ -50,6 +50,8 @@ class _FakePop:
             self._asc_sum_state = _FakeState(np.array([0.5]))
         # glif_psc per-port post-synaptic current (PSC, pA): I_syn = sum over ports.
         self.y2 = [_FakeState(np.array([12.0])), _FakeState(np.array([3.0]))]
+        # glif_psc / iaf injected (current-generator) current, NEST recordable ``I``.
+        self.I_stim = _FakeState(np.array([400.0]))
 
 
 class _FakeAeifPop:
@@ -123,6 +125,12 @@ class TestRecordableAlias(unittest.TestCase):
         pop = _FakePop()
         got = _read_recordable(pop, 'I_syn')
         npt.assert_allclose(np.asarray(got), np.array([15.0]))  # 12.0 + 3.0
+
+    def test_injected_current_I_maps_to_I_stim(self):
+        # NEST records the current-generator input as ``I`` (S_.I_ = currents_);
+        # brainpy buffers it on the I_stim ShortTermState.
+        pop = _FakePop()
+        self.assertIs(_read_recordable(pop, 'I'), pop.I_stim.value)
 
     def test_unknown_recordable_raises_keyerror(self):
         pop = _FakePop()

@@ -94,6 +94,9 @@ def _g_port(k):
 # resolve by their own name via ``getattr`` (e.g. ``iaf_cond_alpha`` exposes ``g_ex``).
 _RECORDABLE_ALIAS = {
     'V_m': ('V',),
+    # Injected current-generator input (NEST ``I`` = S_.I_ = currents_ ring buffer);
+    # the current-based models buffer it on the I_stim ShortTermState.
+    'I': ('I_stim',),
     'I_syn_ex': ('I_syn_ex', 'i_syn_ex'),
     'I_syn_in': ('I_syn_in', 'i_syn_in'),
     # HH gating (NEST Act_m/Inact_h/Act_n -> brainpy m/h/n).
