@@ -434,6 +434,14 @@ class iaf_tum_2000(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
+    # Presynaptically-integrated short-term plasticity: on each of its own spikes
+    # this neuron releases a graded efficacy ``u * x`` (the Tsodyks-Markram
+    # depressing/facilitating fraction), stored on the ``spike_offset`` State. The
+    # Simulator reads this attribute to deliver ``weight * efficacy`` over a TSODYKS
+    # (``receptor_type=1``) connection, instead of the binary ``weight * spike`` it
+    # delivers for an ordinary neuron. ``None`` on plain neurons (no graded emission).
+    _emission_attr = 'spike_offset'
+
     RECEPTOR_TYPES = {
         'DEFAULT': 0,
         'TSODYKS': 1,
@@ -905,8 +913,11 @@ class iaf_tum_2000(NESTNeuron):
         ArrayLike values.
         """
         dftype = brainstate.environ.dftype()
-        w_ex = np.zeros(state_shape, dtype=dftype)
-        w_in = np.zeros(state_shape, dtype=dftype)
+        # JAX arrays throughout: this runs inside the Simulator's ``for_loop`` (JIT
+        # trace) when an iaf_tum_2000 is a postsynaptic target, so host-numpy ops
+        # would raise a TracerArrayConversionError on the traced delta-input values.
+        w_ex = jnp.zeros(state_shape, dtype=dftype)
+        w_in = jnp.zeros(state_shape, dtype=dftype)
 
         if self.delta_inputs is None:
             return w_ex, w_in
@@ -921,15 +932,17 @@ class iaf_tum_2000(NESTNeuron):
             label = None
             if ' // ' in key:
                 label, _ = key.split(' // ', maxsplit=1)
-            receptor = 0 if label is None else self._normalize_spike_receptor(label)
+            # Validate any receptor-label prefix (raises on an unknown label). The
+            # released efficacy is already baked into the delivered amplitude
+            # (weight * u * x), so every receptor sign-splits identically: a positive
+            # amplitude is an excitatory PSC, a negative one inhibitory.
+            if label is not None:
+                self._normalize_spike_receptor(label)
 
-            s = np.broadcast_to(np.asarray(bu.math.asarray(val / bu.pA), dtype=dftype), state_shape)
-            if receptor == 0:
-                w_ex += np.where(s > 0.0, s, 0.0)
-                w_in += np.where(s > 0.0, 0.0, s)
-            else:
-                w_ex += np.where(s > 0.0, s, 0.0)
-                w_in += np.where(s > 0.0, 0.0, s)
+            s = jnp.broadcast_to(
+                jnp.asarray(bu.math.asarray(val / bu.pA), dtype=dftype), state_shape)
+            w_ex = w_ex + jnp.where(s > 0.0, s, 0.0)
+            w_in = w_in + jnp.where(s > 0.0, 0.0, s)
 
         return w_ex, w_in
 

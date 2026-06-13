@@ -473,6 +473,13 @@ class Simulator(brainstate.nn.Module):
             return NodeView([_Segment(mod, jnp.arange(1))])
         holder = _SpikeHolder(_flat_size(mod))
         setattr(self, f'_holder_{id(mod)}', holder)
+        # A neuron that integrates short-term plasticity *presynaptically* (declares
+        # ``_emission_attr`` -- iaf_tum_2000's released efficacy ``spike_offset``)
+        # also gets an emission holder. A TSODYKS connection delivers that graded
+        # efficacy (captured in phase 2 alongside the binary spike) rather than
+        # ``weight * spike``; the binary holder still serves every other connection.
+        if getattr(mod, '_emission_attr', None) is not None:
+            setattr(self, f'_emit_holder_{id(mod)}', _SpikeHolder(_flat_size(mod)))
         return NodeView.of(mod)
 
     # -- connection --------------------------------------------------------
@@ -688,6 +695,59 @@ class Simulator(brainstate.nn.Module):
                 )
             vt.bind_dopa(_holder_reader(holder), pre_seg.indices)
 
+    def _resolve_stp_emission(self, pre_pop, post_pop, receptor_type, spike_holder):
+        """Choose what a neuron->neuron static connection delivers per step.
+
+        Most neurons emit a binary spike (the spike holder -> ``weight * spike``).
+        A neuron integrating short-term plasticity *presynaptically* (declares
+        ``_emission_attr`` -- iaf_tum_2000's released efficacy
+        ``spike_offset = u * x``) delivers that graded efficacy instead
+        (``weight * efficacy``), but **only over its TSODYKS receptor**; its
+        DEFAULT/``None`` connection -- and every other model's connection -- still
+        delivers the binary spike. The TSODYKS post is single-port, so the
+        ``receptor_type`` collapses to ``None`` (a plain delta-input delivery; the
+        post integrates ``weight * efficacy`` as its excitatory PSC).
+
+        Parameters
+        ----------
+        pre_pop, post_pop : Neuron
+            The presynaptic and postsynaptic populations.
+        receptor_type : int or str or None
+            The connection's NEST receptor type as passed to :meth:`connect`.
+        spike_holder : _SpikeHolder
+            The presynaptic population's binary-spike holder (the default source).
+
+        Returns
+        -------
+        tuple
+            ``(pre_spike_reader, effective_receptor_type)`` -- the callable the
+            :class:`EventProjection` reads each step, and the receptor type to
+            build it with (``None`` for the TSODYKS-efficacy path).
+
+        Raises
+        ------
+        ValueError
+            If a TSODYKS connection targets a post of a different model (the
+            efficacy is delivered as that model's PSC, so the post must be the same
+            integrate-and-fire-with-STP model), or if the emission holder is absent.
+        """
+        emit_attr = getattr(pre_pop, '_emission_attr', None)
+        tsodyks = getattr(pre_pop, 'RECEPTOR_TYPES', {}).get('TSODYKS')
+        if emit_attr is None or receptor_type is None or receptor_type != tsodyks:
+            return _holder_reader(spike_holder), receptor_type
+        if not isinstance(post_pop, type(pre_pop)):
+            raise ValueError(
+                f'a TSODYKS (receptor_type={receptor_type}) connection from '
+                f'{type(pre_pop).__name__} delivers presynaptic short-term-plasticity '
+                f'efficacy and requires a {type(pre_pop).__name__} post; got '
+                f'{type(post_pop).__name__}.')
+        emit_holder = getattr(self, f'_emit_holder_{id(pre_pop)}', None)
+        if emit_holder is None:
+            raise ValueError(
+                f'{type(pre_pop).__name__} declares _emission_attr={emit_attr!r} but '
+                'no emission holder was allocated by create().')
+        return _holder_reader(emit_holder), None
+
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
                       receptor_type=None, synapse=None, vt=None):
@@ -739,11 +799,13 @@ class Simulator(brainstate.nn.Module):
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                     seed=self._derive_seed(seed, ordinal), **plastic_extra)
             else:
+                pre_spike, eff_receptor = self._resolve_stp_emission(
+                    pre_pop, post_pop, receptor_type, holder)
                 proj = EventProjection(
-                    pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
+                    pre_spike=pre_spike, n_pre_pop=_flat_size(pre_pop),
                     pre_local_idx=pre_seg.indices, post=post_pop,
                     post_local_idx=post_seg.indices, rule=rule, weight=weight,
-                    delay=delay, comm=comm, receptor_type=receptor_type,
+                    delay=delay, comm=comm, receptor_type=eff_receptor,
                     pre_is_post=(pre_pop is post_pop),
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                     seed=self._derive_seed(seed, ordinal))
@@ -838,6 +900,15 @@ class Simulator(brainstate.nn.Module):
                 # keep their raw per-step count instead of a binarised spike.
                 val = jnp.asarray(u.get_mantissa(out), dtype=dftype)
             holder.spk.value = val
+            # Presynaptic STP: capture this step's released efficacy (graded, 0 off
+            # spike) into the emission holder, time-aligned with the binary spike so a
+            # TSODYKS connection delivers it with the same latency as a plain spike.
+            emit_attr = getattr(m, '_emission_attr', None)
+            if emit_attr is not None:
+                emit = getattr(self, f'_emit_holder_{id(m)}', None)
+                if emit is not None:
+                    emit.spk.value = jnp.asarray(
+                        u.get_mantissa(getattr(m, emit_attr).value), dtype=dftype)
 
     def simulate(self, duration, *, dt=None) -> SimulationResult:
         """Run for ``duration`` and return recorded spikes and analog traces.
