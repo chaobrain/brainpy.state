@@ -90,7 +90,17 @@ def equilibrium_mh():
 
 
 def grids():
-    """Return the ``(V_vec, n_vec)`` scan axes."""
+    """Build the phase-plane scan axes.
+
+    Returns
+    -------
+    V_vec : numpy.ndarray
+        Membrane-potential samples (mV mantissa) from ``V_MIN`` to ``V_MAX``
+        spaced by ``DELTA_V``.
+    n_vec : numpy.ndarray
+        K-activation samples (dimensionless) from ``N_MIN`` to ``N_MAX`` spaced
+        by ``DELTA_N``.
+    """
     return (np.arange(V_MIN, V_MAX, DELTA_V), np.arange(N_MIN, N_MAX, DELTA_N))
 
 

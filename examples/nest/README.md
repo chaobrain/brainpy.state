@@ -176,6 +176,56 @@ These ports add one reusable seam on top of the §3.2 vocabulary:
   stamping each at `step + 1` (NEST's one-step delivery latency, which cancels in
   the lag difference). Nothing imperative runs inside the `for_loop`.
 
+## Single-neuron model demos (§3.5)
+
+Seven of NEST's single-neuron model tutorials (NEST §3.5), each a faithful port
+driven by a live-NEST parity test (`brainpy_state/_nest/_validation/<name>_test.py`).
+Run any directly, e.g. `python examples/nest/glif_cond_neuron.py`.
+
+- **`hh_psc_alpha.py`** — the Hodgkin–Huxley neuron (`hh_psc_alpha`) under a
+  sub-rheobase bias current, recording `V_m` and the `m`/`h`/`n` gating variables
+  (NEST `Act_m`/`Inact_h`/`Act_n`), plus a supra-threshold F–I curve sweep.
+- **`hh_phaseplane.py`** — a phase-plane **analysis** carve-out: the reduced
+  `(V, n)` vector field of the HH neuron with `m` frozen, its nullclines (checked
+  against the closed-form `n_inf(V)`), and a relaxation trajectory to the resting
+  fixed point. An analysis demo, not a spike-train port.
+- **`aeif_cond_beta_multisynapse.py`** — the adaptive-exponential neuron with four
+  beta-function conductance receptors at distinct reversal potentials; the first
+  demo to exercise the multi-receptor routing seam `connect(receptor_type=k)`.
+- **`gif_cond_exp_multisynapse.py`** — the generalized-IF neuron with two
+  exponential-conductance receptors of opposite reversal potential, recording the
+  `E_sfa`/`I_stc` adaptation variables.
+- **`glif_cond_neuron.py`** — the Allen-Institute conductance-based GLIF neuron at
+  all five mechanism levels (`lif`, `lif_r`, `lif_asc`, `lif_r_asc`, `lif_r_asc_a`)
+  under four stimulation paradigms (400 pA step current, excitatory/inhibitory
+  receptor spikes, and a 15 kHz Poisson window relayed through a `parrot_neuron`).
+- **`glif_psc_neuron.py`** — the current-based GLIF counterpart (exact propagator
+  matrices, alpha-PSC synapses), the same five levels and four paradigms (the
+  150 kHz Poisson window exercises spike multiplicity through the parrot),
+  recording the injected current `I` and summed synaptic current `I_syn`.
+- **`glif_psc_double_alpha_neuron.py`** — `glif_psc` with a *double* alpha synaptic
+  kernel (a fast alpha plus `amp_slow`×a slow alpha), comparing the single- vs
+  double-alpha synaptic-current shape across three receptor ports.
+
+These ports add a multi-receptor seam and a relay primitive on top of the
+§3.2/§3.4 vocabulary:
+
+- **F — multi-receptor routing.** `connect(pre, neuron, receptor_type=k)` deposits a
+  spike train into a specific 1-based receptor port `k` of a multi-receptor neuron.
+  Conductance-based models (`aeif_cond_beta_multisynapse`,
+  `gif_cond_exp_multisynapse`, `glif_cond`) receive the input through a per-port
+  `w_by_rec` bridge whose unit (`nS`) is taken from the model; current-based GLIF
+  models (`glif_psc`, `glif_psc_double_alpha`) pull each port with a keyed
+  `sum_delta_inputs(label='receptor_k')` (`pA`). Per-port recordables (`g_1..g_4`,
+  `I_syn`, `I`, `threshold`/`threshold_spike`/`threshold_voltage`, `ASCurrents_sum`)
+  resolve by name through a recordable-alias table (tuple-of-candidates or a
+  derived-value callable).
+- **G — spike-multiplicity relay.** `parrot_neuron` repeats every incoming spike
+  *including multiplicity* — a high-rate `poisson_generator` whose per-bin count
+  exceeds one is relayed as that count, not collapsed to a single event — so a
+  Poisson window drives a chosen receptor port at NEST-faithful magnitude via
+  `poisson_generator → parrot_neuron → connect(receptor_type=k)`.
+
 ## `order` and `comm`
 
 `order` sets the network size (`NE = 4·order`, `NI = order`). `build(order=...,
@@ -266,3 +316,36 @@ deterministic but the DC drive lands after a constant connection-delay onset
 on the **onset-aligned** spike sequence — exact spike *count* and spike times
 *relative to the first spike* (the physically meaningful firing period and its
 resolution dependence).
+
+### Single-neuron model demos (§3.5)
+
+Deterministic ports are compared per-sample against live NEST with the standard
+one-step recorder alignment (`t=0` sample dropped candidate-side, `align_steps=1`
+for the remaining shift); spiking GLIF levels additionally assert exact spike
+**counts**. Exact-propagator models (`glif_psc*`) match to machine precision;
+RKF45 models (`hh`, `aeif`, `glif_cond`) match their smooth sub-threshold traces
+to category A.
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `hh_psc_alpha` | subthreshold `V_m` + `Act_m`/`Inact_h`/`Act_n` ; F–I spike count | `CAT_A` (~1e-3 mV) ; counts match |
+| `hh_phaseplane` | `n`-nullcline vs analytic `n_inf(V)` ; trajectory relaxation | within one grid step (NEST-free) |
+| `aeif_cond_beta_multisynapse` | `V_m` ; `g_1..g_4`, max\|Δ\| | ~1e-6 mV ; machine precision |
+| `gif_cond_exp_multisynapse` | subthreshold `V_m`, max\|Δ\| | machine precision |
+| `glif_cond_neuron` (5 levels) | `g_1`/`g_2` full trace ; subthreshold `V_m`/`threshold` ; spike count | machine precision ; ~1e-13 mV ; exact |
+| `glif_psc_neuron` (5 levels) | `I_syn`/`I` full trace ; subthreshold `V_m` ; spike count | ~2e-15 pA ; ~0.03 mV (`CAT_B_ALIGNED`) ; exact |
+| `glif_psc_double_alpha_neuron` (3 cfgs) | `V_m` + `I_syn` full trace (sub-threshold) | ~1e-13 mV / ~1e-15 pA |
+
+The GLIF per-port conductances (`g_k`) and synaptic currents (`I_syn`, `I`) are
+linear filters of the fixed external spike trains, so they match NEST over the
+whole trace independent of the neuron's own spike jitter; the membrane potential
+is compared in the sub-threshold window (before the two integrators diverge on
+spike timing) and the spiking behaviour by exact count. `glif_psc`'s `V_m` carries
+a ~0.03 mV residual — `V` is computed from the *pre*-propagation PSC while the
+recorded `I_syn` is the *post*-propagation `y2`, so the two sit one step apart
+relative to NEST (which reports both from the same `y2`) — hence `CAT_B_ALIGNED`
+rather than the machine-precision band the linear currents and the spike-free
+`double_alpha` traces enjoy. The 150 kHz `glif_psc` Poisson window is excluded
+from per-sample parity (independent PRNG streams) but tracks NEST in aggregate
+once the parrot relays spike multiplicity (≈59/88/27/26/26 vs 59/89/27/27/26
+spikes across the five levels).
