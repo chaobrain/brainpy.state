@@ -28,6 +28,7 @@ from brainpy_state._nest.multimeter import multimeter as _multimeter
 from brainpy_state._nest.noise_generator import noise_generator as _noise_generator
 from brainpy_state._nest.spike_recorder import spike_recorder as _spike_recorder
 from brainpy_state._nest.step_current_generator import step_current_generator as _step_current_generator
+from brainpy_state._nest.volume_transmitter import volume_transmitter as _volume_transmitter
 from brainpy_state._network._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
 from brainpy_state._network._event_proj import EventProjection
 from brainpy_state._network._nodeview import NodeView, _Segment, _flat_size
@@ -293,6 +294,7 @@ class Simulator(brainstate.nn.Module):
         self._analog_taps = {}                # id(recorder) -> (id(pop), idx, recordables)
         self._weight_taps = {}                # id(proj) -> EventPlasticProj (weight tap)
         self._current_injectors = []          # (device, post_pop, post_idx, weight, key)
+        self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
 
     # -- node creation -----------------------------------------------------
@@ -318,6 +320,12 @@ class Simulator(brainstate.nn.Module):
             return NodeView([_GenSegment(_GeneratorSpec(model_cls, p))])
         mod = model_cls(size, **p)
         setattr(self, f'_node_{id(mod)}', mod)
+        # Volume transmitters are driven in phase 0 (before projections) and expose
+        # the dopamine concentration ``n`` as State; they emit no spikes, so they
+        # get no _SpikeHolder (phase 2 skips them) and are registered for phase 0.
+        if isinstance(mod, _volume_transmitter):
+            self._vt_nodes.append(mod)
+            return NodeView.of(mod)
         # Recorders are tapped, not driven: spike recorders read captured spikes,
         # analog recorders (voltmeter/multimeter) read model State per step. Neither
         # gets a _SpikeHolder.
@@ -330,7 +338,7 @@ class Simulator(brainstate.nn.Module):
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
                 weight=None, delay=None, comm: str = 'dense', receptor_type=None,
-                synapse=None, allow_autapses: bool = True,
+                synapse=None, vt=None, allow_autapses: bool = True,
                 allow_multapses: bool = True, seed: Optional[int] = None):
         """Connect ``pre`` to ``post`` (or register a recorder tap).
 
@@ -346,6 +354,13 @@ class Simulator(brainstate.nn.Module):
         family, ``quantal_stp_synapse``); ``weight``/``delay`` here override the
         spec's defaults. ``synapse=None`` (default) keeps the static
         :class:`EventProjection` path unchanged.
+
+        ``connect(dopa_pool, vt)`` (reverse direction, ``post`` a
+        ``volume_transmitter`` view) registers each presynaptic segment as a
+        dopaminergic source on the transmitter and builds no projection.
+        ``vt=<volume_transmitter view>`` binds a transmitter to a synapse spec that
+        reads a broadcast signal (``signal_reads``, e.g. ``stdp_dopamine_synapse``);
+        such a spec raises if no ``vt`` is supplied.
 
         Analog recorders (``voltmeter`` / ``multimeter``) are connected in NEST's
         reversed direction --- ``connect(recorder, pop)`` --- because the recorder
@@ -378,13 +393,20 @@ class Simulator(brainstate.nn.Module):
             seg = pre.segments[0]
             self._taps[id(post.segments[0].population)] = (id(seg.population), seg.indices)
             return None
+        if len(post.segments) == 1 and isinstance(post.segments[0].population, _volume_transmitter):
+            # reverse-direction bind: connect(dopa_pool, vt) registers each dopa
+            # source on the transmitter (no projection built, like a recorder tap).
+            vt_node = post.segments[0].population
+            for pre_seg in pre.segments:
+                self._bind_dopa_source(pre_seg, vt_node)
+            return None
         seg_weights = self._segment_weights(weight, len(pre.segments))
         projs = []
         for pre_seg, w_seg in zip(pre.segments, seg_weights):
             for post_seg in post.segments:
                 proj = self._connect_pair(pre_seg, post_seg, rule, w_seg, delay,
                                           allow_autapses, allow_multapses, seed, comm,
-                                          receptor_type, synapse)
+                                          receptor_type, synapse, vt)
                 if proj is not None:
                     projs.append(proj)
         if not projs:
@@ -464,22 +486,81 @@ class Simulator(brainstate.nn.Module):
     def _plastic_proj_cls(synapse):
         """Pick the plastic-projection primitive for a synapse spec.
 
-        A spec declaring a non-empty ``post_state_reads`` (e.g. ``clopath_synapse``)
-        samples post-neuron analog State per edge and needs the voltage-coupled
+        A spec declaring a non-empty ``post_state_reads`` (e.g. ``clopath_synapse``,
+        per-edge post-State gather) **or** a non-empty ``signal_reads`` (e.g.
+        ``stdp_dopamine_synapse``, broadcast modulator) needs the voltage-coupled
         reader (primitive #2); every other plastic spec uses the event-driven
         primitive #1.
         """
-        if getattr(synapse, 'post_state_reads', ()):
+        if getattr(synapse, 'post_state_reads', ()) or getattr(synapse, 'signal_reads', ()):
             return VoltageCoupledPlasticProj
         return EventPlasticProj
 
+    @staticmethod
+    def _build_signal_sources(synapse, vt):
+        """Resolve a spec's ``signal_reads`` names to ``{name: (vt_module, attr)}``.
+
+        Each broadcast signal name resolves to the same-named State attribute on the
+        bound :class:`~brainpy_state._nest.volume_transmitter` (``'n'`` -> ``vt.n``).
+        Returns ``None`` for a spec that reads no signal (clopath); raises if a
+        signal-reading spec is given no transmitter.
+        """
+        names = tuple(getattr(synapse, 'signal_reads', ()) or ())
+        if not names:
+            return None
+        if vt is None:
+            raise ValueError(
+                f'{type(synapse).__name__} reads broadcast signal(s) {names} and '
+                'requires a bound volume_transmitter; pass '
+                'connect(..., vt=<volume_transmitter view>).'
+            )
+        vt_mod = vt.segments[0].population if isinstance(vt, NodeView) else vt
+        if not isinstance(vt_mod, _volume_transmitter):
+            raise ValueError('vt= must be a volume_transmitter view.')
+        return {name: (vt_mod, name) for name in names}
+
+    def _bind_dopa_source(self, pre_seg, vt):
+        """Register one presynaptic segment as a dopaminergic source on ``vt``.
+
+        A population segment binds its captured-spike holder directly; a deferred
+        generator segment (e.g. ``spike_generator``) is realized as a single-channel
+        dopa pool with its own holder (driven in phase 2), so its one-step holder lag
+        plays the role of NEST's ``spike_generator -> parrot -> volume_transmitter``
+        relay.
+        """
+        if isinstance(pre_seg, _GenSegment):
+            ordinal = next(self._proj_counter)
+            params = dict(pre_seg.spec.params)
+            if 'rng_seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
+                params['rng_seed'] = self._derive_seed(params.get('rng_seed'), ordinal)
+            gen = pre_seg.spec.model_cls(1, **params)
+            setattr(self, f'_node_{id(gen)}', gen)
+            holder = _SpikeHolder(1)
+            setattr(self, f'_holder_{id(gen)}', holder)
+            vt.bind_dopa(_holder_reader(holder), jnp.arange(1))
+        else:
+            pre_pop = pre_seg.population
+            holder = getattr(self, f'_holder_{id(pre_pop)}', None)
+            if holder is None:
+                raise ValueError(
+                    'the dopaminergic source for a volume_transmitter must be a '
+                    'spiking population or generator (no captured spikes found).'
+                )
+            vt.bind_dopa(_holder_reader(holder), pre_seg.indices)
+
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
-                      receptor_type=None, synapse=None):
+                      receptor_type=None, synapse=None, vt=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
         post_holder = getattr(self, f'_holder_{id(post_pop)}', None)
         post_reader = _holder_reader(post_holder) if post_holder is not None else None
+        # voltage-coupled reader (#2) also carries broadcast signal sources (the VT n
+        # for stdp_dopamine_synapse); primitive #1 and a vt-less spec build neither.
+        proj_cls = self._plastic_proj_cls(synapse) if synapse is not None else None
+        plastic_extra = {}
+        if proj_cls is VoltageCoupledPlasticProj:
+            plastic_extra['signal_sources'] = self._build_signal_sources(synapse, vt)
         if isinstance(pre_seg, _GenSegment):
             if _is_current_generator(pre_seg.spec.model_cls):
                 self._wire_current_injector(pre_seg, post_seg, weight, ordinal)
@@ -493,12 +574,12 @@ class Simulator(brainstate.nn.Module):
             holder = _SpikeHolder(n)
             setattr(self, f'_holder_{id(gen)}', holder)
             if synapse is not None:
-                proj = self._plastic_proj_cls(synapse)(
+                proj = proj_cls(
                     pre_spike=_holder_reader(holder), n_pre_pop=n,
                     pre_local_idx=jnp.arange(n), post=post_pop,
                     post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
                     post_spike=post_reader, rule=self._resolve_synapse(synapse, weight, delay),
-                    conn=one_to_one, seed=seed)
+                    conn=one_to_one, seed=seed, **plastic_extra)
             else:
                 proj = EventProjection(
                     pre_spike=_holder_reader(holder), n_pre_pop=n,
@@ -509,14 +590,14 @@ class Simulator(brainstate.nn.Module):
             pre_pop = pre_seg.population
             holder = getattr(self, f'_holder_{id(pre_pop)}')
             if synapse is not None:
-                proj = self._plastic_proj_cls(synapse)(
+                proj = proj_cls(
                     pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
                     pre_local_idx=pre_seg.indices, post=post_pop,
                     post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
                     post_spike=post_reader, rule=self._resolve_synapse(synapse, weight, delay),
                     conn=rule, pre_is_post=(pre_pop is post_pop),
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
-                    seed=self._derive_seed(seed, ordinal))
+                    seed=self._derive_seed(seed, ordinal), **plastic_extra)
             else:
                 proj = EventProjection(
                     pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
@@ -572,6 +653,11 @@ class Simulator(brainstate.nn.Module):
     def update(self, t=None):
         dftype = brainstate.environ.dftype()
         children = list(self.nodes(allowed_hierarchy=(1, 1)).values())
+        # 0) volume transmitters advance the broadcast dopamine concentration n from
+        #    the previous step's captured dopa spikes (the substrate's one-step lag,
+        #    matching NEST's +1 delivery stamp), so projections in phase 1 read fresh n.
+        for vt in self._vt_nodes:
+            vt.update()
         # 1) projections route the previous step's spikes into delta inputs
         for m in children:
             if isinstance(m, (EventProjection, EventPlasticProj)):
