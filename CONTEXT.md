@@ -152,7 +152,7 @@ objection into a Lessons entry, do **not** silently diverge.
   components, per-port `g_k`, `ASCurrents_sum`, summed PSC `I_syn`, injected `I`). Docs:
   `examples/nest/README.md` §3.5 section + parity table, `examples-gap.md` §3.5 marked
   implemented + `gif_pop` deferral + aeif `n>1` limitation. Branch
-  `worktree-nest-goal+11-single-neuron-models-1`; PR #__.
+  `worktree-nest-goal+11-single-neuron-models-1`; PR #57.
 - **Parity (one-step recorder align: drop bp[0], `align_steps=1`):**
   - `hh_psc_alpha` — subthreshold `V_m`+`Act_m`/`Inact_h`/`Act_n` `CAT_A` (~1e-3 mV); F–I counts match.
   - `hh_phaseplane` — NEST-free: `n`-nullcline within one grid step of analytic `n_inf(V)`.
