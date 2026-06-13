@@ -80,6 +80,30 @@ def test_validation_weight_sign_consistency():
     clopath_synapse(weight=1.0, Wmin=0.0, Wmax=5.0)
 
 
+def test_validation_nonfinite_param_rejected():
+    # any non-finite amplitude/threshold/bound is rejected (NEST-style guard).
+    with pytest.raises(ValueError, match='finite'):
+        clopath_synapse(A_LTP=np.inf)
+    with pytest.raises(ValueError, match='finite'):
+        clopath_synapse(Wmax=np.nan)
+
+
+def test_bare_thresholds_interpreted_as_mv():
+    # theta_plus/theta_minus passed as bare numbers default to mV and drive the
+    # kernel exactly like the equivalent Quantities (the _to_mv bare-number path).
+    bare = clopath_synapse(weight=50.0, theta_plus=-45.3, theta_minus=-70.6)
+    assert u.get_unit(bare.theta_plus) == u.mV
+    assert u.get_unit(bare.theta_minus) == u.mV
+    assert np.isclose(bare._theta_plus, THETA_PLUS)
+    assert np.isclose(bare._theta_minus, THETA_MINUS)
+    # same LTD as the Quantity-thresholds spec on an identical context
+    quant = clopath_synapse(weight=50.0)
+    ctx = _ctx(pre_spike=1.0, V=-80.0, u_minus=-60.0)
+    wb = bare.update({'weight': jnp.array([50.0])}, ctx)[0]['weight']
+    wq = quant.update({'weight': jnp.array([50.0])}, ctx)[0]['weight']
+    assert np.allclose(np.asarray(wb), np.asarray(wq))
+
+
 # --------------------------------------------------------------------------
 # LTD on pre spike (post not depolarized -> pure depression)
 # --------------------------------------------------------------------------

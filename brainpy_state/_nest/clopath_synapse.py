@@ -132,15 +132,15 @@ class clopath_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
-       >>> from brainpy_state import clopath_synapse
-       >>> s = clopath_synapse(weight=0.5, tau_x=15.0 * u.ms)
-       >>> s.is_homogeneous_weight, s.post_state_reads
-       (False, ('u_bar_minus', 'u_bar_plus', 'V'))
-       >>> s.post_trace_tau, s.edge_state_init()
-       (None, {})
-       >>> float(u.Quantity(s.pre_trace_tau).to_decimal(u.ms))
-       15.0
+        >>> import saiunit as u
+        >>> from brainpy_state import clopath_synapse
+        >>> s = clopath_synapse(weight=0.5, tau_x=15.0 * u.ms)
+        >>> s.is_homogeneous_weight, s.post_state_reads
+        (False, ('u_bar_minus', 'u_bar_plus', 'V'))
+        >>> s.post_trace_tau, s.edge_state_init()
+        (None, {})
+        >>> float(u.Quantity(s.pre_trace_tau).to_decimal(u.ms))
+        15.0
     """
     __module__ = 'brainpy.state'
 
