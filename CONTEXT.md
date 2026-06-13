@@ -228,6 +228,72 @@ objection into a Lessons entry, do **not** silently diverge.
   `parrot_neuron` + `_relays_multiplicity` for any count-faithful relay (e.g. feeding a shared
   Poisson train to many targets).
 
+### 13-plasticity-demos — 2026-06-13
+
+- **Shipped:** the **four implementable §3.3 plasticity demos** on the `Simulator` API,
+  each with a live-NEST parity test, + Urbanczik as a documented skipped placeholder, +
+  README §3.3 / examples-gap §3.3 docs. Files: `examples/nest/{clopath_synapse_spike_pairing,
+  clopath_synapse_small_network,evaluate_tsodyks2_synapse,evaluate_quantal_stp_synapse,
+  urbanczik_synapse_example}.py` and matching `_nest/_validation/*_test.py`. Reused the
+  cluster-07 `_clopath_drive` (generalized `_our_clopath_neuron` with an `n` param, default
+  1 so all existing callers are unchanged) and the cluster-01 STP drives verbatim. One
+  `_network` seam fix: `connect(seed=)` now threads into the plastic projection's runtime
+  release `rng` (see below). Branch `worktree-nest-goal+13-plasticity-demos`.
+- **Parity:**
+  - `evaluate_tsodyks2_synapse` (deterministic): post-`V_m` PSC train, **max|Δ| ≈ 9.4e-16 mV**
+    (`CAT_B`, 2-step align) both regimes — machine precision once delivery-aligned.
+  - `evaluate_quantal_stp_synapse` (stochastic): seed-mean `V_m` `CAT_D`, **dep 1.8 % / fac
+    2.9 %** at 8 seeds (ours vs NEST 2.08 v 2.11 / 2.57 v 2.49 mV).
+  - `clopath_synapse_spike_pairing`: stored weight per train, in the frozen clopath band —
+    **LTP ≤ 3.3 %, LTD |Δ| ≤ 0.0022 mV**.
+  - `clopath_synapse_small_network`: per-edge final recurrent weight, **LTP ≤ 2.0 %, LTD
+    |Δ| ≤ 0.0007 mV**; forward edges potentiate (mean 0.527), backward depress (mean 0.493),
+    matching NEST's sign on every edge.
+- **API discovered/changed (reusable):**
+  - **`connect(seed=)` → runtime release `rng` seam.** `_event_plastic.py` now stores
+    `self._rng_seed = seed` in `__init__` and `init_state` keys
+    `self.rng = State(jax.random.key(seed or 0))` from it — so the seed **survives
+    `simulate`'s `init_all_states`** (which re-runs `init_state`). Before this, a stochastic
+    rule's seed set on the proj was wiped by `simulate`. Reproduced with a regression test
+    *first* (`_simulator_plastic_test.py`: seed reproducible + distinct, and threads to
+    `key(7)`), per working-agreement #4. Stochastic plastic rules are now reproducible
+    through the Simulator.
+  - **Weight-matrix recording for networks.** `record_weight(proj)` + `res.weight_trace(proj)`
+    → `(T, E)` in **CSR sorted-by-pre** order; for `all_to_all` no-autapses that is exactly
+    `[(i,j) for i in range(N) for j in range(N) if i!=j]`. Read the actual `(pre,post)` from
+    `proj._pre_idx`/`_post_idx` rather than assuming. Clopath dispatches to
+    `VoltageCoupledPlasticProj` (post-state reader); STP rules to `EventPlasticProj`.
+- **Gotchas:**
+  - **The `RELAY_D` holder-lag convention extends to every device→plastic-synapse port.** In
+    NEST a device can't drive a plastic synapse (a `parrot` relays); the `Simulator`
+    `spike_generator` injects with a **one-step (0.1 ms) holder lag**. So the NEST parrot
+    relay delay must be **`RELAY_D = 0.1`**, NOT the 1.0 ms default — otherwise the whole train
+    delivery-shifts ~8–9 steps and parity fails at any sane tolerance (tsodyks2 first showed
+    this: `_D1=1.0` → best align shift 8; `_D1=0.1` → shift ≈0).
+  - **NEST `quantal_stp_synapse` has a *second* `set_status` footgun: `u`, sibling of `a`.**
+    `set_status` only re-derives `u_` if `'u'` is in the dict; the constructor set `u_(U_)`
+    with the **old 0.5 default `U_`**, so `U=0.15` with no explicit `u` silently starts release
+    at u=0.5 — biasing facilitation ~4 %. Depression (U=0.5) matched only by *coincidence* with
+    the stuck default. Fix: pin **both `a=n` AND `u=U`** on the NEST side. This was a latent bug
+    in the *existing* cluster-01 `quantal_stp_parity_test.py` too (passed only by small-sample
+    luck); fixed there as well.
+  - **Quantal variance reduction: `n_sites=100`, `n·w` fixed.** The stochastic seed-mean's CV
+    drops ~7 %→4.3 % going 30→100 sites (envelope `x·u·(n·w)` unchanged), so 8 seeds reliably
+    clears `CAT_D`. The kernel's seed-mean depends on the *absolute* rng-stream position, so
+    Simulator-path and low-level seed-means differ by pure sampling jitter — not a bug.
+  - **Standalone examples need `PYTHONPATH=. python examples/nest/<f>.py`.** Running a script
+    puts the *script's* dir on `sys.path` (→ resolves the **installed** `brainpy_state`), not
+    the cwd. `brainpy.state` ALSO resolves to site-packages, so during development examples
+    import `brainpy_state` and are run with `PYTHONPATH=.` to exercise the worktree. Tests get
+    this free (pytest rootdir on path).
+- **For next clusters:** **Urbanczik is the one §3.3 blocker** — `urbanczik_synapse` is still on
+  the legacy `NESTSynapse` base and the Simulator-API plastic post-state reader
+  (`VoltageCoupledPlasticProj`) exposes only the **somatic `V`**; the rule needs a **named
+  dendritic-compartment reader** plus a validated multi-compartment point-process post
+  (`pp_cond_exp_mc_urbanczik`). When those land it ports like the other four. The
+  `connect(seed=)`→`rng` seam unblocks any future **stochastic** plastic rule
+  (`stdp_synapse` Hebbian-noise variants, etc.). §3.3 is otherwise complete.
+
 ### fix-brunel-es-import — 2026-06-13
 
 - **Shipped:** repaired `brunel_alpha_evolution_strategies_test.py` (the lone red on `main`
