@@ -230,6 +230,14 @@ See also the ecosystem
 
 .. toctree::
    :hidden:
+   :maxdepth: 2
+   :caption: NEST Porting Guide
+
+   nest-guide/index
+
+
+.. toctree::
+   :hidden:
    :maxdepth: 1
    :caption: Project
 
