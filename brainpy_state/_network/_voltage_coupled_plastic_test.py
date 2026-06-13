@@ -164,6 +164,23 @@ def test_requires_post_population():
             rule=_ReaderProbe())
 
 
+class _SignalProbe(_StaticTestRule):
+    """Rule that declares a broadcast signal_reads (the cluster-08 dopamine seam)."""
+    signal_reads = ('n',)
+
+
+def test_requires_signal_source_when_declared():
+    # a rule declaring signal_reads but no bound source is a construction error
+    # (the Simulator binds these from connect(..., vt=...); a bare proj must too).
+    post = _PostStub(V=[0.], u_plus=[0.], u_minus=[0.])
+    with pytest.raises(ValueError, match='signal_reads'):
+        VoltageCoupledPlasticProj(
+            pre_spike=lambda: jnp.array([1.]), n_pre_pop=1, pre_local_idx=jnp.arange(1),
+            post=post, post_local_idx=jnp.arange(1), n_post_pop=1,
+            pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+            rule=_SignalProbe())   # signal_reads=('n',) but signal_sources=None
+
+
 # --------------------------------------------------------------------------
 # Task 1 — primitive #1 intact: base EventPlasticProj exposes ctx.post_states=None
 # --------------------------------------------------------------------------

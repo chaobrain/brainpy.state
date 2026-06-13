@@ -138,6 +138,77 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 08-dopamine-vt — 2026-06-13
+
+- **Shipped:** the **broadcast-modulator seam** — primitive #2's `VoltageCoupledPlasticProj`
+  gains a `signal_reads` reader (a **1→E broadcast scalar** from a bound node, the superset
+  of `post_states`' N→E gather); a JAX-native **`volume_transmitter`** maintaining `n(t)` as
+  a broadcast `HiddenState` (`_nest/volume_transmitter.py`, ring-buffer port retired); and the
+  rebuilt **`stdp_dopamine_synapse`** as a frozen spec + pure `update(state, ctx)` kernel
+  (per-edge eligibility `c` + broadcast `n`; `_nest/stdp_dopamine_synapse.py`, eager port
+  retired). `Simulator.connect(dopa, vt)` binds a dopa source; `connect(pre, post, vt=…)`
+  wires the `n` signal source and routes to `VoltageCoupledPlasticProj` (`_network/_simulator.py`,
+  `_event_plastic.py`). NEST-free: `volume_transmitter_rule_test.py` (16), `stdp_dopamine_synapse_rule_test.py`
+  (27), `_voltage_coupled_plastic_test.py` (+signal-source guard), `_simulator_dopamine_test.py`
+  (9); live-NEST `_validation/volume_transmitter_parity_test.py` (6) + `stdp_dopamine_synapse_parity_test.py`
+  (9) + `_stdp_dopamine_drive.py`. Coverage: VT / dopamine-rule / drive **100 %**, substrate **98.5 %**.
+  Branch `nest-goal/08-dopamine-vt`.
+- **Parity (live NEST 3.9.0):** **VT `n(t)`** is the pure `update_dopamine_` recursion on both
+  sides → **near-exact** (vs the closed form **0.0**, vs NEST **4.7e-16**; validated **upstream
+  first**, the dopamine analogue of cluster-07's neuron-voltage precondition). **Weight trajectory**
+  under dopamine modulation tracks NEST's `weight_recorder` **send-for-send**: realised
+  **max|Δw| < 8e-3 pA** over LTP / LTD / clamp / window sweeps spanning 50→200 pA (**~0.2 % of Δw**,
+  ~25× tighter than Clopath's 5 % — the clean scalar `n` carries **no** analog-history divergence),
+  with **direction and ordering exact**. **STDP eligibility window** (single pair + dopa read-out):
+  pre-before-post potentiates, post-before-pre depresses, `|Δw|` grows as the pairing tightens, the
+  `A_minus>A_plus` asymmetry reproduces — sign, ordering, and magnitude all match.
+- **API discovered/changed (next neuromodulator clusters reuse verbatim):**
+  - **Broadcast-signal reader.** A rule declares `signal_reads = (names…)`; the substrate reads each
+    from a bound node into **`ctx.signals = {name: scalar}`** — unit-stripped scalars **broadcast**
+    against the `(E,)` per-edge arrays (1→E, a superset of `post_states`' N→E gather). `EventPlasticProj`
+    keeps a no-op `_gather_signals()->None` (primitive #1 sees `ctx.signals is None`);
+    `VoltageCoupledPlasticProj` overrides it and **raises** if a declared signal has no source. Sources
+    are `signal_sources={name: (node, attr)}` (the Simulator wires them from `connect(…, vt=…)`); a spec
+    may declare `post_state_reads`, `signal_reads`, or **both** with no substrate change.
+  - **`volume_transmitter` is a broadcast node, not a spike holder.** `Simulator.create` registers it in
+    `_vt_nodes` (it emits no spikes → no holder); `update()` **phase 0** advances every VT before the
+    projections. `bind_dopa(reader, local_idx)` registers a dopa source; `n` lives **on the VT** (moved
+    off the synapse — valid because `n` depends only on `tau_n` + the shared dopa train, a common
+    property), so **`tau_n` must match** transmitter↔spec.
+- **Gotchas (NEST fidelity):**
+  - **`n`'s increment is `* dt`-free; the decay carries the step** — the mirror image of cluster-07's
+    LTP trap. NEST `update_dopamine_`: `n += multiplicity/tau_n` per dopa spike, then `n *= exp(-dt/tau_n)`.
+    The jump on a dopa-arrival step is exactly `1/tau_n` with **no decay that step**; `_advance(n, count,
+    dt, tau_n) = n*exp(-dt/tau_n) + count/tau_n` reproduces NEST **bit-for-bit**. Verify against the C++,
+    not the nominal `1/ms` unit.
+  - **`n`-relay timing + recorder sampling.** A dopa `spike_generator` spike at `s` relayed
+    `sg→parrot→vt` (two `dt` steps) makes `n` jump at `s + 0.2`; our `connect(dopa, vt)` holder lag is one
+    step, so the drive places our generator one `dt` earlier — both jump on the **same** wall-clock step.
+    NEST's `weight_recorder` logs **only at pre `send`**, so a weight read-out needs the pre to **keep
+    firing**; a delayed dopa pulse *after* the last send is invisible to the recorder — read the final
+    `GetConnections` weight (our last step) instead.
+  - **Online ↔ deferred, but far tighter than Clopath.** NEST integrates the weight lazily (at
+    `send`/`trigger_update_weight`; `e.set_weight(weight_)` is logged **before** the impulse's
+    facilitate/depress, which mutate only `c_`); our kernel integrates **every step** with broadcast `n`
+    (one-step lag). With `n` a clean scalar (no ring-buffered analog history), the residual is just the
+    one-step-`n`-lag + per-step-vs-deferred integral → **~0.2 %**, vs Clopath's structural 5 %. Still a
+    documented band + exact direction/ordering, not 1e-7.
+  - **Param location.** NEST: `A_plus/A_minus/tau_plus/tau_c/tau_n/b/Wmin/Wmax` are **common** props
+    (`CopyModel`) with the VT bound there; `tau_minus` is a **post-neuron** param (`get_K_value`); `c`/`n`
+    are per-synapse state. The self-contained spec moves `tau_minus` onto the synapse (the `stdp_synapse`
+    convention) and `n` onto the VT; parity sets identical values across neuron, synapse, and transmitter.
+  - **Doctest `__module__` filter (cluster-07 redux) + coverage.** Spec/node classes set
+    `__module__='brainpy.state'`, so `DocTestFinder` skips them — verify by restoring `cls.__module__`
+    before `DocTestFinder().find(cls)` (VT 5 + dopamine 6 examples pass). For coverage, the rtk stdout
+    proxy swallows pytest-cov's term-table; `coverage run --source=brainpy_state -m pytest …` + the
+    coverage API (`Coverage().load(); cov.analysis2(file)`) reports per-file cleanly.
+- **For next clusters:** the `KernelContext` now carries **two reader shapes** — `post_states` (N→E
+  per-edge gather) and `signals` (1→E broadcast) — both flowing through the same `update(state, ctx)`
+  kernel. A voltage-gated **and** neuromodulated synapse needs **no new substrate**: declare both
+  `post_state_reads` and `signal_reads` and pass `signal_sources`. The `volume_transmitter` pattern (one
+  node, `n`-like broadcast State, `bind_*` sources, phase-0 advance) generalises to any shared modulator
+  (ACh, NE) or a global gain/reward channel.
+
 ### 06-static-stochastic — 2026-06-13
 
 - **Shipped:** **`bernoulli_synapse`** (static delivery + stochastic transmission) and

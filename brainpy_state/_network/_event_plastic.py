@@ -94,6 +94,14 @@ class KernelContext(NamedTuple):
         mantissa in the State's stored unit, in CSR (sorted-by-pre) edge order.
         ``None`` for the base :class:`EventPlasticProj` (primitive #1 reads no post
         State).
+    signals : dict
+        ``{name: scalar}`` broadcast modulatory signals read from a bound third-party
+        node (the :class:`~brainpy_state._nest.volume_transmitter`) and shared by
+        **every edge** of the projection (cluster-08; e.g. ``'n'``, the dopamine
+        concentration, for ``stdp_dopamine_synapse``). Each value is a unit-stripped
+        scalar mantissa broadcast against the ``(E,)`` per-edge arrays — a superset
+        of :attr:`post_states` (1->E broadcast vs N->E gather). ``None`` for any
+        projection that reads no broadcast signal (primitives #1 and post-only #2).
     """
     pre_spike: jax.Array
     post_spike: jax.Array
@@ -105,6 +113,7 @@ class KernelContext(NamedTuple):
     pre_traces: jax.Array = None
     post_traces: jax.Array = None
     post_states: dict = None
+    signals: dict = None
 
 
 class PlasticSynapse(Protocol):
@@ -410,6 +419,16 @@ class EventPlasticProj(brainstate.nn.Module):
         """
         return None
 
+    def _gather_signals(self):
+        """Broadcast modulatory-signal reads for the kernel (``None`` by default).
+
+        The base :class:`EventPlasticProj` reads no broadcast signal; the override
+        in :class:`VoltageCoupledPlasticProj` returns the ``{name: scalar}`` dict
+        declared by ``rule.signal_reads`` and bound via ``signal_sources`` (the
+        cluster-08 ``volume_transmitter`` seam). Read-only.
+        """
+        return None
+
     # -- step --------------------------------------------------------------
     def update(self):
         x_full = jnp.asarray(self.pre_spike())
@@ -450,7 +469,7 @@ class EventPlasticProj(brainstate.nn.Module):
         state = {'weight': self.weight.value, **{k: v.value for k, v in self.aux.items()}}
         ctx = KernelContext(pre_fired, post_fired, pre_trace_edge, post_trace_edge,
                             t_now, dt, key, pre_traces_edge, post_traces_edge,
-                            self._gather_post_states())
+                            self._gather_post_states(), self._gather_signals())
         new_state, w_eff = self.rule.update(state, ctx)
         self.weight.value = new_state['weight']
         for k, v in self.aux.items():
@@ -522,23 +541,43 @@ class VoltageCoupledPlasticProj(EventPlasticProj):
     """
     __module__ = 'brainpy.state'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, signal_sources=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._post_state_reads = tuple(getattr(self.rule, 'post_state_reads', ()) or ())
-        if not self._post_state_reads:
+        self._signal_reads = tuple(getattr(self.rule, 'signal_reads', ()) or ())
+        self._signal_sources = dict(signal_sources or {})
+        if not self._post_state_reads and not self._signal_reads:
             raise ValueError(
                 'VoltageCoupledPlasticProj requires the rule to declare a non-empty '
-                "'post_state_reads' (a tuple of post-neuron State attribute names); "
-                'use EventPlasticProj for a projection that reads no post State.'
+                "'post_state_reads' (post-neuron State sampled per edge) or "
+                "'signal_reads' (a broadcast scalar read from a bound node); use "
+                'EventPlasticProj for a projection that reads neither.'
             )
         if self.post is None:
             raise ValueError(
                 'VoltageCoupledPlasticProj needs a post population to read State from '
                 '(post=None is only valid for the base EventPlasticProj).'
             )
-        # per-edge population-local post index (same gather as the post-trace seam)
-        self._post_gather = self.post_local_idx[self._post_idx]
+        missing = [name for name in self._signal_reads if name not in self._signal_sources]
+        if missing:
+            raise ValueError(
+                f'VoltageCoupledPlasticProj: rule declares signal_reads={self._signal_reads} '
+                f'but no source was bound for {missing}; pass '
+                'signal_sources={name: (node, attr)} (the Simulator wires this from '
+                'connect(..., vt=...)).'
+            )
+        # per-edge population-local post index (only the post-state gather needs it)
+        self._post_gather = (self.post_local_idx[self._post_idx]
+                             if self._post_state_reads else None)
 
     def _gather_post_states(self):
+        if not self._post_state_reads:
+            return None
         return {name: u.get_mantissa(getattr(self.post, name).value)[self._post_gather]
                 for name in self._post_state_reads}
+
+    def _gather_signals(self):
+        if not self._signal_sources:
+            return None
+        return {name: u.get_mantissa(getattr(node, attr).value)
+                for name, (node, attr) in self._signal_sources.items()}

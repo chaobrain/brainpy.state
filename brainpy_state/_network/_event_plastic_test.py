@@ -22,6 +22,7 @@ from brainstate import transform  # noqa: E402
 
 from brainpy_state._network._event_plastic import (  # noqa: E402
     EventPlasticProj,
+    VoltageCoupledPlasticProj,
     KernelContext,
     _StaticTestRule,
 )
@@ -445,6 +446,129 @@ def test_delay_delivers_after_buffer():
     # full-delay convention: nothing on the first steps, the 7 pA lands after the buffer
     assert delivered[0] == 0.0
     assert max(delivered) == pytest.approx(7.0)
+
+
+# --------------------------------------------------------------------------
+# Task 08 — broadcast-signal reader seam (signal_reads -> ctx.signals).
+# A clean superset of the post-state reader: VoltageCoupledPlasticProj reads a
+# named scalar State from a bound third-party node (the volume_transmitter) and
+# broadcasts it to ALL edges as ctx.signals[name]. Default-empty so primitive #1
+# (base EventPlasticProj) and post-only #2 users (clopath) are untouched.
+# --------------------------------------------------------------------------
+class _SignalNode:
+    """Minimal broadcast-signal source: exposes a scalar State ``.n``."""
+
+    def __init__(self, n=0.7):
+        self.n = brainstate.State(jnp.asarray([float(n)]))
+
+
+class _SignalProbe(_StaticTestRule):
+    signal_reads = ('n',)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = {}
+
+    def update(self, state, ctx):
+        self.seen = dict(signals=ctx.signals)
+        # deliver weight + the broadcast scalar (broadcasts () / (1,) against (E,))
+        return state, state['weight'] + ctx.signals['n']
+
+
+class _CaptureSignalsProbe(_StaticTestRule):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = 'unset'
+
+    def update(self, state, ctx):
+        self.seen = ctx.signals
+        return state, state['weight']
+
+
+def test_base_proj_signals_is_none():
+    # primitive #1 reads no signals: ctx.signals is None (default-empty seam).
+    brainstate.environ.set(dt=1.0 * u.ms)
+    rule = _CaptureSignalsProbe(weight=jnp.array([0.]) * u.pA)
+    proj = _build_probe(rule, post_spike=lambda: jnp.array([0.]))
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert rule.seen is None
+
+
+def _build_signal_proj(rule, vt, *, n_post=1, pre_idx=None, post_idx=None):
+    sink = _Sink(n_post)
+    proj = VoltageCoupledPlasticProj(
+        pre_spike=lambda: jnp.array([1.]), n_pre_pop=1, pre_local_idx=jnp.arange(1),
+        post=sink, post_local_idx=jnp.arange(n_post), n_post_pop=n_post,
+        pre_idx=(jnp.array([0]) if pre_idx is None else pre_idx),
+        post_idx=(jnp.array([0]) if post_idx is None else post_idx),
+        rule=rule, signal_sources={'n': (vt, 'n')})
+    brainstate.nn.init_all_states(proj)
+    return proj, sink
+
+
+def test_voltage_coupled_broadcasts_signal_to_all_edges():
+    # the bound node's scalar `n` reaches every edge identically (broadcast 1->E).
+    brainstate.environ.set(dt=1.0 * u.ms)
+    vt = _SignalNode(n=0.7)
+    rule = _SignalProbe(weight=jnp.array([1.0, 2.0]) * u.pA)
+    proj, sink = _build_signal_proj(rule, vt, n_post=2,
+                                    pre_idx=jnp.array([0, 0]), post_idx=jnp.array([0, 1]))
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert np.allclose(np.asarray(rule.seen['signals']['n']), 0.7)     # same scalar both edges
+    # delivered weight = w + n: edge0->post0 = 1.7, edge1->post1 = 2.7
+    assert np.allclose(np.asarray(u.get_mantissa(sink.last)), [1.7, 2.7])
+
+
+def test_voltage_coupled_accepts_signal_only_rule():
+    # dopamine case: signal_reads non-empty, post_state_reads empty -> no raise.
+    brainstate.environ.set(dt=1.0 * u.ms)
+    vt = _SignalNode()
+    rule = _SignalProbe(weight=jnp.array([1.]) * u.pA)
+    proj, _ = _build_signal_proj(rule, vt)
+    assert proj is not None
+
+
+def test_voltage_coupled_signal_read_is_read_only():
+    # reading the broadcast State must not mutate the source node.
+    brainstate.environ.set(dt=1.0 * u.ms)
+    vt = _SignalNode(n=0.5)
+    before = float(np.asarray(vt.n.value)[0])
+    rule = _SignalProbe(weight=jnp.array([1.]) * u.pA)
+    proj, _ = _build_signal_proj(rule, vt)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert float(np.asarray(vt.n.value)[0]) == before
+
+
+def test_voltage_coupled_requires_a_reader():
+    # neither post_state_reads nor signal_reads -> construction error (preserved guard).
+    with pytest.raises(ValueError, match='post_state_reads'):
+        VoltageCoupledPlasticProj(
+            pre_spike=lambda: jnp.array([1.]), n_pre_pop=1, pre_local_idx=jnp.arange(1),
+            post=_Sink(1), post_local_idx=jnp.arange(1), n_post_pop=1,
+            pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+            rule=_StaticTestRule(weight=jnp.array([1.]) * u.pA))
+
+
+def test_voltage_coupled_signal_only_skips_post_gather():
+    # a signal-only rule (empty post_state_reads) gets ctx.post_states is None,
+    # while the broadcast signal still flows through to ctx.signals.
+    brainstate.environ.set(dt=1.0 * u.ms)
+    vt = _SignalNode(n=0.25)
+
+    class _Probe(_SignalProbe):
+        def update(self, state, ctx):
+            self.seen = dict(signals=ctx.signals, post_states=ctx.post_states)
+            return state, state['weight']
+
+    rule = _Probe(weight=jnp.array([1.]) * u.pA)
+    proj, _ = _build_signal_proj(rule, vt)
+    with brainstate.environ.context(t=1.0 * u.ms, i=1):
+        proj.update()
+    assert rule.seen['post_states'] is None
+    assert np.allclose(np.asarray(rule.seen['signals']['n']), 0.25)
 
 
 # --------------------------------------------------------------------------
