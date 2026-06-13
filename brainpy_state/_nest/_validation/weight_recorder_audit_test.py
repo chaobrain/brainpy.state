@@ -46,6 +46,7 @@ from brainpy_state._nest._validation.nest_compare import compare_trace, requires
 from brainpy_state._nest._validation import tolerance_conventions as tc
 from brainpy_state._nest._validation import _stdp_drive as drv
 from brainpy_state._nest._validation import _stdp_dopamine_drive as ddrv
+from brainpy_state._nest._validation import _clopath_drive as cdrv
 
 _D = drv.DEND_D * u.ms          # the dendritic delay every rule is built with
 WPLE = 100.0 / 15.0             # facetshw weight_per_lut_entry (Wmax=100, 16-entry LUT)
@@ -225,6 +226,11 @@ _DOPA_COMMON = dict(A_plus=1.0, A_minus=1.5, tau_plus=20.0, tau_c=1000.0, tau_n=
 _DOPA_BAND = tc.TraceTolerance(3e-2, 2e-3, label="dopamine",
                                note="online one-step-n-lag vs NEST deferred integral")
 
+# Clopath (Group 2) band — the online instantaneous-read vs NEST deferred-history
+# residual, copied from clopath_synapse_parity_test.py (_WEIGHT_BAND).
+_CLOPATH_BAND = tc.TraceTolerance(2e-3, 5e-2, label="clopath",
+                                  note="online instantaneous-read vs NEST deferred history")
+
 
 def _dopamine_rule():
     return stdp_dopamine_synapse(
@@ -388,6 +394,36 @@ class TestWeightRecorderAudit(unittest.TestCase):
         # (value) the masked online integral reproduces NEST's recorded weights in-band.
         compare_trace(nest_w, ev_w, tol=_DOPA_BAND, metric="dopamine audit").assert_()
         self.assertGreater(float(ev_w[-1]), _DOPA_INIT_W, "dopamine LTP must raise the weight")
+
+    # -- Group 2: voltage-based clopath_synapse (exercises the seam's lag=1) --
+    def test_clopath_send_event_count_timing_value(self):
+        # The clopath pre relays sg -> parrot one step (RELAY_D), so NEST stamps the
+        # send at steps(s_pre)+1 -- the natural place to exercise the send-view lag.
+        s_pre = cdrv.SPIKE_TIMES_PRE[0]          # post-pre 10 Hz: a clean multi-send LTD
+        s_post = cdrv.SPIKE_TIMES_POST[0]
+        weights, wr_t = cdrv.nest_pairing_weights_full(s_pre, s_post)
+        trace = cdrv.our_pairing_weight_trace(s_pre, s_post)     # full (T,) weight trajectory
+        n_steps = trace.shape[0]
+
+        # send mask from the pre train via the seam, with the one-step relay lag.
+        pre_arr = np.zeros((n_steps, 1))
+        pre_arr[drv.steps(s_pre), 0] = 1.0
+        send_steps = send_steps_from_pre(pre_arr, lag=1)
+        np.testing.assert_array_equal(
+            send_steps, drv.steps(wr_t), err_msg="clopath: lagged send mask != NEST stamps")
+
+        ev_steps, ev_w = weight_recorder_events(trace, send_steps)
+        # (count) one event per pre send == NEST weight_recorder event count.
+        self.assertEqual(len(ev_steps), len(s_pre), "clopath: event count vs pre")
+        self.assertEqual(len(weights), len(s_pre), "clopath: NEST count vs pre")
+        # (timing) NEST stamps one relay step after each pre; events sit on those steps.
+        np.testing.assert_array_equal(
+            drv.steps(wr_t), drv.steps(s_pre) + 1, err_msg="clopath: stamp != pre + relay")
+        np.testing.assert_array_equal(
+            ev_steps, drv.steps(wr_t), err_msg="clopath: event steps != NEST stamps")
+        # (value) the masked stored weight reproduces NEST's recorded weights in-band.
+        compare_trace(weights, ev_w, tol=_CLOPATH_BAND, metric="clopath audit").assert_()
+        self.assertLess(float(ev_w[-1]), cdrv.INIT_W, "post-before-pre train must depress")
 
 
 if __name__ == "__main__":
