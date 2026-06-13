@@ -109,6 +109,10 @@ class stdp_dopamine_synapse:
     the broadcast ``n`` (one-step lag, ``O(dt/tau_n)``). The trajectories coincide
     at the send/trigger times where NEST's ``weight_recorder`` samples.
 
+    **Parity note.** The ``n``/``tau_n``-on-``volume_transmitter`` move, the
+    online-vs-deferred band, and the parity test are documented in
+    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-dopamine`).
+
     References
     ----------
     .. [1] Izhikevich (2007). Solving the distal reward problem through linkage of

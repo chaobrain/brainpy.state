@@ -98,6 +98,10 @@ class stdp_triplet_synapse:
     whereas NEST defers it to the next pre spike; the two coincide at pre-spike
     (send) times, so parity is asserted there.
 
+    **Parity note.** The consolidated trace-storage and parameter-location
+    reference (both post-trace constants move onto the synapse) and the parity-test
+    links are in :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-tau-minus`).
+
     References
     ----------
     .. [1] NEST ``models/stdp_triplet_connection.h``; Pfister & Gerstner (2006),

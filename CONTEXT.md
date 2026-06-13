@@ -138,6 +138,65 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 10-stdp-docs — 2026-06-13
+
+- **Shipped:** the **STDP parity reference page** — the discrete-synapse divergences
+  discovered/frozen in 04/05/07/08, consolidated into user-facing docs. A new
+  `docs/nest-guide/` Sphinx section (`index.rst` + `stdp-divergences.rst`) wired into
+  `docs/index.rst` under a new hidden **"NEST Porting Guide"** caption (master lists
+  `nest-guide/index`; that landing page's own toctree pulls in `stdp-divergences` — the
+  nested pattern `brainpy-guide/` uses, so the child is not double-included). The page
+  documents **(A)** the `tau_minus` trace-storage move + a family parameter-location
+  table (`tau_minus`/`tau_minus_triplet`; clopath `A_LTP/A_LTD/theta_*` moved vs
+  `tau_u_bar_*` staying on the neuron + `delay_u_bars`; dopamine `n`/`tau_n` on the VT)
+  + the three numerical bands (clopath 5 %, dopamine 0.2 %, NN phantom-pre-at-0), and
+  **(B)** the symm / restr / pre_centered / facetshw pairing conventions with the NEST
+  source-line citations **lifted from the 05 docstrings**. A one-line `**Parity note.**`
+  paragraph (`:doc:` + `:ref:` links) was appended to the **Notes** section of all **10**
+  `stdp_*`/`clopath_`/`stdp_dopamine_` specs. NEST-free guard test
+  `brainpy_state/_nest/stdp_docs_crosslink_test.py` (3 tests / 10 subtests). Docs-only
+  carve-out: doctest, **no live-NEST run**. Branch `nest-goal/10-stdp-docs`.
+- **Parity:** nothing re-measured — this cluster **cites** 04/05/07/08 (single source of
+  truth: every number pulled from the Lessons + existing docstrings). The page's runnable
+  `brainpy.state` doctests pass (`tau_minus=20 ms` on the synapse; `('nearest','nearest')`;
+  `pre_trace_tau is None`; clopath `theta_plus=-45.3 mV`); the documented bands are quoted
+  verbatim from the source Lessons.
+- **API discovered/changed (reusable by all future model docs):**
+  - **Docstring-link introspection test.** A NEST-free test under `brainpy_state/`
+    (collected by CI's `pytest brainpy_state/`) that (a) asserts every targeted spec's
+    `__doc__` carries the stable ``:doc:`/nest-guide/stdp-divergences``` marker, (b) parses
+    the page's `.. _label:` defs and asserts each spec's cited `:ref:` resolves (no dangling),
+    and (c) runs the page doctests via `doctest.testfile`. Reuse to keep any docstring→docs
+    cross-link from rotting.
+  - **doctest-in-`.rst` is the workaround for the `__module__='brainpy.state'` filter** (the
+    01/04/06/07/08 gotcha): spec-class `>>>` examples are skipped by `--doctest-modules`, so
+    the *runnable* examples live in the `.rst`, executed by `doctest.testfile` /
+    `pytest --doctest-glob='*.rst'`. **There is no repo docs-test command**, so the guard test
+    runs them in-CI itself.
+  - **Public-vs-inner import split (CLAUDE.md rule 9) holds for docs.** Page examples use
+    `brainpy.state`; the guard test uses `brainpy_state`. `brainpy/state/__init__.py` does
+    `from brainpy_state import *`, so under PYTHONPATH=worktree (and CI's editable install)
+    `brainpy.state.X is brainpy_state.X` — the doctests reflect worktree code.
+- **Gotchas:**
+  - **`conf.py exclude_patterns` hides `nest-status/internal/**`** — the gap-doc is **not**
+    built, so a user-facing page cannot live there; `docs/nest-guide/` (built) is the home.
+  - **Docs deploy uses `sphinx-build` without `-W`, only on release (not PR CI)** — so
+    "builds clean" is a local check. The build emits **156 pre-existing `[docutils]` "Field
+    list ends without a blank line" warnings** spanning the whole API (untouched BrainPy-style
+    models included); my new files + **Notes-only** docstring inserts add **zero** (no
+    link-integrity warnings; cross-links render in the built HTML, e.g. the `stdp_synapse`
+    autosummary page → `#stdp-tau-minus`). Do **not** widen scope to fix the codebase-wide
+    field-list quirk here.
+  - **FP-noisy attrs stay out of doctests** — clopath `A_LTP`/`A_LTD` print as `7.9999…e-05`;
+    the table quotes them, the doctests use only clean outputs.
+- **For next clusters:** this **closes the discrete-synapse stream's docs + validation**
+  (04/05/07/08 implemented and now documented). The documented STDP divergence map is
+  complete: trace-storage (`tau_minus`), clopath param-location + `delay_u_bars` 5 %, dopamine
+  `n`/`tau_n`-on-VT + 0.2 %, NN phantom-pre-at-0. The next synapse work is the **bucket-3
+  continuous re-grill** (`gap_junction` / `rate_connection_*` / `diffusion_connection` /
+  `sic_connection` + the rate neurons, `ContinuousCoupledProj`). Reuse the introspection-test
+  + doctest-in-`.rst` pattern for its docs.
+
 ### 08-dopamine-vt — 2026-06-13
 
 - **Shipped:** the **broadcast-modulator seam** — primitive #2's `VoltageCoupledPlasticProj`
