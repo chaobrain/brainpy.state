@@ -48,6 +48,8 @@ class _FakePop:
         self._asc_states = [_FakeState(np.array([0.4])), _FakeState(np.array([0.1]))]
         if with_asc_sum:
             self._asc_sum_state = _FakeState(np.array([0.5]))
+        # glif_psc per-port post-synaptic current (PSC, pA): I_syn = sum over ports.
+        self.y2 = [_FakeState(np.array([12.0])), _FakeState(np.array([3.0]))]
 
 
 class _FakeAeifPop:
@@ -114,6 +116,13 @@ class TestRecordableAlias(unittest.TestCase):
         pop = _FakePop(with_asc_sum=False)
         got = _read_recordable(pop, 'ASCurrents_sum')
         npt.assert_allclose(np.asarray(got), np.array([0.5]))  # 0.4 + 0.1
+
+    def test_i_syn_sums_per_port_psc(self):
+        # glif_psc exposes per-port PSC states ``y2``; NEST ``I_syn`` is their sum
+        # (glif_psc.cpp: ``S_.I_syn_ += S_.y2_[i]`` over all receptors).
+        pop = _FakePop()
+        got = _read_recordable(pop, 'I_syn')
+        npt.assert_allclose(np.asarray(got), np.array([15.0]))  # 12.0 + 3.0
 
     def test_unknown_recordable_raises_keyerror(self):
         pop = _FakePop()

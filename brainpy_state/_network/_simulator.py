@@ -51,6 +51,16 @@ def _asc_sum(pop):
     return sum(s.value for s in pop._asc_states)
 
 
+def _psc_sum(pop):
+    """Total post-synaptic current ``I_syn`` = sum of per-port PSC states ``y2``.
+
+    NEST ``glif_psc`` reports ``I_syn`` as the sum of every receptor's PSC
+    (``glif_psc.cpp``: ``S_.I_syn_ += S_.y2_[i]`` over all receptors); brainpy
+    stores those per-port PSCs as the ``y2`` list of States (each in pA).
+    """
+    return sum(s.value for s in pop.y2)
+
+
 def _g_port(k):
     """Resolver for NEST per-port conductance ``g_k`` (1-indexed).
 
@@ -104,6 +114,8 @@ _RECORDABLE_ALIAS = {
     'g_3': _g_port(3),
     'g_4': _g_port(4),
     'ASCurrents_sum': _asc_sum,
+    # glif_psc total post-synaptic current: sum of per-port PSC states (y2).
+    'I_syn': _psc_sum,
 }
 
 
