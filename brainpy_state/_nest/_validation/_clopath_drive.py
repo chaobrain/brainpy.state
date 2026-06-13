@@ -268,13 +268,18 @@ def our_clamp_weight(I_e, s_pre, T):
     return float(u.get_mantissa(res.weight_trace(proj))[-1, 0])
 
 
-def _our_clopath_neuron(sim, I_e=0.0):
-    """Build the shared ``aeif_psc_delta_clopath`` post with the canonical parameters."""
+def _our_clopath_neuron(sim, I_e=0.0, n=1):
+    """Build ``n`` shared ``aeif_psc_delta_clopath`` neurons with the canonical parameters.
+
+    Default ``n = 1`` is the single post used by the pairing / voltage drives; the
+    small-network example passes ``n > 1`` to build the recurrent population (every
+    neuron carries the identical canonical parameters and starts at ``E_L``).
+    """
     import braintools
     import saiunit as u
     from brainpy_state import aeif_psc_delta_clopath
     return sim.create(
-        aeif_psc_delta_clopath, 1,
+        aeif_psc_delta_clopath, n,
         E_L=-70.6 * u.mV, V_peak=33.0 * u.mV, C_m=281.0 * u.pF, theta_minus=-70.6 * u.mV,
         theta_plus=-45.3 * u.mV, A_LTD=14.0e-5, A_LTP=8.0e-5, tau_u_bar_minus=10.0 * u.ms,
         tau_u_bar_plus=7.0 * u.ms, delay_u_bars=DELAY_UBARS * u.ms, a=4.0 * u.nS, b=0.0805 * u.pA,

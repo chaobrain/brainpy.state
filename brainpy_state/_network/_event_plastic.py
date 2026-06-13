@@ -262,6 +262,12 @@ class EventPlasticProj(brainstate.nn.Module):
         self._n_post_pop = int(n_post_pop if n_post_pop is not None
                                else self.post_local_idx.shape[0])
         self._delta_key = delta_key or f'event_plastic_{id(self)}'
+        # Runtime-rng seed for stochastic rules. ``init_state`` keys the per-step
+        # ``rng`` from this so the seed survives ``init_all_states`` (which the
+        # Simulator runs inside ``simulate``); ``None`` keeps the historical key(0)
+        # default. Shares the integer with connectivity sampling (mirrors NEST's
+        # single ``rng_seed``); the two consume independent key instances.
+        self._rng_seed = seed
 
         n_pre = int(self.pre_local_idx.shape[0])
         n_post = int(self.post_local_idx.shape[0])
@@ -330,7 +336,9 @@ class EventPlasticProj(brainstate.nn.Module):
         }
         self.pre_trace = self._alloc_trace(self._pre_trace_spec, self._n_pre_pop, dftype)
         self.post_trace = self._alloc_trace(self._post_trace_spec, self._n_post_pop, dftype)
-        self.rng = brainstate.State(jax.random.key(0)) if self.rule.stochastic else None
+        self.rng = (brainstate.State(jax.random.key(
+            0 if self._rng_seed is None else int(self._rng_seed)))
+            if self.rule.stochastic else None)
 
         # -- sub-dt (fractional) delay seam (default-off) ---------------------
         # Decompose the homogeneous delay into an integer floor ``k_lo`` and a

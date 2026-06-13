@@ -120,6 +120,70 @@ These ports drive four `Simulator` extensions reused by later clusters:
   rate=[…])` → a `k`-segment view; `connect(gen, neuron, weight=[…])` applies one
   signed weight per channel (`one_neuron_with_noise`, `balancedneuron`).
 
+## Plasticity demos (§3.3)
+
+Four of NEST's plasticity tutorials, each a faithful port driven by a live-NEST
+parity test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any directly,
+e.g. `python examples/nest/evaluate_tsodyks2_synapse.py`.
+
+- **`clopath_synapse_spike_pairing.py`** — the canonical voltage-based STDP
+  (Clopath 2010) protocol: a pre train paired with a post train across pairing
+  frequencies 10–50 Hz in both orderings, onto an `aeif_psc_delta_clopath`
+  through a single `clopath_synapse`. The stored weight is read with
+  `res.weight_trace` and the *normalised weight change* is plotted against pairing
+  frequency. `aeif_psc_delta_clopath` is a **delta** neuron, so the weight is in
+  `u.mV`.
+- **`evaluate_tsodyks2_synapse.py`** — the deterministic Tsodyks-Markram rule
+  (`tsodyks2_synapse`) in a depression (`U=0.67`) and a facilitation (`U=0.1`)
+  regime. A 50 ms-ISI burst plus a recovery pair drives a single edge onto a
+  linear, never-spiking `iaf_psc_exp` post (`V_th = 1e4` mV), so the post `V_m`
+  **is** the PSC-amplitude train — shrinking under depression, growing under
+  facilitation.
+- **`evaluate_quantal_stp_synapse.py`** — the *stochastic* quantal variant
+  (`quantal_stp_synapse`): each edge has `n` release sites and every spike
+  releases `Binomial(available, u)` of them. The per-run `seed` is forwarded to
+  `connect` and keys the release PRNG, so realizations differ across seeds and the
+  seed-mean tracks the deterministic `tsodyks2` envelope (`weight = n·w`, plotted
+  as the limit line).
+- **`clopath_synapse_small_network.py`** — a small all-to-all recurrent
+  `aeif_psc_delta_clopath` population (no autapses) whose neurons are spike-clamped
+  to fire in a staggered order (`0→1→2`) each cycle. Each directed edge then sees
+  the spike-pairing protocol, so forward edges (pre before post) potentiate and
+  backward edges depress; the recurrent weight **matrix** evolution is recorded
+  with `res.weight_trace` and shows a feedforward chain emerging.
+
+The fifth §3.3 demo is **blocked** and ships as a skipped placeholder that raises
+`NotImplementedError` with the gap reason:
+
+- **`urbanczik_synapse_example.py`** — the Urbanczik-Senn dendritic rule trains
+  plastic inputs onto the *dendritic* compartment of a two-compartment
+  `pp_cond_exp_mc_urbanczik` neuron. It needs a dendritic post-compartment reader
+  on a plastic projection (the rule reads a named compartment voltage + prediction
+  error, but `VoltageCoupledPlasticProj` exposes only the somatic `V`) and a
+  validated multi-compartment point-process post (`synapses-plasticity-gap.md` §3,
+  `neurons-gap.md` §3). It will be ported once those land.
+
+These ports add two reusable seams on top of the §3.2 / §3.4 vocabulary:
+
+- **F — plastic projections + weight recording.** `connect(..., synapse=<plastic
+  rule>)` dispatches to the plastic-projection primitives — `EventPlasticProj`
+  (event-driven; the two STP rules) and `VoltageCoupledPlasticProj` (the
+  post-state reader; Clopath reads the `aeif_psc_delta_clopath` analog voltages
+  every step). `record_weight(proj)` taps the per-edge weight, read post-run as
+  `res.weight_trace(proj)` → `(T, E)` in CSR (sorted-by-pre) order. The two Clopath
+  demos record the weight directly; the STP demos read the plasticity through the
+  post `V_m` (the PSC-amplitude train, seam **A**).
+- **G — stochastic seed threading.** `connect(..., seed=k)` keys the per-edge
+  release PRNG and survives `simulate`'s `init_all_states`, so a stochastic rule
+  (`quantal_stp_synapse`) is reproducible per seed; parity is then **distributional**
+  (seed-mean, category D).
+
+In NEST a plastic synapse cannot be driven by a device, so a `parrot_neuron`
+relays the train; the `Simulator` `spike_generator` drives the plastic edge
+directly with a one-step (0.1 ms) holder lag, so the NEST reference's relay delay
+is set to the matching **0.1 ms** (the `RELAY_D` convention) to align delivery
+before comparison.
+
 ## Recording & device demos (§3.4)
 
 Five of NEST's recording/device tutorials, each paired with a live-NEST parity
@@ -238,6 +302,33 @@ The deterministic single-neuron traces match NEST to ~1e-14 mV because
 `iaf_psc_alpha`'s exact propagator and the analog State tap are bit-faithful; the
 `balancedneuron` objective is steep near the root, so the bisected inhibitory rate
 is identical to NEST despite the PRNG-divergent Poisson drive.
+
+### Plasticity demos (§3.3)
+
+Deterministic rules are compared per-sample against live NEST; the stochastic
+quantal rule is compared as a seed-mean statistic (category D, 5 %). The two
+Clopath demos read the stored weight, which carries a documented online-vs-NEST
+band (instantaneous post-state read vs NEST's deferred-history `weight_recorder`):
+backward/LTD edges are near-exact, forward/LTP within 5 % (growing with pairing
+frequency). Weights are bare mV mantissas (`aeif_psc_delta_clopath` is a delta
+neuron, init `0.5`).
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `evaluate_tsodyks2_synapse` (dep / fac) | post `V_m` PSC-amplitude train, max\|Δ\| | 9.4e-16 mV (`CAT_B`, 2-step align) |
+| `evaluate_quantal_stp_synapse` (8 seeds) | seed-mean `V_m` (dep / fac) | 2.08 vs 2.11 (1.8 %) ; 2.57 vs 2.49 (2.9 %) — within `CAT_D` |
+| `clopath_synapse_spike_pairing` (10 trains) | stored weight per train, in clopath band | LTP rel ≤ 3.3 % ; LTD \|Δ\| ≤ 0.0022 mV |
+| `clopath_synapse_small_network` (6 edges) | per-edge final weight, in clopath band | LTP rel ≤ 2.0 % ; LTD \|Δ\| ≤ 0.0007 mV |
+
+`tsodyks2` is an exact analytic-propagator rule, so once the parrot relay delay is
+matched to the generator holder lag (`RELAY_D = 0.1`) the two PSC trains agree to
+machine precision (the 2-step search only absorbs the multimeter recorder step).
+The quantal rule draws a single `jax.random.binomial` where NEST draws one
+Bernoulli per site — distributionally identical but on independent PRNG streams —
+so parity is the seed-mean `V_m` (the example uses `n_sites = 100`, `n·w` fixed,
+to tighten the estimate). Both Clopath demos are the same spike-pairing physics:
+the small network is just that protocol replicated across every directed edge, so
+its per-edge band is tighter (≤ 2 %) than the up-to-50 Hz pairing sweep (≤ 3.3 %).
 
 ### Recording & device demos (§3.4)
 

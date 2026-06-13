@@ -14,7 +14,7 @@ import pytest
 
 from brainpy_state import (
     Simulator, aeif_psc_delta_clopath, all_to_all, clopath_synapse, dc_generator,
-    iaf_psc_exp, spike_generator, spike_recorder,
+    iaf_psc_exp, multimeter, quantal_stp_synapse, spike_generator, spike_recorder,
     static_synapse, tsodyks2_synapse, vogels_sprekeler_synapse,
 )
 from brainpy_state._network._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
@@ -191,3 +191,56 @@ def test_clopath_connect_level_bare_weight_override_stays_mv():
                        delay=1.0 * u.ms, rule=all_to_all)
     assert proj.rule.weight_unit == u.mV
     assert float(u.get_mantissa(proj.rule.weight)) == 5.0
+
+
+# -- stochastic per-run seed seam (quantal_stp) ----------------------------
+# A stochastic plastic rule draws from the projection's ``rng`` State each step.
+# ``simulate()`` re-inits every State through ``init_all_states`` before the run,
+# so the per-run seed must be threaded into ``init_state`` -- otherwise the rng is
+# reset to a hard-coded key and ``connect(seed=)`` is silently ignored, making
+# every seed produce the identical realization (and seed-mean parity meaningless).
+def _quantal_vm(seed):
+    sim = Simulator(dt=0.1 * u.ms)
+    post = sim.create(iaf_psc_exp, 1, V_th=1e4 * u.mV)
+    gen = sim.create(spike_generator, spike_times=np.arange(20., 200., 5.) * u.ms)
+    sim.connect(gen, post,
+                synapse=quantal_stp_synapse(weight=60. * u.pA, n=30, U=0.5,
+                                            tau_rec=150. * u.ms, tau_fac=0. * u.ms),
+                delay=1.0 * u.ms, seed=seed)
+    mm = sim.create(multimeter, record_from=['V_m'], interval=0.1 * u.ms)
+    sim.connect(mm, post)
+    res = sim.simulate(250. * u.ms)
+    return np.asarray(u.get_mantissa(res.trace(mm, 'V_m') / u.mV)).reshape(-1)
+
+
+def test_simulator_stochastic_seed_is_reproducible_and_distinct():
+    # Regression: init_state hard-seeded jax.random.key(0), ignoring connect(seed=),
+    # so every seed produced the identical V_m trace. The per-run seed must survive
+    # simulate()'s init_all_states.
+    a1 = _quantal_vm(1)
+    a1_again = _quantal_vm(1)
+    a2 = _quantal_vm(2)
+    np.testing.assert_array_equal(a1, a1_again)     # a fixed seed reproduces exactly
+    assert not np.allclose(a1, a2)                  # different seeds -> different draws
+
+
+def test_plastic_proj_seed_threads_into_runtime_rng():
+    # Unit-level pin of the seam: after init_all_states, the runtime ``rng`` key
+    # reflects the constructor seed (and seed=None stays key(0) for back-compat,
+    # so the low-level drivers that set proj.rng.value after init are unaffected).
+    import jax.numpy as jnp
+    brainstate.environ.set(dt=0.1 * u.ms)
+
+    def _rng_keydata(seed):
+        proj = EventPlasticProj(
+            pre_spike=lambda: jnp.zeros(1), n_pre_pop=1, pre_local_idx=jnp.arange(1),
+            post=iaf_psc_exp(1), post_local_idx=jnp.arange(1), n_post_pop=1,
+            pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+            rule=quantal_stp_synapse(weight=60. * u.pA, n=10),
+            **({} if seed is None else {'seed': seed}))
+        brainstate.nn.init_all_states(proj)
+        return jax.random.key_data(proj.rng.value)
+
+    assert jnp.array_equal(_rng_keydata(None), jax.random.key_data(jax.random.key(0)))
+    assert jnp.array_equal(_rng_keydata(7), jax.random.key_data(jax.random.key(7)))
+    assert not jnp.array_equal(_rng_keydata(7), jax.random.key_data(jax.random.key(0)))

@@ -77,13 +77,30 @@ per-generator weight vectors (multi-channel generator view).
 
 ### 3.3 Plasticity demos
 
+Four ported in cluster 13 (`Simulator` API, live-NEST parity); one is **blocked**
+and ships as a skipped placeholder. The ports added two reusable extensions —
+**F** plastic projections + weight recording (`connect(synapse=<plastic rule>)`
+dispatches to `EventPlasticProj` / `VoltageCoupledPlasticProj`; `record_weight` +
+`res.weight_trace(proj)` → `(T, E)` CSR order) and **G** stochastic seed threading
+(`connect(seed=)` keys the per-edge release PRNG, surviving `simulate`'s
+`init_all_states`). One `_network` seam fix was required: the `connect(seed=)`
+integer now threads into the plastic projection's runtime release `rng` (reproduced
+with a regression test first), so stochastic rules are reproducible through
+`simulate`. The deterministic ports also pinned the **`RELAY_D` holder-lag
+convention** (NEST's parrot relay delay set to the `Simulator` generator's 0.1 ms
+holder lag) and surfaced the NEST `quantal_stp_synapse` `set_status` footgun (`u`
+stays at the 0.5 constructor default unless pinned, sibling of the known `a`
+footgun). The blocked demo needs a dendritic post-compartment reader on a plastic
+projection + a validated multi-compartment post (`synapses-plasticity-gap.md` §3,
+`neurons-gap.md` §3).
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `clopath_synapse_small_network.py` | missing | none | uses `clopath_synapse` + `aeif_psc_delta_clopath` (both ported, both validated) |
-| `clopath_synapse_spike_pairing.py` | missing | none | spike-pair regression; coordinates with `synapses-plasticity-gap.md` P1 |
-| `evaluate_quantal_stp_synapse.py` | missing | none | exercises `quantal_stp_synapse` (currently unvalidated per `synapses-plasticity-gap.md`) |
-| `evaluate_tsodyks2_synapse.py` | missing | none | exercises `tsodyks2_synapse` (currently unvalidated) |
-| `urbanczik_synapse_example.py` | missing | none | uses `pp_cond_exp_mc_urbanczik` + `urbanczik_synapse` |
+| `clopath_synapse_spike_pairing.py` | implemented | `examples/nest/clopath_synapse_spike_pairing.py` | voltage-based STDP 10–50 Hz; stored weight `res.weight_trace` in clopath band (LTP ≤ 3.3 %, LTD near-exact) (ext. F) |
+| `clopath_synapse_small_network.py` | implemented | `examples/nest/clopath_synapse_small_network.py` | recurrent Clopath weight matrix; per-edge final weight in clopath band (LTP ≤ 2.0 %, LTD near-exact) (ext. F) |
+| `evaluate_tsodyks2_synapse.py` | implemented | `examples/nest/evaluate_tsodyks2_synapse.py` | deterministic Tsodyks-Markram; PSC-train post `V_m` `CAT_B` ~9e-16 mV (ext. F via post `V_m`) |
+| `evaluate_quantal_stp_synapse.py` | implemented | `examples/nest/evaluate_quantal_stp_synapse.py` | stochastic quantal STP; seed-mean `V_m` `CAT_D` (dep 1.8 %, fac 2.9 %, 8 seeds) (ext. F, G) |
+| `urbanczik_synapse_example.py` | blocked | skipped placeholder | needs a dendritic post-compartment reader on a plastic proj + validated `pp_cond_exp_mc_urbanczik` (`synapses-plasticity-gap.md` §3, `neurons-gap.md` §3) |
 | eprop_plasticity/ (subdir) | unsupported until ported | none | requires e-prop neuron + synapse port (cross-link `neurons-gap.md` P2, `synapses-plasticity-gap.md` P2) |
 
 ### 3.4 Recording / device demos
