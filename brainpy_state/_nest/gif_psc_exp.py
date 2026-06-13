@@ -670,7 +670,11 @@ class gif_psc_exp(NESTNeuron):
         self.I_syn_ex.value = I_syn_ex_pA * u.pA
         self.I_syn_in.value = I_syn_in_pA * u.pA
         self.refractory_step_count.value = jnp.asarray(new_r, dtype=ditype)
-        self.I_stim.value = new_i_stim_pA * u.pA
+        # Keep the population shape even when no current input is registered (then
+        # ``sum_current_inputs`` returns the scalar ``x``): a scalar I_stim would
+        # change the for_loop/scan carry type between iterations. (See the mc model
+        # for the same broadcast-on-write idiom.)
+        self.I_stim.value = (new_i_stim_pA + jnp.zeros(v_shape, dtype=jnp.float64)) * u.pA
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
 

@@ -1036,5 +1036,60 @@ class TestGIFPscExpUpdateOrder(unittest.TestCase):
             self.assertTrue(math.isfinite(v1), f"V should be finite, got {v1}")
 
 
+class TestGIFPscExpForLoopLowering(unittest.TestCase):
+    r"""The model must lower into ``brainstate.transform.for_loop`` (the path the
+    Simulator uses to run a whole simulation in one compiled program) without the
+    scan carry changing shape between iterations.
+
+    Regression: ``I_stim`` collapsed from ``(N,)`` to a scalar ``()`` whenever
+    ``update`` ran with **no registered current inputs** -- then
+    ``sum_current_inputs(x, V)`` returns the scalar ``x`` unchanged, and the
+    write-back stored a scalar. Eager step-by-step stepping (which the other tests
+    use) tolerates the shape change, but ``for_loop``/``scan`` requires the carry
+    type to be identical every iteration, so it raised
+    ``carry input and carry output must have equal types``.
+    """
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
+    def _make(self, n):
+        # The gif_population.py demo parameters (two stc + two sfa elements).
+        return gif_psc_exp(
+            n, C_m=83.1 * u.pF, g_L=3.7 * u.nS, E_L=-67.0 * u.mV,
+            Delta_V=1.4 * u.mV, V_T_star=-39.6 * u.mV, t_ref=4.0 * u.ms,
+            V_reset=-36.7 * u.mV, lambda_0=1.0,
+            q_stc=[56.7, -6.9], tau_stc=[57.8, 218.2],
+            q_sfa=[11.7, 1.8], tau_sfa=[53.8, 640.0], tau_syn_ex=10.0 * u.ms,
+            rng_key=jax.random.PRNGKey(0))
+
+    def test_for_loop_runs_with_no_current_inputs(self):
+        # No external current registered: the run must complete and return one
+        # spike vector per step (the bug raised before any output).
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = self._make(100)
+            neuron.init_state()
+
+            def step(i):
+                with brainstate.environ.context(t=i * 0.1 * u.ms):
+                    return neuron.update(x=0.0 * u.pA)
+
+            out = brainstate.transform.for_loop(step, np.arange(50))
+            self.assertEqual(np.asarray(u.get_mantissa(out)).shape, (50, 100))
+
+    def test_for_loop_preserves_i_stim_shape(self):
+        # The crux: I_stim keeps the population shape after the lowered run.
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            neuron = self._make(8)
+            neuron.init_state()
+
+            def step(i):
+                with brainstate.environ.context(t=i * 0.1 * u.ms):
+                    return neuron.update(x=0.0 * u.pA)
+
+            brainstate.transform.for_loop(step, np.arange(20))
+            self.assertEqual(tuple(u.math.shape(neuron.I_stim.value)), (8,))
+
+
 if __name__ == '__main__':
     unittest.main()
