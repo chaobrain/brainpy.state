@@ -123,6 +123,10 @@ class PlasticSynapse(Protocol):
     # optional (default 'all_to_all'); 'nearest' resets the trace to 1 on each
     # spike instead of accumulating (cluster-05 nearest-neighbour STDP):
     # pre_trace_mode, post_trace_mode
+    # optional (default False); when True the substrate honours a sub-dt delay by
+    # delivering at the integer floor delay and splitting the post amplitude
+    # across the two bracketing grid steps (cluster-06 cont_delay_synapse):
+    # fractional_delay
 
     def edge_state_init(self) -> dict: ...
 
@@ -285,8 +289,16 @@ class EventPlasticProj(brainstate.nn.Module):
                         else jnp.broadcast_to(w_m, (self._E,)))
 
         # -- axonal delay seam (identity when delay is None) ------------------
+        # A rule may opt into a *sub-dt* delay via ``fractional_delay = True``
+        # (cont_delay_synapse): the substrate then delivers the binary event at
+        # the integer floor delay (so ``BinaryArray`` is not fed a fractional
+        # vector) and splits the post amplitude across the two bracketing grid
+        # steps with a 1-step output carry (built in ``init_state``, where ``dt``
+        # is known). Default-off: every other rule keeps the unchanged path.
+        self._fractional_delay = bool(getattr(rule, 'fractional_delay', False))
         self.delay_seam = (InputDelay((self._n_pre_pop,), rule.delay)
-                           if rule.delay is not None else None)
+                           if (rule.delay is not None and not self._fractional_delay)
+                           else None)
 
         # -- pre-computed (Python bool) full-post fast path -------------------
         self._post_is_full = (
@@ -310,6 +322,29 @@ class EventPlasticProj(brainstate.nn.Module):
         self.pre_trace = self._alloc_trace(self._pre_trace_spec, self._n_pre_pop, dftype)
         self.post_trace = self._alloc_trace(self._post_trace_spec, self._n_post_pop, dftype)
         self.rng = brainstate.State(jax.random.key(0)) if self.rule.stochastic else None
+
+        # -- sub-dt (fractional) delay seam (default-off) ---------------------
+        # Decompose the homogeneous delay into an integer floor ``k_lo`` and a
+        # fraction ``frac = d/dt - k_lo`` (NEST cont_delay's ``delay_steps`` /
+        # ``delay_offset_``). Deliver the binary event at ``k_lo`` steps (clean
+        # floor frame for ``BinaryArray``) and FIR-split the post amplitude
+        # ``[1-frac, frac]`` across the two bracketing grid steps. ``frac == 0``
+        # (integer delay) -> no carry -> byte-identical to a plain grid delay.
+        self.delay_carry = None
+        self._delay_frac = 0.0
+        if self._fractional_delay and self.rule.delay is not None:
+            dt = brainstate.environ.get_dt()
+            steps = (float(u.Quantity(self.rule.delay).to_decimal(u.ms))
+                     / float(u.Quantity(dt).to_decimal(u.ms)))
+            k_lo = int(np.floor(steps + 1e-9))
+            frac = float(steps - k_lo)
+            self._delay_frac = 0.0 if frac < 1e-9 else frac
+            if k_lo >= 1:
+                self.delay_seam = InputDelay((self._n_pre_pop,), k_lo * dt)
+                brainstate.nn.init_all_states(self.delay_seam)
+            if self._delay_frac > 0.0:
+                self.delay_carry = brainstate.HiddenState(
+                    jnp.zeros((self._shape[1],), dtype=dftype))
 
     # -- helpers -----------------------------------------------------------
     @staticmethod
@@ -425,6 +460,11 @@ class EventPlasticProj(brainstate.nn.Module):
         w_eff = jnp.broadcast_to(jnp.asarray(w_eff), (self._E,))
         csr = brainevent.CSR((w_eff, self._indices, self._indptr), shape=self._shape)
         y = jnp.asarray(brainevent.BinaryArray(pre_seg) @ csr)   # (n_post_seg,)
+        if self.delay_carry is not None:
+            # sub-dt delay: deliver (1-frac) of this floor-delayed amplitude now,
+            # carry frac to the next grid step (1-step FIR -> exact first moment).
+            frac = self._delay_frac
+            y, self.delay_carry.value = (1.0 - frac) * y + self.delay_carry.value, frac * y
         contrib = y if self._post_is_full else self._scatter(y)
         if self._w_unit is not u.UNITLESS:
             contrib = u.Quantity(contrib, unit=self._w_unit)
