@@ -238,6 +238,95 @@ objection into a Lessons entry, do **not** silently diverge.
   (rate-neuron primitives), `gap_junctions_*` (gap-junction coupling), `intrinsic_currents_*`
   (`ht_neuron`). Reuse the `iaf_cond_exp` receptor seam for any conductance E/I net and the
   steady-state-rate + seed-mean/median distributional pattern for any balanced/metastable net.
+### 12-single-neuron-models-2 — 2026-06-14
+
+- **Shipped:** the **§3.5 single-neuron model-demo cluster, part 2** — 9 more
+  `examples/nest/` ports completing NEST §3.5 (now **16** total), each with a
+  live-NEST trace-parity test or a documented carve-out in `_nest/_validation/`:
+  `iaf_tum_2000_short_term_{depression,facilitation}` (presynaptically-integrated
+  Tsodyks–Markram STP), `izhikevich` (RS/IB/CH/FS), `mat_psc_exp`
+  (`mat2_psc_exp` + an active-`V_th_v` `amat2_psc_exp` config), `mc_neuron`
+  (`iaf_cond_alpha_mc`, full device→compartment-receptor routing), `CampbellSiegert`
+  (analytic mean/var/rate cross-check), `BrodyHopfield` (sinusoidal-drive
+  phase-locking), `gif_population` (microscopic GIF network), `gif_pop_psc_exp`
+  (mesoscopic population-rate model vs microscopic network). Two new seams: **(H)**
+  presynaptic-STP emission and **(I)** mc device→compartment-receptor routing.
+  Foundation: callable recordable aliases (`U_m`, composite `V_th`, per-compartment
+  `V_m.{s,p,d}` / `g_ex/g_in.*`). Docs: README §3.5 prose + parity/carve-out tables;
+  this entry. Branch `worktree-nest-goal+12-single-neuron-models-2`; PR #58.
+- **Parity:**
+  - deterministic (trace, generous constant integer-step align where a device
+    carries NEST's 1 ms delay): `izhikevich` `V_m`/`U_m` `CAT_A` (~1e-3 mV) **zero
+    shift** + exact counts (RS<IB<CH<FS) under an `I_e` drive; `mat_psc_exp`
+    non-resetting `V_m` + composite `V_th` float-noise floor zero-shift + exact
+    counts (`amat2` run with `beta=0.2/ms` so `V_th_v` is active); `iaf_tum_2000`
+    post `V_m` machine precision after a **constant ~8-step** delivery/recorder
+    offset (depression EPSPs decrease, facilitation increase-then-saturate; efficacy
+    →0.0569); `mc_neuron` per-compartment `V_m.*` ~0.05–0.08 mV (RKF45), `g_*.*`
+    float-noise floor, somatic-rheobase spike count exact.
+  - carve-outs (distributional / analytic): `CampbellSiegert` Campbell μ <0.01 mV,
+    σ² ~2–3 %, Siegert rate ~35 % (low count); `BrodyHopfield` seed-mean vector
+    strength rel ~2 %, rate ~0.3 %, phase-hist max|Δ| ~0.006 (5 seeds);
+    `gif_population` seed-mean rate ~1.4 %, binned-rate autocorr max|Δ| ~0.024
+    (`CAT_D`); `gif_pop_psc_exp` meso-vs-micro window-mean rate ~11 % (mean 0.3 %),
+    step jump ×3.36/×2.73, + meso-driver vs NEST uncoupled (`CAT_D`).
+- **API discovered/changed (reusable seams):**
+  - **(H) presynaptic-STP emission.** A presynaptic model declaring class attr
+    `_emission_attr` (e.g. `iaf_tum_2000._emission_attr='spike_offset'`) wired with
+    `connect(pre, post, receptor_type=pre.RECEPTOR_TYPES['TSODYKS'])` makes
+    `Simulator._connect_pair` build a plain `EventProjection` that reads the pre's
+    per-step emission holder — delivering the **released efficacy** `weight·(u·x)` as
+    a pA delta, **not** the binary spike, and with **no** post-port routing
+    (`iaf_tum_2000` has no `n_receptors`). A plain (receptor-0) connection from the
+    same pre still delivers the binary spike — the per-connection distinction is the
+    point. Reuse for any presynaptically-integrated plasticity.
+  - **(I) mc device→compartment-receptor routing.** `connect(device, mc,
+    receptor_type=k)`, 1-based `k∈1..6` = per-compartment exc/inh spike ports,
+    `k∈7..9` = per-compartment current ports; per-compartment recordables resolve via
+    `_mc_comp(attr, idx)` aliases (`V_m.{s,p,d}`, `g_ex/g_in.{s,p,d}`, last-axis
+    compartment index). Pairs with the Urbanczik dendritic reader the deferred
+    plasticity cluster needs.
+  - **`gif_pop_psc_exp` is host-side** (NumPy `RandomState`, plain-int `N`,
+    `update(x)->int n_spikes`, `add_delta_input(key, val)` sign-split into the
+    tau_syn-filtered exc/inh channels, `update(x=)` → direct `y0` current; props
+    `n_spikes`/`V_m`). Driven by a host Python loop — the **documented rule-#10
+    carve-out** for untraceable models (it is not a lowerable `brainstate` module).
+    Recurrent coupling = a delayed sign-split `add_delta_input` (synaptic); the step
+    current = `update(x=)` (direct). The **microscopic** half ports onto the
+    Simulator (one `for_loop`): `pconn` realized as `fixed_indegree(round(pconn·N))`,
+    weight sign routing inhibition, `step_current_generator` for the jump.
+- **Gotchas:**
+  - **`gif_psc_exp.I_stim` collapsed `(N,)`→`()` under `for_loop`/`scan`.** With no
+    current input registered, `sum_current_inputs(x, V)` returns the scalar `x`, so
+    the write-back stored a scalar — changing the scan carry type between iterations
+    (`carry input and carry output must have equal types`). Eager step-by-step tests
+    (all the model had) never lowered it, so it was invisible until the Simulator ran
+    the population in one `for_loop`. Fix = broadcast-on-write `I_stim =
+    (i_stim + zeros(v_shape))·pA` (the mc idiom). **Lesson: every model the Simulator
+    runs needs a `for_loop`-lowering regression test — eager stepping hides
+    carry-shape bugs.** (Wrote the failing test first, then fixed.)
+  - **`noise_generator` refresh interval (BrodyHopfield).** NEST's default
+    `noise_generator` refresh is **1.0 ms**, not the sim `dt`; membrane-noise
+    variance ∝ refresh interval, so leaving it at 0.1 ms inflated the noise and
+    over-locked the population (R 0.44 vs NEST 0.27). Pass `noise_dt=1.0*ms`.
+  - **No `pairwise_bernoulli` connectivity rule** — use `fixed_indegree(round(p·N))`
+    (same mean in-degree); applied to both gif demos and matched NEST-side.
+  - **Simulator compile cost dominates gif test wall-clock.** Each fresh
+    `Simulator(...).simulate()` JIT-compiles the gif `for_loop` (minutes); the
+    `gif_population` validation (4 distinct builds) took ~34 min. Amortize by sharing
+    one expensive run across tests in `setUpClass` (`gif_pop_psc_exp` does **one**
+    micro run); keep multi-seed `@requires_nest` work on the cheap host-side path.
+    XLA's persistent cache makes a re-run of the same graph fast.
+  - **meso-vs-micro autocorrelation dip is method-specific.** The cleaner mesoscopic
+    rate model anti-correlates (adaptation dip ~26 ms); the noisier microscopic
+    network's autocorrelation stays positive. Assert the *shared* feature (slow
+    positive correlation at 60 ms), not the dip.
+- **For next clusters:** §3.5 single-neuron demos are **complete (16 ports)**. Reuse
+  seam (H) for any presynaptically-integrated plasticity, seam (I) + the
+  per-compartment aliases for multi-compartment models (and the Urbanczik reader),
+  and the host-side-loop + distributional-carve-out pattern for any untraceable /
+  population-density model. The `for_loop`-lowering regression-test discipline
+  applies to **every** Simulator-run model.
 
 ### 11-single-neuron-models-1 — 2026-06-13
 

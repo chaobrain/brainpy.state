@@ -242,8 +242,11 @@ These ports add one reusable seam on top of the §3.2 vocabulary:
 
 ## Single-neuron model demos (§3.5)
 
-Seven of NEST's single-neuron model tutorials (NEST §3.5), each a faithful port
-driven by a live-NEST parity test (`brainpy_state/_nest/_validation/<name>_test.py`).
+Sixteen of NEST's single-neuron model tutorials (NEST §3.5): most are faithful
+ports driven by a live-NEST trace-parity test
+(`brainpy_state/_nest/_validation/<name>_test.py`); the stochastic and mean-field
+ones use a documented analytic or distributional carve-out (where the PRNG streams
+diverge, the closed form or the seed-averaged statistics are the ground truth).
 Run any directly, e.g. `python examples/nest/glif_cond_neuron.py`.
 
 - **`hh_psc_alpha.py`** — the Hodgkin–Huxley neuron (`hh_psc_alpha`) under a
@@ -270,9 +273,42 @@ Run any directly, e.g. `python examples/nest/glif_cond_neuron.py`.
 - **`glif_psc_double_alpha_neuron.py`** — `glif_psc` with a *double* alpha synaptic
   kernel (a fast alpha plus `amp_slow`×a slow alpha), comparing the single- vs
   double-alpha synaptic-current shape across three receptor ports.
+- **`iaf_tum_2000_short_term_depression.py`** / **`…_facilitation.py`** — two
+  `iaf_tum_2000` neurons with Tsodyks–Markram STP integrated *presynaptically*: a
+  DC-driven presynaptic neuron relays its graded released efficacy `weight·(u·x)`
+  through `receptor_type=1` to a post neuron whose sub-threshold `V_m` is recorded.
+  A large `U` with `tau_fac=0` depresses successive EPSPs; a small `U` with a
+  non-zero `tau_fac` facilitates them. First demo to use the STP-emission seam.
+- **`izhikevich.py`** — the Izhikevich two-variable neuron in the four canonical
+  regimes (`RS`/`IB`/`CH`/`FS`) under a constant current, recording `V_m` and `U_m`.
+- **`mat_psc_exp.py`** — the multi-timescale adaptive-threshold neuron
+  (`mat2_psc_exp`, plus an `amat2_psc_exp` config with the active voltage-dependent
+  `V_th_v` component), recording the non-resetting `V_m` and the composite moving
+  threshold `V_th = omega + V_th_1 + V_th_2 [+ V_th_v]`.
+- **`mc_neuron.py`** — the three-compartment `iaf_cond_alpha_mc` driven through all
+  nine receptors: per-compartment current pulses (receptors 7-9), per-compartment
+  excitatory/inhibitory spike trains (receptors 1-6), and a somatic rheobase;
+  records per-compartment `V_m.{s,p,d}` and `g_ex/g_in.{s,p,d}`. Exercises the full
+  device→compartment-receptor routing seam.
+- **`CampbellSiegert.py`** — a mean-field **analysis** carve-out: an `iaf_psc_alpha`
+  population under Poisson drive whose free-membrane mean/variance (Campbell's
+  theorem) and firing rate (Siegert's approximation) are computed analytically and
+  cross-checked against the Simulator's empirical statistics.
+- **`BrodyHopfield.py`** — a distributional **phase-locking** carve-out: 1000
+  `iaf_psc_alpha` neurons under a shared 35 Hz sub-threshold oscillation, independent
+  noise, and a per-neuron DC bias ramp; spikes synchronize to the oscillation
+  (measured by vector strength), and the synchrony vanishes without it.
+- **`gif_population.py`** — a microscopic GIF network: 100 `gif_psc_exp` neurons with
+  recurrent `fixed_indegree(30)` coupling and a Poisson drive, run in one compiled
+  `for_loop`; spike-frequency adaptation drives a population-rate oscillation that
+  recurrence sharpens.
+- **`gif_pop_psc_exp.py`** — the same finite two-population GIF network simulated two
+  ways — mesoscopically (the host-side `gif_pop_psc_exp` population-rate model) and
+  microscopically (an 800+200 `gif_psc_exp` network on the Simulator) — shown to give
+  the same population activity `A_N(t)`. The mesoscopic half runs in a host-side loop
+  (`gif_pop_psc_exp` is host-side NumPy, not JAX-traceable).
 
-These ports add a multi-receptor seam and a relay primitive on top of the
-§3.2/§3.4 vocabulary:
+These ports add four seams on top of the §3.2/§3.4 vocabulary:
 
 - **F — multi-receptor routing.** `connect(pre, neuron, receptor_type=k)` deposits a
   spike train into a specific 1-based receptor port `k` of a multi-receptor neuron.
@@ -289,6 +325,19 @@ These ports add a multi-receptor seam and a relay primitive on top of the
   exceeds one is relayed as that count, not collapsed to a single event — so a
   Poisson window drives a chosen receptor port at NEST-faithful magnitude via
   `poisson_generator → parrot_neuron → connect(receptor_type=k)`.
+- **H — presynaptic-STP emission.** When a presynaptic model carries the class attr
+  `_emission_attr` (e.g. `iaf_tum_2000`'s `spike_offset`) and is wired with
+  `connect(pre, post, receptor_type=1)` (its `TSODYKS` receptor), the Simulator
+  delivers the *graded released efficacy* `weight·(u·x)` as a plain pA delta input —
+  not the binary spike — so the short-term plasticity, which lives in and is gated by
+  the presynaptic neuron, reaches the post at NEST-faithful magnitude. A plain
+  (receptor-0) connection from the same neuron still delivers the binary spike.
+- **I — device→compartment-receptor routing.** `connect(device, mc, receptor_type=k)`
+  routes a current or spike device into a specific compartment-receptor of a
+  multi-compartment neuron (`iaf_cond_alpha_mc`): 1-based `k ∈ 1..6` are the
+  per-compartment excitatory/inhibitory spike ports, `k ∈ 7..9` the per-compartment
+  current ports. Per-compartment recordables (`V_m.{s,p,d}`, `g_ex/g_in.{s,p,d}`)
+  resolve by compartment index through the recordable-alias table.
 
 ## Network demos (§3.6)
 
@@ -488,6 +537,10 @@ to category A.
 | `glif_cond_neuron` (5 levels) | `g_1`/`g_2` full trace ; subthreshold `V_m`/`threshold` ; spike count | machine precision ; ~1e-13 mV ; exact |
 | `glif_psc_neuron` (5 levels) | `I_syn`/`I` full trace ; subthreshold `V_m` ; spike count | ~2e-15 pA ; ~0.03 mV (`CAT_B_ALIGNED`) ; exact |
 | `glif_psc_double_alpha_neuron` (3 cfgs) | `V_m` + `I_syn` full trace (sub-threshold) | ~1e-13 mV / ~1e-15 pA |
+| `iaf_tum_2000` (depression, facilitation) | post `V_m` full trace (sub-threshold) | machine precision after a constant ~8-step align |
+| `izhikevich` (RS/IB/CH/FS) | `V_m`+`U_m` full trace ; spike count | `CAT_A` (~1e-3 mV), zero shift ; exact |
+| `mat_psc_exp` (mat2, amat2) | `V_m` + composite `V_th` full trace ; spike count | float-noise floor, zero shift ; exact |
+| `mc_neuron` (`iaf_cond_alpha_mc`, 9 receptors) | per-compartment `V_m.{s,p,d}` ; `g_ex/g_in.*` ; spike count | ~0.05–0.08 mV (RKF45) ; machine precision ; exact |
 
 The GLIF per-port conductances (`g_k`) and synaptic currents (`I_syn`, `I`) are
 linear filters of the fixed external spike trains, so they match NEST over the
@@ -502,6 +555,25 @@ rather than the machine-precision band the linear currents and the spike-free
 from per-sample parity (independent PRNG streams) but tracks NEST in aggregate
 once the parrot relays spike multiplicity (≈59/88/27/26/26 vs 59/89/27/27/26
 spikes across the five levels).
+
+Four §3.5 demos are **carve-outs** rather than per-sample NEST trace parity: their
+drive is a PRNG stream (or the comparison is against analytic theory), so the ground
+truth is the closed form or the seed-averaged statistics, never a per-sample match.
+
+| Port | comparison | result |
+|---|---|---|
+| `CampbellSiegert` | sim vs analytic Campbell μ/σ², Siegert rate | μ <0.01 mV ; σ² ~2–3 % ; rate ~35 % (low-count Siegert approximation) |
+| `BrodyHopfield` | seed-mean vector strength / rate / phase-histogram vs NEST (5 seeds) | R ~2 % ; rate ~0.3 % ; phase-hist max\|Δ\| ~0.006 |
+| `gif_population` | seed-mean rate / binned-rate autocorrelation vs NEST (`CAT_D`) | rate ~1.4 % ; autocorr max\|Δ\| ~0.024 |
+| `gif_pop_psc_exp` | mesoscopic vs microscopic `A_N` ; meso driver vs NEST (uncoupled) | window-mean rate ~11 % (mean 0.3 %) ; step jump ×3.4 / ×2.7 |
+
+`BrodyHopfield`, `gif_population` and `gif_pop_psc_exp` are stochastic spiking
+populations whose NEST and JAX PRNG streams diverge, so they are compared
+distributionally (seed-aggregated, category D); `CampbellSiegert` is checked against
+its own closed-form theory. `gif_pop_psc_exp`'s mesoscopic half is the host-side
+`gif_pop_psc_exp` population-rate model (NumPy + `RandomState`, not JAX-traceable),
+driven by a host-side Python loop — the documented exception to the
+`brainstate.transform` lowering rule for untraceable models.
 
 ### Network demos (§3.6)
 

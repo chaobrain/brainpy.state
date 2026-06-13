@@ -91,6 +91,56 @@ def _g_port(k):
     return read
 
 
+def _adaptive_threshold(pop):
+    """NEST ``V_th`` recordable for the multi-timescale adaptive-threshold family.
+
+    ``mat2_psc_exp``/``amat2_psc_exp`` do not store the firing threshold; it is
+    *computed* as ``V_th = omega + V_th_1 + V_th_2`` (mat2_psc_exp.cpp), where
+    ``omega`` is a parameter (absolute mV) and ``V_th_1``/``V_th_2`` are States
+    that jump by ``alpha_1``/``alpha_2`` on the model's own spikes and decay back.
+    ``amat2_psc_exp`` adds the voltage-dependent component ``V_th_v``.
+
+    Models that instead expose the threshold *directly* as a ``V_th`` State (e.g.
+    ``aeif_psc_delta_clopath``) fall through to that State, so this single alias
+    serves both the computed-threshold and stored-threshold conventions.
+    """
+    omega = getattr(pop, 'omega', None)
+    if omega is not None and getattr(pop, 'V_th_1', None) is not None:
+        total = omega + pop.V_th_1.value + pop.V_th_2.value
+        v_th_v = getattr(pop, 'V_th_v', None)        # amat2 only
+        if v_th_v is not None:
+            total = total + v_th_v.value
+        return total
+    state = getattr(pop, 'V_th', None)               # clopath: threshold is a State
+    if state is not None and hasattr(state, 'value'):
+        return state.value
+    raise KeyError(
+        'V_th: population is neither a MAT model (omega + V_th_1 + V_th_2) nor '
+        f'exposes a V_th State on {type(pop).__name__}'
+    )
+
+
+def _mc_comp(attr, idx):
+    """Resolver for a multi-compartment recordable ``<attr>.<s|p|d>``.
+
+    ``iaf_cond_alpha_mc`` stacks the three compartments on the *last axis* of a
+    single State (SOMA=0, PROX=1, DIST=2); NEST spells the per-compartment
+    recordables ``V_m.s``/``V_m.p``/``V_m.d``, ``g_ex.s``/…, ``g_in.s``/…. This
+    returns a ``pop -> value`` reader selecting one compartment column, preserving
+    the leading (neuron) axis so the analog tap can index by neuron ordinal.
+    """
+    def read(pop):
+        state = getattr(pop, attr, None)
+        if state is None:
+            raise KeyError(
+                f'{attr!r} compartment recordable: {type(pop).__name__} has no '
+                f'{attr!r} stacked-compartment State'
+            )
+        return state.value[..., idx]
+
+    return read
+
+
 # Map NEST recordable names to brainpy.state State attributes. Most current-based
 # neurons store ``V`` (NEST ``V_m``); the exp family uses ``i_syn_ex`` where the
 # alpha family uses ``I_syn_ex``; so each maps either to a tuple of candidate attrs
@@ -124,6 +174,15 @@ _RECORDABLE_ALIAS = {
     'ASCurrents_sum': _asc_sum,
     # glif_psc total post-synaptic current: sum of per-port PSC states (y2).
     'I_syn': _psc_sum,
+    # izhikevich recovery variable (NEST ``U_m`` -> brainpy ``U``).
+    'U_m': ('U',),
+    # MAT family adaptive threshold (computed: omega + V_th_1 + V_th_2 [+ V_th_v]);
+    # falls back to a directly-stored ``V_th`` State for non-MAT models (clopath).
+    'V_th': _adaptive_threshold,
+    # iaf_cond_alpha_mc per-compartment recordables (SOMA=0, PROX=1, DIST=2).
+    'V_m.s': _mc_comp('V', 0), 'V_m.p': _mc_comp('V', 1), 'V_m.d': _mc_comp('V', 2),
+    'g_ex.s': _mc_comp('g_ex', 0), 'g_ex.p': _mc_comp('g_ex', 1), 'g_ex.d': _mc_comp('g_ex', 2),
+    'g_in.s': _mc_comp('g_in', 0), 'g_in.p': _mc_comp('g_in', 1), 'g_in.d': _mc_comp('g_in', 2),
 }
 
 
@@ -374,7 +433,7 @@ class Simulator(brainstate.nn.Module):
         self._taps = {}                       # id(recorder) -> (id(source), idx)
         self._analog_taps = {}                # id(recorder) -> (id(pop), idx, recordables)
         self._weight_taps = {}                # id(proj) -> EventPlasticProj (weight tap)
-        self._current_injectors = []          # (device, post_pop, post_idx, weight, key)
+        self._current_injectors = []          # (device, post_pop, post_idx, weight, key, comp, ncomp)
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
 
@@ -414,6 +473,13 @@ class Simulator(brainstate.nn.Module):
             return NodeView([_Segment(mod, jnp.arange(1))])
         holder = _SpikeHolder(_flat_size(mod))
         setattr(self, f'_holder_{id(mod)}', holder)
+        # A neuron that integrates short-term plasticity *presynaptically* (declares
+        # ``_emission_attr`` -- iaf_tum_2000's released efficacy ``spike_offset``)
+        # also gets an emission holder. A TSODYKS connection delivers that graded
+        # efficacy (captured in phase 2 alongside the binary spike) rather than
+        # ``weight * spike``; the binary holder still serves every other connection.
+        if getattr(mod, '_emission_attr', None) is not None:
+            setattr(self, f'_emit_holder_{id(mod)}', _SpikeHolder(_flat_size(mod)))
         return NodeView.of(mod)
 
     # -- connection --------------------------------------------------------
@@ -629,6 +695,59 @@ class Simulator(brainstate.nn.Module):
                 )
             vt.bind_dopa(_holder_reader(holder), pre_seg.indices)
 
+    def _resolve_stp_emission(self, pre_pop, post_pop, receptor_type, spike_holder):
+        """Choose what a neuron->neuron static connection delivers per step.
+
+        Most neurons emit a binary spike (the spike holder -> ``weight * spike``).
+        A neuron integrating short-term plasticity *presynaptically* (declares
+        ``_emission_attr`` -- iaf_tum_2000's released efficacy
+        ``spike_offset = u * x``) delivers that graded efficacy instead
+        (``weight * efficacy``), but **only over its TSODYKS receptor**; its
+        DEFAULT/``None`` connection -- and every other model's connection -- still
+        delivers the binary spike. The TSODYKS post is single-port, so the
+        ``receptor_type`` collapses to ``None`` (a plain delta-input delivery; the
+        post integrates ``weight * efficacy`` as its excitatory PSC).
+
+        Parameters
+        ----------
+        pre_pop, post_pop : Neuron
+            The presynaptic and postsynaptic populations.
+        receptor_type : int or str or None
+            The connection's NEST receptor type as passed to :meth:`connect`.
+        spike_holder : _SpikeHolder
+            The presynaptic population's binary-spike holder (the default source).
+
+        Returns
+        -------
+        tuple
+            ``(pre_spike_reader, effective_receptor_type)`` -- the callable the
+            :class:`EventProjection` reads each step, and the receptor type to
+            build it with (``None`` for the TSODYKS-efficacy path).
+
+        Raises
+        ------
+        ValueError
+            If a TSODYKS connection targets a post of a different model (the
+            efficacy is delivered as that model's PSC, so the post must be the same
+            integrate-and-fire-with-STP model), or if the emission holder is absent.
+        """
+        emit_attr = getattr(pre_pop, '_emission_attr', None)
+        tsodyks = getattr(pre_pop, 'RECEPTOR_TYPES', {}).get('TSODYKS')
+        if emit_attr is None or receptor_type is None or receptor_type != tsodyks:
+            return _holder_reader(spike_holder), receptor_type
+        if not isinstance(post_pop, type(pre_pop)):
+            raise ValueError(
+                f'a TSODYKS (receptor_type={receptor_type}) connection from '
+                f'{type(pre_pop).__name__} delivers presynaptic short-term-plasticity '
+                f'efficacy and requires a {type(pre_pop).__name__} post; got '
+                f'{type(post_pop).__name__}.')
+        emit_holder = getattr(self, f'_emit_holder_{id(pre_pop)}', None)
+        if emit_holder is None:
+            raise ValueError(
+                f'{type(pre_pop).__name__} declares _emission_attr={emit_attr!r} but '
+                'no emission holder was allocated by create().')
+        return _holder_reader(emit_holder), None
+
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
                       receptor_type=None, synapse=None, vt=None):
@@ -644,7 +763,8 @@ class Simulator(brainstate.nn.Module):
             plastic_extra['signal_sources'] = self._build_signal_sources(synapse, vt)
         if isinstance(pre_seg, _GenSegment):
             if _is_current_generator(pre_seg.spec.model_cls):
-                self._wire_current_injector(pre_seg, post_seg, weight, ordinal)
+                self._wire_current_injector(pre_seg, post_seg, weight, ordinal,
+                                            receptor_type)
                 return
             n = int(post_seg.indices.shape[0])
             params = dict(pre_seg.spec.params)
@@ -680,18 +800,20 @@ class Simulator(brainstate.nn.Module):
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                     seed=self._derive_seed(seed, ordinal), **plastic_extra)
             else:
+                pre_spike, eff_receptor = self._resolve_stp_emission(
+                    pre_pop, post_pop, receptor_type, holder)
                 proj = EventProjection(
-                    pre_spike=_holder_reader(holder), n_pre_pop=_flat_size(pre_pop),
+                    pre_spike=pre_spike, n_pre_pop=_flat_size(pre_pop),
                     pre_local_idx=pre_seg.indices, post=post_pop,
                     post_local_idx=post_seg.indices, rule=rule, weight=weight,
-                    delay=delay, comm=comm, receptor_type=receptor_type,
+                    delay=delay, comm=comm, receptor_type=eff_receptor,
                     pre_is_post=(pre_pop is post_pop),
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                     seed=self._derive_seed(seed, ordinal))
         setattr(self, f'_proj_{ordinal}', proj)
         return proj
 
-    def _wire_current_injector(self, pre_seg, post_seg, weight, ordinal):
+    def _wire_current_injector(self, pre_seg, post_seg, weight, ordinal, receptor_type=None):
         """Realize a current generator at the post size and register it as an injector.
 
         Current generators (``dc_generator`` / ``step_current_generator`` /
@@ -705,8 +827,15 @@ class Simulator(brainstate.nn.Module):
         one independent channel per target (``noise_generator`` draws ``randn(n)``
         each step); a per-connect derived seed keeps separate connects
         independent.
+
+        ``receptor_type`` selects a target compartment for a multi-compartment post
+        (``iaf_cond_alpha_mc``: 7=soma, 8=proximal, 9=distal); the resolved
+        ``(comp, ncomp)`` makes the injection land in one compartment instead of
+        broadcasting across all of them. It is ``(None, None)`` for an ordinary
+        single-compartment post.
         """
         post_pop = post_seg.population
+        comp, ncomp = self._resolve_current_compartment(post_pop, receptor_type)
         n = int(post_seg.indices.shape[0])
         params = dict(pre_seg.spec.params)
         if 'seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
@@ -714,7 +843,52 @@ class Simulator(brainstate.nn.Module):
         device = pre_seg.spec.model_cls(n, **params)
         setattr(self, f'_node_{id(device)}', device)
         key = f'cur_inj_{ordinal}'
-        self._current_injectors.append((device, post_pop, post_seg.indices, weight, key))
+        self._current_injectors.append(
+            (device, post_pop, post_seg.indices, weight, key, comp, ncomp))
+
+    @staticmethod
+    def _resolve_current_compartment(post_pop, receptor_type):
+        """Resolve a compartmental post's current ``receptor_type`` to ``(comp, ncomp)``.
+
+        A multi-compartment post (``iaf_cond_alpha_mc``) exposes
+        ``current_compartment_for_receptor`` and ``NCOMP``; its current generators MUST
+        name a target compartment via ``receptor_type`` (7=soma, 8=proximal, 9=distal)
+        so the injected current lands in one compartment instead of broadcasting across
+        all of them. A non-compartmental post takes no current ``receptor_type``.
+
+        Parameters
+        ----------
+        post_pop : Dynamics
+            The postsynaptic population.
+        receptor_type : int or None
+            The connection's NEST receptor type.
+
+        Returns
+        -------
+        tuple
+            ``(comp, ncomp)`` --- the target compartment index and compartment count for
+            a compartmental post, or ``(None, None)`` for an ordinary single-compartment
+            post.
+
+        Raises
+        ------
+        ValueError
+            If a compartmental post is given no ``receptor_type``, a non-compartmental
+            post is given one, or the receptor type is not a valid current receptor.
+        """
+        resolver = getattr(post_pop, 'current_compartment_for_receptor', None)
+        if resolver is None:
+            if receptor_type is not None:
+                raise ValueError(
+                    f'receptor_type={receptor_type} was given for current injection into '
+                    f'{type(post_pop).__name__}, which has no current receptors.')
+            return None, None
+        if receptor_type is None:
+            raise ValueError(
+                f'{type(post_pop).__name__} requires a current receptor_type for current '
+                f'input (soma_curr=7, proximal_curr=8, distal_curr=9); none was given.')
+        comp = resolver(receptor_type)            # raises for spike / out-of-range
+        return comp, int(post_pop.NCOMP)
 
     @staticmethod
     def _scatter_current(cur, pop, idx):
@@ -729,6 +903,21 @@ class Simulator(brainstate.nn.Module):
         mant = u.get_mantissa(cur)
         base = jnp.zeros(n_pop, dtype=mant.dtype)
         return u.maybe_decimal(base.at[idx].add(mant) * u.get_unit(cur))
+
+    @staticmethod
+    def _scatter_current_compartment(cur, pop, idx, comp, ncomp):
+        """Place a device's ``(n,)`` current into one compartment column of ``(n_pop, ncomp)``.
+
+        Like :meth:`_scatter_current`, but for a multi-compartment post: the current is
+        scattered into column ``comp`` of an otherwise-zero ``(n_pop, ncomp)`` frame, so
+        the neuron's ``sum_current_inputs`` (which reads a ``(*varshape, ncomp)`` array)
+        sees the current only in the targeted compartment, never broadcast across all of
+        them.
+        """
+        n_pop = _flat_size(pop)
+        mant = u.get_mantissa(cur)
+        base = jnp.zeros((n_pop, ncomp), dtype=mant.dtype)
+        return u.maybe_decimal(base.at[idx, comp].add(mant) * u.get_unit(cur))
 
     # -- run ---------------------------------------------------------------
     def update(self, t=None):
@@ -749,11 +938,15 @@ class Simulator(brainstate.nn.Module):
         #     ``y0`` and applied on the *next* step --- a one-step ring buffer,
         #     matching NEST's current buffer). Non-callable inputs are popped on
         #     consumption, so the contribution is re-added every step.
-        for device, pop, idx, weight, key in self._current_injectors:
+        for device, pop, idx, weight, key, comp, ncomp in self._current_injectors:
             cur = device.update()
             if weight is not None:
                 cur = cur * weight
-            pop.add_current_input(key, self._scatter_current(cur, pop, idx))
+            if comp is None:
+                pop.add_current_input(key, self._scatter_current(cur, pop, idx))
+            else:
+                pop.add_current_input(
+                    key, self._scatter_current_compartment(cur, pop, idx, comp, ncomp))
         # 2) drive neurons/generators and capture their output into holders
         for m in children:
             if isinstance(m, (EventProjection, EventPlasticProj, _SpikeHolder)):
@@ -779,6 +972,15 @@ class Simulator(brainstate.nn.Module):
                 # keep their raw per-step count instead of a binarised spike.
                 val = jnp.asarray(u.get_mantissa(out), dtype=dftype)
             holder.spk.value = val
+            # Presynaptic STP: capture this step's released efficacy (graded, 0 off
+            # spike) into the emission holder, time-aligned with the binary spike so a
+            # TSODYKS connection delivers it with the same latency as a plain spike.
+            emit_attr = getattr(m, '_emission_attr', None)
+            if emit_attr is not None:
+                emit = getattr(self, f'_emit_holder_{id(m)}', None)
+                if emit is not None:
+                    emit.spk.value = jnp.asarray(
+                        u.get_mantissa(getattr(m, emit_attr).value), dtype=dftype)
 
     def simulate(self, duration, *, dt=None) -> SimulationResult:
         """Run for ``duration`` and return recorded spikes and analog traces.

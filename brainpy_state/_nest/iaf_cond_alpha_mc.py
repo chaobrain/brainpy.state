@@ -665,6 +665,103 @@ class iaf_cond_alpha_mc(NESTNeuron):
             i_s = u.math.broadcast_to(x, self.varshape)
             return u.math.stack([i_s, zeros_pA, zeros_pA], axis=-1)
 
+    # Spike receptor type (1-6) -> the labeled delta-input channel the model reads
+    # back with ``sum_delta_inputs(label=...)`` (compartment × synapse type). The
+    # Simulator's projection layer uses :meth:`delta_label_for_receptor` to route a
+    # ``connect(spike_source, mc, receptor_type=k)`` deposit into this one channel.
+    _SPIKE_RECEPTOR_DELTA_LABEL = {
+        1: 'w_ex_s', 2: 'w_in_s',   # soma     exc / inh
+        3: 'w_ex_p', 4: 'w_in_p',   # proximal exc / inh
+        5: 'w_ex_d', 6: 'w_in_d',   # distal   exc / inh
+    }
+
+    def delta_label_for_receptor(self, receptor_type):
+        r"""Map a spike receptor type (1-6) to its delta-input channel label.
+
+        The Simulator routes ``connect(spike_source, mc, receptor_type=k)`` into the
+        single conductance channel the model reads with ``sum_delta_inputs(label=...)``
+        (see :meth:`update`). Current receptors (7-9) are rejected here: they carry an
+        injected current and must be driven by a current generator.
+
+        Parameters
+        ----------
+        receptor_type : int
+            NEST receptor type. Spike receptors are ``1-6`` (soma/proximal/distal ×
+            exc/inh; see :attr:`SPIKE_RECEPTOR_TYPES`).
+
+        Returns
+        -------
+        str
+            The delta-input channel label, one of ``'w_ex_s'``, ``'w_in_s'``,
+            ``'w_ex_p'``, ``'w_in_p'``, ``'w_ex_d'``, ``'w_in_d'``.
+
+        Raises
+        ------
+        ValueError
+            If ``receptor_type`` is a current receptor (7-9) or out of range.
+        """
+        try:
+            rt = int(receptor_type)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f'receptor_type must be an integer spike receptor 1-6, got {receptor_type!r}.'
+            )
+        if rt in self._SPIKE_RECEPTOR_DELTA_LABEL:
+            return self._SPIKE_RECEPTOR_DELTA_LABEL[rt]
+        if rt in self.CURRENT_RECEPTOR_TYPES.values():
+            raise ValueError(
+                f'receptor_type {rt} is a current receptor (soma_curr=7, proximal_curr=8, '
+                f'distal_curr=9); drive it with a current generator '
+                f'(dc_/step_/ac_/noise_generator), not a spike source.'
+            )
+        raise ValueError(
+            f'invalid spike receptor_type {rt}; valid spike receptors are 1-6 '
+            f'({sorted(self.SPIKE_RECEPTOR_TYPES.values())}).'
+        )
+
+    def current_compartment_for_receptor(self, receptor_type):
+        r"""Map a current receptor type (7-9) to its compartment index.
+
+        The Simulator routes ``connect(current_generator, mc, receptor_type=k)`` into a
+        single compartment's injected current. Spike receptors (1-6) are rejected here:
+        they carry a conductance weight and must be driven by a spike source.
+
+        Parameters
+        ----------
+        receptor_type : int
+            NEST receptor type. Current receptors are ``7`` (soma), ``8`` (proximal),
+            ``9`` (distal); see :attr:`CURRENT_RECEPTOR_TYPES`.
+
+        Returns
+        -------
+        int
+            The compartment index (:attr:`SOMA` ``=0``, :attr:`PROX` ``=1``,
+            :attr:`DIST` ``=2``).
+
+        Raises
+        ------
+        ValueError
+            If ``receptor_type`` is a spike receptor (1-6) or out of range.
+        """
+        try:
+            rt = int(receptor_type)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f'receptor_type must be an integer current receptor 7-9, got {receptor_type!r}.'
+            )
+        mapping = {7: self.SOMA, 8: self.PROX, 9: self.DIST}
+        if rt in mapping:
+            return mapping[rt]
+        if rt in self.SPIKE_RECEPTOR_TYPES.values():
+            raise ValueError(
+                f'receptor_type {rt} is a spike receptor (1-6); drive it with a spike '
+                f'source (spike_generator or a neuron), not a current generator.'
+            )
+        raise ValueError(
+            f'invalid current receptor_type {rt}; valid current receptors are 7-9 '
+            f'({sorted(self.CURRENT_RECEPTOR_TYPES.values())}).'
+        )
+
     def init_state(self, **kwargs):
         r"""Initialize all state variables.
 

@@ -52,6 +52,55 @@ class _FakePop:
         self.y2 = [_FakeState(np.array([12.0])), _FakeState(np.array([3.0]))]
         # glif_psc / iaf injected (current-generator) current, NEST recordable ``I``.
         self.I_stim = _FakeState(np.array([400.0]))
+        # izhikevich recovery variable (NEST ``U_m`` -> brainpy ``U``).
+        self.U = _FakeState(np.array([-13.0]))
+
+
+class _FakeMatPop:
+    """mat2_psc_exp: adaptive threshold is *computed* as omega + V_th_1 + V_th_2.
+
+    ``omega`` is a parameter (absolute mV, no ``.value``); ``V_th_1``/``V_th_2``
+    are States that jump on the model's own spikes and decay.
+    """
+
+    def __init__(self):
+        self.V = _FakeState(np.array([-70.0]))
+        self.omega = np.array([-51.0])              # parameter, absolute mV
+        self.V_th_1 = _FakeState(np.array([5.0]))
+        self.V_th_2 = _FakeState(np.array([2.0]))
+
+
+class _FakeAmatPop:
+    """amat2_psc_exp: adds the voltage-dependent component V_th_v to the sum."""
+
+    def __init__(self):
+        self.V = _FakeState(np.array([-70.0]))
+        self.omega = np.array([-51.0])
+        self.V_th_1 = _FakeState(np.array([5.0]))
+        self.V_th_2 = _FakeState(np.array([2.0]))
+        self.V_th_v = _FakeState(np.array([1.0]))   # voltage-dependent component
+
+
+class _FakeClopathPop:
+    """aeif_psc_delta_clopath: stores the adaptive threshold directly as ``V_th``.
+
+    No MAT ``omega``; the ``V_th`` recordable must fall back to this State so the
+    MAT callable does not hijack a model that already exposes ``V_th`` directly.
+    """
+
+    def __init__(self):
+        self.V = _FakeState(np.array([-55.0]))
+        self.V_th = _FakeState(np.array([-50.4]))
+
+
+class _FakeMcPop:
+    """iaf_cond_alpha_mc: each compartment stacked on the last axis (SOMA/PROX/DIST)."""
+
+    def __init__(self):
+        # shape (n_neurons=1, n_compartments=3): columns = soma, proximal, distal.
+        self.V = _FakeState(np.array([[-65.0, -64.0, -63.0]]))
+        self.g_ex = _FakeState(np.array([[0.1, 0.2, 0.3]]))
+        self.g_in = _FakeState(np.array([[0.4, 0.5, 0.6]]))
 
 
 class _FakeAeifPop:
@@ -159,6 +208,63 @@ class TestRecordableAlias(unittest.TestCase):
         pop = _FakeDoubleAlphaPop()
         with self.assertRaisesRegex(KeyError, 'neither g_syn nor g'):
             _read_recordable(pop, 'g_1')
+
+    def test_izhikevich_U_m_maps_to_U(self):
+        # NEST izhikevich exposes the recovery variable as ``U_m``; brainpy ``U``.
+        pop = _FakePop()
+        self.assertIs(_read_recordable(pop, 'U_m'), pop.U.value)
+
+    def test_mat_V_th_sums_omega_and_threshold_components(self):
+        # mat2_psc_exp threshold is computed: omega + V_th_1 + V_th_2 (absolute mV).
+        pop = _FakeMatPop()
+        got = _read_recordable(pop, 'V_th')
+        npt.assert_allclose(np.asarray(got), np.array([-44.0]))  # -51 + 5 + 2
+
+    def test_amat_V_th_includes_voltage_dependent_component(self):
+        # amat2_psc_exp adds the voltage-dependent V_th_v to the threshold sum.
+        pop = _FakeAmatPop()
+        got = _read_recordable(pop, 'V_th')
+        npt.assert_allclose(np.asarray(got), np.array([-43.0]))  # -51 + 5 + 2 + 1
+
+    def test_amat_V_th_v_resolves_by_name(self):
+        # The voltage-dependent component is itself recordable under its own name.
+        pop = _FakeAmatPop()
+        self.assertIs(_read_recordable(pop, 'V_th_v'), pop.V_th_v.value)
+
+    def test_V_th_falls_back_to_direct_state_when_not_mat(self):
+        # A model storing the threshold directly as a V_th State (clopath) must not
+        # be hijacked by the MAT sum (which would AttributeError on V_th_1).
+        pop = _FakeClopathPop()
+        self.assertIs(_read_recordable(pop, 'V_th'), pop.V_th.value)
+
+    def test_V_th_without_omega_or_state_raises(self):
+        # A population that is neither a MAT model nor exposes a V_th State is a
+        # misconfiguration, not a silent value.
+        pop = _FakePop()  # has neither omega+V_th_1 nor a V_th State
+        with self.assertRaisesRegex(KeyError, 'V_th'):
+            _read_recordable(pop, 'V_th')
+
+    def test_mc_per_compartment_V_m(self):
+        # iaf_cond_alpha_mc: V_m.s/.p/.d index the compartment on the last axis.
+        pop = _FakeMcPop()
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'V_m.s')), [-65.0])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'V_m.p')), [-64.0])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'V_m.d')), [-63.0])
+
+    def test_mc_per_compartment_conductances(self):
+        pop = _FakeMcPop()
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_ex.s')), [0.1])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_ex.d')), [0.3])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_in.s')), [0.4])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_in.p')), [0.5])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_in.d')), [0.6])
+
+    def test_mc_compartment_without_state_raises(self):
+        # Asking for a compartment recordable on a pop lacking that stacked State
+        # is a misconfiguration.
+        pop = _FakePop()  # no g_ex/g_in/V stacked-compartment states
+        with self.assertRaises(KeyError):
+            _read_recordable(pop, 'g_ex.s')
 
     def test_unknown_recordable_raises_keyerror(self):
         pop = _FakePop()
