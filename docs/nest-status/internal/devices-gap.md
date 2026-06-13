@@ -72,7 +72,7 @@ semantics* may diverge. Validate this concretely.
 |---|---|---|---|---|---|
 | `multimeter` | divergent | `brainpy_state/_nest/multimeter.py:44-155` | <https://nest-simulator.readthedocs.io/en/stable/models/multimeter.html> | `multimeter_test.py` (Y) | full NEST timing surface (`interval`, `offset`, `start`, `stop`, `origin`, `record_from`); verify per-step pending-event aggregation matches NEST |
 | `spike_recorder` | divergent | `brainpy_state/_nest/spike_recorder.py:51-135` | <https://nest-simulator.readthedocs.io/en/stable/models/spike_recorder.html> | `spike_recorder_test.py` (Y) | NEST-matching gate `(origin+start, origin+stop]`; verify event buffer/flush semantics under jit |
-| `weight_recorder` | divergent | `brainpy_state/_nest/weight_recorder.py` | <https://nest-simulator.readthedocs.io/en/stable/models/weight_recorder.html> | `weight_recorder_test.py` (Y) | requires hook from plastic synapse; verify per-rule wiring (cross-link `synapses-plasticity-gap.md` §6) |
+| `weight_recorder` | nest_validated | `brainpy_state/_nest/weight_recorder.py` (imperative shim) + `brainpy_state/_network/_weight_recorder_view.py` (send-view seam) | <https://nest-simulator.readthedocs.io/en/stable/models/weight_recorder.html> | `weight_recorder_test.py` (Y), `_validation/weight_recorder_audit_test.py` (Y) | per-rule wiring validated (cluster-09): the send-view seam reproduces NEST's send-event series (count + timing + value) for all 13 plastic rules with no imperative hook — `synapses-plasticity-gap.md` §6 |
 
 ### Detectors
 
@@ -139,9 +139,13 @@ semantics* may diverge. Validate this concretely.
   per-step amplitude scaling by `1/sqrt(dt)` is NEST's convention; verify the
   repo implementation matches scaling so that the spectral density is
   invariant to dt.
-- **`weight_recorder` hookup per plasticity rule.** Cross-cuts
-  `synapses-plasticity-gap.md`. The recorder is divergent because the
-  *emit-on-update* hook may not be wired through every plastic synapse type.
+- **`weight_recorder` hookup per plasticity rule.** ✅ **Resolved (cluster-09).**
+  Rather than an imperative *emit-on-update* hook, weight recording reuses the
+  analog State-tap: a thin send-view (`brainpy_state._network.weight_recorder_events`
+  / `send_steps_from_pre`) masks the per-step weight trajectory to its send
+  (pre-spike) steps, reproducing NEST's `weight_recorder` event series. Validated
+  for all 13 plastic rules in `_validation/weight_recorder_audit_test.py`
+  (cross-cuts `synapses-plasticity-gap.md` §6).
 - **Correlation-detector binning windows and accumulation interval.** The
   correlator devices store covariance counts in a `Tau_max`-wide window
   bucketed by `delta_tau`. Verify the bucketing and the post-`Simulate()`
@@ -185,10 +189,10 @@ semantics* may diverge. Validate this concretely.
   Acceptance: parametric test runs at `t == start`, `t == start + dt/2`,
   `t == stop`, `t == stop + dt`, and asserts inclusion/exclusion of events.
 
-- **P1 — `weight_recorder` per-rule hookup test.** [M]
-  Cross-link `synapses-plasticity-gap.md` P0 audit. Acceptance: one test per
-  STDP variant attaches `weight_recorder` and verifies event count + timing
-  matches NEST.
+- **P1 — `weight_recorder` per-rule hookup test.** ✅ **Done (cluster-09).**
+  `_validation/weight_recorder_audit_test.py` verifies event count + timing +
+  value against NEST for all 13 plastic rules via the send-view seam (cross-link
+  `synapses-plasticity-gap.md` P0 audit).
 
 - **P1 — Noise generator dt-invariance test.** [S]
   Acceptance: same `mean`, `std` parameters with `dt = 0.1 ms` and `dt = 0.05 ms`
