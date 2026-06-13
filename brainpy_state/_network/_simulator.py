@@ -767,10 +767,12 @@ class Simulator(brainstate.nn.Module):
                 out = m.update(w_by_rec=u.get_mantissa(m.sum_delta_inputs(init) / runit))
             else:
                 out = m.update()
-            if isinstance(m, Neuron):
+            if isinstance(m, Neuron) and not getattr(m, '_relays_multiplicity', False):
                 val = (jnp.asarray(u.get_mantissa(out)) >= 0.5).astype(dftype)
             else:
-                val = jnp.asarray(out, dtype=dftype)
+                # Generators and multiplicity-relaying neurons (parrot_neuron)
+                # keep their raw per-step count instead of a binarised spike.
+                val = jnp.asarray(u.get_mantissa(out), dtype=dftype)
             holder.spk.value = val
 
     def simulate(self, duration, *, dt=None) -> SimulationResult:
