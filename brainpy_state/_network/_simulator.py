@@ -684,8 +684,11 @@ class Simulator(brainstate.nn.Module):
                     and 'w_by_rec' in inspect.signature(type(m).update).parameters):
                 # Multi-receptor neuron: gather the per-port delta input and drive
                 # the model's JIT-safe ``w_by_rec`` path (its no-arg seam is numpy).
-                init = u.math.zeros(m.varshape + (int(m.n_receptors),)) * u.pA
-                out = m.update(w_by_rec=u.get_mantissa(m.sum_delta_inputs(init) / u.pA))
+                # ``receptor_input_unit`` scales the gathered mantissa: pA for
+                # current-based (iaf), nS for conductance-based (aeif/gif) models.
+                runit = getattr(m, 'receptor_input_unit', u.pA)
+                init = u.math.zeros(m.varshape + (int(m.n_receptors),)) * runit
+                out = m.update(w_by_rec=u.get_mantissa(m.sum_delta_inputs(init) / runit))
             else:
                 out = m.update()
             if isinstance(m, Neuron):

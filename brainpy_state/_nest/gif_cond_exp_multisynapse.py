@@ -366,6 +366,10 @@ class gif_cond_exp_multisynapse(NESTNeuron):
     """
     __module__ = 'brainpy.state'
 
+    #: Unit the multi-receptor ``connect(receptor_type=k)`` bridge uses to scale the
+    #: gathered per-port deposit into the ``w_by_rec`` mantissa (conductance -> nS).
+    receptor_input_unit = u.nS
+
     _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 10000
 
@@ -757,7 +761,7 @@ class gif_cond_exp_multisynapse(NESTNeuron):
 
         return dg
 
-    def update(self, x=0.0 * u.pA):
+    def update(self, x=0.0 * u.pA, w_by_rec=None):
         r"""Update neuron state for one time step.
 
         Performs the following operations in order:
@@ -772,6 +776,13 @@ class gif_cond_exp_multisynapse(NESTNeuron):
         x : ArrayLike, default: 0.0 pA
             External current input for this time step. Shape: scalar or broadcastable to ``in_size``.
             Unit: pA. This is stored as ``I_stim`` for use in the **next** time step.
+        w_by_rec : ArrayLike or None, optional
+            Pre-gathered per-receptor conductance jumps (nS mantissa), shape
+            ``(*in_size, n_receptors)``. When given, it is used directly and the
+            legacy per-key ``add_delta_input('receptor_k', ...)`` parser is
+            bypassed. This is the JIT-safe path the multi-receptor
+            ``connect(receptor_type=k)`` seam drives via the Simulator bridge.
+            Default: None.
 
         Returns
         -------
@@ -866,7 +877,14 @@ class gif_cond_exp_multisynapse(NESTNeuron):
         )
 
         # ---- Step 3: Add synaptic conductance jumps from spike inputs. ----
-        dg = self._collect_receptor_delta_inputs()
+        if w_by_rec is not None:
+            # Bridged blob path (``connect(receptor_type=k)`` seam): per-receptor
+            # nS-mantissa jumps gathered by the Simulator, used directly. Bypasses
+            # the legacy ``key.split('_')`` parser (kept for the per-key API).
+            w_by_rec = jnp.asarray(w_by_rec, dtype=brainstate.environ.dftype())
+            dg = [w_by_rec[..., k] for k in range(self._n_receptors)]
+        else:
+            dg = self._collect_receptor_delta_inputs()
         for k in range(self._n_receptors):
             g_list[k] = g_list[k] + dg[k] * u.nS
 
