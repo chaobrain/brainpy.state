@@ -245,5 +245,25 @@ class TestReceptorPartialPopulation(unittest.TestCase):
             self.assertEqual(float(jnp.sum(by_label[f'receptor_{k}'])), 0.0)
 
 
+class TestParrotUnitGateGuard(unittest.TestCase):
+    """``_check_unit_gate_weight`` pins the parrot incoming-weight contract: only the
+    unitless gate 1.0 is accepted; physical units or any other value raise. (A
+    ``_relays_multiplicity`` post relays the summed input as the spike count.)"""
+
+    def test_accepts_unit_gate_and_unresolved(self):
+        # 1.0 (plain + unitless Quantity) is the gate; None / initializers can't be
+        # checked eagerly and pass through to the normal weight resolution.
+        EventProjection._check_unit_gate_weight(1.0)
+        EventProjection._check_unit_gate_weight(u.Quantity(1.0))
+        EventProjection._check_unit_gate_weight(None)
+        EventProjection._check_unit_gate_weight(lambda *a, **k: 1.0)
+
+    def test_rejects_nonunit_or_physical(self):
+        for bad in (3.0, 0.0, u.Quantity(2.0), 2.0 * u.nS):
+            with self.subTest(weight=repr(bad)):
+                with self.assertRaisesRegex(ValueError, 'unit gate'):
+                    EventProjection._check_unit_gate_weight(bad)
+
+
 if __name__ == '__main__':
     unittest.main()

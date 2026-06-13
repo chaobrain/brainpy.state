@@ -88,9 +88,16 @@ class EventProjection(brainstate.nn.Module):
         self.post_local_idx = jnp.asarray(post_local_idx)
         self._n_pre_pop = int(n_pre_pop)
         self._n_post_pop = _flat_size(post)
+        # A multiplicity-relaying post (parrot_neuron) reads its summed delta input
+        # AS the spike count, so an incoming connection MUST carry the unit gate
+        # weight 1.0 (unitless). NEST ignores weights into a parrot; a non-unit
+        # weight here would silently scale the relayed multiplicity, so reject it.
+        if getattr(post, '_relays_multiplicity', False):
+            self._check_unit_gate_weight(weight)
         self._one_to_one = isinstance(rule, _OneToOne)
-        # Per-receptor routing: each edge targets one of the post neuron's
-        # receptor ports (``iaf_psc_exp_multisynapse``), drawn uniformly.
+        # Per-receptor routing (multi-receptor post, e.g. ``iaf_psc_exp_multisynapse``):
+        # ``receptor_type='uniform'`` draws a port per edge, an int ``k`` (1-based,
+        # NEST convention) routes every edge to internal port ``k-1``.
         self._receptor = receptor_type is not None
         self._n_receptors = int(post.n_receptors) if self._receptor else 0
         # Deposit mode. Models exposing ``w_by_rec`` in their update signature
@@ -159,6 +166,46 @@ class EventProjection(brainstate.nn.Module):
             n_post == self._n_post_pop
             and bool(jnp.all(self.post_local_idx == jnp.arange(self._n_post_pop)))
         )
+
+    @staticmethod
+    def _check_unit_gate_weight(weight):
+        """Enforce the parrot-relay contract: an incoming weight must be the unit gate.
+
+        A ``_relays_multiplicity`` post (``parrot_neuron``) re-emits the *summed*
+        delta input as the spike count, which only equals the true multiplicity when
+        every incoming edge carries weight ``1.0`` (unitless). NEST ignores weights
+        on connections into a parrot; a non-unit weight here would silently scale the
+        relayed count, so reject it eagerly with a clear message.
+
+        Parameters
+        ----------
+        weight : ArrayLike or Quantity or Callable or None
+            The connection weight passed to the projection. ``None`` and callable
+            initializers are not validated (no concrete value to check).
+
+        Raises
+        ------
+        ValueError
+            If ``weight`` carries a physical unit, or is a concrete value other
+            than ``1.0``.
+        """
+        if weight is None or callable(weight):
+            return  # no concrete scalar/array to validate
+        w = weight
+        if isinstance(w, u.Quantity):
+            mant, unit = u.split_mantissa_unit(w)
+            if unit is not u.UNITLESS:
+                raise ValueError(
+                    "connections into a parrot_neuron must use the unit gate weight "
+                    "1.0 (unitless): the relay reads the summed input as the spike "
+                    "count and NEST ignores weights into a parrot, but got a weight "
+                    f"with physical units ({weight!r}).")
+            w = mant
+        if not bool(jnp.all(jnp.asarray(w) == 1.0)):
+            raise ValueError(
+                "connections into a parrot_neuron must use the unit gate weight 1.0: "
+                "the relay reads the summed input as the spike count and NEST ignores "
+                f"weights into a parrot, but got weight={weight!r}.")
 
     @staticmethod
     def _edge_weight(weight, n_edges, key):

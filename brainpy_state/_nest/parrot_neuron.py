@@ -49,11 +49,14 @@ class parrot_neuron(NESTNeuron):
 
     In NEST the parrot counts arriving spikes regardless of their connection
     weight ("a spike is a spike"). The Simulator delta-input seam can only observe
-    the *weighted* sum of arrivals, so drive the parrot with the canonical unit
-    gate ``weight=1.0``: the summed input then equals the arriving spike count,
-    which is relayed verbatim as the output multiplicity. Weights on connections
-    *from* the parrot are honored normally by the downstream projection.
-    Transmission delays are honored on both sides.
+    the *weighted* sum of arrivals, so the parrot must be driven with the canonical
+    unit gate ``weight=1.0``: the summed input then equals the arriving spike count,
+    which is relayed verbatim as the output multiplicity. This contract is
+    **enforced** — ``connect(..., post=parrot)`` raises ``ValueError`` if the
+    incoming weight is anything other than the unitless ``1.0`` gate, so a non-unit
+    weight can never silently scale the relayed count. Weights on connections *from*
+    the parrot are honored normally by the downstream projection. Transmission
+    delays are honored on both sides.
 
     Parameters
     ----------

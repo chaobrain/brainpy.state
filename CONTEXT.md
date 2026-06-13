@@ -181,7 +181,11 @@ objection into a Lessons entry, do **not** silently diverge.
     neuron.
   - **`_relays_multiplicity` substrate flag.** The phase-2 capture binarises `Neuron` outputs at
     `>=0.5` **unless** the model sets `_relays_multiplicity=True` (then the raw per-step count is
-    kept). `parrot_neuron` uses it to relay `get_mantissa(inp)` verbatim.
+    kept). `parrot_neuron` uses it to relay `get_mantissa(inp)` verbatim. Because the relay reads
+    the *summed* delta input as the count, `EventProjection.__init__` **enforces the unit gate**:
+    a connection into a `_relays_multiplicity` post raises `ValueError` unless its weight is the
+    unitless `1.0` (NEST ignores weights into a parrot; a non-unit weight would silently scale the
+    relayed multiplicity).
 - **Gotchas:**
   - **NEST `poisson_generator` emits Poisson *counts* (multiplicity >1/step):** `rate·dt`
     (150000 Hz · 0.05 ms = 7.5). Two masked bugs collapsed this: the parrot's `get_spike` returned
@@ -189,7 +193,12 @@ objection into a Lessons entry, do **not** silently diverge.
     — so even a count-returning parrot was re-collapsed. Fix both (relay raw count + honour
     `_relays_multiplicity`). **Lesson:** exercise the *general* input (count >1 per step), not just
     1-spike-per-step, and trace the full substrate capture path — a unit test that only sends single
-    spikes hides multiplicity collapse.
+    spikes hides multiplicity collapse. **The same gap recurred:** the pre-merge code review caught
+    that *every* multiplicity test used `weight=1.0`, hiding that a non-unit weight into the parrot
+    silently scaled the relayed count (it reads the weighted sum, not a raw multiplicity field). Fix
+    = the connect-time unit-gate guard above. Reinforced lesson: **test the adversarial value, not
+    the convenient one** — for any "weight is ignored / must be X" contract, assert the off-nominal
+    weight is actually rejected.
   - **`glif_psc` `V_m` is one step off, not machine-precise (`glif_cond` is exact).** brainpy
     computes `V` from the **pre**-propagation PSC (`y2_old`) while the recorded `I_syn` is the
     **post**-propagation `y2` — so `V_m` and recorded `I_syn` sit one step apart vs NEST (which

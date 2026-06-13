@@ -96,6 +96,35 @@ class TestParrotRelay(unittest.TestCase):
         one, two = peak_g1(1), peak_g1(2)
         self.assertAlmostEqual(two / one, 2.0, delta=0.05)
 
+    def test_non_unit_weight_into_parrot_raises(self):
+        # NEST ignores weights on connections INTO a parrot ("a spike is a spike");
+        # our relay reads the summed delta input AS the spike count, so a non-unit
+        # incoming weight would silently scale the relayed multiplicity. connect()
+        # must reject it rather than mis-relay.
+        sim = Simulator(dt=0.1 * u.ms)
+        gen = sim.create(spike_generator, spike_times=np.asarray([10.0]) * u.ms)
+        parrot = sim.create(parrot_neuron, 1)
+        with self.assertRaisesRegex(ValueError, 'unit gate'):
+            sim.connect(gen, parrot, weight=3.0, delay=1.0 * u.ms)
+
+    def test_physical_unit_weight_into_parrot_raises(self):
+        # A weight carrying physical units (nS) is likewise not the unitless gate.
+        sim = Simulator(dt=0.1 * u.ms)
+        gen = sim.create(spike_generator, spike_times=np.asarray([10.0]) * u.ms)
+        parrot = sim.create(parrot_neuron, 1)
+        with self.assertRaisesRegex(ValueError, 'unit gate'):
+            sim.connect(gen, parrot, weight=2.0 * u.nS, delay=1.0 * u.ms)
+
+    def test_unit_weight_into_parrot_is_accepted(self):
+        # The unit gate weight 1.0 (the documented contract) connects without error.
+        sim = Simulator(dt=0.1 * u.ms)
+        gen = sim.create(spike_generator, spike_times=np.asarray([10.0]) * u.ms)
+        parrot = sim.create(parrot_neuron, 1)
+        sim.connect(gen, parrot, weight=1.0, delay=1.0 * u.ms)  # must not raise
+        rec = sim.create(spike_recorder)
+        sim.connect(parrot, rec)
+        self.assertEqual(sim.simulate(30.0 * u.ms).n_events(rec), 1)
+
     def test_parrot_drives_downstream_receptor_port(self):
         # parrot is a valid spiking *source*: relay one spike into a glif_cond
         # receptor port and confirm that port's conductance rises.
