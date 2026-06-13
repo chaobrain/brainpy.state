@@ -19,6 +19,11 @@
 # - Brette, R., Rudolph, M., Carnevale, T., Hines, M., Beeman, D., Bower, J. M., et al. (2007),
 #   Simulation of networks of spiking neurons: a review of tools and strategies., J. Comput. Neurosci., 23, 3, 349–98
 #
+# This is the Hodgkin-Huxley variant (benchmark 3) of the FACETS simulator review.
+# The integrate-and-fire benchmarks 1 (COBA, iaf_cond_exp) and 2 (CUBA, iaf_psc_exp)
+# of the same review are ported on the brainpy.state Simulator API, with live-NEST
+# rate-band parity, in ``examples/nest/brette_et_al_2007.py``.
+#
 
 import saiunit as u
 import matplotlib.pyplot as plt
