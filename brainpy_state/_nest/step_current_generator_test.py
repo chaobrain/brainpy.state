@@ -317,5 +317,39 @@ class TestStepCurrentGeneratorVsNEST(unittest.TestCase):
                             err_msg="Step current V_m differs from NEST")
 
 
+class TestStepCurrentGeneratorJitArrayInput(unittest.TestCase):
+    r"""Regression: a NumPy-backed Quantity schedule must drive under ``for_loop``.
+
+    Inside a jitted ``for_loop`` the environment time ``t`` is traced, so the
+    schedule look-up gathers with a *traced* index. That requires a jnp-backed
+    ``amplitude_values``; passing the schedule as a NumPy-array Quantity
+    (``np.asarray([400.0]) * u.pA``) previously stored a NumPy mantissa, so the
+    gather raised ``TracerArrayConversionError``. A list of scalar Quantities
+    already worked, so this pins the array-input form too.
+    """
+
+    def test_numpy_quantity_schedule_under_for_loop(self):
+        dt = 0.05 * u.ms
+        with brainstate.environ.context(dt=dt):
+            scg = step_current_generator(
+                1,
+                amplitude_times=np.asarray([200.0]) * u.ms,
+                amplitude_values=np.asarray([400.0]) * u.pA,
+                start=200.0 * u.ms, stop=500.0 * u.ms)
+            t_array = jnp.arange(0.0, 600.0, 0.05) * u.ms
+
+            def step_fn(t):
+                with brainstate.environ.context(t=t):
+                    return scg.update()
+
+            out = brainstate.transform.for_loop(step_fn, t_array)
+        cur = np.asarray(u.get_mantissa(out / u.pA)).reshape(-1)
+        tms = np.asarray(u.get_mantissa(t_array / u.ms)).reshape(-1)
+        # interior points avoid float-arange boundary fuzz at 200 / 500 ms
+        npt.assert_allclose(cur[tms < 199.0], 0.0, atol=1e-9)
+        npt.assert_allclose(cur[(tms > 201.0) & (tms < 499.0)], 400.0, atol=1e-9)
+        npt.assert_allclose(cur[tms > 501.0], 0.0, atol=1e-9)
+
+
 if __name__ == '__main__':
     unittest.main()

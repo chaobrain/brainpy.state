@@ -763,4 +763,10 @@ def stack_schedule_values(amplitude_values, varshape):
         f'Final shape {final_shape} is not broadcastable to varshape {varshape}'
     )
     # Broadcast each element to final_shape, then stack to (K, *final_shape).
-    return u.math.stack([u.math.broadcast_to(v, final_shape) for v in expanded])
+    stacked = u.math.stack([u.math.broadcast_to(v, final_shape) for v in expanded])
+    # Force a jnp-backed mantissa. The schedule is gathered with a *traced* index
+    # inside a jitted ``for_loop`` (``amplitude_values[searchsorted(t)]``); a NumPy
+    # mantissa cannot be indexed by a tracer and raises TracerArrayConversionError.
+    # A list of scalar Quantities already stacks to jnp, but a NumPy-array Quantity
+    # (``np.asarray([...]) * u.pA``) does not, so coerce unconditionally.
+    return u.maybe_decimal(jnp.asarray(u.get_mantissa(stacked)) * u.get_unit(stacked))
