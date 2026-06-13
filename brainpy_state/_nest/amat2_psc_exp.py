@@ -168,8 +168,6 @@ class amat2_psc_exp(NESTNeuron):
 
     **Update Order**
 
-    dftype = brainstate.environ.dftype()
-    ditype = brainstate.environ.ditype()
     Each simulation step proceeds as follows (matching NEST's update order):
 
     1. Evolve voltage-dependent threshold component (``V_th_v``, ``V_th_dv``)

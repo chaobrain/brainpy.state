@@ -531,7 +531,9 @@ class izhikevich(NESTNeuron):
         self.V.value = V_post
         self.U.value = U_post
 
-        # Buffer external current for the next step (one-step delay)
-        self.I.value = self.sum_current_inputs(x, V_post)
+        # Buffer external current for the next step (one-step delay). Broadcast to
+        # varshape (as iaf_psc_exp does) so a scalar default ``x`` with no current
+        # inputs cannot collapse self.I to a scalar and break the scan carry.
+        self.I.value = self.sum_current_inputs(x, V_post) + u.math.zeros(self.varshape) * u.pA
 
         return self.get_spike(V_new)

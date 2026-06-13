@@ -95,10 +95,19 @@ class EventProjection(brainstate.nn.Module):
         if getattr(post, '_relays_multiplicity', False):
             self._check_unit_gate_weight(weight)
         self._one_to_one = isinstance(rule, _OneToOne)
-        # Per-receptor routing (multi-receptor post, e.g. ``iaf_psc_exp_multisynapse``):
-        # ``receptor_type='uniform'`` draws a port per edge, an int ``k`` (1-based,
-        # NEST convention) routes every edge to internal port ``k-1``.
-        self._receptor = receptor_type is not None
+        # Labeled single-channel routing (named-channel post, e.g.
+        # ``iaf_cond_alpha_mc``): each ``connect(device, post, receptor_type=k)`` feeds
+        # exactly ONE named delta channel (``'w_ex_s'`` ...), which the model reads via
+        # ``sum_delta_inputs(label=...)``. Such a post exposes
+        # ``delta_label_for_receptor`` and has no ``n_receptors``. Resolve the label
+        # once and fall through to the ordinary plain comm path (a single
+        # ``(n_post,)`` contribution), tagging the deposit with that label.
+        self._channel_label = self._resolve_channel_label(post, receptor_type)
+        # Per-receptor routing (stacked multi-receptor post, e.g.
+        # ``iaf_psc_exp_multisynapse``): ``receptor_type='uniform'`` draws a port per
+        # edge, an int ``k`` (1-based, NEST convention) routes every edge to internal
+        # port ``k-1``. A resolved named channel uses the plain path instead.
+        self._receptor = receptor_type is not None and self._channel_label is None
         self._n_receptors = int(post.n_receptors) if self._receptor else 0
         # Deposit mode. Models exposing ``w_by_rec`` in their update signature
         # (``iaf``/``aeif``/``gif_cond_exp_multisynapse``) are Simulator-bridged
@@ -208,6 +217,43 @@ class EventProjection(brainstate.nn.Module):
                 f"weights into a parrot, but got weight={weight!r}.")
 
     @staticmethod
+    def _resolve_channel_label(post, receptor_type):
+        """Resolve a named-channel post's ``receptor_type`` to its delta-input label.
+
+        A multi-compartment / named-channel post (``iaf_cond_alpha_mc``) routes each
+        connection to ONE named delta channel rather than a stacked ``n_receptors``
+        port. It exposes ``delta_label_for_receptor(rt) -> label`` and has no
+        ``n_receptors``.
+
+        Parameters
+        ----------
+        post : Dynamics
+            The postsynaptic population.
+        receptor_type : int or str or None
+            The connection's NEST receptor type.
+
+        Returns
+        -------
+        str or None
+            The target delta-input channel label, or ``None`` when there is no
+            receptor routing or the post is a stacked-``n_receptors`` model (the
+            existing ``_ReceptorScatter`` path handles those).
+
+        Raises
+        ------
+        ValueError
+            Propagated from ``post.delta_label_for_receptor`` for a receptor type the
+            named-channel post does not accept (e.g. a current receptor on a spike
+            projection, or an out-of-range type).
+        """
+        if receptor_type is None or hasattr(post, 'n_receptors'):
+            return None
+        resolver = getattr(post, 'delta_label_for_receptor', None)
+        if resolver is None:
+            return None
+        return resolver(receptor_type)
+
+    @staticmethod
     def _edge_weight(weight, n_edges, key):
         """Resolve ``weight`` to a per-edge ``(mantissa, unit)`` pair."""
         w_edge = resolve_param(weight, (n_edges,), key)
@@ -238,7 +284,13 @@ class EventProjection(brainstate.nn.Module):
             else:
                 y = self.comm(x_seg)                    # (n_post,) pA
             contrib = y if self._post_is_full else self._scatter(y)
-            self.post.add_delta_input(self._delta_key, contrib)
+            if self._channel_label is not None:
+                # Named-channel post: deposit into the resolved compartment+syntype
+                # channel (key composes to ``'<label> // <delta_key>'``, which the
+                # model selects with ``sum_delta_inputs(label=<label>)``).
+                self.post.add_delta_input(self._delta_key, contrib, label=self._channel_label)
+            else:
+                self.post.add_delta_input(self._delta_key, contrib)
 
     def _scatter(self, y):
         """Place per-segment contributions into a full (n_post_pop,) vector."""
