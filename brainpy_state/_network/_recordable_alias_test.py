@@ -152,6 +152,14 @@ class TestRecordableAlias(unittest.TestCase):
         pop = _FakePop()
         self.assertIs(_read_recordable(pop, 'I'), pop.I_stim.value)
 
+    def test_g_port_without_conductance_state_raises(self):
+        # ``g_k`` on a population exposing neither ``g_syn`` (glif_cond) nor ``g``
+        # (aeif/gif) is a misconfiguration, not a silent zero. The double-alpha
+        # pop is current-based (PSC, no conductance), so g_1 must raise clearly.
+        pop = _FakeDoubleAlphaPop()
+        with self.assertRaisesRegex(KeyError, 'neither g_syn nor g'):
+            _read_recordable(pop, 'g_1')
+
     def test_unknown_recordable_raises_keyerror(self):
         pop = _FakePop()
         with self.assertRaises(KeyError):

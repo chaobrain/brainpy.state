@@ -62,6 +62,15 @@ class TestParrotRelay(unittest.TestCase):
         out = p.get_spike(jnp.asarray([3.0]))
         np.testing.assert_allclose(np.asarray(out), [3.0])
 
+    def test_direct_get_spike_with_no_input_is_silent(self):
+        # The ``inp is None`` default-argument path (the route ``update(x=None)``
+        # takes when nothing is wired in) emits an all-zero, varshape-shaped train.
+        p = parrot_neuron(3)
+        brainstate.nn.init_all_states(p)
+        out = p.get_spike()
+        self.assertEqual(tuple(np.asarray(out).shape), (3,))
+        np.testing.assert_allclose(np.asarray(out), np.zeros(3))
+
     def test_relays_multiplicity_into_downstream_current(self):
         # Two presynaptic spikes coincident in a single step must be relayed as a
         # multiplicity-2 event: the downstream receptor sees twice the current of a
