@@ -209,6 +209,75 @@ objection into a Lessons entry, do **not** silently diverge.
   node, `n`-like broadcast State, `bind_*` sources, phase-0 advance) generalises to any shared modulator
   (ACh, NE) or a global gain/reward channel.
 
+### 06-static-stochastic — 2026-06-13
+
+- **Shipped:** **`bernoulli_synapse`** (static delivery + stochastic transmission) and
+  **`cont_delay_synapse`** (static delivery + sub-dt delay) rebuilt as frozen NEST specs +
+  pure `update(state, ctx) -> (new_state, w_eff)` kernels on the cluster-01 `EventPlasticProj`
+  (primitive #1), retiring their eager `ImperativeSynapseBase` impls from the active path
+  (`_nest/{bernoulli_synapse,cont_delay_synapse}.py`). One **additive, default-off** substrate
+  seam landed (`fractional_delay`, below). Each ships a NEST-free `*_rule_test.py` (**both
+  100 %** line coverage) + a live-NEST `_validation/*_parity_test.py`; the old eager
+  `*_test.py` are deleted. Both are **delivery-semantics** models (no learned weight evolves) —
+  this **closes the non-plastic `EventPlasticProj` delivery family**. Branch
+  `nest-goal/06-static-stochastic`.
+- **Parity (live NEST 3.9.0):**
+  - **bernoulli:** `p_transmit=1` ≡ `static_synapse` **exact** (CAT_B V_m trace);
+    `p_transmit=0` flat at rest; `0<p<1` seed-mean `V_m` within **CAT_D 5 %** over 6 seeds.
+    Driven through **E=20 multapses** (one pre→post pair, repeated CSR edges) → ~500 Bernoulli
+    arrivals/seed → per-seed variance ~2 % ≪ bound.
+  - **cont_delay:** integer/grid delay ≡ static **exact** (CAT_B, verified first). Sub-dt
+    `d∈{1.33,1.35,1.37} ms` (frac {0.3,0.5,0.7}) vs NEST **precise `iaf_psc_exp_ps`**:
+    integrated `∫V_m` **and** EPSP **peak amplitude** match **~1e-5..4e-5 rel** (charge +
+    first-moment exact), peak **timing** within **±1 step** (CAT_E); the sole residual is a
+    ~0.25 mV **onset transient** (frac 0.3 worst, on a ~4.3 mV EPSP) — documented, intrinsic.
+- **API discovered/changed (reusable by 08+):**
+  - **Design A — per-edge stochastic independence is free.** A rule that sets
+    `stochastic=True` gets one 0-d step key `ctx.key`; drawing
+    `jax.random.uniform(ctx.key, (E,)) < p` yields **edge-axis-independent** gates (JAX threefry
+    counter PRNG: output position `j` ← counter `j`), so two edges from one pre and multapses
+    gate independently. **No per-edge `split`/`fold_in` seam is needed** (the goal's fallback is
+    unnecessary, and cheaper) — the shape-`(E,)` draw already supplies it. Same idiom
+    `quantal_stp` uses. Multapses (repeated CSR `(i,j)`) **sum** in the event-matmul.
+  - **Design B — `fractional_delay` output-carry seam** (additive, default-off via
+    `getattr(rule,'fractional_delay',False)`). When a rule sets `fractional_delay=True` the
+    substrate, **in `init_state`** (where `dt` is known), decomposes the homogeneous delay into
+    an integer floor `k_lo=⌊d/dt⌋` → `InputDelay(k_lo·dt)` (clean binary floor frame) + a
+    `(n_post,)` `delay_carry` HiddenState, and `update` applies a 1-step FIR `[1−frac, frac]` on
+    the **post amplitude after the matmul**. Charge + arrival-centroid exact; `frac==0` collapses
+    byte-identical to a grid delay. Reusable by any precise/off-grid demo.
+- **Gotchas (NEST fidelity / substrate):**
+  - **`BinaryArray` binarizes the pre vector** (`y[j]=Σ_{i:s[i]≠0} W[i,j]`, magnitude ignored),
+    so a sub-dt delay **cannot** ride on a fractional *pre* weight — it would double-deliver. The
+    split **must** live on the delivered (post) amplitude → output-carry, not the `InputDelay`
+    linear-interp (which BinaryArray defeats). Phase-2 RED captured exactly this double-delivery.
+  - **`cont_delay` `delay >= dt` is best-effort.** `__init__` reads
+    `brainstate.environ.get_dt()`, but that **raises `KeyError` when no `dt` is set**, so the
+    floor check is *deferred* (the Simulator/tests set `dt` before building synapses). Don't
+    assume construction always validates the resolution floor.
+  - **The sub-dt residual is first-order, not `O((dt/τ)²)`.** The exp-PSC onset is a C¹ kink, so
+    the split-vs-precise error is `O(frac·dt/τ)` **at the onset** (a ~6 %-of-peak ripple on the
+    rising edge), not the second-order I first wrote. Charge-exactness makes `∫V_m` and peak
+    amplitude match to ~1e-4 regardless — **assert those + peak-step**, document the transient,
+    never force a tight per-sample trace bound on a grid integrator. Corrected the docstring
+    after measuring vs live NEST.
+  - **`brainpy_state._nest.<model>` resolves to the CLASS, not the submodule** (the
+    `_nest/__init__` `from .x import x` rebind shadows it). To monkeypatch a spec's module-level
+    dependency in a test, patch the **imported object directly** (`brainstate.environ.get_dt`),
+    not `mod.brainstate...`. (Same root cause as 07's doctest-finder note.)
+  - **Doctests:** specs set `__module__='brainpy.state'` → `DocTestFinder` skips them when
+    scanning the file; verify via `DocTestFinder()._from_module=lambda *_:True` + `.find(cls)`
+    (bernoulli 6 / cont_delay 8 examples, 0 failed).
+  - **Coverage:** the local pytest proxy **strips `--cov` flags** (emits only `Pytest: N
+    passed`) → use `python -m coverage run … && coverage json -o … && read the JSON`
+    (the directory-dotted `--cov=pkg.mod` form still coredumps per 04/05).
+- **For next clusters:** the **non-plastic delivery family is complete** (`static`,
+  `static_synapse_hom_w`, `bernoulli`, `cont_delay`). The per-edge `ctx.key` shape-`(E,)` idiom
+  and the `fractional_delay` output-carry seam are both proven and reusable. The stochastic
+  `ctx.key` seam is now exercised by **both** `quantal_stp` (binomial) and `bernoulli` (uniform
+  gate) — 08's neuromodulated/stochastic rules can lean on it. Remaining: plastic clusters 08
+  (dopamine) + 09/10 + bucket-3.
+
 ### 07-voltage-coupled-clopath — 2026-06-13
 
 - **Shipped:** **primitive #2 `VoltageCoupledPlasticProj`** (the post-state reader) +

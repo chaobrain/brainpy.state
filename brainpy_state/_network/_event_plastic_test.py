@@ -18,6 +18,8 @@ import saiunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 
+from brainstate import transform  # noqa: E402
+
 from brainpy_state._network._event_plastic import (  # noqa: E402
     EventPlasticProj,
     VoltageCoupledPlasticProj,
@@ -567,3 +569,157 @@ def test_voltage_coupled_signal_only_skips_post_gather():
         proj.update()
     assert rule.seen['post_states'] is None
     assert np.allclose(np.asarray(rule.seen['signals']['n']), 0.25)
+
+
+# --------------------------------------------------------------------------
+# Cluster 06 — `fractional_delay` two-slot output-carry seam (default-off).
+# A rule may declare `fractional_delay = True` (cont_delay_synapse) to honour a
+# sub-dt delay on the fixed grid: deliver the binary event at the integer FLOOR
+# delay (existing InputDelay + BinaryArray fast path, so ctx.pre_spike stays
+# binary), then split the post-segment amplitude across the two bracketing grid
+# steps via a 1-step FIR carry `[1-frac, frac]` (frac = d/dt - floor(d/dt)).
+# First moment + total charge are exact; only the sub-dt transient is an
+# approximation. The seam is additive and DEFAULT-OFF: rules without the flag
+# keep the unchanged InputDelay(rule.delay) path. See spec §5.
+# --------------------------------------------------------------------------
+class _FracDelayRule(_StaticTestRule):
+    """Static rule that opts into the two-slot fractional-delay split."""
+    fractional_delay = True
+
+
+class _FracPreProbe(_StaticTestRule):
+    """Records ctx.pre_spike each step (to assert it stays binary)."""
+    fractional_delay = True
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen_pre = []
+
+    def update(self, state, ctx):
+        self.seen_pre.append(np.asarray(ctx.pre_spike))
+        return state, state['weight']
+
+
+def _delivery_series(rule, n_steps, dt_ms=0.1):
+    """Per-step delivered amplitude (mantissa) for a single spike at step 0."""
+    brainstate.environ.set(dt=dt_ms * u.ms)
+    sink = _Sink(1)
+    holder = {'pre': jnp.array([1.])}        # spike present only on the first step
+    proj = EventPlasticProj(
+        pre_spike=lambda: holder['pre'], n_pre_pop=1, pre_local_idx=jnp.arange(1),
+        post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    out = []
+    for i in range(n_steps):
+        with brainstate.environ.context(t=dt_ms * (i + 1) * u.ms, i=i + 1):
+            proj.update()
+        out.append(float(u.get_mantissa(sink.last)[0]))
+        holder['pre'] = jnp.array([0.])
+    return np.array(out)
+
+
+def test_fractional_delay_splits_amplitude_1p7():
+    # d = 1.7*dt -> floor=1, frac=0.7 -> 0.3*w one step after the buffer, 0.7*w next.
+    out = _delivery_series(_FracDelayRule(weight=jnp.array([10.]) * u.pA, delay=0.17 * u.ms), 5)
+    assert np.allclose(out, [0.0, 3.0, 7.0, 0.0, 0.0], atol=1e-9)
+
+
+def test_fractional_delay_splits_amplitude_1p5():
+    # d = 1.5*dt -> floor=1, frac=0.5 -> even 0.5/0.5 split.
+    out = _delivery_series(_FracDelayRule(weight=jnp.array([10.]) * u.pA, delay=0.15 * u.ms), 5)
+    assert np.allclose(out, [0.0, 5.0, 5.0, 0.0, 0.0], atol=1e-9)
+
+
+def test_fractional_delay_sub_dt_floor_zero():
+    # d = 0.7*dt -> floor=0 (no buffer), frac=0.7 -> 0.3*w THIS step, 0.7*w next.
+    out = _delivery_series(_FracDelayRule(weight=jnp.array([10.]) * u.pA, delay=0.07 * u.ms), 4)
+    assert np.allclose(out, [3.0, 7.0, 0.0, 0.0], atol=1e-9)
+
+
+def test_fractional_delay_charge_conserved_and_centroid():
+    # The FIR [1-frac, frac] conserves total weight and places the arrival
+    # centroid (in steps, relative to the input step) at exactly d/dt.
+    w, d_ms, dt = 10.0, 0.17, 0.1
+    out = _delivery_series(_FracDelayRule(weight=jnp.array([w]) * u.pA, delay=d_ms * u.ms), 6)
+    assert np.sum(out) == pytest.approx(w, abs=1e-9)                  # charge exact
+    centroid = np.sum(out * np.arange(len(out))) / np.sum(out)
+    assert centroid == pytest.approx(d_ms / dt, abs=1e-9)            # first moment exact
+
+
+def test_fractional_delay_integer_delay_is_plain_grid():
+    # frac == 0 (integer delay) with the flag set -> NO carry -> identical to a
+    # plain grid delay: full w lands at exactly one step (floor==total).
+    out = _delivery_series(_FracDelayRule(weight=jnp.array([7.]) * u.pA, delay=0.2 * u.ms), 5)
+    assert np.allclose(out, [0.0, 0.0, 7.0, 0.0, 0.0], atol=1e-9)
+
+
+def test_fractional_delay_default_off_for_plain_rule():
+    # A rule WITHOUT the flag must take the unchanged InputDelay path: an integer
+    # delay still delivers the full weight at one step (regression guard).
+    out = _delivery_series(_StaticTestRule(weight=jnp.array([7.]) * u.pA, delay=0.2 * u.ms), 5)
+    assert np.allclose(out, [0.0, 0.0, 7.0, 0.0, 0.0], atol=1e-9)
+    # and a plain rule never allocates a carry State
+    rule = _StaticTestRule(weight=jnp.array([1.]) * u.pA, delay=0.15 * u.ms)
+    brainstate.environ.set(dt=0.1 * u.ms)
+    proj, _ = _build(1, 1, rule)
+    assert getattr(proj, 'delay_carry', None) is None
+
+
+def test_fractional_delay_keeps_pre_spike_binary():
+    # The kernel must see a BINARY ctx.pre_spike even on the fractional path
+    # (the split lives on the output amplitude, not the binary pre vector).
+    rule = _FracPreProbe(weight=jnp.array([1.]) * u.pA, delay=0.17 * u.ms)
+    _delivery_series(rule, 4)
+    seen = np.concatenate(rule.seen_pre)
+    assert np.all((seen == 0.0) | (seen == 1.0))
+
+
+def test_fractional_delay_train_superposition():
+    # Two spikes 2 steps apart each split independently -> linear superposition.
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(1)
+    spikes = [1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+    holder = {'pre': jnp.array([spikes[0]])}
+    rule = _FracDelayRule(weight=jnp.array([10.]) * u.pA, delay=0.15 * u.ms)  # 0.5/0.5
+    proj = EventPlasticProj(
+        pre_spike=lambda: holder['pre'], n_pre_pop=1, pre_local_idx=jnp.arange(1),
+        post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    out = []
+    for i in range(len(spikes)):
+        holder['pre'] = jnp.array([spikes[i]])
+        with brainstate.environ.context(t=0.1 * (i + 1) * u.ms, i=i + 1):
+            proj.update()
+        out.append(float(u.get_mantissa(sink.last)[0]))
+    # spike@0 -> 5@step1,5@step2 ; spike@2 -> 5@step3,5@step4
+    assert np.allclose(out, [0.0, 5.0, 5.0, 5.0, 5.0, 0.0, 0.0], atol=1e-9)
+    assert np.sum(out) == pytest.approx(20.0, abs=1e-9)              # 2 spikes * 10 pA
+
+
+def test_fractional_delay_state_advances_in_for_loop():
+    # The delay_carry / floor-delay States must be discovered + threaded by
+    # transform.for_loop (they are built in init_state) — drive the same single
+    # spike and require the JIT-compiled loop to match the eager Python loop.
+    brainstate.environ.set(dt=0.1 * u.ms)
+    sink = _Sink(1)
+    box = {'v': jnp.zeros(1)}
+    rule = _FracDelayRule(weight=jnp.array([10.]) * u.pA, delay=0.17 * u.ms)
+    proj = EventPlasticProj(
+        pre_spike=lambda: box['v'], n_pre_pop=1, pre_local_idx=jnp.arange(1),
+        post=sink, post_local_idx=jnp.arange(1), n_post_pop=1,
+        pre_idx=jnp.array([0]), post_idx=jnp.array([0]), rule=rule)
+    brainstate.nn.init_all_states(proj)
+    n = 5
+    spk = jnp.asarray(np.array([[1.], [0.], [0.], [0.], [0.]]))
+    times = jnp.arange(n) * 0.1 * u.ms
+    idx = jnp.arange(n)
+
+    def step(t, i, x):
+        box['v'] = x
+        with brainstate.environ.context(t=t, i=i):
+            return u.get_mantissa(proj.update()[0])
+
+    out = np.asarray(transform.for_loop(step, times, idx, spk)).reshape(-1)
+    assert np.allclose(out, [0.0, 3.0, 7.0, 0.0, 0.0], atol=1e-9)
