@@ -114,11 +114,11 @@ def test_ltd_below_theta_minus_is_zero():
 def test_ltp_accumulates_while_depolarized():
     s = clopath_synapse(weight=50.0)
     # x_bar = pre_trace/tau_x = 15/15 = 1; V above theta_plus; u_plus above theta_minus.
-    # NEST adds one fixed increment per step with NO dt factor (A_LTP is 1/mV^2).
+    # NEST's LTP dw carries a * resolution (dt) factor (write_LTP_history).
     ctx = _ctx(pre_spike=0.0, pre_trace=TAU_X, V=-40.0, u_plus=-60.0, dt=0.1)
     new, _ = s.update({'weight': jnp.array([50.0])}, ctx)
     x_bar = 1.0
-    expected = 50.0 + A_LTP * x_bar * (-40.0 - THETA_PLUS) * (-60.0 - THETA_MINUS)
+    expected = 50.0 + A_LTP * x_bar * (-40.0 - THETA_PLUS) * (-60.0 - THETA_MINUS) * 0.1
     assert np.allclose(np.asarray(new['weight']), expected)
 
 
@@ -144,11 +144,11 @@ def test_ltp_scales_with_x_bar():
 # clamps
 # --------------------------------------------------------------------------
 def test_wmax_clamp_on_ltp():
-    s = clopath_synapse(weight=99.5, Wmax=100.0)
-    # strong depolarization: ltp = 8e-5*1*95.3*120.6 = 0.9195 -> 99.5+0.9195 = 100.42
-    # overshoots Wmax -> clamp to 100.
-    ctx = _ctx(pre_trace=TAU_X, V=50.0, u_plus=50.0)
-    new, _ = s.update({'weight': jnp.array([99.5])}, ctx)
+    s = clopath_synapse(weight=99.95, Wmax=100.0)
+    # ltp = 8e-5*1*95.3*120.6*0.1 = 0.09195 -> 99.95+0.092 = 100.042 overshoots Wmax
+    # -> clamp to 100. (With the dt factor the per-step increment is ~0.092.)
+    ctx = _ctx(pre_trace=TAU_X, V=50.0, u_plus=50.0, dt=0.1)
+    new, _ = s.update({'weight': jnp.array([99.95])}, ctx)
     assert np.allclose(np.asarray(new['weight']), 100.0)
 
 
@@ -177,27 +177,23 @@ def test_theta_minus_boundary_no_ltd():
 
 
 # --------------------------------------------------------------------------
-# resolution dependence: one fixed LTP increment per step, NO dt factor
-# (NEST clopath is resolution-dependent; A_LTP units are 1/mV^2).
+# dt invariance of the LTP time-integral: NEST's LTP dw carries a * resolution
+# factor, so accumulating over a fixed physical duration is dt-invariant.
 # --------------------------------------------------------------------------
-def test_ltp_increment_is_per_step_independent_of_dt():
+def test_dt_invariance_of_ltp_integral():
     s = clopath_synapse(weight=50.0)
 
-    def one_step_inc(dt):
-        w = s.update({'weight': jnp.array([50.0])},
-                     _ctx(pre_trace=TAU_X, V=-40.0, u_plus=-60.0, dt=dt))[0]['weight']
-        return float(np.asarray(w)[0]) - 50.0
+    def accumulate(dt, nsteps):
+        w = jnp.array([50.0])
+        for _ in range(nsteps):
+            w = s.update({'weight': w},
+                         _ctx(pre_trace=TAU_X, V=-40.0, u_plus=-60.0, dt=dt))[0]['weight']
+        return float(np.asarray(w)[0])
 
-    # the per-step increment must NOT scale with dt (no dt factor in NEST)
-    assert np.isclose(one_step_inc(0.1), one_step_inc(0.2), atol=1e-12)
-    assert one_step_inc(0.1) > 0.0   # there *is* potentiation
-
-    # accumulation is linear in the number of steps: N steps == N x one step
-    w = jnp.array([50.0])
-    for _ in range(5):
-        w = s.update({'weight': w},
-                     _ctx(pre_trace=TAU_X, V=-40.0, u_plus=-60.0, dt=0.1))[0]['weight']
-    assert np.isclose(float(np.asarray(w)[0]) - 50.0, 5.0 * one_step_inc(0.1), atol=1e-10)
+    w_fine = accumulate(0.1, 10)     # T = 1.0 ms
+    w_coarse = accumulate(0.2, 5)    # T = 1.0 ms
+    assert np.isclose(w_fine, w_coarse, atol=1e-12)
+    assert w_fine > 50.0             # there *is* potentiation
 
 
 # --------------------------------------------------------------------------

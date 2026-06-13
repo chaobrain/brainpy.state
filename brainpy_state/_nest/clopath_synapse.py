@@ -59,21 +59,22 @@ class clopath_synapse:
     .. math::
 
        w \leftarrow \min\!\big(W_{\max},\; w + A_\text{LTP}\, \bar{x}\,
-         [V - \theta_+]_+ \, [\bar{u}_+ - \theta_-]_+\big)
+         [V - \theta_+]_+ \, [\bar{u}_+ - \theta_-]_+ \, \Delta t\big)
          \quad\text{(every step)}
 
        w \leftarrow \max\!\big(W_{\min},\; w - A_\text{LTD}\,
          [\bar{u}_- - \theta_-]_+\big) \quad\text{(pre spike)}
 
-    where :math:`[x]_+ = \max(x, 0)`. There is **no** :math:`\Delta t` factor: NEST
-    accumulates one fixed increment per timestep (its ``A_LTP`` carries units
-    :math:`1/\text{mV}^2` and ``A_LTD`` :math:`1/\text{mV}`, so each product is
-    unitless), which makes the rule **resolution-dependent** — see Notes. The
-    product of rectifiers reproduces NEST's ``u > theta_plus AND u_bar_plus >
-    theta_minus`` AND-gate, and the strict NEST inequalities at equality give
-    :math:`[0]_+ = 0` (no update) — see the boundary edge cases. ``x_bar`` is the
-    substrate's per-pre trace divided by ``tau_x`` (NEST increments ``x_bar`` by
-    :math:`1/\tau_x` per spike, the substrate by 1).
+    where :math:`[x]_+ = \max(x, 0)`. **LTP carries a** :math:`\Delta t` **factor,
+    LTD does not.** NEST's ``write_LTP_history`` multiplies its per-step ``dw`` by
+    ``Time::get_resolution()`` (so the accumulated potentiation is a
+    resolution-independent time integral), whereas the depression ``dw`` applied at
+    each presynaptic spike has no such factor. The product of rectifiers reproduces
+    NEST's ``u > theta_plus AND u_bar_plus > theta_minus`` AND-gate, and the strict
+    NEST inequalities at equality give :math:`[0]_+ = 0` (no update) — see the
+    boundary edge cases. ``x_bar`` is the substrate's per-pre trace divided by
+    ``tau_x`` (NEST increments ``x_bar`` by :math:`1/\tau_x` per spike, the
+    substrate by 1).
 
     Parameters
     ----------
@@ -114,12 +115,12 @@ class clopath_synapse:
     this kernel potentiates eagerly every step. The cumulative weight at each pre
     spike — where NEST's ``weight_recorder`` samples — coincides.
 
-    **Resolution dependence (no dt factor).** NEST pushes one LTP increment per
-    simulation step with no ``dt`` multiplication (``A_LTP`` units :math:`1/\text{mV}^2`
-    make the per-step ``dw`` unitless), so the accumulated potentiation scales with
-    the *number* of steps, not elapsed time — halving the resolution doubles the LTP
-    over the same interval. Parity therefore requires matching NEST's resolution
-    (``dt = 0.1 ms`` by default); this kernel mirrors that step-for-step.
+    **Delayed reads (``delay_u_bars``).** NEST's archiving node gates and evaluates
+    LTP/LTD against the post voltages **delayed by** ``delay_u_bars`` (a ring buffer):
+    LTP uses the instantaneous ``u`` with the delayed ``u_bar_plus``; LTD uses the
+    delayed ``u_bar_minus``. This kernel reads the post neuron's *current* State with
+    the substrate's intrinsic one-step lag (projections run before neurons), so live
+    parity aligns NEST's ``delay_u_bars`` to one resolution step.
 
     References
     ----------
@@ -213,11 +214,13 @@ class clopath_synapse:
         u_minus = ps['u_bar_minus']
         x_bar = ctx.pre_trace / self._tau_x_ms                # NEST 1/tau_x increment
 
-        # LTP: one fixed increment per timestep — NO dt factor (NEST clopath is
-        # resolution-dependent; A_LTP has units 1/mV^2 so the product is unitless).
+        # LTP: time-integrated potentiation. NEST's write_LTP_history multiplies the
+        # per-step dw by the resolution (Time::get_resolution().get_ms()), so the
+        # accumulated LTP is a resolution-independent integral. Hence the * ctx.dt.
         ltp = (self.A_LTP * x_bar
                * jnp.maximum(V - self._theta_plus, 0.0)
-               * jnp.maximum(u_plus - self._theta_minus, 0.0))
+               * jnp.maximum(u_plus - self._theta_minus, 0.0)
+               * ctx.dt)
         w = jnp.minimum(w + ltp, self.Wmax)
 
         # LTD: on the pre spike
