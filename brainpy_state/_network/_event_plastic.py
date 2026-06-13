@@ -32,7 +32,7 @@ import saiunit as u
 
 from brainpy_state._brainpy._delay import InputDelay
 
-__all__ = ['EventPlasticProj', 'KernelContext', 'PlasticSynapse']
+__all__ = ['EventPlasticProj', 'VoltageCoupledPlasticProj', 'KernelContext', 'PlasticSynapse']
 
 
 def _trace_spec(attr, mode='all_to_all'):
@@ -86,6 +86,14 @@ class KernelContext(NamedTuple):
         column 0.
     post_traces : jax.Array
         ``(E, k)`` all postsynaptic traces gathered per edge (see ``pre_traces``).
+    post_states : dict
+        ``{name: (E,)}`` per-edge gathers of the post-neuron analog State variables
+        named by the rule's ``post_state_reads`` (the primitive-#2
+        :class:`VoltageCoupledPlasticProj` reader; e.g. ``'V'`` / ``'u_bar_plus'`` /
+        ``'u_bar_minus'`` for ``clopath_synapse``). Each value is a unit-stripped
+        mantissa in the State's stored unit, in CSR (sorted-by-pre) edge order.
+        ``None`` for the base :class:`EventPlasticProj` (primitive #1 reads no post
+        State).
     """
     pre_spike: jax.Array
     post_spike: jax.Array
@@ -96,6 +104,7 @@ class KernelContext(NamedTuple):
     key: jax.Array
     pre_traces: jax.Array = None
     post_traces: jax.Array = None
+    post_states: dict = None
 
 
 class PlasticSynapse(Protocol):
@@ -357,6 +366,15 @@ class EventPlasticProj(brainstate.nn.Module):
         base = jnp.zeros(self._n_post_pop, dtype=y.dtype)
         return base.at[self.post_local_idx].add(y)
 
+    def _gather_post_states(self):
+        """Post-neuron analog-State reads for the kernel (``None`` for primitive #1).
+
+        The base :class:`EventPlasticProj` reads no post State; the override in
+        :class:`VoltageCoupledPlasticProj` returns the ``{name: (E,)}`` per-edge
+        gather declared by ``rule.post_state_reads``.
+        """
+        return None
+
     # -- step --------------------------------------------------------------
     def update(self):
         x_full = jnp.asarray(self.pre_spike())
@@ -396,7 +414,8 @@ class EventPlasticProj(brainstate.nn.Module):
 
         state = {'weight': self.weight.value, **{k: v.value for k, v in self.aux.items()}}
         ctx = KernelContext(pre_fired, post_fired, pre_trace_edge, post_trace_edge,
-                            t_now, dt, key, pre_traces_edge, post_traces_edge)
+                            t_now, dt, key, pre_traces_edge, post_traces_edge,
+                            self._gather_post_states())
         new_state, w_eff = self.rule.update(state, ctx)
         self.weight.value = new_state['weight']
         for k, v in self.aux.items():
@@ -412,3 +431,74 @@ class EventPlasticProj(brainstate.nn.Module):
         if self.post is not None:
             self.post.add_delta_input(self._delta_key, contrib)
         return contrib
+
+
+class VoltageCoupledPlasticProj(EventPlasticProj):
+    """Voltage-coupled plastic projection — primitive #2 of the typed family.
+
+    A superset of :class:`EventPlasticProj` that adds a **post-neuron analog-state
+    reader**. The rule declares a tuple of post-neuron ``State`` attribute names in
+    ``post_state_reads`` (e.g. ``('u_bar_minus', 'u_bar_plus', 'V')`` for
+    ``clopath_synapse``); each step the projection gathers those per-post-neuron
+    State columns **per edge** — in CSR (sorted-by-pre) edge order, exactly the
+    post-trace gather (``post_local_idx[post_idx]``) — and hands them to the kernel
+    as :attr:`KernelContext.post_states`, a ``{name: (E,)}`` dict of unit-stripped
+    mantissas (in each State's stored unit). This samples a continuous post-neuron
+    quantity (membrane / filtered voltage) that a spike-driven trace cannot
+    reconstruct.
+
+    Everything else — CSR delivery, axonal delay, rule-declared per-neuron traces
+    (``x_bar`` via ``pre_trace_tau``), the weight-recording / ``_stdp_drive`` seams —
+    is inherited unchanged. The post population module supplied as ``post`` is the
+    read source (``getattr(post, name).value``); it must be present and the rule
+    must declare a non-empty ``post_state_reads``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+       >>> import jax.numpy as jnp, brainstate, saiunit as u
+       >>> from brainpy_state._network._event_plastic import (
+       ...     VoltageCoupledPlasticProj, _StaticTestRule)
+       >>> class _Post:
+       ...     def __init__(self): self.V = type('S', (), {'value': jnp.array([3.]) * u.mV})()
+       ...     def add_delta_input(self, key, val): self.last = val
+       >>> class _Read(_StaticTestRule):
+       ...     post_state_reads = ('V',)
+       ...     def update(self, state, ctx):
+       ...         return state, state['weight'] + ctx.post_states['V']
+       >>> brainstate.environ.set(dt=0.1 * u.ms)
+       >>> post = _Post()
+       >>> proj = VoltageCoupledPlasticProj(
+       ...     pre_spike=lambda: jnp.array([1.]), n_pre_pop=1, pre_local_idx=jnp.arange(1),
+       ...     post=post, post_local_idx=jnp.arange(1), n_post_pop=1,
+       ...     pre_idx=jnp.array([0]), post_idx=jnp.array([0]),
+       ...     rule=_Read(weight=jnp.array([1.]) * u.pA))
+       >>> _ = brainstate.nn.init_all_states(proj)
+       >>> with brainstate.environ.context(t=0.1 * u.ms, i=1):
+       ...     _ = proj.update()
+       >>> u.get_mantissa(post.last).tolist()
+       [4.0]
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._post_state_reads = tuple(getattr(self.rule, 'post_state_reads', ()) or ())
+        if not self._post_state_reads:
+            raise ValueError(
+                'VoltageCoupledPlasticProj requires the rule to declare a non-empty '
+                "'post_state_reads' (a tuple of post-neuron State attribute names); "
+                'use EventPlasticProj for a projection that reads no post State.'
+            )
+        if self.post is None:
+            raise ValueError(
+                'VoltageCoupledPlasticProj needs a post population to read State from '
+                '(post=None is only valid for the base EventPlasticProj).'
+            )
+        # per-edge population-local post index (same gather as the post-trace seam)
+        self._post_gather = self.post_local_idx[self._post_idx]
+
+    def _gather_post_states(self):
+        return {name: u.get_mantissa(getattr(self.post, name).value)[self._post_gather]
+                for name in self._post_state_reads}
