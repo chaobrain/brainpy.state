@@ -109,13 +109,17 @@ class TestQuantalStpParity(unittest.TestCase):
         sg = nest.Create("spike_generator", params={"spike_times": list(_TRAIN)})
         mm = nest.Create("multimeter", params={"record_from": ["V_m"], "interval": _DT})
         nest.Connect(sg, pn, syn_spec={"delay": _D1})
-        # NEST's set_status leaves a_ at its constructor default (=1) unless 'a'
-        # is given explicitly, so we set a = n to start with all sites available
-        # (matching the rebuilt kernel's ``a`` default).  Without this the first
-        # spike — which dominates a strongly depressing train — diverges.
+        # NEST's set_status leaves a_ and u_ at their constructor defaults unless
+        # given explicitly, so we pin both to the rebuilt kernel's defaults:
+        #   * a = n  -> all sites start available (NEST default a_ = 1).  Without
+        #     this the first spike, which dominates a depressing train, diverges.
+        #   * u = U  -> NEST keeps u_ at the *old* 0.5 default (u_(U_) used the
+        #     0.5 default U_) and does NOT re-derive it when only 'U' is set, so
+        #     the facilitation regime (U=0.15) would otherwise start at u=0.5 and
+        #     bias ~4 % vs the kernel's u0 = U.
         nest.Connect(pn, neuron, syn_spec={"synapse_model": "quantal_stp_synapse",
                                            "delay": _D2, "n": _N_SITES,
-                                           "a": _N_SITES, **syn})
+                                           "a": _N_SITES, "u": syn["U"], **syn})
         nest.Connect(mm, neuron)
         nest.Simulate(_T_SIM)
         return float(np.mean(np.asarray(mm.get("events")["V_m"])))
