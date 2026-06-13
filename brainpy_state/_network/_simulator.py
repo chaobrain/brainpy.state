@@ -51,6 +51,31 @@ def _asc_sum(pop):
     return sum(s.value for s in pop._asc_states)
 
 
+def _g_port(k):
+    """Resolver for NEST per-port conductance ``g_k`` (1-indexed).
+
+    The multi-receptor models lay conductance out three different ways: a
+    ``g_syn`` *list* of per-receptor States (``glif_cond*``), a ``g`` *list* of
+    per-receptor States (``gif_cond_exp_multisynapse``), or a single ``g`` State
+    with the receptor on the last axis (``aeif_cond_beta_multisynapse``). This
+    returns a ``pop -> value`` reader that handles all three.
+    """
+    idx = k - 1
+
+    def read(pop):
+        g_syn = getattr(pop, 'g_syn', None)
+        if g_syn is not None:                       # glif_cond: list of States
+            return g_syn[idx].value
+        g = getattr(pop, 'g', None)
+        if g is None:
+            raise KeyError(f'g_{k}: population exposes neither g_syn nor g')
+        if isinstance(g, (list, tuple)):            # gif: list of States
+            return g[idx].value
+        return g.value[..., idx]                     # aeif: single State, last axis
+
+    return read
+
+
 # Map NEST recordable names to brainpy.state State attributes. Most current-based
 # neurons store ``V`` (NEST ``V_m``); the exp family uses ``i_syn_ex`` where the
 # alpha family uses ``I_syn_ex``; so each maps either to a tuple of candidate attrs
@@ -72,9 +97,12 @@ _RECORDABLE_ALIAS = {
     'threshold': ('_threshold_state',),
     'threshold_spike': ('_threshold_spike_state',),
     'threshold_voltage': ('_threshold_voltage_state',),
-    # GLIF per-port conductance (glif_cond) and total after-spike current.
-    'g_1': lambda p: p.g_syn[0].value,
-    'g_2': lambda p: p.g_syn[1].value,
+    # Per-port conductance g_k (glif_cond g_syn list, gif g list, aeif g last-axis)
+    # and total after-spike current.
+    'g_1': _g_port(1),
+    'g_2': _g_port(2),
+    'g_3': _g_port(3),
+    'g_4': _g_port(4),
     'ASCurrents_sum': _asc_sum,
 }
 

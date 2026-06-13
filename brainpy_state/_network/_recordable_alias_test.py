@@ -50,6 +50,22 @@ class _FakePop:
             self._asc_sum_state = _FakeState(np.array([0.5]))
 
 
+class _FakeAeifPop:
+    """aeif_cond_beta_multisynapse: one ``g`` State, receptor on the last axis."""
+
+    def __init__(self):
+        self.V = _FakeState(np.array([-70.0]))
+        self.g = _FakeState(np.array([[0.1, 0.2, 0.3, 0.4]]))   # (1, n_receptors)
+
+
+class _FakeGifPop:
+    """gif_cond_exp_multisynapse: ``g`` is a *list* of per-receptor States."""
+
+    def __init__(self):
+        self.V = _FakeState(np.array([-65.0]))
+        self.g = [_FakeState(np.array([0.7])), _FakeState(np.array([0.2]))]
+
+
 class TestRecordableAlias(unittest.TestCase):
     def test_backcompat_V_m(self):
         pop = _FakePop()
@@ -76,6 +92,19 @@ class TestRecordableAlias(unittest.TestCase):
         pop = _FakePop()
         self.assertIs(_read_recordable(pop, 'g_1'), pop.g_syn[0].value)
         self.assertIs(_read_recordable(pop, 'g_2'), pop.g_syn[1].value)
+
+    def test_aeif_per_port_conductance_last_axis(self):
+        # aeif stores one g State of shape (*, n_receptors); g_k indexes the last axis.
+        pop = _FakeAeifPop()
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_1')), [0.1])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_3')), [0.3])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_4')), [0.4])
+
+    def test_gif_per_port_conductance_list(self):
+        # gif stores g as a list of per-receptor States; g_k indexes the list.
+        pop = _FakeGifPop()
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_1')), [0.7])
+        npt.assert_allclose(np.asarray(_read_recordable(pop, 'g_2')), [0.2])
 
     def test_ascurrents_sum_prefers_precomputed_state(self):
         pop = _FakePop(with_asc_sum=True)
