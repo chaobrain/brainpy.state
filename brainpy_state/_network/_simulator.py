@@ -43,26 +43,59 @@ __all__ = ['Simulator', 'SimulationResult']
 # (``iaf_psc_exp``), so each maps to a tuple of candidate attributes tried in
 # order. Recordables not listed here (``g_ex``, ``g_in``, ``w``, …) resolve by
 # their own name via ``getattr`` (e.g. ``iaf_cond_alpha`` exposes ``g_ex``/``g_in``).
+def _asc_sum(pop):
+    """Total after-spike current: a precomputed sum state if present, else summed."""
+    state = getattr(pop, '_asc_sum_state', None)
+    if state is not None:
+        return state.value
+    return sum(s.value for s in pop._asc_states)
+
+
+# Map NEST recordable names to brainpy.state State attributes. Most current-based
+# neurons store ``V`` (NEST ``V_m``); the exp family uses ``i_syn_ex`` where the
+# alpha family uses ``I_syn_ex``; so each maps either to a tuple of candidate attrs
+# tried in order, or to a callable ``pop -> value`` for derived/indexed recordables
+# (per-port conductance, summed adaptation currents). Recordables not listed here
+# resolve by their own name via ``getattr`` (e.g. ``iaf_cond_alpha`` exposes ``g_ex``).
 _RECORDABLE_ALIAS = {
     'V_m': ('V',),
     'I_syn_ex': ('I_syn_ex', 'i_syn_ex'),
     'I_syn_in': ('I_syn_in', 'i_syn_in'),
+    # HH gating (NEST Act_m/Inact_h/Act_n -> brainpy m/h/n).
+    'Act_m': ('m',),
+    'Inact_h': ('h',),
+    'Act_n': ('n',),
+    # GIF adaptation (NEST E_sfa / I_stc).
+    'E_sfa': ('_sfa_val_state',),
+    'I_stc': ('_stc_val_state',),
+    # GLIF threshold components (relative to E_L; demos add E_L test-side).
+    'threshold': ('_threshold_state',),
+    'threshold_spike': ('_threshold_spike_state',),
+    'threshold_voltage': ('_threshold_voltage_state',),
+    # GLIF per-port conductance (glif_cond) and total after-spike current.
+    'g_1': lambda p: p.g_syn[0].value,
+    'g_2': lambda p: p.g_syn[1].value,
+    'ASCurrents_sum': _asc_sum,
 }
 
 
 def _read_recordable(pop, name):
     """Read a NEST recordable as the model's State value (Quantity or array).
 
-    Resolves ``name`` to the first State attribute that exists among its candidate
-    spellings (``_RECORDABLE_ALIAS``), falling back to the recordable name itself.
+    Resolves ``name`` via ``_RECORDABLE_ALIAS``: a callable entry is invoked as
+    ``entry(pop)`` (for derived/indexed recordables), otherwise ``name`` maps to a
+    tuple of candidate attr spellings tried in order (falling back to the recordable
+    name itself).
     """
-    candidates = _RECORDABLE_ALIAS.get(name, (name,))
-    for attr in candidates:
+    entry = _RECORDABLE_ALIAS.get(name, (name,))
+    if callable(entry):
+        return entry(pop)
+    for attr in entry:
         state = getattr(pop, attr, None)
         if state is not None:
             return state.value
     raise KeyError(
-        f'recordable {name!r} (tried {candidates}) is not available on '
+        f'recordable {name!r} (tried {entry}) is not available on '
         f'{type(pop).__name__}'
     )
 
