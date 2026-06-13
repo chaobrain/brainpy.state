@@ -52,12 +52,17 @@ def _asc_sum(pop):
 
 
 def _psc_sum(pop):
-    """Total post-synaptic current ``I_syn`` = sum of per-port PSC states ``y2``.
+    """Total post-synaptic current ``I_syn``.
 
-    NEST ``glif_psc`` reports ``I_syn`` as the sum of every receptor's PSC
-    (``glif_psc.cpp``: ``S_.I_syn_ += S_.y2_[i]`` over all receptors); brainpy
-    stores those per-port PSCs as the ``y2`` list of States (each in pA).
+    NEST reports ``I_syn`` as the sum of every receptor's PSC. Models expose this
+    differently: ``glif_psc`` keeps a single ``y2`` list of per-port PSC States
+    (``glif_psc.cpp``: ``S_.I_syn_ += S_.y2_[i]``), while ``glif_psc_double_alpha``
+    splits each port into fast/slow components and provides a ``get_I_syn()`` that
+    sums them. Prefer the model's own ``get_I_syn()`` when present, else sum ``y2``.
     """
+    get = getattr(pop, 'get_I_syn', None)
+    if callable(get):
+        return get()
     return sum(s.value for s in pop.y2)
 
 

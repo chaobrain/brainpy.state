@@ -70,6 +70,19 @@ class _FakeGifPop:
         self.g = [_FakeState(np.array([0.7])), _FakeState(np.array([0.2]))]
 
 
+class _FakeDoubleAlphaPop:
+    """glif_psc_double_alpha: PSC split across y2_fast/y2_slow, summed by get_I_syn()."""
+
+    def __init__(self):
+        self.V = _FakeState(np.array([-78.85]))
+        # No flat ``y2`` list — the fast/slow split is summed by the model method.
+        self.y2_fast = [_FakeState(np.array([5.0])), _FakeState(np.array([2.0]))]
+        self.y2_slow = [_FakeState(np.array([1.0])), _FakeState(np.array([0.5]))]
+
+    def get_I_syn(self):
+        return sum(f.value + s.value for f, s in zip(self.y2_fast, self.y2_slow))
+
+
 class TestRecordableAlias(unittest.TestCase):
     def test_backcompat_V_m(self):
         pop = _FakePop()
@@ -125,6 +138,13 @@ class TestRecordableAlias(unittest.TestCase):
         pop = _FakePop()
         got = _read_recordable(pop, 'I_syn')
         npt.assert_allclose(np.asarray(got), np.array([15.0]))  # 12.0 + 3.0
+
+    def test_i_syn_prefers_get_I_syn_method(self):
+        # glif_psc_double_alpha splits the PSC across y2_fast/y2_slow and exposes a
+        # get_I_syn() summing both; the resolver must call it (there is no flat y2).
+        pop = _FakeDoubleAlphaPop()
+        got = _read_recordable(pop, 'I_syn')
+        npt.assert_allclose(np.asarray(got), np.array([8.5]))  # (5+1) + (2+0.5)
 
     def test_injected_current_I_maps_to_I_stim(self):
         # NEST records the current-generator input as ``I`` (S_.I_ = currents_);
