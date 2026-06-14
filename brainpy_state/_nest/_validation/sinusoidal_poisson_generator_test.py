@@ -10,6 +10,7 @@ the modulation period — must match live NEST element-wise within
 individual/shared noise modes, rate clamping when ``ac > dc``, ``dt`` invariance)
 are checked NEST-free.
 """
+import gc
 import unittest
 
 import brainstate
@@ -64,6 +65,13 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
 
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
+
+    def tearDown(self):
+        # Each run_spikes builds a fresh generator inside a new environ.context, so
+        # every call is a fresh JAX trace+compile whose artifacts otherwise accumulate
+        # across tests in one process and slow JAX cache lookups. Bound it per test.
+        jax.clear_caches()
+        gc.collect()
 
     def test_psth_tracks_lambda(self):
         from examples.nest.sinusoidal_poisson_generator import (
@@ -166,6 +174,13 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
 class TestSinusoidalPoissonParity(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
+
+    def tearDown(self):
+        # Each run_spikes builds a fresh generator inside a new environ.context, so
+        # every call is a fresh JAX trace+compile whose artifacts otherwise accumulate
+        # across tests in one process and slow JAX cache lookups. Bound it per test.
+        jax.clear_caches()
+        gc.collect()
 
     def test_psth_autocorr_matches_nest_distributional(self):
         from examples.nest.sinusoidal_poisson_generator import (
