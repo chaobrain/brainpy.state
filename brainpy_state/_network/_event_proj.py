@@ -168,6 +168,9 @@ class EventProjection(brainstate.nn.Module):
 
         # Delay buffers the FULL pre-population vector (axonal granularity).
         self.delay_seam = InputDelay((self._n_pre_pop,), delay) if delay is not None else None
+        # Retained (additive) so ``realized_edges`` can report the homogeneous
+        # axonal delay and ``SynapseCollection.set('delay')`` can rebuild the seam.
+        self._delay = delay
 
         # Precompute (Python bool) whether this projection targets the whole
         # post population, so update() can skip the scatter on the fast path.
@@ -308,3 +311,16 @@ class EventProjection(brainstate.nn.Module):
             return u.Quantity(base.at[self.post_local_idx].add(y.mantissa), unit=y.unit)
         base = jnp.zeros(shape, dtype=y.dtype)
         return base.at[self.post_local_idx].add(y)
+
+    def realized_edges(self):
+        """Enumerate this projection's realized edges (NEST ``GetConnections`` view).
+
+        Returns
+        -------
+        ProjEdges
+            Population-local ``source`` / ``target`` plus live ``weight`` / ``delay``
+            in the canonical edge order, with guarded write-back hooks. See
+            :func:`~brainpy_state._network._connection_introspection.event_proj_edges`.
+        """
+        from brainpy_state._network._connection_introspection import event_proj_edges
+        return event_proj_edges(self)
