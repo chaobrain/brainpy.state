@@ -436,6 +436,7 @@ class Simulator(brainstate.nn.Module):
         self._current_injectors = []          # (device, post_pop, post_idx, weight, key, comp, ncomp)
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
+        self._connections = []                # (pre_pop, post_pop, model_name, proj), registration order
 
     # -- node creation -----------------------------------------------------
     def create(self, model_cls, size=1, *, params=None, **kw) -> NodeView:
@@ -559,6 +560,58 @@ class Simulator(brainstate.nn.Module):
         if not projs:
             return None
         return projs[0] if len(projs) == 1 else projs
+
+    def get_connections(self, source=None, target=None, synapse=None):
+        """Enumerate realized synapses across projections (NEST ``GetConnections``).
+
+        Returns a :class:`~brainpy_state._network._connection_introspection.SynapseCollection`
+        over the edges matching the filters, letting you read and write weights /
+        delays **without holding each projection handle**. The collection is a lazy
+        view: weights and delays are re-read from the live projections on each
+        :meth:`~brainpy_state._network._connection_introspection.SynapseCollection.get`,
+        so a query made before :meth:`simulate` still reflects post-simulation
+        evolved plastic weights.
+
+        Parameters
+        ----------
+        source : NodeView, optional
+            Keep only edges whose presynaptic neuron lies in this view (matched by
+            population identity and population-local index). ``None`` keeps all.
+        target : NodeView, optional
+            Keep only edges whose postsynaptic neuron lies in this view. ``None``
+            keeps all.
+        synapse : str, optional
+            Keep only projections with this synapse-model name (``'static_synapse'``
+            for the static event path, else the plastic spec's class name such as
+            ``'stdp_synapse'``). ``None`` keeps all.
+
+        Returns
+        -------
+        SynapseCollection
+            A filtered, lazy view over the matching edges (empty if none match).
+
+        See Also
+        --------
+        connect : Build the projections this enumerates.
+
+        Examples
+        --------
+        .. code-block:: python
+
+           >>> import saiunit as u
+           >>> from brainpy import state as bp
+           >>> sim = bp.Simulator(dt=0.1 * u.ms)
+           >>> exc = sim.create(bp.iaf_psc_exp, 4)
+           >>> _ = sim.connect(exc, exc, rule=bp.all_to_all, weight=20. * u.pA,
+           ...                 allow_autapses=False, comm='sparse')
+           >>> conns = sim.get_connections(source=exc, target=exc)
+           >>> len(conns)
+           12
+           >>> bool(u.math.allclose(conns.get('weight'), 20. * u.pA))
+           True
+        """
+        from brainpy_state._network._connection_introspection import collect_connections
+        return collect_connections(self._connections, source, target, synapse)
 
     def record_weight(self, proj):
         """Register a per-step weight tap on a plastic projection.
@@ -807,6 +860,7 @@ class Simulator(brainstate.nn.Module):
             if 'rng_seed' in inspect.signature(pre_seg.spec.model_cls.__init__).parameters:
                 params['rng_seed'] = self._derive_seed(params.get('rng_seed'), ordinal)
             gen = pre_seg.spec.model_cls(n, **params)
+            source_pop = gen
             setattr(self, f'_node_{id(gen)}', gen)
             holder = _SpikeHolder(n)
             setattr(self, f'_holder_{id(gen)}', holder)
@@ -825,6 +879,7 @@ class Simulator(brainstate.nn.Module):
                     delay=delay, receptor_type=receptor_type, seed=seed)
         else:
             pre_pop = pre_seg.population
+            source_pop = pre_pop
             holder = getattr(self, f'_holder_{id(pre_pop)}')
             if synapse is not None:
                 proj = proj_cls(
@@ -847,6 +902,11 @@ class Simulator(brainstate.nn.Module):
                     pre_is_post=(pre_pop is post_pop),
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
                     seed=self._derive_seed(seed, ordinal))
+        # Register for get_connections (NEST GetConnections analogue). The static
+        # event path is 'static_synapse'; a plastic path takes its spec class name.
+        model_name = (type(proj.rule).__name__ if isinstance(proj, EventPlasticProj)
+                      else 'static_synapse')
+        self._connections.append((source_pop, post_pop, model_name, proj))
         setattr(self, f'_proj_{ordinal}', proj)
         return proj
 

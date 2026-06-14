@@ -397,6 +397,98 @@ objection into a Lessons entry, do **not** silently diverge.
   *separate*: `nest_compat.CollocatedSynapses` (express AMPA+NMDA on one pair in a
   single call — the Wang port uses two ordinary `connect()` calls, which is fine).
 
+### 23-connection-introspection — 2026-06-14
+
+- **Shipped:** **post-hoc connection enumeration + introspection** —
+  `Simulator.get_connections(source, target, synapse) -> SynapseCollection`, NEST's
+  `GetConnections` / `SynapseCollection` idiom: enumerate realized edges and read or
+  write per-edge `weight`/`delay`/`source`/`target` **without holding each
+  `Projection` handle**. An additive convenience layer — **no edge-storage change**.
+  With it the **§3.4 §-introspection demos are done**: ported
+  `examples/nest/plot_weight_matrices.py` (four `E→E/E→I/I→E/I→I` weight matrices via
+  `get_connections(src,tgt)` + `np.add.at`) and `examples/nest/synapsecollection.py`
+  (the full idiom tour), retiring both cluster-deferred `NotImplementedError`
+  placeholders. Files: `_network/_connection_introspection.py` (the core, 280 stmts:
+  `ProjEdges`, `SynapseCollection`, per-family enumeration), `_connection_introspection_test.py`
+  (29 NEST-free), `_network/_event_proj.py` + `_event_plastic.py` (added
+  `realized_edges()`), `_network/_simulator.py` (`_connections` registry +
+  `get_connections()`), `_network/__init__.py` + `brainpy_state/__init__.py` (export
+  `SynapseCollection`); `_rules.py` + `_rules_test.py` (Phase-0 `fixed_total_number`
+  rule); rewritten validations `_nest/_validation/{plot_weight_matrices,synapsecollection}_test.py`
+  (each 6 NEST-free + 3–4 live-NEST). Docs: README §3.4 (blocked→implemented prose,
+  **seam F**, 2 parity rows + prose). Branch `worktree-nest-goal+23-connection-introspection`.
+- **Parity:**
+  - **`plot_weight_matrices` (5 seeds, live NEST).** Connectivity is **exact** on both
+    sides — `fixed_indegree(K)` gives every post exactly `K` inputs, so edge counts
+    (`K·n_post`) and per-target in-degrees match bit-for-bit (`np.bincount == CE/CI`).
+    The `Normal(20,0.5)` / `−g·Normal` weight **draws** match NEST only as a seed-mean
+    (`CAT_D`): `w_ex` mean ≈ 20 pA, `w_in` mean ≈ −100 pA, and `mean(w_in) ≈ −g·mean(w_ex)`.
+  - **`synapsecollection` (5 seeds, live NEST).** Deterministic-count rules are exact:
+    `one_to_one` per-edge `set` round-trips to **identical `[1..10]` pA on both sims**,
+    `all_to_all` count == `n_pre·n_post`, the `stdp` model-filter count == **65**
+    (`one_to_one 5 + all_to_all 5×12`) on both. The `Uniform(0.5,4.5)` weight mean
+    matches NEST distributionally (`CAT_D`). The random topology of
+    `pairwise_bernoulli`/`fixed_total_number` PRNG-diverges, so only their counts are
+    compared (not realized pairs). **49 NEST-free unit tests, 99 %** line coverage on
+    the API module.
+- **API discovered/changed (reusable):**
+  - **`realized_edges()` — one additive accessor per projection family.** Returns a
+    frozen `ProjEdges(source, target, weight, delay, is_homogeneous_weight, is_plastic,
+    model_name, write_weight, write_delay)`. `EventProjection` implements **all four
+    comm modes** (dense `_W`, sparse CSR, per-receptor scatter `_ReceptorScatter`,
+    `one_to_one` scalar); `EventPlasticProj`/`VoltageCoupledPlasticProj` enumerate
+    their CSR `_pre_idx`/`_post_idx`. Centralized in `_connection_introspection.py`
+    (lazy-imports `_DenseMatMul` to dodge the import cycle). **Reuse for any future
+    `nest_compat.GetConnections` facade** — a thin global-node-id translator wraps this
+    with zero edge-storage change.
+  - **`Simulator._connections` registry** `(pre_pop, post_pop, model_name, proj)`
+    recorded at every `connect()` — *required* because neither projection family
+    stores `self.pre`. `model_name` = `type(proj.rule).__name__` for plastic, else
+    `'static_synapse'`.
+  - **Lazy `SynapseCollection`** stores per-proj `(proj, kept_idx, source_local,
+    target_local)`; `weight`/`delay` are **re-read live** on each `get` (so a
+    post-`simulate` read reflects evolved weights). Canonical edge order = stable
+    argsort of population-local source (deterministic → cached `kept` stays valid).
+  - **`set` guards (all-or-nothing, validated before any write):** per-edge weight on a
+    homogeneous-weight projection → `ValueError`; any weight write on a weight-evolving
+    plastic (`model_name ∉ {static_synapse, static_synapse_hom_w}`) → `ValueError`
+    ("rule-managed"); delay on a plastic → `ValueError`; a set delay **grid-rounds to
+    `dt`** and rebuilds/clears the `InputDelay` seam (NEST stores delays as integer
+    resolution multiples).
+- **Gotchas:**
+  - **The cluster-22 coverage SIGABRT has a workaround.** The abort is jaxlib's absl
+    (`SetTimeZone() has already been called`), and it is triggered by coverage's
+    **`--source=<pkg>` PRE-IMPORT** (a second absl init), *not* by tracing. Drop
+    `--source`: `coverage run -m pytest <files>` then `coverage report
+    --include="*_connection_introspection.py"` (report-time scoping never imports) →
+    **99 % on the pure-Python API module**, no crash, any tracer. (The `_simulator`
+    seam itself still can't be line-instrumented, consistent with entry 22 — but the
+    introspection module is standalone and measures cleanly.) `pytest-cov`'s `--cov`
+    plugin still SIGABRTs at collection; use bare `coverage run` + `pytest`.
+  - **Plastic projections reject `dist.*` Parameter weights** — plastic `__init__`
+    does `jnp.asarray(rule.weight)` → `TypeError` on a `Normal`/`Uniform`. Only the
+    **static** path samples distributions eagerly at connect. So distributional weights
+    ride the static `all_to_all`; plastic `stdp` connects take concrete scalars (the
+    rule evolves them at `simulate` anyway).
+  - **`one_to_one` is homogeneous** (one shared scalar EventProjection) → refuses
+    per-edge `set`. NEST's `one_to_one` uses the per-edge `static_synapse`; to keep that
+    per-edge pedagogy, route the demo's `one_to_one` block through the **`static_synapse`
+    plastic path** (`rule=one_to_one, synapse=static_synapse(...)`) — same realized
+    connectivity, per-edge weights.
+  - **Pre-sim vs post-sim weight backing.** Plastic `weight` is a `brainstate.State`
+    allocated in `init_state` (runs at `simulate`); **before** simulate a `set`/`get`
+    must target `_w_init`, **after** it the live `weight.value`. `realized_edges()` and
+    the writer both branch on `isinstance(getattr(proj,'weight'), State)`.
+  - **Population-local source/target** — brainpy has no global node-id space, so the
+    matrices index directly with **no `−min(node_id)` offset** (NEST's). Membership
+    filtering is by `id(population)` **and** local index.
+- **For next clusters:** **§3.4 is complete** (all 7 demos: 5 recording/device + 2
+  introspection). The `realized_edges()` + `SynapseCollection` pair is the substrate
+  the planned `nest_compat` facade should wrap (add `GetConnections` global-node-id
+  translation on top, no storage change). Still open and *separate*:
+  `SynapseCollection.set('source'/'target')` (rewiring) is deliberately unsupported —
+  the layer is introspective, not a graph editor.
+
 ### 14-network-demos — 2026-06-14
 
 - **Shipped:** the **§3.6 spiking network-demo cluster** — 5 ports on the `Simulator`

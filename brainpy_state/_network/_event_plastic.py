@@ -519,6 +519,23 @@ class EventPlasticProj(brainstate.nn.Module):
                 self.post.add_delta_input(self._delta_key, contrib)
         return contrib
 
+    def realized_edges(self):
+        """Enumerate this plastic projection's realized edges (``GetConnections`` view).
+
+        Reads the live (post-simulation evolved) ``weight`` State when allocated,
+        else the pre-simulation init. A weight-evolving rule exposes no weight
+        write-back. See
+        :func:`~brainpy_state._network._connection_introspection.plastic_proj_edges`.
+
+        Returns
+        -------
+        ProjEdges
+            Population-local ``source`` / ``target`` plus live ``weight`` / ``delay``
+            in the canonical edge order.
+        """
+        from brainpy_state._network._connection_introspection import plastic_proj_edges
+        return plastic_proj_edges(self)
+
 
 class VoltageCoupledPlasticProj(EventPlasticProj):
     """Voltage-coupled plastic projection — primitive #2 of the typed family.
