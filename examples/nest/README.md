@@ -432,6 +432,48 @@ bit-identical results. Construction cost is dominated by the `fixed_indegree`
 sampler, which is `O(NE + NI)`; that is what makes the large-`order` build slow,
 not the sparse comm.
 
+## Generator-pattern demos (§3.7)
+
+Three of NEST's stimulation-device tutorials (NEST §3.7), each a faithful port with a
+live-NEST **distributional** parity test plus a no-NEST companion that runs in CI. Run
+any directly, e.g. `python examples/nest/pulsepacket.py`.
+
+- **`sinusoidal_poisson_generator.py`** — an inhomogeneous Poisson train whose rate
+  oscillates, `λ(t) = max(0, dc + ac·sin(2πft + φ))`, across a bank of `N` channels. The
+  population PSTH tracks `λ(t)` and the per-bin spike-count autocorrelation carries the
+  modulation period; the `individual_spike_trains` flag selects the noise mode
+  (independent channels vs one train broadcast to all, perfectly synchronous).
+- **`sinusoidal_gamma_generator.py`** — the same rate profile, but spikes are drawn from
+  a **gamma renewal process of order `m`**. The headline is the gamma-regularization law:
+  the ISI coefficient of variation `CV → 1/√m`, so `m = 1` recovers Poisson (`CV → 1`) and
+  large `m` gives an increasingly clock-like train, while the mean rate profile is
+  unchanged.
+- **`pulsepacket.py`** — a `pulsepacket_generator` emits Gaussian-jittered synchronous
+  spike packets (`activity` spikes per center, times `~ N(pulse, sdev²)`). The packet
+  width *is* the jitter `sdev`; replaying the packet through `iaf_psc_alpha` neurons
+  recovers the neuron-averaged membrane excursion, which matches the analytical
+  Gaussian⊛PSP convolution of Diesmann.
+
+The two sinusoidal generators are `for_loop`-traceable, so each is driven **directly** by
+`brainstate.transform.for_loop` over a single `in_size=N` instance — the same loop
+primitive `Simulator.simulate` uses internally — which both exercises the
+`individual_spike_trains` flag and lowers the whole rollout into one compiled program.
+`pulsepacket_generator` is instead **host-side** (NumPy `default_rng` + per-train `deque`
+queues, so its `update()` is not JAX-traceable); it is driven by an explicit host loop,
+and its precomputed packet is then replayed through the `Simulator` as a `SpikeTime`
+population (`one_to_one`) for the membrane drive.
+
+Parity is **distributional**: NEST's per-thread RNG and the JAX/NumPy streams diverge
+sample-by-sample, so each test compares a seed-aggregated statistic within a documented
+band — the spike-count autocorrelation (Poisson), the seed-mean ISI-CV (gamma), and the
+packet width plus per-step count profile (pulsepacket) — alongside the qualitative law
+each demo exists to show. The pulsepacket membrane excursion is checked NEST-free against
+the analytical solution.
+
+> NEST's §3.8 **astrocyte** demos (`astrocytes/`) are out of scope here: they need the
+> bucket-3 `sic_connection` plus an astrocyte rate model, so they are the natural next
+> target once that machinery lands.
+
 ## Validation
 
 Live-NEST parity tests live in

@@ -212,17 +212,29 @@ for this cluster** — each needs a primitive the spiking-network harness does n
 
 ### 3.7 Generator-pattern demos
 
+All three ported in cluster 16 with live-NEST **distributional** parity tests plus
+no-NEST companions. The two sinusoidal generators are `for_loop`-traceable, so each is
+driven directly by `brainstate.transform.for_loop` over a single `in_size=N` instance
+(the loop primitive `Simulator.simulate` uses internally) — which both exercises the
+`individual_spike_trains` flag and lowers the rollout into one compiled program. The
+host-side `pulsepacket_generator` (NumPy RNG + `deque` queues, not JAX-traceable) is
+driven by an eager host loop, then its packet is replayed through the `Simulator` as a
+`SpikeTime` population (`one_to_one`) for the membrane drive. Parity is distributional
+because NEST's per-thread RNG diverges from the JAX/NumPy streams: each test compares a
+seed-aggregated statistic within a documented band, plus the qualitative law the demo
+exists to show (PSTH tracks `λ(t)`; `CV → 1/√m`; packet width ∝ `sdev`).
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `sinusoidal_gamma_generator.py` | missing | none | |
-| `sinusoidal_poisson_generator.py` | missing | none | |
-| `pulsepacket.py` | missing | none | uses `pulsepacket_generator` |
+| `sinusoidal_gamma_generator.py` | implemented | `examples/nest/sinusoidal_gamma_generator.py` | gamma renewal order `m`; ISI-CV → 1/√m (seed-mean `CAT_D` width 6 %, qualitative law within 12 %) + modulated-rate autocorr `CAT_D`; eager `for_loop` drive. Tests clear JAX caches per case (the gamma `update()` lowers a costly `while_loop`-in-`scan` that otherwise accumulates) |
+| `sinusoidal_poisson_generator.py` | implemented | `examples/nest/sinusoidal_poisson_generator.py` | inhomogeneous Poisson; PSTH tracks `λ(t)` + spike-count autocorr `CAT_D`; `individual_spike_trains` (independent vs shared) modes; eager `for_loop` drive |
+| `pulsepacket.py` | implemented | `examples/nest/pulsepacket.py` | host-side `pulsepacket_generator` via eager host loop; packet width = `sdev` (seed-mean `CAT_D`) + per-step profile (smoothed corr > 0.93, mass 8 %, centroid < 1 ms); averaged-V_m vs analytical Gaussian⊛PSP (NEST-free, windowed corr 0.9998) through a `SpikeTime → iaf_psc_alpha` Simulator drive |
 
 ### 3.8 Astrocyte demos
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `astrocytes/` (subdir, contains `astrocyte_brunel_*` series) | missing | none | uses `astrocyte_lr_1994` + `aeif_cond_alpha_astro` (both validated). Astrocyte Brunel variant is the natural P0 port target for the astrocyte family. |
+| `astrocytes/` (subdir, contains `astrocyte_brunel_*` series) | missing (deferred) | none | uses `astrocyte_lr_1994` + `aeif_cond_alpha_astro` (both validated) but also the **bucket-3 `sic_connection`** + an astrocyte rate model. Explicitly deferred past cluster 16 (generator demos) to the post-bucket-3 window; the astrocyte Brunel variant is then the natural P0 port target. |
 
 ### 3.9 Spatial demos
 
@@ -263,8 +275,9 @@ networks, COBA, and HH-COBA). Concretely:
   gap-junction coupling / rate-neuron connections). Wang 2002, Brette 2007,
   EI-clustered, perturbation-sensitivity, artificial-synchrony and
   repeated-stimulation are ported (§3.6).
-- **Generator demos**: sinusoidal Poisson + gamma, pulse packets.
-- **Astrocyte demos**: the `astrocytes/` Brunel-variant series.
+- **Generator demos**: sinusoidal Poisson + gamma and pulse packets are ported (§3.7).
+- **Astrocyte demos**: the `astrocytes/` Brunel-variant series (deferred to post-bucket-3,
+  pending `sic_connection` + an astrocyte rate model).
 - **Spatial and SONATA**: blocked by API absence; classified `unsupported`
   until the underlying API lands.
 
