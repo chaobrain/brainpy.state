@@ -15,9 +15,13 @@ from ._projections import (
 
 # NEST-flavored explicit Simulator API.
 from ._nodeview import NodeView
-from ._rules import ConnRule, all_to_all, one_to_one, fixed_indegree, pairwise_bernoulli
+from ._rules import (
+    ConnRule, all_to_all, one_to_one, fixed_indegree, pairwise_bernoulli,
+    fixed_total_number,
+)
 from ._event_proj import EventProjection
 from ._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
+from ._connection_introspection import SynapseCollection
 from ._simulator import Simulator, SimulationResult
 from ._weight_recorder_view import send_steps_from_pre, weight_recorder_events
 
@@ -40,9 +44,11 @@ __all__ = [
     'one_to_one',
     'fixed_indegree',
     'pairwise_bernoulli',
+    'fixed_total_number',
     'EventProjection',
     'EventPlasticProj',
     'VoltageCoupledPlasticProj',
+    'SynapseCollection',
     'Simulator',
     'SimulationResult',
     'send_steps_from_pre',

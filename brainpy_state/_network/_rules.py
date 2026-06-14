@@ -8,10 +8,11 @@ from brainpy_state._network._connectivity import (
     sample_one_to_one,
     sample_fixed_indegree,
     sample_pairwise_bernoulli,
+    sample_fixed_total_number,
 )
 
 __all__ = ['ConnRule', 'all_to_all', 'one_to_one', 'fixed_indegree',
-           'pairwise_bernoulli']
+           'pairwise_bernoulli', 'fixed_total_number']
 
 
 class ConnRule:
@@ -69,6 +70,20 @@ class _PairwiseBernoulli(ConnRule):
                                          allow_multapses=allow_multapses)
 
 
+class _FixedTotalNumber(ConnRule):
+    """Exactly ``N`` edges drawn uniformly over the ``(pre, post)`` grid."""
+    __module__ = 'brainpy.state'
+
+    def __init__(self, N: int):
+        self.N = int(N)
+
+    def sample(self, n_pre, n_post, *, key, pre_is_post, allow_autapses, allow_multapses):
+        return sample_fixed_total_number(n_pre, n_post, N=self.N, key=key,
+                                         pre_is_post=pre_is_post,
+                                         allow_autapses=allow_autapses,
+                                         allow_multapses=allow_multapses)
+
+
 all_to_all = _AllToAll()
 one_to_one = _OneToOne()
 
@@ -86,3 +101,10 @@ def pairwise_bernoulli(p: float) -> _PairwiseBernoulli:
     if not (0.0 <= p <= 1.0):
         raise ValueError(f'p must be in [0, 1], got {p}')
     return _PairwiseBernoulli(p)
+
+
+def fixed_total_number(N: int) -> _FixedTotalNumber:
+    """Return a fixed-total-number rule: exactly ``N`` edges over the ``(pre, post)`` grid."""
+    if int(N) < 0:
+        raise ValueError(f'N must be >= 0, got {N}')
+    return _FixedTotalNumber(int(N))

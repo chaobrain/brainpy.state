@@ -225,16 +225,27 @@ test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any directly, e.g.
   resolves the spike **between** grid points (read from `last_spike_time`), so its
   firing period barely moves with `dt`.
 
-Two further §3.4 demos are **blocked** and ship as skipped placeholders that
-raise `NotImplementedError` with the gap reason:
+Two further §3.4 demos extract realized connectivity **after** wiring, via
+`Simulator.get_connections` — the `GetConnections` / `SynapseCollection` idiom
+(enumerate realized synapses and read or write per-edge
+`weight`/`delay`/`source`/`target` without holding each `Projection` handle):
 
-- **`plot_weight_matrices.py`** and **`synapsecollection.py`** both need post-hoc
-  connection introspection — `GetConnections` / `SynapseCollection` to enumerate
-  realized synapses and read per-edge weights (`network-api-gap.md` §3.1, §3.8) —
-  which the explicit `Simulator` does not expose. They will be ported once the
-  planned `nest_compat` facade lands.
+- **`plot_weight_matrices.py`** — an E/I network wired with `fixed_indegree`
+  (excitatory weights `Normal(20, 0.5)` pA, inhibitory `−g` times as large); for
+  each of the four `E→E / E→I / I→E / I→I` population pairings it enumerates the
+  realized edges with `get_connections(source, target)` and scatters
+  `W[source, target] += weight` into a dense weight matrix. Population-local
+  `source` / `target` indices replace NEST's global-node offset; multapses sum into
+  a cell exactly as NEST's `W[i, j] += w`.
+- **`synapsecollection.py`** — the `SynapseCollection` introspection tour:
+  `one_to_one`, an `all_to_all` block with `Uniform(0.5, 4.5)` pA weights, and a
+  five-rule complex network, queried by `get_connections()` (every edge),
+  `get_connections(source, target)` (a population slice) and
+  `get_connections(synapse=model)` (one synapse model), with
+  `get(['source', 'target', 'weight'])` batch reads and `set('weight', …)` per-edge
+  write-backs.
 
-These ports add one reusable seam on top of the §3.2 vocabulary:
+These ports add two reusable seams on top of the §3.2 vocabulary:
 
 - **E — eager imperative devices.** `mip_generator`, `correlation_detector`, and
   `correlospinmatrix_detector` are NumPy-RNG / Python-loop host devices that cannot
@@ -243,6 +254,14 @@ These ports add one reusable seam on top of the §3.2 vocabulary:
   then drive the detector **post-hoc**, feeding only event-carrying steps and
   stamping each at `step + 1` (NEST's one-step delivery latency, which cancels in
   the lag difference). Nothing imperative runs inside the `for_loop`.
+- **F — post-hoc connection introspection.** `get_connections(source, target,
+  synapse)` returns a lazy `SynapseCollection` over the realized edges of the
+  matching projections, re-reading `weight` / `delay` live on each `get` and writing
+  them back on `set`. One uniform `source` / `target` / `weight` / `delay` view spans
+  every edge-storage family (dense matrix, sparse CSR, per-receptor scatter, the
+  `one_to_one` scalar, and the plastic CSR projections); per-edge weight writes are
+  refused on homogeneous-weight or rule-managed (weight-evolving) projections, and a
+  set delay grid-rounds to the resolution as NEST stores it.
 
 ## Single-neuron model demos (§3.5)
 
@@ -510,7 +529,9 @@ its per-edge band is tighter (≤ 2 %) than the up-to-50 Hz pairing sweep (≤ 3
 
 Deterministic recordings are compared per-sample against live NEST; PRNG-driven
 detectors are compared as a seed-mean statistic (category D, 5 %); the precise
-spiking contrast is compared as an onset-aligned spike sequence (category E).
+spiking contrast is compared as an onset-aligned spike sequence (category E);
+connection introspection is compared as exact realized-edge counts (and per-edge
+`set` round-trips) plus seed-mean weights (category D).
 
 | Port | metric | brainpy vs NEST |
 |---|---|---|
@@ -519,6 +540,8 @@ spiking contrast is compared as an onset-aligned spike sequence (category E).
 | `cross_check_mip_corrdet` (5 seeds) | normalized cross-correlogram, max\|Δ\| | within `CAT_D` (5e-2) |
 | `correlospinmatrix_..._two_neuron` (5 seeds) | mean activities ; covariance | means \|Δ\| ≤ 0.013 ; cov max\|Δ\| ≈ 0.014 |
 | `precise_spiking` (`dt∈{0.1,0.5,1.0}`) | onset-aligned spike times ; count | ≤ 1 step ; 10 = 10 |
+| `plot_weight_matrices` (5 seeds) | per-edge `Normal` weight mean ; `fixed_indegree` structure | `w_ex`/`w_in` mean within `CAT_D` ; in-degree exact |
+| `synapsecollection` (5 seeds) | `one_to_one`/`all_to_all` counts + per-edge `set` ; `Uniform` weight mean ; `stdp` model-filter count | counts/`set` exact ; weight mean within `CAT_D` |
 
 `multimeter_file`'s three recordables are exact analytic-propagator curves, so
 they match to machine precision once the constant two-step generator-delivery
@@ -532,7 +555,14 @@ deterministic but the DC drive lands after a constant connection-delay onset
 (NEST's default 1 ms vs the Simulator one-step convention), so parity is asserted
 on the **onset-aligned** spike sequence — exact spike *count* and spike times
 *relative to the first spike* (the physically meaningful firing period and its
-resolution dependence).
+resolution dependence). The two introspection demos split into an *exact* part and
+a *distributional* part: deterministic-count rules (`one_to_one`, `all_to_all`,
+`fixed_indegree`, `fixed_total_number`) realize the same edge counts and per-target
+in-degrees as NEST and a per-edge `set` round-trips identically on both sides, so
+those are asserted exactly; the `Normal` / `Uniform` weight *draws* agree only as a
+seed-mean (`CAT_D`), and the random topology of `pairwise_bernoulli` /
+`fixed_total_number` differs between the PRNGs, so only their counts (not the
+realized pairs) are compared.
 
 ### Single-neuron model demos (§3.5)
 

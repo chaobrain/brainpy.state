@@ -124,11 +124,13 @@ from ._network import (
     # NEST-flavored explicit Simulator API
     Simulator,
     SimulationResult,
+    SynapseCollection,
     NodeView,
     all_to_all,
     one_to_one,
     fixed_indegree,
     pairwise_bernoulli,
+    fixed_total_number,
 )
 
 from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
@@ -560,11 +562,13 @@ __all__ = [
     # NEST-flavored explicit Simulator API
     'Simulator',
     'SimulationResult',
+    'SynapseCollection',
     'NodeView',
     'all_to_all',
     'one_to_one',
     'fixed_indegree',
     'pairwise_bernoulli',
+    'fixed_total_number',
     'network',
     'dist',
 ]

@@ -5,6 +5,7 @@ import jax
 
 from brainpy_state._network import (
     all_to_all, one_to_one, fixed_indegree, pairwise_bernoulli,
+    fixed_total_number,
 )
 
 
@@ -30,6 +31,16 @@ class TestRules(unittest.TestCase):
     def test_fixed_indegree_negative_K_rejected(self):
         with self.assertRaises(ValueError):
             fixed_indegree(-1)
+
+    def test_fixed_total_number_edge_count(self):
+        spec = fixed_total_number(5).sample(
+            10, 5, key=jax.random.key(0), pre_is_post=False,
+            allow_autapses=True, allow_multapses=True)
+        self.assertEqual(spec.n_edges, 5)
+
+    def test_fixed_total_number_negative_rejected(self):
+        with self.assertRaises(ValueError):
+            fixed_total_number(-1)
 
 
 class TestPairwiseBernoulli(unittest.TestCase):
