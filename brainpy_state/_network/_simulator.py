@@ -780,7 +780,7 @@ class Simulator(brainstate.nn.Module):
                     pre_local_idx=jnp.arange(n), post=post_pop,
                     post_local_idx=post_seg.indices, n_post_pop=_flat_size(post_pop),
                     post_spike=post_reader, rule=self._resolve_synapse(synapse, weight, delay),
-                    conn=one_to_one, seed=seed, **plastic_extra)
+                    conn=one_to_one, seed=seed, receptor_type=receptor_type, **plastic_extra)
             else:
                 proj = EventProjection(
                     pre_spike=_holder_reader(holder), n_pre_pop=n,
@@ -798,7 +798,8 @@ class Simulator(brainstate.nn.Module):
                     post_spike=post_reader, rule=self._resolve_synapse(synapse, weight, delay),
                     conn=rule, pre_is_post=(pre_pop is post_pop),
                     allow_autapses=allow_autapses, allow_multapses=allow_multapses,
-                    seed=self._derive_seed(seed, ordinal), **plastic_extra)
+                    seed=self._derive_seed(seed, ordinal), receptor_type=receptor_type,
+                    **plastic_extra)
             else:
                 pre_spike, eff_receptor = self._resolve_stp_emission(
                     pre_pop, post_pop, receptor_type, holder)
