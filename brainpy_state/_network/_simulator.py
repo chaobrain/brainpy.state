@@ -556,7 +556,9 @@ class Simulator(brainstate.nn.Module):
                                           allow_autapses, allow_multapses, seed, comm,
                                           receptor_type, synapse, vt)
                 if proj is not None:
-                    projs.append(proj)
+                    # A ``mult_coupling`` rate pair returns its two sign-split
+                    # (rate_ex/rate_in) projections as a list; flatten them in.
+                    projs.extend(proj) if isinstance(proj, list) else projs.append(proj)
         if not projs:
             return None
         return projs[0] if len(projs) == 1 else projs
@@ -759,7 +761,15 @@ class Simulator(brainstate.nn.Module):
         that receptor the connection delivers ``weight * emission`` instead of
         ``weight * spike``; the DEFAULT/``None`` connection -- and every other
         receptor and every non-emitting model -- still delivers the binary spike
-        with its receptor unchanged. Two models emit:
+        with its receptor unchanged.
+
+        A third, *receptorless* class emits **continuously**: a rate neuron
+        declares ``_emission_continuous=True`` and ``_emission_attr='rate'`` (or
+        ``'phi_rate'``). Its static connection delivers ``weight * rate`` into the
+        post's DEFAULT delta channel every step (read back via
+        ``sum_delta_inputs``) -- there is no NEST receptor, so this branch is
+        resolved first and ignores ``receptor_type``. The two receptor-gated
+        spike-offset emitters are:
 
         * ``iaf_tum_2000`` -- released short-term-plasticity efficacy
           ``spike_offset = u * x`` over its TSODYKS receptor. The post is
@@ -806,6 +816,25 @@ class Simulator(brainstate.nn.Module):
             same model); or if the emission holder is absent.
         """
         emit_attr = getattr(pre_pop, '_emission_attr', None)
+        # Continuous graded emitter (rate neurons): the connection delivers
+        # ``weight * emission`` (e.g. ``weight * rate``) into the post's DEFAULT
+        # delta channel every step -- a *receptorless* continuous coupling that
+        # rides the ordinary delta seam (read back via ``sum_delta_inputs``),
+        # not a NEST receptor. It is resolved first and independently of
+        # ``receptor_type`` (rate connections carry none), so it cannot collide
+        # with the receptor-gated STP/NMDA branches below.
+        if emit_attr is not None and getattr(pre_pop, '_emission_continuous', False):
+            emit_holder = getattr(self, f'_emit_holder_{id(pre_pop)}', None)
+            if emit_holder is None:
+                raise ValueError(
+                    f'{type(pre_pop).__name__} declares _emission_continuous but no '
+                    'emission holder was allocated by create().')
+            if comm == 'sparse':
+                raise ValueError(
+                    f'a continuous rate connection from {type(pre_pop).__name__} '
+                    f'delivers weight * {emit_attr} and must ride the dense matmul; '
+                    'comm="sparse" binarizes the presynaptic value. Use comm="dense".')
+            return _holder_reader(emit_holder), None
         emit_receptor = getattr(pre_pop, '_emission_receptor', None)
         if emit_receptor is None:
             emit_receptor = getattr(pre_pop, 'RECEPTOR_TYPES', {}).get('TSODYKS')
@@ -836,6 +865,99 @@ class Simulator(brainstate.nn.Module):
                 f'PSC and requires a {type(pre_pop).__name__} post; got '
                 f'{type(post_pop).__name__}.')
         return _holder_reader(emit_holder), None
+
+    @staticmethod
+    def _is_continuous_rate(pop):
+        """Whether ``pop`` couples through seam-(H) continuous graded emission."""
+        return (getattr(pop, '_emission_continuous', False)
+                and getattr(pop, '_emission_attr', None) is not None)
+
+    def _check_rate_phi_homogeneity(self, pre_pop, post_pop):
+        r"""Guard a rate->rate connection against a φ / summation-mode mismatch.
+
+        A continuous rate connection emits the *sender's* per-step value and the
+        *receiver* integrates it through its own coupling path. With
+        ``linear_summation=True`` the sender emits the raw ``rate`` and the receiver
+        applies its own φ to the summed input, so the two φ may differ freely; with
+        ``linear_summation=False`` the sender emits ``φ_pre(rate)`` and the receiver
+        adds it *as-is* (it would otherwise have applied ``φ_post``), which is exact
+        only for a homogeneous φ. The summation modes must also agree --- a raw
+        ``rate`` integrated where ``φ(rate)`` was expected (or vice versa) is silently
+        wrong. Both conditions are enforced here and raise at ``connect()`` time
+        (the user's "guard to homogeneous-φ" decision, spec §3.3).
+
+        A rate -> non-rate connection (a rate neuron driving a spiking/current
+        target) carries no φ contract and is left unchecked.
+        """
+        if not self._is_continuous_rate(post_pop):
+            return
+        pre_ls = bool(getattr(pre_pop, 'linear_summation', True))
+        post_ls = bool(getattr(post_pop, 'linear_summation', True))
+        if pre_ls != post_ls:
+            raise ValueError(
+                f'rate connection {type(pre_pop).__name__} -> {type(post_pop).__name__}: '
+                f'linear_summation must match on both sides (pre={pre_ls}, post={post_ls}). '
+                'The receiver integrates the raw rate or φ(rate) the sender emits, and the '
+                'two summation modes are not interchangeable.')
+        if not pre_ls:
+            sig_pre = getattr(pre_pop, '_phi_signature', None)
+            sig_post = getattr(post_pop, '_phi_signature', None)
+            if sig_pre != sig_post:
+                raise ValueError(
+                    f'rate connection {type(pre_pop).__name__} -> {type(post_pop).__name__} '
+                    'with linear_summation=False requires a homogeneous input nonlinearity φ: '
+                    'the sender emits φ(rate) and the receiver integrates it directly, which is '
+                    f'exact only when both φ agree (got pre φ={sig_pre!r}, post φ={sig_post!r}). '
+                    'Use linear_summation=True so the receiver applies its own φ, or match the '
+                    'models and their gain parameters.')
+
+    @staticmethod
+    def _sign_split_weight(weight):
+        """Split a connection weight into ``(max(W,0), min(W,0))`` by sign.
+
+        The two halves sum back to ``W``; they feed the ``mult_coupling`` excitatory
+        and inhibitory channels (spec §3.2). The weight must be concrete (a scalar or
+        array) --- a random initializer cannot be sign-split, so ``mult_coupling``
+        rejects callable / absent weights.
+        """
+        if weight is None or callable(weight):
+            raise ValueError(
+                'mult_coupling rate connections sign-split the weight into the '
+                'rate_ex/rate_in channels and require a concrete weight (scalar or '
+                'array); a callable initializer or an absent weight cannot be split.')
+        return jnp.maximum(weight, 0.0), jnp.minimum(weight, 0.0)
+
+    def _build_rate_dual_channel(self, pre_spike, pre_pop, pre_seg, post_pop, post_seg,
+                                 rule, weight, delay, comm, seed, ordinal):
+        r"""Build the two sign-split labelled projections for ``mult_coupling`` (spec §3.2).
+
+        NEST's multiplicative rate coupling splits the presynaptic drive by weight
+        sign --- :math:`\sum_\mathrm{ex} w\,r` over the excitatory (``w>0``) edges and
+        :math:`\sum_\mathrm{in} w\,r` over the inhibitory (``w<0``) edges --- and scales
+        each partial sum by a receiver-state factor ``H_ex``/``H_in``. The split is
+        realised here as two ordinary rate projections reading the *same* presynaptic
+        emission: one carrying ``max(W,0)`` into the post's ``'rate_ex'`` delta channel,
+        one carrying ``min(W,0)`` into ``'rate_in'``. The receiver reads them back with
+        ``sum_delta_inputs(label='rate_ex'|'rate_in')`` and applies ``H_ex``/``H_in``.
+
+        Both halves share one connectivity sample (the same derived seed), so a random
+        rule realises the *same* edge set split only by weight sign.
+        """
+        w_ex, w_in = self._sign_split_weight(weight)
+        conn_seed = self._derive_seed(seed, ordinal)
+        proj_ords = (ordinal, next(self._proj_counter))
+        projs = []
+        for (w_part, label), p_ord in zip(((w_ex, 'rate_ex'), (w_in, 'rate_in')), proj_ords):
+            proj = EventProjection(
+                pre_spike=pre_spike, n_pre_pop=_flat_size(pre_pop),
+                pre_local_idx=pre_seg.indices, post=post_pop,
+                post_local_idx=post_seg.indices, rule=rule, weight=w_part,
+                delay=delay, comm=comm, channel_label=label,
+                pre_is_post=(pre_pop is post_pop), seed=conn_seed)
+            self._connections.append((pre_pop, post_pop, 'static_synapse', proj))
+            setattr(self, f'_proj_{p_ord}', proj)
+            projs.append(proj)
+        return projs
 
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
@@ -894,6 +1016,15 @@ class Simulator(brainstate.nn.Module):
             else:
                 pre_spike, eff_receptor = self._resolve_stp_emission(
                     pre_pop, post_pop, receptor_type, holder, comm)
+                # Continuous rate coupling: enforce the φ / summation-mode contract,
+                # and split into the labelled rate_ex/rate_in channels when the
+                # receiver uses multiplicative coupling (spec §3.2-3.3).
+                if self._is_continuous_rate(pre_pop):
+                    self._check_rate_phi_homogeneity(pre_pop, post_pop)
+                    if getattr(post_pop, '_use_mult_coupling', False):
+                        return self._build_rate_dual_channel(
+                            pre_spike, pre_pop, pre_seg, post_pop, post_seg,
+                            rule, weight, delay, comm, seed, ordinal)
                 proj = EventProjection(
                     pre_spike=pre_spike, n_pre_pop=_flat_size(pre_pop),
                     pre_local_idx=pre_seg.indices, post=post_pop,

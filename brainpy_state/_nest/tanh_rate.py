@@ -42,353 +42,19 @@ class _tanh_rate_base(_lin_rate_base):
     """
     __module__ = 'brainpy.state'
 
-    def _input(self, h, g, theta):
-        r"""Apply hyperbolic-tangent nonlinearity to input.
+    #: φ(h) = tanh(g·(h − θ)) is fixed by the gain and threshold; these identify it
+    #: for the ``linear_summation=False`` homogeneity guard.
+    _phi_param_names = ('g', 'theta')
 
-        Parameters
-        ----------
-        h : ndarray
-            Input value(s) to transform (dimensionless).
-        g : ndarray
-            Gain parameter (dimensionless).
-        theta : ndarray
-            Threshold/shift parameter (dimensionless).
+    def _activation(self, h):
+        """Hyperbolic-tangent gain ``φ(h) = tanh(g·(h − θ))`` (JAX; reads ``self``)."""
+        g = u.get_mantissa(self.g)
+        theta = u.get_mantissa(self.theta)
+        return jnp.tanh(g * (h - theta))
 
-        Returns
-        -------
-        out : ndarray
-            Transformed input :math:`\tanh(g(h - \theta))`.
-        """
-        return np.tanh(g * (h - theta))
-
-    @staticmethod
-    def _mult_coupling_ex(rate):
-        r"""Multiplicative coupling factor for excitatory inputs (always 1).
-
-        Parameters
-        ----------
-        rate : ndarray
-            Current rate values (unused for tanh_rate).
-
-        Returns
-        -------
-        out : ndarray
-            Array of ones with same shape and dtype as ``rate``.
-        """
-        dftype = brainstate.environ.dftype()
-        return jnp.ones_like(rate, dtype=dftype)
-
-    @staticmethod
-    def _mult_coupling_in(rate):
-        r"""Multiplicative coupling factor for inhibitory inputs (always 1).
-
-        Parameters
-        ----------
-        rate : ndarray
-            Current rate values (unused for tanh_rate).
-
-        Returns
-        -------
-        out : ndarray
-            Array of ones with same shape and dtype as ``rate``.
-        """
-        dftype = brainstate.environ.dftype()
-        return jnp.ones_like(rate, dtype=dftype)
-
-    def _extract_event_fields(self, ev, default_delay_steps: int):
-        r"""Extract event fields from flexible event representation.
-
-        Parse rate events in dict, tuple, or scalar format and return
-        normalized components.
-
-        Parameters
-        ----------
-        ev : dict or tuple or list or scalar
-            Rate event specification. Supported formats:
-
-            - dict: ``{'rate': val, 'weight': w, 'delay_steps': d,
-              'multiplicity': m}``
-            - tuple/list: ``(rate, weight)``, ``(rate, weight, delay_steps)``,
-              or ``(rate, weight, delay_steps, multiplicity)``
-            - scalar: interpreted as rate with default weight, multiplicity,
-              and delay
-
-        default_delay_steps : int
-            Default delay in simulation steps when not specified.
-
-        Returns
-        -------
-        rate : Any
-            Rate value (not yet converted to array).
-        weight : float
-            Synaptic weight.
-        multiplicity : float
-            Event multiplicity factor.
-        delay_steps : int
-            Delay in simulation steps.
-
-        Raises
-        ------
-        ValueError
-            If tuple/list has invalid length (not 2, 3, or 4).
-        """
-        if isinstance(ev, dict):
-            rate = ev.get('rate', ev.get('coeff', ev.get('value', 0.0)))
-            weight = ev.get('weight', 1.0)
-            multiplicity = ev.get('multiplicity', 1.0)
-            delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
-        elif isinstance(ev, (tuple, list)):
-            if len(ev) == 2:
-                rate, weight = ev
-                delay_steps = default_delay_steps
-                multiplicity = 1.0
-            elif len(ev) == 3:
-                rate, weight, delay_steps = ev
-                multiplicity = 1.0
-            elif len(ev) == 4:
-                rate, weight, delay_steps, multiplicity = ev
-            else:
-                raise ValueError('Rate event tuples must have length 2, 3, or 4.')
-        else:
-            rate = ev
-            weight = 1.0
-            multiplicity = 1.0
-            delay_steps = default_delay_steps
-
-        delay_steps = self._to_int_scalar(delay_steps, name='delay_steps')
-        return rate, weight, multiplicity, delay_steps
-
-    def _event_to_ex_in(self, ev, default_delay_steps: int, state_shape, g, theta):
-        r"""Convert event to excitatory and inhibitory contributions.
-
-        Extract event components, broadcast to state shape, apply nonlinearity
-        if needed, and split by weight sign.
-
-        Parameters
-        ----------
-        ev : dict or tuple or list or scalar
-            Rate event specification.
-        default_delay_steps : int
-            Default delay when not specified in event.
-        state_shape : tuple
-            Target shape for broadcasting.
-        g : ndarray
-            Gain parameter for tanh nonlinearity.
-        theta : ndarray
-            Threshold parameter for tanh nonlinearity.
-
-        Returns
-        -------
-        ex : ndarray
-            Excitatory (positive-weight) contribution with shape
-            ``state_shape``.
-        inh : ndarray
-            Inhibitory (negative-weight) contribution with shape
-            ``state_shape``.
-        delay_steps : int
-            Extracted delay in simulation steps.
-
-        Notes
-        -----
-        When ``linear_summation=False``, tanh is applied per event before
-        weighting. When ``True``, raw rates are weighted (tanh applied later
-        to sums).
-        """
-        rate, weight, multiplicity, delay_steps = self._extract_event_fields(ev, default_delay_steps)
-
-        rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
-        weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
-        multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
-        dftype = brainstate.environ.dftype()
-        weight_sign = self._broadcast_to_state(
-            np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0,
-            state_shape,
-        )
-
-        if self.linear_summation:
-            weighted_value = rate_np * weight_np * multiplicity_np
-        else:
-            weighted_value = self._input(rate_np, g, theta) * weight_np * multiplicity_np
-
-        ex = np.where(weight_sign, weighted_value, 0.0)
-        inh = np.where(weight_sign, 0.0, weighted_value)
-        return ex, inh, delay_steps
-
-    def _accumulate_instant_events_tanh(self, events, state_shape, g, theta):
-        r"""Accumulate instant rate events (zero-delay).
-
-        Sum excitatory and inhibitory contributions from all instant events.
-
-        Parameters
-        ----------
-        events : list or None
-            List of rate events to process, or None.
-        state_shape : tuple
-            Shape for output arrays.
-        g : ndarray
-            Gain parameter for tanh nonlinearity.
-        theta : ndarray
-            Threshold parameter for tanh nonlinearity.
-
-        Returns
-        -------
-        ex : ndarray
-            Total excitatory input with shape ``state_shape``.
-        inh : ndarray
-            Total inhibitory input with shape ``state_shape``.
-
-        Raises
-        ------
-        ValueError
-            If any event specifies non-zero ``delay_steps``.
-        """
-        dftype = brainstate.environ.dftype()
-        ex = np.zeros(state_shape, dtype=dftype)
-        inh = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            ex_i, inh_i, delay_steps = self._event_to_ex_in(
-                ev,
-                default_delay_steps=0,
-                state_shape=state_shape,
-                g=g,
-                theta=theta,
-            )
-            if delay_steps != 0:
-                raise ValueError('instant_rate_events must not specify non-zero delay_steps.')
-            ex += ex_i
-            inh += inh_i
-        return ex, inh
-
-    def _schedule_delayed_events_tanh(self, events, step_idx: int, state_shape, g, theta):
-        r"""Schedule delayed rate events and return zero-delay contributions.
-
-        Queue events with positive delay into internal buffers and accumulate
-        zero-delay events for immediate application.
-
-        Parameters
-        ----------
-        events : list or None
-            List of rate events to schedule, or None.
-        step_idx : int
-            Current simulation step index.
-        state_shape : tuple
-            Shape for output arrays.
-        g : ndarray
-            Gain parameter for tanh nonlinearity.
-        theta : ndarray
-            Threshold parameter for tanh nonlinearity.
-
-        Returns
-        -------
-        ex_now : ndarray
-            Excitatory contribution from zero-delay events with shape
-            ``state_shape``.
-        inh_now : ndarray
-            Inhibitory contribution from zero-delay events with shape
-            ``state_shape``.
-
-        Raises
-        ------
-        ValueError
-            If any event specifies negative ``delay_steps``.
-
-        Notes
-        -----
-        Events with ``delay_steps > 0`` are queued in
-        ``self._delayed_ex_queue`` and ``self._delayed_in_queue`` for delivery
-        at ``step_idx + delay_steps``.
-        """
-        dftype = brainstate.environ.dftype()
-        ex_now = np.zeros(state_shape, dtype=dftype)
-        inh_now = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            ex_i, inh_i, delay_steps = self._event_to_ex_in(
-                ev,
-                default_delay_steps=1,
-                state_shape=state_shape,
-                g=g,
-                theta=theta,
-            )
-            if delay_steps < 0:
-                raise ValueError('delay_steps for delayed_rate_events must be >= 0.')
-            if delay_steps == 0:
-                ex_now += ex_i
-                inh_now += inh_i
-            else:
-                target_step = step_idx + delay_steps
-                self._queue_add(self._delayed_ex_queue, target_step, ex_i)
-                self._queue_add(self._delayed_in_queue, target_step, inh_i)
-        return ex_now, inh_now
-
-    def _common_inputs_tanh(self, x, instant_rate_events, delayed_rate_events, g, theta):
-        r"""Collect all input contributions for current simulation step.
-
-        Process delayed queues, schedule new delayed events, accumulate instant
-        events, and gather external current/delta inputs.
-
-        Parameters
-        ----------
-        x : Any
-            External current input.
-        instant_rate_events : list or None
-            Rate events to apply immediately.
-        delayed_rate_events : list or None
-            Rate events to schedule with delay.
-        g : ndarray
-            Gain parameter for tanh nonlinearity.
-        theta : ndarray
-            Threshold parameter for tanh nonlinearity.
-
-        Returns
-        -------
-        state_shape : tuple
-            Shape of state variables.
-        step_idx : int
-            Current simulation step index.
-        delayed_ex : ndarray
-            Total delayed excitatory input.
-        delayed_in : ndarray
-            Total delayed inhibitory input.
-        instant_ex : ndarray
-            Total instant excitatory input (includes delta_inputs).
-        instant_in : ndarray
-            Total instant inhibitory input (includes delta_inputs).
-        mu_ext : ndarray
-            External current input (broadcast).
-
-        Notes
-        -----
-        Delta inputs (from projections) are split by sign and added to instant
-        excitatory/inhibitory branches.
-        """
-        state_shape = self.rate.value.shape
-        step_idx = self._step_count
-
-        delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
-        delayed_ex_now, delayed_in_now = self._schedule_delayed_events_tanh(
-            delayed_rate_events,
-            step_idx=step_idx,
-            state_shape=state_shape,
-            g=g,
-            theta=theta,
-        )
-        delayed_ex = delayed_ex + delayed_ex_now
-        delayed_in = delayed_in + delayed_in_now
-
-        instant_ex, instant_in = self._accumulate_instant_events_tanh(
-            instant_rate_events,
-            state_shape=state_shape,
-            g=g,
-            theta=theta,
-        )
-
-        delta_input = self._broadcast_to_state(self._to_numpy(self.sum_delta_inputs(0.0)), state_shape)
-        instant_ex += np.where(delta_input > 0.0, delta_input, 0.0)
-        instant_in += np.where(delta_input < 0.0, delta_input, 0.0)
-
-        mu_ext = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.rate.value)), state_shape)
-
-        return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
+    def _mult_factors(self, rate):
+        one = jnp.ones_like(rate)
+        return one, one
 
     def _common_parameters_tanh(self, state_shape):
         r"""Broadcast model parameters to state shape.
@@ -773,12 +439,9 @@ class tanh_rate_ipn(_tanh_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        self._step_count = 0
+        self._alloc_phi_rate(rate_np)
 
-        self._delayed_ex_queue = {}
-        self._delayed_in_queue = {}
-
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
+    def update(self, x=0.0, noise=None):
         r"""Advance rate dynamics by one simulation step.
 
         Execute stochastic exponential Euler integration with input noise,
@@ -833,19 +496,13 @@ class tanh_rate_ipn(_tanh_rate_base):
         lambda_ = self._broadcast_to_state(self._to_numpy(self.lambda_), state_shape)
         rectify_rate = self._broadcast_to_state(self._to_numpy(self.rectify_rate), state_shape)
 
-        state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs_tanh(
-            x=x,
-            instant_rate_events=instant_rate_events,
-            delayed_rate_events=delayed_rate_events,
-            g=g,
-            theta=theta,
-        )
+        mu_ext, h_a, h_b = self._read_coupling(x)
 
         dftype = brainstate.environ.dftype()
         rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
         if noise is None:
-            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
+            xi = brainstate.random.randn(*state_shape)
         else:
             xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
@@ -869,22 +526,7 @@ class tanh_rate_ipn(_tanh_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
 
-        H_ex = jnp.ones_like(rate_prev)
-        H_in = jnp.ones_like(rate_prev)
-        if self.mult_coupling:
-            H_ex = self._mult_coupling_ex(rate_prev)
-            H_in = self._mult_coupling_in(rate_prev)
-
-        if self.linear_summation:
-            if self.mult_coupling:
-                rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g, theta)
-                rate_new += P2 * H_in * self._input(delayed_in + instant_in, g, theta)
-            else:
-                rate_new += P2 * self._input(delayed_ex + instant_ex + delayed_in + instant_in, g, theta)
-        else:
-            # Nonlinear transform has already been applied per event in buffer handling.
-            rate_new += P2 * H_ex * (delayed_ex + instant_ex)
-            rate_new += P2 * H_in * (delayed_in + instant_in)
+        rate_new = rate_new + P2 * self._coupling_increment(rate_prev, h_a, h_b)
 
         if self.rectify_output:
             rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
@@ -893,7 +535,7 @@ class tanh_rate_ipn(_tanh_rate_base):
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count = step_idx + 1
+        self._store_phi_rate(rate_new)
         return rate_new
 
 
@@ -1225,12 +867,9 @@ class tanh_rate_opn(_tanh_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
-        self._step_count = 0
+        self._alloc_phi_rate(rate_np)
 
-        self._delayed_ex_queue = {}
-        self._delayed_in_queue = {}
-
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None):
+    def update(self, x=0.0, noise=None):
         r"""Advance rate dynamics by one simulation step.
 
         Execute deterministic exponential Euler integration, add output noise,
@@ -1282,19 +921,13 @@ class tanh_rate_opn(_tanh_rate_base):
         state_shape = self.rate.value.shape
 
         tau, sigma, mu, g, theta = self._common_parameters_tanh(state_shape)
-        state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs_tanh(
-            x=x,
-            instant_rate_events=instant_rate_events,
-            delayed_rate_events=delayed_rate_events,
-            g=g,
-            theta=theta,
-        )
+        mu_ext, h_a, h_b = self._read_coupling(x)
 
         dftype = brainstate.environ.dftype()
         rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
         if noise is None:
-            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
+            xi = brainstate.random.randn(*state_shape)
         else:
             xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
@@ -1307,27 +940,12 @@ class tanh_rate_opn(_tanh_rate_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total
 
-        H_ex = jnp.ones_like(rate_prev)
-        H_in = jnp.ones_like(rate_prev)
-        if self.mult_coupling:
-            H_ex = self._mult_coupling_ex(noisy_rate)
-            H_in = self._mult_coupling_in(noisy_rate)
-
-        if self.linear_summation:
-            if self.mult_coupling:
-                rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g, theta)
-                rate_new += P2 * H_in * self._input(delayed_in + instant_in, g, theta)
-            else:
-                rate_new += P2 * self._input(delayed_ex + instant_ex + delayed_in + instant_in, g, theta)
-        else:
-            # Nonlinear transform has already been applied per event in buffer handling.
-            rate_new += P2 * H_ex * (delayed_ex + instant_ex)
-            rate_new += P2 * H_in * (delayed_in + instant_in)
+        rate_new = rate_new + P2 * self._coupling_increment(noisy_rate, h_a, h_b)
 
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
-        self._step_count = step_idx + 1
+        self._store_phi_rate(rate_new)
         return rate_new

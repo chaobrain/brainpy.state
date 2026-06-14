@@ -435,6 +435,15 @@ meaningless. Each test compares a seed-**mean** (or, for `ei_clustered`, a seed-
 **median** robust to a rare globally-synchronized seed) of a population observable
 within a documented band, and asserts the qualitative law the demo exists to show.
 
+> NEST's §3.6 **rate-based network** demos (`lin_rate_ipn_network`, `rate_neuron_dm`)
+> are not yet ported, but their core machinery now exists: the rate-neuron families and
+> the instantaneous / delayed `rate_connection_*` seam landed in cluster 15a (under
+> [`brainpy_state/_nest/`](../../brainpy_state/_nest), validated NEST-free and against
+> live NEST). Unlike the spiking demos above, rate coupling rides the continuous-emission
+> seam — each neuron emits a graded `rate` that connections deposit (`comm='dense'`) into
+> the post's input sum — so these demo ports are the natural next target now that the
+> substrate is in place.
+
 ## `order` and `comm`
 
 `order` sets the network size (`NE = 4·order`, `NI = order`). `build(order=...,

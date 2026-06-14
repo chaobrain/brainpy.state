@@ -42,349 +42,14 @@ class _sigmoid_rate_gg_1998_base(_lin_rate_base):
     """
     __module__ = 'brainpy.state'
 
-    def _input(self, h, g):
-        r"""Evaluate Gancarz-Grossberg quartic gain function.
+    def _activation(self, h):
+        """Gancarz-Grossberg quartic gain ``φ(h) = (g·h)^4 / (0.1^4 + (g·h)^4)`` (JAX)."""
+        gh4 = jnp.power(u.get_mantissa(self.g) * h, 4.0)
+        return gh4 / (0.1 ** 4 + gh4)
 
-        Computes :math:`\phi(h) = (g h)^4 / (0.1^4 + (g h)^4)`, providing a steep
-        saturating nonlinearity with half-activation at :math:`h \approx 0.1/g`.
-
-        Parameters
-        ----------
-        h : float or ndarray
-            Input activation (dimensionless), typically summed synaptic drive.
-        g : float or ndarray
-            Gain parameter (dimensionless). Larger values steepen the curve.
-
-        Returns
-        -------
-        phi : ndarray
-            Transformed activation, same shape as broadcasted ``h`` and ``g``.
-            Range :math:`[0, 1)` (asymptotically approaches 1).
-        """
-        gh4 = np.power(g * h, 4.0)
-        return gh4 / (np.power(0.1, 4.0) + gh4)
-
-    @staticmethod
-    def _mult_coupling_ex(rate):
-        r"""Compute excitatory multiplicative coupling factor (fixed to 1.0).
-
-        For ``sigmoid_rate_gg_1998`` variants, multiplicative coupling is not
-        implemented; this method always returns ones regardless of ``rate``.
-
-        Parameters
-        ----------
-        rate : ndarray
-            Current rate (used to determine output shape).
-
-        Returns
-        -------
-        ndarray
-            Ones array with shape matching ``rate``, dtype float64.
-        """
-        dftype = brainstate.environ.dftype()
-        return jnp.ones_like(rate, dtype=dftype)
-
-    @staticmethod
-    def _mult_coupling_in(rate):
-        r"""Compute inhibitory multiplicative coupling factor (fixed to 1.0).
-
-        For ``sigmoid_rate_gg_1998`` variants, multiplicative coupling is not
-        implemented; this method always returns ones regardless of ``rate``.
-
-        Parameters
-        ----------
-        rate : ndarray
-            Current rate (used to determine output shape).
-
-        Returns
-        -------
-        ndarray
-            Ones array with shape matching ``rate``, dtype float64.
-        """
-        dftype = brainstate.environ.dftype()
-        return jnp.ones_like(rate, dtype=dftype)
-
-    def _extract_event_fields(self, ev, default_delay_steps: int):
-        r"""Parse rate event into (rate, weight, multiplicity, delay_steps).
-
-        Accepts dict, tuple/list, or scalar formats and applies defaults for
-        missing fields.
-
-        Parameters
-        ----------
-        ev : dict or tuple or list or scalar
-            Event specification. Supported formats:
-            - Dict: ``{'rate': r, 'weight': w, 'delay_steps': d, 'multiplicity': m}``
-              (all fields optional; aliases ``'coeff'``/``'value'`` for ``'rate'``,
-              ``'delay'`` for ``'delay_steps'``).
-            - Tuple/list: ``(rate, weight)``, ``(rate, weight, delay_steps)``, or
-              ``(rate, weight, delay_steps, multiplicity)``.
-            - Scalar: Interpreted as ``rate`` with default weight=1, multiplicity=1,
-              delay_steps=``default_delay_steps``.
-        default_delay_steps : int
-            Delay value to use if not specified in event. Typically 0 for
-            instantaneous events, 1 for delayed events.
-
-        Returns
-        -------
-        rate : float or array
-            Event rate value.
-        weight : float or array
-            Synaptic weight (positive for excitatory, negative for inhibitory).
-        multiplicity : float or array
-            Event multiplicity factor.
-        delay_steps : int
-            Delay in simulation steps (validated as non-negative integer).
-
-        Raises
-        ------
-        ValueError
-            If tuple/list length is not 2, 3, or 4.
-        """
-        if isinstance(ev, dict):
-            rate = ev.get('rate', ev.get('coeff', ev.get('value', 0.0)))
-            weight = ev.get('weight', 1.0)
-            multiplicity = ev.get('multiplicity', 1.0)
-            delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
-        elif isinstance(ev, (tuple, list)):
-            if len(ev) == 2:
-                rate, weight = ev
-                delay_steps = default_delay_steps
-                multiplicity = 1.0
-            elif len(ev) == 3:
-                rate, weight, delay_steps = ev
-                multiplicity = 1.0
-            elif len(ev) == 4:
-                rate, weight, delay_steps, multiplicity = ev
-            else:
-                raise ValueError('Rate event tuples must have length 2, 3, or 4.')
-        else:
-            rate = ev
-            weight = 1.0
-            multiplicity = 1.0
-            delay_steps = default_delay_steps
-
-        delay_steps = self._to_int_scalar(delay_steps, name='delay_steps')
-        return rate, weight, multiplicity, delay_steps
-
-    def _event_to_ex_in(self, ev, default_delay_steps: int, state_shape, g):
-        r"""Convert single rate event to excitatory/inhibitory contributions.
-
-        Parses event, broadcasts fields to ``state_shape``, applies gain function
-        (if ``linear_summation=False``), and splits by weight polarity.
-
-        Parameters
-        ----------
-        ev : dict or tuple or list or scalar
-            Rate event in any supported format (see ``_extract_event_fields``).
-        default_delay_steps : int
-            Default delay if not specified in event.
-        state_shape : tuple of int
-            Target broadcast shape (``rate.value.shape``).
-        g : ndarray
-            Gain parameter broadcast to ``state_shape``.
-
-        Returns
-        -------
-        ex : ndarray
-            Excitatory contribution (non-zero where ``weight >= 0``).
-        inh : ndarray
-            Inhibitory contribution (non-zero where ``weight < 0``).
-        delay_steps : int
-            Parsed delay in steps.
-
-        Notes
-        -----
-        When ``linear_summation=True``, returns raw ``rate * weight * multiplicity``
-        (gain applied later to branch sums). When ``linear_summation=False``, applies
-        :math:`\phi(rate)` before weighting (per-event nonlinearity).
-        """
-        rate, weight, multiplicity, delay_steps = self._extract_event_fields(ev, default_delay_steps)
-
-        rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
-        weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
-        multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
-        dftype = brainstate.environ.dftype()
-        weight_sign = self._broadcast_to_state(
-            np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0,
-            state_shape,
-        )
-
-        if self.linear_summation:
-            weighted_value = rate_np * weight_np * multiplicity_np
-        else:
-            weighted_value = self._input(rate_np, g) * weight_np * multiplicity_np
-
-        ex = np.where(weight_sign, weighted_value, 0.0)
-        inh = np.where(weight_sign, 0.0, weighted_value)
-        return ex, inh, delay_steps
-
-    def _accumulate_instant_events_sigmoid_gg_1998(self, events, state_shape, g):
-        r"""Accumulate instantaneous rate events into excitatory/inhibitory sums.
-
-        Processes all events with ``delay_steps=0`` and aggregates contributions.
-        Raises error if any event specifies non-zero delay.
-
-        Parameters
-        ----------
-        events : None or list or nested structure
-            Instantaneous events (flattened by ``_coerce_events``).
-        state_shape : tuple of int
-            Target array shape.
-        g : ndarray
-            Gain parameter broadcast to ``state_shape``.
-
-        Returns
-        -------
-        ex : ndarray
-            Total excitatory contribution (shape ``state_shape``).
-        inh : ndarray
-            Total inhibitory contribution (shape ``state_shape``).
-
-        Raises
-        ------
-        ValueError
-            If any event has non-zero ``delay_steps``.
-        """
-        dftype = brainstate.environ.dftype()
-        ex = np.zeros(state_shape, dtype=dftype)
-        inh = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            ex_i, inh_i, delay_steps = self._event_to_ex_in(
-                ev,
-                default_delay_steps=0,
-                state_shape=state_shape,
-                g=g,
-            )
-            if delay_steps != 0:
-                raise ValueError('instant_rate_events must not specify non-zero delay_steps.')
-            ex += ex_i
-            inh += inh_i
-        return ex, inh
-
-    def _schedule_delayed_events_sigmoid_gg_1998(self, events, step_idx: int, state_shape, g):
-        r"""Schedule delayed rate events and return zero-delay contributions.
-
-        For each event:
-        - If ``delay_steps=0``, add to immediate excitatory/inhibitory sums.
-        - If ``delay_steps > 0``, queue for delivery at ``step_idx + delay_steps``.
-
-        Parameters
-        ----------
-        events : None or list or nested structure
-            Delayed events (flattened by ``_coerce_events``).
-        step_idx : int
-            Current simulation step index.
-        state_shape : tuple of int
-            Target array shape.
-        g : ndarray
-            Gain parameter broadcast to ``state_shape``.
-
-        Returns
-        -------
-        ex_now : ndarray
-            Excitatory contributions with zero delay (shape ``state_shape``).
-        inh_now : ndarray
-            Inhibitory contributions with zero delay (shape ``state_shape``).
-
-        Raises
-        ------
-        ValueError
-            If any event has negative ``delay_steps``.
-
-        Notes
-        -----
-        Modifies ``self._delayed_ex_queue`` and ``self._delayed_in_queue`` in-place
-        by adding entries at ``target_step = step_idx + delay_steps``. Multiple
-        events targeting the same step are summed via ``_queue_add``.
-        """
-        dftype = brainstate.environ.dftype()
-        ex_now = np.zeros(state_shape, dtype=dftype)
-        inh_now = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            ex_i, inh_i, delay_steps = self._event_to_ex_in(
-                ev,
-                default_delay_steps=1,
-                state_shape=state_shape,
-                g=g,
-            )
-            if delay_steps < 0:
-                raise ValueError('delay_steps for delayed_rate_events must be >= 0.')
-            if delay_steps == 0:
-                ex_now += ex_i
-                inh_now += inh_i
-            else:
-                target_step = step_idx + delay_steps
-                self._queue_add(self._delayed_ex_queue, target_step, ex_i)
-                self._queue_add(self._delayed_in_queue, target_step, inh_i)
-        return ex_now, inh_now
-
-    def _common_inputs_sigmoid_gg_1998(self, x, instant_rate_events, delayed_rate_events, g):
-        r"""Aggregate all input sources into excitatory/inhibitory and external drive.
-
-        Drains delayed queues, schedules new delayed events, accumulates instantaneous
-        events, separates delta inputs by polarity, and computes total external drive.
-
-        Parameters
-        ----------
-        x : float or array_like
-            External continuous current input.
-        instant_rate_events : None or list or nested structure
-            Instantaneous events (``delay_steps=0``).
-        delayed_rate_events : None or list or nested structure
-            Delayed events (``delay_steps >= 0``, default 1).
-        g : ndarray
-            Gain parameter broadcast to ``state_shape``.
-
-        Returns
-        -------
-        state_shape : tuple of int
-            Shape of ``rate.value``.
-        step_idx : int
-            Current step index (before increment).
-        delayed_ex : ndarray
-            Total delayed excitatory input (shape ``state_shape``).
-        delayed_in : ndarray
-            Total delayed inhibitory input (shape ``state_shape``).
-        instant_ex : ndarray
-            Total instantaneous excitatory input (includes positive delta inputs).
-        instant_in : ndarray
-            Total instantaneous inhibitory input (includes negative delta inputs).
-        mu_ext : ndarray
-            External drive from ``x`` and projection currents (via ``sum_current_inputs``).
-
-        Notes
-        -----
-        Delta inputs (from projections calling ``add_delta_input``) are split by
-        sign: positive values added to ``instant_ex``, negative to ``instant_in``.
-        Continuous inputs (via ``add_current_input``) are aggregated into ``mu_ext``.
-        """
-        state_shape = self.rate.value.shape
-        step_idx = self._step_count
-
-        delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
-        delayed_ex_now, delayed_in_now = self._schedule_delayed_events_sigmoid_gg_1998(
-            delayed_rate_events,
-            step_idx=step_idx,
-            state_shape=state_shape,
-            g=g,
-        )
-        delayed_ex = delayed_ex + delayed_ex_now
-        delayed_in = delayed_in + delayed_in_now
-
-        instant_ex, instant_in = self._accumulate_instant_events_sigmoid_gg_1998(
-            instant_rate_events,
-            state_shape=state_shape,
-            g=g,
-        )
-
-        delta_input = self._broadcast_to_state(self._to_numpy(self.sum_delta_inputs(0.0)), state_shape)
-        instant_ex += np.where(delta_input > 0.0, delta_input, 0.0)
-        instant_in += np.where(delta_input < 0.0, delta_input, 0.0)
-
-        mu_ext = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.rate.value)), state_shape)
-
-        return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
+    def _mult_factors(self, rate):
+        one = jnp.ones_like(rate)
+        return one, one
 
     def _common_parameters_sigmoid_gg_1998(self, state_shape):
         r"""Broadcast model parameters to state shape.
@@ -795,13 +460,9 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        self._step_count = 0
+        self._alloc_phi_rate(rate_np)
 
-        self._delayed_ex_queue = {}
-        self._delayed_in_queue = {}
-
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
-               _precomputed_ex=None, _precomputed_in=None):
+    def update(self, x=0.0, noise=None):
         r"""Advance rate neuron dynamics by one time step with stochastic integration.
 
         Implements the full update cycle: drain delayed events, schedule new delayed
@@ -891,27 +552,12 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
         rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
-        if _precomputed_ex is not None:
-            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
-            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
-            instant_ex = jnp.zeros(state_shape, dtype=dftype)
-            instant_in = jnp.zeros(state_shape, dtype=dftype)
-            mu_ext = jnp.zeros(state_shape, dtype=dftype)
-        else:
-            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = (
-                self._common_inputs_sigmoid_gg_1998(
-                    x=x,
-                    instant_rate_events=instant_rate_events,
-                    delayed_rate_events=delayed_rate_events,
-                    g=g,
-                )
-            )
-            self._step_count = step_idx + 1
+        mu_ext, h_a, h_b = self._read_coupling(x)
 
         if noise is None:
-            xi = np.random.normal(size=state_shape)
+            xi = brainstate.random.randn(*state_shape)
         else:
-            xi = self._broadcast_to_state(self._to_numpy(noise), state_shape)
+            xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
 
         if np.any(lambda_ > 0.0):
@@ -933,22 +579,7 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
 
-        H_ex = jnp.ones_like(rate_prev)
-        H_in = jnp.ones_like(rate_prev)
-        if self.mult_coupling:
-            H_ex = self._mult_coupling_ex(rate_prev)
-            H_in = self._mult_coupling_in(rate_prev)
-
-        if self.linear_summation:
-            if self.mult_coupling:
-                rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g)
-                rate_new += P2 * H_in * self._input(delayed_in + instant_in, g)
-            else:
-                rate_new += P2 * self._input(delayed_ex + instant_ex + delayed_in + instant_in, g)
-        else:
-            # Nonlinear transform has already been applied per event in buffer handling.
-            rate_new += P2 * H_ex * (delayed_ex + instant_ex)
-            rate_new += P2 * H_in * (delayed_in + instant_in)
+        rate_new = rate_new + P2 * self._coupling_increment(rate_prev, h_a, h_b)
 
         if self.rectify_output:
             rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
@@ -957,4 +588,5 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
+        self._store_phi_rate(rate_new)
         return rate_new
