@@ -138,6 +138,87 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 16-generator-demos — 2026-06-14
+
+- **Shipped:** the **three §3.7 generator-pattern demos**, each a runnable
+  `examples/nest/` script + a single test module carrying **both** a NEST-free
+  structural class (always runs) and a live-NEST **distributional** parity class
+  (`@requires_nest`):
+  - `sinusoidal_poisson_generator.py` — inhomogeneous-Poisson drive
+    `λ(t)=max(0,dc+ac·sin(2πf t+φ))` relayed through parrots; eager-`for_loop` drive.
+  - `sinusoidal_gamma_generator.py` — gamma-process (order *m*) rate-modulated drive;
+    the headline is ISI regularization **CV → 1/√m**.
+  - `pulsepacket.py` — `pulsepacket_generator` emits Gaussian-jittered synchronous
+    spike packets; packet width ∝ `sdev`, with the neuron-averaged membrane excursion
+    checked against the **Diesmann analytical** Gaussian⊛PSP convolution.
+  Files: `examples/nest/{sinusoidal_poisson_generator,sinusoidal_gamma_generator,pulsepacket}.py`,
+  `brainpy_state/_nest/_validation/{sinusoidal_poisson_generator,sinusoidal_gamma_generator,pulsepacket}_test.py`,
+  docs (`examples/nest/README.md` §3.7, `docs/nest-status/internal/examples-gap.md`).
+  **§3.8 astrocytes are explicitly deferred** (need bucket-3 `sic_connection` + an
+  astrocyte rate model — out of scope here). Branch `worktree-nest-goal+16-generator-demos`.
+- **Parity (all distributional, category D — NEST per-thread RNG vs JAX/NumPy diverge
+  sample-by-sample, so compare seed-aggregated statistics, never per-sample):**
+  - **Poisson:** the seed-averaged per-bin population spike-count **autocorrelation**
+    (which carries the modulation period) matches NEST element-wise within
+    `CAT_D.autocorr_max_diff`. Standalone PSTH-vs-`λ(t)` corr > 0.85; the
+    individual-vs-shared `individual_spike_trains` modes are both exercised.
+  - **Gamma:** measured CV `[1.012, 0.708, 0.409, 0.316]` for orders `(1,2,6,10)`
+    tracks `1/√m` `[1.000, 0.707, 0.408, 0.316]`; the order-3 modulated rate correlates
+    0.968 with `λ(t)`. Both the CV law and the modulated rate match NEST.
+  - **Pulsepacket:** the pooled spike-time std (packet **width**) tracks `sdev`
+    (`compare_distributional(..., statistic='mean')`), and the per-step count **profile**
+    matches NEST (smoothed corr > 0.93, ±8 % windowed mass, centroid aligned < 1 ms after
+    a +1-step recorder align). The membrane excursion is verified **NEST-free** vs the
+    analytical: windowed corr **0.9998**, peak 6.287 mV @ 511.8 ms vs 6.451 mV @ 511.2 ms.
+- **API discovered/reusable:**
+  - **Eager `for_loop` drive for a single multi-channel generator.** Build the generator
+    once inside `environ.context(dt=…)`, then `transform.for_loop(step, times, idx)` with
+    `step` closing over `environ.context(t=t, i=i)` → **one** trace, stacked `(n_steps, N)`
+    output. This drives the `in_size=N` *individual-train* path directly (the Simulator
+    fan-out demo does not use it); a `test_update_lowers_under_for_loop` regression pins
+    the single-trace contract (cluster-12 discipline).
+  - **`SpikeTime` population as a passive membrane drive.** Replay a host-generated spike
+    matrix through the JAX `Simulator`: `create(SpikeTime, N, indices=, times=, weights=counts)`
+    → `connect(one_to_one, weight, delay)` → `iaf_psc_alpha(V_th=1e9 mV)` (integrates without
+    firing) → `voltmeter` → `res.trace(vm, 'V_m')`. Multiplicity rides in `weights`. This is
+    the same `SpikeTime`-as-population-source seam cluster 21 found, reused here for a passive
+    membrane readout rather than a plastic edge.
+- **Gotchas:**
+  - **JAX compile-cache accumulation reads as a hang (the big one).** Each `run_spikes`
+    builds a *fresh* generator (new `State`s) in a *new* `environ.context`, so every call is
+    a fresh JAX trace+compile. Gamma's `update()` lowers a **`while_loop`-in-`scan`**
+    (rejection sampling) that is **costly to compile**; uncleared, those artifacts accumulate
+    across tests in one pytest process until JAX cache lookups degrade into an apparent hang
+    (gamma module > 400 s, faulthandler stack parked in scan compilation). **Fix:**
+    `jax.clear_caches()` + `gc.collect()` in `tearDown` of *both* classes → gamma 23.7 s.
+    Poisson lowers a **cheap `scan` (no `while_loop`)** so it merely *slowed* (71 s) rather
+    than hanging — the same guard took it to 13 s. **Any parity test that rebuilds a fresh
+    traced model per call needs this `tearDown`, especially anything lowering a `while_loop`.**
+    (The earlier "parity-body-present ⇒ hang" bisection was a red herring: import-time
+    reference retention merely nudged accumulation past threshold.)
+  - **`pulsepacket_generator` is host-side** (NumPy `default_rng` + per-train `deque`
+    queues + Python control flow), so `update()` is **not** JAX-traceable — CLAUDE.md rule
+    10's premise (the model lowers into one XLA program) does **not** hold. The **eager host
+    loop is the contract**; there is no `for_loop`-lowering test for it, only the membrane
+    replay through `SpikeTime` is traced.
+  - **`SpikeTime` needs JAX-backed inputs.** `SpikeTime.__init__` calls `saiunit.lax.sort`,
+    which requires a JAX backend → pass `jnp.asarray(indices)` and `jnp.asarray(times) * u.ms`;
+    plain NumPy inputs raise a `BackendError`.
+  - **Centroid, not argmax, for distributional center alignment.** The argmax (mode) of a
+    finite-sample Gaussian histogram is noise-dominated (wobbles ±1.3–3.8 ms across seeds);
+    the **count-weighted centroid** is stable to ≤ 0.4 ms. Assert packet-center parity via the
+    centroid moment, never the mode (the principled fix for a 1.3 ms argmax flake, not a
+    loosened tolerance).
+  - **`iaf_psc_alpha` warm-up transient.** `V_m` inits ~−66 mV and relaxes to `E_L` over
+    ~100–150 ms; the analytical excursion is 0 there, so a *full-trace* correlation is
+    swamped by the transient (corr 0.20). **Window around the pulse** (place it at t=500 ms,
+    well past warm-up) → corr 0.9998. NEST's own demo only plots a window.
+- **For next clusters:** **§3.7 generator demos are complete; §3.8 astrocytes remain**,
+  blocked on bucket-3 (`sic_connection`) plus an astrocyte rate model — revisit post-bucket-3.
+  The `clear_caches()` + `gc.collect()` `tearDown` is now the standing remedy for
+  per-process compile-cache growth in fresh-model-per-call parity suites (it manifests as a
+  hang, not a clean failure, so it is easy to misdiagnose).
+
 ### 21-urbanczik-dendritic — 2026-06-14
 
 - **Shipped:** the **last plastic synapse on the legacy base** — `urbanczik_synapse`
