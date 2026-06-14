@@ -25,9 +25,19 @@ in ``urbanczik_synapse_test.py`` and exercised end-to-end by the demo).
 """
 import unittest
 
+import jax
 import numpy as np
 import brainstate
 import saiunit as u
+
+# Pin float64 and (in setUpClass) evict the import-time JAX cache, so this test is
+# precision-stable regardless of collection order. brainpy_state traces some kernels
+# at import; under pytest that happens during collection before x64 is enabled, so
+# the kernels get cached in float32. If another test then flips x64 on, the neuron
+# runs in a mixed state and the weight trajectory drifts past the band. (The silent
+# regime is float32-stable in isolation; this guards the mixed state.)
+jax.config.update("jax_enable_x64", True)
+brainstate.environ.set(precision=64, platform="cpu")
 
 from brainpy_state._nest._validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest._validation import tolerance_conventions as tc
@@ -55,6 +65,9 @@ class TestUrbanczikSynapseParity(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # evict any float32 kernels cached at import (before x64) so the neuron
+        # re-traces in float64 regardless of collection order -- see module header.
+        jax.clear_caches()
         brainstate.environ.set(dt=drv.DT * u.ms)
         # 1. neuron / dendrite traces (static dendritic drive, soma clamped silent)
         cls.nt, cls.ntr, cls.n_nrn_spk = drv.nest_neuron_trace()
