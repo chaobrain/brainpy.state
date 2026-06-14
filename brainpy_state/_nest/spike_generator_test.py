@@ -250,6 +250,44 @@ class TestSpikeGeneratorSimulation(unittest.TestCase):
         npt.assert_allclose(recorded, expected, atol=1e-4,
                             err_msg="Gated spike times don't match expected")
 
+    def test_spike_weights_in_for_loop(self):
+        r"""``spike_weights`` must work inside ``for_loop`` (traced-index gather).
+
+        Regression: the per-step weight gather indexed a host (numpy-backed)
+        ``spike_weights`` with a traced step index, which raises under ``jit`` /
+        ``for_loop`` (the standard simulation path). The weights must be a device
+        array so the gather lowers. This is the seam the time-varying somatic
+        conductance teacher in the Urbanczik demo relies on.
+        """
+        dt_ms = 0.1
+        spike_times_ms = [1.0, 2.0, 3.0, 5.0]
+        # a numpy array (as a demo computes from a g(t) profile): u.math.asarray keeps
+        # it host-backed, so the traced gather must still lower (regression trigger).
+        spike_weights = np.array([2.5, 0.3, 1.7, 4.0])
+        simtime = 7.0
+        n_steps = int(round(simtime / dt_ms))
+
+        with brainstate.environ.context(dt=dt_ms * u.ms):
+            sg = spike_generator(
+                spike_times=[t * u.ms for t in spike_times_ms],
+                spike_weights=spike_weights,
+            )
+            t_array = jnp.arange(n_steps, dtype=jnp.float64) * dt_ms
+
+            def step_fn(t_ms):
+                with brainstate.environ.context(t=t_ms * u.ms):
+                    return sg.update()[0]
+
+            outputs = np.array(brainstate.transform.for_loop(step_fn, t_array))
+
+        # the emitted value at each matching step equals that spike's weight
+        for t_val, w in zip(spike_times_ms, spike_weights):
+            k = int(round(t_val / dt_ms))
+            npt.assert_allclose(outputs[k], w, atol=1e-12,
+                                err_msg=f"weight at t={t_val} should be {w}")
+        # non-matching steps emit 0
+        self.assertEqual(int(np.sum(outputs > 1e-9)), len(spike_times_ms))
+
 
 class TestSpikeGeneratorVsNEST(unittest.TestCase):
     r"""Compare against NEST simulator."""

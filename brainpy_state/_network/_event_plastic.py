@@ -31,6 +31,7 @@ import numpy as np
 import saiunit as u
 
 from brainpy_state._brainpy._delay import InputDelay
+from brainpy_state._network._event_proj import EventProjection
 
 __all__ = ['EventPlasticProj', 'VoltageCoupledPlasticProj', 'KernelContext', 'PlasticSynapse']
 
@@ -206,6 +207,13 @@ class EventPlasticProj(brainstate.nn.Module):
         Connectivity sampling seed.
     delta_key : str, optional
         Unique ``add_delta_input`` key (defaults to one derived from ``id``).
+    receptor_type : int, optional
+        Named-channel routing for a multi-compartment / named-channel post (a
+        post exposing ``delta_label_for_receptor`` and no ``n_receptors``, e.g.
+        ``pp_cond_exp_mc_urbanczik``). Resolved once to a delta-input channel
+        label (mirroring the static :class:`EventProjection` seam); each per-step
+        deposit is then tagged with that label so the deposit reaches the correct
+        compartment/sign. ``None`` (default) delivers to the unlabeled key.
 
     Examples
     --------
@@ -250,6 +258,7 @@ class EventPlasticProj(brainstate.nn.Module):
         allow_multapses: bool = True,
         seed: Optional[int] = None,
         delta_key: Optional[str] = None,
+        receptor_type=None,
     ):
         super().__init__()
         self.pre_spike = pre_spike
@@ -262,6 +271,12 @@ class EventPlasticProj(brainstate.nn.Module):
         self._n_post_pop = int(n_post_pop if n_post_pop is not None
                                else self.post_local_idx.shape[0])
         self._delta_key = delta_key or f'event_plastic_{id(self)}'
+        # Named-channel single-label routing (mc post, e.g. the Urbanczik
+        # neuron): resolve receptor_type -> delta channel label once, then tag
+        # every deposit so the plastic weight reaches the right compartment.
+        # ``None`` for an unrouted or stacked-n_receptors post (delivers
+        # unlabeled, the historical behavior).
+        self._channel_label = EventProjection._resolve_channel_label(post, receptor_type)
         # Runtime-rng seed for stochastic rules. ``init_state`` keys the per-step
         # ``rng`` from this so the seed survives ``init_all_states`` (which the
         # Simulator runs inside ``simulate``); ``None`` keeps the historical key(0)
@@ -496,7 +511,12 @@ class EventPlasticProj(brainstate.nn.Module):
         if self._w_unit is not u.UNITLESS:
             contrib = u.Quantity(contrib, unit=self._w_unit)
         if self.post is not None:
-            self.post.add_delta_input(self._delta_key, contrib)
+            if self._channel_label is not None:
+                # Named-channel post: tag the deposit so it lands on the resolved
+                # compartment/sign channel (read back via sum_delta_inputs(label=)).
+                self.post.add_delta_input(self._delta_key, contrib, label=self._channel_label)
+            else:
+                self.post.add_delta_input(self._delta_key, contrib)
         return contrib
 
 

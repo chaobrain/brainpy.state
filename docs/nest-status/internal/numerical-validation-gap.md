@@ -56,12 +56,12 @@ the spec §3) requires that documentation step to land per-family.
 | HH (`hh_*`, `ht_neuron`) | 6 | 0 | **0 %** | — | n/a | **gap** — includes Hill-Tononi |
 | Izhikevich (`izhikevich`) | 1 | 0 | **0 %** | — | n/a | **gap** |
 | Binary (`erfc_neuron`, `ginzburg_neuron`, `mcculloch_pitts_neuron`) | 3 | 0 | **0 %** | — | n/a | PRNG distributional |
-| Point process (`pp_psc_delta`, `pp_cond_exp_mc_urbanczik`) | 2 | 0 | **0 %** | — | n/a | **gap** |
+| Point process (`pp_psc_delta`, `pp_cond_exp_mc_urbanczik`) | 2 | 1 | 50 % | `_validation/urbanczik_synapse_parity_test.py` (Y) | dendritic/somatic V + `V_W_star`/`delta_Pi` | `pp_cond_exp_mc_urbanczik` validated (cluster-21); `pp_psc_delta` unvalidated |
 | Multi-compartment (`cm_default`, `iaf_cond_alpha_mc`) | 2 | 1 | 50 % | `cm_default_test.py` (Y) | V_m + compartment traces | `iaf_cond_alpha_mc` unvalidated |
 | Astrocyte (`astrocyte_lr_1994`) | 1 | 1 | 100 % | `astrocyte_lr_1994_test.py` (Y) | astrocyte state | covered |
 | Other neurons (`ignore_and_fire`, `spike_train_injector`) | 2 | 2 | 100 % | `ignore_and_fire_test.py` (Y), `spike_train_injector_test.py` (Y) | spike times | covered |
 | Rate models (`lin_rate`, `tanh_rate`, `sigmoid_rate*`, `threshold_lin_rate`, `gauss_rate`, `siegert_neuron`, `rate_neuron_ipn/opn`, `rate_transformer_node`) | 10 | 10 | 100 % | `lin_rate_test.py` (Y) | rate state | full family covered |
-| **Neurons total** | **66** | **23** | **35 %** | | | |
+| **Neurons total** | **66** | **24** | **36 %** | | | |
 | Static + bernoulli + cont_delay + diffusion + gap + sic + rate-connection + ht_synapse | 9 | 9 | 100 % | `static_synapse_test.py` (Y) | weight / current | covered |
 | STDP family (`stdp_*` × 9) | 9 | 9 | 100 % | `stdp_synapse_test.py` (Y) | weight trajectory | covered |
 | STP family (`tsodyks*` × 3, `quantal_stp_synapse`) | 4 | 0 | **0 %** | — | n/a | **gap** |
@@ -227,8 +227,9 @@ Concretely, the harness should provide:
   junction variants require waveform-relaxation parity.
 
 - **P1 — Validate MAT, Izhikevich, point-process families.** [M]
-  Acceptance: `mat2_psc_exp`, `amat2_psc_exp`, `izhikevich`, `pp_psc_delta`,
-  `pp_cond_exp_mc_urbanczik` validated.
+  Acceptance: `mat2_psc_exp`, `amat2_psc_exp`, `izhikevich`, `pp_psc_delta`
+  validated (`pp_cond_exp_mc_urbanczik` ✓ done in cluster-21 via
+  `_validation/urbanczik_synapse_parity_test.py`).
 
 - **P1 — Validate binary stochastic family (distributional).** [S]
   Acceptance: `erfc_neuron`, `ginzburg_neuron`, `mcculloch_pitts_neuron`

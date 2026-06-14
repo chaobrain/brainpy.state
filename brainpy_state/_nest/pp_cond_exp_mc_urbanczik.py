@@ -31,12 +31,24 @@ from ._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'pp_cond_exp_mc_urbanczik',
+    'SOMA_EXC',
+    'SOMA_INH',
+    'DEND_EXC',
+    'DEND_INH',
 ]
 
 # Compartment indices
 SOMA = 0
 DEND = 1
 NCOMP = 2
+
+# Spike receptor types (NEST ``receptor_type`` convention for the
+# multi-compartment Urbanczik neuron). A presynaptic spike selects which
+# conductance the delta-input drives, mirroring NEST's receptor ports.
+SOMA_EXC = 1
+SOMA_INH = 2
+DEND_EXC = 3
+DEND_INH = 4
 
 
 class pp_cond_exp_mc_urbanczik(NESTNeuron):
@@ -671,10 +683,19 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         # (populated only during Python-loop execution, not inside for_loop / JIT)
         self._urbanczik_history = {}
 
-        # Current-step dPI stored as ShortTermState so for_loop bodies can
-        # return it and collect the full trace.
-        self._dPI = brainstate.ShortTermState(
+        # Current-step dendritic prediction error δΠ, exposed as a public
+        # ShortTermState so (a) for_loop bodies can return it to collect the
+        # full trace and (b) the plastic post-state reader
+        # (VoltageCoupledPlasticProj) can gather it per edge as a learning
+        # signal. It is a per-step readout, not carried dynamics.
+        self.delta_Pi = brainstate.ShortTermState(
             jnp.zeros(self.varshape, dtype=dftype)
+        )
+
+        # Current-step dendritic prediction voltage V*_W (mV), exposed as a
+        # readable ShortTermState alongside δΠ for diagnostics/readers.
+        self.V_W_star = brainstate.ShortTermState(
+            jnp.zeros(self.varshape, dtype=dftype) * u.mV
         )
 
         # RNG state as ShortTermState so jax.lax.scan tracks it correctly.
@@ -700,6 +721,52 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         V = self.V_s.value if V is None else V
         v_scaled = V / (1.0 * u.mV)
         return self.spk_fun(v_scaled)
+
+    #: Map a NEST ``receptor_type`` to the delta-input channel label that
+    #: :meth:`_collect_receptor_delta_inputs` routes by (substring match).
+    _DELTA_LABEL_BY_RECEPTOR = {
+        SOMA_EXC: 'soma_exc',
+        SOMA_INH: 'soma_inh',
+        DEND_EXC: 'dend_exc',
+        DEND_INH: 'dend_inh',
+    }
+
+    def delta_label_for_receptor(self, receptor_type):
+        r"""Return the delta-input channel label for a spike ``receptor_type``.
+
+        This is the named-channel-post seam used by the network projection
+        layer: a projection delivering into this neuron tags its delta input
+        with the returned label so that :meth:`_collect_receptor_delta_inputs`
+        routes the contribution into the correct compartment/sign. Because this
+        neuron routes by *label substring* (it has no ``n_receptors`` stacked
+        port), the projection layer detects the label seam via the presence of
+        this method rather than an ``n_receptors`` attribute.
+
+        Parameters
+        ----------
+        receptor_type : int
+            NEST receptor port: ``SOMA_EXC`` (1), ``SOMA_INH`` (2),
+            ``DEND_EXC`` (3) or ``DEND_INH`` (4).
+
+        Returns
+        -------
+        str
+            The channel label, one of ``'soma_exc'``, ``'soma_inh'``,
+            ``'dend_exc'`` or ``'dend_inh'``.
+
+        Raises
+        ------
+        ValueError
+            If ``receptor_type`` is not a known receptor port.
+        """
+        try:
+            return self._DELTA_LABEL_BY_RECEPTOR[receptor_type]
+        except (KeyError, TypeError):
+            raise ValueError(
+                f'Unknown receptor_type {receptor_type!r}; expected one of '
+                f'{sorted(self._DELTA_LABEL_BY_RECEPTOR)} '
+                f'(SOMA_EXC, SOMA_INH, DEND_EXC, DEND_INH).'
+            )
 
     def _collect_receptor_delta_inputs(self):
         r"""Collect delta inputs labeled by receptor type.
@@ -1052,8 +1119,10 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         )
         dPI = (n_spikes_float - phi_val * dt_ms) * h_val
 
-        # Store current-step dPI as ShortTermState (accessible from for_loop body).
-        self._dPI.value = dPI
+        # Store current-step δΠ and V*_W as readable ShortTermState
+        # (accessible from for_loop bodies and the plastic post-state reader).
+        self.delta_Pi.value = dPI
+        self.V_W_star.value = V_W_star * u.mV
 
         # Populate Python history dict only when NOT inside a JAX JIT context.
         # t is a concrete Quantity during Python loops; a JAX tracer inside for_loop.

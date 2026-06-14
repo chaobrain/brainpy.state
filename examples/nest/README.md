@@ -122,9 +122,9 @@ These ports drive four `Simulator` extensions reused by later clusters:
 
 ## Plasticity demos (§3.3)
 
-Four of NEST's plasticity tutorials, each a faithful port driven by a live-NEST
-parity test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any directly,
-e.g. `python examples/nest/evaluate_tsodyks2_synapse.py`.
+All five of NEST's plasticity tutorials, each a faithful port driven by a
+live-NEST parity test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any
+directly, e.g. `python examples/nest/evaluate_tsodyks2_synapse.py`.
 
 - **`clopath_synapse_spike_pairing.py`** — the canonical voltage-based STDP
   (Clopath 2010) protocol: a pre train paired with a post train across pairing
@@ -151,28 +151,32 @@ e.g. `python examples/nest/evaluate_tsodyks2_synapse.py`.
   the spike-pairing protocol, so forward edges (pre before post) potentiate and
   backward edges depress; the recurrent weight **matrix** evolution is recorded
   with `res.weight_trace` and shows a feedforward chain emerging.
-
-The fifth §3.3 demo is **blocked** and ships as a skipped placeholder that raises
-`NotImplementedError` with the gap reason:
-
-- **`urbanczik_synapse_example.py`** — the Urbanczik-Senn dendritic rule trains
-  plastic inputs onto the *dendritic* compartment of a two-compartment
-  `pp_cond_exp_mc_urbanczik` neuron. It needs a dendritic post-compartment reader
-  on a plastic projection (the rule reads a named compartment voltage + prediction
-  error, but `VoltageCoupledPlasticProj` exposes only the somatic `V`) and a
-  validated multi-compartment point-process post (`synapses-plasticity-gap.md` §3,
-  `neurons-gap.md` §3). It will be ported once those land.
+- **`urbanczik_synapse_example.py`** — the Urbanczik-Senn dendritic prediction-error
+  rule (Urbanczik & Senn 2014, Fig. 1B). A two-compartment
+  `pp_cond_exp_mc_urbanczik` neuron has its *soma* driven by a time-varying
+  conductance teacher while a fixed Poisson pattern drives the *dendrite* through
+  plastic `urbanczik_synapse` edges; the dendritic weights adapt so the dendritic
+  prediction `V_W*` reproduces the somatically-imposed signal — the rate prediction
+  error `|phi(U) - phi(V_W*)|` shrinks over training. The rule reads the post
+  neuron's **dendritic** prediction error `delta_Pi` per edge through the post-state
+  reader (primitive #2), validated against live NEST in
+  `urbanczik_synapse_parity_test.py`; the demo's end-to-end learning is asserted by
+  `urbanczik_synapse_example_test.py`.
 
 These ports add two reusable seams on top of the §3.2 / §3.4 vocabulary:
 
 - **F — plastic projections + weight recording.** `connect(..., synapse=<plastic
   rule>)` dispatches to the plastic-projection primitives — `EventPlasticProj`
   (event-driven; the two STP rules) and `VoltageCoupledPlasticProj` (the
-  post-state reader; Clopath reads the `aeif_psc_delta_clopath` analog voltages
-  every step). `record_weight(proj)` taps the per-edge weight, read post-run as
-  `res.weight_trace(proj)` → `(T, E)` in CSR (sorted-by-pre) order. The two Clopath
-  demos record the weight directly; the STP demos read the plasticity through the
-  post `V_m` (the PSC-amplitude train, seam **A**).
+  post-state reader). The post-state reader pulls **named** post States each step:
+  Clopath reads the `aeif_psc_delta_clopath` analog voltages, and Urbanczik reads
+  the `pp_cond_exp_mc_urbanczik` *dendritic* prediction error `delta_Pi` (the
+  rule declares `post_state_reads`, so the same primitive serves a somatic and a
+  dendritic-compartment reader without change). `record_weight(proj)` taps the
+  per-edge weight, read post-run as `res.weight_trace(proj)` → `(T, E)` in CSR
+  (sorted-by-pre) order. The Clopath and Urbanczik demos record the weight
+  directly; the STP demos read the plasticity through the post `V_m` (the
+  PSC-amplitude train, seam **A**).
 - **G — stochastic seed threading.** `connect(..., seed=k)` keys the per-edge
   release PRNG and survives `simulate`'s `init_all_states`, so a stochastic rule
   (`quantal_stp_synapse`) is reproducible per seed; parity is then **distributional**

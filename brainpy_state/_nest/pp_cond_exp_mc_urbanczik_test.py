@@ -1082,5 +1082,81 @@ class TestUrbanczikLearningSignal(unittest.TestCase):
             self.assertAlmostEqual(dPI_model, dPI_expected, places=3)
 
 
+# ---------------------------------------------------------------------------
+# Cluster-21: dendritic prediction-error State exposure + mc receptor routing
+# ---------------------------------------------------------------------------
+class TestReceptorRoutingLabels(unittest.TestCase):
+    r"""``delta_label_for_receptor`` maps a spike receptor_type to its delta
+    channel label (the named-channel-post convention the plastic/static
+    projection delivery uses to route into a compartment)."""
+
+    def test_delta_label_for_receptor_maps_named_channels(self):
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            nrn = pp_cond_exp_mc_urbanczik(in_size=1)
+        self.assertEqual(nrn.delta_label_for_receptor(1), 'soma_exc')
+        self.assertEqual(nrn.delta_label_for_receptor(2), 'soma_inh')
+        self.assertEqual(nrn.delta_label_for_receptor(3), 'dend_exc')
+        self.assertEqual(nrn.delta_label_for_receptor(4), 'dend_inh')
+        # named-channel post (routes by label), NOT a stacked n_receptors model
+        self.assertFalse(hasattr(nrn, 'n_receptors'))
+
+    def test_delta_label_for_receptor_rejects_unknown(self):
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            nrn = pp_cond_exp_mc_urbanczik(in_size=1)
+        with self.assertRaises(ValueError):
+            nrn.delta_label_for_receptor(99)
+
+
+class TestDeltaPiStateExposure(unittest.TestCase):
+    r"""δΠ and V*_W are exposed as public ShortTermState so the plastic
+    post-state reader (VoltageCoupledPlasticProj) can gather them per edge."""
+
+    def setUp(self):
+        self.dt = 0.1 * u.ms
+
+    def test_delta_Pi_and_V_W_star_exposed_as_state(self):
+        with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
+            nrn = pp_cond_exp_mc_urbanczik(in_size=2)
+            nrn.init_state()
+            self.assertIsInstance(nrn.delta_Pi, brainstate.ShortTermState)
+            self.assertIsInstance(nrn.V_W_star, brainstate.ShortTermState)
+            with brainstate.environ.context(t=0.0 * u.ms):
+                nrn.update(x=0.0 * u.pA)
+            # at rest V_d = E_L_d = -70 -> V*_W = (E_L_s g_L_s + V_d g_sp)/(g_sp+g_L_s) = -70
+            self.assertTrue(jnp.allclose(u.get_mantissa(nrn.V_W_star.value), -70.0, atol=1e-5))
+            self.assertEqual(tuple(nrn.delta_Pi.value.shape), (2,))
+            # no spike at rest -> dPI = (0 - phi(V*_W)*dt)*h(V*_W) <= 0
+            self.assertTrue(bool(jnp.all(nrn.delta_Pi.value <= 0.0)))
+
+    def test_delta_Pi_state_matches_history(self):
+        with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
+            nrn = pp_cond_exp_mc_urbanczik(in_size=1)
+            nrn.init_state()
+            with brainstate.environ.context(t=0.0 * u.ms):
+                nrn.update()
+            state_dpi = float(u.get_mantissa(nrn.delta_Pi.value).reshape(-1)[0])
+            _, hist_dpi = nrn.get_urbanczik_history(0)[0]
+            self.assertAlmostEqual(state_dpi, hist_dpi, places=10)
+
+
+class TestForLoopLowering(unittest.TestCase):
+    r"""cluster-12 discipline: the model must lower under for_loop with a
+    stable carry shape (eager stepping hides carry-shape collapse bugs)."""
+
+    def test_for_loop_lowering_stable_carry_and_delta_Pi_trace(self):
+        with brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
+            nrn = pp_cond_exp_mc_urbanczik(in_size=3)
+            nrn.init_state()
+
+            def _body(k):
+                with brainstate.environ.context(t=k * 0.1 * u.ms):
+                    nrn.update(x=250.0 * u.pA)
+                return nrn.delta_Pi.value
+
+            trace = brainstate.transform.for_loop(_body, jnp.arange(50))
+        self.assertEqual(tuple(trace.shape), (50, 3))
+        self.assertTrue(bool(jnp.all(jnp.isfinite(trace))))
+
+
 if __name__ == '__main__':
     unittest.main()

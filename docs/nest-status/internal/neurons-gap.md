@@ -37,9 +37,9 @@ spec §7.
 | Bucket | Count | Notes |
 |---|---:|---|
 | implemented | 0 | (no neuron has a passing NEST-trace comparison documented in CI) |
-| unvalidated | ~41 | Present and parameter-compatible, no NEST-trace test |
+| unvalidated | ~40 | Present and parameter-compatible, no NEST-trace test |
 | partial | 0 known | (none identified at family level — see §5 for per-model risks) |
-| divergent | 22 | AdEx and rate families: parameter-compatible *and* nest-comparison test exists; classified divergent because surrogate-gradient (`spk_fun`) extensions are additive to NEST and intentional |
+| divergent | 23 | AdEx and rate families: parameter-compatible *and* nest-comparison test exists; classified divergent because surrogate-gradient (`spk_fun`) extensions are additive to NEST and intentional. Plus `pp_cond_exp_mc_urbanczik` (cluster-21): per-compartment live-NEST parity in the `_validation` harness |
 | missing | 10 | e-prop (8) + `parrot_neuron`, `parrot_neuron_ps` |
 | unsupported | 7 | MUSIC proxies (catalogued in `nest-catalog-snapshot.md` §7) |
 | **total NEST neurons surveyed** | **73** | per snapshot §1 |
@@ -117,7 +117,7 @@ trace-tolerance in the test and confirming pass.
 | `mcculloch_pitts_neuron` | unvalidated | `brainpy_state/_nest/mcculloch_pitts_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/mcculloch_pitts_neuron.html> | `mcculloch_pitts_neuron_test.py` (N) | binary deterministic |
 | `parrot_neuron` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/parrot_neuron.html> | — | spike-repeater; used pervasively in NEST examples as fan-out fan-in glue |
 | `parrot_neuron_ps` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/parrot_neuron_ps.html> | — | precise-spike variant |
-| `pp_cond_exp_mc_urbanczik` | unvalidated | `brainpy_state/_nest/pp_cond_exp_mc_urbanczik.py` | <https://nest-simulator.readthedocs.io/en/stable/models/pp_cond_exp_mc_urbanczik.html> | `pp_cond_exp_mc_urbanczik_test.py` (N) | multi-compartment + point-process |
+| `pp_cond_exp_mc_urbanczik` | divergent | `brainpy_state/_nest/pp_cond_exp_mc_urbanczik.py` | <https://nest-simulator.readthedocs.io/en/stable/models/pp_cond_exp_mc_urbanczik.html> | `pp_cond_exp_mc_urbanczik_test.py` (N) + `_validation/urbanczik_synapse_parity_test.py` (Y) | multi-compartment + point-process; per-compartment parity vs live NEST (cluster-21): dendritic `V_d` exact, somatic `V_s`, and `V_W_star`/`delta_Pi` == closed-form on `V_d` |
 | `pp_psc_delta` | unvalidated | `brainpy_state/_nest/pp_psc_delta.py` | <https://nest-simulator.readthedocs.io/en/stable/models/pp_psc_delta.html> | `pp_psc_delta_test.py` (N) | point process |
 | `rate_neuron_ipn` | divergent | `brainpy_state/_nest/rate_neuron_ipn.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_ipn.html> | `rate_neuron_ipn_test.py` (Y) | |
 | `rate_neuron_opn` | divergent | `brainpy_state/_nest/rate_neuron_opn.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_opn.html> | `rate_neuron_opn_test.py` (Y) | |

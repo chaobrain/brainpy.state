@@ -86,9 +86,10 @@ What users should not rely on yet
   outputs as plausible but unverified for scientific work.
 - **Stable parameter names and defaults.** Names track NEST upstream, but
   defaults and unit conventions may shift during the migration above.
-- **Multi-compartment models.** Models with the ``_mc`` suffix
-  (``iaf_cond_alpha_mc``, ``pp_cond_exp_mc_urbanczik``) are particularly
-  experimental.
+- **Multi-compartment models.** Models with the ``_mc`` suffix are
+  particularly experimental — ``iaf_cond_alpha_mc`` remains unvalidated, while
+  ``pp_cond_exp_mc_urbanczik`` now has per-compartment live-NEST parity
+  (cluster-21).
 - **Recording-device fidelity.** Generator and recorder semantics do not yet
   fully match NEST's device model.
 - **Plasticity (STDP, STP).** Implementations are present, but learning

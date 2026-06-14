@@ -138,6 +138,88 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 21-urbanczik-dendritic — 2026-06-14
+
+- **Shipped:** the **last plastic synapse on the legacy base** — `urbanczik_synapse`
+  rebuilt as a frozen spec + pure `update(state, ctx) -> (new_state, w_eff)` kernel on
+  `VoltageCoupledPlasticProj` (primitive #2; its **third user** after Clopath and
+  dopamine), reading the post neuron's **dendritic** prediction error δΠ per edge. With it,
+  the **§3.3 plasticity demos are complete (all 5)**: ported
+  `examples/nest/urbanczik_synapse_example.py` (Urbanczik-Senn 2014 Fig 1B) and retired
+  cluster-13's `NotImplementedError` placeholder. Files: `_nest/urbanczik_synapse.py` (spec
+  + rule), `_nest/pp_cond_exp_mc_urbanczik.py` (δΠ/`V_W_star` States + `delta_label_for_receptor`
+  routing seam), `_nest/spike_generator.py` (device-backed `spike_weights` fix),
+  `_nest/_validation/{_urbanczik_drive.py,urbanczik_synapse_parity_test.py,urbanczik_synapse_example_test.py}`,
+  docs (`examples-gap.md` §3.3, `synapses-plasticity-gap.md` §3, `neurons-gap.md`,
+  `numerical-validation-gap.md`, `index.rst`, `examples/nest/README.md`). Branch
+  `worktree-nest-goal-21-urbanczik-dendritic`.
+- **Parity (deterministic chain, soma clamped silent so δΠ is the closed-form branch):**
+  - dendritic `V_d` (the rule's only neuron input) matches NEST **sample-for-sample** (passive
+    RC; `align_steps=2` absorbs a 2-step recorder offset on the synaptic onset; band 2e-2 mV).
+  - recorded `V_W_star` and `delta_Pi` **== the closed-form NEST functions of `V_d`** to
+    machine precision (`atol 1e-6`) → with `V_d`, they equal NEST transitively.
+  - **weight trajectory** depresses and matches NEST **at every `weight_recorder` send step**
+    (max |Δ| **~0.016 pA** over the 36-send curve; band 0.1 pA). The soma conductance teacher
+    `V_s` matches NEST to **1.4e-14 mV**.
+  - **demo learning** (upstream scale n_pg=200, 100 reps): rate prediction error
+    `|φ(U)−φ(V_W*)|` **0.0239 → 0.0133 (ratio 0.557)**, RMS `|U_M−V_W*|` 6.30 → 4.11 mV,
+    weights adapt bidirectionally (mean 90 → 54.6 pA, max 248).
+- **API discovered/changed (reusable):**
+  - **Named post-state reader on primitive #2.** A plastic rule declares
+    `post_state_reads = ('<state>',)` and the `VoltageCoupledPlasticProj` substrate pulls that
+    **named** post State per edge each step (`ctx.post_states['<state>']`). Primitive #2 now
+    serves a **somatic** reader (Clopath's analog `V`) *and* a **dendritic-compartment** reader
+    (Urbanczik's `delta_Pi`) **with no substrate change** — the rule names what it needs. Any
+    future rule reading a *derived* neuron signal reuses this.
+  - **Routing seam:** the neuron exposes `delta_label_for_receptor(receptor_type)` and
+    `connect(..., synapse=<plastic>, receptor_type=k)` threads `k` to the right delta-input
+    channel (dendritic exc = 3). Minimal + reused by the demo's soma teacher (receptor 1/2).
+  - **Two-column pre-trace seam:** `pre_trace_tau = (tau_L, tau_s)` → the substrate keeps two
+    per-pre traces, gathered as `ctx.pre_traces[:, 0]` / `[:, 1]`.
+  - **`SpikeTime(n, indices=, times=)` as a population spike source** (JAX-backed inputs
+    required — `saiunit.lax.sort`) → **one** `n→1` plastic projection drives `n` dendritic
+    edges, vs `n` projections. The substrate lets a *device* drive a plastic edge directly (NEST
+    needs a `parrot_neuron` relay).
+  - **`spike_generator` `spike_weights` must be device-backed** (`jnp.asarray(get_mantissa(...))`):
+    the per-step gather `spike_weights[idx]` with a traced index raises under `for_loop` if the
+    array stays numpy (`u.math.asarray` of a numpy input stays host). This is the seam the
+    time-varying somatic conductance teacher relies on (RED→GREEN regression added).
+- **Gotchas:**
+  - **float32 divergence + import-time cache contamination (the big one).** The *driven* soma
+    (oscillating conductance teacher) is a **stiff** coupled ODE that **diverges in float32**
+    (`V_s` → 7641 mV). `brainpy_state` traces some kernels at **import**; under pytest that
+    happens during **collection, before any test enables x64**, so those kernels are cached in
+    **float32**. Flipping `jax_enable_x64=True` later returns `True` and makes *fresh* arrays
+    float64, **but the cached float32 kernels are still reused** → the sim diverges. Fix:
+    `jax.clear_caches()` in `setUpClass` (+ pin `precision=64`) forces a float64 re-trace. The
+    silent-soma **parity** test is float32-*stable in isolation* but **fails in the mixed state**
+    (x64 flag on + float32 cache) when run *after* any test that enables x64 (e.g. the neuron
+    unit test or the new demo test) — so it too had to pin float64 + `clear_caches()`.
+    **Precision-fragility is collection-order-dependent**; any stiff/multi-compartment parity
+    test needs this guard, not just a module-top `config.update`.
+  - **Online vs event-driven weight.** The every-step kernel weight coincides with NEST's
+    event-driven weight **only at presynaptic-send steps**; between/after spikes it drifts
+    continuously and re-synchronises at the next spike. Assert parity **at send steps**
+    (`sample_at_send_steps`), the Clopath precedent — a t=200 "13.6 % over-depression" was a
+    false alarm from comparing my drifted weight to NEST's frozen-since-185 weight.
+  - **Soma decoupling enables deterministic δΠ.** With `g_ps=0` the dendrite gets no somatic
+    current, so `V_d`/`V_W_star`/`delta_Pi`/weight are **invariant to `soma_I_e`**; a strong
+    hyperpolarisation (`SOMA_IE=-12000 pA`) pins **0 somatic spikes** → δΠ is the deterministic
+    `-φ(V_W*)·dt·h` branch. **Potentiation needs somatic spikes (stochastic** point process), so
+    the positive-δΠ branch is covered by the kernel unit tests + the demo smoke test, **not**
+    deterministic live-NEST.
+  - **Dendritic params are synapse-spec constructor args** (frozen before `connect`), defaulting
+    to the `pp_cond_exp_mc_urbanczik` dendrite (`C_m=300 pF`, `g_L=30 nS`, `tau_syn=3 ms`);
+    `tau_L=C_m/g_L`, and **`tau_s` is selected by the initial weight sign** (NEST `send()`), with
+    sign-consistency constraints keeping the weight from crossing zero.
+- **For next clusters:** **§3.3 is done** and **every plastic synapse is off the legacy base**.
+  The **named post-state reader** is the pattern for any rule needing a derived neuron signal;
+  the **`clear_caches()` + float64 guard** is mandatory for any test exercising a stiff or
+  multi-compartment neuron under pytest (collection imports `brainpy_state` in float32 first). If
+  many parity tests start sharing sessions, consider a root-level conftest that enables x64 +
+  clears caches **once** before `brainpy_state` is imported — the per-test guard works but is
+  repeated.
+
 ### 22-wang-nmda-network — 2026-06-14
 
 - **Shipped:** **recurrent NMDA coupling through the `Simulator` API + the Wang (2002)
