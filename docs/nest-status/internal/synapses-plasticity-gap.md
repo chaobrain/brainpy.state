@@ -38,6 +38,19 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 > **`weight_recorder` send-event audit** (`_validation/weight_recorder_audit_test.py`)
 > asserts event count + timing + value against NEST for all 13 plastic rules.
 
+> **Update (cluster-21).** `urbanczik_synapse` — the last plastic synapse on the
+> legacy base — is rebuilt as a frozen spec + pure `update(state, ctx) -> (state, w)`
+> kernel on `VoltageCoupledPlasticProj` (primitive #2, the post-state reader). It is
+> the primitive's third user (after `clopath_synapse` and `stdp_dopamine_synapse`)
+> and the first to read a **named dendritic** post State: the rule declares
+> `post_state_reads = ('delta_Pi',)`, so the substrate pulls the
+> `pp_cond_exp_mc_urbanczik` dendritic prediction error δΠ per edge each step (no
+> change to the somatic readers). Live-NEST parity in
+> `_validation/urbanczik_synapse_parity_test.py` (dendritic `V_d` exact; recorded
+> `V_W_star`/`delta_Pi` == closed-form on `V_d`; depression weight trajectory matches
+> NEST at every `weight_recorder` send step); the `urbanczik_synapse_example` demo
+> exercises the potentiating branch end-to-end (`examples-gap.md` §3.3).
+
 | Bucket | Count | Notes |
 |---|---:|---|
 | implemented | 0 | No tolerance/duration documented in test headers |
@@ -77,7 +90,7 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 | `tsodyks_synapse` | unvalidated | `brainpy_state/_nest/tsodyks_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/tsodyks_synapse.html> | `tsodyks_synapse_test.py` (N) | STP base; per-neuron `u,x,y` triple |
 | `tsodyks_synapse_hom` | unvalidated | `brainpy_state/_nest/tsodyks_synapse_hom.py` | <https://nest-simulator.readthedocs.io/en/stable/models/tsodyks_synapse_hom.html> | `tsodyks_synapse_hom_test.py` (N) | homogeneous |
 | `tsodyks2_synapse` | unvalidated | `brainpy_state/_nest/tsodyks2_synapse.py:33-240` | <https://nest-simulator.readthedocs.io/en/stable/models/tsodyks2_synapse.html> | `tsodyks2_synapse_test.py` (N) | v2 (multiplicative scaling, `tau_fac==0` special case); NEST defaults present |
-| `urbanczik_synapse` | divergent | `brainpy_state/_nest/urbanczik_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/urbanczik_synapse.html> | `urbanczik_synapse_test.py` (Y) | dendritic plasticity; needs `pp_cond_exp_mc_urbanczik` postsynaptic |
+| `urbanczik_synapse` | divergent | `brainpy_state/_nest/urbanczik_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/urbanczik_synapse.html> | `urbanczik_synapse_test.py` (N rule) + `_validation/urbanczik_synapse_parity_test.py` (Y) | dendritic prediction-error plasticity; **rebuilt** (cluster-21) as a frozen spec + pure `update` on `VoltageCoupledPlasticProj` reading the post-neuron `delta_Pi` per edge; live-NEST parity validated |
 | `vogels_sprekeler_synapse` | divergent | `brainpy_state/_nest/vogels_sprekeler_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/vogels_sprekeler_synapse.html> | `vogels_sprekeler_synapse_test.py` (Y) | inhibitory STDP |
 | `volume_transmitter` | unvalidated | `brainpy_state/_nest/volume_transmitter.py` | <https://nest-simulator.readthedocs.io/en/stable/models/volume_transmitter.html> | `volume_transmitter_test.py` (N) | dopamine broadcast support node — required by `stdp_dopamine_synapse` |
 | `weight_optimizer` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/weight_optimizer.html> | — | Adam/SGD optimizer selector for e-prop; could be deferred to brainstate/optax in repo's port |

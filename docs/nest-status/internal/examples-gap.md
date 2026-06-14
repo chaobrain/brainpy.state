@@ -77,8 +77,9 @@ per-generator weight vectors (multi-channel generator view).
 
 ### 3.3 Plasticity demos
 
-Four ported in cluster 13 (`Simulator` API, live-NEST parity); one is **blocked**
-and ships as a skipped placeholder. The ports added two reusable extensions —
+All five ported on the `Simulator` API with live-NEST parity — four in cluster 13,
+the fifth (`urbanczik_synapse_example`) in cluster 21. The cluster-13 ports added
+two reusable extensions —
 **F** plastic projections + weight recording (`connect(synapse=<plastic rule>)`
 dispatches to `EventPlasticProj` / `VoltageCoupledPlasticProj`; `record_weight` +
 `res.weight_trace(proj)` → `(T, E)` CSR order) and **G** stochastic seed threading
@@ -90,9 +91,13 @@ with a regression test first), so stochastic rules are reproducible through
 convention** (NEST's parrot relay delay set to the `Simulator` generator's 0.1 ms
 holder lag) and surfaced the NEST `quantal_stp_synapse` `set_status` footgun (`u`
 stays at the 0.5 constructor default unless pinned, sibling of the known `a`
-footgun). The blocked demo needs a dendritic post-compartment reader on a plastic
-projection + a validated multi-compartment post (`synapses-plasticity-gap.md` §3,
-`neurons-gap.md` §3).
+footgun). Cluster 21 then rebuilt `urbanczik_synapse` as a frozen spec + pure
+`update` kernel on `VoltageCoupledPlasticProj`, extending that post-state reader to
+pull a **named dendritic** post State — the prediction error `delta_Pi` — via the
+rule's `post_state_reads`, so the same primitive #2 serves both a somatic (Clopath)
+and a dendritic-compartment reader without change. It also validated
+`pp_cond_exp_mc_urbanczik` against live NEST and retired the placeholder
+(`synapses-plasticity-gap.md` §3, `neurons-gap.md` §3).
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
@@ -100,7 +105,7 @@ projection + a validated multi-compartment post (`synapses-plasticity-gap.md` §
 | `clopath_synapse_small_network.py` | implemented | `examples/nest/clopath_synapse_small_network.py` | recurrent Clopath weight matrix; per-edge final weight in clopath band (LTP ≤ 2.0 %, LTD near-exact) (ext. F) |
 | `evaluate_tsodyks2_synapse.py` | implemented | `examples/nest/evaluate_tsodyks2_synapse.py` | deterministic Tsodyks-Markram; PSC-train post `V_m` `CAT_B` ~9e-16 mV (ext. F via post `V_m`) |
 | `evaluate_quantal_stp_synapse.py` | implemented | `examples/nest/evaluate_quantal_stp_synapse.py` | stochastic quantal STP; seed-mean `V_m` `CAT_D` (dep 1.8 %, fac 2.9 %, 8 seeds) (ext. F, G) |
-| `urbanczik_synapse_example.py` | blocked | skipped placeholder | needs a dendritic post-compartment reader on a plastic proj + validated `pp_cond_exp_mc_urbanczik` (`synapses-plasticity-gap.md` §3, `neurons-gap.md` §3) |
+| `urbanczik_synapse_example.py` | implemented | `examples/nest/urbanczik_synapse_example.py` | Urbanczik-Senn dendritic prediction error; soma conductance teacher + plastic dendrite, learning asserted (rate err ratio ~0.56); rule reads post `delta_Pi`, neuron-side `urbanczik_synapse_parity_test.py` (ext. F, dendritic reader) |
 | eprop_plasticity/ (subdir) | unsupported until ported | none | requires e-prop neuron + synapse port (cross-link `neurons-gap.md` P2, `synapses-plasticity-gap.md` P2) |
 
 ### 3.4 Recording / device demos
