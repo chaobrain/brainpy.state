@@ -138,6 +138,91 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 15a-rate-core — 2026-06-15
+
+- **Shipped:** the **rate-neuron core on the JAX substrate** — 11 rate neurons +
+  2 rate connections rebuilt on seam-(H) continuous graded emission, the host
+  dict-queue event emulator **deleted**, `mult_coupling` dual-channel coupling, and a
+  pre/post φ-homogeneity guard. Per the cluster decisions the de-queue also covered the
+  3 extra files (`rate_transformer_node`, `siegert_neuron`, `step_rate_generator`).
+  Files: `_nest/{lin_rate,gauss_rate,sigmoid_rate,sigmoid_rate_gg_1998,tanh_rate,
+  threshold_lin_rate,rate_neuron_ipn,rate_neuron_opn,rate_transformer_node,
+  siegert_neuron,step_rate_generator}.py` (seam-(H) markers + JAX φ; connection I/O
+  removed), `_nest/rate_connection_{instantaneous,delayed}.py` (host-queue API trimmed →
+  pure NEST-parity status specs), `_network/_simulator.py` (`_is_continuous_rate`,
+  `_check_rate_phi_homogeneity`, `_sign_split_weight`, `_build_rate_dual_channel`),
+  `_network/_event_proj.py` (`channel_label` kwarg). Validation (`_nest/_validation/`):
+  `rate_coupling_micro_parity`, `rate_network_parity`, `rate_delayed_connection_parity`,
+  `rate_mult_coupling_parity`, `rate_nonlinearity`, `rate_core_forloop`,
+  `rate_core_no_nest`, `rate_core_edge_cases`, `rate_generator_source`,
+  `rate_transformer_node_substrate`, `siegert_substrate` (110 tests + 127 subtests
+  green). Branch `worktree-nest-goal+15a-rate-core`.
+- **Parity (all vs live NEST `use_wfr=False` unless noted):**
+  - **Linear-rate network FP** relaxes to the analytic `r* = (I − gC)⁻¹μ` to **1e-4**
+    against the **closed form AND** NEST, for a 2-neuron mutual loop, a 3-neuron
+    mixed-sign net, and a zero-coupling control (`r*=μ`). The recurrent loop solution is
+    genuinely ≠ the one-pass feed-forward estimate — the substrate finds the loop FP.
+  - **All 5 φ formulas == NEST `nonlinearities_*::input()` C++ exactly** (lin `g·h`;
+    gauss `g·exp(−(h−μ)²/2σ²)`; sigmoid `g/(1+e^{−β(h−θ)})`; tanh `tanh(g(h−θ))`;
+    threshold `min(max(g(h−θ),0),α)`; sigmoid_gg `(g·h)⁴/(0.1⁴+(g·h)⁴)`); nonlinear
+    recurrent steady-states match NEST.
+  - **`mult_coupling` dual-channel** matches the closed form `r*=(μ+g_ex θ_ex A+g_in θ_in
+    B)/(1+g_ex A−g_in B)` and NEST; **siegert** Siegert-rate == NEST ref `27.1095934379`.
+- **A resolved — receptor-optional continuous seam-(H).** Rate coupling crosses the seam
+  as a **continuous** graded emission, not a discrete event: a rate neuron declares
+  `_emission_continuous=True` + `_emission_attr='rate'` (`linear_summation=True`) or
+  `'phi_rate'` (False); the connection deposits `weight·rate` into the post's **default**
+  delta channel (`comm='dense'`, `receptor_type=None`), which the post reads via
+  `sum_delta_inputs(0.0)`. No receptor routing, no host queue. For `mult_coupling` the
+  weight is **sign-split** (`W_ex=max(W,0)`, `W_in=min(W,0)`) into two labeled
+  EventProjections → `'rate_ex'`/`'rate_in'` channels, recombined as
+  `P2·(H_ex·φ(Σ_ex) + H_in·φ(Σ_in))` with `H` from `_mult_factors`.
+- **`linear_summation` is receiver-side, and that forces the homogeneity guard.** True →
+  sender emits the raw `rate`, the receiver applies **its own** φ to the summed input (so
+  heterogeneous φ across a projection is fine). False → the sender emits `phi_rate=φ_pre(rate)`
+  and the receiver adds it directly — but NEST applies the **receiver's** φ in its event
+  handler, so brainpy↔NEST agree only when pre and post share φ. Hence
+  `_check_rate_phi_homogeneity` raises at `connect()` when the modes mismatch, or when both
+  sides are `False` and `_phi_signature` differs (`(class, linear_summation, per-param
+  distinct-value sets)`; the template appends `('input_nonlinearity', fn)` compared by
+  identity).
+- **De-queue: I/O seam swapped, dynamics untouched.** The deletion removed only the
+  host-side event emulator (`prepare_secondary_event` / `to_rate_event` /
+  `coeffarray_to_step_events` + `_to_coeff_array` / `_to_rate_value` helpers) from the two
+  connections; the JAX update `τ Ẋ = −λX + μ + φ(h)`, `h = sum_delta_inputs(0)`,
+  `μ = sum_current_inputs(x, rate)` was **unchanged**. The connection objects survive as
+  thin NEST-parity status/param specs (`weight`, `delay`, `get/set_status`, delay
+  rejection); the Simulator builds the actual routing from them.
+- **Instantaneous lag = the WFR seed.** The substrate's one-step pipeline latency **is**
+  NEST's `use_wfr=False` instantaneous seed: it **diverges on the transient** but
+  **preserves the fixed point** — it breaks the otherwise-algebraic feedback loop
+  `r0 ← r1 ← r0`. Trajectory parity needs `align_steps` to absorb the uniform integer
+  offset; the FP needs nothing. **Delayed** = `InputDelay(delay_steps·dt)` on the same
+  seam; `step_rate_generator` only emits `DelayedRateConnectionEvent` (no instantaneous
+  output), so its NEST counterpart is `rate_connection_delayed` at the minimum delay,
+  which equals the generator path's intrinsic one-step lag.
+- **Gotchas:**
+  - **gauss reuses `mu`/`sigma` as the φ centre/width AND the noise** — it cannot be
+    driven noise-free (`sigma=0` is a divide-by-zero in φ), so its parity/edge tests keep
+    `sigma>0` and assert distributionally / finiteness.
+  - **`rate_neuron_opn` has no `lambda_` and no `rectify_output`** (output-noise template:
+    `τ Ẋ = −X + μ + φ(h) + σξ`) — it is excluded from the zero-λ / rectify edge branches.
+  - **siegert's step is EAGER, a documented `for_loop` exception** — its Siegert transfer
+    is a host-side SciPy/Gauss-Legendre special-function integral on concrete values, so
+    `update()` does **not** lower under `for_loop`/`jit`; drive it with an eager host loop.
+    Its `_HAVE_SCIPY` is a **module global shadowed by the class re-export** — patch it via
+    `sys.modules['brainpy_state._nest.siegert_neuron']`, not the imported class.
+  - **Coverage on shared `_simulator.py` must be measured on the *touched* lines**
+    (git-diff added lines = **90.7 %**), not whole-file (61 % — the rest is pre-existing
+    spiking/device infra). Every rate-owned `_nest` file is **>90 %** (siegert 92 %; the
+    residual is the no-SciPy quadrature split-boundary branches + 15c diffusion).
+- **For next clusters:** the seam-(H) emitter + sign-split dual-channel + homogeneity
+  guard is the reusable substrate for **15b/c/d** (any graded-state-gated coupling — declare
+  `_emission_continuous`/`_emission_attr`, deposit `comm='dense'`). Still deferred: **siegert
+  network diffusion → 15c** (the `DiffusionConnection` that supplies `(μ, σ²)`; in 15a these
+  ride `update()`'s direct args), and **sparse graded emission** (only `comm='dense'` graded
+  deposit is wired).
+
 ### 16-generator-demos — 2026-06-14
 
 - **Shipped:** the **three §3.7 generator-pattern demos**, each a runnable

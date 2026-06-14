@@ -21,6 +21,7 @@ from typing import Callable
 import brainstate
 import braintools
 import saiunit as u
+import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import Size
 
@@ -347,6 +348,10 @@ class rate_transformer_node(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
+    #: This node emits a continuous graded value every step (seam-(H)); the
+    #: substrate routes ``weight * <emission>`` into downstream rate targets.
+    _emission_continuous = True
+
     def __init__(
         self,
         in_size: Size,
@@ -363,7 +368,12 @@ class rate_transformer_node(NESTNeuron):
         self.input_nonlinearity = input_nonlinearity
         self.rate_initializer = rate_initializer
 
-        self._delayed_queue = {}
+        # Seam-(H) continuous graded emission: the substrate captures this node's
+        # output each step and deposits ``weight * <emission>`` into downstream
+        # rate targets. ``linear_summation`` selects which value rides the seam --
+        # the raw rate (post applies phi to the summed input) or the pre-applied
+        # ``phi_rate`` (post sums phi-of-rate directly).
+        self._emission_attr = 'rate' if self.linear_summation else 'phi_rate'
 
     @property
     def recordables(self):
@@ -378,41 +388,12 @@ class rate_transformer_node(NESTNeuron):
         dftype = brainstate.environ.dftype()
         return np.asarray(u.math.asarray(x), dtype=dftype)
 
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
+    def _call_nl(self, fn: Callable, x):
+        r"""Invoke a user nonlinearity as ``fn(self, x)`` then ``fn(x)`` (JAX pass-through).
 
-    @staticmethod
-    def _to_int_scalar(x, name: str):
-        dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.math.asarray(x), dtype=dftype).reshape(-1)
-        if arr.size != 1:
-            raise ValueError(f'{name} must be scalar.')
-        return int(arr[0])
-
-    @staticmethod
-    def _coerce_events(events):
-        if events is None:
-            return []
-        if isinstance(events, dict):
-            return [events]
-        if isinstance(events, tuple):
-            if len(events) == 0:
-                return []
-            if isinstance(events[0], (dict, tuple, list)):
-                return list(events)
-            if len(events) in (2, 3, 4):
-                return [events]
-        if isinstance(events, list):
-            if len(events) == 0:
-                return []
-            if isinstance(events[0], (dict, tuple, list)):
-                return events
-            if len(events) in (2, 3, 4):
-                return [tuple(events)]
-        return [events]
-
-    def _call_nl(self, fn: Callable, x: np.ndarray):
+        The argument ``x`` is a JAX value (a tracer under ``for_loop`` / ``jit``),
+        so the supplied callable must be JAX-expressible.
+        """
         try:
             return fn(self, x)
         except TypeError as first_error:
@@ -421,100 +402,34 @@ class rate_transformer_node(NESTNeuron):
             except TypeError:
                 raise first_error
 
-    def _input_transform(self, h: np.ndarray, state_shape):
-        h_np = self._broadcast_to_state(self._to_numpy(h), state_shape)
+    def _activation(self, h):
+        r"""Input nonlinearity :math:`\phi(h)` (JAX; reads ``self``).
+
+        Uses the user-supplied ``input_nonlinearity`` when provided (invoked as
+        ``fn(self, h)`` then ``fn(h)``), otherwise the default linear gain
+        :math:`\phi(h)=g\,h`. Must be JAX-expressible so the step lowers under
+        ``brainstate.transform.for_loop`` / ``jit``.
+        """
         if self.input_nonlinearity is None:
-            g = self._broadcast_to_state(self._to_numpy(self.g), state_shape)
-            return g * h_np
-        y = self._call_nl(self.input_nonlinearity, h_np)
-        return self._broadcast_to_state(self._to_numpy(y), state_shape)
+            return u.get_mantissa(self.g) * h
+        return self._call_nl(self.input_nonlinearity, h)
 
-    def _extract_event_fields(self, ev, default_delay_steps: int):
-        if isinstance(ev, dict):
-            rate = ev.get('rate', ev.get('coeff', ev.get('value', 0.0)))
-            weight = ev.get('weight', 1.0)
-            multiplicity = ev.get('multiplicity', 1.0)
-            delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
-        elif isinstance(ev, (tuple, list)):
-            if len(ev) == 2:
-                rate, weight = ev
-                delay_steps = default_delay_steps
-                multiplicity = 1.0
-            elif len(ev) == 3:
-                rate, weight, delay_steps = ev
-                multiplicity = 1.0
-            elif len(ev) == 4:
-                rate, weight, delay_steps, multiplicity = ev
-            else:
-                raise ValueError('Rate event tuples must have length 2, 3, or 4.')
-        else:
-            rate = ev
-            weight = 1.0
-            multiplicity = 1.0
-            delay_steps = default_delay_steps
+    def _alloc_phi_rate(self, rate_np):
+        r"""Allocate the ``phi_rate`` emission holder (``linear_summation`` False only).
 
-        delay_steps = self._to_int_scalar(delay_steps, name='delay_steps')
-        return rate, weight, multiplicity, delay_steps
-
-    def _event_to_weighted_value(self, ev, default_delay_steps: int, state_shape):
-        rate, weight, multiplicity, delay_steps = self._extract_event_fields(ev, default_delay_steps)
-
-        rate_np = self._broadcast_to_state(self._to_numpy(rate), state_shape)
-        weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
-        multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
-
-        if self.linear_summation:
-            weighted_value = rate_np * weight_np * multiplicity_np
-        else:
-            weighted_value = self._input_transform(rate_np, state_shape) * weight_np * multiplicity_np
-
-        return weighted_value, delay_steps
-
-    @staticmethod
-    def _queue_add(queue: dict, step_idx: int, value: np.ndarray):
-        if step_idx in queue:
-            queue[step_idx] = queue[step_idx] + value
-        else:
+        When ``linear_summation`` is False the seam emits :math:`\phi(\text{rate})`
+        so downstream targets sum the already-transformed value; this allocates the
+        holder so the substrate can capture it.
+        """
+        if not self.linear_summation:
             dftype = brainstate.environ.dftype()
-            queue[step_idx] = np.array(value, dtype=dftype, copy=True)
+            phi0 = np.asarray(u.get_mantissa(self._activation(jnp.asarray(rate_np))), dtype=dftype)
+            self.phi_rate = brainstate.ShortTermState(phi0)
 
-    def _drain_delayed_queue(self, step_idx: int, state_shape):
-        dftype = brainstate.environ.dftype()
-        value = self._delayed_queue.pop(step_idx, None)
-        if value is None:
-            return np.zeros(state_shape, dtype=dftype)
-        return np.array(self._broadcast_to_state(np.asarray(value, dtype=dftype), state_shape), copy=True)
-
-    def _accumulate_instant_events(self, events, state_shape):
-        dftype = brainstate.environ.dftype()
-        total = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            value, delay_steps = self._event_to_weighted_value(
-                ev,
-                default_delay_steps=0,
-                state_shape=state_shape,
-            )
-            if delay_steps != 0:
-                raise ValueError('instant_rate_events must not specify non-zero delay_steps.')
-            total += value
-        return total
-
-    def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        dftype = brainstate.environ.dftype()
-        total_now = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            value, delay_steps = self._event_to_weighted_value(
-                ev,
-                default_delay_steps=1,
-                state_shape=state_shape,
-            )
-            if delay_steps < 0:
-                raise ValueError('delay_steps for delayed_rate_events must be >= 0.')
-            if delay_steps == 0:
-                total_now += value
-            else:
-                self._queue_add(self._delayed_queue, step_idx + delay_steps, value)
-        return total_now
+    def _store_phi_rate(self, rate_new):
+        r"""Refresh the ``phi_rate`` emission holder (``linear_summation`` False only)."""
+        if not self.linear_summation:
+            self.phi_rate.value = self._activation(rate_new)
 
     def init_state(self, **kwargs):
         r"""Initialize all state variables and reset the delayed event queue.
@@ -538,163 +453,49 @@ class rate_transformer_node(NESTNeuron):
         be invoked manually to reset the model to initial conditions.
         """
         dftype = brainstate.environ.dftype()
-        ditype = brainstate.environ.ditype()
         rate = braintools.init.param(self.rate_initializer, self.varshape)
         rate_np = self._to_numpy(rate)
 
         self.rate = brainstate.ShortTermState(rate_np)
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
+        self._alloc_phi_rate(rate_np)
 
-        self._delayed_queue = {}
+    def update(self, x=0.0):
+        r"""Apply the input nonlinearity to the aggregated network input.
 
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None,
-               _precomputed_rate=None):
-        r"""Execute one timestep of the rate transformation algorithm.
-
-        Processes incoming rate events (both instant and delayed), applies the configured
-        nonlinearity, and updates the output ``rate`` state variable. Implements the NEST
-        ``rate_transformer_node_impl.h`` update sequence.
+        Network coupling arrives continuously through the substrate's delta
+        channel (seam-(H)): :math:`h=\sum_j w_{ij}\,\psi(X_j)` is read from
+        ``sum_delta_inputs(0.0)``. With ``linear_summation=True`` the gain is
+        applied to that sum, :math:`X_i=\phi(h)`; with ``linear_summation=False``
+        the presynaptic gain has already been applied per connection (each source
+        emits ``phi_rate``) and the node forwards the sum directly,
+        :math:`X_i=h`. The whole step is JAX-expressible so it lowers under
+        ``brainstate.transform.for_loop`` / ``jit``.
 
         Parameters
         ----------
-        x : float, array_like, optional
-            External input current (ignored). Present for API compatibility with ``Dynamics``
-            base class, but rate transformers have no intrinsic current-driven dynamics.
-            Default: ``0.0``.
-        instant_rate_events : None, tuple, list of tuples, or dict, optional
-            **Zero-delay rate events** applied in the current timestep. Event format:
-
-            - **2-tuple**: ``(rate, weight)`` — uses ``delay_steps=0`` (enforced)
-            - **3-tuple**: ``(rate, weight, delay_steps)`` — ``delay_steps`` **must** be 0
-            - **4-tuple**: ``(rate, weight, delay_steps, multiplicity)`` — ``delay_steps`` **must** be 0
-            - **dict**: ``{'rate': r, 'weight': w, 'delay_steps': d, 'multiplicity': m}`` — ``d`` **must** be 0
-            - **list/tuple of above**: multiple events processed sequentially
-            - **None** (default): no instant events
-
-            Raises ``ValueError`` if any event specifies non-zero ``delay_steps``.
-        delayed_rate_events : None, tuple, list of tuples, or dict, optional
-            **Delayed rate events** stored in internal queue and applied after specified delay.
-            Event format:
-
-            - **2-tuple**: ``(rate, weight)`` — uses default ``delay_steps=1``
-            - **3-tuple**: ``(rate, weight, delay_steps)`` — custom delay
-            - **4-tuple**: ``(rate, weight, delay_steps, multiplicity)``
-            - **dict**: ``{'rate': r, 'weight': w, 'delay_steps': d, 'multiplicity': m}``
-            - **list/tuple of above**: multiple events
-            - **None** (default): no delayed events
-
-            - ``delay_steps=0``: event applied immediately (equivalent to instant event)
-            - ``delay_steps=d > 0``: event applied after ``d`` timesteps
-            - Negative ``delay_steps`` raises ``ValueError``
-
-        _precomputed_rate : array_like or None, optional
-            **JIT-compatible fast path**: pre-computed output rate for the current timestep,
-            bypassing all Python-level event queue operations *and* the nonlinearity call.
-
-            The caller is responsible for computing the correct value outside the loop:
-
-            - For ``linear_summation=True``: ``nl(sum_j w_j * r_j)``
-            - For ``linear_summation=False``: ``sum_j w_j * nl(r_j)``
-
-            When provided, ``instant_rate_events``, ``delayed_rate_events``, and the
-            internal ``_step_count`` / ``_delayed_queue`` are all ignored. This allows the
-            body of a ``brainstate.transform.for_loop`` to be JIT-compiled without
-            requiring the user-supplied nonlinearity to handle JAX traced values.
-            Default: ``None`` (use standard Python-queue event processing).
+        x : ArrayLike, optional
+            Ignored; accepted for ``Dynamics`` API compatibility (the NEST rate
+            transformer has no intrinsic current-driven dynamics).
 
         Returns
         -------
-        rate_new : ndarray, shape ``(in_size,)`` or ``(batch_size, *in_size)``
-            **Updated output rate** after applying nonlinearity to aggregated inputs. This
-            is the new value of the ``rate`` state variable. Shape matches ``in_size``
-            (or ``(batch_size, *in_size)`` if batch mode was used in ``init_state()``).
-
-        Raises
-        ------
-        ValueError
-            If ``instant_rate_events`` contains any event with non-zero ``delay_steps``.
-        ValueError
-            If ``delayed_rate_events`` contains any event with negative ``delay_steps``.
-        ValueError
-            If event tuples have invalid length (must be 2, 3, or 4).
-        ValueError
-            If ``delay_steps`` is not a scalar value.
-
-        Notes
-        -----
-        **Update algorithm (step-by-step)**:
-          1. Store current ``rate`` → ``delayed_rate`` (for outgoing delayed connections)
-          2. Increment internal ``_step_count``
-          3. Drain events scheduled for current timestep from ``_delayed_queue``
-          4. Process new ``delayed_rate_events``:
-
-             - Events with ``delay_steps=0`` are applied immediately
-             - Events with ``delay_steps>0`` are added to ``_delayed_queue``
-
-          5. Process ``instant_rate_events`` (all applied immediately)
-          6. Sum all contributions:
-
-             - If ``linear_summation=True``: sum weighted rates, then apply nonlinearity once
-             - If ``linear_summation=False``: apply nonlinearity per-event, then sum
-
-          7. Update ``rate`` and ``instant_rate`` with the new value
-
-        **Event semantics**:
-          - **rate**: Input rate value (can be scalar or array matching ``in_size``)
-          - **weight**: Connection weight (scalar or array matching ``in_size``)
-          - **delay_steps**: Integer delay in timesteps (0 = immediate, >0 = delayed)
-          - **multiplicity**: Event count multiplier (default 1.0, rarely used)
-          - Effective contribution: ``rate * weight * multiplicity`` (before nonlinearity)
-
-        **Broadcasting rules**:
-          - All event fields (``rate``, ``weight``, ``multiplicity``) broadcast to ``in_size``
-          - Scalars are replicated across all nodes
-          - Arrays must have compatible shapes (standard NumPy broadcasting)
-
-        **Memory management**:
-          - Delayed events are stored in ``_delayed_queue`` until their scheduled timestep
-          - Queue entries are automatically removed after retrieval (no memory leak)
-          - Queue persists across ``update()`` calls but is cleared by ``init_state()``
+        rate_new : ArrayLike
+            Updated output rate :math:`X_i` (shape ``self.rate.value.shape``).
         """
         del x  # NEST rate transformer has no intrinsic current input.
-
         dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
 
-        if _precomputed_rate is not None:
-            # JIT-compatible path: bypass all Python queue, event-dict, and nonlinearity
-            # operations. The caller pre-computes the full output rate before the loop.
-            rate_new = u.math.asarray(_precomputed_rate, dtype=dftype)
-            rate_prev = u.math.asarray(self.rate.value, dtype=dftype)
-            self.rate.value = rate_new
-            self.delayed_rate.value = rate_prev
-            self.instant_rate.value = rate_new
-            return rate_new
+        h = u.get_mantissa(self.sum_delta_inputs(0.0))
+        h = jnp.broadcast_to(jnp.asarray(h, dtype=dftype), state_shape)
 
-        ditype = brainstate.environ.ditype()
-        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
-
-        delayed_total = self._drain_delayed_queue(step_idx, state_shape)
-        delayed_total += self._schedule_delayed_events(
-            delayed_rate_events,
-            step_idx=step_idx,
-            state_shape=state_shape,
-        )
-        instant_total = self._accumulate_instant_events(
-            instant_rate_events,
-            state_shape=state_shape,
-        )
-
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
-        if self.linear_summation:
-            rate_new = self._input_transform(delayed_total + instant_total, state_shape)
-        else:
-            rate_new = delayed_total + instant_total
+        rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
+        rate_new = self._activation(h) if self.linear_summation else h
 
         self.rate.value = rate_new
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
+        self._store_phi_rate(rate_new)
         return rate_new

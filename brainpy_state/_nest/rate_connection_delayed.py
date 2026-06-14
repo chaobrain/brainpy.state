@@ -29,15 +29,22 @@ __all__ = [
 
 
 class rate_connection_delayed(NESTSynapse):
-    r"""NEST-compatible ``rate_connection_delayed`` connection model.
+    r"""NEST-compatible ``rate_connection_delayed`` connection spec.
 
-    Implements connection-level semantics for delayed rate connections following NEST's
-    ``rate_connection_delayed`` model. This class represents a synapse that transmits
-    rate signals with a configurable delay, supporting secondary event propagation
-    for rate-based network simulations.
+    Carries the NEST-facing parameters and status of a delayed rate connection: a scalar
+    ``weight`` and an integer ``delay_steps`` (``>= 1``). It mirrors NEST's ``GetStatus`` /
+    ``SetStatus`` surface (``weight``, ``delay`` / ``delay_steps`` aliases, ``has_delay``,
+    ``supports_wfr``) so connection parameters round-trip identically to the C++ model.
+
+    The delayed rate coupling itself is realized by the Simulator's continuous-rate
+    (seam-(H)) emission path: a presynaptic rate neuron emits its graded ``rate`` each step,
+    and the connection routes ``weight · rate`` through an input delay line of
+    ``delay_steps`` steps (``delay_steps · dt`` of latency) into the postsynaptic neuron's
+    delta input channel, which the post reads via ``sum_delta_inputs``. This spec object
+    carries the parameters; the Simulator builds the delay line from them.
 
     Unlike ``rate_connection_instantaneous``, this model enforces a minimum delay of
-    one simulation step and supports delayed secondary events through coefficient arrays.
+    one simulation step.
 
     Parameters
     ----------
@@ -78,49 +85,24 @@ class rate_connection_delayed(NESTSynapse):
 
     Mathematical Description
     ------------------------
-    **1. Connection Model**
-
-    A ``rate_connection_delayed`` synapse transmits a rate signal :math:`r_\text{pre}(t)`
-    from a presynaptic neuron to a postsynaptic neuron with delay :math:`d` and weight
-    :math:`w`:
+    A delayed connection transmits a rate signal :math:`r_\text{pre}` to the postsynaptic
+    neuron with delay :math:`d` and weight :math:`w`:
 
     .. math::
 
        r_\text{post}(t) = w \cdot r_\text{pre}(t - d)
 
     In discrete-time simulation with step size :math:`\Delta t`, the delay is quantized
-    to an integer number of steps:
+    to an integer number of steps :math:`d_\text{steps} \geq 1`, and on the JAX substrate
+    is realized by an input delay line of length :math:`d_\text{steps}`:
 
     .. math::
 
        d_\text{steps} = \left\lceil \frac{d}{\Delta t} \right\rceil, \quad d_\text{steps} \geq 1
 
-    **2. Secondary Event Handling**
-
-    NEST rate neurons support secondary events for implicit integration schemes. A
-    secondary event carries a coefficient array :math:`\{c_0, c_1, \ldots, c_{n-1}\}`
-    representing contributions at multiple time lags.
-
-    The receiver maps each coefficient :math:`c_i` to a target buffer slot:
-
-    .. math::
-
-       \text{target\_slot} = (d_\text{steps} - d_\text{min}) + i
-
-    where :math:`d_\text{min}` is the minimum delay in the network. This ensures that
-    coefficients are applied to the correct future time steps.
-
-    **3. Event Payload Structure**
-
-    A delayed rate event contains:
-
-    - ``rate``: Scalar rate value or coefficient array
-    - ``weight``: Connection weight
-    - ``delay_steps``: Integer delay
-    - ``multiplicity``: Optional scaling factor for probabilistic connections
-
-    The method :meth:`coeffarray_to_step_events` expands a coefficient array into
-    individual per-step events, each with the appropriate delay offset.
+    The presynaptic rate captured at step :math:`k` is therefore deposited into the
+    postsynaptic input at step :math:`k + d_\text{steps}`, matching NEST's delayed rate
+    delivery.
 
     Implementation Notes
     --------------------
@@ -141,8 +123,7 @@ class rate_connection_delayed(NESTSynapse):
     - NEST stores delays in time units (ms), while this implementation uses discrete
       steps to match BrainPy's event system.
     - The ``set_status`` method accepts both ``delay`` and ``delay_steps`` as aliases
-      for backward compatibility.
-    - Secondary event expansion follows NEST's buffer indexing logic exactly.
+      (if both are provided, they must be identical).
 
     Raises
     ------
@@ -151,15 +132,12 @@ class rate_connection_delayed(NESTSynapse):
     ValueError
         If ``delay`` and ``delay_steps`` are both provided in ``set_status`` with
         conflicting values.
-    ValueError
-        If coefficient array is empty or delay is less than ``min_delay_steps`` in
-        ``coeffarray_to_step_events``.
 
     See Also
     --------
     rate_connection_instantaneous : Zero-delay rate connection model (NEST equivalent)
-    rate_neuron_ipn : Input rate neuron (delayed event receiver)
-    rate_neuron_opn : Output rate neuron (delayed event receiver)
+    rate_neuron_ipn : Input rate neuron (delayed rate receiver)
+    rate_neuron_opn : Output rate neuron (delayed rate receiver)
 
     References
     ----------
@@ -184,33 +162,6 @@ class rate_connection_delayed(NESTSynapse):
        >>> conn.get_status()
        {'weight': 2.0, 'delay_steps': 3, 'delay': 3, 'has_delay': True, 'supports_wfr': False}
 
-    **Creating Rate Events**
-
-    Transmit a rate signal with the connection's parameters:
-
-    .. code-block:: python
-
-       >>> event = conn.to_rate_event(rate=5.0, multiplicity=1.0)
-       >>> event
-       {'rate': 5.0, 'weight': 2.0, 'delay_steps': 3, 'multiplicity': 1.0}
-
-    **Secondary Event Expansion**
-
-    Map a coefficient array to per-step events (e.g., for implicit integration):
-
-    .. code-block:: python
-
-       >>> coeffs = [0.5, 1.0, 0.3]  # Three lag coefficients
-       >>> events = conn.coeffarray_to_step_events(coeffs, min_delay_steps=1)
-       >>> len(events)
-       3
-       >>> events[0]
-       {'rate': 0.5, 'weight': 2.0, 'delay_steps': 2, 'multiplicity': 1.0}
-       >>> events[1]
-       {'rate': 1.0, 'weight': 2.0, 'delay_steps': 3, 'multiplicity': 1.0}
-       >>> events[2]
-       {'rate': 0.3, 'weight': 2.0, 'delay_steps': 4, 'multiplicity': 1.0}
-
     **Dynamic Parameter Updates**
 
     Update connection parameters at runtime:
@@ -223,24 +174,30 @@ class rate_connection_delayed(NESTSynapse):
        >>> conn.get('delay_steps')
        5
 
-    **Using with Rate Neurons**
+    **Delay Validation**
 
-    Typical usage in a rate-based network (conceptual example):
+    Zero or sub-step delays are rejected:
 
     .. code-block:: python
 
-       >>> from brainpy import state as bst
+       >>> conn.set_delay_steps(0)
+       Traceback (most recent call last):
+           ...
+       ValueError: delay_steps must be >= 1.
+
+    **Using with Rate Neurons**
+
+    Typical usage in a rate-based network — the Simulator builds the delay line from the
+    connection's ``delay_steps``:
+
+    .. code-block:: python
+
        >>> import saiunit as u
-       >>> # Create rate neurons (assuming rate_neuron_ipn exists)
-       >>> pre = bst.rate_neuron_ipn(size=10, tau=10.0*u.ms)
-       >>> post = bst.rate_neuron_ipn(size=5, tau=10.0*u.ms)
-       >>> # Define delayed connections
-       >>> conns = [bst.rate_connection_delayed(weight=w, delay_steps=d)
-       ...          for w, d in zip([0.8, 1.2, 0.5], [2, 3, 1])]
-       >>> # Transmit events during simulation
-       >>> for conn in conns:
-       ...     event = conn.to_rate_event(pre.rate, multiplicity=1.0)
-       ...     # post.handle_delayed_event(event)  # Receiver-side logic
+       >>> from brainpy import state as bst
+       >>> sim = bst.Simulator(dt=0.1 * u.ms)
+       >>> pre = sim.create(bst.lin_rate_ipn, 10, params=dict(tau=10.0 * u.ms))
+       >>> post = sim.create(bst.lin_rate_ipn, 5, params=dict(tau=10.0 * u.ms))
+       >>> proj = sim.connect(pre, post, weight=0.5, delay=0.3 * u.ms, comm='dense')  # doctest: +SKIP
     """
 
     __module__ = 'brainpy.state'
@@ -480,305 +437,6 @@ class rate_connection_delayed(NESTSynapse):
            3
         """
         self.delay_steps = self._validate_delay_steps(delay_steps, name='delay_steps')
-
-    def prepare_secondary_event(self, coeffarray: ArrayLike) -> dict[str, Any]:
-        r"""Create a delayed secondary-event payload.
-
-        Secondary events are used in implicit integration schemes for rate neurons.
-        The coefficient array represents contributions at multiple time lags.
-
-        Parameters
-        ----------
-        coeffarray : array-like
-            1D array of coefficients, shape ``(n,)``, representing rate contributions
-            at ``n`` consecutive time lags. Must be non-empty. Accepts
-            ``saiunit.Quantity`` (mantissa will be extracted).
-
-        Returns
-        -------
-        dict
-            Event payload with keys:
-
-            - ``'coeffarray'`` (ndarray): Validated coefficient array, shape ``(n,)``,
-              dtype ``float64``.
-            - ``'weight'`` (float): Connection weight.
-            - ``'delay_steps'`` (int): Connection delay in steps.
-
-        Raises
-        ------
-        ValueError
-            If ``coeffarray`` is empty or cannot be converted to a 1D array.
-
-        See Also
-        --------
-        coeffarray_to_step_events : Expand coefficient array to per-step events.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> conn = rate_connection_delayed(weight=2.0, delay_steps=3)
-           >>> event = conn.prepare_secondary_event([0.5, 1.0, 0.3])
-           >>> event['coeffarray']
-           array([0.5, 1. , 0.3])
-           >>> event['weight']
-           2.0
-        """
-        return {
-            'coeffarray': self._to_coeff_array(coeffarray),
-            'weight': float(self.weight),
-            'delay_steps': int(self.delay_steps),
-        }
-
-    def to_rate_event(
-        self,
-        rate: ArrayLike,
-        multiplicity: ArrayLike = 1.0,
-        delay_steps: ArrayLike | None = None,
-    ) -> dict[str, Any]:
-        r"""Create a delayed-rate event payload for step-based simulation APIs.
-
-        Constructs an event dictionary that can be passed to rate neuron receivers
-        to transmit a rate signal with the connection's weight and delay.
-
-        Parameters
-        ----------
-        rate : float or array-like
-            Rate value to transmit. Can be scalar (single rate) or array (multiple
-            rates). Accepts ``saiunit.Quantity`` (mantissa will be extracted).
-        multiplicity : float or array-like, optional
-            Scaling factor for stochastic or probabilistic connections. Must be
-            scalar. Default: ``1.0``.
-        delay_steps : int or array-like or None, optional
-            Override delay for this event. Must be integer-valued scalar ``>= 1``.
-            If ``None``, uses the connection's ``self.delay_steps``. Default: ``None``.
-
-        Returns
-        -------
-        dict
-            Event payload with keys:
-
-            - ``'rate'`` (float or ndarray): Rate value (scalar or array).
-            - ``'weight'`` (float): Connection weight.
-            - ``'delay_steps'`` (int): Delay in steps.
-            - ``'multiplicity'`` (float): Scaling factor.
-
-        Raises
-        ------
-        ValueError
-            If ``multiplicity`` or ``delay_steps`` is not scalar, or if
-            ``delay_steps < 1``.
-
-        Examples
-        --------
-        .. code-block:: python
-
-           >>> conn = rate_connection_delayed(weight=2.0, delay_steps=3)
-           >>> event = conn.to_rate_event(rate=5.0)
-           >>> event
-           {'rate': 5.0, 'weight': 2.0, 'delay_steps': 3, 'multiplicity': 1.0}
-
-        Override delay for a specific event:
-
-        .. code-block:: python
-
-           >>> event = conn.to_rate_event(rate=5.0, delay_steps=5)
-           >>> event['delay_steps']
-           5
-        """
-        d = self.delay_steps if delay_steps is None else self._validate_delay_steps(delay_steps, name='delay_steps')
-        return {
-            'rate': self._to_rate_value(rate),
-            'weight': float(self.weight),
-            'delay_steps': int(d),
-            'multiplicity': self._to_float_scalar(multiplicity, name='multiplicity'),
-        }
-
-    def coeffarray_to_step_events(
-        self,
-        coeffarray: ArrayLike,
-        min_delay_steps: ArrayLike = 1,
-        multiplicity: ArrayLike = 1.0,
-    ) -> list[dict[str, Any]]:
-        r"""Map lag-indexed coefficient array to per-step delayed-rate events.
-
-        Expands a coefficient array representing multiple time lags into individual
-        per-step rate events, following NEST's delayed-rate receiver buffer indexing.
-        Each coefficient :math:`c_i` is mapped to an event with delay offset
-        :math:`(d - d_{\text{min}}) + i`, where :math:`d` is the connection delay
-        and :math:`d_{\text{min}}` is the minimum network delay.
-
-        This method is used to distribute secondary event coefficients across future
-        time steps for implicit integration schemes.
-
-        Parameters
-        ----------
-        coeffarray : array-like
-            1D array of coefficients, shape ``(n,)``. Each element represents a rate
-            contribution at a successive time lag. Must be non-empty. Accepts
-            ``saiunit.Quantity`` (mantissa will be extracted).
-        min_delay_steps : int or array-like, optional
-            Minimum delay in the network (in simulation steps). Used to compute the
-            base delay offset. Must be integer-valued scalar ``>= 1``. Default: ``1``.
-        multiplicity : float or array-like, optional
-            Scaling factor for all events. Must be scalar. Default: ``1.0``.
-
-        Returns
-        -------
-        list of dict
-            List of event dictionaries, one per coefficient. Each event has keys:
-
-            - ``'rate'`` (float): Coefficient value.
-            - ``'weight'`` (float): Connection weight.
-            - ``'delay_steps'`` (int): Computed delay = ``(self.delay_steps - min_delay_steps) + i``.
-            - ``'multiplicity'`` (float): Scaling factor.
-
-            Length of list equals ``len(coeffarray)``.
-
-        Raises
-        ------
-        ValueError
-            If ``coeffarray`` is empty.
-        ValueError
-            If ``self.delay_steps < min_delay_steps`` (would produce negative delay).
-        ValueError
-            If ``min_delay_steps`` or ``multiplicity`` is not scalar, or if
-            ``min_delay_steps < 1``.
-
-        Notes
-        -----
-        **NEST Buffer Indexing**
-
-        NEST rate neurons with delayed connections use a ring buffer indexed by:
-
-        .. math::
-
-           \text{buffer\_slot} = (d - d_{\text{min}}) + i
-
-        where :math:`d` is the connection delay, :math:`d_{\text{min}}` is the
-        minimum delay, and :math:`i` is the coefficient index. This ensures that
-        coefficients are applied to the correct future time steps during implicit
-        integration.
-
-        **Example Calculation**
-
-        Suppose ``self.delay_steps = 5``, ``min_delay_steps = 2``, and
-        ``coeffarray = [0.5, 1.0, 0.3]``:
-
-        - Coefficient 0 (``0.5``): ``delay_steps = (5 - 2) + 0 = 3``
-        - Coefficient 1 (``1.0``): ``delay_steps = (5 - 2) + 1 = 4``
-        - Coefficient 2 (``0.3``): ``delay_steps = (5 - 2) + 2 = 5``
-
-        See Also
-        --------
-        prepare_secondary_event : Create secondary event with coefficient array.
-        to_rate_event : Create single-rate event.
-
-        Examples
-        --------
-        Basic usage with 3 coefficients:
-
-        .. code-block:: python
-
-           >>> conn = rate_connection_delayed(weight=2.0, delay_steps=5)
-           >>> coeffs = [0.5, 1.0, 0.3]
-           >>> events = conn.coeffarray_to_step_events(coeffs, min_delay_steps=2)
-           >>> len(events)
-           3
-           >>> events[0]
-           {'rate': 0.5, 'weight': 2.0, 'delay_steps': 3, 'multiplicity': 1.0}
-           >>> events[1]
-           {'rate': 1.0, 'weight': 2.0, 'delay_steps': 4, 'multiplicity': 1.0}
-           >>> events[2]
-           {'rate': 0.3, 'weight': 2.0, 'delay_steps': 5, 'multiplicity': 1.0}
-
-        Error when connection delay is less than minimum delay:
-
-        .. code-block:: python
-
-           >>> conn = rate_connection_delayed(weight=1.0, delay_steps=1)
-           >>> conn.coeffarray_to_step_events([0.5, 1.0], min_delay_steps=3)
-           Traceback (most recent call last):
-               ...
-           ValueError: delay_steps must be >= min_delay_steps.
-
-        Using with multiplicity scaling:
-
-        .. code-block:: python
-
-           >>> conn = rate_connection_delayed(weight=1.0, delay_steps=3)
-           >>> events = conn.coeffarray_to_step_events([0.5, 1.0], min_delay_steps=1, multiplicity=0.8)
-           >>> events[0]['multiplicity']
-           0.8
-        """
-        coeff = self._to_coeff_array(coeffarray)
-        min_delay = self._validate_delay_steps(min_delay_steps, name='min_delay_steps')
-        base_delay = int(self.delay_steps - min_delay)
-        if base_delay < 0:
-            raise ValueError('delay_steps must be >= min_delay_steps.')
-        mult = self._to_float_scalar(multiplicity, name='multiplicity')
-
-        events = []
-        for i, c in enumerate(coeff):
-            events.append(
-                {
-                    'rate': float(c),
-                    'weight': float(self.weight),
-                    'delay_steps': int(base_delay + i),
-                    'multiplicity': float(mult),
-                }
-            )
-        return events
-
-    @staticmethod
-    def _to_coeff_array(value: ArrayLike) -> np.ndarray:
-        r"""Convert input to a validated 1D float64 coefficient array.
-
-        Parameters
-        ----------
-        value : array-like
-            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
-
-        Returns
-        -------
-        ndarray
-            1D array with dtype ``float64``.
-
-        Raises
-        ------
-        ValueError
-            If array is empty after conversion.
-        """
-        if isinstance(value, u.Quantity):
-            value = u.get_mantissa(value)
-        dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.math.asarray(value), dtype=dftype).reshape(-1)
-        if arr.size == 0:
-            raise ValueError('Coefficient array must not be empty.')
-        return arr
-
-    @staticmethod
-    def _to_rate_value(value: ArrayLike):
-        r"""Convert input to a rate value (scalar float or array).
-
-        Parameters
-        ----------
-        value : array-like
-            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
-
-        Returns
-        -------
-        float or ndarray
-            If input has exactly one element, returns scalar float. Otherwise,
-            returns array with dtype ``float64``.
-        """
-        if isinstance(value, u.Quantity):
-            value = u.get_mantissa(value)
-        dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.math.asarray(value), dtype=dftype)
-        if arr.size == 1:
-            return float(arr.reshape(-1)[0])
-        return arr
 
     @staticmethod
     def _to_float_scalar(value: ArrayLike, name: str) -> float:

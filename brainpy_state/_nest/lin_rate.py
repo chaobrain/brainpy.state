@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable, Tuple
+from typing import Callable
 
 import brainstate
 import braintools
@@ -35,7 +35,42 @@ __all__ = [
 
 
 class _lin_rate_base(NESTNeuron):
+    """Shared JAX-native base for the NEST rate-neuron family.
+
+    Rate neurons couple **continuously**, not by spikes: each step the
+    presynaptic ``rate`` (a graded value) is emitted over a receptorless static
+    connection and the postsynaptic neuron integrates the weighted sum
+    ``h = Σ_pre weight·rate_pre`` as its coupling input. On the
+    :class:`~brainpy_state.Simulator` substrate this is realized by the seam-(H)
+    *continuous emission* path: the class declares ``_emission_continuous`` and
+    ``_emission_attr`` so ``create()`` allocates an emission holder, phase-2
+    captures the per-step ``rate`` into it, and the connection deposits
+    ``weight·rate`` into the post's default delta channel (``comm='dense'``);
+    the neuron reads it back with ``sum_delta_inputs``. The dynamics
+    ``τ dX = (−λX + μ + φ(h)) dt + noise`` are integrated with the exact
+    exponential-Euler propagators in pure JAX, so the whole simulation lowers
+    into one compiled ``for_loop``.
+    """
+
     __module__ = 'brainpy.state'
+
+    #: Rate neurons emit a continuous graded value (the per-step ``rate``) rather
+    #: than a binary spike. The Simulator routes ``weight·rate`` into the post's
+    #: default delta channel each step (receptorless seam-(H) coupling).
+    _emission_continuous = True
+
+    #: Whether ``mult_coupling=True`` has a real effect. Only models with genuine
+    #: excitatory/inhibitory coupling factors ``H_ex=g_ex(θ_ex−r)`` /
+    #: ``H_in=g_in(θ_in+r)`` (``lin_rate``, the ``rate_neuron`` template) override
+    #: this to ``True``; for the fixed-nonlinearity models (``gauss``/``sigmoid``/
+    #: ``tanh``/``threshold_lin``/``sigmoid_gg``) the factors are identically 1, so
+    #: ``mult_coupling`` is a no-op and the dual-channel split is skipped.
+    _supports_mult_coupling = False
+
+    #: φ-defining parameter names compared by :pyattr:`_phi_signature` for the
+    #: ``linear_summation=False`` homogeneity guard. The default linear gain φ(h)=g·h
+    #: is identified by ``g``; richer nonlinearities extend this.
+    _phi_param_names = ('g',)
 
     def __init__(
         self,
@@ -70,8 +105,13 @@ class _lin_rate_base(NESTNeuron):
         self.rate_initializer = rate_initializer
         self.noise_initializer = noise_initializer
 
-        self._delayed_ex_queue = {}
-        self._delayed_in_queue = {}
+        # Seam-(H) continuous emission. ``linear_summation=True`` emits the raw
+        # ``rate`` (the receiver applies φ to the summed input); ``False`` emits
+        # ``phi_rate = φ(rate)`` so the receiver integrates ``Σ w·φ(r)`` (exact for
+        # a homogeneous φ). For a linear gain the two coincide. ``_emission_attr``
+        # must be known at ``create()`` time (before ``init_state``), so it is
+        # pinned here; the ``phi_rate`` State itself is allocated in ``init_state``.
+        self._emission_attr = 'rate' if self.linear_summation else 'phi_rate'
 
     @staticmethod
     def _to_numpy(x):
@@ -87,156 +127,137 @@ class _lin_rate_base(NESTNeuron):
     def _broadcast_to_state(x_np: np.ndarray, shape):
         return np.broadcast_to(x_np, shape)
 
-    @staticmethod
-    def _to_int_scalar(x, name: str):
-        dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.get_mantissa(x), dtype=dftype).reshape(-1)
-        if arr.size != 1:
-            raise ValueError(f'{name} must be scalar.')
-        return int(arr[0])
+    def _activation(self, h):
+        """The input gain φ(h) on the summed coupling input (JAX; reads ``self``).
 
-    def _input(self, h, g):
-        return g * h
+        Linear default ``φ(h) = g·h``. Nonlinear subclasses override this with a
+        JAX (``jnp``/``u.math``) gain reading their own parameters, so it lowers
+        into the compiled ``for_loop`` (the coupling input ``h`` is a tracer).
+        """
+        return u.get_mantissa(self.g) * h
 
-    def _mult_coupling_ex(self, rate, g_ex, theta_ex):
-        return g_ex * (theta_ex - rate)
+    def _mult_factors(self, rate):
+        """Multiplicative-coupling factors ``(H_ex, H_in)`` at ``rate`` (JAX).
 
-    def _mult_coupling_in(self, rate, g_in, theta_in):
-        return g_in * (theta_in + rate)
+        Default is the linear-rate form ``H_ex = g_ex·(θ_ex − rate)`` and
+        ``H_in = g_in·(θ_in + rate)``; models whose coupling is trivially unity
+        (``gauss``/``sigmoid``/``tanh``/``threshold_lin``) override to return ones.
+        """
+        g_ex = u.get_mantissa(self.g_ex)
+        g_in = u.get_mantissa(self.g_in)
+        theta_ex = u.get_mantissa(self.theta_ex)
+        theta_in = u.get_mantissa(self.theta_in)
+        return g_ex * (theta_ex - rate), g_in * (theta_in + rate)
 
-    @staticmethod
-    def _coerce_events(events):
-        if events is None:
-            return []
-        if isinstance(events, dict):
-            return [events]
-        if isinstance(events, tuple):
-            if len(events) == 0:
-                return []
-            if isinstance(events[0], (dict, tuple, list)):
-                return list(events)
-            if len(events) in (2, 3, 4):
-                return [events]
-        if isinstance(events, list):
-            if len(events) == 0:
-                return []
-            if isinstance(events[0], (dict, tuple, list)):
-                return events
-            if len(events) in (2, 3, 4):
-                return [tuple(events)]
-        return [events]
+    @property
+    def _use_mult_coupling(self):
+        """Whether dual-channel multiplicative coupling is active for this neuron.
 
-    def _parse_event(self, ev, default_delay_steps: int) -> Tuple[np.ndarray, np.ndarray, int]:
-        if isinstance(ev, dict):
-            rate = ev.get('rate', ev.get('coeff', ev.get('value', 0.0)))
-            weight = ev.get('weight', 1.0)
-            multiplicity = ev.get('multiplicity', 1.0)
-            delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
-            dftype = brainstate.environ.dftype()
-            weight_sign = np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0
-        elif isinstance(ev, (tuple, list)):
-            if len(ev) == 2:
-                rate, weight = ev
-                delay_steps = default_delay_steps
-                multiplicity = 1.0
-            elif len(ev) == 3:
-                rate, weight, delay_steps = ev
-                multiplicity = 1.0
-            elif len(ev) == 4:
-                rate, weight, delay_steps, multiplicity = ev
-            else:
-                raise ValueError('Rate event tuples must have length 2, 3, or 4.')
-            weight_sign = np.asarray(u.get_mantissa(weight), dtype=dftype) >= 0.0
-        else:
-            rate = ev
-            weight = 1.0
-            multiplicity = 1.0
-            delay_steps = default_delay_steps
-            weighted_value = self._to_numpy(rate)
-            ex = np.where(weighted_value >= 0.0, weighted_value, 0.0)
-            inh = np.where(weighted_value < 0.0, weighted_value, 0.0)
-            return ex, inh, self._to_int_scalar(delay_steps, name='delay_steps')
+        ``True`` only when the user requested ``mult_coupling`` **and** the model
+        has genuine ``(H_ex, H_in)`` factors (:pyattr:`_supports_mult_coupling`).
+        For the fixed-nonlinearity models the factors are identically one, so the
+        request is silently a no-op and the single default channel is used — this
+        keeps ``mult_coupling=True`` exactly equivalent to ``False`` for them.
+        """
+        return self.mult_coupling and self._supports_mult_coupling
 
-        weighted_value = self._to_numpy(rate) * self._to_numpy(weight) * self._to_numpy(multiplicity)
-        ex = np.where(weight_sign, weighted_value, 0.0)
-        inh = np.where(weight_sign, 0.0, weighted_value)
-        return ex, inh, self._to_int_scalar(delay_steps, name='delay_steps')
+    @property
+    def _phi_signature(self):
+        r"""Hashable identity of this neuron's input nonlinearity φ.
 
-    @staticmethod
-    def _queue_add(queue: dict, step_idx: int, value: np.ndarray):
-        if step_idx in queue:
-            queue[step_idx] = queue[step_idx] + value
-        else:
-            dftype = brainstate.environ.dftype()
-            queue[step_idx] = np.array(value, dtype=dftype, copy=True)
+        Two rate neurons share a φ iff they are the same model class, agree on
+        ``linear_summation``, and carry identical φ-defining gain parameters
+        (:pyattr:`_phi_param_names`). A ``linear_summation=False`` rate connection
+        emits the **sender's** ``φ(rate)`` but is integrated where the **receiver**
+        would have applied **its** φ; the two coincide only for a homogeneous φ, so
+        the Simulator compares signatures at ``connect()`` and refuses a mismatch.
 
-    def _drain_delayed_queue(self, step_idx: int, state_shape):
-        ex = self._delayed_ex_queue.pop(step_idx, None)
-        inh = self._delayed_in_queue.pop(step_idx, None)
-        dftype = brainstate.environ.dftype()
-        if ex is None:
-            ex = np.zeros(state_shape, dtype=dftype)
-        else:
-            ex = np.array(self._broadcast_to_state(np.asarray(ex, dtype=dftype), state_shape), copy=True)
-        if inh is None:
-            inh = np.zeros(state_shape, dtype=dftype)
-        else:
-            inh = np.array(self._broadcast_to_state(np.asarray(inh, dtype=dftype), state_shape), copy=True)
-        return ex, inh
-
-    def _accumulate_instant_events(self, events, state_shape):
-        dftype = brainstate.environ.dftype()
-        ex = np.zeros(state_shape, dtype=dftype)
-        inh = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            ex_i, inh_i, delay_steps = self._parse_event(ev, default_delay_steps=0)
-            if delay_steps != 0:
-                raise ValueError('instant_rate_events must not specify non-zero delay_steps.')
-            ex += self._broadcast_to_state(ex_i, state_shape)
-            inh += self._broadcast_to_state(inh_i, state_shape)
-        return ex, inh
-
-    def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        dftype = brainstate.environ.dftype()
-        ex_now = np.zeros(state_shape, dtype=dftype)
-        inh_now = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            ex_i, inh_i, delay_steps = self._parse_event(ev, default_delay_steps=1)
-            if delay_steps < 0:
-                raise ValueError('delay_steps for delayed_rate_events must be >= 0.')
-            ex_i = self._broadcast_to_state(ex_i, state_shape)
-            inh_i = self._broadcast_to_state(inh_i, state_shape)
-            if delay_steps == 0:
-                ex_now += ex_i
-                inh_now += inh_i
-            else:
-                target_step = step_idx + delay_steps
-                self._queue_add(self._delayed_ex_queue, target_step, ex_i)
-                self._queue_add(self._delayed_in_queue, target_step, inh_i)
-        return ex_now, inh_now
-
-    def _common_inputs(self, x, instant_rate_events, delayed_rate_events):
-        state_shape = self.rate.value.shape
-        step_idx = self._step_count
-
-        delayed_ex, delayed_in = self._drain_delayed_queue(step_idx, state_shape)
-        delayed_ex_now, delayed_in_now = self._schedule_delayed_events(
-            delayed_rate_events,
-            step_idx=step_idx,
-            state_shape=state_shape,
+        Each parameter is reduced to its *set* of distinct values, so a scalar and
+        a uniformly-filled population array compare equal regardless of size.
+        """
+        params = tuple(
+            (name, tuple(sorted(set(
+                np.asarray(u.get_mantissa(getattr(self, name))).reshape(-1).tolist()
+            ))))
+            for name in self._phi_param_names
         )
-        delayed_ex = delayed_ex + delayed_ex_now
-        delayed_in = delayed_in + delayed_in_now
+        return (type(self).__name__, bool(self.linear_summation), params)
 
-        instant_ex, instant_in = self._accumulate_instant_events(instant_rate_events, state_shape)
+    def _emission_state(self, rate_new):
+        """The value emitted this step: ``rate`` (linear summation) or ``φ(rate)``."""
+        return rate_new if self.linear_summation else self._activation(rate_new)
 
-        delta_input = self._broadcast_to_state(self._to_numpy(self.sum_delta_inputs(0.0)), state_shape)
-        instant_ex += np.where(delta_input > 0.0, delta_input, 0.0)
-        instant_in += np.where(delta_input < 0.0, delta_input, 0.0)
+    def _alloc_phi_rate(self, rate_np):
+        """Allocate the ``phi_rate`` emission State (call from ``init_state``).
 
-        mu_ext = self._broadcast_to_state(self._to_numpy(self.sum_current_inputs(x, self.rate.value)), state_shape)
+        Only needed when ``linear_summation=False`` (the neuron emits ``φ(rate)``);
+        a no-op otherwise (the ``rate`` State is emitted directly).
+        """
+        if not self.linear_summation:
+            dftype = brainstate.environ.dftype()
+            phi0 = np.asarray(u.get_mantissa(self._activation(jnp.asarray(rate_np))), dtype=dftype)
+            self.phi_rate = brainstate.ShortTermState(phi0)
 
-        return state_shape, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext
+    def _store_phi_rate(self, rate_new):
+        """Refresh the ``phi_rate`` emission State (call at the end of ``update``)."""
+        if not self.linear_summation:
+            self.phi_rate.value = self._activation(rate_new)
+
+    def _read_coupling(self, x):
+        """Read the per-step JAX coupling inputs (no host event queue).
+
+        Returns the external mean drive ``mu_ext = sum_current_inputs(x, rate)``
+        and the rate coupling delivered by the seam-(H) continuous-emission
+        connections. Without ``mult_coupling`` a single summed default channel
+        ``h = Σ_pre weight·rate_pre`` is read (the second value is ``None``); with
+        ``mult_coupling`` the excitatory/inhibitory partial sums are read from the
+        labelled ``'rate_ex'``/``'rate_in'`` channels (dual-channel deposit).
+
+        Parameters
+        ----------
+        x : ArrayLike
+            Optional runtime drive forwarded as the ``sum_current_inputs`` init.
+
+        Returns
+        -------
+        mu_ext : jax.Array
+            External mean drive (the summed current inputs).
+        h_a : jax.Array
+            The default summed rate channel ``h`` (``mult_coupling=False``) or the
+            excitatory partial sum ``h_ex`` (``mult_coupling=True``).
+        h_b : jax.Array or None
+            ``None`` (``mult_coupling=False``) or the inhibitory partial sum
+            ``h_in`` (``mult_coupling=True``).
+        """
+        rate_now = self.rate.value
+        mu_ext = u.get_mantissa(self.sum_current_inputs(x, rate_now))
+        if self._use_mult_coupling:
+            h_ex = u.get_mantissa(self.sum_delta_inputs(0.0, label='rate_ex'))
+            h_in = u.get_mantissa(self.sum_delta_inputs(0.0, label='rate_in'))
+            return mu_ext, h_ex, h_in
+        h = u.get_mantissa(self.sum_delta_inputs(0.0))
+        return mu_ext, h, None
+
+    def _coupling_increment(self, rate_for_H, h_a, h_b):
+        """The coupling term added each step as ``rate_new += P2 * <this>``.
+
+        Shared by every rate neuron's update; they differ only in ``_activation``
+        (φ) and in ``rate_for_H`` (the rate the multiplicative-coupling factors
+        are evaluated at: the pre-update rate for ipn, the noisy rate for opn).
+
+        With ``linear_summation=True`` the input nonlinearity is applied to the
+        summed channel, ``φ(h_a)``; with ``False`` the receiver integrates the
+        already-transformed channel (the pre emitted ``φ(rate)``), so ``h_a`` is
+        added directly. ``mult_coupling=False`` uses the single default channel
+        (``h_a``); ``mult_coupling=True`` uses the labelled ex/in partial sums
+        (``h_a=h_ex``, ``h_b=h_in``) scaled by ``H_ex``/``H_in``.
+        """
+        a = self._activation(h_a) if self.linear_summation else h_a
+        if not self._use_mult_coupling:
+            return a
+        H_ex, H_in = self._mult_factors(rate_for_H)
+        b = self._activation(h_b) if self.linear_summation else h_b
+        return H_ex * a + H_in * b
 
     def _common_parameters(self, state_shape):
         tau = self._broadcast_to_state(self._to_numpy_ms(self.tau), state_shape)
@@ -335,6 +356,11 @@ class lin_rate_ipn(_lin_rate_base):
 
     __module__ = 'brainpy.state'
 
+    #: Linear rate neurons carry genuine ``(H_ex, H_in)`` factors, so
+    #: ``mult_coupling`` splits the deposit into the ``'rate_ex'``/``'rate_in'``
+    #: channels (spec §3.2).
+    _supports_mult_coupling = True
+
     def __init__(
         self,
         in_size: Size,
@@ -408,13 +434,9 @@ class lin_rate_ipn(_lin_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        self._step_count = 0
+        self._alloc_phi_rate(rate_np)
 
-        self._delayed_ex_queue = {}
-        self._delayed_in_queue = {}
-
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
-               _precomputed_ex=None, _precomputed_in=None):
+    def update(self, x=0.0, noise=None):
         h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
         dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
@@ -425,22 +447,10 @@ class lin_rate_ipn(_lin_rate_base):
 
         rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
-        if _precomputed_ex is not None:
-            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
-            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
-            instant_ex = jnp.zeros(state_shape, dtype=dftype)
-            instant_in = jnp.zeros(state_shape, dtype=dftype)
-            mu_ext = jnp.zeros(state_shape, dtype=dftype)
-        else:
-            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs(
-                x=x,
-                instant_rate_events=instant_rate_events,
-                delayed_rate_events=delayed_rate_events,
-            )
-            self._step_count = step_idx + 1
+        mu_ext, h_a, h_b = self._read_coupling(x)
 
         if noise is None:
-            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
+            xi = brainstate.random.randn(*state_shape)
         else:
             xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
@@ -463,22 +473,7 @@ class lin_rate_ipn(_lin_rate_base):
 
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total + input_noise_factor * noise_now
-
-        H_ex = jnp.ones_like(rate_prev)
-        H_in = jnp.ones_like(rate_prev)
-        if self.mult_coupling:
-            H_ex = self._mult_coupling_ex(rate_prev, g_ex, theta_ex)
-            H_in = self._mult_coupling_in(rate_prev, g_in, theta_in)
-
-        if self.linear_summation:
-            if self.mult_coupling:
-                rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g)
-                rate_new += P2 * H_in * self._input(delayed_in + instant_in, g)
-            else:
-                rate_new += P2 * self._input(delayed_ex + instant_ex + delayed_in + instant_in, g)
-        else:
-            rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g)
-            rate_new += P2 * H_in * self._input(delayed_in + instant_in, g)
+        rate_new = rate_new + P2 * self._coupling_increment(rate_prev, h_a, h_b)
 
         if self.rectify_output:
             rate_new = jnp.where(rate_new < rectify_rate, rectify_rate, rate_new)
@@ -487,6 +482,7 @@ class lin_rate_ipn(_lin_rate_base):
         self.noise.value = noise_now
         self.delayed_rate.value = rate_prev
         self.instant_rate.value = rate_new
+        self._store_phi_rate(rate_new)
         return rate_new
 
 
@@ -525,6 +521,11 @@ class lin_rate_opn(_lin_rate_base):
     """
 
     __module__ = 'brainpy.state'
+
+    #: Linear rate neurons carry genuine ``(H_ex, H_in)`` factors, so
+    #: ``mult_coupling`` splits the deposit into the ``'rate_ex'``/``'rate_in'``
+    #: channels (spec §3.2).
+    _supports_mult_coupling = True
 
     def __init__(
         self,
@@ -594,13 +595,9 @@ class lin_rate_opn(_lin_rate_base):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(noisy_rate_np, dtype=dftype, copy=True))
-        self._step_count = 0
+        self._alloc_phi_rate(rate_np)
 
-        self._delayed_ex_queue = {}
-        self._delayed_in_queue = {}
-
-    def update(self, x=0.0, instant_rate_events=None, delayed_rate_events=None, noise=None,
-               _precomputed_ex=None, _precomputed_in=None):
+    def update(self, x=0.0, noise=None):
         h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
         dftype = brainstate.environ.dftype()
         state_shape = self.rate.value.shape
@@ -609,22 +606,10 @@ class lin_rate_opn(_lin_rate_base):
 
         rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
 
-        if _precomputed_ex is not None:
-            delayed_ex = jnp.asarray(_precomputed_ex, dtype=dftype)
-            delayed_in = jnp.asarray(_precomputed_in, dtype=dftype)
-            instant_ex = jnp.zeros(state_shape, dtype=dftype)
-            instant_in = jnp.zeros(state_shape, dtype=dftype)
-            mu_ext = jnp.zeros(state_shape, dtype=dftype)
-        else:
-            _, step_idx, delayed_ex, delayed_in, instant_ex, instant_in, mu_ext = self._common_inputs(
-                x=x,
-                instant_rate_events=instant_rate_events,
-                delayed_rate_events=delayed_rate_events,
-            )
-            self._step_count = step_idx + 1
+        mu_ext, h_a, h_b = self._read_coupling(x)
 
         if noise is None:
-            xi = jnp.asarray(np.random.normal(size=state_shape), dtype=dftype)
+            xi = brainstate.random.randn(*state_shape)
         else:
             xi = jnp.broadcast_to(jnp.asarray(noise, dtype=dftype), state_shape)
         noise_now = sigma * xi
@@ -636,26 +621,13 @@ class lin_rate_opn(_lin_rate_base):
 
         mu_total = mu + mu_ext
         rate_new = P1 * rate_prev + P2 * mu_total
-
-        H_ex = jnp.ones_like(rate_prev)
-        H_in = jnp.ones_like(rate_prev)
-        if self.mult_coupling:
-            H_ex = self._mult_coupling_ex(noisy_rate, g_ex, theta_ex)
-            H_in = self._mult_coupling_in(noisy_rate, g_in, theta_in)
-
-        if self.linear_summation:
-            if self.mult_coupling:
-                rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g)
-                rate_new += P2 * H_in * self._input(delayed_in + instant_in, g)
-            else:
-                rate_new += P2 * self._input(delayed_ex + instant_ex + delayed_in + instant_in, g)
-        else:
-            rate_new += P2 * H_ex * self._input(delayed_ex + instant_ex, g)
-            rate_new += P2 * H_in * self._input(delayed_in + instant_in, g)
+        # opn evaluates the multiplicative-coupling factors at the *noisy* rate.
+        rate_new = rate_new + P2 * self._coupling_increment(noisy_rate, h_a, h_b)
 
         self.rate.value = rate_new
         self.noise.value = noise_now
         self.noisy_rate.value = noisy_rate
         self.delayed_rate.value = noisy_rate
         self.instant_rate.value = noisy_rate
+        self._store_phi_rate(rate_new)
         return rate_new

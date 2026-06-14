@@ -75,6 +75,7 @@ class EventProjection(brainstate.nn.Module):
         delay=None,
         comm: str = 'dense',
         receptor_type=None,
+        channel_label=None,
         pre_is_post: bool = False,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
@@ -102,7 +103,12 @@ class EventProjection(brainstate.nn.Module):
         # ``delta_label_for_receptor`` and has no ``n_receptors``. Resolve the label
         # once and fall through to the ordinary plain comm path (a single
         # ``(n_post,)`` contribution), tagging the deposit with that label.
-        self._channel_label = self._resolve_channel_label(post, receptor_type)
+        # ``channel_label`` (an explicit string) bypasses the receptor lookup: the
+        # rate dual-channel split (``mult_coupling``) deposits the sign-split
+        # ``weight·rate`` into the post's ``'rate_ex'``/``'rate_in'`` delta channels
+        # directly, since those are not NEST receptors.
+        self._channel_label = (channel_label if channel_label is not None
+                               else self._resolve_channel_label(post, receptor_type))
         # Per-receptor routing (stacked multi-receptor post, e.g.
         # ``iaf_psc_exp_multisynapse``): ``receptor_type='uniform'`` draws a port per
         # edge, an int ``k`` (1-based, NEST convention) routes every edge to internal

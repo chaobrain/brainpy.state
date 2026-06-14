@@ -191,9 +191,13 @@ no bespoke offset-aware event projection is needed) — and one connection rule,
 **`pairwise_bernoulli(p)`** (Phase 0).
 
 The rate-neuron (`lin_rate_ipn_network`, `rate_neuron_dm`), gap-junction
-(`gap_junctions_*`), and `ht_neuron` (`intrinsic_currents_*`) demos are **out of scope
-for this cluster** — each needs a primitive the spiking-network harness does not build
-(rate-neuron connections, gap-junction coupling, `ht_neuron` intrinsic currents).
+(`gap_junctions_*`), and `ht_neuron` (`intrinsic_currents_*`) demos were **out of scope
+for the spiking network-demo cluster (14)** — each needs a primitive that harness does not
+build. The **rate-neuron substrate has since landed (cluster 15a)**: `lin_rate`/`rate_neuron`
++ instantaneous/delayed rate connections now run on the seam-(H) continuous-emission path
+(`τ Ẋ = −λX + μ + φ(h)`, linear-rate FP `(I−gC)⁻¹μ` parity vs NEST), so the two rate-network
+demos are **substrate-ready** and only await a demo-port cluster. Gap-junction and
+`ht_neuron` demos remain blocked on their own primitives.
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
@@ -203,8 +207,8 @@ for this cluster** — each needs a primitive the spiking-network harness does n
 | `repeated_stimulation.py` | implemented | `examples/nest/repeated_stimulation.py` | gated `poisson_generator` over repeated trials; active-window spike count `CAT_D` 5 %; zero-rate → silent |
 | `sensitivity_to_perturbation.py` | implemented | `examples/nest/sensitivity_to_perturbation.py` | Brunel-style balanced net; AI rate 14.95 vs 15.17 Hz (1.45 %, `CAT_D`); 1-spike perturbation decorrelates >0.9 of net after `t_stim`, 0 before (both sims) |
 | `wang_decision_making.py` | implemented | `examples/nest/wang_decision_making.py` | Wang (2002) WTA decision network on `iaf_bw_2001`. Recurrent NMDA via `connect(receptor_type=NMDA, comm='dense')` matches live NEST to machine precision (~5e-15; `iaf_bw_2001_recurrent_nmda_parity_test.py`) — **design A resolved to option (a)** (generalize the presynaptic-emission seam; no offset-aware event projection needed). Decision parity is distributional (`wang_decision_making_test.py`): ±coherence→A/B both sims, winner > 2.5× loser (< 4 Hz), unbiased at 0; the WTA attractor amplifies integrator/PRNG differences so the winner's absolute rate differs (BP A~12 vs NEST A~7 Hz). No-NEST companion `wang_decision_making_no_nest_test.py` |
-| `lin_rate_ipn_network.py` | missing | none | out of scope (cluster 14): `lin_rate` + rate connections |
-| `rate_neuron_dm.py` | missing | none | out of scope (cluster 14): rate-network decision-making |
+| `lin_rate_ipn_network.py` | missing | none | substrate-ready (cluster 15a): `lin_rate` + rate connections on seam-(H); demo port pending |
+| `rate_neuron_dm.py` | missing | none | substrate-ready (cluster 15a): rate-network decision-making on the rate core; demo port pending |
 | `gap_junctions_two_neurons.py` | missing | none | out of scope (cluster 14): `hh_psc_alpha_gap` + `gap_junction` coupling |
 | `gap_junctions_inhibitory_network.py` | missing | none | out of scope (cluster 14): gap-junction coupling |
 | `intrinsic_currents_spiking.py` | missing | none | out of scope (cluster 14): `ht_neuron` intrinsic currents |

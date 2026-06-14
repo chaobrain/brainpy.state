@@ -336,9 +336,6 @@ class siegert_neuron(NESTNeuron):
 
         self.rate_initializer = rate_initializer
 
-        self._delayed_drift_queue = {}
-        self._delayed_diffusion_queue = {}
-
         self._validate_parameters()
 
     @property
@@ -364,168 +361,6 @@ class siegert_neuron(NESTNeuron):
     def _broadcast_to_state(x_np: np.ndarray, shape):
         return np.broadcast_to(x_np, shape)
 
-    @staticmethod
-    def _to_int_scalar(x, name: str):
-        dftype = brainstate.environ.dftype()
-        arr = np.asarray(u.get_mantissa(x), dtype=dftype).reshape(-1)
-        if arr.size != 1:
-            raise ValueError(f'{name} must be scalar.')
-        return int(arr[0])
-
-    @staticmethod
-    def _coerce_events(events):
-        if events is None:
-            return []
-        if isinstance(events, dict):
-            return [events]
-        if isinstance(events, tuple):
-            if len(events) == 0:
-                return []
-            if isinstance(events[0], (dict, tuple, list)):
-                return list(events)
-            return [events]
-        if isinstance(events, list):
-            if len(events) == 0:
-                return []
-            if isinstance(events[0], (dict, tuple, list)):
-                return events
-            return [tuple(events)]
-        return [events]
-
-    @staticmethod
-    def _queue_add(queue: dict, step_idx: int, value: np.ndarray):
-        if step_idx in queue:
-            queue[step_idx] = queue[step_idx] + value
-        else:
-            dftype = brainstate.environ.dftype()
-            queue[step_idx] = np.array(value, dtype=dftype, copy=True)
-
-    def _drain_delayed_queue(self, step_idx: int, state_shape):
-        drift = self._delayed_drift_queue.pop(step_idx, None)
-        diffusion = self._delayed_diffusion_queue.pop(step_idx, None)
-        dftype = brainstate.environ.dftype()
-
-        if drift is None:
-            drift = np.zeros(state_shape, dtype=dftype)
-        else:
-            drift = np.array(self._broadcast_to_state(np.asarray(drift, dtype=dftype), state_shape), copy=True)
-
-        if diffusion is None:
-            diffusion = np.zeros(state_shape, dtype=dftype)
-        else:
-            diffusion = np.array(
-                self._broadcast_to_state(np.asarray(diffusion, dtype=dftype), state_shape),
-                copy=True,
-            )
-
-        return drift, diffusion
-
-    def _extract_event_fields(self, ev, default_delay_steps: int):
-        if isinstance(ev, dict):
-            coeff = ev.get('coeff', ev.get('rate', ev.get('value', 0.0)))
-            drift_factor = ev.get('drift_factor', 1.0)
-            diffusion_factor = ev.get('diffusion_factor', 0.0)
-            weight = ev.get('weight', 1.0)
-            multiplicity = ev.get('multiplicity', 1.0)
-            delay_steps = ev.get('delay_steps', ev.get('delay', default_delay_steps))
-        elif isinstance(ev, (tuple, list)):
-            if len(ev) == 1:
-                coeff = ev[0]
-                drift_factor = 1.0
-                diffusion_factor = 0.0
-                weight = 1.0
-                multiplicity = 1.0
-                delay_steps = default_delay_steps
-            elif len(ev) == 2:
-                coeff, drift_factor = ev
-                diffusion_factor = 0.0
-                weight = 1.0
-                multiplicity = 1.0
-                delay_steps = default_delay_steps
-            elif len(ev) == 3:
-                coeff, drift_factor, diffusion_factor = ev
-                weight = 1.0
-                multiplicity = 1.0
-                delay_steps = default_delay_steps
-            elif len(ev) == 4:
-                coeff, drift_factor, diffusion_factor, delay_steps = ev
-                weight = 1.0
-                multiplicity = 1.0
-            elif len(ev) == 5:
-                coeff, drift_factor, diffusion_factor, delay_steps, weight = ev
-                multiplicity = 1.0
-            elif len(ev) == 6:
-                coeff, drift_factor, diffusion_factor, delay_steps, weight, multiplicity = ev
-            else:
-                raise ValueError('Diffusion event tuples must have length 1 to 6.')
-        else:
-            coeff = ev
-            drift_factor = 1.0
-            diffusion_factor = 0.0
-            weight = 1.0
-            multiplicity = 1.0
-            delay_steps = default_delay_steps
-
-        delay_steps = self._to_int_scalar(delay_steps, name='delay_steps')
-        return coeff, drift_factor, diffusion_factor, weight, multiplicity, delay_steps
-
-    def _event_to_drift_diffusion(self, ev, default_delay_steps: int, state_shape):
-        coeff, drift_factor, diffusion_factor, weight, multiplicity, delay_steps = self._extract_event_fields(
-            ev,
-            default_delay_steps,
-        )
-
-        coeff_np = self._broadcast_to_state(self._to_numpy(coeff), state_shape)
-        drift_factor_np = self._broadcast_to_state(self._to_numpy(drift_factor), state_shape)
-        diffusion_factor_np = self._broadcast_to_state(self._to_numpy(diffusion_factor), state_shape)
-        weight_np = self._broadcast_to_state(self._to_numpy(weight), state_shape)
-        multiplicity_np = self._broadcast_to_state(self._to_numpy(multiplicity), state_shape)
-
-        weighted_coeff = coeff_np * weight_np * multiplicity_np
-        drift = drift_factor_np * weighted_coeff
-        diffusion = diffusion_factor_np * weighted_coeff
-
-        return drift, diffusion, delay_steps
-
-    def _accumulate_instant_events(self, events, state_shape):
-        dftype = brainstate.environ.dftype()
-        drift = np.zeros(state_shape, dtype=dftype)
-        diffusion = np.zeros(state_shape, dtype=dftype)
-        for ev in self._coerce_events(events):
-            d_i, s_i, delay_steps = self._event_to_drift_diffusion(
-                ev,
-                default_delay_steps=0,
-                state_shape=state_shape,
-            )
-            if delay_steps != 0:
-                raise ValueError('instant_diffusion_events must not specify non-zero delay_steps.')
-            drift += d_i
-            diffusion += s_i
-        return drift, diffusion
-
-    def _schedule_delayed_events(self, events, step_idx: int, state_shape):
-        dftype = brainstate.environ.dftype()
-        drift_now = np.zeros(state_shape, dtype=dftype)
-        diffusion_now = np.zeros(state_shape, dtype=dftype)
-
-        for ev in self._coerce_events(events):
-            d_i, s_i, delay_steps = self._event_to_drift_diffusion(
-                ev,
-                default_delay_steps=1,
-                state_shape=state_shape,
-            )
-            if delay_steps < 0:
-                raise ValueError('delay_steps for delayed_diffusion_events must be >= 0.')
-            if delay_steps == 0:
-                drift_now += d_i
-                diffusion_now += s_i
-            else:
-                target_step = step_idx + delay_steps
-                self._queue_add(self._delayed_drift_queue, target_step, d_i)
-                self._queue_add(self._delayed_diffusion_queue, target_step, s_i)
-
-        return drift_now, diffusion_now
-
     def _validate_parameters(self):
         # Skip validation when parameters are JAX tracers (e.g. during jit).
         if any(is_tracer(v) for v in (self.tau, self.tau_m, self.tau_syn, self.t_ref, self.V_reset, self.theta)):
@@ -550,11 +385,6 @@ class siegert_neuron(NESTNeuron):
         dftype = brainstate.environ.dftype()
         self.instant_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
         self.delayed_rate = brainstate.ShortTermState(np.array(rate_np, dtype=dftype, copy=True))
-        ditype = brainstate.environ.ditype()
-        self._step_count = brainstate.ShortTermState(np.asarray(0, dtype=ditype))
-
-        self._delayed_drift_queue = {}
-        self._delayed_diffusion_queue = {}
 
     @staticmethod
     def _gauss_legendre_scalar_integral(func, a: float, b: float):
@@ -858,224 +688,53 @@ class siegert_neuron(NESTNeuron):
             v_reset_b,
         )
 
-    def update(
-        self,
-        x=0.0,
-        drift_input: ArrayLike = 0.0,
-        diffusion_input: ArrayLike = 0.0,
-        instant_diffusion_events=None,
-        delayed_diffusion_events=None,
-        _precomputed_drive=None,
-    ):
-        r"""Advance the rate dynamics by one simulation timestep.
+    def update(self, x=0.0, drift_input: ArrayLike = 0.0, diffusion_input: ArrayLike = 0.0):
+        r"""Advance the Siegert rate by one step (NEST non-WFR semantics).
 
-        Integrates the first-order rate ODE using exact exponential propagators,
-        incorporating drift/diffusion inputs from multiple sources (direct inputs,
-        current/delta hooks, and diffusion events). Updates internal state variables
-        and publishes the new rate to ``delayed_rate`` and ``instant_rate`` buffers
-        for outgoing connections.
+        Drift coupling is read continuously from the substrate seam
+        (:math:`\mu = \mathrm{sum\_current\_inputs}(x, r) + \mathrm{sum\_delta\_inputs}(0)`)
+        plus the direct ``drift_input`` and the intrinsic ``mean``. Diffusion is taken
+        from the direct ``diffusion_input`` only -- network diffusion routing
+        (``DiffusionConnection``) is deferred to goal 15c.
 
-        **Update Sequence:**
-
-        1. Retrieve timestep ``dt`` from ``brainstate.environ``.
-        2. Drain delayed event queues for the current step index.
-        3. Schedule incoming delayed events into future queue slots.
-        4. Accumulate instant events (must have ``delay_steps=0``).
-        5. Sum all drift and diffusion contributions:
-
-           - Delayed events (from queue)
-           - Scheduled delayed events with ``delay_steps=0``
-           - Instant events
-           - Direct inputs (``drift_input``, ``diffusion_input``)
-           - Dynamics hooks (``current_inputs``, ``delta_inputs``)
-
-        6. Evaluate Siegert transfer function :math:`\Phi(\mu_{\text{total}}, \sigma^2_{\text{total}})`.
-        7. Update rate: :math:`r \leftarrow P_1 r + P_2 (\text{mean} + \Phi)`,
-           where :math:`P_1 = e^{-\Delta t / \tau}` and :math:`P_2 = 1 - P_1`.
-        8. Copy new rate to ``delayed_rate`` and ``instant_rate`` (NEST non-WFR semantics).
-        9. Increment internal step counter.
+        .. note::
+            The Siegert transfer function is a host-side special-function integral
+            (Gauss-Legendre / SciPy on concrete values); this step therefore runs
+            **eagerly** and does *not* lower under ``brainstate.transform.for_loop``
+            / ``jit``. Drive it with an eager host loop (or, once goal 15c lands the
+            diffusion substrate, a precompute-then-propagate bridge).
 
         Parameters
         ----------
         x : ArrayLike, optional
-            External input passed to ``sum_current_inputs()`` hook (dimensionless).
-            Scalar or array broadcastable to ``in_size``. Used for compatibility
-            with standard Dynamics input API. Default: ``0.0``.
+            External drive forwarded to ``sum_current_inputs`` (dimensionless).
         drift_input : ArrayLike, optional
-            Direct drift contribution (dimensionless). Scalar or array broadcastable
-            to ``in_size``. Added to total drift before Siegert evaluation. Positive
-            values increase firing rate. Default: ``0.0``.
+            Direct drift contribution added to the total drift before the Siegert
+            evaluation.
         diffusion_input : ArrayLike, optional
-            Direct diffusion contribution (dimensionless squared). Scalar or array
-            broadcastable to ``in_size``. Added to total diffusion (variance) before
-            Siegert evaluation. Must be non-negative. Default: ``0.0``.
-        instant_diffusion_events : None, dict, tuple, list, optional
-            Diffusion events applied in the current step (delay = 0). Can be:
-
-            - ``None``: no events
-            - Single dict: ``{'coeff': float, 'drift_factor': float, ...}``
-            - Tuple/list of event dicts
-            - Tuple of (coeff, drift_factor, diffusion_factor, ...)
-
-            All events must have ``delay_steps=0`` (implicit or explicit). Raises
-            ``ValueError`` if non-zero delay is specified. Default: ``None``.
-        delayed_diffusion_events : None, dict, tuple, list, optional
-            Diffusion events scheduled for future delivery. Format identical to
-            ``instant_diffusion_events``, but ``delay_steps`` can be any non-negative
-            integer (default 1). Events with ``delay_steps=0`` are applied immediately.
-            Negative delays raise ``ValueError``. Default: ``None``.
+            Direct diffusion (variance) contribution; must be non-negative.
 
         Returns
         -------
-        rate : ndarray
-            Updated firing rate in Hz (shape matches ``in_size`` or ``(batch_size, *in_size)``).
-            Also stored in ``self.rate.value``. Values are non-negative.
-
-        Raises
-        ------
-        ValueError
-            If ``instant_diffusion_events`` contains events with ``delay_steps != 0``.
-        ValueError
-            If ``delayed_diffusion_events`` contains events with ``delay_steps < 0``.
-        ValueError
-            If event tuples have invalid length (must be 1–6 elements).
-
-        Notes
-        -----
-        **State Updates:**
-
-        The following state variables are modified in-place:
-
-        - ``self.rate``: current firing rate (Hz)
-        - ``self.delayed_rate``: rate for delayed connections (copy of ``rate``)
-        - ``self.instant_rate``: rate for instant connections (copy of ``rate``)
-        - ``self._step_count``: internal step counter (int64)
-
-        Event queues (``_delayed_drift_queue``, ``_delayed_diffusion_queue``) are
-        updated: delivered events are removed, new events are added.
-
-        **Numerical Properties:**
-
-        - **Exact integration**: exponential propagators ensure no drift accumulation.
-        - **Stability**: unconditionally stable for all ``tau > 0`` and ``dt > 0``.
-        - **Precision**: limited by Siegert evaluation accuracy (~1.5e-8 relative error).
-
-        **Broadcasting:**
-
-        All inputs are broadcast to a common ``state_shape``, which is the maximum
-        of ``self.rate.value.shape`` and any batch dimension. Scalar inputs are
-        automatically tiled.
-
-        **NEST Compatibility:**
-
-        Reproduces NEST's non-waveform-relaxation update semantics:
-
-        - Delayed events use integer step delays (not continuous time).
-        - Outgoing diffusion coefficients are updated post-integration (not mid-step).
-        - No iterative waveform relaxation (NEST's WFR mode is not implemented).
-
-        Examples
-        --------
-        **Single step with constant input:**
-
-        .. code-block:: python
-
-            >>> from brainpy import state as bp
-            >>> import saiunit as u
-            >>> import brainstate
-            >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms)
-            >>> model.init_all_states()
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     rate = model.update(drift_input=12.0, diffusion_input=3.0)
-            >>> print(rate.shape)  # (10,)
-            >>> print(model.rate.value)  # Updated firing rates
-
-        **Using delayed events for network coupling:**
-
-        .. code-block:: python
-
-            >>> model.init_all_states()
-            >>> event = {'coeff': 50.0, 'drift_factor': 0.1, 'diffusion_factor': 0.05, 'delay_steps': 5}
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     for step in range(10):
-            ...         rate = model.update(delayed_diffusion_events=event if step == 0 else None)
-            ...         if step == 5:
-            ...             print(f"Event delivered at step {step}, rate = {rate[0]:.2f} Hz")
-
-        **Batch simulation with heterogeneous parameters:**
-
-        .. code-block:: python
-
-            >>> model = bp.siegert_neuron(in_size=100, tau=1*u.ms)
-            >>> model.init_all_states(batch_size=32)  # 32 independent realizations
-            >>> drift = np.random.uniform(10, 20, size=(32, 100))
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     rate = model.update(drift_input=drift, diffusion_input=2.0)
-            >>> print(rate.shape)  # (32, 100)
-
-        **Multiple simultaneous instant events:**
-
-        .. code-block:: python
-
-            >>> events = [
-            ...     {'coeff': 10.0, 'drift_factor': 1.0, 'diffusion_factor': 0.0},
-            ...     {'coeff': 5.0, 'drift_factor': 0.5, 'diffusion_factor': 0.1}
-            ... ]
-            >>> model.init_all_states()
-            >>> with brainstate.environ.context(dt=0.1*u.ms):
-            ...     rate = model.update(instant_diffusion_events=events)
-            >>> print(f"Combined event effect: {rate.mean():.2f} Hz")
+        rate_new : ndarray
+            Updated firing rate in Hz (shape ``self.rate.value.shape``).
         """
-        ditype = brainstate.environ.ditype()
         dftype = brainstate.environ.dftype()
         h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
-
         state_shape = self.rate.value.shape
 
-        if _precomputed_drive is not None:
-            # JIT-compatible path: bypass event queue and Siegert computation entirely.
-            drive = jnp.broadcast_to(jnp.asarray(_precomputed_drive, dtype=dftype), state_shape)
-            rate_prev = jnp.broadcast_to(jnp.asarray(self.rate.value, dtype=dftype), state_shape)
-            tau = np.broadcast_to(self._to_numpy_ms(self.tau), state_shape)
-            mean = np.broadcast_to(self._to_numpy(self.mean), state_shape)
-            p1 = np.exp(-h / tau)
-            p2 = -np.expm1(-h / tau)
-            rate_new = p1 * rate_prev + p2 * (mean + drive)
-            self.rate.value = rate_new
-            self.delayed_rate.value = rate_new
-            self.instant_rate.value = rate_new
-            return rate_new
-
-        step_idx = int(np.asarray(self._step_count.value, dtype=ditype).reshape(-1)[0])
-
-        drift_delayed, diffusion_delayed = self._drain_delayed_queue(step_idx, state_shape)
-        d_now, s_now = self._schedule_delayed_events(
-            delayed_diffusion_events,
-            step_idx=step_idx,
-            state_shape=state_shape,
-        )
-        drift_delayed += d_now
-        diffusion_delayed += s_now
-
-        drift_instant, diffusion_instant = self._accumulate_instant_events(
-            instant_diffusion_events,
-            state_shape=state_shape,
-        )
-
-        # Keep compatibility with the standard Dynamics input hooks.
+        # Drift from the standard Dynamics seam (eager host read) + direct arg + mean.
         drift_direct = self._broadcast_to_state(
             self._to_numpy(self.sum_current_inputs(x, self.rate.value) + drift_input + self.sum_delta_inputs(0.0)),
             state_shape,
         )
-        diffusion_direct = self._broadcast_to_state(self._to_numpy(diffusion_input), state_shape)
-
-        mu_total = drift_delayed + drift_instant + drift_direct
-        sigma_square_total = diffusion_delayed + diffusion_instant + diffusion_direct
+        mu_total = drift_direct
+        # Diffusion: direct argument only for goal 15a (network diffusion -> 15c).
+        sigma_square_total = self._broadcast_to_state(self._to_numpy(diffusion_input), state_shape)
 
         rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
         tau = self._broadcast_to_state(self._to_numpy_ms(self.tau), state_shape)
         mean = self._broadcast_to_state(self._to_numpy(self.mean), state_shape)
-
         tau_m = self._broadcast_to_state(self._to_numpy_ms(self.tau_m), state_shape)
         tau_syn = self._broadcast_to_state(self._to_numpy_ms(self.tau_syn), state_shape)
         t_ref = self._broadcast_to_state(self._to_numpy_ms(self.t_ref), state_shape)
@@ -1089,10 +748,7 @@ class siegert_neuron(NESTNeuron):
         rate_new = p1 * rate_prev + p2 * (mean + drive)
 
         self.rate.value = rate_new
-
-        # NEST non-WFR update emits coefficient arrays overwritten by final rate.
+        # NEST non-WFR: outgoing delayed/instant buffers carry the final rate.
         self.delayed_rate.value = np.array(rate_new, dtype=dftype, copy=True)
         self.instant_rate.value = np.array(rate_new, dtype=dftype, copy=True)
-
-        self._step_count.value = np.asarray(step_idx + 1, dtype=ditype)
         return rate_new
