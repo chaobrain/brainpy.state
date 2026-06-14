@@ -166,7 +166,7 @@ Pulled from per-axis docs §7; full acceptance criteria live there.
 
 Summarized at index level — see per-axis docs §7 for full lists. Highlights:
 e-prop family port (XL), spatial / topology surface (XL), HH gap-junction
-parity (M), `pong`/`sudoku`/`wang_decision_making` example ports (L), file-
+parity (M), `pong`/`sudoku` example ports (L), file-
 backed recording backends (L), CI parity-check matrix (M), validation
 progress badge (S), parallel-computing guide (M), glossary (S).
 

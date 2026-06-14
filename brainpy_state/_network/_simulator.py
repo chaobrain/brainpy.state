@@ -695,18 +695,34 @@ class Simulator(brainstate.nn.Module):
                 )
             vt.bind_dopa(_holder_reader(holder), pre_seg.indices)
 
-    def _resolve_stp_emission(self, pre_pop, post_pop, receptor_type, spike_holder):
+    def _resolve_stp_emission(self, pre_pop, post_pop, receptor_type, spike_holder,
+                              comm='dense'):
         """Choose what a neuron->neuron static connection delivers per step.
 
         Most neurons emit a binary spike (the spike holder -> ``weight * spike``).
-        A neuron integrating short-term plasticity *presynaptically* (declares
-        ``_emission_attr`` -- iaf_tum_2000's released efficacy
-        ``spike_offset = u * x``) delivers that graded efficacy instead
-        (``weight * efficacy``), but **only over its TSODYKS receptor**; its
-        DEFAULT/``None`` connection -- and every other model's connection -- still
-        delivers the binary spike. The TSODYKS post is single-port, so the
-        ``receptor_type`` collapses to ``None`` (a plain delta-input delivery; the
-        post integrates ``weight * efficacy`` as its excitatory PSC).
+        A neuron that integrates a *presynaptic graded efficacy* declares
+        ``_emission_attr`` (the State holding the per-step emission, 0 off spike)
+        and ``_emission_receptor`` (the one NEST receptor that carries it). Over
+        that receptor the connection delivers ``weight * emission`` instead of
+        ``weight * spike``; the DEFAULT/``None`` connection -- and every other
+        receptor and every non-emitting model -- still delivers the binary spike
+        with its receptor unchanged. Two models emit:
+
+        * ``iaf_tum_2000`` -- released short-term-plasticity efficacy
+          ``spike_offset = u * x`` over its TSODYKS receptor. The post is
+          single-port, so ``receptor_type`` collapses to ``None`` (a plain
+          delta-input delivery; the post integrates ``weight * efficacy`` as its
+          excitatory PSC) and the post must be the same model.
+        * ``iaf_bw_2001`` -- presynaptic NMDA gate increment
+          ``spike_offset = k0 + k1 * s_NMDA_pre`` over its ``NMDA`` receptor. The
+          post is multi-port, so ``receptor_type`` is *preserved* and the graded
+          deposit is routed into the post's NMDA delta channel (via
+          ``delta_label_for_receptor``); AMPA/GABA on other connections stay
+          binary and land in their own channels.
+
+        The graded emission rides the **dense** matmul (``x @ W``); the sparse
+        event path binarizes the presynaptic value, so ``comm='sparse'`` over an
+        emitting receptor is rejected.
 
         Parameters
         ----------
@@ -716,36 +732,56 @@ class Simulator(brainstate.nn.Module):
             The connection's NEST receptor type as passed to :meth:`connect`.
         spike_holder : _SpikeHolder
             The presynaptic population's binary-spike holder (the default source).
+        comm : str, default 'dense'
+            The connection's communication mode. ``'sparse'`` is rejected for the
+            graded-emission path because it binarizes the presynaptic value.
 
         Returns
         -------
         tuple
             ``(pre_spike_reader, effective_receptor_type)`` -- the callable the
             :class:`EventProjection` reads each step, and the receptor type to
-            build it with (``None`` for the TSODYKS-efficacy path).
+            build it with (``None`` for the single-port efficacy collapse, the
+            original receptor for the multi-port routed path).
 
         Raises
         ------
         ValueError
-            If a TSODYKS connection targets a post of a different model (the
-            efficacy is delivered as that model's PSC, so the post must be the same
-            integrate-and-fire-with-STP model), or if the emission holder is absent.
+            If the graded emission would ride ``comm='sparse'`` (binarized); if a
+            single-port efficacy connection targets a post of a different model
+            (the efficacy is delivered as that model's PSC, so the post must be the
+            same model); or if the emission holder is absent.
         """
         emit_attr = getattr(pre_pop, '_emission_attr', None)
-        tsodyks = getattr(pre_pop, 'RECEPTOR_TYPES', {}).get('TSODYKS')
-        if emit_attr is None or receptor_type is None or receptor_type != tsodyks:
+        emit_receptor = getattr(pre_pop, '_emission_receptor', None)
+        if emit_receptor is None:
+            emit_receptor = getattr(pre_pop, 'RECEPTOR_TYPES', {}).get('TSODYKS')
+        if emit_attr is None or receptor_type is None or receptor_type != emit_receptor:
             return _holder_reader(spike_holder), receptor_type
-        if not isinstance(post_pop, type(pre_pop)):
-            raise ValueError(
-                f'a TSODYKS (receptor_type={receptor_type}) connection from '
-                f'{type(pre_pop).__name__} delivers presynaptic short-term-plasticity '
-                f'efficacy and requires a {type(pre_pop).__name__} post; got '
-                f'{type(post_pop).__name__}.')
         emit_holder = getattr(self, f'_emit_holder_{id(pre_pop)}', None)
         if emit_holder is None:
             raise ValueError(
                 f'{type(pre_pop).__name__} declares _emission_attr={emit_attr!r} but '
                 'no emission holder was allocated by create().')
+        if comm == 'sparse':
+            raise ValueError(
+                f'a graded-emission connection from {type(pre_pop).__name__} over '
+                f'receptor_type={receptor_type} delivers weight * {emit_attr} and '
+                'must ride the dense matmul; comm="sparse" binarizes the '
+                'presynaptic value. Use comm="dense".')
+        # Multi-port post routes by receptor into a named delta channel: keep the
+        # receptor so EventProjection deposits the graded value into the right
+        # channel (e.g. iaf_bw_2001 NMDA).
+        if hasattr(post_pop, 'delta_label_for_receptor') or hasattr(post_pop, 'n_receptors'):
+            return _holder_reader(emit_holder), receptor_type
+        # Single-port post (iaf_tum_2000): the efficacy IS the PSC; collapse the
+        # receptor to None and require the same integrate-and-fire-with-STP model.
+        if not isinstance(post_pop, type(pre_pop)):
+            raise ValueError(
+                f'a graded-efficacy (receptor_type={receptor_type}) connection from '
+                f'{type(pre_pop).__name__} delivers presynaptic efficacy as the post '
+                f'PSC and requires a {type(pre_pop).__name__} post; got '
+                f'{type(post_pop).__name__}.')
         return _holder_reader(emit_holder), None
 
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
@@ -802,7 +838,7 @@ class Simulator(brainstate.nn.Module):
                     **plastic_extra)
             else:
                 pre_spike, eff_receptor = self._resolve_stp_emission(
-                    pre_pop, post_pop, receptor_type, holder)
+                    pre_pop, post_pop, receptor_type, holder, comm)
                 proj = EventProjection(
                     pre_spike=pre_spike, n_pre_pop=_flat_size(pre_pop),
                     pre_local_idx=pre_seg.indices, post=post_pop,

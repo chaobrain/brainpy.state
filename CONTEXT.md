@@ -220,6 +220,103 @@ objection into a Lessons entry, do **not** silently diverge.
   clears caches **once** before `brainpy_state` is imported — the per-test guard works but is
   repeated.
 
+### 22-wang-nmda-network — 2026-06-14
+
+- **Shipped:** **recurrent NMDA coupling through the `Simulator` API + the Wang (2002)
+  winner-take-all decision network** — completing §3.6. The cluster-14 entry below
+  deferred this as "needs a new offset-aware NMDA event projection"; **that turned out
+  to be unnecessary** — generalizing the existing presynaptic-emission seam (H) was
+  enough (design A → **option (a)**). Files: generalized
+  `brainpy_state/_network/_simulator.py::_resolve_stp_emission`; the ported
+  `examples/nest/wang_decision_making.py` (the deferred placeholder retired);
+  `_network/_simulator_bw_receptor_test.py` (NEST-free seam unit tests),
+  `_nest/_validation/iaf_bw_2001_recurrent_nmda_parity_test.py` (the design-A arbiter,
+  live NEST), `_nest/_validation/wang_decision_making_test.py` (distributional WTA
+  parity, live NEST), `_nest/_validation/wang_decision_making_no_nest_test.py` (CI
+  companion). Docs: README §3.6 (Wang now the 6th port + the recurrent-NMDA seam +
+  2 parity rows), `examples-gap.md` §3.6 (deferred→implemented, P2 marked DONE),
+  `index.md`. Branch `worktree-nest-goal+22-wang-nmda-network`.
+- **Parity:**
+  - **Recurrent-NMDA micro-parity (the design-A arbiter, deterministic).** An
+    *asymmetric* 3-cell pool (each neuron AMPA-fired at a distinct time, no autapses)
+    wired `connect(pool, pool, receptor_type=NMDA, comm='dense')` reproduces NEST's
+    recurrent `Connect(pool, pool, {receptor_type: 3})` **per-neuron `s_NMDA` to
+    machine precision (max|Δ| ~ 5e-15 over every column)** and `V_m` to ~1e-3 mV. Every
+    column compared (not just neuron 0) so a transposed/mis-routed weight matrix can't
+    hide. ⇒ **option (a) confirmed: no bespoke offset-aware `EventProjection` needed.**
+  - **Wang WTA decision (distributional — the attractor amplifies integrator/PRNG
+    divergence, never per-sample).** Reduced mean-field-preserving net (ne=200, ni=50,
+    weights ∝ N_full/N), seeds 1-3. **+102.4 coherence → A wins 3/3 on both sims**
+    (late-window brainpy A~12 / B~1.4 Hz; NEST A~7 / B~1.2 Hz), mirror image at -102.4,
+    zero coherence unbiased (|bias| < ½ the biased gap) on both. Asserted invariants:
+    direction (±coh→A/B ≥2/3 seeds), WTA contrast (winner > 2.5× loser, loser < 4 Hz),
+    zero-coherence unbias. The winner's **absolute** rate legitimately differs
+    (~30-70 %) — genuine attractor amplification, not a wiring/coupling error (the
+    coupling itself is the 5e-15 micro-parity above).
+- **API discovered/changed (reusable):**
+  - **Generalized presynaptic-emission seam (H) → multi-port graded routing.**
+    `_resolve_stp_emission(pre, post, receptor_type, holder, comm)` now keys off two
+    class attrs any emitting neuron declares: **`_emission_attr`** (the State holding
+    the per-step graded emission, 0 off-spike) and **`_emission_receptor`** (the one
+    NEST receptor that carries it). Over that receptor a static `connect` delivers
+    `weight · emission` instead of `weight · spike`; **every other receptor and every
+    non-emitting pre stays binary on its own channel.** Two post shapes: a **multi-port**
+    post (`hasattr delta_label_for_receptor`/`n_receptors`, e.g. `iaf_bw_2001`) keeps
+    the `receptor_type` so the graded value lands in the named NMDA delta channel; a
+    **single-port** post (`iaf_tum_2000`) collapses it to `None` (the efficacy *is* the
+    PSC) and requires the same model. `iaf_bw_2001` declares
+    `_emission_attr='spike_offset'`, `_emission_receptor=NMDA`.
+  - **Graded emission must ride `comm='dense'` (`x @ W`).** `comm='sparse'` binarizes
+    the presynaptic value (it's an event/CSR path), so it is **rejected** for an
+    emitting receptor with a clear error. Dense is required for any presynaptic-state-
+    gated synapse.
+  - **Recurrent realization works under `for_loop`/`scan` unchanged** — the emission
+    holder is allocated in `create()` for any pop with `_emission_attr` and captured
+    after the pre's `update()`; the carry shape is stable across steps.
+- **Gotchas:**
+  - **Pipeline-latency offset is uniform + benign.** The Simulator captures a pop's
+    emission holder *after* its `update()`, so a recorded signal sits a fixed integer
+    number of steps later than NEST's multimeter phase:
+    **`brainpy_step = NEST_step + 1 (global multimeter phase) + 1 per projection hop`**.
+    `V_m` (one hop, generator→cell) aligns at **shift 2**; `s_NMDA` (two hops,
+    generator→sender→receiver) at **shift 3**. Absorb with `align_steps` (sub-ms lag on
+    a 100 ms NMDA timescale is immaterial); the first probe failed at shift 0 (max|Δ|
+    0.78) and matched at -3 (5e-15).
+  - **Don't compare `I_NMDA` per-sample.** It is `s_NMDA · (V_m − E_ex) / Mg-block` — a
+    product whose two factors carry *different* recorder phases, so no single shift
+    aligns it (a comparison artifact, not a dynamics difference; both factors match NEST
+    at their own shift). Compare `s_NMDA` and `V_m` separately.
+  - **The SILENT-network bug: external Poisson needs `receptor_type=AMPA`.** First Wang
+    smoke run gave all-zero rates because the background/signal `poisson_generator`
+    connects omitted `receptor_type`, so the deposits never reached `s_AMPA` (an
+    `iaf_bw_2001` reads only its named receptor channels — a connect with no receptor
+    delivers nothing). Every external drive into a multi-receptor conductance neuron
+    must name its receptor.
+  - **`np.asarray(state.value)` raises on a unit `Quantity`** ("Only dimensionless
+    quantities can be converted") — a false "it didn't accumulate" red herring (the
+    recurrent NMDA *had* worked, s_NMDA=3.28 nS). Strip units first:
+    `float((state.value / u.nS).max())`.
+  - **`V_m` recorded just *below* `V_th` even on a spike.** NEST resets V before the
+    multimeter samples, so the recurrent-NMDA `V_m` sanity bound is `> E_L + 5` (not
+    `> V_th`); spiking is confirmed by the `s_NMDA` accumulation, not the recorded peak.
+  - **coverage.py cannot instrument `brainpy_state._network._simulator`.** Measuring its
+    import **SIGABRTs the interpreter inside jaxlib's native `xla_client`** (both the C
+    tracer and `COVERAGE_CORE=sysmon`). The pure-Python example module measures fine
+    (testable API 100 % after a B-winner edge test + `# pragma: no cover` on the
+    full-scale `main()` demo driver); the simulator seam's branches are verified
+    **behaviourally** by the passing NEST-free seam suite, not by a line-coverage number.
+  - **CPU platform.** All test/example headers pin `brainstate.environ.set(platform=
+    'cpu')` + `jax_enable_x64` (per the session directive); the 18-run live-NEST WTA grid
+    takes ~9 min on CPU.
+- **For next clusters:** **§3.6 is complete.** The generalized emission seam is the
+  reusable substrate for **any presynaptic-state-gated synapse** (declare
+  `_emission_attr` + `_emission_receptor`, wire `comm='dense'`); reuse the
+  pipeline-latency `align_steps` convention and the distributional (direction +
+  contrast, not absolute rate) pattern for any attractor/WTA network. Still open and
+  *separate*: `nest_compat.CollocatedSynapses` (express AMPA+NMDA on one pair in a
+  single call — the Wang port uses two ordinary `connect()` calls, which is fine).
+
+### 14-network-demos — 2026-06-14
 
 - **Shipped:** the **§3.6 spiking network-demo cluster** — 5 ports on the `Simulator`
   API, each with a live-NEST **distributional** parity test + a no-NEST CI companion,
