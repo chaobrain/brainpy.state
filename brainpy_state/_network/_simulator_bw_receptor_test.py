@@ -22,7 +22,18 @@ import saiunit as u
 import braintools
 
 
-from brainpy_state import iaf_bw_2001
+import numpy as np
+
+from brainpy_state import (iaf_bw_2001, iaf_tum_2000, Simulator,
+                           spike_generator, all_to_all)
+
+#: Shared neuron params (Wang family); pin V_m IC to E_L (the -70 trap).
+_BW = dict(V_th=-50.0 * u.mV, V_reset=-55.0 * u.mV,
+           V_initializer=braintools.init.Constant(-70.0 * u.mV))
+
+
+def _bw_pop(sim, n):
+    return sim.create(iaf_bw_2001, n, params=dict(_BW))
 
 
 class TestBwDeltaLabel(unittest.TestCase):
@@ -47,6 +58,53 @@ class TestBwDeltaLabel(unittest.TestCase):
     def test_emission_attrs_declared(self):
         self.assertEqual(iaf_bw_2001._emission_attr, 'spike_offset')
         self.assertEqual(iaf_bw_2001._emission_receptor, iaf_bw_2001.NMDA)
+
+
+class TestBwReceptorRouting(unittest.TestCase):
+    """A Simulator ``connect(receptor_type=k)`` reaches the right delta channel."""
+
+    def _drive_single(self, rt):
+        """Drive one neuron over receptor ``rt`` from a spike generator; return the neuron."""
+        sim = Simulator(dt=0.1 * u.ms)
+        pop = _bw_pop(sim, 1)
+        gen = sim.create(spike_generator, 1, spike_times=[1.0] * u.ms)
+        sim.connect(gen, pop, weight=5.0 * u.nS, delay=0.1 * u.ms, receptor_type=rt)
+        sim.simulate(2.0 * u.ms)
+        return pop.segments[0].population
+
+    def test_ampa_routes_to_s_ampa_only(self):
+        n = self._drive_single(1)
+        self.assertGreater(float(n.s_AMPA.value[0] / u.nS), 0.0)
+        self.assertEqual(float(n.s_GABA.value[0] / u.nS), 0.0)
+        self.assertEqual(float(n.s_NMDA.value[0] / u.nS), 0.0)
+
+    def test_gaba_routes_to_s_gaba_only(self):
+        n = self._drive_single(2)
+        self.assertGreater(float(n.s_GABA.value[0] / u.nS), 0.0)
+        self.assertEqual(float(n.s_AMPA.value[0] / u.nS), 0.0)
+        self.assertEqual(float(n.s_NMDA.value[0] / u.nS), 0.0)
+
+
+class TestEmissionResolution(unittest.TestCase):
+    """``_resolve_stp_emission`` generalization + back-compat."""
+
+    def test_sparse_emission_rejected(self):
+        sim = Simulator(dt=0.1 * u.ms)
+        pool = _bw_pop(sim, 3)
+        with self.assertRaises(ValueError):
+            sim.connect(pool, pool, weight=1.0 * u.nS, delay=0.5 * u.ms,
+                        rule=all_to_all, receptor_type=iaf_bw_2001.NMDA,
+                        comm='sparse', allow_autapses=False)
+
+    def test_tum_tsodyks_path_unchanged(self):
+        """iaf_tum_2000 TSODYKS connect still builds a projection (collapse-to-None)."""
+        sim = Simulator(dt=0.1 * u.ms)
+        pre = sim.create(iaf_tum_2000, 2)
+        post = sim.create(iaf_tum_2000, 2)
+        proj = sim.connect(pre, post, weight=1.0 * u.pA, delay=0.1 * u.ms,
+                           rule=all_to_all,
+                           receptor_type=iaf_tum_2000.RECEPTOR_TYPES['TSODYKS'])
+        self.assertIsNotNone(proj)
 
 
 if __name__ == '__main__':
