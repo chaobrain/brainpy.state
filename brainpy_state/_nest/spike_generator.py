@@ -19,6 +19,7 @@ from typing import Sequence
 
 import brainstate
 import braintools
+import jax.numpy as jnp
 import saiunit as u
 from brainstate.typing import ArrayLike, Size
 
@@ -269,8 +270,14 @@ class spike_generator(NESTDevice):
         else:
             self.spike_times = None
 
-        # Store spike weights as a dimensionless array, or None for binary mode.
-        self.spike_weights = u.math.asarray(spike_weights) if len(spike_weights) > 0 else None
+        # Store spike weights as a dimensionless *device* array, or None for binary
+        # mode. ``jnp.asarray`` forces JAX backing so the per-step gather in
+        # ``update`` (``self.spike_weights[last_idx]`` with a traced index) lowers
+        # under ``for_loop`` / ``jit`` — a host (numpy-backed) array would raise.
+        self.spike_weights = (
+            jnp.asarray(u.get_mantissa(u.math.asarray(spike_weights)))
+            if len(spike_weights) > 0 else None
+        )
 
         self.start = braintools.init.param(start, self.varshape)
         self.stop = None if stop is None else braintools.init.param(stop, self.varshape)
