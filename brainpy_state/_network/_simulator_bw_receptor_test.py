@@ -107,5 +107,26 @@ class TestEmissionResolution(unittest.TestCase):
         self.assertIsNotNone(proj)
 
 
+class TestRecurrentNmdaLowers(unittest.TestCase):
+    """A recurrent-NMDA pool builds and lowers in one ``Simulator.simulate``."""
+
+    def test_pool_runs_in_for_loop_and_accumulates_s_nmda(self):
+        """pool->pool NMDA (graded, dense) lowers under scan; s_NMDA accumulates."""
+        sim = Simulator(dt=0.1 * u.ms)
+        pool = _bw_pop(sim, 3)
+        # A shared generator fires the whole pool via strong AMPA so every neuron
+        # spikes; each spike's graded NMDA offset then feeds the others recurrently.
+        gen = sim.create(spike_generator, 1, spike_times=[2.0, 3.0, 4.0] * u.ms)
+        sim.connect(gen, pool, weight=400.0 * u.nS, delay=0.1 * u.ms,
+                    rule=all_to_all, receptor_type=iaf_bw_2001.AMPA)
+        sim.connect(pool, pool, weight=2.0 * u.nS, delay=0.5 * u.ms,
+                    rule=all_to_all, receptor_type=iaf_bw_2001.NMDA,
+                    comm='dense', allow_autapses=False)
+        sim.simulate(30.0 * u.ms)  # must not raise a carry-shape error
+        node = pool.segments[0].population
+        s_nmda_max = float((node.s_NMDA.value / u.nS).max())
+        self.assertGreater(s_nmda_max, 0.0)
+
+
 if __name__ == '__main__':
     unittest.main()
