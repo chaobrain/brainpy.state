@@ -50,6 +50,14 @@ class TestWangNoNest(unittest.TestCase):
         self.assertEqual(out['winner'], 'A')
         self.assertAlmostEqual(out['t_decision'], 5.0, places=6)
 
+    def test_decision_helper_picks_b_when_b_crosses_first(self):
+        """The readout returns 'B' when only B crosses threshold (B-winner branch)."""
+        a = np.zeros(100)
+        b = np.r_[np.zeros(50), np.full(50, 30.0)]
+        out = decision_from_rates(a, b, dt=0.1, start_ms=0.0, thr_hz=15.0)
+        self.assertEqual(out['winner'], 'B')
+        self.assertAlmostEqual(out['t_decision'], 5.0, places=6)
+
     def test_decision_helper_returns_none_when_silent(self):
         """No crossing -> no winner, no decision time."""
         out = decision_from_rates(np.zeros(100), np.zeros(100), dt=0.1,

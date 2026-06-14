@@ -127,6 +127,34 @@ class TestRecurrentNmdaLowers(unittest.TestCase):
         s_nmda_max = float((node.s_NMDA.value / u.nS).max())
         self.assertGreater(s_nmda_max, 0.0)
 
+    def test_recurrent_ampa_from_bw_pre_stays_binary_on_ampa(self):
+        """A bw->bw edge over AMPA stays binary and never feeds the graded NMDA gate.
+
+        ``iaf_bw_2001`` is an *emitting* pre (``_emission_receptor == NMDA``), but a
+        recurrent connection over the *AMPA* receptor takes the ``receptor_type !=
+        emit_receptor`` branch: it must deliver the binary spike into ``s_AMPA`` (the
+        Wang network wires bw->bw over both AMPA and NMDA), not the graded NMDA
+        emission. With no NMDA edge present, ``s_NMDA`` must stay exactly zero.
+        """
+        sim = Simulator(dt=0.1 * u.ms)
+        pool = _bw_pop(sim, 2)
+        # Fire neuron 0 only; its spike rides the recurrent AMPA edge onto neuron 1.
+        gen = sim.create(spike_generator, 1, spike_times=[2.0, 3.0, 4.0] * u.ms)
+        sim.connect(gen, pool[0], weight=400.0 * u.nS, delay=0.1 * u.ms,
+                    rule=all_to_all, receptor_type=iaf_bw_2001.AMPA)
+        sim.connect(pool, pool, weight=3.0 * u.nS, delay=0.5 * u.ms,
+                    rule=all_to_all, receptor_type=iaf_bw_2001.AMPA,
+                    allow_autapses=False)
+        sim.simulate(30.0 * u.ms)
+        node = pool.segments[0].population
+        s_ampa = node.s_AMPA.value / u.nS
+        s_nmda = node.s_NMDA.value / u.nS
+        # The recurrent AMPA spike reached neuron 1's AMPA channel...
+        self.assertGreater(float(s_ampa[1]), 0.0)
+        # ...and no NMDA edge exists, so the emitting pre did NOT leak a graded NMDA
+        # deposit (would be non-zero if the AMPA edge wrongly used the NMDA emission).
+        self.assertEqual(float((s_nmda).max()), 0.0)
+
 
 if __name__ == '__main__':
     unittest.main()

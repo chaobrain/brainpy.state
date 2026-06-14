@@ -283,7 +283,7 @@ def run_decision(coherence, seed, *, ne=NE_FULL, ni=NI_FULL, T=4000.0, dt=0.1,
                 rate_a=rate_a, rate_b=rate_b)
 
 
-def main():
+def main():   # pragma: no cover - manual full-scale demo driver (I/O + matplotlib)
     coherence, seed = 25.6, 1
     print(f"Wang (2002) decision network on iaf_bw_2001 — full scale "
           f"({NE_FULL} exc + {NI_FULL} inh), coherence=+{coherence} (biased to A).")
@@ -320,5 +320,5 @@ def main():
         print("  (matplotlib not installed; skipping rate plot)")
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':   # pragma: no cover
     main()
