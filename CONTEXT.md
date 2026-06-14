@@ -138,6 +138,106 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 14-network-demos — 2026-06-14
+
+- **Shipped:** the **§3.6 spiking network-demo cluster** — 5 ports on the `Simulator`
+  API, each with a live-NEST **distributional** parity test + a no-NEST CI companion,
+  plus the Wang decision neuron validated and its network deferred. Files:
+  `examples/nest/{artificial_synchrony,repeated_stimulation,sensitivity_to_perturbation,
+  ei_clustered_network,brette_et_al_2007,wang_decision_making}.py` and matching
+  `_nest/_validation/*_test.py` (+ `iaf_bw_2001_nest_parity_test.py`). One neuron seam
+  fix (`iaf_cond_exp` multi-receptor), one connection rule (`pairwise_bernoulli`,
+  Phase 0), and a cross-link from `examples/brainpy_like/106_COBA_HH_2007.py` (the HH
+  benchmark-3 sibling) to the new IF benchmarks 1&2. Docs: `examples/nest/README.md`
+  §3.6 demos+validation sections, `examples-gap.md` §3.6 table. Branch
+  `worktree-nest-goal+14-network-demos`.
+- **Parity (all distributional — chaotic/balanced/metastable nets never per-sample):**
+  - `repeated_stimulation` — per-trial active-window spike count vs NEST, **`CAT_D` 5 %**
+    (≈ `rate·(stop−start)`); zero-rate → silent (0).
+  - `artificial_synchrony` — Golomb–Rinzel Σ = var_t(mean_n V)/mean_n(var_t V): uncoupled
+    baseline matches NEST exactly, coupling lifts Σ on **both** sims (monotone law); the
+    sensitive synchronized strengths compared in a **documented ~10 %** distributional band
+    (grid-degenerate volleys flip cell-assignment under a sub-ULP integrator difference).
+  - `sensitivity_to_perturbation` — AI-state rate **brainpy 14.95 vs NEST 15.17 Hz
+    (1.45 %)**, `CAT_D`; the 1-spike perturbation decorrelates **> 0.9** of the network on
+    *both* sims after `t_stim` and is **0** before (chaotic divergence is qualitative — the
+    perturbed neuron/connectivity PRNG-differ, so per-seed divergence is not matched).
+  - `ei_clustered_network` — rep=1 homogeneous **median** E/I rate within **12 %**
+    (measured ~1–3 %) and median ISI-CV within **8 %** (measured < 4 %); rep=6 clustering
+    **signature** required in both sims (`std6 > 3·std1`, `CV6 > CV1`). Median, not mean —
+    1-in-N seeds falls into a globally synchronized state (CV≈0) that NEST does not share at
+    that seed, and the median is immune to that outlier while the mean is not.
+  - `brette_et_al_2007` — **second-half (steady-state) population rate**, seed-mean over
+    3 seeds: COBA (`iaf_cond_exp`) bp 13.77/14.03 vs NEST 15.12/14.44 Hz (E **8.9 %** / I
+    2.8 %, band **15 %**); CUBA (`iaf_psc_exp`) bp 3.97/3.99 vs NEST 4.03/4.01 Hz (E
+    **1.5 %** / I 0.5 %, band **12 %**); both self-sustain (late E > 1 Hz) after the kick.
+  - `iaf_bw_2001` (Wang neuron) — single-cell AMPA+GABA `V_m`/`s_AMPA`/`s_GABA`/`I_*` and
+    the two-neuron NMDA presynaptic-offset coupling (`s_NMDA`/`I_NMDA`/`V_m`) both match
+    **live NEST to machine precision** (direct alignment `bp[i]==nest[i]`).
+- **API discovered/changed (reusable):**
+  - **`iaf_cond_exp` multi-receptor seam (extends cluster-11 seam F to a conductance LIF).**
+    Added `n_receptors=2`, `receptor_input_unit=u.nS`, and a `w_by_rec` branch in `update`:
+    receptor **1 → `g_ex`**, **2 → `g_in`**. Before this `iaf_cond_exp` only read the legacy
+    `sum_delta_inputs(label='w_ex'/'w_in')` deltas — *invisible* to `sim.connect()`, so any
+    Simulator connection into it silently delivered nothing. The Simulator blob-bridge
+    (`_simulator.py:764-771`, `inspect`-detects `n_receptors` + `'w_by_rec'` in the
+    signature) needed **no change** — the model just had to opt in. **In brainpy the
+    inhibitory conductance weight is a *positive* magnitude** (`COBA_W_I = 67 nS`), reversal
+    handled by `E_in`; NEST's own `iaf_cond_exp` instead splits ex/in by weight *sign* and
+    has no receptor ports — so the demo routes by `receptor_type` on our side and by sign on
+    NEST's. (`iaf_psc_exp`/CUBA splits by sign on *both* sides — inhibitory weight negative,
+    no receptor.)
+  - **`pairwise_bernoulli(p)` ConnRule** (Phase 0, TDD) — exposes the existing Bernoulli
+    sampler as a named rule; used by `ei_clustered` / `sensitivity` and broadly reusable.
+  - **Population-rate idioms (Brunel family, now reused for E/I spiking nets):**
+    `sim.connect(ne, ne+ni, rule=fixed_indegree(CE), comm='sparse', allow_multapses=True,
+    seed=...)` (population-concat target, CSR comm for N=4000); a `poisson_generator(Nstim,
+    …)` kick wired `one_to_one` into `e[:Nstim]` reproduces NEST's independent-per-target
+    Poisson; `res.rate(esr.segments[0].population)` / `res.spikes(node)` for rate/raster.
+- **Gotchas:**
+  - **NEST `V_m` default ≠ `E_L` (the −70 trap).** NEST defaults `iaf_cond_exp`/`iaf_bw_2001`
+    `V_m` to the **model default −70 mV**, not to `E_L`. Setting `E_L=-60` alone leaves the
+    trace starting at −70 and relaxing toward −60 (this surfaced as a 9.9 mV single-cell
+    mismatch at index 0). **Pin NEST `V_m` to brainpy's `V_initializer`** for any single-cell
+    parity. Network *rate*-band parity is IC-insensitive (kick + recurrence wash the start
+    out), so the demo `main()` may leave NEST's default.
+  - **`iaf_bw_2001` aligns *directly* (`bp[i]==nest[i]`, `align_steps=0`)** — unlike the RKF45
+    conductance models (`iaf_cond_exp`, `aeif`) that need the candidate's `t=0` dropped +
+    `align_steps=1`. A first probe that dropped `bp[0]` falsely showed a 0.54 mV mismatch;
+    sample-by-sample the streams line up with no drop.
+  - **NEST forbids `spike_generator → NMDA`** (`IllegalConnection`: the NMDA *sender* must be
+    an `iaf_bw_2001`, because the deposit reads the sender's `spike_offset`). Validate NMDA
+    with a **two-neuron** setup (force a sender to fire, project NMDA to a receiver); brainpy
+    replays it feed-forward by reading the sender's per-step `spike_offset` and depositing
+    `weight·offset` one delay step later.
+  - **NMDA deposits `weight · sender_spike_offset`, not `weight · spike`** — a *presynaptic*-
+    state-gated synapse. The generic Simulator event projection deposits a uniform
+    `weight·spike` and has no path to fold a per-presynaptic-neuron state into the deposit, so
+    **recurrent NMDA needs a new offset-aware event projection.** This is the genuine
+    blocker for the Wang *network* (its attractor lives on recurrent NMDA); the neuron and the
+    feed-forward coupling are fully validated, so the demo ships the building block + the
+    precise seam gap (goal-sanctioned deferral).
+  - **Steady-state (2nd-half) rate is the kick-independent parity observable.** Brette's
+    full-window rate is dominated by the ignition transient whose *magnitude* differs between
+    sims (a kick-response detail, not the benchmark's point); compare the rate over
+    `[simtime/2, simtime]` (NEST via `spike_recorder(start=simtime/2)`).
+  - **Sensitive / chaotic / metastable observables → distributional, never per-sample.** Σ
+    (synchrony), divergence (perturbation), cluster occupancy (ei_clustered) all PRNG-diverge;
+    assert a seed-**mean** or **median** in a documented band + a qualitative law (Σ monotone↑,
+    divergence ≈0-then->0.9, clustering signature). `ei_clustered` additionally needs the
+    **median** (mean is poisoned by the rare synchronized seed) and **`rep < Q`** to keep the
+    out-cluster weight `J-` positive.
+  - **External CPU contention.** A parallel agent's `/tmp/gif_driver.py` (a `gif_population`
+    test loop) thrashed the shared 20-core WSL2 box (~18× slowdown + swap) during Phase 2;
+    not mine to kill. Worked around by confirming the *identical*-harness CUBA parity GREEN +
+    arithmetic COBA probe, deferring the in-pytest COBA confirmation to the Phase-4 full run.
+- **For next clusters:** the **Wang network is the one §3.6 blocker** — it needs the
+  **offset-aware (presynaptic-state-gated) NMDA event projection** above; when that lands the
+  network ports on the now-validated `iaf_bw_2001` + the `receptor_type` routing seam. The
+  remaining §3.6 items are out of scope by spec: `lin_rate_ipn_network` / `rate_neuron_dm`
+  (rate-neuron primitives), `gap_junctions_*` (gap-junction coupling), `intrinsic_currents_*`
+  (`ht_neuron`). Reuse the `iaf_cond_exp` receptor seam for any conductance E/I net and the
+  steady-state-rate + seed-mean/median distributional pattern for any balanced/metastable net.
 ### 12-single-neuron-models-2 — 2026-06-14
 
 - **Shipped:** the **§3.5 single-neuron model-demo cluster, part 2** — 9 more

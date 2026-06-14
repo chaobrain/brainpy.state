@@ -7,9 +7,11 @@ from brainpy_state._network._connectivity import (
     sample_all_to_all,
     sample_one_to_one,
     sample_fixed_indegree,
+    sample_pairwise_bernoulli,
 )
 
-__all__ = ['ConnRule', 'all_to_all', 'one_to_one', 'fixed_indegree']
+__all__ = ['ConnRule', 'all_to_all', 'one_to_one', 'fixed_indegree',
+           'pairwise_bernoulli']
 
 
 class ConnRule:
@@ -53,6 +55,20 @@ class _FixedIndegree(ConnRule):
                                      allow_multapses=allow_multapses)
 
 
+class _PairwiseBernoulli(ConnRule):
+    """Each ordered ``(pre, post)`` pair is connected independently with prob. ``p``."""
+    __module__ = 'brainpy.state'
+
+    def __init__(self, p: float):
+        self.p = float(p)
+
+    def sample(self, n_pre, n_post, *, key, pre_is_post, allow_autapses, allow_multapses):
+        return sample_pairwise_bernoulli(n_pre, n_post, p=self.p, key=key,
+                                         pre_is_post=pre_is_post,
+                                         allow_autapses=allow_autapses,
+                                         allow_multapses=allow_multapses)
+
+
 all_to_all = _AllToAll()
 one_to_one = _OneToOne()
 
@@ -62,3 +78,11 @@ def fixed_indegree(K: int) -> _FixedIndegree:
     if int(K) < 0:
         raise ValueError(f'K must be >= 0, got {K}')
     return _FixedIndegree(int(K))
+
+
+def pairwise_bernoulli(p: float) -> _PairwiseBernoulli:
+    """Return a pairwise-Bernoulli rule: connect each ``(pre, post)`` pair with prob. ``p``."""
+    p = float(p)
+    if not (0.0 <= p <= 1.0):
+        raise ValueError(f'p must be in [0, 1], got {p}')
+    return _PairwiseBernoulli(p)
