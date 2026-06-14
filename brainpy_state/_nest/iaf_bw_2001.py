@@ -392,6 +392,15 @@ class iaf_bw_2001(NESTNeuron):
         'NMDA': NMDA,
     }
 
+    # Presynaptic graded emission (seam H). When this neuron spikes it emits a graded
+    # NMDA offset ``Delta s_NMDA = k0 + k1 * s_NMDA_pre`` (exposed as ``spike_offset``).
+    # The Simulator allocates an emission holder for any model declaring
+    # ``_emission_attr`` and captures it each step; a connection over the NMDA receptor
+    # delivers ``weight * spike_offset`` (not ``weight * spike``), reproducing NEST's
+    # presynaptic-state-gated NMDA deposit (``iaf_bw_2001.cpp`` SpikeEvent handling).
+    _emission_attr = 'spike_offset'
+    _emission_receptor = NMDA
+
     RECORDABLES = (
         'V_m',
         's_AMPA',
@@ -521,6 +530,34 @@ class iaf_bw_2001(NESTNeuron):
         if receptor < 1 or receptor > 3:
             raise ValueError(f'Receptor type must be in [1, 3], got {receptor}.')
         return receptor
+
+    def delta_label_for_receptor(self, receptor_type):
+        r"""Map a NEST receptor type to this model's delta-input channel label.
+
+        Routes ``Simulator.connect(..., receptor_type=k)`` through the named-channel
+        deposit path: :class:`~brainpy_state._network._event_proj.EventProjection` tags
+        the deposit with the returned label, which the model reads back via
+        ``sum_delta_inputs(label=...)``. Exposing this resolver (instead of a stacked
+        ``n_receptors`` port) is what lets a Simulator connection reach the AMPA, GABA
+        and NMDA channels of ``iaf_bw_2001``.
+
+        Parameters
+        ----------
+        receptor_type : int or str
+            NEST receptor type: ``1``/``'AMPA'``, ``2``/``'GABA'`` or ``3``/``'NMDA'``.
+
+        Returns
+        -------
+        str
+            The delta-input channel label (``'AMPA'``, ``'GABA'`` or ``'NMDA'``).
+
+        Raises
+        ------
+        ValueError
+            If ``receptor_type`` is not a valid AMPA/GABA/NMDA receptor.
+        """
+        rid = self._normalize_spike_receptor(receptor_type)
+        return {self.AMPA: 'AMPA', self.GABA: 'GABA', self.NMDA: 'NMDA'}[rid]
 
     def _validate_parameters(self):
         # Skip validation when parameters are JAX tracers (e.g. during jit).

@@ -341,10 +341,11 @@ These ports add four seams on top of the §3.2/§3.4 vocabulary:
 
 ## Network demos (§3.6)
 
-Five of NEST's spiking-network tutorials (NEST §3.6), each a faithful port driven
-by a live-NEST **distributional** parity test — population rate, synchrony, or
-perturbation divergence within a documented band — plus a no-NEST companion that
-runs in CI. Run any directly, e.g. `python examples/nest/brette_et_al_2007.py`.
+Six of NEST's spiking-network tutorials (NEST §3.6), each a faithful port driven
+by a live-NEST **distributional** parity test — population rate, synchrony,
+perturbation divergence, or winner-take-all decision within a documented band —
+plus a no-NEST companion that runs in CI. Run any directly, e.g. `python
+examples/nest/brette_et_al_2007.py`.
 
 - **`repeated_stimulation.py`** — a `poisson_generator` gated to an active window
   (`start`/`stop`) drives a neuron across repeated trials (NEST's `origin` shift);
@@ -372,17 +373,18 @@ runs in CI. Run any directly, e.g. `python examples/nest/brette_et_al_2007.py`.
   self-sustains an asynchronous-irregular state after the kick ends. The
   Hodgkin–Huxley variant (benchmark 3) is the sibling
   `examples/brainpy_like/106_COBA_HH_2007.py`.
+- **`wang_decision_making.py`** — Wang's (2002) two-population winner-take-all
+  decision network of `iaf_bw_2001` conductance neurons: two selective excitatory
+  pools (A/B) with strong recurrent NMDA+AMPA self-excitation (`w+`) and mutual /
+  background depression (`w−`), a shared inhibitory pool, and a coherence-modulated
+  stimulus (two `inhomogeneous_poisson_generator`s with rates `μ0·(1 ± c)`). After
+  the stimulus the winning pool latches into a high-rate attractor while the loser
+  is suppressed; the winner follows the coherence bias and is noise-driven (either
+  pool can win) at zero coherence.
 
-A sixth, **`wang_decision_making.py`**, is a **documented deferred placeholder**.
-Its `iaf_bw_2001` neuron is fully validated against live NEST (single-cell AMPA+GABA
-and the two-neuron NMDA presynaptic-offset coupling match to machine precision), and
-the script ships a runnable demonstration of that validated recurrent-NMDA building
-block — but the full competing-populations decision network awaits a Simulator seam:
-recurrent NMDA deposits `weight · sender_spike_offset` (a *presynaptic*-state-gated
-synapse), which the generic `weight · spike` event projection cannot yet express.
-
-These ports add a conductance-LIF receptor seam and a Bernoulli connection rule on
-top of the Brunel-family population vocabulary:
+These ports add a conductance-LIF receptor seam, a recurrent presynaptic-gated NMDA
+path, and a Bernoulli connection rule on top of the Brunel-family population
+vocabulary:
 
 - **COBA receptor routing.** `connect(E, ne+ni, receptor_type=1)` /
   `connect(I, ne+ni, receptor_type=2)` route excitation into `g_ex` and inhibition
@@ -394,6 +396,15 @@ top of the Brunel-family population vocabulary:
 - **`pairwise_bernoulli(p)`.** A named connection rule wiring each pre→post pair
   independently with probability `p` — the random-balanced-network primitive behind
   the clustered and perturbation demos.
+- **Recurrent presynaptic-gated NMDA.** `iaf_bw_2001`'s NMDA gate is driven by a
+  *presynaptic* graded emission (`spike_offset = k0 + k1·s_NMDA_pre`), not the binary
+  spike. `connect(pool, pool, receptor_type=NMDA, comm='dense')` routes that graded
+  emission through the dense matmul into each post's NMDA delta channel, while AMPA/GABA
+  edges from the same pre stay binary on their own channels. A live-NEST recurrent
+  micro-parity (`iaf_bw_2001_recurrent_nmda_parity_test.py`) confirms this reproduces
+  NEST's recurrent `Connect(pool, pool, {receptor_type: 3})` gate to machine precision
+  across asymmetric per-neuron routing — so no bespoke offset-aware event projection is
+  needed (`comm='sparse'` is rejected, as it would binarize the graded value).
 
 Parity is **distributional by construction**: these networks are chaotic, balanced,
 or metastable, so their PRNG streams diverge from NEST's and a per-neuron match is
@@ -593,6 +604,8 @@ E/I currents and is hypersensitive to sub-percent current scatter.
 | `brette_et_al_2007` COBA | steady-state E / I rate (3-seed mean) | 13.77 / 14.03 vs 15.12 / 14.44 Hz (E 8.9 % / I 2.8 %, band 15 %) |
 | `brette_et_al_2007` CUBA | steady-state E / I rate (3-seed mean) | 3.97 / 3.99 vs 4.03 / 4.01 Hz (E 1.5 % / I 0.5 %, band 12 %) |
 | `iaf_bw_2001` (Wang neuron) | AMPA+GABA `V_m`/gating ; 2-neuron NMDA `s_NMDA`/`I_NMDA`/`V_m` | machine precision (direct align) |
+| `iaf_bw_2001` recurrent NMDA | per-neuron `s_NMDA`/`V_m`, asymmetric 3-cell pool drive | machine precision ~5e-15 (pipeline-latency aligned) |
+| `wang_decision_making` | WTA decision direction & contrast (3 seeds × ±/0 coherence) | distributional: ±coh→A/B both sims ; winner > 2.5× loser (< 4 Hz) ; unbiased at 0 |
 
 `brette_et_al_2007` compares the **second-half (steady-state) rate** over
 `[simtime/2, simtime]` — the kick-independent observable; the full-window rate is
@@ -605,7 +618,12 @@ median reports the typical AI-state realization while the mean would chase that
 outlier. `sensitivity_to_perturbation`'s chaotic divergence is asserted only
 qualitatively (the perturbed neuron and connectivity PRNG-differ, so the per-seed
 divergence trajectory is not matched — only that *both* simulators decorrelate the
-bulk of the network after `t_stim` and neither before). `wang_decision_making` ships
-no network parity test — its neuron is validated by `iaf_bw_2001_nest_parity_test.py`
-and the network is deferred pending an offset-aware NMDA event projection (the demo
-documents the exact seam gap).
+bulk of the network after `t_stim` and neither before). `wang_decision_making` is a
+winner-take-all attractor whose positive NMDA feedback amplifies the per-neuron
+integrator and PRNG differences, so the winner's *absolute* rate differs between
+simulators (brainpy A~12 vs NEST A~7 Hz on +bias); its parity is therefore
+**distributional/behavioural** — strong ±coherence selects A/B on both sims, the
+winner's late rate exceeds the loser's by > 2.5× (loser suppressed < 4 Hz), and the
+choice is unbiased at zero coherence. The recurrent-NMDA *coupling* underneath it
+matches NEST to machine precision (`iaf_bw_2001_recurrent_nmda_parity_test.py`), so
+the divergence is genuine attractor amplification, not a wiring or coupling error.

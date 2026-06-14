@@ -166,18 +166,23 @@ harness this cluster builds.
 
 ### 3.6 Network demos
 
-Five spiking-network demos ported in cluster 14 (`Simulator` API, live-NEST
-**distributional** parity), plus the Wang decision neuron validated and its network
-deferred. Network parity is distributional by construction — chaotic / balanced /
-metastable nets PRNG-diverge from NEST, so each test compares a seed-**mean** (or, for
-`ei_clustered`, a seed-**median** robust to a rare globally-synchronized seed) of a
-population observable within a documented band, plus the qualitative law the demo
-exists to show. Bands are wider than the single-neuron 5 % because a *balanced* rate
-sits on a near-cancellation of large E/I currents → hypersensitive to sub-percent
-scatter. The ports added one neuron seam — **the `iaf_cond_exp` multi-receptor
-routing** (`n_receptors=2`, `receptor_input_unit=u.nS`, a `w_by_rec` branch: receptor
-1→`g_ex`, 2→`g_in`) so COBA excitation/inhibition route through `connect(receptor_type=k)`
-(extends the §3.5 seam F to a conductance LIF) — and one connection rule,
+Six spiking-network demos: five ported in cluster 14 plus Wang's decision network in
+cluster 22 (`Simulator` API, live-NEST **distributional** parity). Network parity is
+distributional by construction — chaotic / balanced / metastable nets PRNG-diverge from
+NEST, so each test compares a seed-**mean** (or, for `ei_clustered`, a seed-**median**
+robust to a rare globally-synchronized seed) of a population observable within a
+documented band, plus the qualitative law the demo exists to show. Bands are wider than
+the single-neuron 5 % because a *balanced* rate sits on a near-cancellation of large E/I
+currents → hypersensitive to sub-percent scatter, and a winner-take-all attractor
+amplifies them further (so Wang's parity is the *direction* and *contrast* of the
+decision, not the winner's absolute rate). The ports added two neuron seams — **the
+`iaf_cond_exp` multi-receptor routing** (`n_receptors=2`, `receptor_input_unit=u.nS`, a
+`w_by_rec` branch: receptor 1→`g_ex`, 2→`g_in`) so COBA excitation/inhibition route
+through `connect(receptor_type=k)` (extends the §3.5 seam F to a conductance LIF), and
+**recurrent presynaptic-gated NMDA** (cluster 22: `iaf_bw_2001` emits a graded
+`spike_offset = k0 + k1·s_NMDA_pre` routed by `connect(receptor_type=NMDA, comm='dense')`
+into the post's NMDA channel; reproduces NEST's recurrent gate to machine precision, so
+no bespoke offset-aware event projection is needed) — and one connection rule,
 **`pairwise_bernoulli(p)`** (Phase 0).
 
 The rate-neuron (`lin_rate_ipn_network`, `rate_neuron_dm`), gap-junction
@@ -192,7 +197,7 @@ for this cluster** — each needs a primitive the spiking-network harness does n
 | `artificial_synchrony.py` | implemented | `examples/nest/artificial_synchrony.py` | Golomb–Rinzel Σ vs coupling; uncoupled baseline exact, Σ↑ monotone both sims, sensitive strengths ~10 % band (grid branch) |
 | `repeated_stimulation.py` | implemented | `examples/nest/repeated_stimulation.py` | gated `poisson_generator` over repeated trials; active-window spike count `CAT_D` 5 %; zero-rate → silent |
 | `sensitivity_to_perturbation.py` | implemented | `examples/nest/sensitivity_to_perturbation.py` | Brunel-style balanced net; AI rate 14.95 vs 15.17 Hz (1.45 %, `CAT_D`); 1-spike perturbation decorrelates >0.9 of net after `t_stim`, 0 before (both sims) |
-| `wang_decision_making.py` | deferred | `examples/nest/wang_decision_making.py` (placeholder) | `iaf_bw_2001` neuron **validated** vs live NEST (AMPA+GABA single-cell + 2-neuron NMDA, machine precision; `iaf_bw_2001_nest_parity_test.py`). Network deferred: recurrent NMDA deposits `weight·sender_spike_offset` (presynaptic-state-gated) — needs an offset-aware event projection the generic `weight·spike` projection cannot express |
+| `wang_decision_making.py` | implemented | `examples/nest/wang_decision_making.py` | Wang (2002) WTA decision network on `iaf_bw_2001`. Recurrent NMDA via `connect(receptor_type=NMDA, comm='dense')` matches live NEST to machine precision (~5e-15; `iaf_bw_2001_recurrent_nmda_parity_test.py`) — **design A resolved to option (a)** (generalize the presynaptic-emission seam; no offset-aware event projection needed). Decision parity is distributional (`wang_decision_making_test.py`): ±coherence→A/B both sims, winner > 2.5× loser (< 4 Hz), unbiased at 0; the WTA attractor amplifies integrator/PRNG differences so the winner's absolute rate differs (BP A~12 vs NEST A~7 Hz). No-NEST companion `wang_decision_making_no_nest_test.py` |
 | `lin_rate_ipn_network.py` | missing | none | out of scope (cluster 14): `lin_rate` + rate connections |
 | `rate_neuron_dm.py` | missing | none | out of scope (cluster 14): rate-network decision-making |
 | `gap_junctions_two_neurons.py` | missing | none | out of scope (cluster 14): `hh_psc_alpha_gap` + `gap_junction` coupling |
@@ -249,8 +254,10 @@ networks, COBA, and HH-COBA). Concretely:
   pedagogy + correlation-detector regressions.
 - **Single-neuron model demos**: HH, AdEx, GIF, GLIF, MAT, IAF Tum 2000, Brody-
   Hopfield, Campbell-Siegert, multi-compartment, intrinsic-currents.
-- **Network demos**: gap junctions, rate networks, Wang 2002, Brette 2007,
-  EI-clustered, perturbation sensitivity.
+- **Network demos**: gap junctions and rate networks only (both out of scope —
+  gap-junction coupling / rate-neuron connections). Wang 2002, Brette 2007,
+  EI-clustered, perturbation-sensitivity, artificial-synchrony and
+  repeated-stimulation are ported (§3.6).
 - **Generator demos**: sinusoidal Poisson + gamma, pulse packets.
 - **Astrocyte demos**: the `astrocytes/` Brunel-variant series.
 - **Spatial and SONATA**: blocked by API absence; classified `unsupported`
@@ -356,9 +363,12 @@ The examples-as-validation point above is the headline: porting NEST examples
 - **P2 — Port GIF / GLIF / MAT / IAF Tum 2000 single-neuron demos.** [M]
   Acceptance: each ported; trace matches NEST.
 
-- **P2 — Port `wang_decision_making.py`.** [L]
-  Blocked by `iaf_bw_2001*` validation (currently unvalidated). Acceptance:
-  decision dynamics match NEST in a single-trial trace.
+- **P2 — Port `wang_decision_making.py`.** [L] — **DONE (cluster 22).** The
+  `iaf_bw_2001` recurrent-NMDA seam was generalized (design A resolved to option
+  (a): the graded presynaptic emission over `connect(receptor_type=NMDA,
+  comm='dense')` matches live NEST to ~5e-15), and the Wang WTA decision network was
+  ported with distributional live-NEST parity (±coherence→A/B, winner ≫ loser,
+  unbiased at 0). See §3.6.
 
 - **P2 — Port gap-junction demos (`gap_junctions_*`).** [M]
   Blocked by gap-junction synapse parity audit (`synapses-plasticity-gap.md`).
