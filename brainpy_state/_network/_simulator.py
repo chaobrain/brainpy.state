@@ -509,6 +509,44 @@ class Simulator(brainstate.nn.Module):
             setattr(self, f'_emit_holder_{id(mod)}', _SpikeHolder(_flat_size(mod)))
         return NodeView.of(mod)
 
+    def get_position(self, view: NodeView):
+        """Node coordinates of a spatial population/view (NEST ``GetPosition``).
+
+        Parameters
+        ----------
+        view : NodeView
+            A single-segment view over a population created with ``create(positions=...)``.
+
+        Returns
+        -------
+        Quantity
+            ``(n, ndim)`` coordinates (length units) in the view's node order.
+
+        Raises
+        ------
+        ValueError
+            If the population was not created with ``positions=``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            >>> from brainpy import state as bp
+            >>> import brainunit as u
+            >>> sim = bp.Simulator(dt=0.1 * u.ms)
+            >>> pop = sim.create(bp.iaf_psc_alpha, positions=bp.spatial.grid([4, 3], extent=[2.0, 1.5]))
+            >>> [round(float(v), 2) for v in u.get_magnitude(sim.get_position(pop).to(u.um))[0]]
+            [-0.75, 0.5]
+        """
+        seg = view.segments[0]
+        try:
+            coords = self._positions[id(seg.population)]
+        except KeyError:
+            raise ValueError(
+                'get_position requires a population created with create(positions=...).'
+            )
+        return coords[seg.indices]
+
     def _resolve_positions(self, layer, size):
         """Resolve a spatial layer to ``(n, coords)`` for :meth:`create`.
 

@@ -52,6 +52,26 @@ class TestCreatePositions(unittest.TestCase):
         pop = view.segments[0].population
         self.assertNotIn(id(pop), sim._positions)
 
+    def test_get_position_returns_coords(self):
+        sim = Simulator(dt=0.1 * u.ms)
+        view = sim.create(iaf_psc_alpha, positions=grid([4, 3], extent=[2.0, 1.5]))
+        xy = u.get_magnitude(sim.get_position(view).to(u.um))
+        self.assertEqual(xy.shape, (12, 2))
+        np.testing.assert_allclose(xy[0], [-0.75, 0.5], atol=1e-9)
+
+    def test_get_position_slices_to_view(self):
+        sim = Simulator(dt=0.1 * u.ms)
+        view = sim.create(iaf_psc_alpha, positions=grid([4, 3], extent=[2.0, 1.5]))
+        one = u.get_magnitude(sim.get_position(view[0]).to(u.um))
+        self.assertEqual(one.shape, (1, 2))
+        np.testing.assert_allclose(one[0], [-0.75, 0.5], atol=1e-9)
+
+    def test_get_position_no_positions_raises(self):
+        sim = Simulator(dt=0.1 * u.ms)
+        v = sim.create(iaf_psc_alpha, 3)
+        with self.assertRaises(ValueError):
+            sim.get_position(v)
+
 
 class TestSpatialConnectSeam(unittest.TestCase):
     def setUp(self):
