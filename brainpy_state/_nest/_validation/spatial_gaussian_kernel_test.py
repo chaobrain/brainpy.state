@@ -133,6 +133,18 @@ class TestGaussianKernelStructure(unittest.TestCase):
         self.assertEqual(coords.shape, (100, 2))
         self.assertGreaterEqual(tgt.shape[0], 1)
 
+    def test_csa_spatial_example_run_smoke(self):
+        # csa_spatial_example ported natively: same Gaussian-kernel family as gaussex.
+        from examples.nest.spatial_csa import run
+        coords, ctr, tgt = run(shape=(8, 8))
+        self.assertEqual(coords.shape, (64, 2))
+        self.assertGreaterEqual(tgt.shape[0], 1)
+
+    def test_csa_example_native_density(self):
+        # csa_example's csa.random(0.1) maps to pairwise_bernoulli(0.1); density ~ p.
+        from examples.nest.csa_example import run
+        self.assertTrue(0.08 < run(n=200, p=0.1) < 0.12)
+
 
 # --- NEST side --------------------------------------------------------------------
 
