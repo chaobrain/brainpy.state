@@ -24,6 +24,7 @@ import braintools
 import saiunit as u
 import numpy as np
 import jax.numpy as jnp
+import jax.scipy.special as jax_special
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -578,6 +579,202 @@ class siegert_neuron(NESTNeuron):
             )
         return out
 
+    # ------------------------------------------------------------------
+    # JAX-native Siegert transfer (goal 15c, design B).
+    #
+    # The host ``_siegert_scalar`` path above (SciPy / numpy Gauss-Legendre)
+    # is the quadrature *oracle*; it stays eager and drives ``siegert_rate``.
+    # The ``*_jax`` methods below re-express the same three-branch algorithm in
+    # ``jax.numpy`` so ``update`` lowers under ``brainstate.transform.for_loop``
+    # / ``jit``. They are validated against the oracle in
+    # ``_validation/siegert_diffusion_test.py``.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _erfcx_jax(x):
+        r"""Scaled complementary error function ``erfcx(x) = exp(x^2) erfc(x)``.
+
+        Direct ``exp(x^2) erfc(x)`` for ``x < 8`` (clipped to avoid overflow in the
+        unused branch); a seven-term ``1/x`` asymptotic series for ``x >= 8``.
+        """
+        x = jnp.asarray(x)
+        inv = 1.0 / jnp.where(x != 0.0, x, 1.0)
+        inv2 = inv * inv
+        # erfcx(x) ~ 1/(x sqrt(pi)) * sum_k (-1)^k (2k-1)!!/(2x^2)^k  (alternating).
+        poly = (1.0 - 0.5 * inv2 + 0.75 * inv2 ** 2 - 1.875 * inv2 ** 3
+                + 6.5625 * inv2 ** 4 - 29.53125 * inv2 ** 5 + 162.421875 * inv2 ** 6)
+        asympt = inv / jnp.sqrt(jnp.pi) * poly
+        x_safe = jnp.minimum(x, 8.0)
+        direct = jnp.exp(x_safe * x_safe) * jax_special.erfc(x_safe)
+        return jnp.where(x < 8.0, direct, asympt)
+
+    @classmethod
+    def _dawsn_jax(cls, x):
+        r"""Dawson's integral ``D(x) = exp(-x^2) \int_0^x exp(t^2) dt`` (odd in x).
+
+        Taylor series for ``|x| < 0.2``; a five-term ``1/x`` asymptotic series for
+        ``|x| >= 8``; an 8-segment 64-point Gauss-Legendre quadrature of
+        ``\int_0^{|x|} exp(t^2) dt`` (segments of width ``<= 1``) in between. The
+        argument to ``exp`` is clipped to ``[., 8]`` so the (unused) mid branch
+        stays finite for large ``|x|``.
+        """
+        x = jnp.asarray(x)
+        ax = jnp.abs(x)
+        sgn = jnp.sign(x)
+
+        x2 = ax * ax
+        taylor = ax * (1.0 - (2.0 / 3.0) * x2 + (4.0 / 15.0) * x2 ** 2
+                       - (8.0 / 105.0) * x2 ** 3 + (16.0 / 945.0) * x2 ** 4)
+
+        inv = 1.0 / jnp.where(ax > 0.0, ax, 1.0)
+        inv2 = inv * inv
+        asympt = (0.5 * inv + 0.25 * inv * inv2 + (3.0 / 8.0) * inv * inv2 ** 2
+                  + (15.0 / 16.0) * inv * inv2 ** 3 + (105.0 / 32.0) * inv * inv2 ** 4
+                  + (945.0 / 64.0) * inv * inv2 ** 5 + (10395.0 / 128.0) * inv * inv2 ** 6)
+
+        nseg = 8
+        nodes = jnp.asarray(_GAUSS_NODES)
+        weights = jnp.asarray(_GAUSS_WEIGHTS)
+        seg_w = ax / nseg
+        k = jnp.arange(nseg)
+        left = seg_w[..., None] * k
+        mid = left + 0.5 * seg_w[..., None]
+        half_seg = 0.5 * seg_w
+        pts = mid[..., None] + half_seg[..., None, None] * nodes
+        integrand = jnp.exp(jnp.minimum(pts, 8.0) ** 2)
+        integ_per_seg = jnp.sum(weights * integrand, axis=-1) * half_seg[..., None]
+        integral = jnp.sum(integ_per_seg, axis=-1)
+        mid_val = jnp.exp(-ax * ax) * integral
+
+        out = jnp.where(ax < 0.2, taylor, jnp.where(ax >= 8.0, asympt, mid_val))
+        return sgn * out
+
+    @staticmethod
+    def _integral_erfcx_asympt_jax(a, b):
+        r"""Closed-form ``\int_a^b erfcx(s) ds`` via the ``1/s`` asymptotic series."""
+        inv_a2 = 1.0 / (a * a)
+        inv_b2 = 1.0 / (b * b)
+        # Antiderivative of the alternating erfcx asymptotic series; the odd-order
+        # terms are +, the even-order terms - (integral of (-1)^k (2k-1)!!/(2s^2)^k).
+        term0 = jnp.log(b / a)
+        term1 = 0.25 * (inv_b2 - inv_a2)
+        term2 = -(3.0 / 16.0) * (inv_b2 ** 2 - inv_a2 ** 2)
+        term3 = (5.0 / 16.0) * (inv_b2 ** 3 - inv_a2 ** 3)
+        term4 = -(105.0 / 128.0) * (inv_b2 ** 4 - inv_a2 ** 4)
+        term5 = (945.0 / 320.0) * (inv_b2 ** 5 - inv_a2 ** 5)
+        return (term0 + term1 + term2 + term3 + term4 + term5) / jnp.sqrt(jnp.pi)
+
+    @classmethod
+    def _integral_erfcx_jax(cls, a, b):
+        r"""``\int_a^b erfcx(s) ds`` for non-negative bounds (signed in ``b - a``).
+
+        ``[lo, min(hi, 8)]`` is integrated with a fixed 64-point Gauss-Legendre rule
+        (``erfcx`` is smooth and bounded there); ``[max(lo, 8), hi]`` uses the
+        closed-form asymptotic antiderivative.
+        """
+        a = jnp.asarray(a)
+        b = jnp.asarray(b)
+        lo = jnp.minimum(a, b)
+        hi = jnp.maximum(a, b)
+        sign = jnp.sign(b - a)
+        split = 8.0
+
+        c = jnp.minimum(hi, split)
+        nodes = jnp.asarray(_GAUSS_NODES)
+        weights = jnp.asarray(_GAUSS_WEIGHTS)
+        mid = 0.5 * (lo + c)
+        half = 0.5 * (c - lo)
+        pts = mid[..., None] + half[..., None] * nodes
+        gl = half * jnp.sum(weights * cls._erfcx_jax(pts), axis=-1)
+        gl = jnp.where(lo < split, gl, 0.0)
+
+        d = jnp.maximum(lo, split)
+        asy = cls._integral_erfcx_asympt_jax(d, hi)
+        asy = jnp.where(hi > split, asy, 0.0)
+        return sign * (gl + asy)
+
+    @classmethod
+    def _siegert_phi_core(cls, mu, sigma_square, tau_m_ms, tau_syn_ms, t_ref_ms, theta, v_reset):
+        r"""JAX three-branch Siegert transfer on broadcast arrays (Hz)."""
+        mu = jnp.asarray(mu)
+        sig2 = jnp.asarray(sigma_square)
+        sqrt_pi = jnp.sqrt(jnp.pi)
+
+        # Deterministic LIF (sigma^2 <= 0): guard the log argument to stay finite.
+        gap = jnp.where(mu > theta, mu - theta, 1.0)
+        ratio = jnp.where(mu > theta, (mu - v_reset) / gap, 2.0)
+        det = jnp.where(mu > theta, 1e3 / (t_ref_ms + tau_m_ms * jnp.log(ratio)), 0.0)
+
+        sigma = jnp.sqrt(jnp.maximum(sig2, 1e-12))
+        shift = (cls._ALPHA / 2.0) * jnp.sqrt(tau_syn_ms / tau_m_ms)
+        y_th = (theta - mu) / sigma + shift
+        y_r = (v_reset - mu) / sigma + shift
+        e_th = jnp.exp(-y_th * y_th)
+
+        # Clamp heavy-function arguments to their valid (non-negative) ranges; this
+        # is a no-op in each branch's *selected* region and keeps the unused branches
+        # finite (value-safe jnp.where).
+        yth_p = jnp.maximum(y_th, 0.0)
+        yr_p = jnp.maximum(y_r, 0.0)
+        myth_p = jnp.maximum(-y_th, 0.0)
+        myr_p = jnp.maximum(-y_r, 0.0)
+
+        # Branch A: y_r > 0.
+        iA = cls._integral_erfcx_jax(yr_p, yth_p)
+        expd = jnp.exp(jnp.minimum(y_r * y_r - y_th * y_th, 0.0))
+        integ_A = 2.0 * cls._dawsn_jax(yth_p) - 2.0 * expd * cls._dawsn_jax(yr_p) - e_th * iA
+        rate_A = 1e3 * e_th / (e_th * t_ref_ms + tau_m_ms * sqrt_pi * integ_A)
+
+        # Branch B: y_th < 0.
+        iB = cls._integral_erfcx_jax(myth_p, myr_p)
+        rate_B = 1e3 / (t_ref_ms + tau_m_ms * sqrt_pi * iB)
+
+        # Branch C: y_r <= 0 <= y_th.
+        iC = cls._integral_erfcx_jax(yth_p, myr_p)
+        integ_C = 2.0 * cls._dawsn_jax(yth_p) + e_th * iC
+        rate_C = 1e3 * e_th / (e_th * t_ref_ms + tau_m_ms * sqrt_pi * integ_C)
+
+        rate = jnp.where(y_r > 0.0, rate_A, jnp.where(y_th < 0.0, rate_B, rate_C))
+        # Brunel (2000) deep-subthreshold fast path.
+        rate = jnp.where((theta - mu) > 6.0 * sigma, 0.0, rate)
+        rate = jnp.where(sig2 <= 0.0, det, rate)
+        return jnp.maximum(rate, 0.0)
+
+    def _siegert_phi_jax(self, mu: ArrayLike, sigma_square: ArrayLike):
+        r"""Evaluate the JAX Siegert transfer with this model's parameters (Hz).
+
+        JAX-lowering counterpart of :meth:`siegert_rate`: ``mu`` / ``sigma_square``
+        may be tracers, the model parameters are folded in as static constants, and
+        the result is a ``jax.numpy`` array that composes under
+        ``brainstate.transform`` primitives.
+
+        Parameters
+        ----------
+        mu : ArrayLike
+            Drift input (mean membrane potential shift), broadcastable with
+            ``sigma_square`` and the model parameters.
+        sigma_square : ArrayLike
+            Diffusion input (membrane potential variance); non-negative.
+
+        Returns
+        -------
+        rate : jax.Array
+            Firing rate in Hz (broadcast shape of inputs and parameters).
+
+        See Also
+        --------
+        siegert_rate : Eager SciPy / Gauss-Legendre quadrature oracle.
+        """
+        theta = jnp.asarray(self._to_numpy(self.theta))
+        v_reset = jnp.asarray(self._to_numpy(self.V_reset))
+        tau_m_ms = jnp.asarray(self._to_numpy_ms(self.tau_m))
+        tau_syn_ms = jnp.asarray(self._to_numpy_ms(self.tau_syn))
+        t_ref_ms = jnp.asarray(self._to_numpy_ms(self.t_ref))
+        return self._siegert_phi_core(
+            jnp.asarray(mu), jnp.asarray(sigma_square),
+            tau_m_ms, tau_syn_ms, t_ref_ms, theta, v_reset,
+        )
+
     def siegert_rate(self, mu: ArrayLike, sigma_square: ArrayLike):
         r"""Evaluate the NEST-compatible Siegert transfer function.
 
@@ -691,18 +888,26 @@ class siegert_neuron(NESTNeuron):
     def update(self, x=0.0, drift_input: ArrayLike = 0.0, diffusion_input: ArrayLike = 0.0):
         r"""Advance the Siegert rate by one step (NEST non-WFR semantics).
 
-        Drift coupling is read continuously from the substrate seam
-        (:math:`\mu = \mathrm{sum\_current\_inputs}(x, r) + \mathrm{sum\_delta\_inputs}(0)`)
-        plus the direct ``drift_input`` and the intrinsic ``mean``. Diffusion is taken
-        from the direct ``diffusion_input`` only -- network diffusion routing
-        (``DiffusionConnection``) is deferred to goal 15c.
+        Drift and diffusion are read from the dual-channel substrate seam that a
+        :class:`~brainpy_state.diffusion_connection` deposits into (goal 15c,
+        design A):
 
-        .. note::
-            The Siegert transfer function is a host-side special-function integral
-            (Gauss-Legendre / SciPy on concrete values); this step therefore runs
-            **eagerly** and does *not* lower under ``brainstate.transform.for_loop``
-            / ``jit``. Drive it with an eager host loop (or, once goal 15c lands the
-            diffusion substrate, a precompute-then-propagate bridge).
+        - drift  :math:`\mu = \mathrm{sum\_current\_inputs}(x, r)
+          + \mathrm{drift\_input} + \mathrm{sum\_delta\_inputs}(0,\ \text{label}=`
+          ``'diffusion_mu'`` :math:`)`,
+        - diffusion :math:`\sigma^2 = \mathrm{diffusion\_input}
+          + \mathrm{sum\_delta\_inputs}(0,\ \text{label}=` ``'diffusion_sigma2'``
+          :math:`)`.
+
+        The two channels carry distinct labels so a single ``diffusion_connection``
+        making two seam deposits (``drift_factor * rate`` and
+        ``diffusion_factor * rate``) never cross-contaminates :math:`\mu` and
+        :math:`\sigma^2`. The rate then relaxes by the exact exponential propagator
+        :math:`r \leftarrow P_1 r + P_2(\mathrm{mean} + \Phi)`.
+
+        The Siegert transfer is evaluated with the JAX port :meth:`_siegert_phi_jax`,
+        so the whole step lowers under ``brainstate.transform.for_loop`` / ``jit``
+        (drive it with those, not a bare Python loop).
 
         Parameters
         ----------
@@ -716,39 +921,30 @@ class siegert_neuron(NESTNeuron):
 
         Returns
         -------
-        rate_new : ndarray
+        rate_new : jax.Array
             Updated firing rate in Hz (shape ``self.rate.value.shape``).
         """
-        dftype = brainstate.environ.dftype()
         h = float(u.get_mantissa(brainstate.environ.get_dt() / u.ms))
         state_shape = self.rate.value.shape
+        rate_prev = jnp.asarray(self.rate.value)
 
-        # Drift from the standard Dynamics seam (eager host read) + direct arg + mean.
-        drift_direct = self._broadcast_to_state(
-            self._to_numpy(self.sum_current_inputs(x, self.rate.value) + drift_input + self.sum_delta_inputs(0.0)),
-            state_shape,
-        )
-        mu_total = drift_direct
-        # Diffusion: direct argument only for goal 15a (network diffusion -> 15c).
-        sigma_square_total = self._broadcast_to_state(self._to_numpy(diffusion_input), state_shape)
+        # Drift: current-input seam + direct arg + labeled diffusion-drift channel.
+        mu_total = (self.sum_current_inputs(x, rate_prev) + drift_input
+                    + self.sum_delta_inputs(0.0, label='diffusion_mu'))
+        # Diffusion (variance): direct arg + labeled diffusion-variance channel.
+        sigma_square_total = (diffusion_input
+                              + self.sum_delta_inputs(0.0, label='diffusion_sigma2'))
 
-        rate_prev = self._broadcast_to_state(self._to_numpy(self.rate.value), state_shape)
-        tau = self._broadcast_to_state(self._to_numpy_ms(self.tau), state_shape)
-        mean = self._broadcast_to_state(self._to_numpy(self.mean), state_shape)
-        tau_m = self._broadcast_to_state(self._to_numpy_ms(self.tau_m), state_shape)
-        tau_syn = self._broadcast_to_state(self._to_numpy_ms(self.tau_syn), state_shape)
-        t_ref = self._broadcast_to_state(self._to_numpy_ms(self.t_ref), state_shape)
-        theta = self._broadcast_to_state(self._to_numpy(self.theta), state_shape)
-        v_reset = self._broadcast_to_state(self._to_numpy(self.V_reset), state_shape)
+        drive = self._siegert_phi_jax(mu_total, sigma_square_total)
 
-        drive = self._siegert_array(mu_total, sigma_square_total, tau_m, tau_syn, t_ref, theta, v_reset)
-
-        p1 = np.exp(-h / tau)
-        p2 = -np.expm1(-h / tau)
-        rate_new = p1 * rate_prev + p2 * (mean + drive)
+        tau = jnp.asarray(self._to_numpy_ms(self.tau))
+        mean = jnp.asarray(self._to_numpy(self.mean))
+        p1 = jnp.exp(-h / tau)
+        p2 = -jnp.expm1(-h / tau)
+        rate_new = jnp.broadcast_to(p1 * rate_prev + p2 * (mean + drive), state_shape)
 
         self.rate.value = rate_new
         # NEST non-WFR: outgoing delayed/instant buffers carry the final rate.
-        self.delayed_rate.value = np.array(rate_new, dtype=dftype, copy=True)
-        self.instant_rate.value = np.array(rate_new, dtype=dftype, copy=True)
+        self.delayed_rate.value = rate_new
+        self.instant_rate.value = rate_new
         return rate_new
