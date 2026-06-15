@@ -301,11 +301,20 @@ documented skipped placeholders, their per-edge tripartite physics already valid
 
 ### 3.9 Spatial demos
 
+The spatial API landed (goal 20): `brainpy.state.spatial.*` (layers, distance, `gaussian`
+kernel, masks, `spatial_pairwise_bernoulli`, query helpers) + `Simulator.create(positions=)`
+and `get_position`. Four representative demos are ported with live-NEST parity (NEST 3.9.0);
+the remaining `spatial/` tutorials are variants over the same primitives. See `network-api-gap.md`
+§3.10 for the API-surface status and `examples/nest/README.md` §3.9.
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `spatial/` (subdir) | missing | none | depends on `nest.spatial.*` which is absent (`network-api-gap.md` §3.10). Blocked by that P2. |
-| `csa_example.py` | missing | none | Connection Set Algebra — `conngen` rule, also absent |
-| `csa_spatial_example.py` | missing | none | |
+| `spatial/grid_iaf.py` | done | `examples/nest/spatial_grid_iaf.py` | 4×3 grid; exact coord + centre parity vs NEST `GetPosition`/`FindCenterElement` |
+| `spatial/gaussex.py` | done | `examples/nest/spatial_gaussex.py` | Gaussian kernel + circular mask; empirical `p(d)` matches NEST bin-by-bin (max\|Δ\|≈0.016) |
+| `spatial/test_3d_gauss.py` | done | `examples/nest/spatial_3d_gauss.py` | 3-D free layer + box mask + no autapses; curve parity (max\|Δ\|≈0.008) |
+| `csa_spatial_example.py` | done (native) | `examples/nest/spatial_csa.py` | CSA Gaussian re-expressed as `spatial_pairwise_bernoulli(gaussian, circular)` — no libneurosim |
+| `csa_example.py` | placeholder | `examples/nest/csa_example.py` | CSA/`conngen` mechanism not ported; documents `csa.random(0.1)` → `pairwise_bernoulli(0.1)` |
+| `spatial/` (other tutorials) | missing | none | `conncon_*`, `connex*`, `grid_iaf_oc`, `test_3d`, … — variants over the now-present primitives |
 
 ### 3.10 Pedagogical / advanced
 

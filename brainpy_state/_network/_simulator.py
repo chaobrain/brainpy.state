@@ -442,16 +442,35 @@ class Simulator(brainstate.nn.Module):
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
         self._connections = []                # (pre_pop, post_pop, model_name, proj), registration order
+        self._positions = {}                  # id(pop) -> (n, ndim) Quantity coords (spatial populations)
 
     # -- node creation -----------------------------------------------------
-    def create(self, model_cls, size=1, *, params=None, **kw) -> NodeView:
+    def create(self, model_cls, size=1, *, params=None, positions=None, **kw) -> NodeView:
         """Instantiate a population/device and return a :class:`NodeView`.
 
         Generators are deferred (realised per target at :meth:`connect`) so each
         target receives an independent train, mirroring NEST fan-out.
+
+        ``positions=<spatial layer>`` attaches node coordinates to a neuron
+        population (NEST ``Create(model, positions=spatial.grid/free(...))``). A
+        :func:`~brainpy_state._nest_spatial.grid` / concrete
+        :func:`~brainpy_state._nest_spatial.free` layer *derives* the population
+        size from its coordinates (the ``size`` argument is ignored); a deferred
+        ``free`` layer (sampled from a distribution) draws ``size`` positions. The
+        coordinates are stored under ``id(population)`` so a
+        :func:`~brainpy_state._nest_spatial.spatial_pairwise_bernoulli` rule can be
+        bound to them at :meth:`connect`.
         """
         p = dict(params or {})
         p.update(kw)
+        coords = None
+        if positions is not None:
+            if _is_generator(model_cls):
+                raise ValueError(
+                    'create(positions=...) is not supported for generators/injectors; '
+                    'spatial layers attach to neuron populations.'
+                )
+            size, coords = self._resolve_positions(positions, size)
         if _is_generator(model_cls):
             k = _n_channels(size)
             if k > 1:
@@ -466,6 +485,8 @@ class Simulator(brainstate.nn.Module):
             return NodeView([_GenSegment(_GeneratorSpec(model_cls, p))])
         mod = model_cls(size, **p)
         setattr(self, f'_node_{id(mod)}', mod)
+        if coords is not None:
+            self._positions[id(mod)] = coords      # spatial layer -> per-population coords
         # Volume transmitters are driven in phase 0 (before projections) and expose
         # the dopamine concentration ``n`` as State; they emit no spikes, so they
         # get no _SpikeHolder (phase 2 skips them) and are registered for phase 0.
@@ -487,6 +508,83 @@ class Simulator(brainstate.nn.Module):
         if getattr(mod, '_emission_attr', None) is not None:
             setattr(self, f'_emit_holder_{id(mod)}', _SpikeHolder(_flat_size(mod)))
         return NodeView.of(mod)
+
+    def get_position(self, view: NodeView):
+        """Node coordinates of a spatial population/view (NEST ``GetPosition``).
+
+        Parameters
+        ----------
+        view : NodeView
+            A single-segment view over a population created with ``create(positions=...)``.
+
+        Returns
+        -------
+        Quantity
+            ``(n, ndim)`` coordinates (length units) in the view's node order.
+
+        Raises
+        ------
+        ValueError
+            If the population was not created with ``positions=``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            >>> from brainpy import state as bp
+            >>> import brainunit as u
+            >>> sim = bp.Simulator(dt=0.1 * u.ms)
+            >>> pop = sim.create(bp.iaf_psc_alpha, positions=bp.spatial.grid([4, 3], extent=[2.0, 1.5]))
+            >>> [round(float(v), 2) for v in u.get_magnitude(sim.get_position(pop).to(u.um))[0]]
+            [-0.75, 0.5]
+        """
+        seg = view.segments[0]
+        try:
+            coords = self._positions[id(seg.population)]
+        except KeyError:
+            raise ValueError(
+                'get_position requires a population created with create(positions=...).'
+            )
+        return coords[seg.indices]
+
+    def _resolve_positions(self, layer, size):
+        """Resolve a spatial layer to ``(n, coords)`` for :meth:`create`.
+
+        Concrete layers (``grid`` / array-backed ``free``) derive the population
+        size from their coordinates; a deferred ``free`` layer draws ``size``
+        positions from its distribution with a reproducible per-population key.
+        """
+        if layer.is_deferred:
+            n = _n_channels(size)
+            key = jax.random.key(self._derive_seed(None, len(self._positions)))
+            return n, layer.sample(n, key)
+        return layer.n, layer.coords
+
+    def _bind_spatial_coords(self, rule, pre_seg, post_seg):
+        """Bind a spatial rule to the sliced pre/post coordinates of this connect.
+
+        Looks up each population's stored coordinates (from ``create(positions=...)``),
+        slices them by the segment's local indices so the rows align with the edge
+        index space the projection uses, and returns a coordinate-bound rule clone.
+        Raises if either side is a device/generator (no population) or was not created
+        with positions.
+        """
+        pre_pop = pre_seg.population
+        post_pop = post_seg.population
+        if pre_pop is None or post_pop is None:
+            raise ValueError(
+                'a spatial connection rule requires neuron populations on both sides; '
+                'generators/devices carry no positions.'
+            )
+        try:
+            pre_all = self._positions[id(pre_pop)]
+            post_all = self._positions[id(post_pop)]
+        except KeyError:
+            raise ValueError(
+                'a spatial connection rule requires both populations to be created '
+                'with create(positions=...).'
+            )
+        return rule.with_coords(pre_all[pre_seg.indices], post_all[post_seg.indices])
 
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
@@ -1140,6 +1238,11 @@ class Simulator(brainstate.nn.Module):
                       receptor_type=None, synapse=None, vt=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
+        # Spatial rule: bind this connect's sliced pre/post coordinates onto a pure
+        # rule clone before any dispatch, so every downstream path (static, plastic,
+        # diffusion, gap, sic) samples an identical, coordinate-bound rule.
+        if getattr(rule, '_is_spatial', False):
+            rule = self._bind_spatial_coords(rule, pre_seg, post_seg)
         # Diffusion coupling (siegert mean-field): a diffusion_connection is not a
         # plastic projection -- the Simulator routes it as a dual-channel seam deposit
         # (drift -> mu, diffusion -> sigma^2). Dispatch before the plastic path.
