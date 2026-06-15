@@ -203,6 +203,60 @@ objection into a Lessons entry, do **not** silently diverge.
   `third_factor_bernoulli_with_pool` astrocyte-pool rule (`network-api-gap.md`) — the next
   astrocyte-network cluster.
 
+### 17-rate-demos — 2026-06-15
+
+- **Shipped:** the two remaining §3.6 **rate-network demos** on the `Simulator` API, each a
+  runnable script + live-NEST parity test + NEST-free companion (cluster-16 house style):
+  `examples/nest/lin_rate_ipn_network.py` (E/I `lin_rate_ipn`, delayed-E + instantaneous-I)
+  and `examples/nest/rate_neuron_dm.py` (two-unit rectified WTA decision). Tests:
+  `_nest/_validation/lin_rate_ipn_network_test.py` (8), `rate_neuron_dm_test.py` (8). Docs:
+  `examples/nest/README.md` §3.6 + `docs/nest-status/internal/examples-gap.md` rows flipped.
+  **No substrate change** (the 15a rate core sufficed). Branch
+  `worktree-nest-goal+17-rate-demos`, **PR #68**. §3.6 is now complete bar `ht_neuron`.
+- **Parity (vs live NEST 3.9, `use_wfr=False`):**
+  - lin_rate_ipn_network: a deterministic (`sigma=0`) instrument net's fixed point == closed
+    form `(λI−W)⁻¹μ` == NEST to **atol 1e-3**; per-neuron trajectory == NEST with
+    **`align_steps=12`** (`TraceTolerance` 1e-4/1e-4). FP is delay- and dt-invariant; the
+    random demo net is covered by a smoke run.
+  - rate_neuron_dm: deterministic strong-bias winner **11.0 / loser 0 on both sims exactly**;
+    strong ±bias decision direction **5/5 and 0/5 identical**; zero-bias both-win balance
+    (brainpy 1:4, NEST 2:3 over 5 seeds; seed-mean < 0.85·gap).
+- **API discovered/changed:** none (no substrate edit). Contracts the next rate cluster reuses:
+  - **`rectify_output` is correct in a *recurrent* rate loop** (the goal R1 arbiter): the
+    rectified `rate` is what the seam holder emits, so a loser clamped to 0 deposits 0 into its
+    partner — clean WTA, no special-casing.
+  - **Two-phase μ-protocols set `mu` at construction, not by mutating the node.** `NodeView`
+    (the `create()` return) does **not** forward attribute writes to the wrapped module, so
+    `d1.mu = 1+dE` sets a dead attribute on the *view* and the dynamics never see it. Because
+    `simulate()` re-inits state to `rate_init` each call, building a fresh per-phase net with
+    that phase's `mu` is **numerically identical** to NEST's mutate-and-continue (both evidence
+    phases start from `rate=0`, sharing one RNG stream) — and idiomatic.
+- **Gotchas:**
+  - **Few-seed unbias bands must reject only the *fully one-sided* case.** With 5 seeds an
+    unbiased WTA can only split 3:2 / 4:1 / 5:0 → seed-mean |D1−D2| ∈ {2,6,10}·(winner/5). A
+    4:1 sampling lean (≈6) is normal, so a `< 0.5·gap` band wrongly fails it; the robust test
+    is **both units win ≥1** (rejects 5:0) + a magnitude guard `< 0.85·gap` (rejects only ≈10).
+    The plan's original `mean(|mean(r1)−mean(r2)|)` measured per-seed *contrast* (~10), not
+    bias — wrong statistic; average the **signed** rates over seeds first.
+  - **The `sigma=0` anchor is the tight cross-sim arbiter; noisy runs are distributional.**
+    Random connectivity (lin_rate net) and the WTA attractor (dm) both PRNG-diverge, so a
+    per-sample NEST match is meaningless there — anchor on the closed form / `sigma=0` and
+    compare seeds otherwise (same discipline as clusters 14 / 22).
+  - **`fixed_outdegree` has no brainpy rule → map to `fixed_indegree`** with
+    `K_in = N_src·K_out/N_tgt` (same expected in-degree, hence the same mean-field input).
+  - **dm uses `dt=0.1` ms (not upstream `1e-3`)** for runtime; both sims share `dt`, so the
+    decision parity is unaffected (the converged winner rate is `dt`-independent).
+  - **NEST repo actually lives at `/mnt/d/codes/githubs/nest-simulator`**, NOT the
+    `…/computational_neuroscience/nest-simulator` path in CLAUDE.md (stale; do not edit theirs).
+  - **Coverage:** both example modules **97 %** (only the `if __name__=='__main__'` line is
+    uncovered; `main()` plotting carries `# pragma: no cover`). Use `coverage run -m pytest`
+    + report-time `--include=` — `coverage run --source=…` still SIGABRTs on absl double-init.
+- **For next clusters:** the 15a rate substrate + these ports leave only `ht_neuron`
+  intrinsic-currents demos in §3.6 (they need a single-neuron intrinsic-currents primitive,
+  not continuous coupling). Reuse: per-phase reconstruction for any "change a scalar param
+  mid-run" protocol; the both-win + magnitude-guard recipe for few-seed unbias. Still deferred
+  from 15a/15c: **sparse graded/rate emission** (only `comm='dense'` is wired).
+
 ### 15c-siegert-diffusion — 2026-06-15
 
 - **Shipped:** the **Siegert mean-field node + dual-channel `diffusion_connection`** on the
