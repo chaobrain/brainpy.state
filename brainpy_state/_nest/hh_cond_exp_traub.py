@@ -322,6 +322,10 @@ class hh_cond_exp_traub(NESTNeuron):
     _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 100000
 
+    #: Unit the multi-receptor ``connect(receptor_type=k)`` bridge uses to scale the
+    #: gathered per-port deposit into the ``w_by_rec`` mantissa (conductance -> nS).
+    receptor_input_unit = u.nS
+
     def __init__(
         self,
         in_size: Size,
@@ -369,6 +373,12 @@ class hh_cond_exp_traub(NESTNeuron):
         self.Inact_h_init = Inact_h_init
         self.Act_n_init = Act_n_init
         self.gsl_error_tol = gsl_error_tol
+
+        # Two synaptic receptors (g_ex / g_in) addressable by ``connect(receptor_type=k)``:
+        # the Simulator's multi-receptor bridge gathers per-port conductance jumps into a
+        # ``(*varshape, n_receptors)`` blob and passes it to ``update(w_by_rec=...)``;
+        # column 0 -> g_ex (receptor 1), column 1 -> g_in (receptor 2).
+        self.n_receptors = 2
 
         self._validate_parameters()
 
@@ -684,7 +694,7 @@ class hh_cond_exp_traub(NESTNeuron):
         new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable, 'V_old': new_V_old})
         return new_state, new_extra
 
-    def update(self, x=0. * u.pA):
+    def update(self, x=0. * u.pA, w_by_rec=None):
         r"""Update neuron state for one simulation step.
 
         Integrates the 6-dimensional ODE system for one time step using adaptive
@@ -709,6 +719,12 @@ class hh_cond_exp_traub(NESTNeuron):
             () or (\*in_size,). This current is added
             to the constant ``I_e`` parameter and any registered current inputs
             via ``add_current_input()``.
+        w_by_rec : ArrayLike or None, optional
+            Per-receptor conductance jumps gathered by the Simulator's multi-receptor
+            bridge, shape ``(*varshape, n_receptors)`` in nanosiemens -- column 0 is the
+            excitatory port (``g_ex``), column 1 the inhibitory port (``g_in``). ``None``
+            (the default) selects the legacy self-pull path (``label='w_ex'/'w_in'`` delta
+            inputs), so direct calls and the BrainPy-style API are unchanged.
 
         Returns
         -------
@@ -818,9 +834,19 @@ class hh_cond_exp_traub(NESTNeuron):
         # Decrement refractory counter.
         r = u.math.where(r > 0, r - 1, r)
 
-        # Synaptic spike inputs (applied after integration).
-        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
-        w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
+        # Synaptic spike inputs (applied after integration). Two delivery paths: the
+        # Simulator's multi-receptor bridge pre-gathers per-receptor conductance jumps
+        # (nS mantissa, shape ``(*varshape, n_receptors)``) and passes them via
+        # ``w_by_rec`` -- column 0 -> g_ex, column 1 -> g_in; the legacy BrainPy-style path
+        # self-pulls the ``label='w_ex'/'w_in'`` delta inputs. Only the *source* of
+        # ``w_ex``/``w_in`` changes; the exponential kinetics below consume them unchanged.
+        if w_by_rec is not None:
+            w_by_rec = jnp.asarray(w_by_rec, dtype=dftype)
+            w_ex = w_by_rec[..., 0] * u.nS
+            w_in = w_by_rec[..., 1] * u.nS
+        else:
+            w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
+            w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
 
         # Apply synaptic spike inputs (instantaneous conductance jump).
         g_ex = g_ex + w_ex
