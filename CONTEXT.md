@@ -88,10 +88,11 @@ objection into a Lessons entry, do **not** silently diverge.
   0.1.0.
 - **Imperative / NOT JAX-native (needs rebuild or bypass):**
   - Synapses — all of `_nest/*_synapse.py` (rebuild, Part 2).
-  - **Rate/continuous models** — `rate_neuron_ipn/opn`, `lin_rate`, `gauss_rate`,
-    `sigmoid_rate*`, `siegert_neuron`, `aeif_cond_alpha_astro`,
-    `diffusion_connection` carry the same `_queue` pattern. These are **bucket 3**
-    and co-designed with `ContinuousCoupledProj`.
+  - **Rate/continuous models** — were the `_queue`-pattern **bucket 3**. Rebuilt on the
+    seam-(H) substrate: `rate_neuron_ipn/opn`, `lin_rate`, `gauss_rate`, `sigmoid_rate*`,
+    `siegert_neuron`, `step_rate_generator`, `rate_transformer_node` (15a);
+    `aeif_cond_alpha_astro` + `astrocyte_lr_1994` + `sic_connection` (15d). **Only the
+    Siegert `diffusion_connection` still carries `_queue`** — deferred to 15c.
   - Recording — `multimeter` is imperative; the Simulator **bypasses** it by
     tapping `State` into the `for_loop` output (analog recording, built in `02`).
     Do not gut multimeter; tap State.
@@ -137,6 +138,81 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **Gotchas:** <NEST-fidelity traps, numerical pitfalls, dt/delay conventions>.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
+
+### 15d-astro — 2026-06-15
+
+- **Shipped:** the **bidirectional neuron↔astrocyte SIC loop on the JAX substrate** — the
+  **last bucket-3 *model* cluster** (the one remaining bucket-3 item is the Siegert
+  `diffusion_connection`, still deferred to 15c). `astrocyte_lr_1994` emits
+  its slow-inward current as seam-(H) continuous graded **current** emission; a one-way
+  `sic_connection` deposits `weight·SIC` into `aeif_cond_alpha_astro`'s labelled `'I_SIC'`
+  current channel through a new `as_current` `EventProjection` mode; the neuron→astro arm
+  stays the ordinary delta path (`Δ_IP3·w` IP3 via `sum_delta_inputs`). The host-side
+  `_sic_queue` event-emulator on the neuron and `sic_connection`'s host-queue coeff-array
+  API are **deleted** (the de-queue), so the whole loop lowers under `Simulator.simulate`.
+  Files: `_nest/astrocyte_lr_1994.py` (`_emission_attr='SIC'`, `_emission_continuous`,
+  `_emission_current`, `_emission_current_label='I_SIC'`; spike read via `sum_delta_inputs`),
+  `_nest/aeif_cond_alpha_astro.py` (de-queue: 6 host-queue helpers + `_sic_queue`/`_sic_step`
+  removed, `sic_events` kwarg dropped; labelled `I_SIC` current read before the unlabelled
+  `I_stim` read), `_nest/sic_connection.py` (host-queue API trimmed 991→664 lines → thin
+  NEST-parity status spec), `_network/_event_proj.py` (`as_current` deposit mode),
+  `_network/_simulator.py` (`_connect_sic` dispatch + `'I_SIC':('I_sic',)` recordable alias).
+  Tests: `_event_proj_current_test`, `astrocyte_lr_1994_test` (+emission), `aeif_cond_alpha_astro_test`
+  (+SIC channel), `_simulator_sic_test`, `sic_connection_test` (de-queue + validators),
+  `_nest/_validation/astrocyte_sic_test.py` (live-NEST parity). Branch
+  `worktree-nest-goal+15d-astro`.
+- **Parity (vs live NEST 3.9.0, dt=0.1ms; exact-after-`align_steps`):**
+  - **SIC-response micro** (spike_generator → astro → sic → post): IP3 `2.4e-5`, Ca
+    `1.9e-4`, I_SIC `2.3e-4` aligned max|Δ|.
+  - **Driven loop** (aeif `I_e=1000pA` → astro → sic → post, Ca crosses SIC_th): IP3 `0.0`
+    (exact), Ca `9.9e-7`, I_SIC `6.0e-4`, V_pre `3.7e-4 mV`.
+  - **Astro-network distributional** (N post `I_e=700pA`; Poisson → astro → sic → post):
+    seed-mean post rate `NEST 9.0 = BP 9.0` (SIC off) → `14.0 = 14.0` (SIC on) — the
+    SIC-raises-firing law (+5 Hz), **identical** on both sims, near-zero seed variance.
+- **A resolved → option (a) `synapse=sic_connection(w)`.** The SIC crosses the seam as a
+  **continuous graded current**, not a discrete event. `Simulator.connect(astro, neuron,
+  synapse=sic_connection(weight=w))` dispatches (via `isinstance`) to `_connect_sic`, which
+  enforces the NEST sender/receiver contract (`sic_connection.check_connection`), reads the
+  astrocyte's `_emit_holder`, and builds an `as_current` `EventProjection` into the post's
+  `'I_SIC'` channel. No bespoke SIC primitive — the existing seam-(H) emitter + one new
+  deposit-mode flag suffice.
+- **API discovered/changed (reuse downstream):**
+  - **`EventProjection(..., as_current=False)`** — when `True`, deposits the dense graded
+    contribution via `post.add_current_input(key, contrib, label=...)` instead of
+    `add_delta_input`. The route for any **pA current that enters `dV/dt`** (vs a
+    delta/conductance). Rejects `comm='sparse'` (binarises the presynaptic value).
+  - **`_emission_current=True` + `_emission_current_label='I_SIC'`** on an emitter pop tells
+    `_connect_sic` to route into a labelled current channel; the generic
+    `create()`/phase-2 holder capture already handles any `_emission_attr` pop (no change).
+  - **`sic_connection.delay_steps`**: NEST's default `delay=1.0 ms` is **10 steps** at
+    dt=0.1, so `delay_steps=10` rides it; `delay_steps=1` (min delay) rides only the
+    intrinsic one-step pipeline lag. `(delay_steps−1)` extra steps = `InputDelay` (mirrors
+    the deleted queue's `base_offset`).
+- **Gotchas:**
+  - **Read-order collision — labelled before unlabelled.** The post's labelled `I_SIC`
+    current read (`sum_current_inputs(0, V, label='I_SIC', pop=True)`) **must precede** the
+    unlabelled `I_stim` read (`sum_current_inputs(x, V)` with `label=None`, which sums **all**
+    current channels). Reversed, the device `I_stim` read would consume + double-count the
+    SIC deposit. This was the Phase-3 RED (`units do not match: pA != 1`).
+  - **Current, not delta.** SIC is a pA current; depositing it on the default delta channel
+    is silently wrong. `as_current=True` is mandatory; `comm='dense'` is mandatory (graded).
+  - **`sum_delta_inputs(spike_weights)` is backward-compatible**: returns its arg unchanged
+    when no delta inputs are registered, so the astrocyte's standalone `update(spike_weights=…)`
+    still works while the Simulator's neuron→astro deposits now also reach IP3.
+  - **Recordable alias gap.** The Simulator's multimeter needs `_RECORDABLE_ALIAS['I_SIC'] =
+    ('I_sic',)` to map the NEST recordable name to the State; the astro cluster had no
+    Simulator integration before, so this was a genuine pre-existing hole.
+  - **Coverage on touched lines** (whole-file is misleading on the shared `_event_proj.py`
+    60 % / `_simulator.py` 53 %): touched lines covered; `sic_connection` 98 %, aeif 94 %,
+    astrocyte 91 %.
+- **For next clusters:** every bucket-3 **model** is now on the substrate; the sole
+  remaining bucket-3 item is the Siegert `diffusion_connection` (still carries the host
+  `_queue`; supplies network `(μ, σ²)`) — **15c**. **§3.8 astrocyte demos are unblocked
+  (→ 17b):** `astrocyte_single` /
+  `astrocyte_interaction` are substrate-ready (the exact loop is validated); `small_network`
+  / `astrocyte_brunel_*` additionally need NEST's `TripartiteConnect` astrocyte-pool rule
+  (`third_factor_bernoulli_with_pool`) — **out of scope** (no new connectivity rule). Still
+  unwired everywhere: **sparse graded emission** (only `comm='dense'` graded deposit exists).
 
 ### 15a-rate-core — 2026-06-15
 

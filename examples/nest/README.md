@@ -498,9 +498,17 @@ packet width plus per-step count profile (pulsepacket) — alongside the qualita
 each demo exists to show. The pulsepacket membrane excursion is checked NEST-free against
 the analytical solution.
 
-> NEST's §3.8 **astrocyte** demos (`astrocytes/`) are out of scope here: they need the
-> bucket-3 `sic_connection` plus an astrocyte rate model, so they are the natural next
-> target once that machinery lands.
+> NEST's §3.8 **astrocyte** demos (`astrocytes/`): the neuron↔astrocyte SIC-loop machinery
+> **landed in cluster 15d** (the last bucket-3 *model* cluster; only the Siegert
+> `diffusion_connection` remains queued → 15c). `astrocyte_lr_1994` emits its
+> slow-inward current through the seam-(H) continuous-emission path, and a one-way
+> `sic_connection` deposits `weight·SIC` into `aeif_cond_alpha_astro`'s `'I_SIC'` current
+> channel via an `as_current` `EventProjection`; the whole bidirectional loop lowers under
+> `Simulator.simulate` and matches live NEST near-exactly
+> (`_validation/astrocyte_sic_test.py`). `astrocyte_single` and `astrocyte_interaction`
+> are therefore **substrate-ready** (demo port pending); the `small_network` /
+> `astrocyte_brunel_*` variants additionally need NEST's `TripartiteConnect` astrocyte-pool
+> rule, which is out of scope.
 
 ## Validation
 
