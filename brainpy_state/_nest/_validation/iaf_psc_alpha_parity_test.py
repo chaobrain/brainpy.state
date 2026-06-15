@@ -35,23 +35,26 @@ def _bp_neuron(I_e):
 
 
 def _bp_run(I_e, T_ms):
-    """Step the neuron and return (V_m trace in mV, spike count)."""
+    """Step the neuron and return (V_m trace in mV, spike count).
+
+    The whole sweep lowers into one compiled ``brainstate.transform.for_loop``
+    (CLAUDE.md rule #10): the per-step ``t``/``i`` are mapped in as ``xs`` and the
+    neuron ``State`` is carried automatically; the stacked ``(spk, V_m)`` outputs are
+    reduced host-side afterwards (instead of a per-step Python dispatch + device sync).
+    """
     neu = _bp_neuron(I_e)
     n_steps = int(round(T_ms / 0.1))
+    times = jnp.arange(n_steps) * 0.1 * u.ms
+    indices = jnp.arange(n_steps)
 
-    @brainstate.transform.jit
     def _step(t, i):
         with brainstate.environ.context(t=t, i=i):
             spk = neu.update()
             return spk, neu.V.value[0]
 
-    vs = []
-    spikes = 0
-    for k in range(n_steps):
-        spk, vk = _step(k * 0.1 * u.ms, k)
-        spikes += int(np.asarray(u.get_mantissa(spk)).reshape(-1)[0] >= 0.5)
-        vs.append(float(u.get_mantissa(vk / u.mV)))
-    return np.asarray(vs), spikes
+    spks, vs = brainstate.transform.for_loop(_step, times, indices)
+    spikes = int(np.sum(np.asarray(u.get_mantissa(spks)).reshape(-1) >= 0.5))
+    return np.asarray(u.get_mantissa(vs / u.mV)).reshape(-1), spikes
 
 
 @unittest.skipUnless(_HAS_NEST, "live NEST not importable")
@@ -118,14 +121,22 @@ class TestIafPscAlphaParity(unittest.TestCase):
             weight=50. * u.pA, delay=1.5 * u.ms)
         brainstate.nn.init_all_states(post)
         brainstate.nn.init_all_states(proj)
-        vs = []
-        for k in range(600):
-            box['v'] = jnp.ones(1) if k == 100 else jnp.zeros(1)  # spike at t=10 ms
-            with brainstate.environ.context(t=k * 0.1 * u.ms, i=k):
+        # One compiled for_loop (CLAUDE.md rule #10): the per-step input spike is mapped
+        # in as an xs array (a single spike at step 100 = t=10 ms), and the holder the
+        # projection reads is set from it inside the traced body -- the data dependency
+        # is established at trace time, so the delay buffer carries correctly per step.
+        spikes = jnp.zeros((600, 1)).at[100].set(1.0)
+        steps = jnp.arange(600)
+
+        def _step(i, spk):
+            box['v'] = spk
+            with brainstate.environ.context(t=i * 0.1 * u.ms, i=i):
                 proj.update()
                 post.update()
-                vs.append(float(u.get_mantissa(post.V.value[0] / u.mV)))
-        bp_v = np.asarray(vs)
+                return post.V.value[0]
+
+        bp_v = np.asarray(u.get_mantissa(
+            brainstate.transform.for_loop(_step, steps, spikes) / u.mV)).reshape(-1)
 
         m = min(len(nest_v), len(bp_v))
         nest_peak = int(np.argmax(nest_v[:m]))

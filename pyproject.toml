@@ -80,3 +80,15 @@ exclude = [
     ".gitignore",
     ".readthedocs.yml",
 ]
+
+
+[tool.pytest.ini_options]
+# Registered so `-m requires_nest` / `-m "not requires_nest"` don't emit an
+# "unknown mark" warning on every run. The marker is attached by the
+# `@requires_nest` decorator in `_nest/_validation/nest_compare.py`; the live-NEST
+# parity classes carry it (run by `nest-comparison.yml`, deselected by the fast CI
+# gate). Parallelism (`-n auto`) is set per-workflow in the CI command, not here, so
+# local and ad-hoc runs stay serial/explicit by default.
+markers = [
+    "requires_nest: live-NEST comparison test; needs the NEST simulator installed",
+]

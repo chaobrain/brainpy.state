@@ -176,6 +176,7 @@ def our_vt_n_trace(dopa_arrival, T, tau_n, *, sample_dt=1.0):
         Broadcast concentration at each sample time.
     """
     import brainstate
+    import jax.numpy as jnp
     import numpy as _np
     import brainunit as u
     from brainpy_state import Simulator, spike_generator, volume_transmitter
@@ -190,15 +191,23 @@ def our_vt_n_trace(dopa_arrival, T, tau_n, *, sample_dt=1.0):
 
     n_steps = int(round(T / DT))
     every = int(round(sample_dt / DT))
-    times, ns = [], []
-    for k in range(1, n_steps + 1):
+
+    # One compiled for_loop (CLAUDE.md rule #10) over the n_steps drive, instead of a
+    # per-step Python ``sim.update()``: map the 1-based step index in as xs, carry the
+    # Simulator State automatically, and stack the broadcast concentration; the sample
+    # grid (every ``sample_dt``) is sliced host-side afterwards.
+    def _step(k):
         t = k * DT
         with brainstate.environ.context(t=t * u.ms, i=k):
             sim.update(t * u.ms)
-        if k % every == 0:
-            times.append(round(t, 4))
-            ns.append(float(_np.asarray(vt_mod.n.value)[0]))
-    return np.asarray(times), np.asarray(ns)
+        return vt_mod.n.value[0]
+
+    n_trace = _np.asarray(
+        u.get_mantissa(brainstate.transform.for_loop(_step, jnp.arange(1, n_steps + 1)))
+    ).reshape(-1)
+    sample_k = _np.arange(every, n_steps + 1, every)
+    times = _np.round(sample_k * DT, 4)
+    return _np.asarray(times), n_trace[sample_k - 1]
 
 
 # ==========================================================================

@@ -275,19 +275,29 @@ parity is near-exact (`astrocyte_sic_test.py`): SIC-response micro IP3 `2.4e-5`/
 astro-network seed-mean post rate `9.0=9.0` (SIC off) → `14.0=14.0` (SIC on). The
 `sic_connection` default delay `1.0 ms` maps to `delay_steps=10`.
 
-The single-astrocyte and tripartite-interaction demos are therefore **substrate-ready**
-(await a demo-port cluster, 17b). The `small_network` / `astrocyte_brunel_*` variants
-additionally need NEST's `TripartiteConnect` astrocyte-pool rule
-(`third_factor_bernoulli_with_pool`), which is **out of scope** (cluster-15d spec §7 — no
-new connectivity rule); their per-edge tripartite physics, however, is now validated.
+The single-astrocyte and tripartite-interaction demos are now **ported** (cluster 17b)
+to `examples/nest/`, each with a live-NEST parity test. Porting `astrocyte_interaction`
+surfaced — and **fixed** — a latent gap: `aeif_cond_alpha_astro` could not receive
+ordinary excitatory/inhibitory **spike** input into its synaptic conductance through the
+`Simulator` (it self-pulls `label='w_ex'/'w_in'` but had no `n_receptors`/`w_by_rec`
+bridge to populate them), so the demo's Poisson drive left the presynaptic neuron at
+`E_L`. The model now exposes the multi-receptor bridge (`receptor_type=1`→`g_ex`,
+`=2`→`g_in`, positive nS — NEST's weight-sign routing), parity-validated in
+`aeif_cond_alpha_astro_test.py` (V_m/g_ex/g_in ~1e-6 vs live NEST). The same self-pull-only
+gap remains in sibling conductance neurons (`aeif_cond_alpha`, `aeif_cond_exp`,
+`iaf_cond_alpha`, `iaf_cond_beta`, `gif_cond_exp`, …) — tracked in `neurons-gap.md` as a
+follow-up. The `small_network` / `astrocyte_brunel_*` variants additionally need NEST's
+`TripartiteConnect` astrocyte-pool rule (`third_factor_bernoulli_with_pool`), which is
+**out of scope** (cluster-15d spec §7 — no new connectivity rule); they ship as
+documented skipped placeholders, their per-edge tripartite physics already validated.
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `astrocyte_single.py` | substrate-ready | none | one `astrocyte_lr_1994` + Poisson → IP3/Ca; astrocyte ODE validated (cluster, `astrocyte_lr_1994_test.py`). Demo port pending (17b) |
-| `astrocyte_interaction.py` | substrate-ready | none | tripartite two-neuron + one-astrocyte SIC loop — the exact topology wired & parity-validated in cluster 15d (`astrocyte_sic_test.py`). Demo port pending (17b) |
-| `astrocyte_small_network.py` | blocked | none | needs `TripartiteConnect` (`third_factor_bernoulli_with_pool` pool rule); out of scope (15d spec §7). Per-edge SIC physics validated |
-| `astrocyte_brunel_bernoulli.py` | blocked | none | Brunel + astrocytes via `TripartiteConnect`; same pool-rule blocker. Natural P0 port once the pool rule lands |
-| `astrocyte_brunel_fixed_indegree.py` | blocked | none | as above, fixed-indegree tripartite variant |
+| `astrocyte_single.py` | **implemented** | `examples/nest/astrocyte_single.py` | one `astrocyte_lr_1994` + Poisson → IP3/Ca, plus a downstream `aeif_cond_alpha_astro` to expose `I_SIC`. Live-NEST parity IP3/Ca/I_SIC (`astrocyte_single_test.py`, 17b) |
+| `astrocyte_interaction.py` | **implemented** | `examples/nest/astrocyte_interaction.py` | tripartite two-neuron + one-astrocyte SIC loop; faithful Poisson drive (spike→conductance fix). Live-NEST parity V_pre/IP3/Ca/I_SIC (`astrocyte_interaction_test.py`, 17b) |
+| `astrocyte_small_network.py` | skipped placeholder | `examples/nest/astrocyte_small_network.py` | needs `TripartiteConnect` (`third_factor_bernoulli_with_pool`, pool_size=1/block); out of scope (15d spec §7). Marker test; per-edge SIC physics validated |
+| `astrocyte_brunel_bernoulli.py` | skipped placeholder | `examples/nest/astrocyte_brunel_bernoulli.py` | Brunel + astrocytes via `TripartiteConnect` (pool_size=10/random, pairwise_bernoulli primary); same pool-rule blocker. Marker test |
+| `astrocyte_brunel_fixed_indegree.py` | skipped placeholder | `examples/nest/astrocyte_brunel_fixed_indegree.py` | as above, fixed-indegree primary rule. Marker test |
 
 ### 3.9 Spatial demos
 
