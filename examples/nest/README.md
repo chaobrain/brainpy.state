@@ -546,11 +546,23 @@ the analytical solution.
 > own conductance parity test (`_validation/aeif_cond_alpha_astro_test.py`); the same fix is
 > tracked for the sibling conductance neurons in `neurons-gap.md`.
 >
-> The three pool-rule demos — [`astrocyte_small_network.py`](astrocyte_small_network.py) and
-> the two [`astrocyte_brunel_*`](astrocyte_brunel_bernoulli.py) variants — ship as
-> **documented skipped placeholders**: they need NEST's `TripartiteConnect` +
-> `third_factor_bernoulli_with_pool` astrocyte-pool connection rule, which the Simulator does
-> not yet provide (blocker recorded in `network-api-gap.md`).
+> **Cluster 24** closes §3.8: it adds the `Simulator`-level
+> [`tripartite_connect`](../../brainpy_state/_network/_simulator.py) +
+> `third_factor_bernoulli_with_pool` astrocyte-pool rule. One realized primary
+> `pre→post` sample is shared across all three arms — primary (`pre→post`),
+> `third_in` (`pre→astro`, delta IP3) and `third_out` (`astro→post`, the
+> `sic_connection`) — reusing the merged static + SIC paths with **no new deposit
+> primitive**, validated against live NEST by a micro-parity GATE
+> (`_validation/tripartite_connect_test.py`: block bit-identical / random
+> distributional). The three pool-rule demos now ship as **real ports**:
+> [`astrocyte_small_network.py`](astrocyte_small_network.py) (deterministic per-sample
+> parity on IP3/Ca/`I_SIC` + driver `V_pre`) and the two
+> [`astrocyte_brunel_*`](astrocyte_brunel_bernoulli.py) variants
+> (`pairwise_bernoulli` / `fixed_indegree` primary rule; **connectivity-distributional**
+> parity on the `pre→post`/`pre→astro`/`astro→post` edge counts — a balanced AI rate
+> needs near-full scale, so rate parity is not asserted at the dense-friendly test
+> scale). Both arms use **static** (not `tsodyks`) synapses — connectivity-neutral, the
+> documented goal-24 divergence. **§3.8 complete.**
 
 ## Spatial-network demos (§3.9)
 

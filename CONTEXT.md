@@ -242,6 +242,66 @@ objection into a Lessons entry, do **not** silently diverge.
   `target_*` helpers are the read-side substrate; `with_coords`-clone binding is the write-side
   substrate. See `network-api-gap.md` §3.10 (now mostly **done/partial**) for the precise residual.
 
+### 24-tripartite-connect — 2026-06-15
+
+- **Shipped:** the `Simulator`-level **`tripartite_connect`** + **`third_factor_bernoulli_with_pool`**
+  astrocyte-pool rule (NEST's `TripartiteConnect`), and the **three §3.8 pool-rule demos**
+  promoted from skipped placeholders to real ports. One realized primary `pre→post` sample is
+  shared across three arms — primary, `third_in` (`pre→astro`, delta IP3) and `third_out`
+  (`astro→post`, the 15d `sic_connection`) — reusing the merged static + SIC paths with **no new
+  deposit primitive**. New: `_network/_rules.py` `_ExplicitEdges` (precomputed-edge rule) +
+  `_ThirdFactorBernoulliWithPool` + `third_factor_bernoulli_with_pool` factory;
+  `_network/_connectivity.py` `build_pool_map` + `sample_third_factor_pairing`; `_simulator.py`
+  `tripartite_connect`/`_connect_tripartite_arm`/`_tripartite_segment`. Tests:
+  `_network/_simulator_tripartite_test.py` (NEST-free structural),
+  `_nest/_validation/tripartite_connect_test.py` (live-NEST GATE, 7), and the three demo parity
+  suites (`astrocyte_small_network_test.py` 3, `astrocyte_brunel_test.py` 5) — **79 touched
+  tests pass**. Examples: `astrocyte_small_network.py`, `astrocyte_brunel_{bernoulli,fixed_indegree}.py`.
+  Branch `worktree-nest-goal+24-tripartite-connect`. **§3.8 complete; `network-api-gap`
+  TripartiteConnect + third-factor rows flip to implemented.**
+- **Parity (vs live NEST 3.9.0):** the GATE validates Design A two ways — **block** (`p=1`,
+  `pool_type='block'`) realized edge-sets are **bit-identical** to NEST across all three arms;
+  **random** pools match seed-by-seed on `n2n`/`n2a`/`a2n` counts (category D, 5 %), with the hard
+  **pool invariant** (distinct astrocytes per target ≤ `pool_size`) asserted on the NEST side too.
+  `astrocyte_small_network` is deterministic per-sample parity: IP3 `~3e-6` / Ca `~6e-5` / `V_pre`
+  `~0.01` (CAT_A) / `I_SIC` `~0.7 %` (loosened `SIC_TOL`, log-onset ×10) under `ASTRO_TOL` align.
+  The two `astrocyte_brunel_*` ports are **connectivity-distributional** (n2n/n2a/a2n/inh seed-mean
+  counts, CAT_D) for both primary rules — not rate parity.
+- **API discovered/changed:** `tripartite_connect(pre, post, third, *, conn_spec,
+  third_factor_conn_spec, syn_specs={'primary'|'third_in'|'third_out': {...}}, seed, comm,
+  allow_autapses, allow_multapses)` returns `(primary, third_in, third_out)` projections (`third_*`
+  are `None` when no edge pairs, e.g. `p_third=0`). The **shared-sample** mechanism is
+  `_ExplicitEdges(ConnSpec)` — a `ConnRule` whose `sample()` returns its precomputed `ConnSpec`, so
+  `_connect_pair` wires the *same* realized edges on every arm instead of re-drawing.
+  `_ThirdFactorBernoulliWithPool.sample_third(primary_spec, n_post, n_third, *, key)` →
+  `(third_in_spec, third_out_spec)`. **Constraints the next cluster must respect:** each role must
+  be a **single-population, single-segment** view (a prefix slice like `neurons[:N_ex]` is fine;
+  `a + b` and deferred generators raise `NotImplementedError`); `third_out` is forced onto
+  `comm='dense'` (the `sic_connection` `as_current` path). The Brunel ports satisfy the single-
+  segment rule by making **one** neuron pop and slicing `ex = neurons[:N_ex]`, `post = neurons`.
+- **Gotchas:** (1) **NEST `rng_seed` must be in `(0, 2^32-1)`** — it rejects 0 with `BadProperty`,
+  while brainpy/jax accept `seed=0`. The block-parity test seeds **both** sides with `1` (block is
+  deterministic, seed-irrelevant); never pass 0 to a NEST kernel. (2) **A synaptically-driven,
+  near-critical spiking `V_m` is unsuitable for sample-wise parity** — `astrocyte_small_network`'s
+  `V_post` diverged ~25 mV from a single spike-timing flip even though IP3/Ca/`V_pre` matched to
+  ~1e-5; validate the *loop coupling* (IP3→Ca→`I_SIC`) and the *driver* `V_pre`, drop the driven
+  `V_post`. (3) **Astrocyte SIC ignition has a ~250–300 ms latency** (slow Ca integrator) — a
+  dynamics-law window shorter than that sees `I_SIC.max()==0` and reads as "loop dead"; the Brunel
+  law uses a 400 ms window + an IP3-climb assertion. (4) **Dense-merge sums duplicate-edge weights**
+  = NEST's multigraph dynamics (N edges of weight w ≡ one merged edge of weight N·w);
+  `realized_edges()` reports the *unique* edge-set. Confirmed empirically (`3.59 = 3.59` on a 2×2×1
+  minimal net) — no multiplicity bug. (5) **Coverage under JAX SIGABRTs** if any trace core is
+  active during `jax/__init__`; the working recipe is *pre-import jax/jaxlib/brainstate before
+  `cov.start()`* + `COVERAGE_CORE=sysmon` + `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` (else the `jaxtyping`
+  pytest plugin re-imports numpy under assertion-rewrite → "cannot load module more than once").
+  **Touched-code coverage = 100 %** (90/90 new statements across `_rules`/`_connectivity`/`_simulator`).
+- **For next clusters:** `sic_connection` is now consumed twice (15d bidirectional loop + cluster-24
+  `third_out`); reuse `tripartite_connect`'s single-segment + `_ExplicitEdges` shared-sample pattern
+  for any "one sample → many arms" rule (e.g. `CollocatedSynapses`). The static-vs-`tsodyks`
+  divergence on the primary/`third_in` arms is connectivity-neutral and documented; a future
+  STP-on-tripartite pass would swap the arm synapse only. Bucket-3 model clusters fully closed bar
+  the Siegert `diffusion_connection` (→ 15c).
+
 ### 17b-astro-demos — 2026-06-15
 
 - **Shipped:** the two substrate-ready **§3.8 astrocyte demos** on the `Simulator` API +
