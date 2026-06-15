@@ -139,6 +139,56 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 25-conductance-bridge-sweep — 2026-06-15
+
+- **Shipped:** the **eight remaining conductance neurons** enrolled into the 17b
+  multi-receptor spike→conductance bridge, closing the "silent dead conductance path"
+  gap with **zero substrate change**. `aeif_cond_alpha`, `aeif_cond_exp`, `iaf_cond_beta`
+  (the alpha·exp·beta **micro-parity gate** that first resolved design A), then
+  `iaf_cond_alpha`, `iaf_cond_exp_sfa_rr`, `gif_cond_exp`, `hh_cond_exp_traub`,
+  `iaf_chxk_2008` (a **migration**). Each gets `n_receptors=2` /
+  `receptor_input_unit=u.nS` + a source-only `w_by_rec` dual-path arm in `update()` (the
+  legacy self-pull is the `else` branch) and a per-model parity test
+  `_validation/<m>_conductance_test.py` (4 law + 2 live-NEST). Shared bridge edge cases
+  (weight=0, convergent scatter-add→2×, seam-zero, `receptor_type` out-of-range) fold
+  into `aeif_cond_exp_conductance_test.py`. Branch
+  `worktree-nest-goal+25-conductance-bridge-sweep` (11 commits). `neurons-gap.md` §4
+  follow-up **cleared** + §3 eight rows flipped; `examples/nest/README.md` `multimeter_file`
+  noted now-portable.
+- **Parity (vs live NEST 3.9.0):** every model's `V_m` within `VM_TOL`
+  (1e-3 mV + `align_steps=3`) and `g_ex`/`g_in` within `COND_TOL` (1e-3), for exc
+  (`receptor_type=1` / NEST `+W`) and inh (`=2` / NEST `−W`). Micro-parity residuals (the
+  design-A gate): alpha `V_m` **1.72e-6 mV** / `g_ex` 3.3e-7; exp 1.72e-6 / 1.6e-7; beta
+  6.95e-6 / 1.2e-4 — all far inside the bands. Stiff/subthreshold cells match to ~**1e-12**
+  in the non-stiff regime (HH `g_ex`/`g_in` are autonomous-linear → exact). No-regression:
+  all eight existing `I_e` suites stay byte-identical (the self-pull `else` supplies the
+  same guaranteed 0). Touched-model coverage **94–98 %**.
+- **API discovered/changed:** **design A resolved — the bridge is source-only /
+  kinetics-agnostic.** Declaring `n_receptors` + the `w_by_rec` arm enrolls *any*
+  conductance neuron with **zero `_simulator.py` change**, regardless of synapse class
+  (alpha `dg += (e/τ)·w`, exp `g += w`, beta `dg += pscon_β·w`) — only the *source* of
+  `w_ex`/`w_in` swaps (blob column `k-1` vs `sum_delta_inputs(label=…)`). The micro-parity
+  trio proved this before the mechanical sweep. **`iaf_chxk_2008` migration:** its bespoke
+  `update(w_ex=, w_in=)` kwargs → canonical `w_by_rec` (the two NEST-reference step tests
+  re-pointed to stacked `w_by_rec`, numbers unchanged — behaviour-preserving).
+- **Gotchas:** (1) **stiff cells** (`gif_cond_exp`, `hh_cond_exp_traub`, `iaf_chxk_2008`)
+  need `jax.clear_caches()` + x64 (`precision=64`) or the float32 trace-cache collides
+  across collection order (21-Lessons). (2) **`hh_cond_exp_traub` has no stable rest** — at
+  defaults it is an autonomous oscillator (spontaneous AP ~11 ms), and hyperpolarising to
+  `V_m=-80` makes it *more* excitable (rebound: a 1 nS EPSP fires). Held quiescent at
+  `V_m_init=-75 mV, I_e=0`, subthreshold, with the law tests comparing **driven-vs-baseline**
+  (relaxation alone clears `E_L+1`). A full AP splits the stiff Dormand-Prince vs GSL solvers
+  by volts — only the subthreshold regime matches tightly. (3) `gif_cond_exp` fires
+  **stochastically**; subthreshold drive keeps the hazard `λ₀·exp((V−V_T*)/Δ_V)` ~0 so both
+  sims stay silent. (4) `iaf_chxk_2008` *does* rest at `E_L` (proper IAF) — standard template
+  applies; keep subthreshold so the intrinsic AHP stays inert. (5) no newly-activated
+  demo/test assertion path exists (grep-confirmed) — nothing to update.
+- **For next clusters:** the **conductance family now has no silent dead spike path** — any
+  `connect(spikes, neuron, receptor_type=1/2)` drives `g_ex`/`g_in` with NEST-sign routing.
+  Still-open sibling: the **current-based** `aeif_psc_*` / `hh_psc_alpha_clopath` self-pull
+  `label='w_ex'/'w_in'` too but take `pA`, not the `nS` conductance bridge — a related but
+  distinct seam (no `receptor_input_unit` scaling), not touched here.
+
 ### 17b-astro-demos — 2026-06-15
 
 - **Shipped:** the two substrate-ready **§3.8 astrocyte demos** on the `Simulator` API +
