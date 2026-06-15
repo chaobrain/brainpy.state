@@ -235,9 +235,13 @@ must compose three separate projection objects.
 - **`ResetKernel` destroys CopyModel models.** Per NEST docs. Documented for
   completeness; not a brainpy.state concern since brainpy.state has no kernel.
 - **`waveform-relaxation` (`use_wfr`).** NEST kernel attribute controlling
-  iteration for instantaneous rate connections + gap junctions. Cross-link to
-  `synapses-plasticity-gap.md` §5 — brainpy.state's equivalent loop semantics
-  must be documented.
+  iteration for instantaneous rate connections + gap junctions. brainpy.state has
+  **no** waveform relaxation: both seams reproduce NEST's `use_wfr=False` regime via
+  the substrate's explicit **one-step pipeline lag** — rate connections (cluster 15a)
+  and gap junctions (cluster 15b, the `(G−diag(D))@V[n−1]` difference current). The
+  equivalence to NEST's non-iterated mode is validated (rate FP parity; gap 2-neuron
+  micro-parity to machine precision between spikes). Cross-link
+  `synapses-plasticity-gap.md` cluster-15b Update + `numerical-validation-gap.md` §4.
 
 ## 6. Validation gaps
 

@@ -88,10 +88,11 @@ objection into a Lessons entry, do **not** silently diverge.
   0.1.0.
 - **Imperative / NOT JAX-native (needs rebuild or bypass):**
   - Synapses — all of `_nest/*_synapse.py` (rebuild, Part 2).
-  - **Rate/continuous models** — `rate_neuron_ipn/opn`, `lin_rate`, `gauss_rate`,
-    `sigmoid_rate*`, `siegert_neuron`, `aeif_cond_alpha_astro`,
-    `diffusion_connection` carry the same `_queue` pattern. These are **bucket 3**
-    and co-designed with `ContinuousCoupledProj`.
+  - **Rate/continuous models** — were the `_queue`-pattern **bucket 3**. Rebuilt on the
+    seam-(H) substrate: `rate_neuron_ipn/opn`, `lin_rate`, `gauss_rate`, `sigmoid_rate*`,
+    `siegert_neuron`, `step_rate_generator`, `rate_transformer_node` (15a);
+    `aeif_cond_alpha_astro` + `astrocyte_lr_1994` + `sic_connection` (15d). **Only the
+    Siegert `diffusion_connection` still carries `_queue`** — deferred to 15c.
   - Recording — `multimeter` is imperative; the Simulator **bypasses** it by
     tapping `State` into the `for_loop` output (analog recording, built in `02`).
     Do not gut multimeter; tap State.
@@ -195,6 +196,162 @@ objection into a Lessons entry, do **not** silently diverge.
   read each back by label, and **never rely on a default `sum_delta_inputs` read when labeled
   deposits coexist**. Still deferred: **sparse graded/diffusion emission** (only `comm='dense'`
   is wired).
+### 15b-gap-junctions — 2026-06-15
+
+- **Shipped:** **explicit-lag gap-junction coupling** for the two gap-capable HH neurons,
+  reusing cluster 15a's seam-(H) emission substrate verbatim. The `Simulator` realizes
+  NEST's `gap_junction` as a recurrent **difference-current** coupler
+  `I_gap,i[n] = Σ_j g_ij (V_j[n−1] − V_i[n−1]) = (G − diag(D)) @ V[n−1]` deposited into the
+  post's **current** channel, under the substrate's one-step pipeline lag (NEST's
+  `use_wfr=False` regime — **no** waveform relaxation). Files: `_nest/{hh_psc_alpha_gap,
+  hh_cond_beta_gap_traub}.py` (declare `_emission_attr='V'`; per-neuron gating-init fix),
+  `_network/_simulator.py` (`_gap_conductance`, `_gap_current`, `_build_gap_coupling`,
+  `_is_gap_synapse` dispatch in `_connect_pair`, `_gap_couplers` phase-loop injection).
+  Tests: `_network/_simulator_gap_test.py` (20 NEST-free seam/guard/behavior),
+  `_nest/{hh_psc_alpha_gap,hh_cond_beta_gap_traub}_test.py` (+ heterogeneous-init regression),
+  `_nest/_validation/{gap_junction_parity, gap_junction_inhibitory_network_parity,
+  gap_junction_no_nest}_test.py`, `examples/nest/gap_junctions_{two_neurons,
+  inhibitory_network}.py`. The reference `_nest/gap_junction.py` WFR class is left
+  **untouched and unused**. Branch `worktree-nest-goal-15b-gap`.
+- **Parity (vs live NEST `use_wfr=False`):**
+  - **2-neuron micro-parity** (g=0.5 nS, resting gating, I_e=100 pA, T=351 ms): membrane
+    matches NEST to **machine precision between spikes** — median ~1e-3 mV, p95 ~0.1 mV
+    after a ≤4-sample alignment; synchronization identical (last-20 ms RMS gap **0.530 mV
+    BP vs 0.539 NEST**; g=5 nS: 0.005 vs 0.006). The ONLY divergence is an **O(dt) AP-edge
+    timing jitter** (< 0.5 % of samples > 5 mV apart) — expected from the one-step lag at
+    the spike's near-vertical upstroke.
+  - **Inhibitory network** (N=200, ~24 gap edges/neuron, 4 seeds): Golomb-Rinzel coherence
+    χ matches NEST distributionally at **async 0.137 BP / 0.139 NEST** (g=0) and **sync
+    0.362 / 0.352** (g=0.7) — a ~2.6× synchrony rise on **both** sims.
+- **A resolved → option (a) (full-lag difference deposit).** The 2-neuron micro-parity GATE
+  confirmed option (a) reproduces `use_wfr=False` to machine precision between spikes, so the
+  fallback option (b) (off-diagonal seam-H emission + neuron-side self-leak split) was **not
+  needed**. Both terms lag: `G@V[n−1]` (off-diagonal, via the V emission holder) AND
+  `−D·V[n−1]` (self term, the same lagged V). Lagging **both** keeps the rest balance exact
+  (`I_gap ≡ 0` when all V equal) and matches NEST; lagging only the off-diagonal would inject
+  a spurious self-bias.
+- **Gap = negated graph Laplacian on the current channel.** `G` is the dense **symmetric**
+  hollow gap-conductance matrix (nS), `D = rowsum(G)`. `connect(synapse=gap_junction)`
+  dispatches **before** the plastic/static paths to `_build_gap_coupling`, which materializes
+  BOTH edge directions (`A = (A | A.T) & ~eye` — NEST's `make_symmetric` / all-to-all
+  bidirectionality), scales by one scalar `g`, caches `(G, D, V-reader, post, key)`, and the
+  phase loop deposits `_gap_current(...) * u.pA` via `add_current_input` (the
+  `sum_current_inputs(x, V)` seam the gap neurons already read). `nS·mV = pA` exactly. No
+  EventProjection, no rule kernel, no WFR.
+- **NEST freezes gating on `SetStatus(V_m)`; the port equilibrates per neuron — reconcile by
+  overriding to resting.** The gap demos perturb a cell's `V_m` AFTER `Create`; NEST's
+  `SetStatus` does **not** recompute gating, so the perturbed cell keeps **resting** gating
+  (`eq(-69.604 mV)`). The port's convention is `eq(V_m_init)` **per neuron** — faithful but
+  different. For parity the validation/example helpers override gating to the resting
+  equilibrium (`_resting_gating()` → `Act_m_init=…`), reproducing NEST's construct-then-
+  perturb workflow exactly. (A g=0 pair == two independent lone runs to 1e-9 confirms the gap
+  itself is innocent of any IC effect — it was the diagnostic that isolated the init bug below.)
+- **Latent per-neuron gating-init bug found + fixed (both gap neurons).** Surfaced by the gap
+  demo's heterogeneous `V_m_init`: `init_state` equilibrated `m/h/n[/p]` at a SINGLE broadcast
+  voltage (`get_mantissa(V).flat[0]`) instead of per neuron, so a population with heterogeneous
+  initial voltages started with WRONG and IDENTICAL gating (a −65 mV cell in a pair plunged to
+  −88 mV vs −64 mV lone). Fix: equilibrate at EACH neuron's own `V_m_init` (vectorized
+  `_hh_*_equilibrium(V_arr)`). **Backward-compatible** — scalar `V_m_init` is unchanged; all
+  prior neuron tests pass. Guarded by a per-neuron heterogeneous-gating regression in each
+  `*_test.py` (the Traub `m` gate barely varies over [−70,−55,−45] mV — assert on the `n` gate
+  instead, ptp > 1e-5).
+- **Symmetry (B) enforced at connect; out-of-scope shapes rejected loudly.** NEST
+  `gap_junction` is `REQUIRES_SYMMETRIC=True`. The coupler rejects, each with a NEST-free guard
+  test: a non-recurrent connect (pre≠post), a `delay` (gap is instantaneous), `comm='sparse'`
+  (the `G@V` is a dense matmul), a callable **or** non-scalar conductance (one scalar `g` per
+  graph), and a post that doesn't emit `V`.
+- **Coverage: the cluster-22 `--source` SIGABRT bites here too; behavioral fallback for
+  `_simulator.py`.** `coverage run --source=<pkg>` SIGABRTs at **collection** (jaxlib absl
+  double-init, entry 22). The documented `--source`-drop workaround (`coverage run -m pytest`
+  then report-time `--include`) instruments the two **standalone neuron modules** cleanly:
+  **`hh_psc_alpha_gap.py` 99 %** (2/202 miss), **`hh_cond_beta_gap_traub.py` 96 %** (8/226 miss)
+  — the misses are pre-existing non-gap branches. `_simulator.py` still can't be
+  line-instrumented (entry 22), so the gap seam relies on **behavioral coverage**: every gap
+  branch (the 3 `_gap_conductance` reject modes, the 4 `_build_gap_coupling` guards, the
+  difference-current arithmetic, the symmetric-matrix build, the dispatch, the phase injection)
+  has an exercising NEST-free test. `clear_caches()` + x64 per stiff-HH test class (entry 21).
+- **For next clusters:** the seam-(H) `_emission_attr` holder now carries BOTH a
+  **continuous-rate** deposit (15a, delta channel) AND a **voltage difference-current** deposit
+  (15b, current channel) — it is the single substrate for any state-gated coupling; declare
+  `_emission_attr` + deposit `comm='dense'`. The gap coupler is **dense-only by design**; a
+  sparse `G@V` for large nets is the natural follow-up. `hh_cond_beta_gap_traub` rides the SAME
+  seam but only `hh_psc_alpha_gap` has a live-NEST gap-parity test — a cond_beta gap regression
+  is the small remaining gap (noted in `neurons-gap.md` / `numerical-validation-gap.md`).
+
+### 15d-astro — 2026-06-15
+
+- **Shipped:** the **bidirectional neuron↔astrocyte SIC loop on the JAX substrate** — the
+  **last bucket-3 *model* cluster** (the one remaining bucket-3 item is the Siegert
+  `diffusion_connection`, still deferred to 15c). `astrocyte_lr_1994` emits
+  its slow-inward current as seam-(H) continuous graded **current** emission; a one-way
+  `sic_connection` deposits `weight·SIC` into `aeif_cond_alpha_astro`'s labelled `'I_SIC'`
+  current channel through a new `as_current` `EventProjection` mode; the neuron→astro arm
+  stays the ordinary delta path (`Δ_IP3·w` IP3 via `sum_delta_inputs`). The host-side
+  `_sic_queue` event-emulator on the neuron and `sic_connection`'s host-queue coeff-array
+  API are **deleted** (the de-queue), so the whole loop lowers under `Simulator.simulate`.
+  Files: `_nest/astrocyte_lr_1994.py` (`_emission_attr='SIC'`, `_emission_continuous`,
+  `_emission_current`, `_emission_current_label='I_SIC'`; spike read via `sum_delta_inputs`),
+  `_nest/aeif_cond_alpha_astro.py` (de-queue: 6 host-queue helpers + `_sic_queue`/`_sic_step`
+  removed, `sic_events` kwarg dropped; labelled `I_SIC` current read before the unlabelled
+  `I_stim` read), `_nest/sic_connection.py` (host-queue API trimmed 991→664 lines → thin
+  NEST-parity status spec), `_network/_event_proj.py` (`as_current` deposit mode),
+  `_network/_simulator.py` (`_connect_sic` dispatch + `'I_SIC':('I_sic',)` recordable alias).
+  Tests: `_event_proj_current_test`, `astrocyte_lr_1994_test` (+emission), `aeif_cond_alpha_astro_test`
+  (+SIC channel), `_simulator_sic_test`, `sic_connection_test` (de-queue + validators),
+  `_nest/_validation/astrocyte_sic_test.py` (live-NEST parity). Branch
+  `worktree-nest-goal+15d-astro`.
+- **Parity (vs live NEST 3.9.0, dt=0.1ms; exact-after-`align_steps`):**
+  - **SIC-response micro** (spike_generator → astro → sic → post): IP3 `2.4e-5`, Ca
+    `1.9e-4`, I_SIC `2.3e-4` aligned max|Δ|.
+  - **Driven loop** (aeif `I_e=1000pA` → astro → sic → post, Ca crosses SIC_th): IP3 `0.0`
+    (exact), Ca `9.9e-7`, I_SIC `6.0e-4`, V_pre `3.7e-4 mV`.
+  - **Astro-network distributional** (N post `I_e=700pA`; Poisson → astro → sic → post):
+    seed-mean post rate `NEST 9.0 = BP 9.0` (SIC off) → `14.0 = 14.0` (SIC on) — the
+    SIC-raises-firing law (+5 Hz), **identical** on both sims, near-zero seed variance.
+- **A resolved → option (a) `synapse=sic_connection(w)`.** The SIC crosses the seam as a
+  **continuous graded current**, not a discrete event. `Simulator.connect(astro, neuron,
+  synapse=sic_connection(weight=w))` dispatches (via `isinstance`) to `_connect_sic`, which
+  enforces the NEST sender/receiver contract (`sic_connection.check_connection`), reads the
+  astrocyte's `_emit_holder`, and builds an `as_current` `EventProjection` into the post's
+  `'I_SIC'` channel. No bespoke SIC primitive — the existing seam-(H) emitter + one new
+  deposit-mode flag suffice.
+- **API discovered/changed (reuse downstream):**
+  - **`EventProjection(..., as_current=False)`** — when `True`, deposits the dense graded
+    contribution via `post.add_current_input(key, contrib, label=...)` instead of
+    `add_delta_input`. The route for any **pA current that enters `dV/dt`** (vs a
+    delta/conductance). Rejects `comm='sparse'` (binarises the presynaptic value).
+  - **`_emission_current=True` + `_emission_current_label='I_SIC'`** on an emitter pop tells
+    `_connect_sic` to route into a labelled current channel; the generic
+    `create()`/phase-2 holder capture already handles any `_emission_attr` pop (no change).
+  - **`sic_connection.delay_steps`**: NEST's default `delay=1.0 ms` is **10 steps** at
+    dt=0.1, so `delay_steps=10` rides it; `delay_steps=1` (min delay) rides only the
+    intrinsic one-step pipeline lag. `(delay_steps−1)` extra steps = `InputDelay` (mirrors
+    the deleted queue's `base_offset`).
+- **Gotchas:**
+  - **Read-order collision — labelled before unlabelled.** The post's labelled `I_SIC`
+    current read (`sum_current_inputs(0, V, label='I_SIC', pop=True)`) **must precede** the
+    unlabelled `I_stim` read (`sum_current_inputs(x, V)` with `label=None`, which sums **all**
+    current channels). Reversed, the device `I_stim` read would consume + double-count the
+    SIC deposit. This was the Phase-3 RED (`units do not match: pA != 1`).
+  - **Current, not delta.** SIC is a pA current; depositing it on the default delta channel
+    is silently wrong. `as_current=True` is mandatory; `comm='dense'` is mandatory (graded).
+  - **`sum_delta_inputs(spike_weights)` is backward-compatible**: returns its arg unchanged
+    when no delta inputs are registered, so the astrocyte's standalone `update(spike_weights=…)`
+    still works while the Simulator's neuron→astro deposits now also reach IP3.
+  - **Recordable alias gap.** The Simulator's multimeter needs `_RECORDABLE_ALIAS['I_SIC'] =
+    ('I_sic',)` to map the NEST recordable name to the State; the astro cluster had no
+    Simulator integration before, so this was a genuine pre-existing hole.
+  - **Coverage on touched lines** (whole-file is misleading on the shared `_event_proj.py`
+    60 % / `_simulator.py` 53 %): touched lines covered; `sic_connection` 98 %, aeif 94 %,
+    astrocyte 91 %.
+- **For next clusters:** every bucket-3 **model** is now on the substrate; the sole
+  remaining bucket-3 item is the Siegert `diffusion_connection` (still carries the host
+  `_queue`; supplies network `(μ, σ²)`) — **15c**. **§3.8 astrocyte demos are unblocked
+  (→ 17b):** `astrocyte_single` /
+  `astrocyte_interaction` are substrate-ready (the exact loop is validated); `small_network`
+  / `astrocyte_brunel_*` additionally need NEST's `TripartiteConnect` astrocyte-pool rule
+  (`third_factor_bernoulli_with_pool`) — **out of scope** (no new connectivity rule). Still
+  unwired everywhere: **sparse graded emission** (only `comm='dense'` graded deposit exists).
 
 ### 15a-rate-core — 2026-06-15
 

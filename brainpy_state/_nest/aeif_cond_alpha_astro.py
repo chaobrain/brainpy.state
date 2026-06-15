@@ -116,21 +116,24 @@ class aeif_cond_alpha_astro(NESTNeuron):
     3. Decrement refractory counter once.
     4. Apply arriving spike weights to ``dg_ex`` / ``dg_in``.
     5. Store new external current into one-step delayed ``I_stim``.
-    6. Store SIC ring-buffer value for next step in ``I_SIC``.
+    6. Read the labelled ``'I_SIC'`` current channel and store it into the
+       one-step delayed ``I_SIC`` state.
 
-    **4. SIC event semantics**
+    **4. SIC delivery semantics**
 
-    ``sic_events`` passed to :meth:`update` emulate NEST ``SICEvent`` handling.
-    For an event with ``weight``, coefficient series ``coeffs`` and
-    ``delay_steps``:
-
-    - effective ring-buffer offset is ``delay_steps - 1``,
-    - each coefficient is added to future SIC buffer entries as
-      ``weight * coeffs[i]``.
+    The astrocyte slow-inward current (SIC) is delivered on the JAX substrate by
+    a :class:`~brainpy_state._network._event_proj.EventProjection` — the
+    ``sic_connection`` — that deposits ``weight·SIC`` into this neuron's labelled
+    ``'I_SIC'`` *current* channel each step (``add_current_input``). Each
+    :meth:`update` reads (and pops) that channel **before** the unlabelled
+    ``I_stim`` read, so the device current and the SIC current land in their own
+    terms with no collision, and stores it into ``I_sic`` (pA) for the next step.
 
     This matches NEST ``handle(SICEvent&)`` where contributions are written to
     ``sic_currents_`` and become available through ``I_SIC`` with one-step
-    delayed application in membrane dynamics.
+    delayed application in membrane dynamics. The host-side event queue used by
+    earlier revisions is removed: the SIC current is a State-backed channel, so
+    the whole simulation lowers into one compiled ``for_loop``.
 
     Parameters
     ----------
@@ -334,25 +337,18 @@ class aeif_cond_alpha_astro(NESTNeuron):
 
        g(t) = w \cdot \frac{t}{\tau} \exp\!\left(1-\frac{t}{\tau}\right),\quad t \ge 0.
 
-    SIC handling is discrete-time queue based. If an SIC event ``e`` arrives at
-    simulation step :math:`s_e` with delay ``d_e`` (steps), weight ``w_e``,
-    and coefficients :math:`c_{e,i}`, this implementation enqueues:
-
-    .. math::
-
-       Q[s_e + d_e - 1 + i] \mathrel{+}= w_e c_{e,i}.
-
-    The membrane ODE at step :math:`k` uses stored :math:`I_{SIC}^{(k)}` from
-    the previous update call, so a delay of 1 step first affects dynamics on
-    step :math:`s_e + 1`, matching NEST ring-buffer semantics.
+    SIC is delivered as a State-backed current channel. The membrane ODE at step
+    :math:`k` uses the stored :math:`I_{SIC}^{(k)}` from the previous update call,
+    so a SIC current deposited at step :math:`s` first affects dynamics on step
+    :math:`s + 1`, matching NEST's one-step ring-buffer semantics at the minimum
+    delay.
 
     Additional implementation implications:
 
-    - ``sic_events`` accepts dict, tuple/list, scalar, or iterable forms;
-      tuple/list forms must have length 2 or 3.
-    - Event ``coeffs`` can be scalar, state-shaped, or leading-time-array;
-      each coefficient creates one future queue entry.
-    - Queue memory cost scales with active future SIC bins and state size.
+    - SIC arrives via ``add_current_input(key, weight·SIC, label='I_SIC')`` and is
+      read with ``sum_current_inputs(label='I_SIC')`` — no host-side event queue.
+    - The labelled ``'I_SIC'`` read happens before the unlabelled ``I_stim`` read,
+      so device currents and the SIC current never collide.
     - As with ``aeif_cond_alpha``, ``t_ref=0`` can allow multiple in-loop
       spikes within one simulation step.
 
@@ -376,9 +372,11 @@ class aeif_cond_alpha_astro(NESTNeuron):
        >>> import saiunit as u
        >>> neuron = brainpy.state.aeif_cond_alpha_astro(in_size=2)
        >>> neuron.init_state()
-       >>> sic = {'weight': 20.0 * u.pA, 'coefficients': [1.0, 0.5], 'delay_steps': 2}
+       >>> # A slow-inward current is deposited on the labelled 'I_SIC' channel
+       >>> # (as the sic_connection projection does inside a Simulator).
        >>> with brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms):
-       ...     spikes = neuron.update(x=80.0 * u.pA, sic_events=[sic])
+       ...     neuron.add_current_input('sic', 20.0, label='I_SIC')
+       ...     spikes = neuron.update(x=80.0 * u.pA)
        >>> spikes.shape
        (2,)
     """
@@ -453,9 +451,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
 
         self._validate_parameters()
 
-        self._sic_queue = {}
-        self._sic_step = 0
-
         self.integrator = AdaptiveRungeKuttaStep(
             method='RKF45',
             vf=self._vector_field,
@@ -484,18 +479,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
     def _to_numpy_unitless(x):
         dftype = brainstate.environ.dftype()
         return np.asarray(u.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _to_numpy_pA_or_unitless(x):
-        try:
-            dftype = brainstate.environ.dftype()
-            return np.asarray(u.math.asarray(x / u.pA), dtype=dftype)
-        except Exception:
-            return np.asarray(u.math.asarray(x), dtype=dftype)
-
-    @staticmethod
-    def _broadcast_to_state(x_np: np.ndarray, shape):
-        return np.broadcast_to(x_np, shape)
 
     def _validate_parameters(self):
         r"""Validate model parameters against NEST constraints.
@@ -577,9 +560,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
         self.I_stim = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
         self.I_sic = brainstate.ShortTermState(u.math.full(self.varshape, 0.0 * u.pA, dtype=dftype))
 
-        self._sic_queue = {}
-        self._sic_step = 0
-
         if self.ref_var:
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
@@ -603,96 +583,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
         V = self.V.value if V is None else V
         v_scaled = (V - self.V_th) / (self.V_th - self.V_reset)
         return self.spk_fun(v_scaled)
-
-    @staticmethod
-    def _coerce_sic_events(sic_events):
-        if sic_events is None:
-            return []
-        if isinstance(sic_events, dict):
-            return [sic_events]
-        if isinstance(sic_events, tuple) and len(sic_events) in (2, 3):
-            return [sic_events]
-        if np.isscalar(sic_events):
-            return [sic_events]
-        return list(sic_events)
-
-    def _queue_sic_value(self, step_index: int, value: np.ndarray):
-        prev = self._sic_queue.get(step_index, None)
-        if prev is None:
-            self._sic_queue[step_index] = value.copy()
-        else:
-            self._sic_queue[step_index] = prev + value
-
-    def _enqueue_sic_events(self, sic_events, state_shape):
-        r"""Convert and enqueue SIC events into the future-step queue.
-
-        Parameters
-        ----------
-        sic_events : object
-            SIC event description or iterable of descriptions. Accepted forms:
-            ``dict`` with keys ``weight``, ``coefficients``/``coeffs``/``coeff``/``values``,
-            optional ``delay_steps``/``delay``, optional ``multiplicity``;
-            tuple/list ``(weight, coeffs)`` or ``(weight, coeffs, delay_steps)``;
-            scalar interpreted as coefficients with default ``weight=1`` and
-            ``delay_steps=1``.
-        state_shape : tuple[int, ...]
-            Target neuron state shape used to broadcast event values.
-
-        Raises
-        ------
-        ValueError
-            If a tuple/list event has invalid length, ``delay_steps <= 0``, or
-            SIC coefficients cannot be broadcast to ``state_shape``.
-        TypeError
-            If event payload cannot be converted to numeric arrays.
-        """
-        events = self._coerce_sic_events(sic_events)
-        if len(events) == 0:
-            return
-
-        for ev in events:
-            weight = 1.0
-            coeffs = 0.0
-            delay_steps = 1
-
-            if isinstance(ev, dict):
-                weight = ev.get('weight', 1.0)
-                coeffs = ev.get('coefficients', ev.get('coeffs', ev.get('coeff', ev.get('values', 0.0))))
-                delay_steps = ev.get('delay_steps', ev.get('delay', 1))
-                multiplicity = ev.get('multiplicity', 1.0)
-                weight = weight * multiplicity
-            elif isinstance(ev, tuple) or isinstance(ev, list):
-                if len(ev) == 2:
-                    weight, coeffs = ev
-                elif len(ev) == 3:
-                    weight, coeffs, delay_steps = ev
-                else:
-                    raise ValueError('SIC event tuples must have length 2 or 3.')
-            else:
-                coeffs = ev
-
-            delay_steps = int(delay_steps)
-            if delay_steps <= 0:
-                raise ValueError('SIC event delay_steps must be a positive integer.')
-
-            weight_np = self._broadcast_to_state(self._to_numpy_pA_or_unitless(weight), state_shape)
-            coeffs_np = self._to_numpy_pA_or_unitless(coeffs)
-
-            if coeffs_np.ndim == 0 or coeffs_np.shape == state_shape:
-                coeff_iter = [self._broadcast_to_state(coeffs_np, state_shape)]
-            else:
-                coeff_iter = [self._broadcast_to_state(coeffs_np[i], state_shape) for i in range(coeffs_np.shape[0])]
-
-            base_offset = delay_steps - 1
-            for i, coeff_i in enumerate(coeff_iter):
-                self._queue_sic_value(self._sic_step + base_offset + i, weight_np * coeff_i)
-
-    def _pop_sic_current(self, state_shape):
-        dftype = brainstate.environ.dftype()
-        current = self._sic_queue.pop(self._sic_step, None)
-        if current is None:
-            return np.zeros(state_shape, dtype=dftype)
-        return np.asarray(current, dtype=dftype)
 
     def _vector_field(self, state, extra):
         """Unit-aware vectorized RHS for all neurons simultaneously.
@@ -767,8 +657,15 @@ class aeif_cond_alpha_astro(NESTNeuron):
         new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
         return new_state, new_extra
 
-    def update(self, x=0.0 * u.pA, sic_events=None):
-        r"""Advance the neuron by one simulation step with optional SIC events.
+    def update(self, x=0.0 * u.pA):
+        r"""Advance the neuron by one simulation step.
+
+        The astrocyte slow-inward current (SIC) is delivered by a
+        :class:`~brainpy_state._network._event_proj.EventProjection` (the
+        ``sic_connection``) that deposits ``weight·SIC`` into this neuron's labelled
+        ``'I_SIC'`` *current* channel each step. ``update`` reads (and pops) that
+        channel, stores it into ``I_sic`` (pA) for the next step — a one-step delay,
+        exactly like ``I_stim`` — and the membrane ODE adds the ``i_sic`` term.
 
         Parameters
         ----------
@@ -776,10 +673,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
             Continuous external current input in pA, broadcastable to
             ``self.varshape``. This value is stored into ``I_stim`` and applied
             at the next simulation step (one-step delay).
-        sic_events : object, optional
-            SIC event payload consumed by :meth:`_enqueue_sic_events`.
-            Enqueued values are popped for the current queue step and stored
-            into ``I_sic`` for the next update call.
 
         Returns
         -------
@@ -793,19 +686,16 @@ class aeif_cond_alpha_astro(NESTNeuron):
         ------
         ValueError
             If RKF45 integration enters a guarded unstable regime
-            (``V < -1e3 mV`` or ``|w| > 1e6 pA``), if SIC tuple/list events have
-            unsupported lengths, or if SIC ``delay_steps`` is not positive.
-        TypeError
-            If SIC event values cannot be interpreted as numeric arrays.
+            (``V < -1e3 mV`` or ``|w| > 1e6 pA``).
 
         Notes
         -----
         Integration is performed with an adaptive vectorized RKF45 loop,
         including in-loop spike/reset/adaptation events and optional
         multiple spikes per step. All arithmetic is unit-aware via
-        ``saiunit.math``. SIC events are enqueued after ODE integration,
-        then current-step SIC queue values are popped and written to
-        ``I_sic`` for use in the next call.
+        ``saiunit.math``. The labelled ``'I_SIC'`` current channel is read
+        **before** the unlabelled ``I_stim`` read so the device current and the
+        SIC current land in their own terms (no channel collision).
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
@@ -826,6 +716,12 @@ class aeif_cond_alpha_astro(NESTNeuron):
 
         # Spike detection threshold: V_peak if Delta_T > 0, else V_th.
         v_peak_detect = u.math.where(self.Delta_T > 0.0 * u.mV, self.V_peak, self.V_th)
+
+        # Astrocyte slow-inward current (SIC): read + pop the labelled 'I_SIC'
+        # current channel FIRST (unitless in the channel) so the unlabelled I_stim
+        # read below sees only device currents. Stored into I_sic (pA) for the next
+        # step — a one-step delay, exactly like I_stim.
+        new_i_sic = self.sum_current_inputs(jnp.zeros(self.varshape, dtype=dftype), self.V.value, label='I_SIC')
 
         # Current input for next step (one-step delay).
         new_i_stim = self.sum_current_inputs(x, self.V.value)  # pA
@@ -864,11 +760,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
         dg_ex = dg_ex + pscon_ex * w_ex  # nS/ms + 1/ms * nS = nS/ms
         dg_in = dg_in + pscon_in * w_in  # nS/ms + 1/ms * nS = nS/ms
 
-        # SIC event handling: enqueue new events and pop current step value.
-        v_shape = self.V.value.shape
-        self._enqueue_sic_events(sic_events, v_shape)
-        new_i_sic = self._pop_sic_current(v_shape)
-
         # Write back state.
         self.V.value = V
         self.dg_ex.value = dg_ex
@@ -882,8 +773,6 @@ class aeif_cond_alpha_astro(NESTNeuron):
         self.I_sic.value = new_i_sic * u.pA
         last_spike_time = u.math.where(spike_mask, t + dt, self.last_spike_time.value)
         self.last_spike_time.value = jax.lax.stop_gradient(last_spike_time)
-
-        self._sic_step += 1
 
         if self.ref_var:
             self.refractory.value = jax.lax.stop_gradient(self.refractory_step_count.value > 0)

@@ -196,8 +196,13 @@ for the spiking network-demo cluster (14)** — each needs a primitive that harn
 build. The **rate-neuron substrate has since landed (cluster 15a)**: `lin_rate`/`rate_neuron`
 + instantaneous/delayed rate connections now run on the seam-(H) continuous-emission path
 (`τ Ẋ = −λX + μ + φ(h)`, linear-rate FP `(I−gC)⁻¹μ` parity vs NEST), so the two rate-network
-demos are **substrate-ready** and only await a demo-port cluster. Gap-junction and
-`ht_neuron` demos remain blocked on their own primitives.
+demos are **substrate-ready** and only await a demo-port cluster. The **gap-junction
+substrate has since landed too (cluster 15b)**: both `gap_junctions_*` demos are now ported
+with live-NEST parity (rows below), realized as an explicit one-step-lagged **difference
+current** `I_gap,i = Σ_j g_ij (V_j[n−1] − V_i[n−1])` deposited into the post current channel
+on the SAME seam-(H) emission path (the V emission holder), NEST's `use_wfr=False` regime —
+no waveform relaxation. Only the `ht_neuron` (`intrinsic_currents_*`) demos remain blocked
+on their own primitive.
 
 The **Siegert mean-field network demo has landed (cluster 15c)**. `siegert_neuron`'s
 transfer Φ(μ,σ²) now lowers under `for_loop` — a jnp leggauss-64 quadrature port of the
@@ -223,8 +228,8 @@ JAX-native end to end (`siegert_diffusion_test.py`, `brunel_siegert_test.py`).
 | `wang_decision_making.py` | implemented | `examples/nest/wang_decision_making.py` | Wang (2002) WTA decision network on `iaf_bw_2001`. Recurrent NMDA via `connect(receptor_type=NMDA, comm='dense')` matches live NEST to machine precision (~5e-15; `iaf_bw_2001_recurrent_nmda_parity_test.py`) — **design A resolved to option (a)** (generalize the presynaptic-emission seam; no offset-aware event projection needed). Decision parity is distributional (`wang_decision_making_test.py`): ±coherence→A/B both sims, winner > 2.5× loser (< 4 Hz), unbiased at 0; the WTA attractor amplifies integrator/PRNG differences so the winner's absolute rate differs (BP A~12 vs NEST A~7 Hz). No-NEST companion `wang_decision_making_no_nest_test.py` |
 | `lin_rate_ipn_network.py` | missing | none | substrate-ready (cluster 15a): `lin_rate` + rate connections on seam-(H); demo port pending |
 | `rate_neuron_dm.py` | missing | none | substrate-ready (cluster 15a): rate-network decision-making on the rate core; demo port pending |
-| `gap_junctions_two_neurons.py` | missing | none | out of scope (cluster 14): `hh_psc_alpha_gap` + `gap_junction` coupling |
-| `gap_junctions_inhibitory_network.py` | missing | none | out of scope (cluster 14): gap-junction coupling |
+| `gap_junctions_two_neurons.py` | implemented | `examples/nest/gap_junctions_two_neurons.py` | gap-coupled `hh_psc_alpha_gap` pair synchronizes (g=0.5 nS, resting-gating ICs). Explicit-lag difference deposit (`use_wfr=False`); 2-neuron micro-parity matches live NEST to machine precision between spikes (median ~1e-3 mV, p95 ~0.1 mV), only O(dt) AP-edge jitter (`gap_junction_parity_test.py`). No-NEST companion `gap_junction_no_nest_test.py` (cluster 15b) |
+| `gap_junctions_inhibitory_network.py` | implemented | `examples/nest/gap_junctions_inhibitory_network.py` | inhibitory `hh_psc_alpha_gap` net + random symmetric gap graph; Golomb-Rinzel coherence χ rises with gap weight (async ~0.14 → sync ~0.36, ~2.6× on BOTH sims), distributional live-NEST parity (`gap_junction_inhibitory_network_parity_test.py`, 4 seeds, χ within a few %). `fixed_indegree` gap graph (cluster 15b) |
 | `intrinsic_currents_spiking.py` | missing | none | out of scope (cluster 14): `ht_neuron` intrinsic currents |
 | `intrinsic_currents_subthreshold.py` | missing | none | out of scope (cluster 14): `ht_neuron` |
 
@@ -250,9 +255,34 @@ exists to show (PSTH tracks `λ(t)`; `CV → 1/√m`; packet width ∝ `sdev`).
 
 ### 3.8 Astrocyte demos
 
+The **neuron↔astrocyte SIC loop substrate landed in cluster 15d** (the last bucket-3
+*model* cluster; only the Siegert `diffusion_connection` remains queued → 15c).
+`astrocyte_lr_1994` now emits its slow-inward current as seam-(H)
+continuous graded emission (`_emission_attr='SIC'`, `_emission_current=True`); a one-way
+`sic_connection` (sender/receiver-enforced `astrocyte_lr_1994 → aeif_cond_alpha_astro`)
+deposits `weight·SIC` into the neuron's labelled `'I_SIC'` current channel through an
+`as_current` `EventProjection`; the neuron→astrocyte arm is the ordinary delta path
+(spikes → `Δ_IP3·w` IP3 via `sum_delta_inputs`). The host-side `_sic_queue` event-emulator
+and `sic_connection`'s host-queue coeff-array API were **deleted** (the bucket-3 de-queue),
+so the whole bidirectional loop lowers under `Simulator.simulate`'s `for_loop`. Live-NEST
+parity is near-exact (`astrocyte_sic_test.py`): SIC-response micro IP3 `2.4e-5`/Ca
+`1.9e-4`/I_SIC `2.3e-4`; driven loop IP3 `0`/Ca `1e-6`/I_SIC `6e-4`/V_pre `3.7e-4 mV`;
+astro-network seed-mean post rate `9.0=9.0` (SIC off) → `14.0=14.0` (SIC on). The
+`sic_connection` default delay `1.0 ms` maps to `delay_steps=10`.
+
+The single-astrocyte and tripartite-interaction demos are therefore **substrate-ready**
+(await a demo-port cluster, 17b). The `small_network` / `astrocyte_brunel_*` variants
+additionally need NEST's `TripartiteConnect` astrocyte-pool rule
+(`third_factor_bernoulli_with_pool`), which is **out of scope** (cluster-15d spec §7 — no
+new connectivity rule); their per-edge tripartite physics, however, is now validated.
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `astrocytes/` (subdir, contains `astrocyte_brunel_*` series) | missing (deferred) | none | uses `astrocyte_lr_1994` + `aeif_cond_alpha_astro` (both validated) but also the **bucket-3 `sic_connection`** + an astrocyte rate model. Explicitly deferred past cluster 16 (generator demos) to the post-bucket-3 window; the astrocyte Brunel variant is then the natural P0 port target. |
+| `astrocyte_single.py` | substrate-ready | none | one `astrocyte_lr_1994` + Poisson → IP3/Ca; astrocyte ODE validated (cluster, `astrocyte_lr_1994_test.py`). Demo port pending (17b) |
+| `astrocyte_interaction.py` | substrate-ready | none | tripartite two-neuron + one-astrocyte SIC loop — the exact topology wired & parity-validated in cluster 15d (`astrocyte_sic_test.py`). Demo port pending (17b) |
+| `astrocyte_small_network.py` | blocked | none | needs `TripartiteConnect` (`third_factor_bernoulli_with_pool` pool rule); out of scope (15d spec §7). Per-edge SIC physics validated |
+| `astrocyte_brunel_bernoulli.py` | blocked | none | Brunel + astrocytes via `TripartiteConnect`; same pool-rule blocker. Natural P0 port once the pool rule lands |
+| `astrocyte_brunel_fixed_indegree.py` | blocked | none | as above, fixed-indegree tripartite variant |
 
 ### 3.9 Spatial demos
 
@@ -289,10 +319,11 @@ networks, COBA, and HH-COBA). Concretely:
   pedagogy + correlation-detector regressions.
 - **Single-neuron model demos**: HH, AdEx, GIF, GLIF, MAT, IAF Tum 2000, Brody-
   Hopfield, Campbell-Siegert, multi-compartment, intrinsic-currents.
-- **Network demos**: gap junctions and rate networks only (both out of scope —
-  gap-junction coupling / rate-neuron connections). Wang 2002, Brette 2007,
-  EI-clustered, perturbation-sensitivity, artificial-synchrony and
-  repeated-stimulation are ported (§3.6).
+- **Network demos**: rate networks (substrate-ready, cluster 15a — demo port
+  pending) and the `ht_neuron` intrinsic-currents demos (blocked on the
+  Hill-Tononi primitive) only. Wang 2002, Brette 2007, EI-clustered,
+  perturbation-sensitivity, artificial-synchrony, repeated-stimulation, and
+  both gap-junction demos (cluster 15b) are ported (§3.6).
 - **Generator demos**: sinusoidal Poisson + gamma and pulse packets are ported (§3.7).
 - **Astrocyte demos**: the `astrocytes/` Brunel-variant series (deferred to post-bucket-3,
   pending `sic_connection` + an astrocyte rate model).
@@ -406,9 +437,13 @@ The examples-as-validation point above is the headline: porting NEST examples
   ported with distributional live-NEST parity (±coherence→A/B, winner ≫ loser,
   unbiased at 0). See §3.6.
 
-- **P2 — Port gap-junction demos (`gap_junctions_*`).** [M]
-  Blocked by gap-junction synapse parity audit (`synapses-plasticity-gap.md`).
-  Acceptance: synchronization metric matches NEST.
+- **P2 — Port gap-junction demos (`gap_junctions_*`).** [M] — **DONE (cluster 15b).**
+  Both demos ported on the explicit-lag difference-deposit seam — option (a): full-lag
+  `I_gap,i = Σ_j g_ij (V_j[n−1] − V_i[n−1])` into the post current channel, NEST's
+  `use_wfr=False` regime, no waveform relaxation. 2-neuron micro-parity matches live NEST
+  to machine precision between spikes (`gap_junction_parity_test.py`); the inhibitory
+  network's Golomb coherence matches distributionally at async/sync gap weights
+  (`gap_junction_inhibitory_network_parity_test.py`). See §3.6.
 
 - **P2 — Port correlation-demos (`cross_check_mip_corrdet.py`,
   `correlospinmatrix_detector_two_neuron.py`).** [M]

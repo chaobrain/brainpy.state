@@ -50,6 +50,19 @@ is the additive brainpy-extension (surrogate gradient, differentiability) that
 NEST itself doesn't offer. Promotion to `implemented` requires documenting
 trace-tolerance in the test and confirming pass.
 
+> **Update (cluster-15b).** The two gap-junction-capable HH neurons (`hh_psc_alpha_gap`,
+> `hh_cond_beta_gap_traub`) gained the gap-coupling seam: both now declare
+> `_emission_attr='V'` so the `Simulator` can read their one-step-lagged membrane voltage
+> for the gap difference current (`synapses-plasticity-gap.md` cluster-15b Update). A latent
+> initialization bug was also fixed in **both** `init_state` methods, surfaced by the gap
+> demos' heterogeneous `V_m_init`: gating variables were equilibrated at a single broadcast
+> voltage (`V_m_init.flat[0]`) instead of **per neuron**, so a population with heterogeneous
+> initial voltages started with wrong (and identical) gating. The fix equilibrates `m/h/n[/p]`
+> at *each* neuron's own `V_m_init` (backward-compatible: scalar `V_m_init` is unchanged; all
+> prior tests pass). `hh_psc_alpha_gap` now has live-NEST gap parity to machine precision
+> between spikes (the 2-neuron micro-parity + the distributional inhibitory network); a
+> per-neuron heterogeneous-gating regression guards the init fix in each `*_test.py`.
+
 ## 3. Evidence-backed mapping table
 
 | NEST model | Status | brainpy.state location | NEST upstream | Tests (import nest?) | Notes |
@@ -84,11 +97,11 @@ trace-tolerance in the test and confirming pass.
 | `glif_cond` | unvalidated | `brainpy_state/_nest/glif_cond.py` | <https://nest-simulator.readthedocs.io/en/stable/models/glif_cond.html> | `glif_cond_test.py` (N) | |
 | `glif_psc` | unvalidated | `brainpy_state/_nest/glif_psc.py` | <https://nest-simulator.readthedocs.io/en/stable/models/glif_psc.html> | `glif_psc_test.py` (N) | |
 | `glif_psc_double_alpha` | unvalidated | `brainpy_state/_nest/glif_psc_double_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/glif_psc_double_alpha.html> | `glif_psc_double_alpha_test.py` (N) | |
-| `hh_cond_beta_gap_traub` | unvalidated | `brainpy_state/_nest/hh_cond_beta_gap_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_beta_gap_traub.html> | `hh_cond_beta_gap_traub_test.py` (N) | gap-junction-capable HH — couples to `gap_junction` synapse |
+| `hh_cond_beta_gap_traub` | unvalidated | `brainpy_state/_nest/hh_cond_beta_gap_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_beta_gap_traub.html> | `hh_cond_beta_gap_traub_test.py` (N) | gap-junction-capable HH — couples to `gap_junction` synapse. **cluster-15b:** declares `_emission_attr='V'` (gap seam) + per-neuron gating-init fix (heterogeneous-init regression in test). Standalone live-NEST gap parity pending (`hh_psc_alpha_gap` is the validated reference for the shared seam) |
 | `hh_cond_exp_traub` | unvalidated | `brainpy_state/_nest/hh_cond_exp_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_exp_traub.html> | `hh_cond_exp_traub_test.py` (N) | |
 | `hh_psc_alpha` | unvalidated | `brainpy_state/_nest/hh_psc_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha.html> | `hh_psc_alpha_test.py` (N) | |
 | `hh_psc_alpha_clopath` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_clopath.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_clopath.html> | `hh_psc_alpha_clopath_test.py` (N) | |
-| `hh_psc_alpha_gap` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_gap.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_gap.html> | `hh_psc_alpha_gap_test.py` (N) | |
+| `hh_psc_alpha_gap` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_gap.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_gap.html> | `hh_psc_alpha_gap_test.py` (N) + `_validation/gap_junction_parity_test.py` (Y) + `_validation/gap_junction_inhibitory_network_parity_test.py` (Y) | gap-junction-capable HH. **cluster-15b:** declares `_emission_attr='V'` (gap seam) + per-neuron gating-init fix; gap-coupled membrane matches live NEST to machine precision between spikes (2-neuron micro-parity, `use_wfr=False`) + distributional network coherence. (Standalone single-neuron parity still folds into the HH-family P1.) |
 | `ht_neuron` | unvalidated | `brainpy_state/_nest/ht_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/ht_neuron.html> | `ht_neuron_test.py` (N) | Hill-Tononi 2005; ~70 KB implementation suggests complex state |
 | `iaf_bw_2001` | unvalidated | `brainpy_state/_nest/iaf_bw_2001.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_bw_2001.html> | `iaf_bw_2001_test.py` (N) | NMDA channels (simplified) |
 | `iaf_bw_2001_exact` | unvalidated | `brainpy_state/_nest/iaf_bw_2001_exact.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_bw_2001_exact.html> | `iaf_bw_2001_exact_test.py` (N) | NMDA channels (exact) |

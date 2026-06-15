@@ -19,13 +19,11 @@ import importlib.util
 import unittest
 
 import brainstate
-import braintools
+import numpy as np
 import saiunit as u
 import jax
-import jax.numpy as jnp
-import numpy as np
-import numpy.testing as npt
-from brainpy.state import aeif_cond_alpha_astro, sic_connection
+
+from brainpy_state import sic_connection, aeif_cond_alpha_astro, astrocyte_lr_1994
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -40,10 +38,6 @@ class TestSICConnection(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt_ms = 0.1
         self.dt = self.dt_ms * u.ms
-
-    def _step(self, neuron, k, sic_events=None):
-        with brainstate.environ.context(t=(k * self.dt_ms) * u.ms):
-            neuron.update(x=0.0 * u.pA, sic_events=sic_events)
 
     def test_nest_default_parameters_and_properties(self):
         syn = sic_connection()
@@ -114,204 +108,60 @@ class TestSICConnection(unittest.TestCase):
                         with self.assertRaises(nest.kernel.NESTError):
                             nest.Connect(src, tgt, syn_spec={'synapse_model': 'sic_connection'})
 
-    def test_event_helpers_match_nest_delay_mapping(self):
-        syn = sic_connection(weight=2.0, delay_steps=7)
-        dftype = brainstate.environ.dftype()
-        coeff = np.asarray([0.5, -1.25, 3.0, 0.0], dtype=dftype)
+    def test_host_queue_api_removed(self):
+        # The bucket-3 de-queue: the host-side coefficient-array/event-emulator API
+        # (prepare_secondary_event / to_aeif_sic_event / to_sic_event /
+        # coeffarray_to_step_events) is removed. The Simulator builds the routing
+        # from the spec's weight / delay_steps + sender/receiver enforcement instead.
+        syn = sic_connection()
+        for gone in ('prepare_secondary_event', 'to_aeif_sic_event', 'to_sic_event',
+                     'coeffarray_to_step_events', '_to_local_delay_steps', '_to_coeff_array'):
+            self.assertFalse(hasattr(syn, gone), f'{gone} should be removed')
+        # The thin NEST-parity spec survives: weight, delay_steps, status, enforcement.
+        self.assertEqual(syn.weight, 1.0)
+        self.assertEqual(syn.delay_steps, 1)
+        self.assertIn('weight', syn.get_status())
 
-        sec = syn.prepare_secondary_event(coeff)
-        npt.assert_allclose(sec['coeffarray'], coeff, atol=0.0, rtol=0.0)
-        self.assertAlmostEqual(sec['weight'], 2.0, delta=0.0)
-        self.assertEqual(sec['delay_steps'], 7)
 
-        event = syn.to_aeif_sic_event(coeff, min_delay_steps=3, multiplicity=4.0)
-        npt.assert_allclose(event['coeffs'], coeff, atol=0.0, rtol=0.0)
-        self.assertAlmostEqual(event['weight'], 8.0, delta=0.0)
-        self.assertEqual(event['delay_steps'], 5)
+class TestSICConnectionStatusAndCoercion(unittest.TestCase):
+    """The kept NEST-parity spec: status getter, scalar coercion, model-name resolution."""
 
-        mapped = syn.coeffarray_to_step_events(coeff, min_delay_steps=3, multiplicity=4.0)
-        self.assertEqual(len(mapped), coeff.size)
-        for i, ev in enumerate(mapped):
-            self.assertAlmostEqual(ev['coeffs'], float(coeff[i]), delta=0.0)
-            self.assertAlmostEqual(ev['weight'], 8.0, delta=0.0)
-            self.assertEqual(ev['delay_steps'], 5 + i)
+    def test_get_returns_status_value_or_raises(self):
+        syn = sic_connection(weight=0.8, delay_steps=2)
+        self.assertEqual(syn.get('status'), syn.get_status())
+        self.assertAlmostEqual(syn.get('weight'), 0.8, delta=0.0)
+        self.assertEqual(syn.get('delay_steps'), 2)
+        with self.assertRaisesRegex(KeyError, 'Unsupported key'):
+            syn.get('not_a_field')
 
-        with brainstate.environ.context(dt=self.dt):
-            n_coeffarray = aeif_cond_alpha_astro(
-                1,
-                V_th=1e6 * u.mV,
-                V_peak=1e6 * u.mV,
-                Delta_T=0.0 * u.mV,
-                g_L=0.0 * u.nS,
-                C_m=100.0 * u.pF,
-                a=0.0 * u.nS,
-                b=0.0 * u.pA,
-                I_e=0.0 * u.pA,
-                V_initializer=braintools.init.Constant(0.0 * u.mV),
-                V_reset=0.0 * u.mV,
-            )
-            n_mapped = aeif_cond_alpha_astro(
-                1,
-                V_th=1e6 * u.mV,
-                V_peak=1e6 * u.mV,
-                Delta_T=0.0 * u.mV,
-                g_L=0.0 * u.nS,
-                C_m=100.0 * u.pF,
-                a=0.0 * u.nS,
-                b=0.0 * u.pA,
-                I_e=0.0 * u.pA,
-                V_initializer=braintools.init.Constant(0.0 * u.mV),
-                V_reset=0.0 * u.mV,
-            )
-            n_coeffarray.init_state()
-            n_mapped.init_state()
+    def test_set_status_delay_steps_key(self):
+        # The 'delay_steps' branch of set_status routes through set_delay_steps.
+        syn = sic_connection()
+        syn.set_status({'delay_steps': 5})
+        self.assertEqual(syn.delay_steps, 5)
+        # Supplying delay and delay_steps together is accepted when they agree.
+        syn.set_status(delay=4, delay_steps=4)
+        self.assertEqual(syn.delay_steps, 4)
 
-            n_steps = 20
-            v_shape = n_coeffarray.V.value.shape  # (1,)
+    def test_scalar_coercion_strips_units_and_rejects_bad_shapes(self):
+        # _to_float_scalar / _to_int_scalar strip arbitrary units and validate shape.
+        self.assertAlmostEqual(sic_connection._to_float_scalar(2.5 * u.mV, 'weight'), 2.5)
+        self.assertEqual(sic_connection._to_int_scalar(3.0 * u.ms, 'delay'), 3)
+        with self.assertRaisesRegex(ValueError, 'must be scalar'):
+            sic_connection._to_float_scalar(np.array([1.0, 2.0]), 'weight')
+        with self.assertRaisesRegex(ValueError, 'must be scalar'):
+            sic_connection._to_int_scalar(np.array([1, 2]), 'delay')
+        with self.assertRaisesRegex(ValueError, 'must be finite'):
+            sic_connection._to_int_scalar(float('inf'), 'delay')
 
-            # Pre-compute I_SIC schedules using Python queue simulation.
-            # i_sic_sched[k] = value popped from queue at step k
-            # (stored into I_sic.value at end of step k, used by ODE at step k+1).
-            i_sic_sched_coeff = np.zeros((n_steps,) + v_shape, dtype=dftype)
-            i_sic_sched_mapped = np.zeros((n_steps,) + v_shape, dtype=dftype)
-            for k in range(n_steps):
-                ev_c = event if k == 0 else None
-                ev_m = mapped if k == 0 else None
-                n_coeffarray._enqueue_sic_events(ev_c, v_shape)
-                i_sic_sched_coeff[k] = n_coeffarray._pop_sic_current(v_shape)
-                n_coeffarray._sic_step += 1
-                n_mapped._enqueue_sic_events(ev_m, v_shape)
-                i_sic_sched_mapped[k] = n_mapped._pop_sic_current(v_shape)
-                n_mapped._sic_step += 1
-
-            # Reset Python queues; the for_loop will inject I_sic via JAX arrays.
-            n_coeffarray._sic_queue = {}
-            n_coeffarray._sic_step = 0
-            n_mapped._sic_queue = {}
-            n_mapped._sic_step = 0
-
-            i_sic_coeff_jax = jnp.asarray(i_sic_sched_coeff)   # (n_steps, 1)
-            i_sic_mapped_jax = jnp.asarray(i_sic_sched_mapped)  # (n_steps, 1)
-            t_array = jnp.arange(n_steps, dtype=dftype) * self.dt_ms  # ms
-
-            def body(inputs):
-                t_k, i_sic_coeff_k, i_sic_mapped_k = inputs
-                with brainstate.environ.context(t=t_k * u.ms):
-                    # update() reads I_sic.value (set at previous step) for the ODE,
-                    # then sets I_sic.value = 0 (empty queue pop).
-                    n_coeffarray.update(x=0.0 * u.pA, sic_events=None)
-                    # Override with pre-computed value for next step's ODE.
-                    n_coeffarray.I_sic.value = i_sic_coeff_k * u.pA
-                    n_mapped.update(x=0.0 * u.pA, sic_events=None)
-                    n_mapped.I_sic.value = i_sic_mapped_k * u.pA
-                return (
-                    u.get_mantissa(n_coeffarray.I_sic.value)[0],
-                    u.get_mantissa(n_mapped.I_sic.value)[0],
-                )
-
-            results = brainstate.transform.for_loop(body, (t_array, i_sic_coeff_jax, i_sic_mapped_jax))
-            trace_coeffarray = np.array(results[0])
-            trace_mapped = np.array(results[1])
-
-        npt.assert_allclose(trace_coeffarray, trace_mapped, atol=1e-12, rtol=0.0)
-
-    def test_i_sic_trace_matches_nest_pipeline(self):
-        if not _is_nest_available():
-            self.skipTest('NEST simulator not available')
-
-        import nest
-
-        required_models = {'astrocyte_lr_1994', 'aeif_cond_alpha_astro'}
-        if not required_models.issubset(set(nest.Models())):
-            self.skipTest('NEST astrocyte/SIC models not available')
-
-        dt_ms = self.dt_ms
-        sim_ms = 30.0
-        weight = 1.7
-
-        nest.set_verbosity('M_WARNING')
-        nest.ResetKernel()
-        nest.resolution = dt_ms
-        nest.use_wfr = False
-        nest.local_num_threads = 1
-
-        astro_defaults = nest.GetDefaults('astrocyte_lr_1994')
-        sic_defaults = nest.GetDefaults('sic_connection')
-        sic_delay_ms = float(sic_defaults['delay'])
-        sic_th = float(astro_defaults['SIC_th'])
-        sic_scale = float(astro_defaults['SIC_scale'])
-
-        astro = nest.Create('astrocyte_lr_1994', params={'Ca_astro': 0.2})
-        nrn = nest.Create('aeif_cond_alpha_astro')
-        nest.Connect(astro, nrn, syn_spec={'synapse_model': 'sic_connection', 'weight': weight, 'delay': sic_delay_ms})
-
-        mm_nrn = nest.Create('multimeter', params={'record_from': ['I_SIC'], 'interval': dt_ms})
-        mm_astro = nest.Create('multimeter', params={'record_from': ['Ca_astro'], 'interval': dt_ms})
-        nest.Connect(mm_nrn, nrn)
-        nest.Connect(mm_astro, astro)
-
-        nest.Simulate(sim_ms)
-
-        nrn_events = mm_nrn.get('events')
-        astro_events = mm_astro.get('events')
-        dftype = brainstate.environ.dftype()
-        nest_times = np.asarray(nrn_events['times'], dtype=dftype)
-        nest_i_sic = np.asarray(nrn_events['I_SIC'], dtype=dftype)
-        ca = np.asarray(astro_events['Ca_astro'], dtype=dftype)
-        self.assertGreater(ca.size, 0)
-
-        calc_thr = (ca - sic_th) * 1000.0
-        coeff = np.zeros_like(calc_thr)
-        mask = calc_thr > 1.0
-        coeff[mask] = np.log(calc_thr[mask]) * sic_scale
-
-        # Multimeter samples correspond to end-of-step states (t+dt), so we shift by one step
-        # when replaying SIC events in the local step loop.
-        delay_steps = int(round(sic_delay_ms / dt_ms)) + 1
-        syn = sic_connection(weight=weight, delay_steps=delay_steps)
-
-        with brainstate.environ.context(dt=self.dt):
-            neuron = aeif_cond_alpha_astro(1)
-            neuron.init_state()
-
-            n_steps = ca.size
-            v_shape = neuron.V.value.shape  # (1,)
-
-            # Pre-compute I_SIC schedule using Python queue simulation.
-            i_sic_sched = np.zeros((n_steps,) + v_shape, dtype=dftype)
-            for k in range(n_steps):
-                ev = syn.to_sic_event(coeff=coeff[k], min_delay_steps=1)
-                neuron._enqueue_sic_events(ev, v_shape)
-                i_sic_sched[k] = neuron._pop_sic_current(v_shape)
-                neuron._sic_step += 1
-
-            # Reset Python queue; inject I_sic via JAX array in for_loop.
-            neuron._sic_queue = {}
-            neuron._sic_step = 0
-
-            i_sic_jax = jnp.asarray(i_sic_sched)  # (n_steps, 1)
-            t_array = jnp.arange(n_steps, dtype=dftype) * dt_ms  # ms
-
-            def body(inputs):
-                t_k, i_sic_k = inputs
-                with brainstate.environ.context(t=t_k * u.ms):
-                    neuron.update(x=0.0 * u.pA, sic_events=None)
-                    neuron.I_sic.value = i_sic_k * u.pA
-                return u.get_mantissa(neuron.I_sic.value)[0]
-
-            bp_i_sic = np.array(brainstate.transform.for_loop(body, (t_array, i_sic_jax)))
-
-        bp_indices = np.rint(nest_times / dt_ms).astype(np.int64) - 1
-        valid = (bp_indices >= 0) & (bp_indices < bp_i_sic.size)
-        bp_indices = bp_indices[valid]
-
-        npt.assert_allclose(
-            bp_i_sic[bp_indices],
-            nest_i_sic[valid],
-            atol=2e-10,
-            rtol=0.0,
-            err_msg='I_SIC trace mismatch vs NEST with sic_connection replay',
-        )
+    def test_model_name_resolves_class_and_instance(self):
+        # supports_connection accepts string names, classes, and instances; the
+        # sender/receiver contract holds however the model is identified.
+        self.assertTrue(
+            sic_connection.supports_connection(astrocyte_lr_1994, aeif_cond_alpha_astro))
+        # An instance routes through __class__.__name__ (here a non-supported source).
+        self.assertFalse(
+            sic_connection.supports_connection(sic_connection(), aeif_cond_alpha_astro))
 
 
 if __name__ == '__main__':

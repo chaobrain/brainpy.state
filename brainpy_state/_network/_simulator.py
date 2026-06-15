@@ -18,6 +18,7 @@ import itertools
 from typing import Optional
 
 import brainstate
+import jax
 import jax.numpy as jnp
 import saiunit as u
 
@@ -26,6 +27,7 @@ from brainpy_state._nest.ac_generator import ac_generator as _ac_generator
 from brainpy_state._nest.dc_generator import dc_generator as _dc_generator
 from brainpy_state._nest.multimeter import multimeter as _multimeter
 from brainpy_state._nest.noise_generator import noise_generator as _noise_generator
+from brainpy_state._nest.sic_connection import sic_connection as _sic_connection
 from brainpy_state._nest.spike_recorder import spike_recorder as _spike_recorder
 from brainpy_state._nest.step_current_generator import step_current_generator as _step_current_generator
 from brainpy_state._nest.volume_transmitter import volume_transmitter as _volume_transmitter
@@ -152,6 +154,8 @@ _RECORDABLE_ALIAS = {
     # Injected current-generator input (NEST ``I`` = S_.I_ = currents_ ring buffer);
     # the current-based models buffer it on the I_stim ShortTermState.
     'I': ('I_stim',),
+    # Astrocyte slow-inward current (aeif_cond_alpha_astro stores it on I_sic).
+    'I_SIC': ('I_sic',),
     'I_syn_ex': ('I_syn_ex', 'i_syn_ex'),
     'I_syn_in': ('I_syn_in', 'i_syn_in'),
     # HH gating (NEST Act_m/Inact_h/Act_n -> brainpy m/h/n).
@@ -434,6 +438,7 @@ class Simulator(brainstate.nn.Module):
         self._analog_taps = {}                # id(recorder) -> (id(pop), idx, recordables)
         self._weight_taps = {}                # id(proj) -> EventPlasticProj (weight tap)
         self._current_injectors = []          # (device, post_pop, post_idx, weight, key, comp, ncomp)
+        self._gap_couplers = []               # (G, D, v_reader, post_pop, key) gap-junction couplers
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
         self._connections = []                # (pre_pop, post_pop, model_name, proj), registration order
@@ -1019,6 +1024,116 @@ class Simulator(brainstate.nn.Module):
             setattr(self, f'_proj_{p_ord}', proj)
             projs.append(proj)
         return projs
+    # -- gap junctions (goal 15b) ------------------------------------------
+    @staticmethod
+    def _is_gap_synapse(synapse):
+        """Whether a ``connect(synapse=...)`` argument selects gap-junction coupling.
+
+        ``gap_junction`` is the only synapse model that requires symmetric
+        connectivity (``REQUIRES_SYMMETRIC=True``); the Simulator detects it by that
+        marker and builds its own explicit-lag difference-deposit coupler, never
+        instantiating the reference model or its waveform-relaxation machinery.
+        """
+        return bool(getattr(synapse, 'REQUIRES_SYMMETRIC', False))
+
+    @staticmethod
+    def _gap_conductance(weight):
+        """Resolve a gap connection weight to a scalar conductance (nS mantissa).
+
+        The gap weight is the coupling conductance ``g`` (nS); the difference deposit
+        ``g * (V_pre - V_post)`` needs one concrete scalar shared by every gap edge.
+        A unit ``Quantity`` is read in nS; a bare scalar is taken as nS. Per-edge /
+        random / callable gap weights are out of scope (like sparse gaps).
+        """
+        if weight is None or callable(weight):
+            raise ValueError(
+                'gap_junction coupling requires a concrete scalar conductance weight '
+                '(nS); a callable initializer or an absent weight cannot build the '
+                'gap matrix G.')
+        w = weight
+        if isinstance(w, u.Quantity):
+            w = u.get_mantissa(w / u.nS)       # nS-valued; raises if not a conductance
+        w = jnp.asarray(w)
+        if w.ndim != 0:
+            raise ValueError(
+                'gap_junction coupling uses a scalar conductance g (one value for all '
+                f'gap edges); got a non-scalar weight of shape {tuple(w.shape)}. '
+                'Per-edge gap weights are out of scope.')
+        return float(w)
+
+    @staticmethod
+    def _gap_current(G, D, v_pre, v_post):
+        r"""The explicit-lag gap difference current ``I_gap = G @ V_pre - D * V_post``.
+
+        ``G`` (nS) is the dense symmetric gap-conductance matrix, ``D = rowsum(G)``
+        the per-neuron total gap conductance, and ``v_pre`` / ``v_post`` (mV) the
+        one-step-lagged pre / post membrane voltages. For a recurrent gap the two
+        voltage vectors are identical, giving ``(G - diag(D)) @ V`` --- the negated
+        graph Laplacian of the gap graph applied to ``V``. ``nS * mV = pA``, so the
+        result is the gap current in pA; at equal voltages it is exactly zero.
+        """
+        return G @ v_pre - D * v_post
+
+    def _build_gap_coupling(self, pre_seg, post_seg, rule, weight, delay, comm,
+                            allow_autapses, allow_multapses, seed, ordinal):
+        r"""Register a recurrent gap-junction coupler (the difference deposit, 15b).
+
+        Builds the dense **symmetric** gap-conductance matrix ``G`` (nS) over the
+        post population from the rule's realized edges (both directions materialized,
+        hollow diagonal), caches ``D = rowsum(G)`` and the post's V emission-holder
+        reader, and appends a coupler driven each step in :meth:`update`: it deposits
+        ``I_gap = G @ V[n-1] - D * V[n-1]`` into the post's current channel
+        (``add_current_input`` -> ``sum_current_inputs``) under the substrate's
+        one-step pipeline lag (the WFR seed, cluster 15a). No waveform relaxation;
+        the reference ``gap_junction`` WFR class is never used.
+
+        Raises
+        ------
+        ValueError
+            If pre and post are different populations (gap coupling is recurrent), a
+            delay is given (gap is instantaneous), ``comm='sparse'`` (the gap ``G@V``
+            is a dense matmul), the post does not emit ``V`` (``_emission_attr='V'``),
+            or the conductance weight is not a concrete scalar.
+        """
+        pre_pop = pre_seg.population
+        post_pop = post_seg.population
+        if pre_pop is not post_pop:
+            raise ValueError(
+                'gap_junction coupling is recurrent (electrical coupling within one '
+                'population); connect a population to itself, got '
+                f'{type(pre_pop).__name__} -> {type(post_pop).__name__}.')
+        if delay is not None:
+            raise ValueError(
+                'gap_junction connections carry no delay (instantaneous electrical '
+                'coupling); remove the delay= argument.')
+        if comm != 'dense':
+            raise ValueError(
+                "gap_junction coupling rides comm='dense' (the gap G @ V matmul); "
+                "comm='sparse' binarizes the presynaptic voltage. Use comm='dense'.")
+        emit_holder = getattr(self, f'_emit_holder_{id(post_pop)}', None)
+        if emit_holder is None:
+            raise ValueError(
+                f'{type(post_pop).__name__} does not emit its membrane voltage for '
+                "gap coupling (it must declare _emission_attr='V'); no emission "
+                'holder was allocated by create().')
+        g = self._gap_conductance(weight)
+        n_pop = _flat_size(post_pop)
+        n_seg = int(post_seg.indices.shape[0])
+        spec = rule.sample(n_seg, n_seg,
+                           key=jax.random.key(self._derive_seed(seed, ordinal)),
+                           pre_is_post=True, allow_autapses=allow_autapses,
+                           allow_multapses=allow_multapses)
+        # Realized edges -> a hollow, symmetric boolean adjacency over the full post
+        # population (both directions materialized: NEST's make_symmetric / the
+        # all_to_all bidirectionality), then scaled by the scalar conductance.
+        gpre = jnp.asarray(post_seg.indices)[spec.pre_idx]
+        gpost = jnp.asarray(post_seg.indices)[spec.post_idx]
+        A = jnp.zeros((n_pop, n_pop), dtype=bool).at[gpre, gpost].set(True)
+        A = (A | A.T) & ~jnp.eye(n_pop, dtype=bool)
+        G = A.astype(brainstate.environ.dftype()) * g            # (n_pop, n_pop) nS
+        D = G.sum(axis=1)                                         # rowsum (n_pop,) nS
+        self._gap_couplers.append((G, D, _holder_reader(emit_holder), post_pop,
+                                   f'gap_inj_{ordinal}'))
 
     def _connect_pair(self, pre_seg, post_seg, rule, weight, delay,
                       allow_autapses, allow_multapses, seed, comm='dense',
@@ -1031,6 +1146,20 @@ class Simulator(brainstate.nn.Module):
         if synapse is not None and getattr(synapse, '_IS_DIFFUSION', False):
             return self._build_siegert_diffusion(
                 pre_seg, post_seg, rule, weight, delay, synapse, comm, seed, ordinal)
+        # Gap-junction coupling (goal 15b) is dispatched on the gap synapse model
+        # before the plastic/static paths: it builds its own explicit-lag difference-
+        # deposit coupler (no EventProjection, no rule kernel, no WFR).
+        if synapse is not None and self._is_gap_synapse(synapse):
+            self._build_gap_coupling(pre_seg, post_seg, rule, weight, delay, comm,
+                                     allow_autapses, allow_multapses, seed, ordinal)
+            return None
+        # One-way astrocyte->neuron slow-inward-current edge (NEST sic_connection):
+        # dispatched before the plastic path, it builds an ``as_current``
+        # EventProjection reading the astrocyte's emission holder.
+        if isinstance(synapse, _sic_connection):
+            return self._connect_sic(pre_seg, post_seg, rule, weight, delay,
+                                     allow_autapses, allow_multapses, seed, ordinal,
+                                     synapse, comm)
         post_holder = getattr(self, f'_holder_{id(post_pop)}', None)
         post_reader = _holder_reader(post_holder) if post_holder is not None else None
         # voltage-coupled reader (#2) also carries broadcast signal sources (the VT n
@@ -1105,6 +1234,102 @@ class Simulator(brainstate.nn.Module):
         model_name = (type(proj.rule).__name__ if isinstance(proj, EventPlasticProj)
                       else 'static_synapse')
         self._connections.append((source_pop, post_pop, model_name, proj))
+        setattr(self, f'_proj_{ordinal}', proj)
+        return proj
+
+    def _connect_sic(self, pre_seg, post_seg, rule, weight, delay,
+                     allow_autapses, allow_multapses, seed, ordinal, synapse, comm):
+        r"""Wire a one-way astrocyte->neuron slow-inward-current (SIC) connection.
+
+        The astrocyte (``astrocyte_lr_1994``) is the sender: phase 2 captures its
+        per-step graded ``SIC`` into the emission holder. The ``sic_connection``
+        deposits ``weight·SIC`` into the receiver's (``aeif_cond_alpha_astro``)
+        labelled ``'I_SIC'`` *current* channel through an ``as_current``
+        :class:`EventProjection`. The edge is one-way (a SICEvent, no back-channel),
+        and the NEST sender/receiver contract is enforced by
+        :meth:`sic_connection.check_connection`.
+
+        Timing follows the deleted host queue's ``base_offset = delay_steps - 1``:
+        ``delay_steps=1`` (the NEST default / minimum delay) rides the substrate's
+        intrinsic pipeline latency with no extra :class:`InputDelay`; a larger
+        ``delay_steps`` adds ``(delay_steps - 1)`` steps. The small residual offset
+        vs NEST is absorbed by ``align_steps`` in parity.
+
+        Parameters
+        ----------
+        pre_seg, post_seg : _Segment
+            The presynaptic astrocyte and postsynaptic neuron segments.
+        rule : ConnRule
+            Connectivity rule (fan-out from astrocytes to neurons).
+        weight : ArrayLike or None
+            Connect-level weight override (unitless); ``None`` uses the spec's
+            ``synapse.weight``.
+        delay : Quantity or None
+            Connect-level delay override; ``None`` uses ``delay_steps``.
+        allow_autapses, allow_multapses : bool
+            Passed through to the connectivity sampler.
+        seed : int or None
+            Base seed for the connectivity draw.
+        ordinal : int
+            Projection ordinal (registration key).
+        synapse : sic_connection
+            The connection spec carrying ``weight`` / ``delay_steps`` and the
+            sender/receiver enforcement.
+        comm : str
+            Communication mode; ``'sparse'`` is rejected (a graded current must
+            ride the dense matmul).
+
+        Returns
+        -------
+        EventProjection
+            The ``as_current`` projection delivering ``weight·SIC`` into ``'I_SIC'``.
+
+        Raises
+        ------
+        ValueError
+            If the sender/receiver models are not the supported SIC pair, if the
+            source is a deferred generator, if ``comm='sparse'``, or if no emission
+            holder was allocated for the astrocyte.
+        """
+        post_pop = post_seg.population
+        pre_name = (pre_seg.spec.model_cls.__name__ if isinstance(pre_seg, _GenSegment)
+                    else type(pre_seg.population).__name__)
+        # Enforce the NEST sender/receiver contract (astrocyte_lr_1994 sends a
+        # SICEvent; aeif_cond_alpha_astro handles it). Raises ValueError otherwise.
+        synapse.check_connection(pre_name, type(post_pop).__name__)
+        if isinstance(pre_seg, _GenSegment):
+            raise ValueError(
+                'a sic_connection source must be an astrocyte_lr_1994 population, '
+                'not a deferred generator.')
+        if comm == 'sparse':
+            raise ValueError(
+                "a sic_connection delivers a graded current and must ride "
+                "comm='dense'; comm='sparse' binarises the presynaptic value.")
+        pre_pop = pre_seg.population
+        emit_holder = getattr(self, f'_emit_holder_{id(pre_pop)}', None)
+        if emit_holder is None:
+            raise ValueError(
+                f'{type(pre_pop).__name__} declares _emission_attr but no emission '
+                'holder was allocated by create().')
+        # Resolve weight (connect override else the spec weight) and delay (connect
+        # override else ``(delay_steps - 1)`` extra steps). The SIC value and weight
+        # are unitless; the neuron attaches pA on write-back into I_sic.
+        eff_weight = weight if weight is not None else synapse.weight
+        if delay is not None:
+            eff_delay = delay
+        elif int(getattr(synapse, 'delay_steps', 1)) > 1:
+            eff_delay = (int(synapse.delay_steps) - 1) * brainstate.environ.get_dt()
+        else:
+            eff_delay = None
+        label = getattr(pre_pop, '_emission_current_label', 'I_SIC')
+        proj = EventProjection(
+            pre_spike=_holder_reader(emit_holder), n_pre_pop=_flat_size(pre_pop),
+            pre_local_idx=pre_seg.indices, post=post_pop,
+            post_local_idx=post_seg.indices, rule=rule, weight=eff_weight,
+            delay=eff_delay, comm='dense', as_current=True, channel_label=label,
+            pre_is_post=False, allow_autapses=allow_autapses,
+            allow_multapses=allow_multapses, seed=self._derive_seed(seed, ordinal))
+        self._connections.append((pre_pop, post_pop, 'sic_connection', proj))
         setattr(self, f'_proj_{ordinal}', proj)
         return proj
 
@@ -1242,6 +1467,15 @@ class Simulator(brainstate.nn.Module):
             else:
                 pop.add_current_input(
                     key, self._scatter_current_compartment(cur, pop, idx, comp, ncomp))
+        # 1c) gap-junction couplers deposit the explicit-lag difference current
+        #     I_gap = G @ V[n-1] - D * V[n-1] (pA) into the post's current channel.
+        #     V[n-1] is the previous step's voltage from the V emission holder (the
+        #     one-step pipeline lag = NEST's use_wfr=False seed, cluster 15a); the
+        #     deposit rides the same current ring buffer as the device injectors.
+        #     For a recurrent gap V_pre and V_post are the same population's V.
+        for G, D, v_reader, pop, key in self._gap_couplers:
+            v = jnp.asarray(v_reader())                  # (n_pop,) mV, one step lagged
+            pop.add_current_input(key, self._gap_current(G, D, v, v) * u.pA)
         # 2) drive neurons/generators and capture their output into holders
         for m in children:
             if isinstance(m, (EventProjection, EventPlasticProj, _SpikeHolder)):

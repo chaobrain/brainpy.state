@@ -51,6 +51,48 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 > NEST at every `weight_recorder` send step); the `urbanczik_synapse_example` demo
 > exercises the potentiating branch end-to-end (`examples-gap.md` §3.3).
 
+> **Update (cluster-15b).** `gap_junction` is no longer a divergent unknown: it is
+> validated against live NEST through the `Simulator` gap-coupling seam. The port does
+> **not** use NEST's waveform relaxation — it reproduces NEST's `use_wfr=False` regime
+> with an explicit **one-step-lagged difference current** deposited into the post's
+> *current* channel: `I_gap,i[n] = Σ_j g_ij (V_j[n−1] − V_i[n−1])` = `(G − diag(D)) @ V[n−1]`,
+> the negated graph Laplacian of the symmetric gap graph (`D = rowsum(G)`, `nS·mV = pA`).
+> The off-diagonal `G @ V_pre` rides the SAME seam-(H) continuous-emission machinery as the
+> rate/Wang seams (the post's `V` emission holder, `_emission_attr='V'`); the `−D·V_post`
+> self term keeps the rest balance (`I_gap ≡ 0` when all `V` are equal). `REQUIRES_SYMMETRIC`
+> is enforced at connect time (both directions materialized, hollow diagonal, scalar `g`,
+> no delay, `comm='dense'`). **Design A resolved to option (a)** (full-lag difference deposit;
+> no off-diagonal-seam + neuron-side self-leak split was needed). Parity: the 2-neuron
+> micro-parity (`_validation/gap_junction_parity_test.py`) matches NEST to machine precision
+> between spikes (median ~1e-3 mV, p95 ~0.1 mV), the only divergence an O(dt) AP-edge timing
+> jitter (< 0.5 % of samples); the inhibitory-network Golomb coherence matches
+> distributionally at async/sync gap weights (`_validation/gap_junction_inhibitory_network_parity_test.py`).
+> The reference `gap_junction.py` WFR class (`begin_wfr_cycle`/`evaluate_gap_current`) stays
+> in the tree but is **never invoked** on the simulation path (asserted by a mock guard).
+> Per-edge / random / `comm='sparse'` gap weights remain out of scope. See `examples-gap.md` §3.6.
+
+> **Update (cluster-15d) — last bucket-3 model on the substrate.** `sic_connection`
+> (astrocyte→neuron slow-inward current) closes the last bucket-3 *model* cluster (only the
+> Siegert `diffusion_connection` remains queued → 15c) and is now a wired,
+> parity-validated tripartite loop on the `Simulator`. `astrocyte_lr_1994` emits
+> its graded `SIC` through the seam-(H) continuous-emission path
+> (`_emission_attr='SIC'`, `_emission_current=True`); the one-way `sic_connection`
+> (sender/receiver-enforced `astrocyte_lr_1994 → aeif_cond_alpha_astro` via
+> `check_connection`) deposits `weight·SIC` into the neuron's labelled `'I_SIC'`
+> **current** channel through a new `as_current` `EventProjection` mode (a pA current
+> entering `dV/dt`, not a delta/conductance — requires `comm='dense'`). The neuron→astro
+> arm stays the ordinary delta path (`Δ_IP3·w` IP3 via `sum_delta_inputs`). The
+> **bucket-3 de-queue**: the host-side `_sic_queue` event-emulator on the neuron and
+> `sic_connection`'s host-queue coeff-array API (`prepare_secondary_event` /
+> `to_aeif_sic_event` / `to_sic_event` / `coeffarray_to_step_events`) are **deleted**, so
+> the whole bidirectional loop lowers under `Simulator.simulate`'s `for_loop`. Explicit
+> one-step pipeline lag both directions; `sic_connection`'s NEST default delay `1.0 ms`
+> maps to `delay_steps=10`. Live-NEST parity (`_validation/astrocyte_sic_test.py`) is
+> near-exact: SIC-response IP3 `2.4e-5` / Ca `1.9e-4` / I_SIC `2.3e-4`; driven loop IP3
+> `0` / Ca `1e-6` / I_SIC `6e-4` / V_pre `3.7e-4 mV`; astro-network seed-mean post rate
+> `9.0=9.0` (SIC off) → `14.0=14.0` (SIC on, the SIC-raises-firing law, identical on both
+> sims). `sic_connection_test.py` stays NEST-free rule tests.
+
 | Bucket | Count | Notes |
 |---|---:|---|
 | implemented | 0 | No tolerance/duration documented in test headers |
@@ -69,13 +111,13 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 | `clopath_synapse` | divergent | `brainpy_state/_nest/clopath_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/clopath_synapse.html> | `clopath_synapse_test.py` (Y) | voltage-based STDP; needs Clopath-capable postsynaptic neuron (`aeif_psc_delta_clopath`, `hh_psc_alpha_clopath`) |
 | `cont_delay_synapse` | divergent | `brainpy_state/_nest/cont_delay_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/cont_delay_synapse.html> | `cont_delay_synapse_test.py` (Y) | continuous (non-grid) delays |
 | `diffusion_connection` | divergent | `brainpy_state/_nest/diffusion_connection.py` | <https://nest-simulator.readthedocs.io/en/stable/models/diffusion_connection.html> | `diffusion_connection_test.py` (Y) | Siegert-only rate connection |
-| `gap_junction` | divergent | `brainpy_state/_nest/gap_junction.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gap_junction.html> | `gap_junction_test.py` (Y) | requires gap-junction-capable neurons (`hh_*_gap`, `hh_cond_beta_gap_traub`) — NEST iterates via waveform-relaxation; brainpy.state likely uses a different fixed-point scheme |
+| `gap_junction` | divergent | `brainpy_state/_nest/gap_junction.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gap_junction.html> | `gap_junction_test.py` (Y) + `_validation/gap_junction_parity_test.py` (Y) + `_validation/gap_junction_inhibitory_network_parity_test.py` (Y) | gap-junction-capable neurons (`hh_psc_alpha_gap`, `hh_cond_beta_gap_traub`). **Validated (cluster-15b):** the `Simulator` realizes the gap as an explicit one-step-lagged difference current `I_gap = (G−diag(D))@V[n−1]` into the post current channel (NEST's `use_wfr=False` regime; **no** waveform relaxation, reference WFR class unused) on the seam-(H) V-emission path. 2-neuron micro-parity to machine precision between spikes (only O(dt) AP-edge jitter) + distributional network-coherence parity. `REQUIRES_SYMMETRIC` enforced; sparse / per-edge weights out of scope. See the cluster-15b Update above + `examples-gap.md` §3.6 |
 | `ht_synapse` | divergent | `brainpy_state/_nest/ht_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/ht_synapse.html> | `ht_synapse_test.py` (Y) | Hill-Tononi depression |
 | `jonke_synapse` | divergent | `brainpy_state/_nest/jonke_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/jonke_synapse.html> | `jonke_synapse_test.py` (Y) | STDP with additive factors |
 | `quantal_stp_synapse` | unvalidated | `brainpy_state/_nest/quantal_stp_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/quantal_stp_synapse.html> | `quantal_stp_synapse_test.py` (N) | probabilistic STP — PRNG sensitive |
 | `rate_connection_delayed` | divergent | `brainpy_state/_nest/rate_connection_delayed.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_connection_delayed.html> | `rate_connection_delayed_test.py` (Y) | |
 | `rate_connection_instantaneous` | divergent | `brainpy_state/_nest/rate_connection_instantaneous.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_connection_instantaneous.html> | `rate_connection_instantaneous_test.py` (Y) | requires waveform-relaxation (`use_wfr`) in NEST — brainpy.state semantics for instantaneous-rate loops needs verification |
-| `sic_connection` | divergent | `brainpy_state/_nest/sic_connection.py` | <https://nest-simulator.readthedocs.io/en/stable/models/sic_connection.html> | `sic_connection_test.py` (Y) | astrocyte slow-inward-current; test skips when NEST lacks the model |
+| `sic_connection` | nest_validated | `brainpy_state/_nest/sic_connection.py` | <https://nest-simulator.readthedocs.io/en/stable/models/sic_connection.html> | `sic_connection_test.py` (N, rule) + `_validation/astrocyte_sic_test.py` (Y) | astrocyte slow-inward current; one-way `as_current` SIC loop wired & validated (cluster 15d, §2 update). Bucket-3 de-queue done |
 | `static_synapse` | divergent | `brainpy_state/_nest/static_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/static_synapse.html> | `static_synapse_test.py` (Y) | default synapse |
 | `static_synapse_hom_w` | divergent | `brainpy_state/_nest/static_synapse_hom_w.py` | <https://nest-simulator.readthedocs.io/en/stable/models/static_synapse_hom_w.html> | `static_synapse_hom_w_test.py` (Y) | homogeneous weight variant |
 | `stdp_dopamine_synapse` | divergent | `brainpy_state/_nest/stdp_dopamine_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/stdp_dopamine_synapse.html> | `stdp_dopamine_synapse_test.py` (Y) | needs `volume_transmitter`; eligibility-trace timing relative to dopamine signal is the high-risk surface |
@@ -167,6 +209,20 @@ has no `brainpy.state` analog. Tracked in `network-api-gap.md`.
   semantics* are an NEST `Connect`-time convention (`receptor_type` in
   syn_spec). Coordinate with `network-api-gap.md` because Connect-side parity is
   needed for these neurons to be used as NEST does.
+- **SIC loop — current deposit, not delta (RESOLVED cluster-15d).** The
+  astrocyte slow-inward current is a **pA current entering `dV/dt`**, not a
+  delta/conductance event. Routing it through the default delta channel would be
+  wrong; `sic_connection` deposits via a new `as_current` `EventProjection` mode
+  into the neuron's labelled `'I_SIC'` *current* channel. Two read-order rules
+  guard correctness: the labelled `I_SIC` current read must precede the
+  unlabelled `I_stim` read (whose `label=None` sums *all* current channels, else
+  it would double-count SIC), and graded current requires `comm='dense'` (sparse
+  binarises the presynaptic value). Both lags (neuron→astro spikes, astro→neuron
+  SIC) carry the substrate's intrinsic one-step pipeline latency; `delay_steps=1`
+  rides it with no `InputDelay`, larger values add `(delay_steps−1)` buffered
+  steps (mirrors the deleted host queue's `base_offset`). NEST's default
+  `delay=1.0 ms` ↔ `delay_steps=10`. Residual offsets are absorbed by
+  `align_steps` in parity — exact-after-alignment (§2 cluster-15d).
 
 ## 6. Validation gaps
 

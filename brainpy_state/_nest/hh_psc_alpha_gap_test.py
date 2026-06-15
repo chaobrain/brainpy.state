@@ -172,6 +172,30 @@ class TestHHPscAlphaGapDefaults(unittest.TestCase):
             self.assertAlmostEqual(_get_scalar(neuron.p.value), 0.00025113182271506364, places=12)
             self.assertAlmostEqual(_get_scalar(neuron.h.value), 0.8684620412943986, places=12)
 
+    def test_heterogeneous_per_neuron_gating_equilibrium(self):
+        r"""Array ``V_m_init`` equilibrates each neuron's gating at ITS OWN voltage.
+
+        Each neuron's gating variables must reach equilibrium at its own initial
+        membrane potential, not at the population's first element. The canonical
+        gap-junction demo perturbs a single cell (``V_m[0] = -10 mV``) and leaves
+        the rest at rest; if every cell inherited neuron-0's equilibrium the
+        unperturbed cells would start far out of equilibrium and fire spurious
+        transients. (Regression: ``init_state`` collapsed ``V_m_init`` to
+        ``.flat[0]`` and broadcast a single equilibrium to the whole population.)
+        """
+        from brainpy_state._nest.hh_psc_alpha_gap import _hh_psc_alpha_gap_equilibrium
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            V0 = np.array([-80.0, -60.0, -40.0])
+            neuron = hh_psc_alpha_gap(3, V_m_init=V0 * u.mV)
+            neuron.init_state()
+            m_eq, h_eq, n_eq, p_eq = _hh_psc_alpha_gap_equilibrium(V0)
+            np.testing.assert_allclose(np.asarray(neuron.m.value), m_eq, atol=1e-12)
+            np.testing.assert_allclose(np.asarray(neuron.h.value), h_eq, atol=1e-12)
+            np.testing.assert_allclose(np.asarray(neuron.n.value), n_eq, atol=1e-12)
+            np.testing.assert_allclose(np.asarray(neuron.p.value), p_eq, atol=1e-12)
+            # the three voltages give DISTINCT gating (non-vacuous heterogeneity).
+            self.assertGreater(float(np.ptp(np.asarray(neuron.m.value))), 1e-6)
+
 
 class TestHHPscAlphaGapValidation(unittest.TestCase):
     r"""Test parameter validation."""
