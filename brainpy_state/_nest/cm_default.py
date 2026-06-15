@@ -31,6 +31,13 @@ tree-based matrix solver, matching NEST's implementation exactly.
 import math
 from typing import Optional, Dict, List
 
+import brainstate
+import braintools
+import brainunit as u
+import jax
+import jax.numpy as jnp
+import numpy as np
+
 __all__ = [
     'cm_default',
 ]
@@ -1471,6 +1478,91 @@ class _Compartment:
 
 
 # ---------------------------------------------------------------------------
+# Vectorised (JAX) channel/receptor kinetics for the State-based update() path
+# ---------------------------------------------------------------------------
+#
+# These functions are exact, array-valued replicas of the per-compartment host
+# formulas above (``_NaChannel._compute_statevar_*``, ``_KChannel._compute_statevar_n``,
+# ``_nmda_sigmoid``).  The host guards the alpha/beta singularities with a Python
+# ``if abs(v) > eps`` branch; under JAX we evaluate the general branch with a
+# *safe* denominator and select with :func:`jnp.where` (the double-``where`` trick),
+# which avoids a 0/0 NaN polluting the gradient while reproducing the host's
+# analytic limit at the singular point.  ``Q10 = 1/3.21`` matches the host.
+
+_Q10 = 1.0 / 3.21
+
+
+def _na_gates_vec(v):
+    r"""Vectorised Na gating steady-states/time-constants ``(m_inf, tau_m, h_inf, tau_h)``."""
+    # --- activation m (singularity at v + 35.013 == 0) ---
+    vm = v + 35.013
+    safe_m = jnp.abs(vm) > 1e-5
+    e_m = jnp.exp(jnp.where(safe_m, vm, 0.0) / 9.0)
+    denom_m = jnp.where(safe_m, e_m - 1.0, 1.0)
+    frac_m = 1.0 / denom_m
+    alpha_m = jnp.where(safe_m, 0.182 * vm * e_m * frac_m, 1.638)
+    beta_m = jnp.where(safe_m, 0.124 * vm * frac_m, 1.116)
+    frac_ab_m = 1.0 / (alpha_m + beta_m)
+    tau_m = _Q10 * frac_ab_m
+    m_inf = alpha_m * frac_ab_m
+
+    # --- inactivation h (two singularities) ---
+    v1 = v + 50.013
+    v2 = v + 75.013
+    safe_h1 = jnp.abs(v1) > 1e-5
+    alpha_h = jnp.where(
+        safe_h1,
+        0.024 * v1 / (1.0 - jnp.exp(-0.2 * jnp.where(safe_h1, v1, 0.0))),
+        0.12,
+    )
+    safe_h2 = jnp.abs(v2) > 1e-9
+    beta_h = jnp.where(
+        safe_h2,
+        -0.0091 * v2 / (1.0 - jnp.exp(0.2 * jnp.where(safe_h2, v2, 0.0))),
+        0.0455,
+    )
+    tau_h = _Q10 / (alpha_h + beta_h)
+    h_inf = 1.0 / (1.0 + jnp.exp((v + 65.0) / 6.2))
+    return m_inf, tau_m, h_inf, tau_h
+
+
+def _k_gate_vec(v):
+    r"""Vectorised K activation steady-state/time-constant ``(n_inf, tau_n)``."""
+    vn = v - 25.0
+    safe = jnp.abs(vn) > 1e-5
+    e_n = jnp.exp(jnp.where(safe, vn, 0.0) / 9.0)
+    denom = jnp.where(safe, e_n - 1.0, 1.0)
+    frac = 1.0 / denom
+    alpha_n = jnp.where(safe, 0.02 * vn * e_n * frac, 0.18)
+    beta_n = jnp.where(safe, 0.002 * vn * frac, 0.018)
+    frac_ab = 1.0 / (alpha_n + beta_n)
+    return alpha_n * frac_ab, _Q10 * frac_ab
+
+
+def _nmda_sigmoid_vec(v):
+    r"""Vectorised NMDA Mg-block factor and derivative ``(B, dB/dV)``."""
+    exp_v = jnp.exp(-0.1 * v)
+    denom = 1.0 + 0.3 * exp_v
+    return 1.0 / denom, 0.03 * exp_v / (denom ** 2)
+
+
+def _to_nS(w):
+    r"""Strip a synaptic weight to a plain ``nS`` magnitude (Quantity or float)."""
+    return w.to_decimal(u.nS) if isinstance(w, u.Quantity) else w
+
+
+def _to_pA(c):
+    r"""Strip an injected current to a plain ``pA`` magnitude (Quantity or float)."""
+    return c.to_decimal(u.pA) if isinstance(c, u.Quantity) else c
+
+
+def _diag_embed(d):
+    r"""Embed a ``(*batch, n)`` vector as the diagonal of a ``(*batch, n, n)`` matrix."""
+    eye = jnp.eye(d.shape[-1], dtype=d.dtype)
+    return d[..., None] * eye
+
+
+# ---------------------------------------------------------------------------
 # Main cm_default class
 # ---------------------------------------------------------------------------
 
@@ -1725,10 +1817,31 @@ class cm_default(NESTNeuron):
     """
     __module__ = 'brainpy.state'
 
-    def __init__(self, V_th: float = -55.0):
-        self.V_th = V_th
+    def __init__(
+        self,
+        in_size=1,
+        V_th: float = -55.0,
+        *,
+        compartments: Optional[List[Dict]] = None,
+        receptors: Optional[List[Dict]] = None,
+        name: Optional[str] = None,
+        spk_fun=None,
+        spk_reset: str = 'hard',
+    ):
+        # Initialise the brainstate ``Neuron`` base so the model is a first-class
+        # State module (``varshape``, delta/current input registries, spike fn).
+        # The legacy host-loop API never did this; supplying it is what lets the
+        # Simulator drive ``update()`` through a compiled ``for_loop``.
+        super().__init__(
+            in_size,
+            name=name,
+            spk_fun=braintools.surrogate.ReluGrad() if spk_fun is None else spk_fun,
+            spk_reset=spk_reset,
+        )
+        self.V_th = float(V_th)
 
-        # Tree structure
+        # --- Host-loop tree structure (also the source of truth from which the
+        #     State topology is built when a morphology is supplied) ---
         self._root: Optional[_Compartment] = None
         self._compartments: List[_Compartment] = []
         self._compartment_indices: List[int] = []
@@ -1749,6 +1862,390 @@ class cm_default(NESTNeuron):
 
         # Recording
         self._v_history: List[List[float]] = []
+
+        # State-based execution path: enabled only when a morphology is supplied
+        # at construction (the ``Simulator.create()`` path).  Bare ``cm_default()``
+        # / ``cm_default(V_th=...)`` stay in pure host-loop mode (no State vars),
+        # preserving the legacy API and its test suite.
+        self._state_ready = False
+        if compartments is not None:
+            for comp in compartments:
+                self.add_compartment(comp['parent_idx'], comp.get('params'))
+            for rec in (receptors or []):
+                self.add_receptor(rec['comp_idx'], rec['receptor_type'], rec.get('params'))
+            self._compute_topology_constants()
+            self.init_state()
+
+    # ======================================================================
+    # State-based (Simulator) execution path
+    # ======================================================================
+    #
+    # The methods below turn the host-built compartment tree into a vectorised,
+    # ``for_loop``-lowerable JAX model.  They reuse the exact Crank-Nicolson math
+    # of the host ``step()`` (which remains the correctness oracle) but assemble
+    # the tridiagonal-on-tree system as a dense batched ``linalg.solve`` over the
+    # whole population in one XLA op.
+
+    def _compute_topology_constants(self):
+        r"""Snapshot the host morphology into constant (non-State) JAX arrays.
+
+        Builds the parent map, per-compartment passive/channel parameters, the
+        symmetric coupling Laplacian ``L`` (so the CN matrix is ``L + diag(...)``
+        and the old-voltage coupling on the RHS is ``-L @ v``), the receptor->
+        compartment scatter matrix ``S``, and per-receptor kinetic constants.
+        Receptors are flattened to a single two-component form: component 1 is the
+        voltage-independent dual-exp (AMPA/GABA, and the AMPA part of AMPA_NMDA);
+        component 2 is the NMDA dual-exp (standalone NMDA, and the NMDA part of
+        AMPA_NMDA), gated by ``nmda_scale`` and the Mg-block sigmoid.
+        """
+        comps = self._compartments  # index order; parent index < child index
+        n = len(comps)
+        self._n_comp = n
+
+        parent = np.array([c.p_index for c in comps], dtype=np.int64)
+        self._parent = parent
+        self._has_parent = jnp.asarray(parent >= 0)
+
+        self._ca = jnp.asarray(np.array([c.ca for c in comps], dtype=np.float64))
+        self._gl = jnp.asarray(np.array([c.gl for c in comps], dtype=np.float64))
+        self._el = jnp.asarray(np.array([c.el for c in comps], dtype=np.float64))
+        self._v_init = jnp.asarray(np.array([c.v_comp for c in comps], dtype=np.float64))
+        gc = np.array([c.gc for c in comps], dtype=np.float64)
+        gbar_Na = np.array([c.na_chan.gbar_Na for c in comps], dtype=np.float64)
+        gbar_K = np.array([c.k_chan.gbar_K for c in comps], dtype=np.float64)
+        self._gbar_Na = jnp.asarray(gbar_Na)
+        self._e_Na = jnp.asarray(np.array([c.na_chan.e_Na for c in comps], dtype=np.float64))
+        self._gbar_K = jnp.asarray(gbar_K)
+        self._e_K = jnp.asarray(np.array([c.k_chan.e_K for c in comps], dtype=np.float64))
+        self._na_active = jnp.asarray(gbar_Na > 1e-9)
+        self._k_active = jnp.asarray(gbar_K > 1e-9)
+
+        # Symmetric coupling Laplacian L (n x n).  Each non-root child i couples
+        # to its parent p with conductance gc[i]/2 (host ``gc__div__2``).
+        L = np.zeros((n, n), dtype=np.float64)
+        for i in range(n):
+            p = int(parent[i])
+            if p >= 0:
+                gc2 = gc[i] / 2.0
+                L[i, i] += gc2
+                L[p, p] += gc2
+                L[i, p] -= gc2
+                L[p, i] -= gc2
+        self._L = jnp.asarray(L)
+
+        # Receptors: per-receptor kinetic constants + scatter to compartments.
+        recs = self._receptors
+        nr = len(recs)
+        self._n_rec = nr
+        rec_comp = np.zeros(nr, dtype=np.int64)
+        e_rev = np.zeros(nr, dtype=np.float64)
+        nmda_scale = np.zeros(nr, dtype=np.float64)
+        gnorm1 = np.zeros(nr, dtype=np.float64)
+        gnorm2 = np.zeros(nr, dtype=np.float64)
+        tau_r1 = np.ones(nr, dtype=np.float64)
+        tau_d1 = np.ones(nr, dtype=np.float64)
+        tau_r2 = np.ones(nr, dtype=np.float64)
+        tau_d2 = np.ones(nr, dtype=np.float64)
+        self._rec_kind = []
+        rec_to_comp = {}
+        for ci, c in enumerate(comps):
+            for rec in c.receptors:
+                rec_to_comp[id(rec)] = ci
+        for k, rec in enumerate(recs):
+            ci = rec_to_comp[id(rec)]
+            rec_comp[k] = ci
+            e_rev[k] = rec.e_rev
+            if isinstance(rec, _AMPA_NMDAReceptor):
+                self._rec_kind.append('AMPA_NMDA')
+                nmda_scale[k] = rec.NMDA_ratio
+                gnorm1[k] = rec.g_norm_AMPA
+                tau_r1[k] = rec.tau_r_AMPA
+                tau_d1[k] = rec.tau_d_AMPA
+                gnorm2[k] = rec.g_norm_NMDA
+                tau_r2[k] = rec.tau_r_NMDA
+                tau_d2[k] = rec.tau_d_NMDA
+            elif isinstance(rec, _NMDAReceptor):
+                self._rec_kind.append('NMDA')
+                nmda_scale[k] = 1.0
+                gnorm2[k] = rec.g_norm
+                tau_r2[k] = rec.tau_r
+                tau_d2[k] = rec.tau_d
+            else:  # AMPA or GABA: voltage-independent dual-exp (component 1)
+                self._rec_kind.append('GABA' if isinstance(rec, _GABAReceptor) else 'AMPA')
+                gnorm1[k] = rec.g_norm
+                tau_r1[k] = rec.tau_r
+                tau_d1[k] = rec.tau_d
+        self._rec_comp = jnp.asarray(rec_comp)
+        self._rec_e_rev = jnp.asarray(e_rev)
+        self._rec_nmda_scale = jnp.asarray(nmda_scale)
+        self._rec_gnorm1 = jnp.asarray(gnorm1)
+        self._rec_gnorm2 = jnp.asarray(gnorm2)
+        self._rec_tau_r1 = jnp.asarray(tau_r1)
+        self._rec_tau_d1 = jnp.asarray(tau_d1)
+        self._rec_tau_r2 = jnp.asarray(tau_r2)
+        self._rec_tau_d2 = jnp.asarray(tau_d2)
+        # Scatter matrix S (n_comp x n_rec): S[c, k] = 1 if receptor k is on comp c.
+        S = np.zeros((n, nr), dtype=np.float64)
+        for k in range(nr):
+            S[rec_comp[k], k] = 1.0
+        self._S = jnp.asarray(S)
+        # First receptor index on each compartment (for recordable name resolution).
+        self._comp_to_rec = {}
+        for k in range(nr):
+            self._comp_to_rec.setdefault(int(rec_comp[k]), k)
+
+        self._state_ready = True
+
+    def init_state(self, **kwargs):
+        r"""Allocate/reset the vectorised State variables (no-op in host-loop mode).
+
+        Compartment voltages start at each compartment's ``v_comp``; the Na/K
+        gating variables start at their steady-state values for that voltage
+        (matching the host ``_init_statevars``); receptor conductances start at
+        zero.
+        """
+        if not getattr(self, '_state_ready', False):
+            return  # pure host-loop instance: no State to allocate
+        n = self._n_comp
+        nr = self._n_rec
+        vs = self.varshape
+        dftype = brainstate.environ.dftype()
+
+        v0 = jnp.broadcast_to(self._v_init.astype(dftype), vs + (n,))
+        self.V = brainstate.HiddenState(v0)
+        m_inf, _, h_inf, _ = _na_gates_vec(self._v_init)
+        n_inf, _ = _k_gate_vec(self._v_init)
+        self.m_Na = brainstate.HiddenState(jnp.broadcast_to(m_inf.astype(dftype), vs + (n,)))
+        self.h_Na = brainstate.HiddenState(jnp.broadcast_to(h_inf.astype(dftype), vs + (n,)))
+        self.n_K = brainstate.HiddenState(jnp.broadcast_to(n_inf.astype(dftype), vs + (n,)))
+        self.syn_gr1 = brainstate.HiddenState(jnp.zeros(vs + (nr,), dtype=dftype))
+        self.syn_gd1 = brainstate.HiddenState(jnp.zeros(vs + (nr,), dtype=dftype))
+        self.syn_gr2 = brainstate.HiddenState(jnp.zeros(vs + (nr,), dtype=dftype))
+        self.syn_gd2 = brainstate.HiddenState(jnp.zeros(vs + (nr,), dtype=dftype))
+        # One-step buffer for Simulator-injected device current (dc/step/noise/ac):
+        # captured from ``sum_current_inputs`` this step, applied next step, so the
+        # injection carries NEST's current ring-buffer delay (= the dc connection's
+        # 0.1 ms / 1-step delay in the receptors_and_current demo).
+        self.I_stim = brainstate.ShortTermState(jnp.zeros(vs + (n,), dtype=dftype))
+
+    def delta_label_for_receptor(self, receptor_type):
+        r"""Map a receptor index (NEST ``syn_idx``, add-order) to its delta-input label.
+
+        The Simulator's :class:`EventProjection` calls this to route a
+        ``connect(spike_source, cm, receptor_type=k)`` deposit into the single
+        channel that :meth:`update` reads back with ``sum_delta_inputs(label=...)``.
+        The trailing ``#`` keeps label ``cm_rcpt1#`` from prefix-colliding with
+        ``cm_rcpt10#`` (deposits are selected by label prefix).
+        """
+        try:
+            rt = int(receptor_type)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f'cm_default receptor_type must be an integer receptor index, got {receptor_type!r}.'
+            )
+        if 0 <= rt < self._n_rec:
+            return f'cm_rcpt{rt}#'
+        raise ValueError(
+            f'invalid receptor_type {rt}; cm_default has {self._n_rec} receptor(s) '
+            f'(valid indices 0..{self._n_rec - 1}).'
+        )
+
+    @property
+    def NCOMP(self):
+        r"""Compartment count (the Simulator reads this to scatter device current)."""
+        return self._n_comp
+
+    def current_compartment_for_receptor(self, receptor_type):
+        r"""Map a current generator's ``receptor_type`` to its target compartment index.
+
+        Unlike spike receptors (routed by :meth:`delta_label_for_receptor`), NEST's
+        ``cm_default`` addresses a **current** generator's ``receptor_type`` directly
+        as the *compartment index* (see the model docstring: "the receptor type is
+        the compartment index").  The Simulator calls this so
+        ``connect(dc_generator, cm, receptor_type=c)`` injects into compartment ``c``.
+        """
+        try:
+            rt = int(receptor_type)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f'cm_default current receptor_type must be an integer compartment index, '
+                f'got {receptor_type!r}.'
+            )
+        if 0 <= rt < self._n_comp:
+            return rt
+        raise ValueError(
+            f'invalid current receptor_type {rt}; cm_default current generators address a '
+            f'compartment index 0..{self._n_comp - 1}.'
+        )
+
+    def update(self, x=0. * u.pA, spike_events=None, current_events=None):
+        r"""Advance all compartments by one Crank-Nicolson timestep (vectorised).
+
+        Parameters
+        ----------
+        x : ArrayLike or Quantity, optional
+            External current (``pA``).  A ``(*in_size, n_comp)`` array is applied
+            per compartment; a scalar / ``(*in_size,)`` value is applied to the
+            soma (compartment 0).  Default ``0 pA``.
+        spike_events : list, optional
+            Direct synaptic spikes as ``(receptor_index, weight)`` tuples or
+            ``{'receptor_type', 'weight'}`` dicts (weight in ``nS``).  Used by the
+            host-vs-State oracle test; the Simulator instead deposits via the
+            delta-channel routing read here with ``sum_delta_inputs``.
+        current_events : list, optional
+            Direct current injections as ``(comp_index, current)`` tuples or
+            ``{'receptor_type'/'comp_idx', 'current'}`` dicts (current in ``pA``).
+
+        Returns
+        -------
+        spike : Array
+            Per-neuron somatic threshold crossing this step (diagnostic; the
+            cable model performs no voltage reset), as a float array.
+        """
+        dt = brainstate.environ.get_dt().to_decimal(u.ms)
+        v = self.V.value                       # (*vs, n_comp), mV magnitude
+        dtype = v.dtype
+        vs = self.varshape
+        n = self._n_comp
+        nr = self._n_rec
+
+        # ---- incoming synaptic weights per receptor (nS) ----
+        sw = jnp.zeros(vs + (nr,), dtype=dtype)
+        if spike_events:
+            for ev in spike_events:
+                if isinstance(ev, dict):
+                    ridx = int(ev.get('receptor_type', ev.get('receptor')))
+                    w = ev.get('weight')
+                else:
+                    ridx, w = ev
+                    ridx = int(ridx)
+                sw = sw.at[..., ridx].add(_to_nS(w))
+        for k in range(nr):
+            dep = self.sum_delta_inputs(0. * u.nS, label=f'cm_rcpt{k}#')
+            sw = sw.at[..., k].add(_to_nS(dep))
+
+        # ---- external current per compartment (pA) ----
+        i_ext = jnp.zeros(vs + (n,), dtype=dtype)
+        xv = jnp.asarray(_to_pA(x), dtype=dtype)
+        if xv.ndim >= 1 and xv.shape[-1] == n:
+            i_ext = i_ext + jnp.broadcast_to(xv, vs + (n,))
+        else:
+            i_ext = i_ext.at[..., 0].add(jnp.broadcast_to(xv, vs))
+        if current_events:
+            for ev in current_events:
+                if isinstance(ev, dict):
+                    cidx = int(ev.get('comp_idx', ev.get('receptor_type', ev.get('receptor'))))
+                    cur = ev.get('current', ev.get('weight'))
+                else:
+                    cidx, cur = ev
+                    cidx = int(cidx)
+                i_ext = i_ext.at[..., cidx].add(_to_pA(cur))
+        # Simulator-injected device current rides the one-step ``I_stim`` buffer:
+        # apply the previous step's captured current, then capture this step's deposit
+        # (``x``/``current_events`` above are the immediate direct/oracle path and are
+        # NOT buffered, so the host-vs-State oracle stays bit-exact).
+        i_ext = i_ext + self.I_stim.value
+        new_i_stim = _to_pA(self.sum_current_inputs(jnp.zeros(vs + (n,), dtype=dtype) * u.pA))
+
+        # ---- ion channels: exact-exp gating, frozen where the channel is off ----
+        m_inf, tau_m, h_inf, tau_h = _na_gates_vec(v)
+        n_inf, tau_n = _k_gate_vec(v)
+        m_new = self.m_Na.value * jnp.exp(-dt / tau_m) + (1.0 - jnp.exp(-dt / tau_m)) * m_inf
+        h_new = self.h_Na.value * jnp.exp(-dt / tau_h) + (1.0 - jnp.exp(-dt / tau_h)) * h_inf
+        n_new = self.n_K.value * jnp.exp(-dt / tau_n) + (1.0 - jnp.exp(-dt / tau_n)) * n_inf
+        m_new = jnp.where(self._na_active, m_new, self.m_Na.value)
+        h_new = jnp.where(self._na_active, h_new, self.h_Na.value)
+        n_new = jnp.where(self._k_active, n_new, self.n_K.value)
+        g_Na = jnp.where(self._na_active, self._gbar_Na * m_new ** 3 * h_new, 0.0)
+        g_K = jnp.where(self._k_active, self._gbar_K * n_new, 0.0)
+        g_chan = (g_Na + g_K) / 2.0
+        i_chan = g_Na * (self._e_Na - v / 2.0) + g_K * (self._e_K - v / 2.0)
+
+        # ---- receptors: one vectorised formula covers AMPA/GABA/NMDA/AMPA_NMDA ----
+        if nr:
+            gr1 = self.syn_gr1.value * jnp.exp(-dt / self._rec_tau_r1)
+            gd1 = self.syn_gd1.value * jnp.exp(-dt / self._rec_tau_d1)
+            gr2 = self.syn_gr2.value * jnp.exp(-dt / self._rec_tau_r2)
+            gd2 = self.syn_gd2.value * jnp.exp(-dt / self._rec_tau_d2)
+            s1 = sw * self._rec_gnorm1
+            gr1 = gr1 - s1
+            gd1 = gd1 + s1
+            s2 = sw * self._rec_gnorm2
+            gr2 = gr2 - s2
+            gd2 = gd2 + s2
+            g1 = gr1 + gd1
+            g2 = gr2 + gd2
+            v_rec = v[..., self._rec_comp]                     # (*vs, nr)
+            B, dB = _nmda_sigmoid_vec(v_rec)
+            drive = self._rec_e_rev - v_rec
+            i_tot = (g1 + self._rec_nmda_scale * g2 * B) * drive
+            di_dv = -g1 + self._rec_nmda_scale * g2 * (dB * drive - B)
+            g_val = -di_dv / 2.0
+            i_val = i_tot + g_val * v_rec
+            g_rec = jnp.einsum('cr,...r->...c', self._S, g_val)
+            i_rec = jnp.einsum('cr,...r->...c', self._S, i_val)
+        else:
+            gr1 = gd1 = gr2 = gd2 = None
+            g_rec = jnp.zeros(vs + (n,), dtype=dtype)
+            i_rec = jnp.zeros(vs + (n,), dtype=dtype)
+
+        # ---- assemble & solve the Crank-Nicolson system  A v_new = rhs ----
+        ca_dt = self._ca / dt
+        gl_2 = self._gl / 2.0
+        diag = ca_dt + gl_2 + g_chan + g_rec
+        A = self._L + _diag_embed(diag)
+        Lv = jnp.einsum('ij,...j->...i', self._L, v)
+        rhs = (ca_dt - gl_2) * v + self._gl * self._el + i_chan + i_rec + i_ext - Lv
+        v_new = jnp.linalg.solve(A, rhs[..., None])[..., 0]
+
+        # ---- spike detection at the root (threshold crossing; no reset) ----
+        spike = (v_new[..., 0] >= self.V_th) & (v[..., 0] < self.V_th)
+
+        # ---- write back ----
+        self.V.value = v_new
+        self.m_Na.value = m_new
+        self.h_Na.value = h_new
+        self.n_K.value = n_new
+        if nr:
+            self.syn_gr1.value = gr1
+            self.syn_gd1.value = gd1
+            self.syn_gr2.value = gr2
+            self.syn_gd2.value = gd2
+        self.I_stim.value = new_i_stim
+        return u.math.asarray(spike, dtype=brainstate.environ.dftype())
+
+    def read_recordable(self, name):
+        r"""Resolve a NEST multimeter recordable name to a State slice.
+
+        Supports the per-compartment names the §3.10 demos record: ``v_comp{c}``
+        (mV), gating ``m_Na_{c}``/``h_Na_{c}``/``n_K_{c}``, AMPA_NMDA conductance
+        components ``g_{r,d}_AN_{AMPA,NMDA}_{c}``, and totals ``g_AMPA_{c}`` /
+        ``g_GABA_{c}`` / ``g_NMDA_{c}``.  Receptor recordables are keyed by the
+        compartment index (NEST convention), resolved via the first receptor on
+        that compartment.
+        """
+        if name.startswith('v_comp'):
+            return self.V.value[..., int(name[len('v_comp'):])] * u.mV
+        for pref, state in (('m_Na_', 'm_Na'), ('h_Na_', 'h_Na'), ('n_K_', 'n_K')):
+            if name.startswith(pref):
+                return getattr(self, state).value[..., int(name[len(pref):])]
+        comp_pairs = (
+            ('g_r_AN_AMPA_', 'syn_gr1'), ('g_d_AN_AMPA_', 'syn_gd1'),
+            ('g_r_AN_NMDA_', 'syn_gr2'), ('g_d_AN_NMDA_', 'syn_gd2'),
+        )
+        for pref, state in comp_pairs:
+            if name.startswith(pref):
+                k = self._comp_to_rec[int(name[len(pref):])]
+                return getattr(self, state).value[..., k]
+        for pref, rise, decay in (
+            ('g_AMPA_', 'syn_gr1', 'syn_gd1'),
+            ('g_GABA_', 'syn_gr1', 'syn_gd1'),
+            ('g_NMDA_', 'syn_gr2', 'syn_gd2'),
+        ):
+            if name.startswith(pref):
+                k = self._comp_to_rec[int(name[len(pref):])]
+                return (getattr(self, rise).value + getattr(self, decay).value)[..., k]
+        raise KeyError(f'cm_default has no recordable {name!r}')
 
     def add_compartment(self, parent_idx: int, params: Optional[Dict] = None) -> int:
         r"""Add a compartment to the neuron's morphological tree structure.

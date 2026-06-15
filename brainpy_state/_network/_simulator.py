@@ -205,6 +205,12 @@ def _read_recordable(pop, name):
         state = getattr(pop, attr, None)
         if state is not None:
             return state.value
+    # Models with per-instance dynamic recordable names (cm_default: ``v_comp0``,
+    # ``m_Na_1``, ``g_r_AN_AMPA_1``, … keyed by compartment/receptor layout known
+    # only to the instance) self-resolve via ``read_recordable``.
+    resolver = getattr(pop, 'read_recordable', None)
+    if resolver is not None:
+        return resolver(name)
     raise KeyError(
         f'recordable {name!r} (tried {entry}) is not available on '
         f'{type(pop).__name__}'
