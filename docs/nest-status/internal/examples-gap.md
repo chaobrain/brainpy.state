@@ -53,7 +53,7 @@ exists.
 | `brunel_alpha_nest.py` | missing | partial: `examples/102_EI_net_1996.py`, `103_COBA_2005.py`, `104_CUBA_2005.py` are similar in spirit | <https://nest-simulator.readthedocs.io/en/stable/auto_examples/brunel_alpha_nest.html> | The single most-cited NEST example. Uses `iaf_psc_alpha`, `poisson_generator`, `spike_recorder`, all present in repo. P0 port target. |
 | `brunel_delta_nest.py` | missing | partial: same as above | upstream | Delta-current variant of Brunel |
 | `brunel_exp_multisynapse_nest.py` | missing | none | upstream | Exercises multi-port AdEx; cross-link `neurons-gap.md` multisynapse |
-| `brunel_siegert_nest.py` | missing | none | upstream | Mean-field comparison vs. spiking — uses `siegert_neuron` (already validated) |
+| `brunel_siegert_nest.py` | implemented | `examples/nest/brunel_siegert.py` | upstream | Mean-field Brunel: `siegert_neuron` + dual-channel `diffusion_connection`, relaxed end-to-end through the `Simulator`; 32.03 vs NEST 32.03 spks/s (0.00 %) and matches the closed-form Siegert fixed point to ~3e-13 (cluster 15c; §3.6) |
 | `brunel_alpha_evolution_strategies.py` | missing | none | upstream | Optimizer-tuned Brunel |
 
 ### 3.2 Single- and few-neuron demos
@@ -203,6 +203,20 @@ current** `I_gap,i = Σ_j g_ij (V_j[n−1] − V_i[n−1])` deposited into the p
 on the SAME seam-(H) emission path (the V emission holder), NEST's `use_wfr=False` regime —
 no waveform relaxation. Only the `ht_neuron` (`intrinsic_currents_*`) demos remain blocked
 on their own primitive.
+
+The **Siegert mean-field network demo has landed (cluster 15c)**. `siegert_neuron`'s
+transfer Φ(μ,σ²) now lowers under `for_loop` — a jnp leggauss-64 quadrature port of the
+SciPy oracle (matched ≤1e-6 across the (μ,σ²) grid; the 15a eager exception is retired) —
+and `diffusion_connection` is a thin NEST-parity status spec that the `Simulator` routes
+as a **dual-channel seam deposit**: drift·rate → the target's `'diffusion_mu'` delta
+channel, diffusion·rate → `'diffusion_sigma2'`, read back with
+`sum_delta_inputs(label=…)`. The flagship `brunel_siegert.py` (§3.1) is rewritten to relax
+three rate nodes end-to-end through the `Simulator` — six convergent `diffusion_connection`
+edges (drive/ex/in into each of ex/in, incl. the ex→ex and in→in population self-coupling)
+whose μ/σ² deposits **accumulate per target** — reproducing the closed-form self-consistent
+Siegert fixed point to ~3e-13 and a live two-population NEST run to 0.00 % (32.03 vs 32.03
+spks/s). The host dict-queue secondary-event emulator is retired; the new path is
+JAX-native end to end (`siegert_diffusion_test.py`, `brunel_siegert_test.py`).
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|

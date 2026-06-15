@@ -964,6 +964,66 @@ class Simulator(brainstate.nn.Module):
             projs.append(proj)
         return projs
 
+    def _build_siegert_diffusion(self, pre_seg, post_seg, rule, weight, delay,
+                                 synapse, comm, seed, ordinal):
+        r"""Route a ``diffusion_connection`` as two labelled seam-(H) deposits (goal 15c).
+
+        NEST delivers a single ``DiffusionConnectionEvent`` carrying the presynaptic
+        rate :math:`r_j`, from which the target ``siegert_neuron`` accumulates a drift
+        :math:`g_\mu r_j \to \mu` and a variance :math:`g_\sigma r_j \to \sigma^2`. Here
+        that one event becomes two ordinary rate projections reading the *same*
+        presynaptic emission (the source's seam-(H) ``rate`` holder): one carrying
+        ``drift_factor`` into the post's ``'diffusion_mu'`` delta channel, one carrying
+        ``diffusion_factor`` into ``'diffusion_sigma2'``. The target reads them back with
+        ``sum_delta_inputs(label='diffusion_mu' | 'diffusion_sigma2')`` -- distinct
+        labels so :math:`\mu` and :math:`\sigma^2` never cross-contaminate (a default,
+        unlabelled read would sum both). Both halves share one connectivity sample.
+
+        The source must be a continuous-rate emitter (e.g. ``siegert_neuron``); the
+        deposit rides the dense matmul, so ``comm='sparse'`` is rejected; and the
+        connection carries no delay (the one-step coupling lag is the seam holder's,
+        matching NEST ``min_delay=1``).
+        """
+        if isinstance(pre_seg, _GenSegment):
+            raise ValueError(
+                'a diffusion_connection source must be a continuous-rate neuron '
+                '(e.g. siegert_neuron), not a generator.')
+        pre_pop = pre_seg.population
+        post_pop = post_seg.population
+        if not self._is_continuous_rate(pre_pop):
+            raise ValueError(
+                f'a diffusion_connection requires a continuous-rate source '
+                f'(_emission_continuous + _emission_attr); {type(pre_pop).__name__} '
+                'does not emit a rate.')
+        if comm == 'sparse':
+            raise ValueError(
+                'a diffusion_connection delivers drift_factor * rate / diffusion_factor '
+                '* rate over the dense matmul; comm="sparse" binarizes the rate. '
+                'Use comm="dense".')
+        if delay is not None:
+            raise ValueError('diffusion_connection has no delay.')
+        if weight is not None:
+            raise ValueError(
+                'diffusion_connection has no weight; use drift_factor / diffusion_factor.')
+        holder = getattr(self, f'_holder_{id(pre_pop)}')
+        pre_spike, _ = self._resolve_stp_emission(pre_pop, post_pop, None, holder, comm)
+        drift = float(synapse.drift_factor)
+        diffusion = float(synapse.diffusion_factor)
+        conn_seed = self._derive_seed(seed, ordinal)
+        proj_ords = (ordinal, next(self._proj_counter))
+        projs = []
+        for (factor, label), p_ord in zip(
+                ((drift, 'diffusion_mu'), (diffusion, 'diffusion_sigma2')), proj_ords):
+            proj = EventProjection(
+                pre_spike=pre_spike, n_pre_pop=_flat_size(pre_pop),
+                pre_local_idx=pre_seg.indices, post=post_pop,
+                post_local_idx=post_seg.indices, rule=rule, weight=factor,
+                delay=None, comm=comm, channel_label=label,
+                pre_is_post=(pre_pop is post_pop), seed=conn_seed)
+            self._connections.append((pre_pop, post_pop, 'diffusion_connection', proj))
+            setattr(self, f'_proj_{p_ord}', proj)
+            projs.append(proj)
+        return projs
     # -- gap junctions (goal 15b) ------------------------------------------
     @staticmethod
     def _is_gap_synapse(synapse):
@@ -1080,6 +1140,12 @@ class Simulator(brainstate.nn.Module):
                       receptor_type=None, synapse=None, vt=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
+        # Diffusion coupling (siegert mean-field): a diffusion_connection is not a
+        # plastic projection -- the Simulator routes it as a dual-channel seam deposit
+        # (drift -> mu, diffusion -> sigma^2). Dispatch before the plastic path.
+        if synapse is not None and getattr(synapse, '_IS_DIFFUSION', False):
+            return self._build_siegert_diffusion(
+                pre_seg, post_seg, rule, weight, delay, synapse, comm, seed, ordinal)
         # Gap-junction coupling (goal 15b) is dispatched on the gap synapse model
         # before the plastic/static paths: it builds its own explicit-lag difference-
         # deposit coupler (no EventProjection, no rule kernel, no WFR).
