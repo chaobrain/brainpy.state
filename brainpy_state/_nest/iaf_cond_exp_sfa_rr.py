@@ -335,6 +335,10 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
     _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 100000
 
+    #: Unit the multi-receptor ``connect(receptor_type=k)`` bridge uses to scale the
+    #: gathered per-port deposit into the ``w_by_rec`` mantissa (conductance -> nS).
+    receptor_input_unit = u.nS
+
     def __init__(
         self,
         in_size: Size,
@@ -398,6 +402,13 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         self.g_sfa_initializer = g_sfa_initializer
         self.g_rr_initializer = g_rr_initializer
         self.ref_var = ref_var
+
+        # Two delivery ports for the Simulator's multi-receptor bridge: receptor 1 ->
+        # g_ex (excitatory), receptor 2 -> g_in (inhibitory). NEST routes excitation /
+        # inhibition by weight *sign* (iaf_cond_exp_sfa_rr.cpp handle(): weight>0 ->
+        # spike_exc_, else spike_inh_); the Simulator expresses that as receptor_type=1/2
+        # with positive nS weights.
+        self.n_receptors = 2
 
         self._validate_parameters()
 
@@ -597,7 +608,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
         return new_state, new_extra
 
-    def update(self, x=0. * u.pA):
+    def update(self, x=0. * u.pA, w_by_rec=None):
         r"""Advance the neuron state by one simulation time step.
 
         Implements the complete NEST update cycle:
@@ -615,6 +626,13 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
             External current input for the **next** time step in pA, shape matching ``in_size``
             or broadcastable. This input is buffered and applied with one-step delay,
             mirroring NEST ring-buffer semantics.
+        w_by_rec : ArrayLike or None, optional
+            Per-receptor synaptic conductance jumps supplied by the Simulator's
+            multi-receptor bridge, shape ``(*varshape, n_receptors)`` as a dimensionless
+            ``nS`` mantissa. Column 0 (``receptor_type=1``) is added to the excitatory
+            conductance ``g_ex`` and column 1 (``receptor_type=2``) to the inhibitory
+            conductance ``g_in``. When ``None`` (the legacy path), the jumps are
+            self-pulled from the ``label='w_ex'/'w_in'`` delta inputs instead.
 
         Returns
         -------
@@ -678,9 +696,19 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         # Decrement refractory counter.
         r = u.math.where(r > 0, r - 1, r)
 
-        # Synaptic spike inputs (applied after integration).
-        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
-        w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
+        # Synaptic spike inputs (applied after integration). Two delivery paths: the
+        # Simulator's multi-receptor bridge pre-gathers per-receptor conductance jumps
+        # (nS mantissa, shape ``(*varshape, n_receptors)``) and passes them via
+        # ``w_by_rec`` -- column 0 -> g_ex, column 1 -> g_in; the legacy BrainPy-style
+        # path self-pulls the ``label='w_ex'/'w_in'`` delta inputs. Only the *source* of
+        # ``w_ex``/``w_in`` changes; the exponential kinetics below consume them unchanged.
+        if w_by_rec is not None:
+            w_by_rec = jnp.asarray(w_by_rec, dtype=dftype)
+            w_ex = w_by_rec[..., 0] * u.nS
+            w_in = w_by_rec[..., 1] * u.nS
+        else:
+            w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
+            w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
 
         # Apply synaptic spike inputs.
         g_ex = g_ex + w_ex
