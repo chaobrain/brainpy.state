@@ -135,6 +135,7 @@ from ._network import (
 
 from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
 from . import _dist as dist  # noqa: F401  -- exposed as brainpy.state.dist
+from . import _nest_spatial as spatial  # noqa: F401  -- exposed as brainpy.state.spatial
 
 # =============================================================================
 # NEST-Compatible Models
@@ -571,4 +572,5 @@ __all__ = [
     'fixed_total_number',
     'network',
     'dist',
+    'spatial',
 ]
