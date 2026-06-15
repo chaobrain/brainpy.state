@@ -123,6 +123,66 @@ class TestAeifCondExpConductanceLaw(unittest.TestCase):
             self.assertEqual(tr.shape, (n,))
 
 
+class TestAeifCondExpConductanceEdgeCases(unittest.TestCase):
+    """Bridge edge cases (NEST-free): zero weight, convergent sum, seam-zero, out-of-range.
+
+    These characterise the *shared* 17b multi-receptor bridge that all eight conductance
+    neurons reuse; ``aeif_cond_exp`` stands in as the representative model.
+    """
+
+    def setUp(self):
+        brainstate.environ.set(dt=DT * u.ms)
+
+    def tearDown(self):
+        jax.clear_caches()
+        gc.collect()
+
+    def test_zero_weight_delivers_no_conductance(self):
+        """A ``weight=0`` connection routes through the bridge but deposits nothing."""
+        _t, v, g_ex, _g_in = _bp_drive(EXC_SPIKES, 0.0, receptor_type=1)
+        self.assertTrue(np.allclose(_ms(g_ex), 0.0), 'a zero-weight edge delivers no conductance')
+        self.assertTrue(np.allclose(_ms(v), E_L, atol=1e-6), 'and the membrane stays at rest')
+
+    def test_convergent_sources_sum_into_one_receptor(self):
+        """Two generators into ``receptor_type=1`` *sum* (scatter-add), not overwrite: g_ex ~ 2x."""
+        single = float(np.max(_ms(_bp_drive(EXC_SPIKES, EXC_W, receptor_type=1)[2])))
+
+        brainstate.environ.set(dt=DT * u.ms)
+        sim = bp.Simulator(dt=DT * u.ms)
+        n = sim.create(bp.aeif_cond_exp, 1)
+        sg1 = sim.create(bp.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
+        sim.connect(sg1, n, weight=EXC_W * u.nS, delay=DT * u.ms, receptor_type=1)
+        sg2 = sim.create(bp.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
+        sim.connect(sg2, n, weight=EXC_W * u.nS, delay=DT * u.ms, receptor_type=1)
+        mm = sim.create(bp.multimeter, record_from=['g_ex'])
+        sim.connect(mm, n)
+        double = float(np.max(_ms(sim.simulate(SIM_T * u.ms).trace(mm, 'g_ex'))))
+
+        self.assertGreater(single, 0.0)
+        # Conductance jumps superpose linearly, so two identical sources give exactly 2x.
+        self.assertTrue(np.isclose(double, 2.0 * single, rtol=1e-6),
+                        f'convergent sources sum: {double} vs 2x{single}')
+
+    def test_self_pull_seam_returns_zero(self):
+        """A bare ``update()`` (no ``w_by_rec``, nothing connected) leaves g_ex/g_in at 0."""
+        n = bp.aeif_cond_exp(1)
+        n.init_state()
+        with brainstate.environ.context(t=0. * u.ms):
+            n.update()
+        self.assertTrue(np.allclose(_ms(n.g_ex.value), 0.0), 'the self-pull seam adds no g_ex')
+        self.assertTrue(np.allclose(_ms(n.g_in.value), 0.0), 'the self-pull seam adds no g_in')
+
+    def test_receptor_type_out_of_range_raises(self):
+        """``receptor_type=3`` on a 2-receptor neuron raises a clear range error."""
+        brainstate.environ.set(dt=DT * u.ms)
+        sim = bp.Simulator(dt=DT * u.ms)
+        n = sim.create(bp.aeif_cond_exp, 1)
+        sg = sim.create(bp.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
+        with self.assertRaisesRegex(ValueError, 'out of range'):
+            sim.connect(sg, n, weight=EXC_W * u.nS, delay=DT * u.ms, receptor_type=3)
+            sim.simulate(SIM_T * u.ms)
+
+
 # --- Live-NEST parity (deterministic spike drive) ----------------------------------
 
 def _nest_drive(spike_times, weight_signed, sim_time=SIM_T):
