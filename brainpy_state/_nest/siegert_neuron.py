@@ -312,6 +312,12 @@ class siegert_neuron(NESTNeuron):
     # NEST value: alpha = |zeta(1/2)| * sqrt(2)
     _ALPHA = 2.0652531522312172
 
+    # Seam-(H) continuous-rate emitter: the Simulator allocates an emission holder
+    # and captures ``rate`` each step so an outgoing diffusion_connection can read
+    # the previous step's rate (NEST min_delay=1). See _network/_simulator.py.
+    _emission_continuous = True
+    _emission_attr = 'rate'
+
     def __init__(
         self,
         in_size: Size,
