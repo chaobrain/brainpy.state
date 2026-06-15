@@ -19,6 +19,7 @@ import importlib.util
 import unittest
 
 import brainstate
+import numpy as np
 import saiunit as u
 import jax
 from brainpy.state import diffusion_connection
@@ -109,6 +110,23 @@ class TestDiffusionConnection(unittest.TestCase):
         for gone in ('prepare_secondary_event', 'project_coeffarray',
                      'to_siegert_event', 'coeffarray_to_step_events'):
             self.assertFalse(hasattr(syn, gone), f'{gone} should be removed')
+
+    def test_get_accessor_and_scalar_coercion(self):
+        # The retained NEST-parity accessors after the de-queue: get() and the
+        # scalar coercion that set_drift_factor / set_diffusion_factor share.
+        syn = diffusion_connection(drift_factor=1.5, diffusion_factor=2.5)
+        self.assertEqual(syn.get('status'), syn.get_status())
+        self.assertAlmostEqual(syn.get('drift_factor'), 1.5, delta=0.0)
+        self.assertAlmostEqual(syn.get('diffusion_factor'), 2.5, delta=0.0)
+        with self.assertRaisesRegex(KeyError, 'invalid_key'):
+            syn.get('invalid_key')
+
+        # A (dimensionless) Quantity is accepted -- its mantissa is taken ...
+        syn.set_drift_factor(u.Quantity(0.25))
+        self.assertAlmostEqual(syn.drift_factor, 0.25, delta=0.0)
+        # ... and a non-scalar factor is rejected.
+        with self.assertRaisesRegex(ValueError, 'must be scalar'):
+            syn.set_diffusion_factor(np.array([1.0, 2.0]))
 
 
 if __name__ == '__main__':

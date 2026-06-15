@@ -28,7 +28,8 @@ import numpy as np
 import saiunit as u
 import braintools
 
-from brainpy_state import siegert_neuron, diffusion_connection, Simulator, multimeter
+from brainpy_state import (siegert_neuron, diffusion_connection, Simulator, multimeter,
+                           poisson_generator, iaf_psc_alpha)
 
 from scipy import special as _sp_special  # the oracle for the special-function ports
 from brainpy_state._nest._validation.nest_compare import requires_nest
@@ -297,6 +298,44 @@ class TestDiffusionNoNest(unittest.TestCase):
     def test_sparse_rejected(self):
         with self.assertRaisesRegex(ValueError, 'comm="sparse"|sparse'):
             self._run(drift_factor=1.0, diffusion_factor=1.0, comm='sparse')
+
+    def _connect_only(self, **connect_kw):
+        # Build a src -> tgt diffusion_connection without simulating; the parameter
+        # guards in _build_siegert_diffusion fire at connect time.
+        sim = Simulator(dt=self.DT_MS * u.ms)
+        src = sim.create(siegert_neuron, 1, params=dict(self.SRC))
+        tgt = sim.create(siegert_neuron, 1, params=dict(self.TGT))
+        sim.connect(src, tgt, synapse=diffusion_connection(
+            drift_factor=1.0, diffusion_factor=1.0), **connect_kw)
+
+    def test_delay_rejected(self):
+        # NEST parity: diffusion_connection carries no delay (the one-step seam
+        # lag is implicit, matching min_delay=1).
+        with self.assertRaisesRegex(ValueError, 'no delay'):
+            self._connect_only(delay=1.0 * u.ms)
+
+    def test_weight_rejected(self):
+        # NEST parity: no weight; the coupling lives in drift / diffusion factors.
+        with self.assertRaisesRegex(ValueError, 'no weight'):
+            self._connect_only(weight=1.0)
+
+    def test_generator_source_rejected(self):
+        # A generator emits spikes/current, not a continuous rate to deposit.
+        sim = Simulator(dt=self.DT_MS * u.ms)
+        gen = sim.create(poisson_generator, 1, params=dict(rate=10.0))
+        tgt = sim.create(siegert_neuron, 1, params=dict(self.TGT))
+        with self.assertRaisesRegex(ValueError, 'not a generator'):
+            sim.connect(gen, tgt, synapse=diffusion_connection(
+                drift_factor=1.0, diffusion_factor=1.0))
+
+    def test_spiking_source_rejected(self):
+        # A spiking neuron has no continuous-rate emission to drive mu / sigma^2.
+        sim = Simulator(dt=self.DT_MS * u.ms)
+        spk = sim.create(iaf_psc_alpha, 1)
+        tgt = sim.create(siegert_neuron, 1, params=dict(self.TGT))
+        with self.assertRaisesRegex(ValueError, 'continuous-rate source'):
+            sim.connect(spk, tgt, synapse=diffusion_connection(
+                drift_factor=1.0, diffusion_factor=1.0))
 
 
 if __name__ == '__main__':
