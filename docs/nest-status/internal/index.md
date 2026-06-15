@@ -165,8 +165,9 @@ Pulled from per-axis docs §7; full acceptance criteria live there.
 ### P2 (edge cases, polish)
 
 Summarized at index level — see per-axis docs §7 for full lists. Highlights:
-e-prop family port (XL), spatial / topology surface (XL), HH gap-junction
-parity (M), `pong`/`sudoku` example ports (L), file-
+e-prop family port (XL), spatial / topology surface (XL), ~~HH gap-junction
+parity (M)~~ (`hh_psc_alpha_gap` done cluster-15b; `hh_cond_beta_gap_traub`
+gap-parity pending), `pong`/`sudoku` example ports (L), file-
 backed recording backends (L), CI parity-check matrix (M), validation
 progress badge (S), parallel-computing guide (M), glossary (S).
 

@@ -138,6 +138,88 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 15b-gap-junctions — 2026-06-15
+
+- **Shipped:** **explicit-lag gap-junction coupling** for the two gap-capable HH neurons,
+  reusing cluster 15a's seam-(H) emission substrate verbatim. The `Simulator` realizes
+  NEST's `gap_junction` as a recurrent **difference-current** coupler
+  `I_gap,i[n] = Σ_j g_ij (V_j[n−1] − V_i[n−1]) = (G − diag(D)) @ V[n−1]` deposited into the
+  post's **current** channel, under the substrate's one-step pipeline lag (NEST's
+  `use_wfr=False` regime — **no** waveform relaxation). Files: `_nest/{hh_psc_alpha_gap,
+  hh_cond_beta_gap_traub}.py` (declare `_emission_attr='V'`; per-neuron gating-init fix),
+  `_network/_simulator.py` (`_gap_conductance`, `_gap_current`, `_build_gap_coupling`,
+  `_is_gap_synapse` dispatch in `_connect_pair`, `_gap_couplers` phase-loop injection).
+  Tests: `_network/_simulator_gap_test.py` (20 NEST-free seam/guard/behavior),
+  `_nest/{hh_psc_alpha_gap,hh_cond_beta_gap_traub}_test.py` (+ heterogeneous-init regression),
+  `_nest/_validation/{gap_junction_parity, gap_junction_inhibitory_network_parity,
+  gap_junction_no_nest}_test.py`, `examples/nest/gap_junctions_{two_neurons,
+  inhibitory_network}.py`. The reference `_nest/gap_junction.py` WFR class is left
+  **untouched and unused**. Branch `worktree-nest-goal-15b-gap`.
+- **Parity (vs live NEST `use_wfr=False`):**
+  - **2-neuron micro-parity** (g=0.5 nS, resting gating, I_e=100 pA, T=351 ms): membrane
+    matches NEST to **machine precision between spikes** — median ~1e-3 mV, p95 ~0.1 mV
+    after a ≤4-sample alignment; synchronization identical (last-20 ms RMS gap **0.530 mV
+    BP vs 0.539 NEST**; g=5 nS: 0.005 vs 0.006). The ONLY divergence is an **O(dt) AP-edge
+    timing jitter** (< 0.5 % of samples > 5 mV apart) — expected from the one-step lag at
+    the spike's near-vertical upstroke.
+  - **Inhibitory network** (N=200, ~24 gap edges/neuron, 4 seeds): Golomb-Rinzel coherence
+    χ matches NEST distributionally at **async 0.137 BP / 0.139 NEST** (g=0) and **sync
+    0.362 / 0.352** (g=0.7) — a ~2.6× synchrony rise on **both** sims.
+- **A resolved → option (a) (full-lag difference deposit).** The 2-neuron micro-parity GATE
+  confirmed option (a) reproduces `use_wfr=False` to machine precision between spikes, so the
+  fallback option (b) (off-diagonal seam-H emission + neuron-side self-leak split) was **not
+  needed**. Both terms lag: `G@V[n−1]` (off-diagonal, via the V emission holder) AND
+  `−D·V[n−1]` (self term, the same lagged V). Lagging **both** keeps the rest balance exact
+  (`I_gap ≡ 0` when all V equal) and matches NEST; lagging only the off-diagonal would inject
+  a spurious self-bias.
+- **Gap = negated graph Laplacian on the current channel.** `G` is the dense **symmetric**
+  hollow gap-conductance matrix (nS), `D = rowsum(G)`. `connect(synapse=gap_junction)`
+  dispatches **before** the plastic/static paths to `_build_gap_coupling`, which materializes
+  BOTH edge directions (`A = (A | A.T) & ~eye` — NEST's `make_symmetric` / all-to-all
+  bidirectionality), scales by one scalar `g`, caches `(G, D, V-reader, post, key)`, and the
+  phase loop deposits `_gap_current(...) * u.pA` via `add_current_input` (the
+  `sum_current_inputs(x, V)` seam the gap neurons already read). `nS·mV = pA` exactly. No
+  EventProjection, no rule kernel, no WFR.
+- **NEST freezes gating on `SetStatus(V_m)`; the port equilibrates per neuron — reconcile by
+  overriding to resting.** The gap demos perturb a cell's `V_m` AFTER `Create`; NEST's
+  `SetStatus` does **not** recompute gating, so the perturbed cell keeps **resting** gating
+  (`eq(-69.604 mV)`). The port's convention is `eq(V_m_init)` **per neuron** — faithful but
+  different. For parity the validation/example helpers override gating to the resting
+  equilibrium (`_resting_gating()` → `Act_m_init=…`), reproducing NEST's construct-then-
+  perturb workflow exactly. (A g=0 pair == two independent lone runs to 1e-9 confirms the gap
+  itself is innocent of any IC effect — it was the diagnostic that isolated the init bug below.)
+- **Latent per-neuron gating-init bug found + fixed (both gap neurons).** Surfaced by the gap
+  demo's heterogeneous `V_m_init`: `init_state` equilibrated `m/h/n[/p]` at a SINGLE broadcast
+  voltage (`get_mantissa(V).flat[0]`) instead of per neuron, so a population with heterogeneous
+  initial voltages started with WRONG and IDENTICAL gating (a −65 mV cell in a pair plunged to
+  −88 mV vs −64 mV lone). Fix: equilibrate at EACH neuron's own `V_m_init` (vectorized
+  `_hh_*_equilibrium(V_arr)`). **Backward-compatible** — scalar `V_m_init` is unchanged; all
+  prior neuron tests pass. Guarded by a per-neuron heterogeneous-gating regression in each
+  `*_test.py` (the Traub `m` gate barely varies over [−70,−55,−45] mV — assert on the `n` gate
+  instead, ptp > 1e-5).
+- **Symmetry (B) enforced at connect; out-of-scope shapes rejected loudly.** NEST
+  `gap_junction` is `REQUIRES_SYMMETRIC=True`. The coupler rejects, each with a NEST-free guard
+  test: a non-recurrent connect (pre≠post), a `delay` (gap is instantaneous), `comm='sparse'`
+  (the `G@V` is a dense matmul), a callable **or** non-scalar conductance (one scalar `g` per
+  graph), and a post that doesn't emit `V`.
+- **Coverage: the cluster-22 `--source` SIGABRT bites here too; behavioral fallback for
+  `_simulator.py`.** `coverage run --source=<pkg>` SIGABRTs at **collection** (jaxlib absl
+  double-init, entry 22). The documented `--source`-drop workaround (`coverage run -m pytest`
+  then report-time `--include`) instruments the two **standalone neuron modules** cleanly:
+  **`hh_psc_alpha_gap.py` 99 %** (2/202 miss), **`hh_cond_beta_gap_traub.py` 96 %** (8/226 miss)
+  — the misses are pre-existing non-gap branches. `_simulator.py` still can't be
+  line-instrumented (entry 22), so the gap seam relies on **behavioral coverage**: every gap
+  branch (the 3 `_gap_conductance` reject modes, the 4 `_build_gap_coupling` guards, the
+  difference-current arithmetic, the symmetric-matrix build, the dispatch, the phase injection)
+  has an exercising NEST-free test. `clear_caches()` + x64 per stiff-HH test class (entry 21).
+- **For next clusters:** the seam-(H) `_emission_attr` holder now carries BOTH a
+  **continuous-rate** deposit (15a, delta channel) AND a **voltage difference-current** deposit
+  (15b, current channel) — it is the single substrate for any state-gated coupling; declare
+  `_emission_attr` + deposit `comm='dense'`. The gap coupler is **dense-only by design**; a
+  sparse `G@V` for large nets is the natural follow-up. `hh_cond_beta_gap_traub` rides the SAME
+  seam but only `hh_psc_alpha_gap` has a live-NEST gap-parity test — a cond_beta gap regression
+  is the small remaining gap (noted in `neurons-gap.md` / `numerical-validation-gap.md`).
+
 ### 15a-rate-core — 2026-06-15
 
 - **Shipped:** the **rate-neuron core on the JAX substrate** — 11 rate neurons +
