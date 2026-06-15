@@ -51,6 +51,26 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 > NEST at every `weight_recorder` send step); the `urbanczik_synapse_example` demo
 > exercises the potentiating branch end-to-end (`examples-gap.md` §3.3).
 
+> **Update (cluster-15b).** `gap_junction` is no longer a divergent unknown: it is
+> validated against live NEST through the `Simulator` gap-coupling seam. The port does
+> **not** use NEST's waveform relaxation — it reproduces NEST's `use_wfr=False` regime
+> with an explicit **one-step-lagged difference current** deposited into the post's
+> *current* channel: `I_gap,i[n] = Σ_j g_ij (V_j[n−1] − V_i[n−1])` = `(G − diag(D)) @ V[n−1]`,
+> the negated graph Laplacian of the symmetric gap graph (`D = rowsum(G)`, `nS·mV = pA`).
+> The off-diagonal `G @ V_pre` rides the SAME seam-(H) continuous-emission machinery as the
+> rate/Wang seams (the post's `V` emission holder, `_emission_attr='V'`); the `−D·V_post`
+> self term keeps the rest balance (`I_gap ≡ 0` when all `V` are equal). `REQUIRES_SYMMETRIC`
+> is enforced at connect time (both directions materialized, hollow diagonal, scalar `g`,
+> no delay, `comm='dense'`). **Design A resolved to option (a)** (full-lag difference deposit;
+> no off-diagonal-seam + neuron-side self-leak split was needed). Parity: the 2-neuron
+> micro-parity (`_validation/gap_junction_parity_test.py`) matches NEST to machine precision
+> between spikes (median ~1e-3 mV, p95 ~0.1 mV), the only divergence an O(dt) AP-edge timing
+> jitter (< 0.5 % of samples); the inhibitory-network Golomb coherence matches
+> distributionally at async/sync gap weights (`_validation/gap_junction_inhibitory_network_parity_test.py`).
+> The reference `gap_junction.py` WFR class (`begin_wfr_cycle`/`evaluate_gap_current`) stays
+> in the tree but is **never invoked** on the simulation path (asserted by a mock guard).
+> Per-edge / random / `comm='sparse'` gap weights remain out of scope. See `examples-gap.md` §3.6.
+
 > **Update (cluster-15d) — last bucket-3 model on the substrate.** `sic_connection`
 > (astrocyte→neuron slow-inward current) closes the last bucket-3 *model* cluster (only the
 > Siegert `diffusion_connection` remains queued → 15c) and is now a wired,
@@ -91,7 +111,7 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 | `clopath_synapse` | divergent | `brainpy_state/_nest/clopath_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/clopath_synapse.html> | `clopath_synapse_test.py` (Y) | voltage-based STDP; needs Clopath-capable postsynaptic neuron (`aeif_psc_delta_clopath`, `hh_psc_alpha_clopath`) |
 | `cont_delay_synapse` | divergent | `brainpy_state/_nest/cont_delay_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/cont_delay_synapse.html> | `cont_delay_synapse_test.py` (Y) | continuous (non-grid) delays |
 | `diffusion_connection` | divergent | `brainpy_state/_nest/diffusion_connection.py` | <https://nest-simulator.readthedocs.io/en/stable/models/diffusion_connection.html> | `diffusion_connection_test.py` (Y) | Siegert-only rate connection |
-| `gap_junction` | divergent | `brainpy_state/_nest/gap_junction.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gap_junction.html> | `gap_junction_test.py` (Y) | requires gap-junction-capable neurons (`hh_*_gap`, `hh_cond_beta_gap_traub`) — NEST iterates via waveform-relaxation; brainpy.state likely uses a different fixed-point scheme |
+| `gap_junction` | divergent | `brainpy_state/_nest/gap_junction.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gap_junction.html> | `gap_junction_test.py` (Y) + `_validation/gap_junction_parity_test.py` (Y) + `_validation/gap_junction_inhibitory_network_parity_test.py` (Y) | gap-junction-capable neurons (`hh_psc_alpha_gap`, `hh_cond_beta_gap_traub`). **Validated (cluster-15b):** the `Simulator` realizes the gap as an explicit one-step-lagged difference current `I_gap = (G−diag(D))@V[n−1]` into the post current channel (NEST's `use_wfr=False` regime; **no** waveform relaxation, reference WFR class unused) on the seam-(H) V-emission path. 2-neuron micro-parity to machine precision between spikes (only O(dt) AP-edge jitter) + distributional network-coherence parity. `REQUIRES_SYMMETRIC` enforced; sparse / per-edge weights out of scope. See the cluster-15b Update above + `examples-gap.md` §3.6 |
 | `ht_synapse` | divergent | `brainpy_state/_nest/ht_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/ht_synapse.html> | `ht_synapse_test.py` (Y) | Hill-Tononi depression |
 | `jonke_synapse` | divergent | `brainpy_state/_nest/jonke_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/jonke_synapse.html> | `jonke_synapse_test.py` (Y) | STDP with additive factors |
 | `quantal_stp_synapse` | unvalidated | `brainpy_state/_nest/quantal_stp_synapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/quantal_stp_synapse.html> | `quantal_stp_synapse_test.py` (N) | probabilistic STP — PRNG sensitive |

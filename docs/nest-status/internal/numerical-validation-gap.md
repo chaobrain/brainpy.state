@@ -113,7 +113,10 @@ new model validations.
   promotions)
 - spike-time precise comparisons (`*_ps` variants, `parrot_neuron_ps` when
   ported)
-- gap-junction waveform-relaxation convergence
+- ~~gap-junction waveform-relaxation convergence~~ **Resolved (cluster-15b)** — the port
+  reproduces NEST's `use_wfr=False` regime with an explicit one-step-lagged difference
+  current (no waveform relaxation to converge); parity is the 2-neuron micro-parity +
+  distributional network coherence in `_validation/gap_junction_*parity_test.py`
 - spatial / topology connectivity statistics (when spatial lands)
 
 ## 5. Semantic & numerical risks
@@ -223,8 +226,12 @@ Concretely, the harness should provide:
 
 - **P1 — Validate HH family.** [L]
   Acceptance: `hh_psc_alpha`, `hh_cond_exp_traub`, `hh_cond_beta_gap_traub`,
-  `hh_psc_alpha_clopath`, `hh_psc_alpha_gap`, `ht_neuron` validated. Gap-
-  junction variants require waveform-relaxation parity.
+  `hh_psc_alpha_clopath`, `hh_psc_alpha_gap`, `ht_neuron` validated. Gap-junction
+  variants are validated against NEST's `use_wfr=False` regime (explicit one-step
+  lag, **not** waveform relaxation): `hh_psc_alpha_gap` ✓ done in cluster-15b
+  (`_validation/gap_junction_parity_test.py` + the inhibitory-network parity);
+  `hh_cond_beta_gap_traub` shares the seam (gap-capable) but its own gap-parity test
+  is still pending. The remaining four HH models keep their single-neuron parity gap.
 
 - **P1 — Validate MAT, Izhikevich, point-process families.** [M]
   Acceptance: `mat2_psc_exp`, `amat2_psc_exp`, `izhikevich`, `pp_psc_delta`
@@ -244,9 +251,13 @@ Concretely, the harness should provide:
   test. Acceptance: each validated; `iaf_tum_2000` STP coupling to the
   synapse-side `tsodyks*` family is also exercised.
 
-- **P2 — Add gap-junction waveform-relaxation parity test.** [M]
-  Acceptance: a 2-`hh_psc_alpha_gap` regression matches NEST coupling
-  dynamics; `hh_cond_beta_gap_traub` likewise.
+- **P2 — Add gap-junction parity test.** [M] — **DONE for `hh_psc_alpha_gap` (cluster-15b).**
+  Validated against NEST's `use_wfr=False` regime (explicit one-step lag, not waveform
+  relaxation): the 2-`hh_psc_alpha_gap` micro-parity matches NEST to machine precision
+  between spikes (`_validation/gap_junction_parity_test.py`) and the inhibitory-network
+  Golomb coherence matches distributionally
+  (`_validation/gap_junction_inhibitory_network_parity_test.py`). Remaining: an analogous
+  `hh_cond_beta_gap_traub` gap-parity regression (shares the seam; not yet covered).
 
 - **P2 — CI parity-check matrix.** [M]
   Acceptance: GitHub Actions workflow runs the harness with NEST installed

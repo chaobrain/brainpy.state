@@ -209,6 +209,28 @@ class TestHHCondBetaGapTraubDefaults(unittest.TestCase):
             self.assertAlmostEqual(_g_nS(neuron.dg_in.value), 0.0, places=10)
             self.assertEqual(int(neuron.refractory_step_count.value[0]), 0)
 
+    def test_heterogeneous_per_neuron_gating_equilibrium(self):
+        r"""Array ``V_m_init`` equilibrates each neuron's gating at ITS OWN voltage.
+
+        Each neuron's gating must reach equilibrium at its own initial voltage, not
+        at the population's first element. The canonical gap-junction demo perturbs a
+        single cell and leaves the rest at rest; collapsing ``V_m_init`` to ``.flat[0]``
+        would start the unperturbed cells far out of equilibrium and fire spurious
+        transients. (Regression on the heterogeneous-init path.)
+        """
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            V0 = np.array([-70.0, -50.0, -30.0])
+            neuron = hh_cond_beta_gap_traub(3, V_m_init=V0 * u.mV)
+            neuron.init_state()
+            m_eq, h_eq, n_eq = hh_cond_beta_gap_traub._hh_equilibrium(V0)
+            np.testing.assert_allclose(np.asarray(neuron.m.value), m_eq, atol=1e-12)
+            np.testing.assert_allclose(np.asarray(neuron.h.value), h_eq, atol=1e-12)
+            np.testing.assert_allclose(np.asarray(neuron.n.value), n_eq, atol=1e-12)
+            # non-vacuous: these voltages give DISTINCT gating (the n gate spans ~1e-4
+            # across the range), which the per-neuron init reproduces and the old
+            # ``.flat[0]`` collapse would not.
+            self.assertGreater(float(np.ptp(np.asarray(neuron.n.value))), 1e-5)
+
     def test_equilibrium_function(self):
         r"""Test the equilibrium function directly."""
         m_inf, h_inf, n_inf = hh_cond_beta_gap_traub._hh_equilibrium(-60.0)

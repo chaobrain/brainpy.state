@@ -420,6 +420,15 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
+    # Gap-junction emission (seam H, goal 15b). The membrane voltage ``V`` is the
+    # graded quantity a gap junction couples on: the Simulator allocates an emission
+    # holder for any model declaring ``_emission_attr`` and captures it each step, so
+    # a gap connection reads the (one-step-lagged) ``V_pre`` and deposits the
+    # difference current ``g * (V_pre - V_post)`` via ``sum_current_inputs``. This is
+    # NOT a continuous *rate* emitter (``_emission_continuous`` stays False): a plain
+    # spike connection from this neuron still delivers the binary spike.
+    _emission_attr = 'V'
+
     _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 100000
     _EPS = np.finfo(np.float64).eps
@@ -775,28 +784,25 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         else:
             V_init_val = self.E_L
 
-        V_init_mV = np.asarray(u.math.asarray(V_init_val / u.mV), dtype=dftype)
-        V_init_scalar = float(V_init_mV.flat[0]) if V_init_mV.ndim > 0 else float(V_init_mV)
-
-        # Compute equilibrium gating variables at initial V.
-        # NEST uses raw V_m (not V_m - V_T) for equilibrium initialization.
-        m_eq, h_eq, n_eq = self._hh_equilibrium(V_init_scalar)
-
         V = braintools.init.param(braintools.init.Constant(V_init_val), self.varshape)
         zeros = u.math.zeros(self.varshape, dtype=u.math.asarray(V / u.mV).dtype) * (u.nS / u.ms)
 
-        if self.Act_m_init is not None:
-            m_init = float(np.asarray(u.math.asarray(self.Act_m_init / u.UNITLESS), dtype=dftype))
-        else:
-            m_init = m_eq
-        if self.Inact_h_init is not None:
-            h_init = float(np.asarray(u.math.asarray(self.Inact_h_init / u.UNITLESS), dtype=dftype))
-        else:
-            h_init = h_eq
-        if self.Act_n_init is not None:
-            n_init = float(np.asarray(u.math.asarray(self.Act_n_init / u.UNITLESS), dtype=dftype))
-        else:
-            n_init = n_eq
+        # Gating variables equilibrate at EACH neuron's own initial voltage (NEST uses
+        # the raw per-node V_m, not V_m - V_T). ``_hh_equilibrium`` is elementwise, so a
+        # per-neuron voltage array yields per-neuron gating; collapsing to ``.flat[0]``
+        # would start a heterogeneously-initialized population (e.g. the gap demo's
+        # perturbed cell) far out of equilibrium and fire spurious transients.
+        V_arr = np.asarray(u.get_mantissa(V / u.mV), dtype=dftype)
+        m_eq, h_eq, n_eq = self._hh_equilibrium(V_arr)
+
+        # An explicit ``*_init`` override (scalar or per-neuron array) wins; otherwise
+        # the per-neuron equilibrium. ``braintools.init.param`` broadcasts either.
+        m_init = (m_eq if self.Act_m_init is None else
+                  np.asarray(u.math.asarray(self.Act_m_init / u.UNITLESS), dtype=dftype))
+        h_init = (h_eq if self.Inact_h_init is None else
+                  np.asarray(u.math.asarray(self.Inact_h_init / u.UNITLESS), dtype=dftype))
+        n_init = (n_eq if self.Act_n_init is None else
+                  np.asarray(u.math.asarray(self.Act_n_init / u.UNITLESS), dtype=dftype))
 
         self.V = brainstate.HiddenState(V)
         self.m = brainstate.HiddenState(
