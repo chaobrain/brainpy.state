@@ -352,8 +352,7 @@ class TestIAFChxk2008(unittest.TestCase):
                 with brainstate.environ.context(t=k * self.dt):
                     spk = neuron.update(
                         x=x_vals[k] * u.pA,
-                        w_ex=w_ex_vals[k] * u.nS,
-                        w_in=w_in_vals[k] * u.nS,
+                        w_by_rec=jnp.stack([w_ex_vals[k], w_in_vals[k]], axis=-1),
                     )
                 return (
                     spk,
@@ -489,8 +488,7 @@ class TestIAFChxk2008(unittest.TestCase):
                 with brainstate.environ.context(t=k * self.dt):
                     neuron.update(
                         x=x_vals[k] * u.pA,
-                        w_ex=w_ex_vals[k] * u.nS,
-                        w_in=w_in_vals[k] * u.nS,
+                        w_by_rec=jnp.stack([w_ex_vals[k], w_in_vals[k]], axis=-1),
                     )
                 return (
                     neuron.V.value / u.mV,

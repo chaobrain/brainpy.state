@@ -469,6 +469,10 @@ class iaf_chxk_2008(NESTNeuron):
     _MIN_H = 1e-8 * u.ms  # ms
     _MAX_ITERS = 10000
 
+    #: Unit the multi-receptor ``connect(receptor_type=k)`` bridge uses to scale the
+    #: gathered per-port deposit into the ``w_by_rec`` mantissa (conductance -> nS).
+    receptor_input_unit = u.nS
+
     def __init__(
         self,
         in_size: Size,
@@ -515,6 +519,13 @@ class iaf_chxk_2008(NESTNeuron):
         self.g_ex_initializer = g_ex_initializer
         self.g_in_initializer = g_in_initializer
         self.g_ahp_initializer = g_ahp_initializer
+
+        # Two synaptic receptors (g_ex / g_in) addressable by ``connect(receptor_type=k)``:
+        # the Simulator's multi-receptor bridge gathers per-port conductance jumps into a
+        # ``(*varshape, n_receptors)`` blob and passes it to ``update(w_by_rec=...)``;
+        # column 0 -> g_ex (receptor 1), column 1 -> g_in (receptor 2). The intrinsic AHP
+        # conductance is spike-triggered, not a synaptic receptor, so it is not a port.
+        self.n_receptors = 2
 
         self._validate_parameters()
 
@@ -652,7 +663,7 @@ class iaf_chxk_2008(NESTNeuron):
         )
 
 
-    def update(self, x=0.0 * u.pA, w_ex=None, w_in=None):
+    def update(self, x=0.0 * u.pA, w_by_rec=None):
         r"""Advance the neuron by one simulation step.
 
         Parameters
@@ -661,14 +672,13 @@ class iaf_chxk_2008(NESTNeuron):
             Continuous external current input in pA, broadcastable to
             ``self.varshape``. This value is stored into ``I_stim`` and applied
             at the next simulation step (one-step delay).
-        w_ex : ArrayLike or None, optional
-            Excitatory synaptic weight increment (nS) to add to ``dg_ex`` after
-            integration, scaled by ``e/tau_syn_ex``. When ``None`` (default),
-            the value is read from registered delta inputs with label ``'w_ex'``.
-            Provide an explicit array for JIT-compatible (for_loop) usage.
-        w_in : ArrayLike or None, optional
-            Inhibitory synaptic weight increment (nS), analogous to ``w_ex``
-            but for ``dg_in`` with label ``'w_in'``.
+        w_by_rec : ArrayLike or None, optional
+            Per-receptor conductance jumps gathered by the Simulator's multi-receptor
+            bridge, shape ``(*varshape, n_receptors)`` in nanosiemens -- column 0 is the
+            excitatory port (added to ``dg_ex``, scaled by ``e/tau_syn_ex``), column 1 the
+            inhibitory port (``dg_in``, scaled by ``e/tau_syn_in``). ``None`` (the default)
+            selects the legacy self-pull path (``label='w_ex'/'w_in'`` delta inputs), so the
+            BrainPy-style API is unchanged.
 
         Returns
         -------
@@ -683,7 +693,9 @@ class iaf_chxk_2008(NESTNeuron):
         follow NEST semantics: crossing is checked at the *global* step level
         (comparing V before and after the full integration), and the AHP state
         is updated post-integration using linear interpolation of the spike time.
-        Synaptic inputs (``w_ex``, ``w_in``) are applied after integration.
+        Synaptic inputs are applied after integration -- either gathered by the
+        multi-receptor bridge (``w_by_rec``) or self-pulled from ``label='w_ex'/'w_in'``
+        delta inputs.
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()
@@ -747,10 +759,18 @@ class iaf_chxk_2008(NESTNeuron):
         I_syn_in = g_in * (V - self.E_in)    # nS * mV = pA
         I_ahp_cur = g_ahp_state * (V - self.E_ahp)  # nS * mV = pA
 
-        # Synaptic spike inputs (applied after integration).
-        if w_ex is None:
+        # Synaptic spike inputs (applied after integration). Two delivery paths: the
+        # Simulator's multi-receptor bridge pre-gathers per-receptor conductance jumps
+        # (nS mantissa, shape ``(*varshape, n_receptors)``) and passes them via ``w_by_rec``
+        # -- column 0 -> g_ex, column 1 -> g_in; the legacy BrainPy-style path self-pulls the
+        # ``label='w_ex'/'w_in'`` delta inputs. Only the *source* of ``w_ex``/``w_in`` changes;
+        # the alpha kinetics below (``dg += (e/tau)*w``) consume them unchanged.
+        if w_by_rec is not None:
+            w_by_rec = jnp.asarray(w_by_rec, dtype=dftype)
+            w_ex = w_by_rec[..., 0] * u.nS
+            w_in = w_by_rec[..., 1] * u.nS
+        else:
             w_ex = self.sum_delta_inputs(u.math.zeros_like(self.g_ex.value), label='w_ex')
-        if w_in is None:
             w_in = self.sum_delta_inputs(u.math.zeros_like(self.g_in.value), label='w_in')
         pscon_ex = np.e / self.tau_syn_ex  # 1/ms
         pscon_in = np.e / self.tau_syn_in  # 1/ms
