@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Set up Conda with Python ${{ matrix.python-version }}
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge,defaults
