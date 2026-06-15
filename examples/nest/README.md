@@ -74,10 +74,14 @@ python examples/nest/brunel_alpha.py
   every connection is routed to a uniformly-drawn port via
   `connect(..., receptor_type='uniform')`.
 - **`brunel_siegert.py`** — the mean-field analysis (`siegert_neuron`), a port of
-  `brunel_siegert_nest.py`. Rather than simulating spikes, it integrates three
-  rate nodes (excitatory, inhibitory, drive) in pseudo-time to the self-consistent
-  firing-rate fixed point and writes `brunel_siegert_relaxation.png`. This network
-  is wired by hand (the spiking `Simulator` does not apply to rate units).
+  `brunel_siegert_nest.py`. Rather than simulating spikes, it relaxes three rate
+  nodes (excitatory, inhibitory, drive) to the self-consistent firing-rate fixed
+  point and writes `brunel_siegert_relaxation.png`. The nodes are coupled by
+  `diffusion_connection` (drift → μ, diffusion → σ²) and relaxed end-to-end
+  through the `Simulator` — one compiled `for_loop` over the rate dynamics, not a
+  Python step loop. Six convergent edges (drive/ex/in into each of ex/in,
+  including the ex→ex and in→in population self-coupling) accumulate into each
+  node's μ / σ², matching NEST's `diffusion_connection`.
 - **`brunel_alpha_evolution_strategies.py`** — a Natural Evolution Strategies
   optimizer (Wierstra et al. 2014) tuning `g` and `eta` of the alpha network
   toward target rate / CV / correlation, a port of

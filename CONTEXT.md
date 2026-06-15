@@ -138,6 +138,64 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 15c-siegert-diffusion — 2026-06-15
+
+- **Shipped:** the **Siegert mean-field node + dual-channel `diffusion_connection`** on the
+  JAX substrate, completing the 15a deferral. **(B)** `siegert_neuron`'s transfer Φ(μ,σ²)
+  ported to jnp (leggauss-64 + `erfcx`/Dawson + asymptotics) so `update()` **lowers under
+  `for_loop`** — the 15a eager exception is retired; **(A)** `diffusion_connection` de-queued to
+  a thin NEST-parity status spec the Simulator routes as a **dual-channel seam deposit**. Files:
+  `_nest/siegert_neuron.py` (jnp `_siegert_phi_jax`/`_siegert_phi_core` + `_erfcx_jax`/
+  `_dawsn_jax`/`_integral_erfcx_jax`; `_emission_continuous`/`_emission_attr='rate'`;
+  dual-channel `update()` reading `'diffusion_mu'`/`'diffusion_sigma2'`), `_nest/
+  diffusion_connection.py` (6 dict-queue methods deleted → status spec, `_IS_DIFFUSION`),
+  `_network/_simulator.py` (`_build_siegert_diffusion` + dispatch). Validation:
+  `siegert_diffusion_test.py` (23), `brunel_siegert_test.py` (2, broken import fixed) + the
+  `examples/nest/brunel_siegert.py` Simulator rewrite. Branch
+  `worktree-nest-goal+15c-siegert-diffusion`.
+- **Parity (vs live NEST `use_wfr=False`):** jnp Φ == SciPy oracle ≤**1e-6** across the (μ,σ²)
+  grid + colored-noise (`tau_syn>0`) + NEST ref `27.1095934379`; live two-siegert micro-parity
+  (drift+diffusion) == NEST to **machine precision (max|Δ|~1e-15, shift=0)**; Brunel mean-field
+  (`order=2500`) relaxes to the closed-form Siegert FP to **~3e-13** and to live NEST **0.00 %**
+  (32.03 vs 32.03 spks/s), `erate==irate` exactly by symmetry.
+- **API discovered/changed:** `_build_siegert_diffusion` fans ONE `diffusion_connection` into
+  TWO labeled rate projections off the same seam-(H) `rate` emission
+  (`drift_factor`→`'diffusion_mu'`, `diffusion_factor`→`'diffusion_sigma2'`) sharing one
+  connectivity sample; rejects sparse / weight / delay / generator / non-continuous source.
+  Convergent deposits **accumulate**: each EventProjection gets a unique `_delta_key`, so N
+  edges into one target SUM under `sum_delta_inputs(label=…)`. Siegert is now a normal
+  `for_loop`-lowering neuron — **no eager driver** (supersedes the 15a note).
+- **Gotchas:**
+  - **`sum_delta_inputs(label=None)` catches ALL keys — labeled ones included** (`filter_fn =
+    lambda k: True`). This **refutes the plan's "drift → default channel, σ² → labeled"**: a
+    default read would sum μ+σ². So **BOTH** channels must carry distinct labels
+    (`'diffusion_mu'`, `'diffusion_sigma2'`) and the post reads each with its own
+    `sum_delta_inputs(label=…)`. (Namespacing: `_input_label_repr(name,'L')='L // name'`; a
+    labeled read filters `startswith('L // ')`, so distinct labels never cross.)
+  - **The seam-holder lag IS NEST `min_delay=1` — micro-parity needs NO `align_steps`.** Unlike
+    15a's instantaneous rate coupling (which needed `align_steps` to absorb a uniform offset on
+    the transient), the two-siegert diffusion trace matches NEST at **shift=0** to machine
+    precision: phase-1 projections read the *previous* step's `rate` holder, exactly NEST's
+    one-step diffusion delivery.
+  - **The host numpy asymptotics carry wrong signs — undiscovered because they are dead code.**
+    SciPy is preferred, so the no-SciPy `_erfcx_pos_scalar` poly (all `+`; erfcx is
+    **alternating** `(-1)^k(2k-1)!!/(2x²)^k`) and `_integral_erfcx_asympt` odd terms (k=1,3 were
+    `-`, should be `+`) were never validated. The jnp port fixed them; **Dawson's asymptotic is
+    all-positive** (do not alternate it). The host fallback is further guarded by the
+    `(θ−μ)>6σ` deep-subthreshold fast-path, so it is unreachable in practice — but its scalar
+    sign bugs (mirroring the ones fixed in jnp) should be repaired if SciPy-absent operation is
+    ever relied upon.
+  - **siegert relaxation `tau` defaults to 1 ms** (not `tau_m`): 50 ms = 50τ → fully converged,
+    so the Brunel closed-form check is tight; the NEST micro-parity side uses the same default.
+  - **Coverage:** `diffusion_connection.py` **100 %**, `siegert_neuron.py` **95 %** (residual =
+    the dead no-SciPy host asymptotic fallback above); `_build_siegert_diffusion`'s touched
+    `_simulator.py` lines fully covered (whole-file % is dominated by pre-existing infra).
+- **For next clusters:** the dual-channel **labeled-deposit + convergent-accumulation** pattern
+  generalizes any multi-quantity graded coupling — deposit each quantity under its own label,
+  read each back by label, and **never rely on a default `sum_delta_inputs` read when labeled
+  deposits coexist**. Still deferred: **sparse graded/diffusion emission** (only `comm='dense'`
+  is wired).
+
 ### 15a-rate-core — 2026-06-15
 
 - **Shipped:** the **rate-neuron core on the JAX substrate** — 11 rate neurons +
