@@ -91,6 +91,16 @@ class TestFree(unittest.TestCase):
         with self.assertRaises(ValueError):
             _ = lay.n
 
+    def test_sample_on_concrete_layer_returns_stored_coords(self):
+        # a concrete layer ignores (n, key) and returns its stored coordinates
+        g = grid([2, 2], extent=[1.0, 1.0])
+        out = g.sample(99, jax.random.key(0))
+        np.testing.assert_array_equal(u.get_magnitude(out), u.get_magnitude(g.coords))
+
+    def test_free_distribution_rejects_non_2d_3d(self):
+        with self.assertRaises(ValueError):
+            free(Uniform(-0.5, 0.5), num_dimensions=4)
+
 
 if __name__ == '__main__':
     unittest.main()
