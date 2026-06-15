@@ -493,6 +493,62 @@ class TestAstrocyteLR1994SpikeInput(unittest.TestCase):
             self.assertGreater(ip3_jump, 0.2)
 
 
+class TestAstrocyteLR1994Emission(unittest.TestCase):
+    r"""Seam-(H) continuous emission declaration + the ``sum_delta_inputs`` spike path.
+
+    The astrocyte is the *emitter* of the slow-inward current (SIC) on the JAX
+    substrate: it declares ``_emission_attr='SIC'`` so the Simulator allocates an
+    emission holder and captures ``astro.SIC.value`` each step (the value the
+    ``sic_connection`` projection reads). Its presynaptic spike input now flows
+    through ``sum_delta_inputs`` so the Simulator's neuron->astrocyte delta deposits
+    reach IP3, while a bare ``update(spike_weights=w)`` call stays backward-compatible.
+    """
+
+    def test_declares_continuous_sic_emission_markers(self):
+        # Seam-(H) class metadata the Simulator/connection wiring keys off.
+        self.assertEqual(astrocyte_lr_1994._emission_attr, 'SIC')
+        self.assertIs(astrocyte_lr_1994._emission_continuous, True)
+        self.assertIs(astrocyte_lr_1994._emission_current, True)
+        self.assertEqual(astrocyte_lr_1994._emission_current_label, 'I_SIC')
+
+    def test_registered_delta_input_reaches_ip3(self):
+        # A delta input deposited externally (as the Simulator's neuron->astro
+        # projection does) must reach IP3 via sum_delta_inputs, even when the
+        # update() kwarg is 0.0. Compare against a no-input control so the ODE
+        # evolution cancels and only the delta_IP3 * weight jump remains.
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            ctrl = astrocyte_lr_1994(1, delta_IP3=0.5)
+            ctrl.init_state()
+            ctrl.update(spike_weights=0.0)
+            ip3_ctrl = float(np.asarray(ctrl.IP3.value).squeeze())
+
+            driven = astrocyte_lr_1994(1, delta_IP3=0.5)
+            driven.init_state()
+            driven.add_delta_input('pre_spike', 2.0)  # weight 2.0 spike deposit
+            driven.update(spike_weights=0.0)
+            ip3_driven = float(np.asarray(driven.IP3.value).squeeze())
+
+        # delta_IP3 * weight = 0.5 * 2.0 = 1.0 over the no-input control.
+        self.assertGreater(ip3_driven - ip3_ctrl, 0.9)
+
+    def test_kwarg_and_delta_input_sum_additively(self):
+        # sum_delta_inputs(spike_weights) = spike_weights + registered deposits.
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            base = astrocyte_lr_1994(1, delta_IP3=0.5)
+            base.init_state()
+            base.update(spike_weights=0.0)
+            ip3_base = float(np.asarray(base.IP3.value).squeeze())
+
+            both = astrocyte_lr_1994(1, delta_IP3=0.5)
+            both.init_state()
+            both.add_delta_input('pre_spike', 1.0)
+            both.update(spike_weights=1.0)  # kwarg 1.0 + deposit 1.0 -> 2.0
+            ip3_both = float(np.asarray(both.IP3.value).squeeze())
+
+        # (1.0 + 1.0) * delta_IP3 = 1.0 over the no-input control.
+        self.assertGreater(ip3_both - ip3_base, 0.9)
+
+
 class TestAstrocyteLR1994CurrentInput(unittest.TestCase):
     r"""Test current (J_noise) input handling."""
 

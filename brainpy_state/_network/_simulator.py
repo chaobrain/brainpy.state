@@ -27,6 +27,7 @@ from brainpy_state._nest.ac_generator import ac_generator as _ac_generator
 from brainpy_state._nest.dc_generator import dc_generator as _dc_generator
 from brainpy_state._nest.multimeter import multimeter as _multimeter
 from brainpy_state._nest.noise_generator import noise_generator as _noise_generator
+from brainpy_state._nest.sic_connection import sic_connection as _sic_connection
 from brainpy_state._nest.spike_recorder import spike_recorder as _spike_recorder
 from brainpy_state._nest.step_current_generator import step_current_generator as _step_current_generator
 from brainpy_state._nest.volume_transmitter import volume_transmitter as _volume_transmitter
@@ -153,6 +154,8 @@ _RECORDABLE_ALIAS = {
     # Injected current-generator input (NEST ``I`` = S_.I_ = currents_ ring buffer);
     # the current-based models buffer it on the I_stim ShortTermState.
     'I': ('I_stim',),
+    # Astrocyte slow-inward current (aeif_cond_alpha_astro stores it on I_sic).
+    'I_SIC': ('I_sic',),
     'I_syn_ex': ('I_syn_ex', 'i_syn_ex'),
     'I_syn_in': ('I_syn_in', 'i_syn_in'),
     # HH gating (NEST Act_m/Inact_h/Act_n -> brainpy m/h/n).
@@ -1084,6 +1087,13 @@ class Simulator(brainstate.nn.Module):
             self._build_gap_coupling(pre_seg, post_seg, rule, weight, delay, comm,
                                      allow_autapses, allow_multapses, seed, ordinal)
             return None
+        # One-way astrocyte->neuron slow-inward-current edge (NEST sic_connection):
+        # dispatched before the plastic path, it builds an ``as_current``
+        # EventProjection reading the astrocyte's emission holder.
+        if isinstance(synapse, _sic_connection):
+            return self._connect_sic(pre_seg, post_seg, rule, weight, delay,
+                                     allow_autapses, allow_multapses, seed, ordinal,
+                                     synapse, comm)
         post_holder = getattr(self, f'_holder_{id(post_pop)}', None)
         post_reader = _holder_reader(post_holder) if post_holder is not None else None
         # voltage-coupled reader (#2) also carries broadcast signal sources (the VT n
@@ -1158,6 +1168,102 @@ class Simulator(brainstate.nn.Module):
         model_name = (type(proj.rule).__name__ if isinstance(proj, EventPlasticProj)
                       else 'static_synapse')
         self._connections.append((source_pop, post_pop, model_name, proj))
+        setattr(self, f'_proj_{ordinal}', proj)
+        return proj
+
+    def _connect_sic(self, pre_seg, post_seg, rule, weight, delay,
+                     allow_autapses, allow_multapses, seed, ordinal, synapse, comm):
+        r"""Wire a one-way astrocyte->neuron slow-inward-current (SIC) connection.
+
+        The astrocyte (``astrocyte_lr_1994``) is the sender: phase 2 captures its
+        per-step graded ``SIC`` into the emission holder. The ``sic_connection``
+        deposits ``weight·SIC`` into the receiver's (``aeif_cond_alpha_astro``)
+        labelled ``'I_SIC'`` *current* channel through an ``as_current``
+        :class:`EventProjection`. The edge is one-way (a SICEvent, no back-channel),
+        and the NEST sender/receiver contract is enforced by
+        :meth:`sic_connection.check_connection`.
+
+        Timing follows the deleted host queue's ``base_offset = delay_steps - 1``:
+        ``delay_steps=1`` (the NEST default / minimum delay) rides the substrate's
+        intrinsic pipeline latency with no extra :class:`InputDelay`; a larger
+        ``delay_steps`` adds ``(delay_steps - 1)`` steps. The small residual offset
+        vs NEST is absorbed by ``align_steps`` in parity.
+
+        Parameters
+        ----------
+        pre_seg, post_seg : _Segment
+            The presynaptic astrocyte and postsynaptic neuron segments.
+        rule : ConnRule
+            Connectivity rule (fan-out from astrocytes to neurons).
+        weight : ArrayLike or None
+            Connect-level weight override (unitless); ``None`` uses the spec's
+            ``synapse.weight``.
+        delay : Quantity or None
+            Connect-level delay override; ``None`` uses ``delay_steps``.
+        allow_autapses, allow_multapses : bool
+            Passed through to the connectivity sampler.
+        seed : int or None
+            Base seed for the connectivity draw.
+        ordinal : int
+            Projection ordinal (registration key).
+        synapse : sic_connection
+            The connection spec carrying ``weight`` / ``delay_steps`` and the
+            sender/receiver enforcement.
+        comm : str
+            Communication mode; ``'sparse'`` is rejected (a graded current must
+            ride the dense matmul).
+
+        Returns
+        -------
+        EventProjection
+            The ``as_current`` projection delivering ``weight·SIC`` into ``'I_SIC'``.
+
+        Raises
+        ------
+        ValueError
+            If the sender/receiver models are not the supported SIC pair, if the
+            source is a deferred generator, if ``comm='sparse'``, or if no emission
+            holder was allocated for the astrocyte.
+        """
+        post_pop = post_seg.population
+        pre_name = (pre_seg.spec.model_cls.__name__ if isinstance(pre_seg, _GenSegment)
+                    else type(pre_seg.population).__name__)
+        # Enforce the NEST sender/receiver contract (astrocyte_lr_1994 sends a
+        # SICEvent; aeif_cond_alpha_astro handles it). Raises ValueError otherwise.
+        synapse.check_connection(pre_name, type(post_pop).__name__)
+        if isinstance(pre_seg, _GenSegment):
+            raise ValueError(
+                'a sic_connection source must be an astrocyte_lr_1994 population, '
+                'not a deferred generator.')
+        if comm == 'sparse':
+            raise ValueError(
+                "a sic_connection delivers a graded current and must ride "
+                "comm='dense'; comm='sparse' binarises the presynaptic value.")
+        pre_pop = pre_seg.population
+        emit_holder = getattr(self, f'_emit_holder_{id(pre_pop)}', None)
+        if emit_holder is None:
+            raise ValueError(
+                f'{type(pre_pop).__name__} declares _emission_attr but no emission '
+                'holder was allocated by create().')
+        # Resolve weight (connect override else the spec weight) and delay (connect
+        # override else ``(delay_steps - 1)`` extra steps). The SIC value and weight
+        # are unitless; the neuron attaches pA on write-back into I_sic.
+        eff_weight = weight if weight is not None else synapse.weight
+        if delay is not None:
+            eff_delay = delay
+        elif int(getattr(synapse, 'delay_steps', 1)) > 1:
+            eff_delay = (int(synapse.delay_steps) - 1) * brainstate.environ.get_dt()
+        else:
+            eff_delay = None
+        label = getattr(pre_pop, '_emission_current_label', 'I_SIC')
+        proj = EventProjection(
+            pre_spike=_holder_reader(emit_holder), n_pre_pop=_flat_size(pre_pop),
+            pre_local_idx=pre_seg.indices, post=post_pop,
+            post_local_idx=post_seg.indices, rule=rule, weight=eff_weight,
+            delay=eff_delay, comm='dense', as_current=True, channel_label=label,
+            pre_is_post=False, allow_autapses=allow_autapses,
+            allow_multapses=allow_multapses, seed=self._derive_seed(seed, ordinal))
+        self._connections.append((pre_pop, post_pop, 'sic_connection', proj))
         setattr(self, f'_proj_{ordinal}', proj)
         return proj
 

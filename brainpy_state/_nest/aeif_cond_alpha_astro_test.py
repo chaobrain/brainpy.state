@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 import importlib.util
+import inspect
 import math
 import unittest
 
@@ -181,7 +182,7 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
     def _is_nest_available():
         return importlib.util.find_spec('nest') is not None
 
-    def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None, sic_events=None):
+    def _step(self, neuron, k, x=0.0 * u.pA, dg_values=None):
         if dg_values is not None:
             for i, val in enumerate(dg_values):
                 if val >= 0:
@@ -189,7 +190,7 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
                 else:
                     neuron.add_delta_input(f'delta_{k}_{i}', (-val) * u.nS, label='w_in')
         with brainstate.environ.context(t=k * self.dt):
-            return neuron.update(x=x, sic_events=sic_events)
+            return neuron.update(x=x)
 
     def test_nest_cpp_default_parameters_and_recordables(self):
         with brainstate.environ.context(dt=0.1 * u.ms):
@@ -234,71 +235,6 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
                 aeif_cond_alpha_astro(1, gsl_error_tol=0.0)
             with self.assertRaises(ValueError):
                 aeif_cond_alpha_astro(1, V_peak=1500.0 * u.mV, Delta_T=1e-12 * u.mV)
-
-    def test_current_and_sic_inputs_are_delayed_one_step_like_nest(self):
-        with brainstate.environ.context(dt=self.dt):
-            neuron = aeif_cond_alpha_astro(
-                1,
-                V_th=1e6 * u.mV,
-                V_peak=1e6 * u.mV,
-                Delta_T=0.0 * u.mV,
-                g_L=0.0 * u.nS,
-                C_m=100.0 * u.pF,
-                a=0.0 * u.nS,
-                b=0.0 * u.pA,
-                I_e=0.0 * u.pA,
-                V_initializer=braintools.init.Constant(0.0 * u.mV),
-                V_reset=0.0 * u.mV,
-            )
-            neuron.init_state()
-
-            self._step(neuron, 0, x=100.0 * u.pA, sic_events={'weight': 1.0, 'coeffs': 50.0, 'delay_steps': 1})
-            self.assertTrue(u.math.allclose(neuron.V.value, 0.0 * u.mV, atol=1e-12 * u.mV))
-            self.assertTrue(u.math.allclose(neuron.I_sic.value, 50.0 * u.pA, atol=1e-12 * u.pA))
-
-            self._step(neuron, 1, x=0.0 * u.pA)
-            self.assertTrue(u.math.allclose(neuron.V.value, 0.15 * u.mV, atol=1e-10 * u.mV))
-            self.assertTrue(u.math.allclose(neuron.I_sic.value, 0.0 * u.pA, atol=1e-12 * u.pA))
-
-    def test_sic_coeff_series_and_delay_queue_semantics(self):
-        with brainstate.environ.context(dt=self.dt):
-            neuron = aeif_cond_alpha_astro(
-                1,
-                V_th=1e6 * u.mV,
-                V_peak=1e6 * u.mV,
-                Delta_T=0.0 * u.mV,
-                g_L=0.0 * u.nS,
-                a=0.0 * u.nS,
-                b=0.0 * u.pA,
-                I_e=0.0 * u.pA,
-                V_initializer=braintools.init.Constant(0.0 * u.mV),
-                V_reset=0.0 * u.mV,
-            )
-            neuron.init_state()
-
-            dftype = brainstate.environ.dftype()
-
-            # Pre-compute SIC output for all 5 steps
-            sic_events_seq = [None] * 5
-            sic_events_seq[0] = {'weight': 2.0, 'coeffs': [1.0, -0.5, 0.25], 'delay_steps': 2}
-            sic_q = {}
-            sic_output = np.zeros(5, dtype=dftype)
-            for k in range(5):
-                _enqueue_reference_sic_event(sic_q, k, sic_events_seq[k])
-                sic_output[k] = sic_q.pop(k, 0.0)
-
-            sic_out_jnp = jnp.asarray(sic_output).reshape(5, 1)
-
-            def _run_step(k):
-                with brainstate.environ.context(t=k * self.dt):
-                    neuron.update(x=0.0 * u.pA, sic_events=None)
-                neuron.I_sic.value = sic_out_jnp[k] * u.pA
-                return neuron.I_sic.value / u.pA
-
-            results = brainstate.transform.for_loop(_run_step, jnp.arange(5))
-            i_sic_trace = np.asarray(results.flatten(), dtype=dftype)
-
-            npt.assert_allclose(i_sic_trace, np.asarray([0.0, 2.0, -1.0, 0.5, 0.0], dtype=dftype), atol=1e-12)
 
     def test_reference_trace_matches_nest_step_logic_with_sic(self):
         with brainstate.environ.context(dt=self.dt):
@@ -415,7 +351,7 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
 
             def _run_step(k):
                 with brainstate.environ.context(t=k * self.dt):
-                    spk = neuron.update(x=x_jnp[k] * u.pA, sic_events=None)
+                    spk = neuron.update(x=x_jnp[k] * u.pA)
                 neuron.dg_ex.value = neuron.dg_ex.value + pscon_ex * w_ex_jnp[k] * u.nS
                 neuron.dg_in.value = neuron.dg_in.value + pscon_in * w_in_jnp[k] * u.nS
                 neuron.I_sic.value = sic_out_jnp[k] * u.pA
@@ -642,7 +578,7 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
 
             def _run_step(k):
                 with brainstate.environ.context(t=(k * dt_ms) * u.ms):
-                    neuron.update(x=0.0 * u.pA, sic_events=None)
+                    neuron.update(x=0.0 * u.pA)
                 neuron.I_sic.value = sic_out_jnp[k] * u.pA
                 return (
                     neuron.V.value / u.mV,
@@ -675,6 +611,93 @@ class TestAEIFCondAlphaAstro(unittest.TestCase):
         npt.assert_allclose(
             bp_i_sic[bp_indices], nest_i_sic[valid], atol=2e-10, rtol=0.0, err_msg='I_SIC mismatch vs NEST SIC run'
         )
+
+
+class TestAEIFCondAlphaAstroSICChannel(unittest.TestCase):
+    r"""The de-queued SIC path: the astrocyte slow-inward current arrives via a
+    labelled ``'I_SIC'`` *current* channel (``add_current_input``), is read one step
+    before it enters ``dV/dt`` (one-step lag, like ``I_stim``), and never collides
+    with the device ``I_stim`` channel. No host-side ``sic_events`` queue remains.
+
+    These pin the bucket-3 de-queue: the host Python dict event-emulator
+    (``_sic_queue``/``_sic_step``) and the ``sic_events=`` kwarg are gone; the SIC
+    current is a State-backed channel read instead, so the whole loop lowers under
+    ``brainstate.transform.for_loop``.
+    """
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+        self.dt = 0.1 * u.ms
+
+    def _passive(self, **over):
+        # Passive integrator (no leak/adaptation/spike): C_m = 100 pF so a constant
+        # current I drives V linearly (dV = I/C_m * dt). Lets us read SIC delivery
+        # straight off V / I_sic without ODE confounds.
+        params = dict(
+            V_th=1e6 * u.mV, V_peak=1e6 * u.mV, Delta_T=0.0 * u.mV, g_L=0.0 * u.nS,
+            C_m=100.0 * u.pF, a=0.0 * u.nS, b=0.0 * u.pA, I_e=0.0 * u.pA,
+            V_initializer=braintools.init.Constant(0.0 * u.mV), V_reset=0.0 * u.mV,
+        )
+        params.update(over)
+        n = aeif_cond_alpha_astro(1, **params)
+        n.init_state()
+        return n
+
+    def test_update_has_no_sic_events_kwarg(self):
+        # The host-queue kwarg is removed; SIC arrives via the current channel.
+        n = self._passive()
+        self.assertNotIn('sic_events', inspect.signature(n.update).parameters)
+
+    def test_no_host_sic_queue_attributes(self):
+        # The host-side dict event-emulator is gone (not JAX-traceable).
+        n = self._passive()
+        self.assertFalse(hasattr(n, '_sic_queue'))
+        self.assertFalse(hasattr(n, '_sic_step'))
+
+    def test_sic_current_channel_one_step_lag(self):
+        # A SIC current deposited on the labelled channel lands in I_sic this step
+        # (stored for the next), and modulates V one step later — never V now.
+        n = self._passive()
+        with brainstate.environ.context(t=0.0 * u.ms):
+            n.add_current_input('sic', 50.0, label='I_SIC')  # unitless -> pA on write-back
+            n.update(x=0.0 * u.pA)
+        self.assertTrue(u.math.allclose(n.V.value, 0.0 * u.mV, atol=1e-12 * u.mV))
+        self.assertTrue(u.math.allclose(n.I_sic.value, 50.0 * u.pA, atol=1e-12 * u.pA))
+
+        with brainstate.environ.context(t=self.dt):
+            n.update(x=0.0 * u.pA)  # I_sic = 50 pA drives V: 50pA/100pF*0.1ms = 0.05 mV
+        self.assertTrue(u.math.allclose(n.V.value, 0.05 * u.mV, atol=1e-10 * u.mV))
+        self.assertTrue(u.math.allclose(n.I_sic.value, 0.0 * u.pA, atol=1e-12 * u.pA))
+
+    def test_i_stim_and_i_sic_do_not_collide(self):
+        # A device current (I_stim via x=) and a SIC current (labelled channel)
+        # coexist: each lands in its OWN term (read order pops I_SIC first), and the
+        # membrane sees their SUM one step later — not one channel swallowing both.
+        n = self._passive()
+        with brainstate.environ.context(t=0.0 * u.ms):
+            n.add_current_input('sic', 50.0, label='I_SIC')
+            n.update(x=100.0 * u.pA)
+        self.assertTrue(u.math.allclose(n.I_stim.value, 100.0 * u.pA, atol=1e-12 * u.pA))
+        self.assertTrue(u.math.allclose(n.I_sic.value, 50.0 * u.pA, atol=1e-12 * u.pA))
+
+        with brainstate.environ.context(t=self.dt):
+            n.update(x=0.0 * u.pA)  # (100 + 50) pA -> 0.15 mV
+        self.assertTrue(u.math.allclose(n.V.value, 0.15 * u.mV, atol=1e-10 * u.mV))
+
+    def test_sic_current_channel_lowers_under_for_loop(self):
+        # A SIC current re-deposited each step lowers under for_loop with a stable
+        # (1,) carry (the cluster-12 (N,)->() collapse guard).
+        n = self._passive()
+
+        def _run_step(k):
+            n.add_current_input('sic', jnp.full(n.varshape, 50.0), label='I_SIC')
+            with brainstate.environ.context(t=k * self.dt):
+                n.update(x=0.0 * u.pA)
+            return n.I_sic.value / u.pA
+
+        out = brainstate.transform.for_loop(_run_step, jnp.arange(4))
+        self.assertEqual(tuple(out.shape), (4, 1))
+        npt.assert_allclose(np.asarray(out).reshape(-1), [50., 50., 50., 50.], atol=1e-10)
 
 
 if __name__ == '__main__':
