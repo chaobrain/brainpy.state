@@ -71,7 +71,7 @@ is the NEST-style facade.
 
 | NEST API | Status | brainpy.state equivalent | NEST upstream | Tests | Notes |
 |---|---|---|---|---|---|
-| `Create(model, n=1, params=None, positions=None)` | missing | `Module()` constructors directly, e.g. `iaf_psc_alpha(n, **params)` | upstream | — | `brainpy.state` style instantiates classes; NEST style passes a string model name |
+| `Create(model, n=1, params=None, positions=None)` | partial | `Module()` constructors directly, e.g. `iaf_psc_alpha(n, **params)`; `Simulator.create(...)` mirrors it (incl. `positions=`) | upstream | `_network/_simulator_spatial_test.py` | `brainpy.state` style instantiates classes; NEST style passes a string model name. `Simulator.create(positions=spatial.*)` done (goal 20) |
 | `GetNodes(properties)` | missing | brainstate iteration via `.nodes()` | upstream | — | brainstate's tree traversal exposes nodes but not by NEST property dict |
 | `GetLocalNodeCollection(nc)` | missing | n/a | upstream | — | MPI-specific (spec §7 unsupported) |
 | `PrintNodes()` | missing | brainstate `Module.print_brief()`/`__repr__` | upstream | — | informational only |
@@ -127,7 +127,7 @@ is the NEST-style facade.
 | `SynapseCollection` | missing | `Projection` object | upstream | — | introspection idioms differ |
 | `Parameter` (runtime-evaluated expressions) | missing | none | upstream | — | NEST's `Parameter` allows `weight=nest.random.normal()` at `Connect` time; brainpy.state expects concrete values at projection-instantiation time |
 | `CreateParameter(type, params)` | missing | none | upstream | — | parameter-distribution factory |
-| `Mask` (spatial) | missing | none | upstream | — | spatial masks absent |
+| `Mask` (spatial) | partial | `spatial.circular` / `spatial.spherical` / `spatial.box` | upstream | `_nest_spatial/_masks_test.py` | circular/spherical/box done; other mask shapes queued |
 | `CollocatedSynapses(...)` | missing | multiple `Projection` instances on the same pre/post pair | upstream | — | NEST users compose multiple synapse types on one edge at once; brainpy.state requires separate Projection objects |
 | `Compartments` / `Receptors` | partial | `brainpy_state/_nest/cm_default.py` exposes compartment+receptor spec internally | upstream | — | not a top-level class — users compose by passing dicts to `cm_default` constructor |
 | `SonataNetwork(config)` | unsupported (per spec §7) | none | upstream | — | declarative SONATA loading out of scope; the SONATA HDF5 format itself could be imported by user code, but the NEST loader semantics are NEST-internal |
@@ -152,15 +152,16 @@ is the NEST-style facade.
 
 | NEST entity | Status | brainpy.state equivalent | NEST upstream | Tests | Notes |
 |---|---|---|---|---|---|
-| `nest.spatial.grid(shape, extent, ...)` | missing | none | <https://nest-simulator.readthedocs.io/en/stable/networks/spatially_structured_networks.html> | — | regular grid layers absent |
-| `nest.spatial.free(pos, ...)` | missing | none | upstream | — | free-position layers absent |
-| `nest.spatial.pos.{x,y,z}` / `source_pos.{x,y,z}` / `target_pos.{x,y,z}` | missing | none | upstream | — | position expressions for use in Connect |
-| `nest.spatial.distance` / `.x/.y/.z` | missing | none | upstream | — | distance/displacement scalars |
-| `nest.spatial_distributions.exponential / gaussian / gaussian2D / gabor / gamma` | missing | none | upstream | — | distance-dependent distribution factories |
-| `Mask` types (rectangular, circular, doughnut, elliptical, grid, box, spherical, ellipsoidal) | missing | none | upstream | — | spatial connectivity masks |
-| `GetPosition`, `GetSourcePositions`, `GetTargetPositions`, `FindNearestElement`, `FindCenterElement`, `Displacement`, `Distance`, `SelectNodesByMask` | missing | none | upstream | — | spatial query helpers |
-| `DumpLayerConnections`, `DumpLayerNodes` | missing | none | upstream | — | spatial export helpers |
-| `PlotLayer`, `PlotTargets`, `PlotSources`, `PlotProbabilityParameter` | missing | none (matplotlib used directly) | upstream | — | spatial visualization helpers |
+| `nest.spatial.grid(shape, extent, ...)` | **done** | `brainpy.state.spatial.grid` | <https://nest-simulator.readthedocs.io/en/stable/networks/spatially_structured_networks.html> | `_nest_spatial/_layers_test.py`, `_validation/spatial_grid_test.py` | exact coord parity vs NEST (2-D + 3-D) |
+| `nest.spatial.free(pos, ...)` | **done** | `brainpy.state.spatial.free` | upstream | `_nest_spatial/_layers_test.py`, `_validation/spatial_3d_test.py` | array- or distribution-backed (2-D/3-D) |
+| `nest.spatial.pos.{x,y,z}` / `source_pos.{x,y,z}` / `target_pos.{x,y,z}` | missing | none | upstream | — | per-axis position expressions for use in Connect (kernel only consumes `distance` so far) |
+| `nest.spatial.distance` / `.x/.y/.z` | partial | `brainpy.state.spatial.distance` (+ `displacement`, `pairwise_distance`) | upstream | `_nest_spatial/_distance_test.py`, `_kernels_test.py` | scalar `distance` sentinel done; per-axis `.x/.y/.z` not yet |
+| `nest.spatial_distributions.exponential / gaussian / gaussian2D / gabor / gamma` | partial | `brainpy.state.spatial.gaussian` | upstream | `_nest_spatial/_kernels_test.py`, `_validation/spatial_gaussian_kernel_test.py` | `gaussian` done (distributional parity); exponential/gabor/gamma queued |
+| `Mask` types (rectangular, circular, doughnut, elliptical, grid, box, spherical, ellipsoidal) | partial | `spatial.circular` / `spatial.spherical` / `spatial.box` | upstream | `_nest_spatial/_masks_test.py` | circular/spherical/box done (hard cutoff parity); rectangular/doughnut/elliptical queued |
+| `GetPosition`, `GetSourcePositions`, `GetTargetPositions`, `FindNearestElement`, `FindCenterElement`, `Displacement`, `Distance`, `SelectNodesByMask` | partial | `Simulator.get_position`, `spatial.target_positions`, `spatial.target_nodes`, `spatial.center_element`, `spatial.Distance` | upstream | `_nest_spatial/_helpers_test.py`, `_validation/spatial_grid_test.py` | GetPosition/GetTargetPositions/GetTargetNodes/FindCenterElement/Distance done; nearest-element/by-mask queued |
+| `DumpLayerConnections`, `DumpLayerNodes` | missing | none (use `get_connections` / `get_position`) | upstream | — | spatial export helpers |
+| `PlotLayer`, `PlotTargets`, `PlotSources`, `PlotProbabilityParameter` | missing | none (matplotlib used directly in demos) | upstream | — | spatial visualization helpers |
+| `Create(model, positions=spatial.*)` + `spatial` pairwise-Bernoulli rule | **done** | `Simulator.create(positions=)` + `spatial.spatial_pairwise_bernoulli` | upstream | `_network/_simulator_spatial_test.py`, `_nest_spatial/_rule_test.py` | coords attach to a population; spatial rule rides `connect(rule=)` unchanged |
 
 ### 3.11 Random / math / logic Parameter operators
 
@@ -194,9 +195,15 @@ or `weight=2 * nest.spatial.distance`. `brainpy.state` requires concrete arrays
 at projection-instantiation time. This breaks NEST examples that use
 `Parameter` arithmetic.
 
-**Spatial / topology.** The entire `nest.spatial` + `nest.spatial_distributions`
-module (≈25 entities) is absent. NEST users building cortical-column,
-visual-cortex, or grid-based-network models depend on this surface.
+**Spatial / topology.** The core of `nest.spatial` + `nest.spatial_distributions` **landed**
+(goal 20): `grid`/`free` layers (2-D/3-D), the `distance` sentinel + `gaussian` kernel,
+`circular`/`spherical`/`box` masks, the `spatial_pairwise_bernoulli` rule (riding the existing
+`Simulator.connect`), and the `GetPosition`/`GetTargetPositions`/`GetTargetNodes`/
+`FindCenterElement`/`Distance` query helpers — all under `brainpy.state.spatial`, validated
+against live NEST 3.9.0 (exact grid coords; distributional kernel parity). Remaining surface
+(per-axis `pos.x/y/z` expressions, the exponential/gabor/gamma distributions, the other mask
+shapes, nearest-element / by-mask selection, layer dump/plot helpers) is queued; the
+primitives and seam are in place to add them incrementally.
 
 **`CollocatedSynapses`.** No support for multiple synapse types on the same
 edge pair at once. NEST users wire AMPA + NMDA on the same pre→post pair in

@@ -189,6 +189,59 @@ objection into a Lessons entry, do **not** silently diverge.
   `label='w_ex'/'w_in'` too but take `pA`, not the `nS` conductance bridge — a related but
   distinct seam (no `receptor_input_unit` scaling), not touched here.
 
+### 20-spatial — 2026-06-15
+
+- **Shipped:** the **spatial-connectivity API** (`nest.spatial.*` was the last genuinely-absent
+  capability). A new **`brainpy_state/_nest_spatial/`** submodule (sibling of `_nest`/`_network`,
+  **not** inside `_nest`) holds position layers (`grid`, `free`, 2-D/3-D), the `distance`
+  sentinel + `displacement`/`pairwise_distance`, the `gaussian` kernel, `circular`/`spherical`/
+  `box` masks, the `spatial_pairwise_bernoulli` rule, and query helpers (`center_element`,
+  `Distance`, `target_nodes`, `target_positions`). Re-exported as **`brainpy.state.spatial`**.
+  The Simulator seam: **`create(positions=spatial.*)`** (coords attach to a population) +
+  **`get_position`** (NEST `GetPosition`). Four demos — `spatial_grid_iaf`, `spatial_gaussex`,
+  `spatial_3d_gauss`, `spatial_csa` (native CSA) — plus a `csa_example` documented placeholder,
+  with three validation files (`_validation/spatial_{grid,gaussian_kernel,3d}_test.py`). Branch
+  `worktree-nest-goal+20-spatial`.
+- **Parity (vs live NEST 3.9.0):** **grid coordinates exact**, element-for-element
+  (`GetPosition`, 2-D + 3-D) and the centre element (`FindCenterElement`). **Gaussian kernel
+  distributional:** empirical `p(d)` binned by distance matches NEST bin-by-bin —
+  gaussex max\|bp−NEST\| ≈ **0.016** (21083 vs 20980 edges, 0.5 %); 3-D max\|bp−NEST\| ≈ **0.008**
+  (129437 vs 130758 edges, ≈1 %), both also tracking the analytic Gaussian. Box mask is a hard
+  per-axis cutoff; `allow_autapses=False` removes every self-edge. **87 spatial tests, 100 %
+  `_nest_spatial` coverage.**
+- **API discovered/changed:** the spatial rule rides the **existing** `connect(rule=)` with
+  **no signature change** beyond `create(positions=)`. `create` stores coords in
+  `self._positions[id(pop)]` (grid/concrete-`free` derive size from coords; deferred `free`
+  draws `size` with a per-pop key). The bind happens at the **top of `_connect_pair`**, gated on
+  `getattr(rule, '_is_spatial', False)`: `_bind_spatial_coords` slices each side's coords by the
+  segment's local indices and returns `rule.with_coords(pre, post)` — a **pure clone**, so every
+  downstream path (static, plastic, diffusion, gap, sic) samples one coordinate-bound rule and
+  the `ConnRule.sample(n_pre, n_post, *, key, pre_is_post, allow_autapses, allow_multapses)`
+  contract is unchanged. `target_nodes`/`target_positions` read realized adjacency back via
+  `get_connections` (population-local indices). **Reuse this pattern**: any new distance-rule
+  variant subclasses/feeds `SpatialConnRule`; any new query helper takes `(sim, source, target)`.
+- **Gotchas:** (1) **Diagonal/autapse trap in distributional binning** — for a self-connection
+  with `allow_autapses=False`, the `n` diagonal `(i,i)` pairs have `d=0` but are *unconnectable*;
+  they must be **excluded from the candidate-pair denominator** or the `d≈0` bin's empirical
+  fraction is diluted toward 0 (cost me a RED on the 3-D law test). a≠b connects (gaussex) don't
+  hit this — `a_i→b_i` at `d=0` is a real, allowed edge. (2) **`free(distribution)` infers
+  dimensionality from `extent` XOR `num_dimensions`** — passing both raises; the 3-D demo extent
+  `[1.5,1.5,1.5]` already implies 3-D, so don't also pass `num_dimensions=3`. (3) **Units:** bare
+  floats on coords/extent/std become `u.um` via `_as_len`, so `gaussian(std=0.5)` is 0.5 µm and
+  `d/std` is dimensionless — never multiply a Quantity distance by a bare std. (4) **NEST grid
+  convention** (now NEST-confirmed, not just pinned): `x = c−L/2+(col+0.5)·L/n`,
+  `y = c+L/2−(row+0.5)·L/n`, node `k`=col·n_rows+row (column slow, row fast); default extent is
+  the unit hypercube. (5) **Distributional tests use a fixed brainpy seed** so the structural
+  (NEST-free) class is deterministic; only the bp-vs-NEST band tolerates PRNG divergence.
+- **For next clusters:** the **primitives + seam are the substrate** for the rest of
+  `nest.spatial`. Queued (all additive, no seam change): per-axis `spatial.pos.x/y/z` /
+  `source_pos`/`target_pos` expressions (kernels currently consume only the `distance` scalar);
+  the `exponential`/`gabor`/`gamma` distance distributions (mirror `_GaussianKernel`); the other
+  mask shapes (rectangular/doughnut/elliptical — mirror `_RadialMask`/`_BoxMask`); nearest-element
+  / `SelectNodesByMask`; layer dump/plot helpers. The `_positions` registry + `get_position` +
+  `target_*` helpers are the read-side substrate; `with_coords`-clone binding is the write-side
+  substrate. See `network-api-gap.md` §3.10 (now mostly **done/partial**) for the precise residual.
+
 ### 17b-astro-demos — 2026-06-15
 
 - **Shipped:** the two substrate-ready **§3.8 astrocyte demos** on the `Simulator` API +

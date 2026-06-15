@@ -552,6 +552,53 @@ the analytical solution.
 > `third_factor_bernoulli_with_pool` astrocyte-pool connection rule, which the Simulator does
 > not yet provide (blocker recorded in `network-api-gap.md`).
 
+## Spatial-network demos (§3.9)
+
+NEST's `spatial/` tutorials place neurons at **coordinates** and wire them with
+distance-dependent rules (`nest.spatial.*` / `nest.spatial_distributions.*`). brainpy.state
+gains a sibling [`brainpy.state.spatial`](../../brainpy_state/_nest_spatial) namespace mirroring
+that surface: position layers (`grid`, `free` in 2-D/3-D), the `distance` sentinel and the
+`gaussian` kernel, masks (`circular`/`spherical`/`box`), the `spatial_pairwise_bernoulli`
+connection rule, and query helpers (`center_element`, `Distance`, `target_nodes`,
+`target_positions`). Coordinates carry `brainunit` length units.
+
+The seam is deliberately small. `Simulator.create(model, positions=spatial.grid/free(...))`
+attaches coordinates to a population (a `grid` / concrete `free` layer derives the size from
+its coordinates; a distribution-backed `free` layer draws `size` of them) and stores them under
+the population; `Simulator.get_position` (NEST `GetPosition`) reads them back.
+`spatial_pairwise_bernoulli(p=..., mask=...)` is an **ordinary `ConnRule`** — it rides the
+existing `Simulator.connect(..., rule=...)` with no signature change. At connect time the
+Simulator binds the connect's sliced pre/post coordinates onto a pure rule clone, so every
+downstream path (static, plastic, even diffusion/gap/sic) samples one coordinate-bound rule;
+the whole `(n_pre, n_post)` distance + Bernoulli draw is vectorized (no Python pair loop).
+
+Four faithful ports plus one documented placeholder (run any directly, e.g.
+`python examples/nest/spatial_gaussex.py`):
+
+- **`spatial_grid_iaf.py`** (NEST `grid_iaf`) — a 4×3 `iaf_psc_alpha` grid. The layout is
+  *exactly* NEST's (column-slow/row-fast, `x` left→right, `y` top→bottom), asserted
+  element-for-element against live NEST `GetPosition`.
+- **`spatial_gaussex.py`** (NEST `gaussex`) — two 30×30 grids connected with a Gaussian
+  distance kernel `p(d)=exp(-d²/2σ²)` clipped to a circular mask; the central neuron's
+  realized footprint is read back via `target_positions`.
+- **`spatial_3d_gauss.py`** (NEST `test_3d_gauss`) — 1000 neurons at uniform-random 3-D
+  positions, a Gaussian kernel with **no autapses** clipped to a cubic `box` mask, and a
+  target-distance histogram of the central footprint.
+- **`spatial_csa.py`** (NEST `csa_spatial_example`) — the CSA Gaussian connectivity
+  (`csa.random * (csa.gaussian(σ, cutoff) * d)`) expressed **natively** as
+  `spatial_pairwise_bernoulli(p=gaussian(distance, std=σ), mask=circular(cutoff))` — no
+  `libneurosim`.
+- **`csa_example.py`** — a **documented placeholder**: the CSA/`conngen` *mechanism*
+  (libneurosim) is intentionally not ported, but the connectivity it describes
+  (`csa.random(0.1)`) is shown to map to the native `pairwise_bernoulli(0.1)`.
+
+Parity is **tiered**. Grid coordinates and the centre element are deterministic, so they match
+live NEST exactly. The probabilistic samples diverge under independent PRNGs, so the kernel
+demos are validated **distributionally** — the empirical connection fraction binned by distance
+must track the analytic Gaussian *and* live NEST's empirical curve, plus a seed-mean edge count
+(`_validation/spatial_{grid,gaussian_kernel,3d}_test.py`). Each example also runs standalone in
+CI without NEST.
+
 ## Validation
 
 Live-NEST parity tests live in
@@ -777,3 +824,23 @@ distributionally over seeds (a strong bias drives D1 on 5/5 seeds and against it
 both sims; the winner ≫ loser; the decision is unbiased at `dE = 0`), because the WTA
 attractor amplifies PRNG divergence just as Wang's does. `rate_neuron_dm` is also the goal-17
 arbiter that confirmed `rectify_output` behaves correctly inside a *recurrent* rate loop.
+
+### Spatial-network demos (§3.9)
+
+Grid coordinates are deterministic and match live NEST **exactly**; the probabilistic kernel
+samples PRNG-diverge, so they are compared **distributionally** — the empirical connection
+fraction binned by distance vs both the analytic Gaussian and live NEST's empirical curve,
+plus a seed-mean edge count. Figures are against NEST 3.9.0.
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `spatial_grid_iaf` | grid coordinates (4×3, 3×3×3) ; centre element | exact, element-for-element (`GetPosition` / `FindCenterElement`) |
+| `spatial_gaussex` | empirical `p(d)` per distance bin ; edge count | max\|bp−NEST\| ≈ 0.016 ; 21083 vs 20980 edges (0.5 %) |
+| `spatial_3d_gauss` | 3-D empirical `p(d)` per bin ; box cutoff ; autapses ; edge count | max\|bp−NEST\| ≈ 0.008 ; hard box ; zero autapses ; 129437 vs 130758 edges (≈1 %) |
+| `spatial_csa` (native CSA) | Gaussian-kernel footprint | same kernel family as `gaussex` (smoke) |
+
+The grid layout was pinned empirically against live NEST (`x = c−L/2 + (col+0.5)·L/n`,
+`y = c+L/2 − (row+0.5)·L/n`, column slow / row fast). Both Gaussian demos confirm the
+substrate's `p(d)` tracks the analytic law and NEST's realized curve bin-by-bin; the 3-D demo
+additionally checks the `box` mask is a hard per-axis cutoff and `allow_autapses=False` removes
+every self-edge. Each demo's NEST-free companion (the structural class) runs in CI.
