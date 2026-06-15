@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST **recurrent**-NMDA micro-parity for ``iaf_bw_2001`` (design-A arbiter).
+r"""Live-NEST **recurrent**-NMDA micro-parity for ``iaf_bw_2001`` (design-A arbiter).
 
 The feed-forward sibling (``iaf_bw_2001_nest_parity_test.py``) validates a single
 sender->receiver NMDA jump by *manually* replaying the sender's ``spike_offset``.
