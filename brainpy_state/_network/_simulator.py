@@ -522,6 +522,32 @@ class Simulator(brainstate.nn.Module):
             return n, layer.sample(n, key)
         return layer.n, layer.coords
 
+    def _bind_spatial_coords(self, rule, pre_seg, post_seg):
+        """Bind a spatial rule to the sliced pre/post coordinates of this connect.
+
+        Looks up each population's stored coordinates (from ``create(positions=...)``),
+        slices them by the segment's local indices so the rows align with the edge
+        index space the projection uses, and returns a coordinate-bound rule clone.
+        Raises if either side is a device/generator (no population) or was not created
+        with positions.
+        """
+        pre_pop = pre_seg.population
+        post_pop = post_seg.population
+        if pre_pop is None or post_pop is None:
+            raise ValueError(
+                'a spatial connection rule requires neuron populations on both sides; '
+                'generators/devices carry no positions.'
+            )
+        try:
+            pre_all = self._positions[id(pre_pop)]
+            post_all = self._positions[id(post_pop)]
+        except KeyError:
+            raise ValueError(
+                'a spatial connection rule requires both populations to be created '
+                'with create(positions=...).'
+            )
+        return rule.with_coords(pre_all[pre_seg.indices], post_all[post_seg.indices])
+
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
                 weight=None, delay=None, comm: str = 'dense', receptor_type=None,
@@ -1174,6 +1200,11 @@ class Simulator(brainstate.nn.Module):
                       receptor_type=None, synapse=None, vt=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
+        # Spatial rule: bind this connect's sliced pre/post coordinates onto a pure
+        # rule clone before any dispatch, so every downstream path (static, plastic,
+        # diffusion, gap, sic) samples an identical, coordinate-bound rule.
+        if getattr(rule, '_is_spatial', False):
+            rule = self._bind_spatial_coords(rule, pre_seg, post_seg)
         # Diffusion coupling (siegert mean-field): a diffusion_connection is not a
         # plastic projection -- the Simulator routes it as a dual-channel seam deposit
         # (drift -> mu, diffusion -> sigma^2). Dispatch before the plastic path.
