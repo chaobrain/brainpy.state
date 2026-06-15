@@ -92,6 +92,14 @@ family (4 variants) plus `weight_optimizer` are entirely missing.
 > `0` / Ca `1e-6` / I_SIC `6e-4` / V_pre `3.7e-4 mV`; astro-network seed-mean post rate
 > `9.0=9.0` (SIC off) → `14.0=14.0` (SIC on, the SIC-raises-firing law, identical on both
 > sims). `sic_connection_test.py` stays NEST-free rule tests.
+>
+> **Cluster 24 (`TripartiteConnect`).** `sic_connection` is now also consumed by
+> `Simulator.tripartite_connect` as the **`third_out`** (astrocyte→neuron) arm: the
+> orchestrator shares one realized primary sample across three arms and wires the
+> astrocyte→post arm through this same merged static-STP + SIC deposit path — **no new
+> deposit primitive**. Validated end-to-end against live NEST in the cluster-24 micro-
+> parity GATE (`_validation/tripartite_connect_test.py`) and the three astrocyte demos
+> (`astrocyte_small_network`, `astrocyte_brunel_{bernoulli,fixed_indegree}`).
 
 | Bucket | Count | Notes |
 |---|---:|---|

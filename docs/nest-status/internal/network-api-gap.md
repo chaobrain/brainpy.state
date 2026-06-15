@@ -63,7 +63,7 @@ is the NEST-style facade.
 | NEST API | Status | brainpy.state equivalent | NEST upstream | Tests | Notes |
 |---|---|---|---|---|---|
 | `Connect(pre, post, conn_spec, syn_spec)` | missing | `brainpy_state/_brainpy/projection.py:AlignPostProj` (different programming model) | <https://nest-simulator.readthedocs.io/en/stable/ref_material/pynest_api/index.html> | comparison only (in `*_test.py`) | NEST users compose `Connect(...)` calls; brainpy.state users instantiate `AlignPostProj` subclasses |
-| `TripartiteConnect(pre, post, third, conn_spec, syn_spec)` | missing | none | upstream | — | Required for the `aeif_cond_alpha_astro` + astrocyte triad pattern; users currently wire compositionally |
+| `TripartiteConnect(pre, post, third, conn_spec, third_factor_conn_spec, syn_specs)` | **implemented** | `Simulator.tripartite_connect` (24) | upstream | `tripartite_connect_test.py`, `astrocyte_small_network_test.py`, `astrocyte_brunel_test.py` | One shared primary `pre→post` sample feeds three arms (primary / `third_in` / `third_out`-`sic_connection`); single-population views. Live-NEST parity: block edge sets bit-identical, random pools match seed-mean counts (cat D) |
 | `Disconnect(...)` | missing | none | upstream | — | No first-class disconnect; user removes the `Projection` object |
 | `GetConnections(source, target, synapse_model, synapse_label)` | missing | none — projections expose `.weight`, `.delay` attributes directly | upstream | — | NEST users introspect via SynapseCollection; brainpy.state requires holding a reference to the `Projection` |
 
@@ -146,7 +146,7 @@ is the NEST-style facade.
 | `fixed_indegree(indegree)` | partial | `brainstate.nn.FixedNumConn` / `EventFixedNumConn` (in-degree-style) | upstream | — | brainstate `FixedNumConn` is close but rule semantics + param-name parity not documented |
 | `fixed_outdegree(outdegree)` | partial | brainstate variant — verify direction | upstream | — | likely available; not named the same |
 | `conngen` (CSA) | missing | none | upstream | — | Connection Set Algebra integration absent |
-| `third_factor_bernoulli_with_pool` | missing | none | upstream | — | `TripartiteConnect` rule; needed for astrocyte triads (`aeif_cond_alpha_astro`) |
+| `third_factor_bernoulli_with_pool` | **implemented** | `brainpy_state.third_factor_bernoulli_with_pool(p, pool_size, pool_type)` (24) | upstream | `_rules_test.py`, `_connectivity_test.py`, `tripartite_connect_test.py` | `tripartite_connect` astrocyte-pool rule; `block` + `random` pools. Live-NEST parity in `tripartite_connect_test.py` |
 
 ### 3.10 Spatial / topology
 
@@ -209,9 +209,18 @@ primitives and seam are in place to add them incrementally.
 edge pair at once. NEST users wire AMPA + NMDA on the same pre→post pair in
 one `Connect` call; brainpy.state requires multiple `Projection` instances.
 
-**`TripartiteConnect`.** The astrocyte triad pattern (used by
-`aeif_cond_alpha_astro` per `neurons-gap.md`) has no top-level helper. Users
-must compose three separate projection objects.
+**`TripartiteConnect`.** *Implemented (cluster 24).*
+`Simulator.tripartite_connect(pre, post, third, conn_spec, third_factor_conn_spec,
+syn_specs)` is the top-level helper for the astrocyte triad pattern (used by
+`aeif_cond_alpha_astro`). It samples the primary `pre→post` connectivity **once** and
+shares that one realization across the three arms — primary, `third_in` (`pre→astro`)
+and `third_out` (`astro→post`, a `sic_connection`) — via an internal `_ExplicitEdges`
+rule, so no new deposit primitive is needed. The pool sampler
+`third_factor_bernoulli_with_pool(p, pool_size, pool_type)` supports `block` and
+`random` pools. `pre`/`post`/`third` must be single-population views (the Brunel ports
+use one sliced neuron population). Live-NEST parity (`tripartite_connect_test.py`):
+deterministic `block` edge sets are bit-identical; `random` pools match seed-mean
+distinct-edge counts within category D.
 
 ## 5. Semantic & numerical risks
 
@@ -303,12 +312,13 @@ must compose three separate projection objects.
   draws connection weights from a normal distribution at Connect time and
   matches the resulting weight histogram with NEST's.
 
-- **P1 — Add `TripartiteConnect` for astrocyte triads.** [M]
-  Rationale: `aeif_cond_alpha_astro` already exists and is validated, but
-  the user pattern for wiring its triad currently requires three projection
-  objects. Acceptance: `nest_compat.TripartiteConnect(neurons, neurons,
-  astrocytes, conn_spec={'rule': 'third_factor_bernoulli_with_pool', ...})`
-  works and matches NEST connectivity statistics.
+- **P1 — Add `TripartiteConnect` for astrocyte triads.** [M] — **DONE (cluster 24).**
+  `Simulator.tripartite_connect(pre, post, third, conn_spec,
+  third_factor_conn_spec, syn_specs)` with the
+  `third_factor_bernoulli_with_pool(p, pool_size, pool_type)` rule shares one primary
+  sample across the three arms and matches live-NEST connectivity statistics
+  (`tripartite_connect_test.py`: block bit-identical, random within cat D;
+  `astrocyte_small_network_test.py`, `astrocyte_brunel_test.py`).
 
 - **P1 — `CollocatedSynapses` support.** [M]
   Acceptance: AMPA+NMDA collocation on one pair (used in NEST Brunel-Wang

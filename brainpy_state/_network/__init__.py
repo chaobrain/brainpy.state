@@ -17,7 +17,7 @@ from ._projections import (
 from ._nodeview import NodeView
 from ._rules import (
     ConnRule, all_to_all, one_to_one, fixed_indegree, pairwise_bernoulli,
-    fixed_total_number,
+    fixed_total_number, third_factor_bernoulli_with_pool,
 )
 from ._event_proj import EventProjection
 from ._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
@@ -45,6 +45,7 @@ __all__ = [
     'fixed_indegree',
     'pairwise_bernoulli',
     'fixed_total_number',
+    'third_factor_bernoulli_with_pool',
     'EventProjection',
     'EventPlasticProj',
     'VoltageCoupledPlasticProj',

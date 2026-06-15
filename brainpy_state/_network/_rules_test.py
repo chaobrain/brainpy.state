@@ -2,11 +2,15 @@
 import unittest
 
 import jax
+import jax.numpy as jnp
+import numpy as np
 
 from brainpy_state._network import (
     all_to_all, one_to_one, fixed_indegree, pairwise_bernoulli,
-    fixed_total_number,
+    fixed_total_number, third_factor_bernoulli_with_pool,
 )
+from brainpy_state._network._connectivity import ConnSpec
+from brainpy_state._network._rules import _ExplicitEdges
 
 
 class TestRules(unittest.TestCase):
@@ -81,3 +85,75 @@ class TestPairwiseBernoulli(unittest.TestCase):
             pairwise_bernoulli(-0.1)
         with self.assertRaises(ValueError):
             pairwise_bernoulli(1.5)
+
+
+class TestExplicitEdges(unittest.TestCase):
+    """`_ExplicitEdges` returns a fixed ConnSpec, ignoring sampling args."""
+
+    def test_returns_wrapped_spec(self):
+        spec = ConnSpec(jnp.array([0, 1, 2]), jnp.array([3, 4, 5]), 3)
+        rule = _ExplicitEdges(spec)
+        out = rule.sample(9, 9, key=jax.random.key(0), pre_is_post=False,
+                          allow_autapses=True, allow_multapses=True)
+        self.assertIs(out, spec)
+
+    def test_ignores_key_and_flags(self):
+        spec = ConnSpec(jnp.array([0]), jnp.array([0]), 1)
+        rule = _ExplicitEdges(spec)
+        a = rule.sample(1, 1, key=jax.random.key(1), pre_is_post=True,
+                        allow_autapses=False, allow_multapses=False)
+        b = rule.sample(99, 99, key=jax.random.key(42), pre_is_post=False,
+                        allow_autapses=True, allow_multapses=True)
+        np.testing.assert_array_equal(np.asarray(a.pre_idx), np.asarray(b.pre_idx))
+
+
+class TestThirdFactorBernoulliWithPool(unittest.TestCase):
+    """`third_factor_bernoulli_with_pool` spec: validation + derived edge sampling."""
+
+    def test_invalid_p_rejected(self):
+        with self.assertRaises(ValueError):
+            third_factor_bernoulli_with_pool(p=-0.1, pool_size=1, pool_type='block')
+        with self.assertRaises(ValueError):
+            third_factor_bernoulli_with_pool(p=1.5, pool_size=1, pool_type='block')
+
+    def test_invalid_pool_size_rejected(self):
+        with self.assertRaises(ValueError):
+            third_factor_bernoulli_with_pool(p=1.0, pool_size=0, pool_type='block')
+
+    def test_invalid_pool_type_rejected(self):
+        with self.assertRaises(ValueError):
+            third_factor_bernoulli_with_pool(p=1.0, pool_size=1, pool_type='nope')
+
+    def test_sample_third_block_deterministic(self):
+        # primary: all-to-all pre(2) x post(10); block pool_size=1, n_third=5, p=1.
+        pre = jnp.repeat(jnp.arange(2), 10)
+        post = jnp.tile(jnp.arange(10), 2)
+        primary = ConnSpec(pre, post, 20)
+        spec = third_factor_bernoulli_with_pool(p=1.0, pool_size=1, pool_type='block')
+        tin, tout = spec.sample_third(primary, n_post=10, n_third=5, key=jax.random.key(0))
+        # third_in: pre_i -> astro(post//2); third_out: astro(post//2) -> post.
+        np.testing.assert_array_equal(np.asarray(tin.pre_idx), np.asarray(pre))
+        np.testing.assert_array_equal(np.asarray(tin.post_idx), np.asarray(post) // 2)
+        np.testing.assert_array_equal(np.asarray(tout.pre_idx), np.asarray(post) // 2)
+        np.testing.assert_array_equal(np.asarray(tout.post_idx), np.asarray(post))
+        self.assertEqual(tin.n_edges, 20)
+        self.assertEqual(tout.n_edges, 20)
+
+    def test_sample_third_p0_empty(self):
+        pre = jnp.repeat(jnp.arange(2), 6)
+        post = jnp.tile(jnp.arange(6), 2)
+        primary = ConnSpec(pre, post, 12)
+        spec = third_factor_bernoulli_with_pool(p=0.0, pool_size=1, pool_type='block')
+        tin, tout = spec.sample_third(primary, n_post=6, n_third=6, key=jax.random.key(0))
+        self.assertEqual(tin.n_edges, 0)
+        self.assertEqual(tout.n_edges, 0)
+
+    def test_sample_third_reproducible(self):
+        pre = jnp.repeat(jnp.arange(4), 6)
+        post = jnp.tile(jnp.arange(6), 4)
+        primary = ConnSpec(pre, post, 24)
+        spec = third_factor_bernoulli_with_pool(p=0.5, pool_size=2, pool_type='random')
+        t1 = spec.sample_third(primary, n_post=6, n_third=6, key=jax.random.key(3))
+        t2 = spec.sample_third(primary, n_post=6, n_third=6, key=jax.random.key(3))
+        np.testing.assert_array_equal(np.asarray(t1[0].pre_idx), np.asarray(t2[0].pre_idx))
+        np.testing.assert_array_equal(np.asarray(t1[1].post_idx), np.asarray(t2[1].post_idx))

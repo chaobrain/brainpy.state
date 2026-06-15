@@ -131,6 +131,7 @@ from ._network import (
     fixed_indegree,
     pairwise_bernoulli,
     fixed_total_number,
+    third_factor_bernoulli_with_pool,
 )
 
 from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
@@ -570,6 +571,7 @@ __all__ = [
     'fixed_indegree',
     'pairwise_bernoulli',
     'fixed_total_number',
+    'third_factor_bernoulli_with_pool',
     'network',
     'dist',
     'spatial',

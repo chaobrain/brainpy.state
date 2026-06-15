@@ -151,7 +151,9 @@ Pulled from per-axis docs §7; full acceptance criteria live there.
 - **`spike_generator` off-grid times convention** [S] — devices.
 - **Implement `pairwise_bernoulli` + `fixed_total_number` named helpers** [M] — network-api.
 - **Implement `Parameter` runtime-evaluated expressions in `nest_compat`** [L] — network-api.
-- **Add `TripartiteConnect`** [M] — network-api.
+- ~~**Add `TripartiteConnect`**~~ [M] — network-api. **DONE (cluster 24):**
+  `Simulator.tripartite_connect` + `third_factor_bernoulli_with_pool`, live-NEST
+  parity (block bit-identical / random cat-D). Unblocked the 3 astrocyte demos.
 - **`CollocatedSynapses` support** [M] — network-api.
 - **Port rest of Brunel family** [L] — examples.
 - **Port Clopath, STP, Astrocyte-Brunel, pedagogical-singles examples** [L total] — examples.
