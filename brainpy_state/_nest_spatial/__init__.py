@@ -30,7 +30,7 @@ from ._rule import SpatialConnRule, spatial_pairwise_bernoulli
 # ---------------------------------------------------------------------------
 # Query helpers
 # ---------------------------------------------------------------------------
-from ._helpers import center_element, Distance
+from ._helpers import center_element, Distance, target_nodes, target_positions
 
 __all__ = [
     'Layer',
@@ -47,4 +47,6 @@ __all__ = [
     'spatial_pairwise_bernoulli',
     'center_element',
     'Distance',
+    'target_nodes',
+    'target_positions',
 ]
