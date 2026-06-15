@@ -195,14 +195,19 @@ The rate-neuron (`lin_rate_ipn_network`, `rate_neuron_dm`), gap-junction
 for the spiking network-demo cluster (14)** — each needs a primitive that harness does not
 build. The **rate-neuron substrate has since landed (cluster 15a)**: `lin_rate`/`rate_neuron`
 + instantaneous/delayed rate connections now run on the seam-(H) continuous-emission path
-(`τ Ẋ = −λX + μ + φ(h)`, linear-rate FP `(I−gC)⁻¹μ` parity vs NEST), so the two rate-network
-demos are **substrate-ready** and only await a demo-port cluster. The **gap-junction
+(`τ Ẋ = −λX + μ + φ(h)`, linear-rate FP `(I−gC)⁻¹μ` parity vs NEST), and the two
+rate-network demos are now **ported with live-NEST parity (cluster 17)**:
+`lin_rate_ipn_network` (delayed-E/instantaneous-I linear-rate net; closed-form **and** NEST
+fixed point `(λI−W)⁻¹μ`, trajectory with `align_steps`) and `rate_neuron_dm` (two-unit
+rectified winner-take-all decision; deterministic winner `10·μ_win` matched to NEST, plus
+distributional decision-direction/contrast/zero-bias parity) — rows below. The **gap-junction
 substrate has since landed too (cluster 15b)**: both `gap_junctions_*` demos are now ported
 with live-NEST parity (rows below), realized as an explicit one-step-lagged **difference
 current** `I_gap,i = Σ_j g_ij (V_j[n−1] − V_i[n−1])` deposited into the post current channel
 on the SAME seam-(H) emission path (the V emission holder), NEST's `use_wfr=False` regime —
-no waveform relaxation. Only the `ht_neuron` (`intrinsic_currents_*`) demos remain blocked
-on their own primitive.
+no waveform relaxation. With the rate, gap-junction, and Siegert ports landed, **§3.6 is
+now complete except the `ht_neuron` (`intrinsic_currents_*`) demos**, which remain blocked
+on their own intrinsic-currents primitive (single-neuron, not continuous network coupling).
 
 The **Siegert mean-field network demo has landed (cluster 15c)**. `siegert_neuron`'s
 transfer Φ(μ,σ²) now lowers under `for_loop` — a jnp leggauss-64 quadrature port of the
@@ -226,8 +231,8 @@ JAX-native end to end (`siegert_diffusion_test.py`, `brunel_siegert_test.py`).
 | `repeated_stimulation.py` | implemented | `examples/nest/repeated_stimulation.py` | gated `poisson_generator` over repeated trials; active-window spike count `CAT_D` 5 %; zero-rate → silent |
 | `sensitivity_to_perturbation.py` | implemented | `examples/nest/sensitivity_to_perturbation.py` | Brunel-style balanced net; AI rate 14.95 vs 15.17 Hz (1.45 %, `CAT_D`); 1-spike perturbation decorrelates >0.9 of net after `t_stim`, 0 before (both sims) |
 | `wang_decision_making.py` | implemented | `examples/nest/wang_decision_making.py` | Wang (2002) WTA decision network on `iaf_bw_2001`. Recurrent NMDA via `connect(receptor_type=NMDA, comm='dense')` matches live NEST to machine precision (~5e-15; `iaf_bw_2001_recurrent_nmda_parity_test.py`) — **design A resolved to option (a)** (generalize the presynaptic-emission seam; no offset-aware event projection needed). Decision parity is distributional (`wang_decision_making_test.py`): ±coherence→A/B both sims, winner > 2.5× loser (< 4 Hz), unbiased at 0; the WTA attractor amplifies integrator/PRNG differences so the winner's absolute rate differs (BP A~12 vs NEST A~7 Hz). No-NEST companion `wang_decision_making_no_nest_test.py` |
-| `lin_rate_ipn_network.py` | missing | none | substrate-ready (cluster 15a): `lin_rate` + rate connections on seam-(H); demo port pending |
-| `rate_neuron_dm.py` | missing | none | substrate-ready (cluster 15a): rate-network decision-making on the rate core; demo port pending |
+| `lin_rate_ipn_network.py` | implemented | `examples/nest/lin_rate_ipn_network.py` | E/I `lin_rate_ipn` net, delayed-E + instantaneous-I (`fixed_outdegree`→mean-field `fixed_indegree`). Deterministic FP arbiter matches closed form **and** NEST `(λI−W)⁻¹μ` (atol 1e-3, `use_wfr=False`); per-neuron trajectory matches NEST with `align_steps=12` (`lin_rate_ipn_network_test.py`, cluster 17) |
+| `rate_neuron_dm.py` | implemented | `examples/nest/rate_neuron_dm.py` | two mutually-inhibiting `lin_rate_ipn` units → rectified WTA decision. Deterministic winner `10·μ_win` (11.0) + loser 0 match NEST exactly (R1 arbiter for `rectify_output` in the recurrent path); distributional parity — strong-bias direction 5/5 & 0/5 both sims, winner-loser contrast, zero-bias both-win balance (`rate_neuron_dm_test.py`, cluster 17) |
 | `gap_junctions_two_neurons.py` | implemented | `examples/nest/gap_junctions_two_neurons.py` | gap-coupled `hh_psc_alpha_gap` pair synchronizes (g=0.5 nS, resting-gating ICs). Explicit-lag difference deposit (`use_wfr=False`); 2-neuron micro-parity matches live NEST to machine precision between spikes (median ~1e-3 mV, p95 ~0.1 mV), only O(dt) AP-edge jitter (`gap_junction_parity_test.py`). No-NEST companion `gap_junction_no_nest_test.py` (cluster 15b) |
 | `gap_junctions_inhibitory_network.py` | implemented | `examples/nest/gap_junctions_inhibitory_network.py` | inhibitory `hh_psc_alpha_gap` net + random symmetric gap graph; Golomb-Rinzel coherence χ rises with gap weight (async ~0.14 → sync ~0.36, ~2.6× on BOTH sims), distributional live-NEST parity (`gap_junction_inhibitory_network_parity_test.py`, 4 seeds, χ within a few %). `fixed_indegree` gap graph (cluster 15b) |
 | `intrinsic_currents_spiking.py` | missing | none | out of scope (cluster 14): `ht_neuron` intrinsic currents |

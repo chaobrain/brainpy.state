@@ -439,14 +439,33 @@ meaningless. Each test compares a seed-**mean** (or, for `ei_clustered`, a seed-
 **median** robust to a rare globally-synchronized seed) of a population observable
 within a documented band, and asserts the qualitative law the demo exists to show.
 
-> NEST's §3.6 **rate-based network** demos (`lin_rate_ipn_network`, `rate_neuron_dm`)
-> are not yet ported, but their core machinery now exists: the rate-neuron families and
-> the instantaneous / delayed `rate_connection_*` seam landed in cluster 15a (under
-> [`brainpy_state/_nest/`](../../brainpy_state/_nest), validated NEST-free and against
-> live NEST). Unlike the spiking demos above, rate coupling rides the continuous-emission
-> seam — each neuron emits a graded `rate` that connections deposit (`comm='dense'`) into
-> the post's input sum — so these demo ports are the natural next target now that the
-> substrate is in place.
+### Rate-based network demos
+
+NEST's §3.6 **rate-based network** demos are ported too (cluster 17). Unlike the spiking
+demos above, rate neurons couple **continuously** — each emits a graded `rate` that
+connections deposit (`comm='dense'`) into the post's input sum along the continuous-emission
+seam (the rate-neuron families + instantaneous/delayed `rate_connection_*` landed in cluster
+15a). Because the linear dynamics have an analytic fixed point, parity here is **tighter**
+than the spiking demos: closed-form and deterministic-NEST anchors, not only distributional
+bands.
+
+- **`lin_rate_ipn_network.py`** — an excitatory (`NE = 4·order`) and an inhibitory
+  (`NI = order`) population of `lin_rate_ipn` neurons with **delayed excitatory** and
+  **instantaneous inhibitory** connections, relaxed end-to-end through the `Simulator` (one
+  compiled `for_loop`). With `sigma > 0` the net fluctuates about its mean-field fixed point
+  `r* = (λI − W)⁻¹μ`; a small deterministic (`sigma = 0`) instrument net matches that closed
+  form **and** live NEST (`use_wfr=False`) tightly, and the per-neuron trajectory matches
+  NEST once `align_steps` absorbs the uniform pipeline+delay offset. NEST's `fixed_outdegree`
+  wiring is mapped to the mean-field-equivalent `fixed_indegree` (`K_in = N_src·K_out/N_tgt`).
+- **`rate_neuron_dm.py`** — two mutually-inhibiting `lin_rate_ipn` units form a rectified
+  winner-take-all decision circuit. Evidence is each unit's mean input `μ`; a positive bias
+  `dE` selects the higher-`μ` unit (winner → `10·μ_win`, loser rectified to 0), and at
+  `dE = 0` the input noise breaks the tie. The deterministic decision matches NEST exactly;
+  the noisy decision is matched **distributionally** (direction, winner-loser contrast,
+  zero-bias balance over seeds), since the WTA attractor amplifies any PRNG divergence.
+
+Only NEST's `ht_neuron` intrinsic-currents demos (`intrinsic_currents_*`) remain unported —
+they need a single-neuron intrinsic-currents primitive, not continuous network coupling.
 
 ## `order` and `comm`
 
@@ -703,6 +722,8 @@ E/I currents and is hypersensitive to sub-percent current scatter.
 | `iaf_bw_2001` (Wang neuron) | AMPA+GABA `V_m`/gating ; 2-neuron NMDA `s_NMDA`/`I_NMDA`/`V_m` | machine precision (direct align) |
 | `iaf_bw_2001` recurrent NMDA | per-neuron `s_NMDA`/`V_m`, asymmetric 3-cell pool drive | machine precision ~5e-15 (pipeline-latency aligned) |
 | `wang_decision_making` | WTA decision direction & contrast (3 seeds × ±/0 coherence) | distributional: ±coh→A/B both sims ; winner > 2.5× loser (< 4 Hz) ; unbiased at 0 |
+| `lin_rate_ipn_network` | deterministic fixed point `(λI−W)⁻¹μ` ; per-neuron trajectory | FP = closed form **and** NEST to atol 1e-3 (`use_wfr=False`) ; trajectory matches NEST (`align_steps=12`) |
+| `rate_neuron_dm` | deterministic WTA winner/loser ; noisy decision direction & contrast | winner 11.0 / loser 0 = NEST exactly ; +/-bias 5/5 & 0/5 both sims ; winner ≫ loser ; unbiased at dE=0 |
 
 `brette_et_al_2007` compares the **second-half (steady-state) rate** over
 `[simtime/2, simtime]` — the kick-independent observable; the full-window rate is
@@ -724,3 +745,16 @@ winner's late rate exceeds the loser's by > 2.5× (loser suppressed < 4 Hz), and
 choice is unbiased at zero coherence. The recurrent-NMDA *coupling* underneath it
 matches NEST to machine precision (`iaf_bw_2001_recurrent_nmda_parity_test.py`), so
 the divergence is genuine attractor amplification, not a wiring or coupling error.
+
+The two **rate-based** demos break the distributional-by-construction pattern of the spiking
+demos above. `lin_rate_ipn_network` is linear, so it has an analytic fixed point: a small
+deterministic (`sigma = 0`) instrument net is matched to the closed form `(λI − W)⁻¹μ` **and**
+to live NEST (`use_wfr=False`) at `atol 1e-3`, and the per-neuron trajectory is matched once
+`align_steps` absorbs the uniform pipeline+delay offset (the demo's full random net is covered
+by a smoke run, since random connectivity PRNG-diverges). `rate_neuron_dm` has a tight
+**deterministic** anchor too — at `sigma = 0` the winner relaxes to `10·μ_win` (11.0) and the
+loser rectifies to exactly 0 on *both* simulators — and is otherwise compared
+distributionally over seeds (a strong bias drives D1 on 5/5 seeds and against it on 0/5 on
+both sims; the winner ≫ loser; the decision is unbiased at `dE = 0`), because the WTA
+attractor amplifies PRNG divergence just as Wang's does. `rate_neuron_dm` is also the goal-17
+arbiter that confirmed `rectify_output` behaves correctly inside a *recurrent* rate loop.
