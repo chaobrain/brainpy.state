@@ -42,13 +42,23 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flit pytest
+          pip install flit pytest pytest-xdist
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
           pip install -e .
 
       - name: Test with pytest (excluding live-NEST comparison)
-        run: pytest brainpy_state/ -m "not requires_nest"
+        # The suite is JAX/JIT compile-bound, so the dominant cost is per-test
+        # compilation run serially. pytest-xdist (-n auto) distributes tests across all
+        # runner cores -- the single biggest wall-clock win. OMP_NUM_THREADS=1 keeps each
+        # worker from oversubscribing the shared cores (compilation is ~single-threaded).
+        env:
+          OMP_NUM_THREADS: "1"
+        run: pytest brainpy_state/ -m "not requires_nest" -n auto
