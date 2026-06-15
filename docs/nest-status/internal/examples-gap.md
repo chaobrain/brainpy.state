@@ -236,9 +236,34 @@ exists to show (PSTH tracks `λ(t)`; `CV → 1/√m`; packet width ∝ `sdev`).
 
 ### 3.8 Astrocyte demos
 
+The **neuron↔astrocyte SIC loop substrate landed in cluster 15d** (the last bucket-3
+*model* cluster; only the Siegert `diffusion_connection` remains queued → 15c).
+`astrocyte_lr_1994` now emits its slow-inward current as seam-(H)
+continuous graded emission (`_emission_attr='SIC'`, `_emission_current=True`); a one-way
+`sic_connection` (sender/receiver-enforced `astrocyte_lr_1994 → aeif_cond_alpha_astro`)
+deposits `weight·SIC` into the neuron's labelled `'I_SIC'` current channel through an
+`as_current` `EventProjection`; the neuron→astrocyte arm is the ordinary delta path
+(spikes → `Δ_IP3·w` IP3 via `sum_delta_inputs`). The host-side `_sic_queue` event-emulator
+and `sic_connection`'s host-queue coeff-array API were **deleted** (the bucket-3 de-queue),
+so the whole bidirectional loop lowers under `Simulator.simulate`'s `for_loop`. Live-NEST
+parity is near-exact (`astrocyte_sic_test.py`): SIC-response micro IP3 `2.4e-5`/Ca
+`1.9e-4`/I_SIC `2.3e-4`; driven loop IP3 `0`/Ca `1e-6`/I_SIC `6e-4`/V_pre `3.7e-4 mV`;
+astro-network seed-mean post rate `9.0=9.0` (SIC off) → `14.0=14.0` (SIC on). The
+`sic_connection` default delay `1.0 ms` maps to `delay_steps=10`.
+
+The single-astrocyte and tripartite-interaction demos are therefore **substrate-ready**
+(await a demo-port cluster, 17b). The `small_network` / `astrocyte_brunel_*` variants
+additionally need NEST's `TripartiteConnect` astrocyte-pool rule
+(`third_factor_bernoulli_with_pool`), which is **out of scope** (cluster-15d spec §7 — no
+new connectivity rule); their per-edge tripartite physics, however, is now validated.
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `astrocytes/` (subdir, contains `astrocyte_brunel_*` series) | missing (deferred) | none | uses `astrocyte_lr_1994` + `aeif_cond_alpha_astro` (both validated) but also the **bucket-3 `sic_connection`** + an astrocyte rate model. Explicitly deferred past cluster 16 (generator demos) to the post-bucket-3 window; the astrocyte Brunel variant is then the natural P0 port target. |
+| `astrocyte_single.py` | substrate-ready | none | one `astrocyte_lr_1994` + Poisson → IP3/Ca; astrocyte ODE validated (cluster, `astrocyte_lr_1994_test.py`). Demo port pending (17b) |
+| `astrocyte_interaction.py` | substrate-ready | none | tripartite two-neuron + one-astrocyte SIC loop — the exact topology wired & parity-validated in cluster 15d (`astrocyte_sic_test.py`). Demo port pending (17b) |
+| `astrocyte_small_network.py` | blocked | none | needs `TripartiteConnect` (`third_factor_bernoulli_with_pool` pool rule); out of scope (15d spec §7). Per-edge SIC physics validated |
+| `astrocyte_brunel_bernoulli.py` | blocked | none | Brunel + astrocytes via `TripartiteConnect`; same pool-rule blocker. Natural P0 port once the pool rule lands |
+| `astrocyte_brunel_fixed_indegree.py` | blocked | none | as above, fixed-indegree tripartite variant |
 
 ### 3.9 Spatial demos
 

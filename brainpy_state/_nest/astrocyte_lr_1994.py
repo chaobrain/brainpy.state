@@ -386,6 +386,17 @@ class astrocyte_lr_1994(NESTNeuron):
 
     __module__ = 'brainpy.state'
 
+    #: Seam-(H) continuous emission. The astrocyte ships its per-step slow-inward
+    #: current ``SIC`` (a graded value, 0 below the Ca threshold) every step. The
+    #: Simulator allocates an emission holder for any ``_emission_attr`` population
+    #: and phase-2 captures ``self.SIC.value`` into it; the ``sic_connection``
+    #: projection reads that holder and deposits ``weight·SIC`` as a *current*
+    #: (``_emission_current``) into the post's labelled ``I_SIC`` channel.
+    _emission_attr = 'SIC'
+    _emission_continuous = True
+    _emission_current = True
+    _emission_current_label = 'I_SIC'
+
     RECORDABLES = (
         'IP3',
         'Ca',
@@ -722,7 +733,11 @@ class astrocyte_lr_1994(NESTNeuron):
         # Final clamp of calcium to [0, Ca_tot] (matches NEST).
         ca = jnp.clip(ca, 0.0, self.Ca_tot)
 
-        # Apply spike input: IP3 += delta_IP3 * spike_weight.
+        # Apply spike input: IP3 += delta_IP3 * spike_weight. Read presynaptic
+        # spikes via sum_delta_inputs so the Simulator's neuron->astrocyte delta
+        # deposits reach IP3; the ``spike_weights`` kwarg is the init/standalone
+        # value (sum_delta_inputs returns it unchanged when no inputs are registered).
+        spike_weights = self.sum_delta_inputs(spike_weights)
         sw = jnp.broadcast_to(jnp.asarray(spike_weights, dtype=dftype), ip3.shape)
         ip3 = ip3 + self.delta_IP3 * sw
 

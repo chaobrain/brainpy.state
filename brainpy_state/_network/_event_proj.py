@@ -59,6 +59,14 @@ class EventProjection(brainstate.nn.Module):
         Synaptic weight in pA (signed: positive excitatory, negative inhibitory).
     delay : ArrayLike or Quantity or None
         Axonal delay; ``None`` for instantaneous delivery.
+    as_current : bool, default False
+        Deposit mode. When ``False`` (default) the contribution is registered as a
+        delta input (``post.add_delta_input``), matching how current-based neurons
+        ingest spikes. When ``True`` it is registered as a **current** input
+        (``post.add_current_input``) instead — the route the astrocyte slow-inward
+        current (SIC) takes, since SIC is a pA current entering ``dV/dt`` rather than
+        a delta/conductance. Requires ``comm='dense'`` (a graded current cannot ride
+        the binarising sparse event matmul).
     """
     __module__ = 'brainpy.state'
 
@@ -76,12 +84,20 @@ class EventProjection(brainstate.nn.Module):
         comm: str = 'dense',
         receptor_type=None,
         channel_label=None,
+        as_current: bool = False,
         pre_is_post: bool = False,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
         seed: Optional[int] = None,
     ):
         super().__init__()
+        # Graded current deposit (SIC) must ride the dense matmul; the sparse event
+        # matmul binarises the presynaptic value, so reject the combination eagerly.
+        if as_current and comm == 'sparse':
+            raise ValueError(
+                "as_current graded-current deposit requires comm='dense'; "
+                "comm='sparse' binarises the presynaptic value.")
+        self._as_current = bool(as_current)
         self._delta_key = f'event_proj_{next(_DELTA_KEY_COUNTER)}'
         self.pre_spike = pre_spike
         self.post = post
@@ -293,13 +309,16 @@ class EventProjection(brainstate.nn.Module):
             else:
                 y = self.comm(x_seg)                    # (n_post,) pA
             contrib = y if self._post_is_full else self._scatter(y)
+            # ``as_current`` routes the graded contribution into the post's *current*
+            # input channel (SIC, a pA current entering dV/dt); otherwise the default
+            # delta channel (current-based spike ingestion).
+            deposit = self.post.add_current_input if self._as_current else self.post.add_delta_input
             if self._channel_label is not None:
-                # Named-channel post: deposit into the resolved compartment+syntype
-                # channel (key composes to ``'<label> // <delta_key>'``, which the
-                # model selects with ``sum_delta_inputs(label=<label>)``).
-                self.post.add_delta_input(self._delta_key, contrib, label=self._channel_label)
+                # Named/labelled channel: key composes to ``'<label> // <delta_key>'``,
+                # which the model selects with ``sum_{delta,current}_inputs(label=<label>)``.
+                deposit(self._delta_key, contrib, label=self._channel_label)
             else:
-                self.post.add_delta_input(self._delta_key, contrib)
+                deposit(self._delta_key, contrib)
 
     def _scatter(self, y):
         """Place per-segment contributions into a full (n_post_pop,) vector."""
