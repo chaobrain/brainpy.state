@@ -202,10 +202,13 @@ test (`brainpy_state/_nest/_validation/<name>_test.py`). Run any directly, e.g.
   (`V_m`, `I_syn_ex`, `I_syn_in`) from an `iaf_psc_exp` driven by two
   `spike_generator`s (excitatory `+80 pA`, inhibitory `−40 pA`). The upstream
   records `V_m`/`g_ex`/`g_in` from a conductance `iaf_cond_alpha` to an `ascii`
-  file; brainpy.state has neither a file backend (`devices-gap.md` P2) nor a
-  spike→conductance routing seam (a documented follow-up), so this is the
-  **in-memory, current-based** equivalent — same demo shape, traces read with
-  `res.trace(mm, name)`.
+  file. The spike→conductance routing seam is now **unblocked**: the conductance
+  family (`iaf_cond_alpha` and its seven siblings) accepts spike-driven
+  `receptor_type=1`→`g_ex` / `=2`→`g_in` input through the `w_by_rec` multi-receptor
+  bridge (goal 25), so this demo could now port to its exact upstream conductance
+  `iaf_cond_alpha` (out of scope here). Only the file backend (`devices-gap.md` P2)
+  is still missing, so this stays the **in-memory, current-based** equivalent —
+  same demo shape, traces read with `res.trace(mm, name)`.
 - **`recording_demo.py`** — the recording-API tour: a `poisson_generator` (1 MHz,
   refractory-saturating) drives an `iaf_psc_exp` into a `spike_recorder` and a
   `multimeter`. NEST's `record_to` backend axis (ascii vs memory) collapses to
