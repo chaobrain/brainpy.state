@@ -67,11 +67,14 @@ class TestVolumeTransmitterParity(unittest.TestCase):
         m = self.m
         compare_trace(self.n_n[:m], self.n_o[:m], tol=_N_TOL, metric="vt n(t)").assert_()
 
-    # -- 2. broadcast n(t) reproduces the closed-form recursion exactly -----
+    # -- 2. broadcast n(t) reproduces the closed-form recursion ------------
     def test_concentration_matches_analytic(self):
         m = self.m
-        # our recursion *is* the closed form -> bit-for-bit (no float reordering)
-        self.assertEqual(float(np.max(np.abs(self.n_o[:m] - self.n_a[:m]))), 0.0)
+        # Our recursion *is* the closed form. The drive now lowers into one compiled
+        # ``for_loop`` (CLAUDE.md rule #10), so XLA fuses the multiply-add (FMA) and the
+        # match is to floating-point round-off (~1e-18 here) rather than literally
+        # bit-for-bit -- still tens of thousands of ULP tighter than any real regression.
+        self.assertLess(float(np.max(np.abs(self.n_o[:m] - self.n_a[:m]))), 1e-12)
 
     # -- 3. NEST itself reproduces the closed form (sanity on the reference) -
     def test_nest_matches_analytic(self):
