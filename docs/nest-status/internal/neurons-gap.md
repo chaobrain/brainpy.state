@@ -67,11 +67,11 @@ trace-tolerance in the test and confirming pass.
 
 | NEST model | Status | brainpy.state location | NEST upstream | Tests (import nest?) | Notes |
 |---|---|---|---|---|---|
-| `aeif_cond_alpha` | divergent | `brainpy_state/_nest/aeif_cond_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha.html> | `aeif_cond_alpha_test.py` (Y, line 448) | nest-comparison present — but tolerance + duration not documented in header |
+| `aeif_cond_alpha` | divergent | `brainpy_state/_nest/aeif_cond_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha.html> | `aeif_cond_alpha_test.py` (Y, line 448) + `aeif_cond_alpha_conductance_test.py` (Y) | nest-comparison present — but tolerance + duration not documented in header; **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (alpha micro-parity arbiter) |
 | `aeif_cond_alpha_astro` | divergent | `brainpy_state/_nest/aeif_cond_alpha_astro.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha_astro.html> | `aeif_cond_alpha_astro_test.py` (Y) | astrocyte coupling + SIC exercised; **spike→conductance path fixed (17b)** — now exposes the `n_receptors=2`/`w_by_rec` multi-receptor bridge (`receptor_type=1`→g_ex, `=2`→g_in, positive nS = NEST's weight-sign routing), with live-NEST V_m/g_ex/g_in parity |
 | `aeif_cond_alpha_multisynapse` | divergent | `brainpy_state/_nest/aeif_cond_alpha_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha_multisynapse.html> | `aeif_cond_alpha_multisynapse_test.py` (Y) | multi-receptor port semantics covered |
 | `aeif_cond_beta_multisynapse` | divergent | `brainpy_state/_nest/aeif_cond_beta_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_beta_multisynapse.html> | `aeif_cond_beta_multisynapse_test.py` (Y) | |
-| `aeif_cond_exp` | divergent | `brainpy_state/_nest/aeif_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_exp.html> | `aeif_cond_exp_test.py` (Y) | |
+| `aeif_cond_exp` | divergent | `brainpy_state/_nest/aeif_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_exp.html> | `aeif_cond_exp_test.py` (Y) + `aeif_cond_exp_conductance_test.py` (Y) | **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (exp micro-parity arbiter; carries the shared bridge edge-case tests) |
 | `aeif_psc_alpha` | divergent | `brainpy_state/_nest/aeif_psc_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_alpha.html> | `aeif_psc_alpha_test.py` (Y) | |
 | `aeif_psc_delta` | divergent | `brainpy_state/_nest/aeif_psc_delta.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_delta.html> | `aeif_psc_delta_test.py` (Y) | |
 | `aeif_psc_delta_clopath` | divergent | `brainpy_state/_nest/aeif_psc_delta_clopath.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_delta_clopath.html> | `aeif_psc_delta_clopath_test.py` (Y) | Clopath voltage-trace plasticity exercised |
@@ -88,7 +88,7 @@ trace-tolerance in the test and confirming pass.
 | `eprop_readout_bsshslm_2020` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/eprop_readout_bsshslm_2020.html> | — | Bellec et al. 2020 variant; not ported |
 | `erfc_neuron` | unvalidated | `brainpy_state/_nest/erfc_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/erfc_neuron.html> | `erfc_neuron_test.py` (N) | binary stochastic; PRNG parity caveat |
 | `gauss_rate` | divergent | `brainpy_state/_nest/gauss_rate.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gauss_rate.html> | `gauss_rate_test.py` (Y) | |
-| `gif_cond_exp` | unvalidated | `brainpy_state/_nest/gif_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gif_cond_exp.html> | `gif_cond_exp_test.py` (N) | category-A RKF45 integration; no NEST trace check |
+| `gif_cond_exp` | unvalidated | `brainpy_state/_nest/gif_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gif_cond_exp.html> | `gif_cond_exp_test.py` (N) + `gif_cond_exp_conductance_test.py` (Y) | category-A RKF45 integration; **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (stochastic GIF held subthreshold so the firing hazard stays ~0) |
 | `gif_cond_exp_multisynapse` | unvalidated | `brainpy_state/_nest/gif_cond_exp_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gif_cond_exp_multisynapse.html> | `gif_cond_exp_multisynapse_test.py` (N) | |
 | `gif_pop_psc_exp` | unvalidated | `brainpy_state/_nest/gif_pop_psc_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gif_pop_psc_exp.html> | `gif_pop_psc_exp_test.py` (N) | population model — vectorised differently |
 | `gif_psc_exp` | unvalidated | `brainpy_state/_nest/gif_psc_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/gif_psc_exp.html> | `gif_psc_exp_test.py` (N) | |
@@ -98,7 +98,7 @@ trace-tolerance in the test and confirming pass.
 | `glif_psc` | unvalidated | `brainpy_state/_nest/glif_psc.py` | <https://nest-simulator.readthedocs.io/en/stable/models/glif_psc.html> | `glif_psc_test.py` (N) | |
 | `glif_psc_double_alpha` | unvalidated | `brainpy_state/_nest/glif_psc_double_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/glif_psc_double_alpha.html> | `glif_psc_double_alpha_test.py` (N) | |
 | `hh_cond_beta_gap_traub` | unvalidated | `brainpy_state/_nest/hh_cond_beta_gap_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_beta_gap_traub.html> | `hh_cond_beta_gap_traub_test.py` (N) | gap-junction-capable HH — couples to `gap_junction` synapse. **cluster-15b:** declares `_emission_attr='V'` (gap seam) + per-neuron gating-init fix (heterogeneous-init regression in test). Standalone live-NEST gap parity pending (`hh_psc_alpha_gap` is the validated reference for the shared seam) |
-| `hh_cond_exp_traub` | unvalidated | `brainpy_state/_nest/hh_cond_exp_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_exp_traub.html> | `hh_cond_exp_traub_test.py` (N) | |
+| `hh_cond_exp_traub` | unvalidated | `brainpy_state/_nest/hh_cond_exp_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_exp_traub.html> | `hh_cond_exp_traub_test.py` (N) + `hh_cond_exp_traub_conductance_test.py` (Y) | **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (held quiescent `V_m_init=-75 mV` + subthreshold so the stiff Na/K AP never fires; g_ex/g_in match to ~1e-12) |
 | `hh_psc_alpha` | unvalidated | `brainpy_state/_nest/hh_psc_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha.html> | `hh_psc_alpha_test.py` (N) | |
 | `hh_psc_alpha_clopath` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_clopath.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_clopath.html> | `hh_psc_alpha_clopath_test.py` (N) | |
 | `hh_psc_alpha_gap` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_gap.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_gap.html> | `hh_psc_alpha_gap_test.py` (N) + `_validation/gap_junction_parity_test.py` (Y) + `_validation/gap_junction_inhibitory_network_parity_test.py` (Y) | gap-junction-capable HH. **cluster-15b:** declares `_emission_attr='V'` (gap seam) + per-neuron gating-init fix; gap-coupled membrane matches live NEST to machine precision between spikes (2-neuron micro-parity, `use_wfr=False`) + distributional network coherence. (Standalone single-neuron parity still folds into the HH-family P1.) |
@@ -106,12 +106,12 @@ trace-tolerance in the test and confirming pass.
 | `iaf_bw_2001` | unvalidated | `brainpy_state/_nest/iaf_bw_2001.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_bw_2001.html> | `iaf_bw_2001_test.py` (N) | NMDA channels (simplified) |
 | `iaf_bw_2001_exact` | unvalidated | `brainpy_state/_nest/iaf_bw_2001_exact.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_bw_2001_exact.html> | `iaf_bw_2001_exact_test.py` (N) | NMDA channels (exact) |
 | `iaf_chs_2007` | unvalidated | `brainpy_state/_nest/iaf_chs_2007.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_chs_2007.html> | `iaf_chs_2007_test.py` (N) | spike-response form |
-| `iaf_chxk_2008` | unvalidated | `brainpy_state/_nest/iaf_chxk_2008.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_chxk_2008.html> | `iaf_chxk_2008_test.py` (N) | precise-spike-time conductance LIF |
-| `iaf_cond_alpha` | unvalidated | `brainpy_state/_nest/iaf_cond_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_alpha.html> | `iaf_cond_alpha_test.py` (N) | |
+| `iaf_chxk_2008` | unvalidated | `brainpy_state/_nest/iaf_chxk_2008.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_chxk_2008.html> | `iaf_chxk_2008_test.py` (N) + `iaf_chxk_2008_conductance_test.py` (Y) | precise-spike-time conductance LIF; **spike→conductance bridged (25)** — *migration* of the bespoke `update(w_ex=, w_in=)` kwargs to canonical `w_by_rec`; `receptor_type=1`→g_ex / `=2`→g_in, live-NEST parity (subthreshold so the intrinsic AHP stays inert) |
+| `iaf_cond_alpha` | unvalidated | `brainpy_state/_nest/iaf_cond_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_alpha.html> | `iaf_cond_alpha_test.py` (N) + `iaf_cond_alpha_conductance_test.py` (Y) | **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (alpha kinetics) |
 | `iaf_cond_alpha_mc` | unvalidated | `brainpy_state/_nest/iaf_cond_alpha_mc.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_alpha_mc.html> | `iaf_cond_alpha_mc_test.py` (N) | multi-compartment; flagged experimental in `nest-status/index.rst` |
-| `iaf_cond_beta` | unvalidated | `brainpy_state/_nest/iaf_cond_beta.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_beta.html> | `iaf_cond_beta_test.py` (N) | |
+| `iaf_cond_beta` | unvalidated | `brainpy_state/_nest/iaf_cond_beta.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_beta.html> | `iaf_cond_beta_test.py` (N) + `iaf_cond_beta_conductance_test.py` (Y) | **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (beta micro-parity arbiter; β-normalised two-state kinetics) |
 | `iaf_cond_exp` | unvalidated | `brainpy_state/_nest/iaf_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_exp.html> | `iaf_cond_exp_test.py` (N) | |
-| `iaf_cond_exp_sfa_rr` | unvalidated | `brainpy_state/_nest/iaf_cond_exp_sfa_rr.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_exp_sfa_rr.html> | `iaf_cond_exp_sfa_rr_test.py` (N) | spike-frequency adaptation + relative refractory |
+| `iaf_cond_exp_sfa_rr` | unvalidated | `brainpy_state/_nest/iaf_cond_exp_sfa_rr.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_cond_exp_sfa_rr.html> | `iaf_cond_exp_sfa_rr_test.py` (N) + `iaf_cond_exp_sfa_rr_conductance_test.py` (Y) | spike-frequency adaptation + relative refractory; **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST parity (subthreshold so SFA/RR conductances stay inert) |
 | `iaf_psc_alpha` | unvalidated | `brainpy_state/_nest/iaf_psc_alpha.py:36-274` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_psc_alpha.html> | `iaf_psc_alpha_test.py` (N) | Exact NEST defaults present (E_L=-70mV, C_m=250pF, tau_m=10ms, t_ref=2ms, V_th=-55mV, V_reset=-70mV); analytical propagator. No NEST-trace check. |
 | `iaf_psc_alpha_multisynapse` | unvalidated | `brainpy_state/_nest/iaf_psc_alpha_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_psc_alpha_multisynapse.html> | `iaf_psc_alpha_multisynapse_test.py` (N) | 5KB test file — sparse coverage |
 | `iaf_psc_alpha_ps` | unvalidated | `brainpy_state/_nest/iaf_psc_alpha_ps.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_psc_alpha_ps.html> | `iaf_psc_alpha_ps_test.py` (N) | precise spike timing |
@@ -168,25 +168,29 @@ is documented under neurons in upstream):
 families that are at least partially ported. The IAF, AdEx, GIF, GLIF, HH, MAT,
 rate, and binary families look complete at the model-name level.
 
-**Spike→conductance bridge — tracked follow-up (from 17b).** Conductance neurons
-receive excitatory/inhibitory *spike* input into their synaptic conductance only
-if their `update()` *sources* the per-receptor weight from the Simulator's
-multi-receptor bridge (`n_receptors` + `receptor_input_unit` + a `w_by_rec` arm),
-the way `iaf_cond_exp` does. Models that instead only `self.sum_delta_inputs(label=
-'w_ex'/'w_in')` get **nothing** through `sim.connect(spikes, neuron, weight=…)` —
-the Simulator never populates those labels, so a presynaptic spike leaves the
+**Spike→conductance bridge — cleared (17b → 25).** Conductance neurons receive
+excitatory/inhibitory *spike* input into their synaptic conductance only if their
+`update()` *sources* the per-receptor weight from the Simulator's multi-receptor
+bridge (`n_receptors` + `receptor_input_unit` + a `w_by_rec` arm), the way
+`iaf_cond_exp` does. Models that instead only `self.sum_delta_inputs(label=
+'w_ex'/'w_in')` got **nothing** through `sim.connect(spikes, neuron, weight=…)` —
+the Simulator never populated those labels, so a presynaptic spike left the
 membrane pinned at `E_L`. `aeif_cond_alpha_astro` had this latent gap; **17b fixed
-it** (bridge + live-NEST parity, above). The same self-pull-only pattern remains in
-every other conductance neuron — verified by grep (`label='w_ex'` present,
-`w_by_rec` absent): `aeif_cond_alpha`, `aeif_cond_exp`, `iaf_cond_alpha`,
-`iaf_cond_beta`, `iaf_cond_exp_sfa_rr`, `iaf_chxk_2008`, `gif_cond_exp`,
-`hh_cond_exp_traub`. Each needs the same `n_receptors`/`w_by_rec` bridge plus a
-per-model conductance parity test. Their existing tests are constant-current
-(`I_e`) driven, so the gap is not caught today. The fix is mechanical per model
-(the alpha/beta/exp synaptic-derivative scaling already matches NEST); deferred as
-a separate sweep rather than done piecemeal here. (The current-based `aeif_psc_*` /
-`hh_psc_alpha_clopath` siblings self-pull too but take `pA`, not the `nS`
-conductance bridge — a related but distinct question, not covered by this note.)
+it** (bridge + live-NEST parity, above). **Goal 25 then swept the remaining eight**
+— `aeif_cond_alpha`, `aeif_cond_exp`, `iaf_cond_alpha`, `iaf_cond_beta`,
+`iaf_cond_exp_sfa_rr`, `iaf_chxk_2008`, `gif_cond_exp`, `hh_cond_exp_traub` — each
+now declares `n_receptors=2` / `receptor_input_unit=u.nS` and the source-only
+`w_by_rec` dual-path arm (the legacy self-pull is the `else` branch, so existing
+`I_e` tests stay byte-identical), with a per-model spike→conductance parity test
+(Law + live-NEST `V_m`/`g_ex`/`g_in`) in
+`brainpy_state/_nest/_validation/<m>_conductance_test.py`. `iaf_chxk_2008` was a
+*migration* — its bespoke `update(w_ex=, w_in=)` kwargs replaced by canonical
+`w_by_rec`. The bridge is **source-only / kinetics-agnostic** (confirmed by an
+alpha·exp·beta micro-parity gate before the sweep): declaring `n_receptors` + the
+arm enrolls a model with zero Simulator change, regardless of synapse class. **This
+follow-up is cleared.** (The current-based `aeif_psc_*` / `hh_psc_alpha_clopath`
+siblings self-pull too but take `pA`, not the `nS` conductance bridge — a related
+but distinct question, still open, not covered by this note.)
 
 ## 5. Semantic & numerical risks
 
