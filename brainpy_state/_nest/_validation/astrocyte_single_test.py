@@ -104,6 +104,21 @@ class TestAstrocyteSingleLaw(unittest.TestCase):
         d = SIC_DELAY_STEPS
         np.testing.assert_allclose(isic[d:d + 20], astro_sic[:20], atol=1e-6)
 
+    def test_poisson_drive_path_accumulates_ip3(self):
+        """The default Poisson drive (``spike_times=None``) runs end-to-end: a
+        fixed-seed high-rate train climbs IP3 far above baseline.
+
+        Exercises the demo's actual ``poisson_generator`` branch (the parity test uses
+        a deterministic ``spike_generator``); Poisson PRNG-diverges from NEST so this is
+        a law, not a parity check.
+        """
+        _t, ip3, _ca, _isic = run(sim_time=80.0, poisson_rate=2000.0, poisson_weight=1.0,
+                                  delta_IP3=0.5, seed=1)
+        ip3 = _ms(ip3)
+        self.assertEqual(ip3.shape, (int(round(80.0 / DT)),))
+        self.assertTrue(np.all(np.isfinite(ip3)))
+        self.assertGreater(float(np.max(ip3)), 5.0, 'Poisson spikes accumulate IP3')
+
     def test_loop_lowers_with_stable_trace_shapes(self):
         """The whole model runs under the Simulator's for_loop with ``(T/dt,)`` traces."""
         _t, ip3, ca, isic = run(**DET)

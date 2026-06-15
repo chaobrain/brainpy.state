@@ -139,6 +139,70 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 17b-astro-demos — 2026-06-15
+
+- **Shipped:** the two substrate-ready **§3.8 astrocyte demos** on the `Simulator` API +
+  the latent **`aeif_cond_alpha_astro` spike→conductance fix** they surfaced.
+  `examples/nest/astrocyte_single.py` (one Poisson-driven `astrocyte_lr_1994` → IP3/Ca + a
+  downstream `aeif_cond_alpha_astro` SIC) and `astrocyte_interaction.py` (the tripartite
+  loop) each ship with a live-NEST parity test
+  (`_validation/astrocyte_single_test.py`, `astrocyte_interaction_test.py`) and a NEST-free
+  law class. The three pool-rule demos (`astrocyte_small_network.py`,
+  `astrocyte_brunel_bernoulli.py`, `astrocyte_brunel_fixed_indegree.py`) ship as
+  **documented skipped placeholders** (each a `BLOCKED_REASON` + `main()` that raises
+  `NotImplementedError`, guarded by marker tests). **The fix:** `aeif_cond_alpha_astro` now
+  exposes the `iaf_cond_exp` multi-receptor bridge (`n_receptors=2`,
+  `receptor_input_unit=u.nS`, a `w_by_rec` arm in `update()`) + a dedicated conductance
+  parity test (`_validation/aeif_cond_alpha_astro_test.py`, 4 law + 2 parity). Branch
+  `worktree-nest-goal+17b-astro-demos`. **§3.8 is now closed bar the pool-rule
+  placeholders → bucket-3 fully closed.**
+- **Parity (vs live NEST 3.9.0):** the new spike-driven conductance path — `V_m` within
+  `VM_TOL` (1e-3 mV + `align_steps=3`; residual after the clean 2-sample shift ~**1e-6 mV**),
+  `g_ex`/`g_in` within `COND_TOL` (1e-3), for both an excitatory train (`receptor_type=1` /
+  NEST `+W`) and an inhibitory train (`receptor_type=2` / NEST `−W`). `astrocyte_single`
+  IP3/Ca/`I_SIC` and `astrocyte_interaction` `V_pre`(`CAT_A`)+IP3/Ca/`I_SIC` track NEST
+  within `ASTRO_TOL` (1e-3, `align_steps=3`) under the deterministic `spike_generator` /
+  constant-`I_e` drives. The demo at its NEST-faithful defaults (1.0 nS, 1500 Hz, 60 s) gives
+  peak IP3 **0.653** / Ca **0.666** / I_SIC **6.151** vs NEST's own demo 0.565 / 0.676 /
+  6.173 (Poisson PRNG-diverges, so this is a *demo-faithfulness* check, not per-sample
+  parity). Full astro suite **30 passed / 2 skipped**; example coverage **95 %**.
+- **API discovered/changed:** the Simulator's multi-receptor bridge
+  (`_simulator.py:1486-1496`) fires for any neuron that declares **both** `n_receptors` and a
+  `w_by_rec` param in `update()`'s signature — it then calls
+  `m.update(w_by_rec=get_mantissa(m.sum_delta_inputs(zeros((*varshape, n_receptors)) *
+  receptor_input_unit) / receptor_input_unit))`, column `k-1` = `receptor_type=k`. For a
+  conductance neuron, column 0 → `g_ex`, column 1 → `g_in`, with **positive nS** weights —
+  the brainpy expression of NEST's weight-**sign** routing (`aeif_cond_alpha_astro.cpp`
+  `handle()`: `weight>0 → spike_exc_`, else `spike_inh_`). The alpha-derivative scaling
+  (`dg_ex += (e/τ_syn_ex)·w_ex`) already matched NEST's `DG_EXC += spike_exc·g0_ex`; only the
+  *source* of `w_ex`/`w_in` changed (bridge vs self-pull). **No-regression argument:** adding
+  `n_receptors` only flips dispatch to `update(w_by_rec=…)`; since nothing previously
+  deposited `w_ex`/`w_in`, the self-pull already returned 0, so the bridge supplies the same
+  0 → byte-identical for every existing astro test (they act as regression guards).
+- **Gotchas:** (1) **Silent dead conductance path** — a conductance neuron whose `update()`
+  *only* `self.sum_delta_inputs(label='w_ex'/'w_in')` receives **nothing** from
+  `sim.connect(spikes, neuron, weight=…)`: the Simulator never populates those labels without
+  the bridge, so a presynaptic spike leaves `V_m` pinned at `E_L` with **no error**. The
+  committed I_e-driven parity tests passed straight through it (they never compared a
+  conductance-dependent trace). (2) **`align_steps` absorbs a clean 2-sample integer offset**
+  (synaptic-input-applied-after-integration + multimeter buffer alignment) — measured by a
+  shift sweep (shift −2 → V_m Δ~1e-6, g_ex Δ~0); use `align_steps=3` (the existing astro
+  band), *not* a loosened atol, to keep the per-sample precision. (3) **Import resolution
+  trap:** `python /tmp/probe.py` puts `/tmp` on `sys.path` and picks up an **installed**
+  `brainpy_state`, not the worktree edits → ran against stale code and crashed on the
+  missing `n_receptors`. Use `PYTHONPATH=<worktree>` or `python -c` (cwd on path); `pytest`
+  always uses the worktree rootdir. (4) **Coverage:** `coverage run -m pytest <files>` then
+  `coverage report --include=…` — dropping `--source` (it SIGABRTs inside jaxlib); and **wait
+  for the run to fully finish** before reading, a partial `.coverage` reports misleadingly low.
+- **For next clusters:** the **sibling conductance-bridge sweep** is the tracked follow-up
+  (recorded in `neurons-gap.md` §4): `aeif_cond_alpha`, `aeif_cond_exp`, `iaf_cond_alpha`,
+  `iaf_cond_beta`, `iaf_cond_exp_sfa_rr`, `iaf_chxk_2008`, `gif_cond_exp`, `hh_cond_exp_traub`
+  each still self-pull (grep-verified `label='w_ex'` present, `w_by_rec` absent) and need the
+  same bridge + a conductance parity test (their tests are `I_e`-only, so the gap is
+  uncaught). The three pool-rule demos remain blocked on NEST's `TripartiteConnect` +
+  `third_factor_bernoulli_with_pool` astrocyte-pool rule (`network-api-gap.md`) — the next
+  astrocyte-network cluster.
+
 ### 15c-siegert-diffusion — 2026-06-15
 
 - **Shipped:** the **Siegert mean-field node + dual-channel `diffusion_connection`** on the

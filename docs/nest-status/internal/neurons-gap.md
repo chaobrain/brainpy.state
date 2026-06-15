@@ -68,7 +68,7 @@ trace-tolerance in the test and confirming pass.
 | NEST model | Status | brainpy.state location | NEST upstream | Tests (import nest?) | Notes |
 |---|---|---|---|---|---|
 | `aeif_cond_alpha` | divergent | `brainpy_state/_nest/aeif_cond_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha.html> | `aeif_cond_alpha_test.py` (Y, line 448) | nest-comparison present — but tolerance + duration not documented in header |
-| `aeif_cond_alpha_astro` | divergent | `brainpy_state/_nest/aeif_cond_alpha_astro.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha_astro.html> | `aeif_cond_alpha_astro_test.py` (Y) | astrocyte coupling exercised; `sic_connection` skip-if-not-available pattern in test |
+| `aeif_cond_alpha_astro` | divergent | `brainpy_state/_nest/aeif_cond_alpha_astro.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha_astro.html> | `aeif_cond_alpha_astro_test.py` (Y) | astrocyte coupling + SIC exercised; **spike→conductance path fixed (17b)** — now exposes the `n_receptors=2`/`w_by_rec` multi-receptor bridge (`receptor_type=1`→g_ex, `=2`→g_in, positive nS = NEST's weight-sign routing), with live-NEST V_m/g_ex/g_in parity |
 | `aeif_cond_alpha_multisynapse` | divergent | `brainpy_state/_nest/aeif_cond_alpha_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha_multisynapse.html> | `aeif_cond_alpha_multisynapse_test.py` (Y) | multi-receptor port semantics covered |
 | `aeif_cond_beta_multisynapse` | divergent | `brainpy_state/_nest/aeif_cond_beta_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_beta_multisynapse.html> | `aeif_cond_beta_multisynapse_test.py` (Y) | |
 | `aeif_cond_exp` | divergent | `brainpy_state/_nest/aeif_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_exp.html> | `aeif_cond_exp_test.py` (Y) | |
@@ -167,6 +167,26 @@ is documented under neurons in upstream):
 **Variants potentially missing (extrapolation flagged):** None confirmed within
 families that are at least partially ported. The IAF, AdEx, GIF, GLIF, HH, MAT,
 rate, and binary families look complete at the model-name level.
+
+**Spike→conductance bridge — tracked follow-up (from 17b).** Conductance neurons
+receive excitatory/inhibitory *spike* input into their synaptic conductance only
+if their `update()` *sources* the per-receptor weight from the Simulator's
+multi-receptor bridge (`n_receptors` + `receptor_input_unit` + a `w_by_rec` arm),
+the way `iaf_cond_exp` does. Models that instead only `self.sum_delta_inputs(label=
+'w_ex'/'w_in')` get **nothing** through `sim.connect(spikes, neuron, weight=…)` —
+the Simulator never populates those labels, so a presynaptic spike leaves the
+membrane pinned at `E_L`. `aeif_cond_alpha_astro` had this latent gap; **17b fixed
+it** (bridge + live-NEST parity, above). The same self-pull-only pattern remains in
+every other conductance neuron — verified by grep (`label='w_ex'` present,
+`w_by_rec` absent): `aeif_cond_alpha`, `aeif_cond_exp`, `iaf_cond_alpha`,
+`iaf_cond_beta`, `iaf_cond_exp_sfa_rr`, `iaf_chxk_2008`, `gif_cond_exp`,
+`hh_cond_exp_traub`. Each needs the same `n_receptors`/`w_by_rec` bridge plus a
+per-model conductance parity test. Their existing tests are constant-current
+(`I_e`) driven, so the gap is not caught today. The fix is mechanical per model
+(the alpha/beta/exp synaptic-derivative scaling already matches NEST); deferred as
+a separate sweep rather than done piecemeal here. (The current-based `aeif_psc_*` /
+`hh_psc_alpha_clopath` siblings self-pull too but take `pA`, not the `nS`
+conductance bridge — a related but distinct question, not covered by this note.)
 
 ## 5. Semantic & numerical risks
 

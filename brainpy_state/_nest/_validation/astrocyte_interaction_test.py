@@ -74,6 +74,23 @@ class TestAstrocyteInteractionLaw(unittest.TestCase):
         self.assertGreater(float(np.max(_ms(isic))), 0.0, 'SIC current is delivered')
         self.assertTrue(np.all(np.isfinite(_ms(v_pre))))
 
+    def test_poisson_drive_spikes_pre_and_lights_the_loop(self):
+        """The faithful Poisson drive (receptor 1 -> g_ex) spikes ``pre`` and lights
+        the tripartite loop: IP3 climbs, Ca crosses SIC_th, and I_SIC fires.
+
+        This is the demo's default path -- the spike->conductance fix made it live
+        (pre-fix the presynaptic neuron sat at E_L and nothing propagated). Poisson
+        PRNG-diverges from NEST, so this is a *law* not a parity check; a stronger
+        weight + shorter window keeps it fast.
+        """
+        _t, v_pre, ip3, ca, isic = run(
+            sim_time=2000.0, drive='poisson', poisson_rate=1500.0, poisson_weight=2.0,
+            delta_IP3=0.2)
+        self.assertGreater(float(np.max(_ms(ip3))), 1.0, 'Poisson spikes accumulate IP3')
+        self.assertGreater(float(np.max(_ms(ca))), SIC_TH, 'Ca crosses the SIC threshold')
+        self.assertGreater(float(np.max(_ms(isic))), 0.0, 'the returned SIC current fires')
+        self.assertTrue(np.all(np.isfinite(_ms(v_pre))))
+
     def test_delta_arm_alone_raises_ip3_without_sic(self):
         """With the astro->post SIC arm decoupled, IP3 still rises but no I_SIC returns."""
         _t, _v, ip3, _ca, isic = run(**{**DET, 'w_astro2post': 0.0})

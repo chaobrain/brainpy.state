@@ -47,7 +47,10 @@ def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,
         presynaptic neuron (the demo); ``'current'`` sets the presynaptic neuron's
         ``I_e`` to ``I_e`` pA (the deterministic parity path).
     poisson_rate, poisson_weight : float
-        Rate (Hz) / weight of the Poisson drive (``drive='poisson'``).
+        Rate (Hz) / excitatory conductance weight (nS) of the Poisson drive into the
+        presynaptic neuron (``drive='poisson'``). Delivered on receptor 1 (-> g_ex).
+        The NEST-faithful default (1.0 nS at 1500 Hz over 60 s) reproduces the demo's
+        sparse-but-live loop (Ca crosses the SIC threshold, the SIC current fires).
     I_e : float, default 1000.0
         Constant current (pA) on the presynaptic neuron (``drive='current'``).
     delta_IP3 : float, default 0.2
@@ -55,8 +58,10 @@ def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,
     tau_syn_ex : float, default 2.0
         Excitatory synaptic time constant (ms) of both neurons (NEST demo value).
     w_pre2post, w_pre2astro, w_astro2post : float
-        Connection weights; ``w_pre2post=0`` drops the direct EPSP arm and
-        ``w_astro2post=0`` drops the SIC arm (each decoupling test).
+        Connection weights. ``w_pre2post`` is the direct EPSP arm's excitatory
+        conductance (nS, receptor 1 -> post g_ex); ``w_pre2astro`` the delta drive into
+        the astrocyte's IP3; ``w_astro2post`` the SIC weight. ``w_pre2post=0`` drops the
+        direct EPSP arm and ``w_astro2post=0`` drops the SIC arm (each decoupling test).
     conn_delay : float, default 1.0
         Delay (ms) of the pre->post and pre->astro connections (NEST default 1.0).
     sic_delay_steps : int, default 10
@@ -92,9 +97,15 @@ def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,
 
     if drive != 'current':
         pg = sim.create(bp.poisson_generator, 1, rate=poisson_rate * u.Hz)
-        sim.connect(pg, pre, weight=poisson_weight, delay=conn_delay * u.ms)
+        # Excitatory spike drive into the presynaptic neuron's conductance: a positive
+        # nS weight on receptor 1 (-> g_ex), the Simulator's expression of NEST's
+        # weight-sign routing for aeif_cond_alpha_astro.
+        sim.connect(pg, pre, weight=poisson_weight * u.nS, delay=conn_delay * u.ms,
+                    receptor_type=1)
     if w_pre2post > 0:
-        sim.connect(pre, post, weight=w_pre2post, delay=conn_delay * u.ms)
+        # The direct excitatory EPSP arm (pre -> post g_ex): receptor 1 / positive nS.
+        sim.connect(pre, post, weight=w_pre2post * u.nS, delay=conn_delay * u.ms,
+                    receptor_type=1)
     sim.connect(pre, astro, weight=w_pre2astro, delay=conn_delay * u.ms)
     if w_astro2post > 0:
         sim.connect(astro, post,

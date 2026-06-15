@@ -509,10 +509,26 @@ the analytical solution.
 > `sic_connection` deposits `weight·SIC` into `aeif_cond_alpha_astro`'s `'I_SIC'` current
 > channel via an `as_current` `EventProjection`; the whole bidirectional loop lowers under
 > `Simulator.simulate` and matches live NEST near-exactly
-> (`_validation/astrocyte_sic_test.py`). `astrocyte_single` and `astrocyte_interaction`
-> are therefore **substrate-ready** (demo port pending); the `small_network` /
-> `astrocyte_brunel_*` variants additionally need NEST's `TripartiteConnect` astrocyte-pool
-> rule, which is out of scope.
+> (`_validation/astrocyte_sic_test.py`).
+>
+> **Cluster 17b** ports the two substrate-ready single-cell demos:
+> [`astrocyte_single.py`](astrocyte_single.py) (one astrocyte, Poisson-driven, IP3/Ca + a
+> downstream SIC) and [`astrocyte_interaction.py`](astrocyte_interaction.py) (the tripartite
+> loop: pre-neuron → {post-neuron EPSP, astrocyte IP3} → SIC back to post), each with a
+> live-NEST parity test (`V`/IP3/Ca/`I_SIC`). Porting `astrocyte_interaction`'s default
+> Poisson drive surfaced — and fixed — a latent gap: `aeif_cond_alpha_astro` could not
+> receive excitatory/inhibitory **spike** input into its synaptic conductance (it self-pulled
+> a delta channel the Simulator never populated, so a presynaptic spike left `V_m` pinned at
+> `E_L`). It now exposes the `n_receptors=2`/`w_by_rec` multi-receptor bridge
+> (`receptor_type=1`→`g_ex`, `=2`→`g_in`, positive nS = NEST's weight-sign routing), with its
+> own conductance parity test (`_validation/aeif_cond_alpha_astro_test.py`); the same fix is
+> tracked for the sibling conductance neurons in `neurons-gap.md`.
+>
+> The three pool-rule demos — [`astrocyte_small_network.py`](astrocyte_small_network.py) and
+> the two [`astrocyte_brunel_*`](astrocyte_brunel_bernoulli.py) variants — ship as
+> **documented skipped placeholders**: they need NEST's `TripartiteConnect` +
+> `third_factor_bernoulli_with_pool` astrocyte-pool connection rule, which the Simulator does
+> not yet provide (blocker recorded in `network-api-gap.md`).
 
 ## Validation
 
