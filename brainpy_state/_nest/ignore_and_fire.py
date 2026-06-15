@@ -17,7 +17,7 @@
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -158,7 +158,7 @@ class ignore_and_fire(NESTNeuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>>
         >>> # Create an ignore_and_fire neuron with 10 Hz firing rate
         >>> neuron = brainpy.state.ignore_and_fire(1, rate=10.0 * u.Hz)
@@ -259,7 +259,7 @@ class ignore_and_fire(NESTNeuron):
         Notes
         -----
         Unit conversion is applied to ``rate`` via
-        :func:`saiunit.get_magnitude` before validation. ``phase`` is
+        :func:`brainunit.get_magnitude` before validation. ``phase`` is
         validated as a unitless scalar or array.
         """
         # Skip validation when parameters are JAX tracers (e.g. during jit).

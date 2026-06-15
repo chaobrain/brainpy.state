@@ -4,7 +4,7 @@ import unittest
 
 import brainstate
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import (
     Builder, LIF, Expon, COBA,

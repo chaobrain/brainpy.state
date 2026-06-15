@@ -25,7 +25,7 @@
 # rate-band parity, in ``examples/nest/brette_et_al_2007.py``.
 #
 
-import saiunit as u
+import brainunit as u
 import matplotlib.pyplot as plt
 import numpy as np
 

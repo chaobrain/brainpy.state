@@ -506,7 +506,7 @@ class Neuron(Dynamics):
     .. code-block:: python
 
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import braintools
         >>> import brainpy
         >>>
@@ -545,7 +545,7 @@ class Neuron(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>>
         >>> # Create a LIF neuron layer
         >>> neuron = brainpy.state.LIF(
@@ -571,7 +571,7 @@ class Neuron(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>>
         >>> # Create a network with multiple neuron types
         >>> class SpikingNet(brainstate.nn.Module):
@@ -718,7 +718,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import braintools
         >>>
         >>> class SimpleSynapse(brainpy.state.Synapse):
@@ -747,7 +747,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import jax
         >>>
         >>> # Create an exponential synapse
@@ -772,7 +772,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>>
         >>> class SynapticNetwork(brainstate.nn.Module):
         ...     def __init__(self):
@@ -813,7 +813,7 @@ class Synapse(Dynamics):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>>
         >>> class EINetwork(brainstate.nn.Module):
         ...     def __init__(self, n_exc=800, n_inh=200):

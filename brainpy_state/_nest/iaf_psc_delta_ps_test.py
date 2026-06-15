@@ -21,7 +21,7 @@ import unittest
 import brainstate
 import braintools
 import numpy as np
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 from brainpy.state import iaf_psc_delta_ps
 

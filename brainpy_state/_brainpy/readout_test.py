@@ -18,7 +18,7 @@ import unittest
 
 import brainpy
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 
 

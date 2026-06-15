@@ -2,7 +2,7 @@
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import LIF, Expon, COBA
 from brainpy_state._network._builder import Builder

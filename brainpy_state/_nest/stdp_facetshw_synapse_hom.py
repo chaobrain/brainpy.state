@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -156,7 +156,7 @@ class stdp_facetshw_synapse_hom:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import stdp_facetshw_synapse_hom
        >>> s = stdp_facetshw_synapse_hom(weight=33.333, Wmax=100.0)
        >>> round(s.weight_per_lut_entry, 3)

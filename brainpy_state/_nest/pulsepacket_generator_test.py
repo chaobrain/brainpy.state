@@ -26,7 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 
 from brainpy_state._nest.pulsepacket_generator import pulsepacket_generator

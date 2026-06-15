@@ -19,7 +19,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -350,7 +350,7 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_exp_ps_lossless(
        ...         in_size=2, I_e=200.0 * u.pA
@@ -364,7 +364,7 @@ class iaf_psc_exp_ps_lossless(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_exp_ps_lossless(in_size=1)
        ...     neu.init_state()

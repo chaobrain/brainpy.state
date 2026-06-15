@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -97,7 +97,7 @@ class poisson_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar firing rate in spikes/s (Hz). Accepted forms are any
         ``ArrayLike`` with exactly one element, optionally a
-        :class:`saiunit.Quantity` convertible to ``u.Hz``.
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     start : ArrayLike, optional
         Scalar relative start time in ms (exclusive lower bound after adding
@@ -181,7 +181,7 @@ class poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.poisson_generator(
        ...         in_size=(2, 3),
@@ -197,7 +197,7 @@ class poisson_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> gen = brainpy.state.poisson_generator(rate=500.0 * u.Hz)
        >>> gen.set(start=2.0 * u.ms, stop=None, origin=1.0 * u.ms)
        >>> params = gen.get()
@@ -344,7 +344,7 @@ class poisson_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainstate
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> from brainpy.state import poisson_generator
            >>> with brainstate.environ.context(dt=0.1 * u.ms):
            ...     gen = poisson_generator(in_size=4, rate=800.0 * u.Hz, rng_seed=7)
@@ -371,7 +371,7 @@ class poisson_generator(NESTDevice):
         rate : ArrayLike or object, optional
             New scalar firing rate in spikes/s (Hz). Accepts any
             ``ArrayLike`` with exactly one element, or a
-            :class:`saiunit.Quantity` convertible to ``u.Hz``.
+            :class:`brainunit.Quantity` convertible to ``u.Hz``.
             Must satisfy ``rate >= 0`` after conversion. Omit to keep the
             current value.
         start : ArrayLike or object, optional
@@ -409,7 +409,7 @@ class poisson_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainpy
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> gen = brainpy.state.poisson_generator(rate=500.0 * u.Hz)
            >>> gen.set(rate=1000.0 * u.Hz, stop=50.0 * u.ms)
            >>> params = gen.get()
@@ -458,7 +458,7 @@ class poisson_generator(NESTDevice):
         Returned values are plain Python ``float`` scalars (``float64``
         precision). They mirror the internal scalar attributes set in
         :meth:`__init__` or updated by :meth:`set` and are not bound to any
-        ``saiunit`` quantities.
+        ``brainunit`` quantities.
 
         See Also
         --------
@@ -469,7 +469,7 @@ class poisson_generator(NESTDevice):
         .. code-block:: python
 
            >>> import brainpy
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> gen = brainpy.state.poisson_generator(
            ...     rate=800.0 * u.Hz,
            ...     start=5.0 * u.ms,

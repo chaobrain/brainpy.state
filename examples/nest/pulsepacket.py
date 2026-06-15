@@ -39,7 +39,7 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 
 from brainpy_state import (Simulator, SpikeTime, iaf_psc_alpha, voltmeter,
@@ -305,7 +305,7 @@ def averaged_membrane(mat, dt=DT, simtime=SIMTIME, weight=WEIGHT):
 
     sim = Simulator(dt=dt * u.ms)
     # SpikeTime requires JAX-backed inputs: u.lax.sort in its constructor rejects
-    # NumPy-backed Quantities (saiunit BackendError). Multiplicity rides in weights.
+    # NumPy-backed Quantities (brainunit BackendError). Multiplicity rides in weights.
     src = sim.create(SpikeTime, n_neurons,
                      indices=jnp.asarray(neurons),
                      times=jnp.asarray(times_ms) * u.ms,

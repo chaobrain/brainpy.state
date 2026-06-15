@@ -30,7 +30,7 @@ except Exception:
 from brainpy_state._nest._validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest._validation.tolerance_conventions import (
     TraceTolerance, CAT_C_RATE)
-import saiunit as u
+import brainunit as u
 
 # Category A with a one-step recorder-offset alignment (HH RKF45 trace).
 CAT_A_ALIGNED = TraceTolerance(1e-3 * u.mV, 1e-3, align_steps=1, label="A",

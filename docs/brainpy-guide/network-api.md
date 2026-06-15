@@ -14,7 +14,7 @@ points produce the same underlying `brainstate.nn.Module` tree:
 
 ```python
 import brainstate
-import saiunit as u
+import brainunit as u
 import brainpy_state as bps
 
 brainstate.environ.set(dt=0.1 * u.ms)

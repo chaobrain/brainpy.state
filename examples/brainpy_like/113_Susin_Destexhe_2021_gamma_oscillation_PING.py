@@ -23,7 +23,7 @@
 # PING Network for Generating Gamma Oscillation
 
 
-import saiunit as u
+import brainunit as u
 
 import brainpy
 import brainstate

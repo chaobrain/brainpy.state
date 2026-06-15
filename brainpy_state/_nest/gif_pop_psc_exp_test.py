@@ -41,7 +41,7 @@ os.environ['JAX_PLATFORMS'] = 'cpu'
 os.environ['JAX_ENABLE_X64'] = 'True'
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 
 from brainpy_state._nest.gif_pop_psc_exp import gif_pop_psc_exp

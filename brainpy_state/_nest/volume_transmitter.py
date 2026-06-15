@@ -25,7 +25,7 @@ from __future__ import annotations
 import brainstate
 import braintools
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTDevice
@@ -76,7 +76,7 @@ class volume_transmitter(NESTDevice):
     ----------
     n : brainstate.HiddenState
         The broadcast dopamine concentration, shape ``(in_size,)``, init ``0.0``.
-    tau_n : saiunit.Quantity
+    tau_n : brainunit.Quantity
         The concentration time constant in ms.
     deliver_interval : int
         The accepted (no-op) NEST delivery period.
@@ -110,7 +110,7 @@ class volume_transmitter(NESTDevice):
 
         >>> import brainstate
         >>> import jax.numpy as jnp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy.state import volume_transmitter
         >>> with brainstate.environ.context(dt=1.0 * u.ms):
         ...     vt = volume_transmitter(1, tau_n=200.0 * u.ms)

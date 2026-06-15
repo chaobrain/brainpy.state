@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -354,7 +354,7 @@ class rate_neuron_ipn(_lin_rate_base):
     .. code-block:: python
 
        >>> from brainpy import state as bst
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> model = bst.rate_neuron_ipn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)
        >>> rate = model(x=0.1)  # external drive

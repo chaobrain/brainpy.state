@@ -3,7 +3,7 @@ import unittest
 
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._dist import Distribution, Normal, LogNormal, Uniform
 

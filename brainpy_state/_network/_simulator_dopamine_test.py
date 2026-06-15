@@ -15,7 +15,7 @@ import numpy as np
 jax.config.update('jax_enable_x64', True)
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 

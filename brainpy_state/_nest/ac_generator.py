@@ -17,7 +17,7 @@
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
@@ -198,7 +198,7 @@ class ac_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     stim = brainpy.state.ac_generator(
        ...         in_size=1,
@@ -216,7 +216,7 @@ class ac_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> ac1 = brainpy.state.ac_generator(
        ...     amplitude=200.0 * u.pA,
        ...     offset=50.0 * u.pA,

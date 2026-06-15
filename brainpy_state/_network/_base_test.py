@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 import unittest
 import brainstate
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._network._base import Network
 from brainpy_state import LIF

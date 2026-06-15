@@ -15,7 +15,7 @@ imperative implementation lived in :mod:`brainpy_state._nest._legacy_imperative`
 from __future__ import annotations
 
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -101,7 +101,7 @@ class vogels_sprekeler_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import vogels_sprekeler_synapse
        >>> s = vogels_sprekeler_synapse(weight=0.5, alpha=0.12, eta=0.001)
        >>> s.is_homogeneous_weight, s.edge_state_init()

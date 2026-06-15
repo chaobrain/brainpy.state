@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -134,28 +134,28 @@ class multimeter(NESTDevice):
         Ordered names of recordable state variables expected as keys in
         ``data`` during :meth:`update`. If empty, incoming payloads are
         silently ignored and no values are stored. Default is ``()``.
-    interval : saiunit.Quantity or float, optional
+    interval : brainunit.Quantity or float, optional
         Scalar sampling interval in time units convertible to ms
         (typically ``u.ms``). Must satisfy ``interval >= dt`` and be an exact
         integer multiple of ``dt`` (checked to within ``1e-12`` tolerance).
         Default is ``1.0 * u.ms``.
-    offset : saiunit.Quantity or float, optional
+    offset : brainunit.Quantity or float, optional
         Scalar phase offset of the sampling lattice relative to the simulation
         origin, convertible to ms.  Must be ``0.0`` or a positive integer
         multiple of ``dt``; non-zero offsets shift the first sample to step
         :math:`o` and every :math:`m`-th step thereafter.
         Default is ``0.0 * u.ms``.
-    start : saiunit.Quantity or float, optional
+    start : brainunit.Quantity or float, optional
         Scalar exclusive lower bound of the recording window relative to
         ``origin``, convertible to ms.  A pending sample at stamp step
         :math:`s` is discarded when :math:`s \le s_\min`.
         Default is ``0.0 * u.ms``.
-    stop : saiunit.Quantity, float, or None, optional
+    stop : brainunit.Quantity, float, or None, optional
         Scalar inclusive upper bound of the recording window relative to
         ``origin``, convertible to ms.  Must satisfy ``stop >= start`` when
         not ``None``.  ``None`` means no upper bound
         (:math:`s_\max = +\infty`). Default is ``None``.
-    origin : saiunit.Quantity or float, optional
+    origin : brainunit.Quantity or float, optional
         Scalar global time-origin shift added to both ``start`` and ``stop``
         when constructing the active window, convertible to ms.  Shifting the
         origin displaces the entire recording window without changing its
@@ -255,7 +255,7 @@ class multimeter(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neuron = brainpy.state.iaf_psc_delta(1, I_e=500.0 * u.pA)

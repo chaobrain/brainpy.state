@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
 import numpy.testing as npt
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import siegert_neuron
 from brainpy_state._nest._validation.nest_compare import requires_nest, compare_trace

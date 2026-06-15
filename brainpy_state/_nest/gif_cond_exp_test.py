@@ -43,7 +43,7 @@ os.environ['JAX_ENABLE_X64'] = 'True'
 
 import braintools
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 jax.config.update('jax_enable_x64', True)

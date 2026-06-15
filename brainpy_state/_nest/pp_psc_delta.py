@@ -19,7 +19,7 @@ from typing import Callable, Optional, Sequence
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -360,7 +360,7 @@ class pp_psc_delta(NESTNeuron):
     .. code-block:: python
 
        >>> from brainpy import state as bst
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> neurons = bst.pp_psc_delta(100)
        >>> neurons.init_all_states()
 
@@ -548,7 +548,7 @@ class pp_psc_delta(NESTNeuron):
         ditype = brainstate.environ.ditype()
 
         # ---- h in ms as a concrete Python float ----
-        # brainstate.environ.get_dt() returns a Python saiunit.Quantity, so
+        # brainstate.environ.get_dt() returns a Python brainunit.Quantity, so
         # dividing by u.ms yields a plain Python float — no JAX array created.
         self._h_ms = float(dt_q / u.ms)
 

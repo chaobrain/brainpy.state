@@ -19,7 +19,7 @@ from typing import Optional
 
 import brainstate
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import Size
 
 from ._base import NESTNeuron
@@ -103,7 +103,7 @@ class parrot_neuron(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy_state import (Simulator, parrot_neuron,
         ...                            poisson_generator, iaf_psc_alpha)
         >>> sim = Simulator(dt=0.1 * u.ms)

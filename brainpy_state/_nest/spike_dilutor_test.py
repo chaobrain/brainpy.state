@@ -27,7 +27,7 @@ import jax.numpy as jnp
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 
 from brainpy_state._nest.spike_dilutor import spike_dilutor
@@ -167,7 +167,7 @@ class TestSpikeDilutorStatistics(unittest.TestCase):
             dil.init_state()
 
             dftype = brainstate.environ.dftype()
-            # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+            # Use plain-float ms times to avoid per-step brainunit arithmetic overhead.
             t_array = jnp.arange(1, n_spikes + 1, dtype=dftype) * dt_ms_val
 
             def step_fn(t_ms):
@@ -227,7 +227,7 @@ class TestSpikeDilutorVsNEST(unittest.TestCase):
             dil.init_state()
 
             dftype = brainstate.environ.dftype()
-            # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+            # Use plain-float ms times to avoid per-step brainunit arithmetic overhead.
             t_array = jnp.arange(1, n_spikes + 1, dtype=dftype) * dt_ms_val
 
             def step_fn(t_ms):

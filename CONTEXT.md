@@ -501,7 +501,7 @@ objection into a Lessons entry, do **not** silently diverge.
     10's premise (the model lowers into one XLA program) does **not** hold. The **eager host
     loop is the contract**; there is no `for_loop`-lowering test for it, only the membrane
     replay through `SpikeTime` is traced.
-  - **`SpikeTime` needs JAX-backed inputs.** `SpikeTime.__init__` calls `saiunit.lax.sort`,
+  - **`SpikeTime` needs JAX-backed inputs.** `SpikeTime.__init__` calls `brainunit.lax.sort`,
     which requires a JAX backend → pass `jnp.asarray(indices)` and `jnp.asarray(times) * u.ms`;
     plain NumPy inputs raise a `BackendError`.
   - **Centroid, not argmax, for distributional center alignment.** The argmax (mode) of a
@@ -558,7 +558,7 @@ objection into a Lessons entry, do **not** silently diverge.
   - **Two-column pre-trace seam:** `pre_trace_tau = (tau_L, tau_s)` → the substrate keeps two
     per-pre traces, gathered as `ctx.pre_traces[:, 0]` / `[:, 1]`.
   - **`SpikeTime(n, indices=, times=)` as a population spike source** (JAX-backed inputs
-    required — `saiunit.lax.sort`) → **one** `n→1` plastic projection drives `n` dendritic
+    required — `brainunit.lax.sort`) → **one** `n→1` plastic projection drives `n` dendritic
     edges, vs `n` projections. The substrate lets a *device* drive a plastic edge directly (NEST
     needs a `parrot_neuron` relay).
   - **`spike_generator` `spike_weights` must be device-backed** (`jnp.asarray(get_mantissa(...))`):
@@ -1974,12 +1974,12 @@ objection into a Lessons entry, do **not** silently diverge.
     (`--cov=brainpy_state/_nest/_validation`) instead.
   - `requires_nest` reads `HAS_NEST` at decoration time — patch the module global
     *before* defining the class to test the skip path.
-  - Rates here are plain floats (not saiunit Quantities); V_m traces may be either.
+  - Rates here are plain floats (not brainunit Quantities); V_m traces may be either.
     The comparator strips units to the tolerance's unit (mV) or takes the mantissa —
     pick the category whose unit matches the metric (mV for V_m, plain/Hz for rates).
   - Division-free allclose reproduces both pure-abs (V_m) and pure-rel (rate) and is
     zero-reference safe — do not reintroduce `|a−b|/ref`.
-  - `saiunit` has no `u.uV`; use `u.volt`/`u.mV`. NEST multimeter carries a one-step
+  - `brainunit` has no `u.uV`; use `u.volt`/`u.mV`. NEST multimeter carries a one-step
     recorder offset → `CAT_B_ALIGNED`/`align_steps` absorbs it (for 02's V_m traces).
 - **For next clusters:**
   - **01** (PSC-amplitude train, static delivery): `compare_trace` + `CAT_A`/`CAT_B`;

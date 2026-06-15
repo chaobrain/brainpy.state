@@ -33,7 +33,7 @@ from typing import Callable, Optional
 import brainstate
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._brainpy._delay import InputDelay
 
@@ -47,7 +47,7 @@ class ProjEdges:
     """A single projection's realized edges, in the documented canonical order.
 
     Returned by each projection's ``realized_edges()``. ``source`` / ``target``
-    are population-local int arrays; ``weight`` / ``delay`` are saiunit
+    are population-local int arrays; ``weight`` / ``delay`` are brainunit
     Quantities read **live** (post-simulation evolved weights for a plastic
     projection). ``write_weight`` / ``write_delay`` are the guarded write-back
     hooks used by :meth:`SynapseCollection.set` (``None`` when the field is not
@@ -57,10 +57,10 @@ class ProjEdges:
     ----------
     source, target : numpy.ndarray
         Population-local pre / post index per edge, shape ``(E,)``.
-    weight : saiunit.Quantity
+    weight : brainunit.Quantity
         Per-edge weight, shape ``(E,)`` (a homogeneous projection broadcasts its
         shared scalar to ``E``).
-    delay : saiunit.Quantity
+    delay : brainunit.Quantity
         Per-edge axonal delay, shape ``(E,)`` (homogeneous broadcast; ``0 ms``
         when the projection has no delay).
     is_homogeneous_weight : bool
@@ -469,7 +469,7 @@ class SynapseCollection:
 
         Returns
         -------
-        numpy.ndarray or saiunit.Quantity or dict
+        numpy.ndarray or brainunit.Quantity or dict
             A single array/Quantity for a string key (``weight`` / ``delay`` carry
             their unit and are read live), or a ``{key: value}`` dict for a list.
         """
@@ -507,7 +507,7 @@ class SynapseCollection:
         ----------
         key : str
             ``'weight'`` or ``'delay'`` (``'source'`` / ``'target'`` are read-only).
-        value : scalar, array, or saiunit.Quantity
+        value : scalar, array, or brainunit.Quantity
             For ``'weight'``: a scalar broadcasts to every edge, a per-edge array
             sets each edge. For ``'delay'``: a scalar homogeneous delay per
             projection.

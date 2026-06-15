@@ -60,7 +60,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -150,7 +150,7 @@ class urbanczik_synapse:
     --------
     .. code-block:: python
 
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy_state import urbanczik_synapse
         >>> s = urbanczik_synapse(weight=1.0 * u.pA)
         >>> s.is_homogeneous_weight, s.post_state_reads

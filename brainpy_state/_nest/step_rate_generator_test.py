@@ -28,7 +28,7 @@ Validates the brainpy.state ``step_rate_generator`` against:
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 import numpy.testing as npt
 import pytest

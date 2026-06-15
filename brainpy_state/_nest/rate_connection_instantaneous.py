@@ -1,7 +1,7 @@
 from typing import Any
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -115,7 +115,7 @@ class rate_connection_instantaneous(NESTSynapse):
 
     **Unit Handling**
 
-    All parameters accept ``saiunit.Quantity`` objects or plain numeric values. If a
+    All parameters accept ``brainunit.Quantity`` objects or plain numeric values. If a
     ``Quantity`` is provided, its mantissa is extracted. Internally, values are stored
     as dimensionless floats.
 
@@ -194,7 +194,7 @@ class rate_connection_instantaneous(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy import state as bst
        >>> sim = bst.Simulator(dt=0.1 * u.ms)
        >>> pre = sim.create(bst.lin_rate_ipn, 10, params=dict(tau=10.0 * u.ms))
@@ -376,7 +376,7 @@ class rate_connection_instantaneous(NESTSynapse):
         Parameters
         ----------
         weight : float or array-like
-            New connection gain. Must be scalar. Accepts ``saiunit.Quantity``
+            New connection gain. Must be scalar. Accepts ``brainunit.Quantity``
             (mantissa will be extracted).
 
         Raises
@@ -456,7 +456,7 @@ class rate_connection_instantaneous(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value. Accepts ``saiunit.Quantity`` (mantissa extracted).
+            Input value. Accepts ``brainunit.Quantity`` (mantissa extracted).
         name : str
             Parameter name for error messages.
 

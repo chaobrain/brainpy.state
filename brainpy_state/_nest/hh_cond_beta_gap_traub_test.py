@@ -36,7 +36,7 @@ import math
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np

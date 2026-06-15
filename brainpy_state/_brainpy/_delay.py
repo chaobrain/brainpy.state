@@ -19,7 +19,7 @@ from typing import Optional, Union
 
 import brainstate
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 __all__ = [

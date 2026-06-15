@@ -25,7 +25,7 @@ import unittest
 import brainstate
 import jax
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
@@ -52,7 +52,7 @@ _NEST_MODEL = {"mat2": "mat2_psc_exp", "amat2": "amat2_psc_exp"}
 
 
 def _nest_params(config):
-    """Translate the demo's saiunit params for one config to NEST's plain floats."""
+    """Translate the demo's brainunit params for one config to NEST's plain floats."""
     _cls, params = demo.CONFIGS[config]
     out = {"I_e": float(u.get_mantissa(params["I_e"] / u.pA))}
     if "omega" in params:

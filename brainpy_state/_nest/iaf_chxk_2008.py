@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -426,7 +426,7 @@ class iaf_chxk_2008(NESTNeuron):
     .. code-block:: python
 
         >>> import brainstate as bs
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy import state as bps
         >>> neuron = bps.iaf_chxk_2008(1)
         >>> with bs.environ.context(dt=0.1 * u.ms):

@@ -41,7 +41,7 @@ import functools
 
 import numpy as np
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.util import DotDict
 
 from brainpy_state import hh_psc_alpha

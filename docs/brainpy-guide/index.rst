@@ -36,7 +36,7 @@ Working through this guide will help you:
 
 - Design complex spiking networks with clean, composable code.
 - Use surrogate gradients to train BrainPy-style neurons end-to-end.
-- Manage simulation state and physical units (``saiunit``) idiomatically.
+- Manage simulation state and physical units (``brainunit``) idiomatically.
 - Integrate cleanly with the rest of the `BrainX ecosystem
   <https://brainx.chaobrain.com/>`_.
 

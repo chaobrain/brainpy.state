@@ -34,7 +34,7 @@ import math
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._nest.cm_default import (
     cm_default,

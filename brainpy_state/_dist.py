@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 __all__ = ['Distribution', 'Normal', 'LogNormal', 'Uniform']
 

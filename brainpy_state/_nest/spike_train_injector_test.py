@@ -33,7 +33,7 @@ import brainstate
 import brainstate as bst
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 import numpy.testing as npt
 
 brainstate.environ.set(precision=64, platform='cpu')

@@ -38,7 +38,7 @@ import unittest
 import brainstate
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 import brainpy_state as B
 from brainpy_state._nest._base import NESTNeuron

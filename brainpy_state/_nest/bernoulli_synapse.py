@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -90,7 +90,7 @@ class bernoulli_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import bernoulli_synapse
        >>> s = bernoulli_synapse(weight=20.0 * u.pA, p_transmit=0.5)
        >>> s.stochastic

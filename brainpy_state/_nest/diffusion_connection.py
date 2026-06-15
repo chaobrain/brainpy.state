@@ -1,7 +1,7 @@
 from typing import Any
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -179,7 +179,7 @@ class diffusion_connection(NESTSynapse):
        labeled seam deposits (drift, variance) dispatched on :attr:`_IS_DIFFUSION`,
        so the model object itself stays stateless.
 
-    3. **Unit handling**: Supports ``saiunit.Quantity`` inputs (mantissa extracted
+    3. **Unit handling**: Supports ``brainunit.Quantity`` inputs (mantissa extracted
        automatically). NEST is unit-agnostic at the connection level.
 
     **Error message compatibility:**
@@ -247,7 +247,7 @@ class diffusion_connection(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> net = bs.Simulator(dt=0.1 * u.ms)
         >>> src = net.create(bs.siegert_neuron, 1, params=dict(tau_m=10.0 * u.ms, theta=15.0, mean=20.0))
         >>> tgt = net.create(bs.siegert_neuron, 1, params=dict(tau_m=10.0 * u.ms, theta=15.0))
@@ -662,7 +662,7 @@ class diffusion_connection(NESTSynapse):
         Parameters
         ----------
         drift_factor : float, array-like, or Quantity
-            New drift scaling factor. Must be scalar. If ``saiunit.Quantity``,
+            New drift scaling factor. Must be scalar. If ``brainunit.Quantity``,
             mantissa is extracted (assumed dimensionless).
 
         Raises
@@ -695,7 +695,7 @@ class diffusion_connection(NESTSynapse):
         Parameters
         ----------
         diffusion_factor : float, array-like, or Quantity
-            New diffusion scaling factor. Must be scalar. If ``saiunit.Quantity``,
+            New diffusion scaling factor. Must be scalar. If ``brainunit.Quantity``,
             mantissa is extracted (assumed dimensionless).
 
         Raises

@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._nest._validation import nest_compare as nc
 from brainpy_state._nest._validation import tolerance_conventions as tc

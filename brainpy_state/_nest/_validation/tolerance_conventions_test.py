@@ -3,7 +3,7 @@
 import dataclasses
 import unittest
 
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._nest._validation import tolerance_conventions as tc
 

@@ -36,7 +36,7 @@ import numpy as np
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-import saiunit as u
+import brainunit as u
 import braintools
 
 # Public rate-core surface. Importing this list at module load IS the import-surface

@@ -66,7 +66,7 @@ def bp_weight_trace(rule, pre_fire, post_fire, n_steps, *, dend_d=DEND_D, delive
     """
     import brainstate
     import jax.numpy as jnp
-    import saiunit as u
+    import brainunit as u
     from brainstate import transform
     from brainpy_state._network import EventPlasticProj
 

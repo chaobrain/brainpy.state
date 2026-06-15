@@ -47,7 +47,7 @@ try:
 except Exception:
     nest = None
 
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._nest._validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest._validation.tolerance_conventions import TraceTolerance

@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 from brainstate.typing import ArrayLike, Size
 
@@ -113,7 +113,7 @@ class Izhikevich(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> # Create an Izhikevich neuron layer with 10 neurons
         >>> izh = brainpy.state.Izhikevich(10)
         >>> # Initialize the state
@@ -294,7 +294,7 @@ class IzhikevichRef(Neuron):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> # Create an IzhikevichRef neuron layer with 10 neurons
         >>> izh_ref = brainpy.state.IzhikevichRef(10, tau_ref=2.*u.ms)
         >>> # Initialize the state

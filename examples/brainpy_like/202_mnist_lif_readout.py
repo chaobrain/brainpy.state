@@ -19,7 +19,7 @@ import time
 
 import brainpy
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np

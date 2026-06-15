@@ -61,7 +61,7 @@ class TestMyModelParity(unittest.TestCase):
 `nest_compare(nest_fn, brainpy_fn, mode=…, tol=…, seeds=…)` is a convenience that
 *runs* the two callables for you and dispatches to the right comparator.
 
-Metrics may be plain floats/arrays or `saiunit` quantities. For a unit-aware
+Metrics may be plain floats/arrays or `brainunit` quantities. For a unit-aware
 tolerance (`CAT_A/B/C`, mV) a plain array is assumed already in that unit; a
 quantity is converted. The pass test is the division-free allclose form
 `|a−b| ≤ atol + rtol·|ref|`, so a zero reference never divides.

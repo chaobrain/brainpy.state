@@ -20,7 +20,7 @@ from typing import Callable, Union, Tuple
 import jax.numpy as jnp
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 from brainstate.util import get_unique_name
 
@@ -88,7 +88,7 @@ class SymmetryGapJunction(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> # Create two neuron populations
         >>> neurons = brainpy.state.HH(100)
         >>> neurons.init_state(batch_size=1)
@@ -301,7 +301,7 @@ class AsymmetryGapJunction(Projection):
     .. code-block:: python
 
         >>> from brainpy import state as brainpy
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import numpy as np
         >>>
         >>> # Create two neuron populations

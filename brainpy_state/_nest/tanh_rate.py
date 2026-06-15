@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -309,7 +309,7 @@ class tanh_rate_ipn(_tanh_rate_base):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import jax.numpy as jnp
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     net = brainpy.state.tanh_rate_ipn(
@@ -744,7 +744,7 @@ class tanh_rate_opn(_tanh_rate_base):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import jax.numpy as jnp
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     net = brainpy.state.tanh_rate_opn(

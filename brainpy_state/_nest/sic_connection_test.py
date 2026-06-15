@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import numpy as np
-import saiunit as u
+import brainunit as u
 import jax
 
 from brainpy_state import sic_connection, aeif_cond_alpha_astro, astrocyte_lr_1994

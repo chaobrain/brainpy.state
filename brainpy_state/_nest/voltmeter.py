@@ -17,7 +17,7 @@
 
 from typing import Optional
 
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from .multimeter import multimeter

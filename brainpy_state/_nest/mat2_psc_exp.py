@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -339,7 +339,7 @@ class mat2_psc_exp(NESTNeuron):
     .. code-block:: python
 
        >>> from brainpy import state as bp
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> # Create a population of 100 MAT neurons
        >>> neurons = bp.mat2_psc_exp(100, tau_1=10*u.ms, tau_2=200*u.ms)
        >>> neurons.init_all_states()

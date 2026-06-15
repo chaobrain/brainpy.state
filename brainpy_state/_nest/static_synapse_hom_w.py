@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
@@ -48,7 +48,7 @@ class static_synapse_hom_w:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import static_synapse_hom_w
        >>> s = static_synapse_hom_w(weight=2.0 * u.pA)
        >>> s.is_homogeneous_weight

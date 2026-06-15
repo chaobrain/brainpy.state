@@ -11,7 +11,7 @@ clusters not yet rebuilt onto the substrate.
 """
 from __future__ import annotations
 
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
@@ -47,7 +47,7 @@ class static_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import static_synapse
        >>> s = static_synapse(weight=20.0 * u.pA)
        >>> s.is_homogeneous_weight

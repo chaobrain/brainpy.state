@@ -25,7 +25,7 @@
 #
 
 
-import saiunit as u
+import brainunit as u
 import matplotlib.pyplot as plt
 
 import brainpy

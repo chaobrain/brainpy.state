@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -392,7 +392,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
        >>> from brainpy import state as bst
        >>> import brainstate as bs
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import matplotlib.pyplot as plt
        >>>
        >>> # Create neuron population
@@ -419,7 +419,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
        >>> from brainpy import state as bst
        >>> import brainstate as bs
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>>
        >>> # Create excitatory and inhibitory populations
        >>> exc = bst.aeif_psc_delta_clopath(in_size=100, I_e=200*u.pA)
@@ -904,7 +904,7 @@ class aeif_psc_delta_clopath(NESTNeuron):
         Integration is performed with an adaptive vectorized RKF45 loop,
         including in-loop spike/reset/adaptation events and optional
         multiple spikes per step. All arithmetic is unit-aware via
-        ``saiunit.math``.
+        ``brainunit.math``.
 
         See Also
         --------

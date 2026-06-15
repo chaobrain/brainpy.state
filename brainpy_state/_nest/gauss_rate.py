@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -336,7 +336,7 @@ class gauss_rate_ipn(_gauss_rate_base):
     .. code-block:: python
 
         >>> import brainpy_state as bpst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.set_dt(0.1 * u.ms)
         >>> neuron = bpst.gauss_rate_ipn(in_size=100)
@@ -552,7 +552,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         x : ArrayLike, optional
             External additive drive (current input), broadcast to ``self.varshape``.
             Added to ``mu`` in the drift term. Can be scalar, array-like, or have
-            ``saiunit`` units (automatically converted). Default ``0.0``.
+            ``brainunit`` units (automatically converted). Default ``0.0``.
         instant_rate_events : scalar, tuple, list of tuples, or None, optional
             Rate events applied in the current step with zero delay. Each event can be:
 

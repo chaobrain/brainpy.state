@@ -188,7 +188,7 @@ gate.
 - **Memory** is set by buffer *depth* = `ceil(max_delay / dt)` × `N_pre`, and is
   **independent of the delay granularity** (homogeneous, axonal and per-connection
   share one `N_pre` buffer). A 20 ms max delay at `dt = 0.01 ms` is 2000 frames ×
-  `N_pre`. `delay` is given in time units (`saiunit`) and converted with the
+  `N_pre`. `delay` is given in time units (`brainunit`) and converted with the
   *current* `dt`; buffer depth is sized from `max(delay)` at `init_state`.
 - **Compute:** per-connection delay adds an `O(N_syn)` gather per step on top of
   the existing comm; homogeneous adds nothing (a slice).

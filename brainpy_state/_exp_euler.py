@@ -24,9 +24,9 @@ Why this module exists
 unit stripped (``unit(jacobian) == 1``), so the reconstructed unit becomes
 ``unit(drift)`` (e.g. ``mV/ms``) instead of the correct ``unit(drift) /
 unit(state)`` (e.g. ``1/ms``). The *mantissa* is correct, so the bug stayed
-latent while ``saiunit.math.exprel`` silently accepted dimensional inputs.
+latent while ``brainunit.math.exprel`` silently accepted dimensional inputs.
 
-``saiunit``/``brainunit`` ``0.4.0`` made ``exprel`` strict — it now raises when
+``brainunit``/``brainunit`` ``0.4.0`` made ``exprel`` strict — it now raises when
 given a dimensional argument without ``unit_to_scale`` — surfacing the latent bug
 as ``TypeError: exprel requires a dimensionless "x" ...`` across every model that
 integrates with units.
@@ -53,7 +53,7 @@ from typing import Callable, Union
 
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate import environ, random
 from brainstate.transform import vector_grad
 
@@ -95,7 +95,7 @@ def exp_euler_step(
 
     Returns
     -------
-    x_next : jax.Array or saiunit.Quantity
+    x_next : jax.Array or brainunit.Quantity
         The state after one integration step of size ``dt``.
 
     Raises
@@ -140,7 +140,7 @@ def exp_euler_step(
     # NOTE: divide by the *state* unit, not the Jacobian unit. ``vector_grad``
     # strips the Jacobian unit to dimensionless, so dividing by ``unit(jacobian)``
     # (as upstream brainstate does) mislabels the result as ``unit(drift)`` and
-    # breaks the strict ``exprel`` in saiunit>=0.4.0.
+    # breaks the strict ``exprel`` in brainunit>=0.4.0.
     jacobian_with_unit = u.Quantity(
         u.get_mantissa(jacobian),
         u.get_unit(drift_value) / u.get_unit(state)
@@ -189,7 +189,7 @@ _PATCH_APPLIED = False
 def _upstream_exp_euler_is_broken() -> bool:
     """Probe whether the installed ``brainstate.nn.exp_euler_step`` rejects a
     dimensional ODE (the regression). Returns ``True`` only for that specific
-    failure, so a fixed brainstate — or an older lenient ``saiunit`` where the
+    failure, so a fixed brainstate — or an older lenient ``brainunit`` where the
     bug never triggers — is left untouched."""
     import brainstate
 
@@ -217,7 +217,7 @@ def install_exp_euler_patch() -> bool:
     -------
     bool
         ``True`` if the patch was applied, ``False`` if it was unnecessary
-        (already fixed upstream, lenient ``saiunit``, or already patched).
+        (already fixed upstream, lenient ``brainunit``, or already patched).
     """
     global _PATCH_APPLIED
     if _PATCH_APPLIED:

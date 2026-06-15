@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
@@ -179,7 +179,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import brainpy_state as bst
        >>>
        >>> # Create a single McCulloch-Pitts neuron with threshold 0.5 mV

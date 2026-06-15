@@ -22,7 +22,7 @@ import brainstate
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
-import saiunit as u
+import brainunit as u
 
 import brainpy_state as brainpy_state_pkg
 from brainpy_state._brainpy._delay import InputDelay

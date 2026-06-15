@@ -19,7 +19,7 @@ from typing import Callable, Sequence
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -396,7 +396,7 @@ class glif_psc(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, spike_dependent_threshold=False,
         ...                         after_spike_currents=False, adapting_threshold=False)
@@ -408,7 +408,7 @@ class glif_psc(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, spike_dependent_threshold=True,
         ...                         after_spike_currents=True, adapting_threshold=True)
@@ -420,7 +420,7 @@ class glif_psc(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> with u.context(dt=0.1 * u.ms):
         ...     model = bp.glif_psc(100, tau_syn=(2.0, 5.0, 10.0))
         ...     model.init_all_states()

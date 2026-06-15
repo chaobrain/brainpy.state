@@ -422,7 +422,7 @@ introduced in [brainstate](https://github.com/chaobrain/brainstate).
 | Python | 3.10 |
 | jax | latest |
 | brainstate | 0.2.0 |
-| saiunit | latest |
+| brainunit | latest |
 | brainevent | 0.0.4 |
 | braintools | 0.0.9 |
 | numpy | 1.15 |

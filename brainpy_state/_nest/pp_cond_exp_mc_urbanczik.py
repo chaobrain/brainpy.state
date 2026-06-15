@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -420,7 +420,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> import numpy as np
         >>> # Create a single neuron
@@ -1217,7 +1217,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         .. code-block:: python
 
             >>> from brainpy import state as bp
-            >>> import saiunit as u
+            >>> import brainunit as u
             >>> import brainstate
             >>> import matplotlib.pyplot as plt
             >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=1)

@@ -28,7 +28,7 @@ single-realization tests use one seed, a documented limitation).
 
 Notes
 -----
-``TraceTolerance.atol`` is unit-aware (a :mod:`saiunit` ``Quantity`` in mV) for
+``TraceTolerance.atol`` is unit-aware (a :mod:`brainunit` ``Quantity`` in mV) for
 voltage traces, and a plain ``float`` for dimensionless / rate metrics. The
 ``compare_*`` engine in :mod:`brainpy_state._nest._validation.nest_compare`
 consumes these constants; this module holds no logic.
@@ -37,7 +37,7 @@ Examples
 --------
 .. code-block:: python
 
-    >>> import saiunit as u
+    >>> import brainunit as u
     >>> from brainpy_state._nest._validation import tolerance_conventions as tc
     >>> u.get_unit(tc.CAT_A.atol) == u.mV
     True
@@ -46,7 +46,7 @@ Examples
 """
 import dataclasses
 
-import saiunit as u
+import brainunit as u
 
 __all__ = [
     "TraceTolerance", "DistributionalTolerance", "SpikeTimeTolerance",
@@ -61,7 +61,7 @@ class TraceTolerance:
 
     Parameters
     ----------
-    atol : float or saiunit.Quantity
+    atol : float or brainunit.Quantity
         Absolute tolerance. Unit-aware for voltage traces (e.g. ``1e-3 * u.mV``);
         a plain ``float`` for dimensionless / rate metrics. The pass test is the
         numpy-allclose form ``|a - b| <= atol + rtol * |reference|`` (division-free,
@@ -80,7 +80,7 @@ class TraceTolerance:
     --------
     .. code-block:: python
 
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy_state._nest._validation.tolerance_conventions import CAT_B
         >>> u.get_unit(CAT_B.atol) == u.mV
         True

@@ -107,7 +107,7 @@ def nest_neuron_trace(I_e, T, record=("V_m", "u_bar_plus", "u_bar_minus")):
 def our_neuron_trace(I_e, T, record=("V_m", "u_bar_plus", "u_bar_minus")):
     """Subthreshold-``I_e`` ``aeif_psc_delta_clopath`` multimeter trace in brainpy.state."""
     import braintools
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import Simulator, aeif_psc_delta_clopath, multimeter
     sim = Simulator(dt=DT * u.ms)
     post = _our_clopath_neuron(sim, I_e=I_e)
@@ -142,7 +142,7 @@ def nest_pairing_weight(s_pre, s_post):
 
 def our_pairing_weight(s_pre, s_post):
     """Final Clopath weight after the canonical pairing protocol, in brainpy.state."""
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import (Simulator, spike_generator, clopath_synapse,
                                static_synapse)
     sim = Simulator(dt=DT * u.ms)
@@ -214,7 +214,7 @@ def our_pairing_weight_trace(s_pre, s_post):
     ndarray
         Post-update stored weight at every step (``(T,)``; bare mV mantissa).
     """
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import (Simulator, spike_generator, clopath_synapse,
                                static_synapse)
     sim = Simulator(dt=DT * u.ms)
@@ -256,7 +256,7 @@ def nest_clamp_weight(I_e, s_pre, T):
 
 def our_clamp_weight(I_e, s_pre, T):
     """Pre spikes onto a post held subthreshold by ``I_e`` (no post driver), brainpy.state."""
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import Simulator, spike_generator, clopath_synapse
     sim = Simulator(dt=DT * u.ms)
     post = _our_clopath_neuron(sim, I_e=I_e)
@@ -276,7 +276,7 @@ def _our_clopath_neuron(sim, I_e=0.0, n=1):
     neuron carries the identical canonical parameters and starts at ``E_L``).
     """
     import braintools
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import aeif_psc_delta_clopath
     return sim.create(
         aeif_psc_delta_clopath, n,

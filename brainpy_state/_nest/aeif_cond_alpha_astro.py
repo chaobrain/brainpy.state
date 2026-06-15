@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -369,7 +369,7 @@ class aeif_cond_alpha_astro(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> neuron = brainpy.state.aeif_cond_alpha_astro(in_size=2)
        >>> neuron.init_state()
        >>> # A slow-inward current is deposited on the labelled 'I_SIC' channel
@@ -693,7 +693,7 @@ class aeif_cond_alpha_astro(NESTNeuron):
         Integration is performed with an adaptive vectorized RKF45 loop,
         including in-loop spike/reset/adaptation events and optional
         multiple spikes per step. All arithmetic is unit-aware via
-        ``saiunit.math``. The labelled ``'I_SIC'`` current channel is read
+        ``brainunit.math``. The labelled ``'I_SIC'`` current channel is read
         **before** the unlabelled ``I_stim`` read so the device current and the
         SIC current land in their own terms (no channel collision).
         """

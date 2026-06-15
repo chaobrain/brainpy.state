@@ -3,7 +3,7 @@
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 brainstate.environ.set(precision=64, platform='cpu')
 

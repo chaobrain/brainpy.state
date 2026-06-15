@@ -21,7 +21,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 from brainstate.typing import Size, ArrayLike
 
 __all__ = [
@@ -95,7 +95,7 @@ class LeakyRateReadout(brainstate.nn.Module):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> with brainstate.environ.context(dt=1. * u.ms):
         ...     readout = brainpy.state.LeakyRateReadout(128, 10, tau=5.*u.ms)
         ...     readout.init_state(batch_size=1)

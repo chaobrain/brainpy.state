@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._dist import Distribution
 

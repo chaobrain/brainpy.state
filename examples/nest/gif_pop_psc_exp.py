@@ -54,7 +54,7 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import (Simulator, gif_psc_exp, gif_pop_psc_exp,
                            step_current_generator, spike_recorder)

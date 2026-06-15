@@ -17,7 +17,7 @@
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import pytest
 from brainpy.state import Expon, STP, STD, AMPA, GABAa, BioNMDA, Alpha

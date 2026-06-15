@@ -18,7 +18,7 @@ from typing import Optional
 
 import brainevent
 import brainstate
-import saiunit as u
+import brainunit as u
 from brainstate import State
 from brainstate.mixin import JointTypes, ParamDescriber
 from brainstate.nn import init_maybe_prefetch
@@ -233,7 +233,7 @@ class AlignPostProj(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> n_pre, n_post = 800, 200
         >>> post_pop = brainpy.state.LIF(n_post, tau=20.*u.ms)
         >>> post_pop.init_state()
@@ -396,7 +396,7 @@ class DeltaProj(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> n_neurons = 100
         >>> pop = brainpy.state.LIF(n_neurons, tau=10.*u.ms)
         >>> pop.init_state()
@@ -512,7 +512,7 @@ class CurrentProj(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> n_neurons = 100
         >>> pop = brainpy.state.LIF(n_neurons, tau=10.*u.ms)
         >>> pop.init_state()
@@ -635,7 +635,7 @@ class align_pre_projection(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> pre = brainpy.state.LIF(800, tau=20.*u.ms)
         >>> post = brainpy.state.LIF(200, tau=20.*u.ms)
         >>> pre.init_state()
@@ -737,7 +737,7 @@ class align_post_projection(Projection):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> pre = brainpy.state.LIF(800, tau=20.*u.ms)
         >>> post = brainpy.state.LIF(200, tau=20.*u.ms)
         >>> pre.init_state()

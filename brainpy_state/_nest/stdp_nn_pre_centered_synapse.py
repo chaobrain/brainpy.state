@@ -19,7 +19,7 @@ trace (``pre_trace_tau = None``). Only the nearest ``K-`` comes from the substra
 from __future__ import annotations
 
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -116,7 +116,7 @@ class stdp_nn_pre_centered_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import stdp_nn_pre_centered_synapse
        >>> s = stdp_nn_pre_centered_synapse(weight=1.0, tau_plus=20.0 * u.ms)
        >>> s.post_trace_mode, s.pre_trace_tau

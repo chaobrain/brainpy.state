@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -113,7 +113,7 @@ class mip_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar parent Poisson rate :math:`r` in spikes/s (Hz), shape ``()``
         after conversion. Accepts a single-element numeric ``ArrayLike`` or a
-        :class:`saiunit.Quantity` convertible to ``u.Hz``.
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``rate >= 0``. Default is ``0.0 * u.Hz``.
     p_copy : ArrayLike, optional
         Scalar copy probability :math:`p_{\mathrm{copy}}` for each parent
@@ -211,7 +211,7 @@ class mip_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.mip_generator(
        ...         in_size=(2, 3),
@@ -228,7 +228,7 @@ class mip_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> gen = brainpy.state.mip_generator(rate=1200.0 * u.Hz, p_copy=0.1)
        >>> gen.set(start=2.0 * u.ms, stop=None, origin=1.0 * u.ms)
        >>> params = gen.get()

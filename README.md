@@ -20,13 +20,13 @@ The library ships two model families:
 - **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, GABA, NMDA), projections, readouts, input generators, and short-term plasticity, designed in the tradition of [BrainPy](https://brainpy.readthedocs.io/).
 - **NEST-compatible models** — JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neurons, synapses, plasticity (STDP, STP), and devices that preserve NEST's parameter names and unit conventions.
 
-All parameters carry **physical units** via [saiunit](https://github.com/chaobrain/saiunit); BrainPy-style neurons are differentiable through surrogate gradients out of the box.
+All parameters carry **physical units** via [brainunit](https://github.com/chaobrain/brainunit); BrainPy-style neurons are differentiable through surrogate gradients out of the box.
 
 
 ## Key features
 
 - **Composable architecture** — mix and match neurons, synapses, synaptic outputs (COBA / CUBA / MgBlock), and projections.
-- **Physical units everywhere** — parameters use `saiunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors at construction time.
+- **Physical units everywhere** — parameters use `brainunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors at construction time.
 - **Differentiable** — surrogate gradients enable backpropagation through BrainPy-style spiking networks for gradient-based training.
 - **NEST-compatible parameter names** — port models from NEST with minimal friction (NEST-compatible API is experimental, see status below).
 - **Hardware-accelerated** — JAX backend with JIT compilation for CPU, GPU, and TPU.
@@ -82,7 +82,7 @@ A small excitatory–inhibitory balanced network using the Stable BrainPy-style 
 import brainpy
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 
 
 class EINet(brainstate.nn.Module):
@@ -177,7 +177,7 @@ features).
 | Package | Description |
 |---------|-------------|
 | [brainstate](https://github.com/chaobrain/brainstate) | State management for JAX-based brain modeling |
-| [saiunit](https://github.com/chaobrain/saiunit) | Physical units for neuroscience |
+| [brainunit](https://github.com/chaobrain/brainunit) | Physical units for neuroscience |
 | [brainevent](https://github.com/chaobrain/brainevent) | Event-driven sparse operators |
 | [braintools](https://github.com/chaobrain/braintools) | Surrogate gradients, analysis, and utilities |
 

@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -146,7 +146,7 @@ class hh_cond_exp_traub(NESTNeuron):
       Positive weights drive excitatory synapses; negative weights drive
       inhibitory synapses (sign is flipped, i.e. ``g_in += |w|``).
     - The numerical integration uses an adaptive RKF45 (Runge-Kutta-Fehlberg)
-      integrator implemented in JAX with unit-aware arithmetic via saiunit.
+      integrator implemented in JAX with unit-aware arithmetic via brainunit.
       This is equivalent to NEST's GSL RKF45 implementation for numerical
       correspondence.
 
@@ -233,7 +233,7 @@ class hh_cond_exp_traub(NESTNeuron):
 
     NEST uses GSL RKF45 (Runge-Kutta-Fehlberg 4/5) with adaptive step-size
     control. This implementation uses an adaptive RKF45 integrator implemented
-    in JAX with unit-aware arithmetic via saiunit, matching NEST's integration
+    in JAX with unit-aware arithmetic via brainunit, matching NEST's integration
     approach for numerical correspondence.
 
     The ODE system is 6-dimensional per neuron:
@@ -277,7 +277,7 @@ class hh_cond_exp_traub(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import hh_cond_exp_traub
        >>>
        >>> # Create a population of 100 Traub HH neurons
@@ -449,7 +449,7 @@ class hh_cond_exp_traub(NESTNeuron):
         .. code-block:: python
 
            >>> import brainstate as bst
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> from brainpy_state import hh_cond_exp_traub
            >>>
            >>> # Initialize with default rest state
@@ -560,7 +560,7 @@ class hh_cond_exp_traub(NESTNeuron):
         --------
         .. code-block:: python
 
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> import jax.numpy as jnp
            >>> from brainpy_state import hh_cond_exp_traub
            >>>
@@ -762,7 +762,7 @@ class hh_cond_exp_traub(NESTNeuron):
 
         Integration is performed with an adaptive vectorized RKF45 loop,
         including in-loop spike detection and refractory handling. All
-        arithmetic is unit-aware via ``saiunit.math``.
+        arithmetic is unit-aware via ``brainunit.math``.
 
         **Failure Modes**
 

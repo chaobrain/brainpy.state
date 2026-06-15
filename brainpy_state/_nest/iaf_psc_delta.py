@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -318,7 +318,7 @@ class iaf_psc_delta(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_delta(in_size=10, t_ref=2.0 * u.ms)
        ...     neu.init_state()
@@ -330,7 +330,7 @@ class iaf_psc_delta(NESTNeuron):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = brainpy.state.iaf_psc_delta(in_size=(2,), V_min=-80.0 * u.mV)
        ...     neu.init_state()

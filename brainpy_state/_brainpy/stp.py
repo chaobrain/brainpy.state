@@ -19,7 +19,7 @@ from typing import Optional
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._base import Synapse
@@ -108,7 +108,7 @@ class STP(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> # Create an STP synapse with facilitation-dominant parameters
         >>> stp = brainpy.state.STP(100, U=0.1, tau_f=1500.*u.ms, tau_d=200.*u.ms)
         >>> stp.init_state(batch_size=1)
@@ -233,7 +233,7 @@ class STD(Synapse):
 
         >>> import brainpy
         >>> import brainstate
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> # Create an STD synapse
         >>> std = brainpy.state.STD(100, tau=200.*u.ms, U=0.07)
         >>> std.init_state(batch_size=1)

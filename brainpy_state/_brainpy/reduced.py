@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._base import Neuron

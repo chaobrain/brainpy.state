@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import Size
@@ -264,7 +264,7 @@ class rate_transformer_node(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy_state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> # Create a transformer node with 10 units
         >>> transformer = bst.rate_transformer_node(in_size=10, g=2.0)
@@ -302,7 +302,7 @@ class rate_transformer_node(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy_state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> transformer = bst.rate_transformer_node(in_size=3)
         >>> transformer.init_state()

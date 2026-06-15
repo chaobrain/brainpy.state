@@ -17,7 +17,7 @@ lived in :mod:`brainpy_state._nest._legacy_stdp_synapse`.
 from __future__ import annotations
 
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -115,7 +115,7 @@ class stdp_nn_symm_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import stdp_nn_symm_synapse
        >>> s = stdp_nn_symm_synapse(weight=1.0, tau_plus=20.0 * u.ms)
        >>> s.is_homogeneous_weight, s.edge_state_init()

@@ -36,7 +36,7 @@ import brainstate
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainpy.state import hh_psc_alpha
 from scipy.integrate import solve_ivp
 

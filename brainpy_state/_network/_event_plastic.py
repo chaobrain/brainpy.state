@@ -28,7 +28,7 @@ import brainstate
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._brainpy._delay import InputDelay
 from brainpy_state._network._event_proj import EventProjection
@@ -219,7 +219,7 @@ class EventPlasticProj(brainstate.nn.Module):
     --------
     .. code-block:: python
 
-       >>> import jax.numpy as jnp, brainstate, saiunit as u
+       >>> import jax.numpy as jnp, brainstate, brainunit as u
        >>> from brainpy_state._network._event_plastic import EventPlasticProj, _StaticTestRule
        >>> class _Sink:
        ...     def add_delta_input(self, key, val): self.last = val
@@ -561,7 +561,7 @@ class VoltageCoupledPlasticProj(EventPlasticProj):
     --------
     .. code-block:: python
 
-       >>> import jax.numpy as jnp, brainstate, saiunit as u
+       >>> import jax.numpy as jnp, brainstate, brainunit as u
        >>> from brainpy_state._network._event_plastic import (
        ...     VoltageCoupledPlasticProj, _StaticTestRule)
        >>> class _Post:

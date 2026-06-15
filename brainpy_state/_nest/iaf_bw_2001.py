@@ -19,7 +19,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
@@ -177,37 +177,37 @@ class iaf_bw_2001(NESTNeuron):
     in_size : int, tuple of int
         Population shape (number of neurons). Can be an integer or tuple for
         multi-dimensional populations.
-    E_L : saiunit.Quantity, optional
+    E_L : brainunit.Quantity, optional
         Leak reversal potential. Default: -70 mV.
-    E_ex : saiunit.Quantity, optional
+    E_ex : brainunit.Quantity, optional
         Excitatory reversal potential (AMPA, NMDA). Default: 0 mV.
-    E_in : saiunit.Quantity, optional
+    E_in : brainunit.Quantity, optional
         Inhibitory reversal potential (GABA). Default: -70 mV.
-    V_th : saiunit.Quantity, optional
+    V_th : brainunit.Quantity, optional
         Spike threshold potential. Default: -55 mV.
-    V_reset : saiunit.Quantity, optional
+    V_reset : brainunit.Quantity, optional
         Reset potential after spike. Must be strictly less than ``V_th``.
         Default: -60 mV.
-    C_m : saiunit.Quantity, optional
+    C_m : brainunit.Quantity, optional
         Membrane capacitance. Must be strictly positive. Default: 500 pF.
-    g_L : saiunit.Quantity, optional
+    g_L : brainunit.Quantity, optional
         Leak conductance. Default: 25 nS.
-    t_ref : saiunit.Quantity, optional
+    t_ref : brainunit.Quantity, optional
         Absolute refractory period duration. Must be non-negative. Default: 2 ms.
-    tau_AMPA : saiunit.Quantity, optional
+    tau_AMPA : brainunit.Quantity, optional
         AMPA receptor decay time constant. Must be strictly positive. Default: 2 ms.
-    tau_GABA : saiunit.Quantity, optional
+    tau_GABA : brainunit.Quantity, optional
         GABA receptor decay time constant. Must be strictly positive. Default: 5 ms.
-    tau_decay_NMDA : saiunit.Quantity, optional
+    tau_decay_NMDA : brainunit.Quantity, optional
         NMDA receptor slow decay time constant. Must be strictly positive.
         Default: 100 ms.
-    tau_rise_NMDA : saiunit.Quantity, optional
+    tau_rise_NMDA : brainunit.Quantity, optional
         NMDA receptor fast rise time constant for jump approximation. Must be
         strictly positive. Default: 2 ms.
-    alpha : saiunit.Quantity, optional
+    alpha : brainunit.Quantity, optional
         NMDA jump-shape parameter (rate constant). Must be strictly positive.
         Default: 0.5 / ms.
-    conc_Mg2 : saiunit.Quantity, optional
+    conc_Mg2 : brainunit.Quantity, optional
         Extracellular magnesium concentration for NMDA voltage-dependent block.
         Must be strictly positive. Default: 1 mM.
     gsl_error_tol : float, optional
@@ -311,7 +311,7 @@ class iaf_bw_2001(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>>
         >>> # Create neuron population
@@ -879,7 +879,7 @@ class iaf_bw_2001(NESTNeuron):
 
         Parameters
         ----------
-        x : saiunit.Quantity, optional
+        x : brainunit.Quantity, optional
             External input current (pA). Can be scalar or array matching population
             shape. This current is buffered and applied in the **next** timestep
             (one-step delay, matching NEST ring-buffer semantics). Default: 0 pA.

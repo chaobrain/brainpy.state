@@ -15,7 +15,7 @@ from typing import Callable, Optional
 import brainstate
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._brainpy._delay import InputDelay
 from brainpy_state._network._connectivity import resolve_param

@@ -23,7 +23,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
 import scipy.special as sp
-import saiunit as u
+import brainunit as u
 import braintools
 
 from brainpy_state import (

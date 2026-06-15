@@ -19,7 +19,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import saiunit as bu
+import brainunit as bu
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -403,7 +403,7 @@ class iaf_tum_2000(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as bu
+       >>> import brainunit as bu
        >>> from brainpy_state._nest.iaf_tum_2000 import iaf_tum_2000
        >>> brainstate.environ.set(dt=0.1 * bu.ms, t=0.0 * bu.ms)
        >>> neu = iaf_tum_2000(

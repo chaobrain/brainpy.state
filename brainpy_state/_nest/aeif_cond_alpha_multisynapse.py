@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -362,7 +362,7 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state._nest.aeif_cond_alpha_multisynapse import (
        ...     aeif_cond_alpha_multisynapse,
        ... )
@@ -689,7 +689,7 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
         Integration is performed with an adaptive vectorized RKF45 loop,
         including in-loop spike/reset/adaptation events and optional
         multiple spikes per step. All arithmetic is unit-aware via
-        ``saiunit.math``.
+        ``brainunit.math``.
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

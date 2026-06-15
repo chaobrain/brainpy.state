@@ -16,7 +16,7 @@ The previous imperative implementation lived in
 from __future__ import annotations
 
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -111,7 +111,7 @@ class stdp_triplet_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import stdp_triplet_synapse
        >>> s = stdp_triplet_synapse(weight=5.0)
        >>> s.is_homogeneous_weight, s.edge_state_init()

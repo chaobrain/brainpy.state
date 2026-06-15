@@ -19,7 +19,7 @@ from typing import Sequence
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTDevice
@@ -196,7 +196,7 @@ class step_current_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     stim = brainpy.state.step_current_generator(
        ...         in_size=1,
@@ -212,7 +212,7 @@ class step_current_generator(NESTDevice):
     .. code-block:: python
 
        >>> import brainpy
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> stim1 = brainpy.state.step_current_generator(
        ...     amplitude_times=[0.0 * u.ms, 100.0 * u.ms, 200.0 * u.ms],
        ...     amplitude_values=[300.0 * u.pA, 0.0 * u.pA, -150.0 * u.pA],

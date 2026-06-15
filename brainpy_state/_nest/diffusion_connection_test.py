@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import numpy as np
-import saiunit as u
+import brainunit as u
 import jax
 from brainpy.state import diffusion_connection
 

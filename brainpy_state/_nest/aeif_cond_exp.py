@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -286,7 +286,7 @@ class aeif_cond_exp(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> # Create 100 AdEx neurons
         >>> neurons = bst.aeif_cond_exp(100)

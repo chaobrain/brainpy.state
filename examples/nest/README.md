@@ -13,7 +13,7 @@ The API mirrors NEST's vocabulary — there is no global kernel; a `Simulator`
 owns the populations, devices, and connections:
 
 ```python
-import saiunit as u
+import brainunit as u
 from brainpy_state import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_alpha, poisson_generator, spike_recorder,

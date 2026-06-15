@@ -13,7 +13,7 @@ imperative implementation lived in :mod:`brainpy_state._nest._legacy_imperative`
 from __future__ import annotations
 
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -98,7 +98,7 @@ class jonke_synapse:
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import jonke_synapse
        >>> s = jonke_synapse(weight=10.0, mu_plus=0.1)
        >>> s.is_homogeneous_weight, s.edge_state_init()

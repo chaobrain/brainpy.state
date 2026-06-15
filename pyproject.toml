@@ -40,7 +40,7 @@ dependencies = [
     "jax",
     "brainpy>=2.7.6",
     "brainstate>=0.2.0",
-    "saiunit",
+    "brainunit",
     "brainevent>=0.0.4",
     "braintools>=0.0.9",
 ]

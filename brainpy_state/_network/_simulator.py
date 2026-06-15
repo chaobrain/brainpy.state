@@ -20,7 +20,7 @@ from typing import Optional
 import brainstate
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._base import Neuron
 from brainpy_state._nest.ac_generator import ac_generator as _ac_generator
@@ -350,7 +350,7 @@ class SimulationResult:
 
         Returns
         -------
-        saiunit.Quantity
+        brainunit.Quantity
             ``(n_steps, n_recorded)`` trace in the model state's natural unit.
 
         Raises
@@ -380,7 +380,7 @@ class SimulationResult:
 
         Returns
         -------
-        saiunit.Quantity
+        brainunit.Quantity
             ``(n_steps, n_edges)`` weights in the synapse weight unit (pA), in CSR
             (sorted-by-pre) edge order — the same order the rule kernel sees.
 
@@ -400,7 +400,7 @@ class SimulationResult:
 
     @property
     def times(self):
-        """The common time axis ``(n_steps,)`` of the run (saiunit Quantity)."""
+        """The common time axis ``(n_steps,)`` of the run (brainunit Quantity)."""
         return self._times
 
 
@@ -409,14 +409,14 @@ class Simulator(brainstate.nn.Module):
 
     Parameters
     ----------
-    dt : saiunit.Quantity
+    dt : brainunit.Quantity
         Simulation timestep; set into ``brainstate.environ`` at construction.
 
     Examples
     --------
     .. code-block:: python
 
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import iaf_psc_alpha, poisson_generator, spike_recorder
        >>> from brainpy_state.network import Simulator, all_to_all
        >>> sim = Simulator(dt=0.1 * u.ms)
@@ -605,7 +605,7 @@ class Simulator(brainstate.nn.Module):
         --------
         .. code-block:: python
 
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> from brainpy import state as bp
            >>> sim = bp.Simulator(dt=0.1 * u.ms)
            >>> exc = sim.create(bp.iaf_psc_exp, 4)

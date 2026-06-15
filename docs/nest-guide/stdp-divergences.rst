@@ -77,7 +77,7 @@ the post-synaptic neuron to implement an archiving API:
 
 .. code-block:: python
 
-   >>> import saiunit as u
+   >>> import brainunit as u
    >>> import brainpy.state as bp
    >>> s = bp.stdp_synapse(tau_plus=20.0 * u.ms, tau_minus=20.0 * u.ms)
    >>> float(u.Quantity(s.tau_minus).to_decimal(u.ms))

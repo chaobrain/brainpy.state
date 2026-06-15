@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy.state import Simulator, hh_psc_alpha_gap, voltmeter, all_to_all
 from brainpy_state._nest.gap_junction import gap_junction

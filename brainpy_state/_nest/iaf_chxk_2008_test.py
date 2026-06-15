@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import numpy as np
 

@@ -40,8 +40,8 @@ What's in the library
   of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron,
   synapse, plasticity (STDP, STP), and device models with NEST-compatible
   parameter names.
-- All parameters carry **physical units** via `saiunit
-  <https://github.com/chaobrain/saiunit>`_; BrainPy-style neurons support
+- All parameters carry **physical units** via `brainunit
+  <https://github.com/chaobrain/brainunit>`_; BrainPy-style neurons support
   surrogate-gradient training out of the box.
 
 
@@ -89,7 +89,7 @@ walkthrough.
    import brainpy
    import brainstate
    import braintools
-   import saiunit as u
+   import brainunit as u
 
 
    class EINet(brainstate.nn.Module):
@@ -185,7 +185,7 @@ See also the ecosystem
 ``brainpy.state`` is one part of the `BrainX ecosystem <https://brainx.chaobrain.com/>`__:
 
 - `brainstate <https://github.com/chaobrain/brainstate>`_ — state management for JAX-based brain modeling
-- `saiunit <https://github.com/chaobrain/saiunit>`_ — physical units for neuroscience
+- `brainunit <https://github.com/chaobrain/brainunit>`_ — physical units for neuroscience
 - `brainevent <https://github.com/chaobrain/brainevent>`_ — event-driven sparse operators
 - `braintools <https://github.com/chaobrain/braintools>`_ — surrogate gradients, analysis, and utilities
 

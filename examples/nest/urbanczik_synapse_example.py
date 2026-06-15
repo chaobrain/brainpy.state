@@ -44,7 +44,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import (Simulator, SpikeTime, multimeter, pp_cond_exp_mc_urbanczik,
                            spike_generator, spike_recorder, urbanczik_synapse)

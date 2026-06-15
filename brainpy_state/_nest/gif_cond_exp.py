@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -312,7 +312,7 @@ class gif_cond_exp(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate as bs
         >>> bs.environ.context(dt=0.1 * u.ms)
         >>> neuron = bst.gif_cond_exp(in_size=10)
@@ -324,7 +324,7 @@ class gif_cond_exp(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate as bs
         >>> bs.environ.context(dt=0.1 * u.ms)
         >>> neuron = bst.gif_cond_exp(

@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -281,7 +281,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
     .. code-block:: python
 
         >>> import brainstate as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy import state as bp
         >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=1)
         >>> with bst.environ.context(dt=0.1 * u.ms):
@@ -636,7 +636,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
         Integration is performed with an adaptive vectorized RKF45 loop,
         including in-loop spike/reset/adaptation events and optional
         multiple spikes per step. All arithmetic is unit-aware via
-        ``saiunit.math``.
+        ``brainunit.math``.
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

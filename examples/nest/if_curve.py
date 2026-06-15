@@ -18,7 +18,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
 import braintools
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import (Simulator, aeif_cond_exp, noise_generator,
                            spike_recorder)

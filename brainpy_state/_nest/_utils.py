@@ -20,7 +20,7 @@ Shared utilities for NEST-compatible neuron and device models.
 
 This module extracts common helper functions used across 60+ model files in the
 ``brainpy_state._nest`` package.  All functions are stateless (no ``self``
-parameter) and operate on plain NumPy / JAX arrays or saiunit quantities.
+parameter) and operate on plain NumPy / JAX arrays or brainunit quantities.
 """
 
 from typing import Callable, NamedTuple, Optional
@@ -29,7 +29,7 @@ import brainstate
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import PyTree
 from jax.interpreters.partial_eval import DynamicJaxprTracer
 
@@ -53,7 +53,7 @@ def cond_any(condition) -> bool:
 
     This is the shared guard used by every NEST model's parameter-validation
     code so that ``if`` checks remain safe under ``jax.jit``.  When *condition*
-    (or the array backing a unitful :class:`~saiunit.Quantity`) is a JAX tracer
+    (or the array backing a unitful :class:`~brainunit.Quantity`) is a JAX tracer
     -- i.e. the model is being constructed/traced under ``jit``, ``vmap``,
     ``grad`` etc. -- the Python ``if`` cannot be evaluated, so this returns
     ``False`` and the guarded validation branch is skipped.  For concrete
@@ -64,7 +64,7 @@ def cond_any(condition) -> bool:
     condition : ArrayLike or Quantity
         A boolean array/scalar (typically the result of a comparison such as
         ``self.C_m <= 0 * u.pF``).  May be a NumPy array, a JAX array, a
-        saiunit Quantity, or a JAX tracer.
+        brainunit Quantity, or a JAX tracer.
 
     Returns
     -------
@@ -380,7 +380,7 @@ FEHLBERG2 = ButcherTableau(
 
 
 def _is_quantity(x):
-    """Check if *x* is a saiunit Quantity (used as ``is_leaf`` for tree ops)."""
+    """Check if *x* is a brainunit Quantity (used as ``is_leaf`` for tree ops)."""
     return isinstance(x, u.Quantity)
 
 
@@ -494,7 +494,7 @@ class AdaptiveRungeKuttaStep:
     """JAX-based adaptive embedded Runge-Kutta ODE integrator.
 
     Supports arbitrary Butcher tableaux, JAX pytree state/extra,
-    unit-aware Quantities via saiunit, and optional per-substep
+    unit-aware Quantities via brainunit, and optional per-substep
     event callbacks for spike detection, refractory clamping, etc.
 
     **Differentiability.**  The integrator is fully compatible with JAX

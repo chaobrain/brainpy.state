@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (

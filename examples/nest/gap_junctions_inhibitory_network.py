@@ -25,7 +25,7 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 from brainpy.state import (Simulator, hh_psc_alpha_gap, voltmeter, spike_recorder,
                            poisson_generator, all_to_all, fixed_indegree)

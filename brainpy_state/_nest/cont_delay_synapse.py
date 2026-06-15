@@ -16,7 +16,7 @@ machinery) now lives in :mod:`brainpy_state._nest._legacy_imperative` as
 from __future__ import annotations
 
 import brainstate
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
@@ -135,7 +135,7 @@ class cont_delay_synapse:
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state import cont_delay_synapse
        >>> brainstate.environ.set(dt=0.1 * u.ms)
        >>> s = cont_delay_synapse(weight=20.0 * u.pA, delay=0.17 * u.ms)

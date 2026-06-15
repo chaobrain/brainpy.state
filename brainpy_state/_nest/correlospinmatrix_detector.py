@@ -20,7 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -169,7 +169,7 @@ class correlospinmatrix_detector(NESTDevice):
         ``in_size`` does not change ``count_covariance`` shape.
         Default is ``1``.
     delta_tau : quantity (ms) or float or None, optional
-        Lag-bin width :math:`\Delta_\tau`. Unitful ``saiunit`` quantities are
+        Lag-bin width :math:`\Delta_\tau`. Unitful ``brainunit`` quantities are
         accepted and converted to ms; bare floats are interpreted as ms.
         Must be finite, strictly positive, and an integer multiple of
         simulation ``dt``. ``None`` auto-selects ``dt``.
@@ -286,7 +286,7 @@ class correlospinmatrix_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlospinmatrix_detector(
@@ -311,7 +311,7 @@ class correlospinmatrix_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlospinmatrix_detector()
        ...     with brainstate.environ.context(t=0.0 * u.ms):

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike
 
 from ._plastic_base import (
@@ -126,7 +126,7 @@ class stdp_dopamine_synapse:
     --------
     .. code-block:: python
 
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> from brainpy_state import stdp_dopamine_synapse
         >>> s = stdp_dopamine_synapse(weight=1.0, b=0.0)
         >>> s.is_homogeneous_weight, s.signal_reads, s.post_state_reads

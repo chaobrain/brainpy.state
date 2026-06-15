@@ -2,7 +2,7 @@
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import iaf_psc_alpha
 from brainpy_state._network import NodeView

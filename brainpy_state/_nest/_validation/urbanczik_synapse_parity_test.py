@@ -28,7 +28,7 @@ import unittest
 import jax
 import numpy as np
 import brainstate
-import saiunit as u
+import brainunit as u
 
 # Pin float64 and (in setUpClass) evict the import-time JAX cache, so this test is
 # precision-stable regardless of collection order. brainpy_state traces some kernels

@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
 from ._base import NESTNeuron
@@ -305,7 +305,7 @@ class iaf_psc_exp_htum(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state._nest.iaf_psc_exp_htum import iaf_psc_exp_htum
        >>> brainstate.environ.set(dt=0.1 * u.ms, t=0.0 * u.ms)
        >>> neu = iaf_psc_exp_htum(

@@ -177,7 +177,7 @@ def our_vt_n_trace(dopa_arrival, T, tau_n, *, sample_dt=1.0):
     """
     import brainstate
     import numpy as _np
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import Simulator, spike_generator, volume_transmitter
 
     sim = Simulator(dt=DT * u.ms)
@@ -322,7 +322,7 @@ def dopamine_trajectory(common, post_tau_minus, pre_want, post_want, dopa_arriva
         ``final['weight']`` (use this, not ``our_w[-1]``, when the decisive dynamics
         happen *after* the last pre send, e.g. a delayed dopa read-out pulse).
     """
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import stdp_dopamine_synapse
 
     pre_fire, post_fire, weights, wr_times, final = nest_dopamine_run(
@@ -374,7 +374,7 @@ def bp_dopamine_weight_trace(rule, pre_fire, post_fire, dopa_arrival, n_steps, *
     """
     import brainstate
     import jax.numpy as jnp
-    import saiunit as u
+    import brainunit as u
     from brainstate import transform
     from brainpy_state._network._event_plastic import VoltageCoupledPlasticProj
     from brainpy_state._nest.volume_transmitter import volume_transmitter

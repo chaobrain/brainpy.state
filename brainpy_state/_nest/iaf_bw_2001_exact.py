@@ -19,7 +19,7 @@ from typing import Callable, Hashable, Iterable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -318,7 +318,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=10)
@@ -332,7 +332,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=5)
@@ -351,7 +351,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=1, V_th=-50*u.mV)
@@ -370,7 +370,7 @@ class iaf_bw_2001_exact(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
         >>> net = bp.iaf_bw_2001_exact(in_size=3, ref_var=True, t_ref=5*u.ms)
@@ -871,7 +871,7 @@ class iaf_bw_2001_exact(NESTNeuron):
         ----------
         x : ArrayLike
             Input value, possibly with units.
-        unit : saiunit.Unit, optional
+        unit : brainunit.Unit, optional
             Target unit for division. If None, return dimensionless float.
 
         Returns

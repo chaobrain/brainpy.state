@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import braintools
-import saiunit as bu
+import brainunit as bu
 import jax
 import numpy as np
 from brainpy.state import iaf_psc_exp, iaf_tum_2000

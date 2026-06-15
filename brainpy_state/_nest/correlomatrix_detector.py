@@ -20,7 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
@@ -172,7 +172,7 @@ class correlomatrix_detector(NESTDevice):
         arrays through ``update``. Default is ``1``.
     delta_tau : ArrayLike or None, optional
         Lag bin width :math:`\Delta_\tau` in milliseconds. Accepts a scalar
-        float-like value or a ``saiunit`` quantity convertible to ms.
+        float-like value or a ``brainunit`` quantity convertible to ms.
         Must be finite, strictly positive, aligned to ``dt``, and an odd
         multiple of ``dt``. ``None`` resolves to ``5 * dt``.
         Default is ``None``.
@@ -184,7 +184,7 @@ class correlomatrix_detector(NESTDevice):
         Default is ``None``.
     Tstart : ArrayLike, optional
         Inclusive lower bound of the counting window in milliseconds.
-        Must be scalar-convertible; ``saiunit`` quantities are converted
+        Must be scalar-convertible; ``brainunit`` quantities are converted
         to ms. Default is ``0.0 * u.ms``.
     Tstop : ArrayLike or None, optional
         Inclusive upper bound of the counting window in milliseconds.
@@ -286,7 +286,7 @@ class correlomatrix_detector(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import numpy as np
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     det = brainpy.state.correlomatrix_detector(

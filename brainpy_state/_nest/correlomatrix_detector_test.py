@@ -19,7 +19,7 @@ import importlib.util
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt

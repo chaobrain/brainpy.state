@@ -23,7 +23,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainpy.state import iaf_psc_alpha
 
 

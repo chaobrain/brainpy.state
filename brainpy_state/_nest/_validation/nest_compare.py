@@ -12,7 +12,7 @@ and an explicit comparison **mode**:
   statistic (the mean), **never per-sample**. Category D.
 
 The core comparators take already-computed metric values (plain floats / arrays
-or :mod:`saiunit` quantities), so they are pure and unit-testable without NEST.
+or :mod:`brainunit` quantities), so they are pure and unit-testable without NEST.
 :func:`nest_compare` is the convenience that *runs* the two callables first.
 
 See ``brainpy_state/_nest/_validation/README.md`` for how to write a parity test.
@@ -21,7 +21,7 @@ import dataclasses
 import unittest
 
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 try:
     import nest  # noqa: F401
@@ -139,7 +139,7 @@ def _samples_to_array(samples):
 def _stack_functions(x):
     """Coerce a correlation/covariance *function* to a 2-D ``(n_seeds, n_lags)`` array.
 
-    Accepts a single function (a 1-D sequence / :mod:`saiunit` quantity over lags)
+    Accepts a single function (a 1-D sequence / :mod:`brainunit` quantity over lags)
     -> ``(1, n_lags)``, or a sequence of per-seed functions -> ``(n_seeds, n_lags)``.
     Units are stripped element-wise (a covariance function is compared on its bare
     magnitude). Used by the ``autocorr`` statistic.
@@ -195,7 +195,7 @@ def compare_trace(reference, candidate, *, tol, metric="trace"):
 
     Parameters
     ----------
-    reference, candidate : float, array, or saiunit.Quantity
+    reference, candidate : float, array, or brainunit.Quantity
         The metric from NEST (``reference``) and brainpy.state (``candidate``). A
         plain array paired with a unit-aware ``tol.atol`` is assumed already in that
         unit; a quantity is converted.
@@ -272,7 +272,7 @@ def compare_distributional(reference_samples, candidate_samples, *, tol, metric=
 
     Parameters
     ----------
-    reference_samples, candidate_samples : sequence of float / saiunit.Quantity, or function(s)
+    reference_samples, candidate_samples : sequence of float / brainunit.Quantity, or function(s)
         For ``"mean"``/``"cv"``: one metric value per seed, from NEST
         (``reference``) and brainpy.state (``candidate``). For ``"autocorr"``: a
         single correlation/covariance function (1-D over lags) or a sequence of

@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -536,7 +536,7 @@ class hh_psc_alpha_gap(NESTNeuron):
     .. code-block:: python
 
        >>> from brainpy import state as bs
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> neuron = bs.hh_psc_alpha_gap(in_size=1, E_L=-70*u.mV, C_m=40*u.pF)
        >>> neuron.init_all_states()
 

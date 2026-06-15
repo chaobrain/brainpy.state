@@ -39,7 +39,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -690,7 +690,7 @@ class ht_neuron(NESTNeuron):
 
         >>> import brainpy as bp
         >>> from brainpy import state as bps
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import numpy as np
         >>> import matplotlib.pyplot as plt
         >>>
@@ -1287,7 +1287,7 @@ class ht_neuron(NESTNeuron):
         .. code-block:: python
 
             >>> from brainpy import state as bps
-            >>> import saiunit as u
+            >>> import brainunit as u
             >>> import brainstate
             >>>
             >>> neuron = bps.ht_neuron(1)

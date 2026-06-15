@@ -20,7 +20,7 @@ import unittest
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import numpy as np
 from brainpy.state import lin_rate_ipn, rate_connection_delayed

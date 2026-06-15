@@ -20,7 +20,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
@@ -194,7 +194,7 @@ class rate_neuron_opn(_lin_rate_base):
         ``in_size=10`` creates 10 neurons, ``in_size=(4, 5)`` creates a 4×5
         grid.
     tau : ArrayLike, optional
-        Time constant :math:`\tau` (saiunit quantity with ms dimension).
+        Time constant :math:`\tau` (brainunit quantity with ms dimension).
         Scalar or array broadcastable to ``self.varshape``. Must be :math:`>0`.
         Controls the exponential relaxation rate of the deterministic dynamics.
         Default: ``10.0 * u.ms``.
@@ -385,7 +385,7 @@ class rate_neuron_opn(_lin_rate_base):
     .. code-block:: python
 
        >>> from brainpy import state as bst
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)
        >>> rate = model(x=0.1)  # external drive
@@ -657,7 +657,7 @@ class rate_neuron_opn(_lin_rate_base):
         .. code-block:: python
 
            >>> from brainpy import state as bst
-           >>> import saiunit as u
+           >>> import brainunit as u
            >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms)
            >>> model.init_state()
            >>> print(model.rate.value.shape)

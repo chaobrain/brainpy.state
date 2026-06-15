@@ -36,7 +36,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 import numpy as np
 import braintools
-import saiunit as u
+import brainunit as u
 from scipy.optimize import fmin
 from scipy.special import erf
 

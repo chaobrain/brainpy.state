@@ -118,7 +118,7 @@ def _nest_params(soma_I_e=0.0):
 def _our_urbanczik_neuron(sim, soma_I_e=0.0, n=1):
     """Build ``n`` ``pp_cond_exp_mc_urbanczik`` neurons with the shared parameters."""
     import jax
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import pp_cond_exp_mc_urbanczik
     return sim.create(
         pp_cond_exp_mc_urbanczik, n,
@@ -161,7 +161,7 @@ def nest_neuron_trace():
 
 def our_neuron_trace():
     """Dendritic-drive trace in brainpy.state (``V_d``/``V_s``/``V_W_star``/``delta_Pi``)."""
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import Simulator, spike_generator, spike_recorder, multimeter
     sim = Simulator(dt=DT * u.ms)
     post = _our_urbanczik_neuron(sim, soma_I_e=SOMA_IE)
@@ -212,7 +212,7 @@ def nest_weight_traj():
 
 def our_weight_traj():
     """Depression weight trajectory in brainpy.state: ``(times, per_step_weights, n_soma_spikes)``."""
-    import saiunit as u
+    import brainunit as u
     from brainpy_state import Simulator, spike_generator, spike_recorder, urbanczik_synapse
     sim = Simulator(dt=DT * u.ms)
     post = _our_urbanczik_neuron(sim, soma_I_e=SOMA_IE)

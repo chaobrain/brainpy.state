@@ -20,7 +20,7 @@ let researchers familiar with NEST port models to ``brainpy.state`` with
 minimal friction by preserving NEST's parameter names and unit conventions.
 
 The models are built on `brainstate <https://github.com/chaobrain/brainstate>`_,
-use `saiunit <https://github.com/chaobrain/saiunit>`_ for physical units, and
+use `brainunit <https://github.com/chaobrain/brainunit>`_ for physical units, and
 compile through JAX to CPU, GPU, and TPU. Where applicable, the dynamics are
 differentiable.
 
@@ -63,7 +63,7 @@ Active migration in progress
 The NEST-compatible model family is mid-refactor. The items below are
 landing across 0.0.x releases:
 
-- **Unit library:** ``brainunit`` → ``saiunit``.
+- **Unit library:** ``brainunit`` → ``brainunit``.
 - **ODE integration:** scalar ``np.ndindex`` loops → vectorised
   ``AdaptiveRungeKuttaStep`` with JAX ``while_loop``.
 - **State representation:** manual numpy arrays → ``DotDict`` PyTrees.
@@ -118,7 +118,7 @@ Roadmap
 
 High-level direction, deliberately coarse-grained:
 
-- Complete the ``brainunit`` → ``saiunit`` migration across all NEST models.
+- Complete the ``brainunit`` → ``brainunit`` migration across all NEST models.
 - Vectorised ODE integration across all Category A and Category C models.
 - Per-family validation suites against NEST reference traces.
 - Promote individual families from Experimental to Beta as their validation

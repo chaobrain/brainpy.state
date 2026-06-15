@@ -1,7 +1,7 @@
 from typing import Any
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
@@ -154,7 +154,7 @@ class sic_connection(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> sim = bp.Simulator(dt=0.1 * u.ms)
         >>> astro = sim.create(bp.astrocyte_lr_1994, 1)
         >>> neuron = sim.create(bp.aeif_cond_alpha_astro, 1)
@@ -523,7 +523,7 @@ class sic_connection(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be scalar, array, or saiunit Quantity).
+            Input value (may be scalar, array, or brainunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -539,7 +539,7 @@ class sic_connection(NESTSynapse):
 
         Notes
         -----
-        - Strips units from saiunit Quantity objects.
+        - Strips units from brainunit Quantity objects.
         - Flattens multi-dimensional inputs before checking size.
         """
         if isinstance(value, u.Quantity):
@@ -557,7 +557,7 @@ class sic_connection(NESTSynapse):
         Parameters
         ----------
         value : array-like
-            Input value (may be scalar, array, or saiunit Quantity).
+            Input value (may be scalar, array, or brainunit Quantity).
         name : str
             Parameter name for error messages.
 
@@ -576,7 +576,7 @@ class sic_connection(NESTSynapse):
 
         Notes
         -----
-        - Strips units from saiunit Quantity objects.
+        - Strips units from brainunit Quantity objects.
         - Allows float inputs if they are integer-valued within 1e-12 tolerance.
         """
         if isinstance(value, u.Quantity):

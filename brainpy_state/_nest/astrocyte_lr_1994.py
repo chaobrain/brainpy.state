@@ -18,7 +18,7 @@
 import brainstate
 import braintools
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 from brainstate.typing import Size
 from brainstate.util import DotDict
 
@@ -356,7 +356,7 @@ class astrocyte_lr_1994(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate as bst
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> import brainpy_state as bps
        >>> with bst.environ.context(dt=0.1 * u.ms):
        ...     astro = bps.astrocyte_lr_1994(in_size=10)

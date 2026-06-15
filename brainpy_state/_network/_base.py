@@ -2,7 +2,7 @@
 from typing import Dict
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 from brainpy_state._base import Neuron
 from brainpy_state._brainpy.projection import Projection
@@ -56,9 +56,9 @@ class Network(brainstate.nn.Module):
 
         Parameters
         ----------
-        duration : saiunit.Quantity
+        duration : brainunit.Quantity
             Wall-clock time to simulate.
-        dt : saiunit.Quantity, optional
+        dt : brainunit.Quantity, optional
             Timestep override. Defaults to ``brainstate.environ.get('dt')``.
         monitor : list[str] | dict[str, Callable] | None
             Per-step recording specification:

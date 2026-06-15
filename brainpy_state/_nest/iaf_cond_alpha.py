@@ -22,7 +22,7 @@ import braintools
 import jax
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
@@ -287,7 +287,7 @@ class iaf_cond_alpha(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> neurons = bst.iaf_cond_alpha(
         ...     in_size=100,
         ...     V_th=-50. * u.mV,

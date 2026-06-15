@@ -44,7 +44,7 @@ from typing import Callable, Sequence
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -456,7 +456,7 @@ class glif_psc_double_alpha(NESTNeuron):
 
         >>> from brainpy import state as st
         >>> import brainstate as bst
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
         >>> neurons = st.glif_psc_double_alpha(
         ...     in_size=100,
@@ -911,7 +911,7 @@ class glif_psc_double_alpha(NESTNeuron):
             Membrane potential (absolute, in mV). If ``None`` (default), uses
             the current state ``self.V.value``. If provided, should have shape
             compatible with ``self.varshape`` (or ``(batch_size, *self.varshape)``).
-            Unit: ``saiunit.mV`` or dimensionless (interpreted as mV).
+            Unit: ``brainunit.mV`` or dimensionless (interpreted as mV).
 
         Returns
         -------
@@ -1138,7 +1138,7 @@ class glif_psc_double_alpha(NESTNeuron):
         I_syn : jax.Array
             Total synaptic current across all receptors (fast + slow).
             Shape: same as ``self.V.value.shape`` (including batch dimension if present).
-            Unit: ``saiunit.pA`` (picoamperes).
+            Unit: ``brainunit.pA`` (picoamperes).
 
         Notes
         -----
@@ -1172,7 +1172,7 @@ class glif_psc_double_alpha(NESTNeuron):
         I_syn_fast : jax.Array
             Fast synaptic current across all receptors.
             Shape: same as ``self.V.value.shape`` (including batch dimension if present).
-            Unit: ``saiunit.pA`` (picoamperes).
+            Unit: ``brainunit.pA`` (picoamperes).
 
         Notes
         -----
@@ -1205,7 +1205,7 @@ class glif_psc_double_alpha(NESTNeuron):
         I_syn_slow : jax.Array
             Slow synaptic current across all receptors.
             Shape: same as ``self.V.value.shape`` (including batch dimension if present).
-            Unit: ``saiunit.pA`` (picoamperes).
+            Unit: ``brainunit.pA`` (picoamperes).
 
         Notes
         -----

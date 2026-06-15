@@ -46,7 +46,7 @@ from ._version import __version_info__, __version__
 # Temporary upstream compatibility patch
 # =============================================================================
 # Correct ``brainstate.nn.exp_euler_step`` when the installed brainstate carries
-# the Jacobian-unit bug that breaks the strict ``exprel`` in saiunit>=0.4.0. This
+# the Jacobian-unit bug that breaks the strict ``exprel`` in brainunit>=0.4.0. This
 # is a no-op once a fixed brainstate is installed. See ``brainpy_state/_exp_euler.py``.
 from ._exp_euler import install_exp_euler_patch
 

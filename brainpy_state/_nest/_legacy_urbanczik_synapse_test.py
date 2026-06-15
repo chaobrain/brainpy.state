@@ -22,7 +22,7 @@ import unittest
 from dataclasses import dataclass
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import numpy as np
 import numpy.testing as npt

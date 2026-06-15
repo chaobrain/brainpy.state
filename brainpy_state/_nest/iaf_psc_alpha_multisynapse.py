@@ -19,7 +19,7 @@ from typing import Callable, Iterable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -328,7 +328,7 @@ class iaf_psc_alpha_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state._nest.iaf_psc_alpha_multisynapse import (
        ...     iaf_psc_alpha_multisynapse,
        ... )
@@ -348,7 +348,7 @@ class iaf_psc_alpha_multisynapse(NESTNeuron):
     .. code-block:: python
 
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> from brainpy_state._nest.iaf_psc_alpha_multisynapse import (
        ...     iaf_psc_alpha_multisynapse,
        ... )

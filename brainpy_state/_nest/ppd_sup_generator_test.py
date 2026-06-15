@@ -26,7 +26,7 @@ import jax
 
 jax.config.update('jax_enable_x64', True)
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 
 from brainpy_state._nest.ppd_sup_generator import ppd_sup_generator
@@ -71,7 +71,7 @@ def _run_bp_counts_and_spikes(
         )
         gen.init_state()
 
-        # Use plain-float ms times to avoid per-step saiunit arithmetic overhead.
+        # Use plain-float ms times to avoid per-step brainunit arithmetic overhead.
         ditype = brainstate.environ.ditype()
         for step in range(n_steps):
             with brainstate.environ.context(t=step * dt_ms):

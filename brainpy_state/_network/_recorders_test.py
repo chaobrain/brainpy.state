@@ -3,7 +3,7 @@ import unittest
 
 import brainstate
 import jax.numpy as jnp
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import LIF
 from brainpy_state._network._base import Network

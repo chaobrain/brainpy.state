@@ -21,7 +21,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import numpy as np
 import jax.numpy as jnp
 import jax.scipy.special as jax_special
@@ -271,7 +271,7 @@ class siegert_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> from brainpy import state as bp
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> import brainstate
         >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms, tau_m=10*u.ms)
         >>> model.init_all_states()
@@ -840,7 +840,7 @@ class siegert_neuron(NESTNeuron):
 
             >>> from brainpy import state as bp
             >>> import numpy as np
-            >>> import saiunit as u
+            >>> import brainunit as u
             >>> model = bp.siegert_neuron(in_size=1, tau_m=10*u.ms, t_ref=2*u.ms, theta=15.0)
             >>> mu_vals = np.linspace(0, 25, 50)
             >>> rates = model.siegert_rate(mu=mu_vals, sigma_square=2.0)

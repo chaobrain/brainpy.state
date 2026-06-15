@@ -20,7 +20,7 @@ import math
 from typing import Sequence
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -140,7 +140,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
     start : ArrayLike, optional
         Scalar relative start time :math:`t_{\mathrm{start,rel}}` in ms.
         Added to ``origin`` to form the exclusive lower bound of the active
-        interval. Unitless scalars are treated as ms; :class:`saiunit.Quantity`
+        interval. Unitless scalars are treated as ms; :class:`brainunit.Quantity`
         values are converted automatically. Default is ``0. * u.ms``.
     stop : ArrayLike or None, optional
         Scalar relative stop time :math:`t_{\mathrm{stop,rel}}` in ms. Added
@@ -209,7 +209,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
         time-like parameter is not scalar-convertible.
     TypeError
         If unit conversion or numeric coercion fails for any time or rate
-        input (e.g., incompatible ``saiunit.Quantity`` dimensions).
+        input (e.g., incompatible ``brainunit.Quantity`` dimensions).
     KeyError
         At runtime during :meth:`update`, if the simulation context accessed
         via ``brainstate.environ`` is missing the required ``dt`` key.
@@ -247,7 +247,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.inhomogeneous_poisson_generator(
        ...         in_size=4,
@@ -269,7 +269,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.inhomogeneous_poisson_generator(
        ...         allow_offgrid_times=True,
@@ -471,7 +471,7 @@ class inhomogeneous_poisson_generator(NESTDevice):
             if a time is off-grid and ``allow_offgrid_times`` is ``False``.
         TypeError
             If unit conversion fails for ``rate_times`` or ``rate_values``
-            inputs (e.g., incompatible ``saiunit.Quantity`` dimensions).
+            inputs (e.g., incompatible ``brainunit.Quantity`` dimensions).
         """
         times_given = rate_times is not _UNSET
         rates_given = rate_values is not _UNSET

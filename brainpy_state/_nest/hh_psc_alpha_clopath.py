@@ -19,7 +19,7 @@ from typing import Callable
 
 import brainstate
 import braintools
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -45,7 +45,7 @@ def _hh_psc_alpha_clopath_equilibrium(V):
     Parameters
     ----------
     V : float
-        Membrane potential in mV (unitless, not a ``saiunit`` quantity).
+        Membrane potential in mV (unitless, not a ``brainunit`` quantity).
 
     Returns
     -------
@@ -562,7 +562,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
 
         >>> import brainstate as bst
         >>> import brainpy_state as bps
-        >>> import saiunit as u
+        >>> import brainunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
         >>> neurons = bps.hh_psc_alpha_clopath(
         ...     in_size=100,
@@ -842,7 +842,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
         .. code-block:: python
 
             >>> import brainpy_state as bps
-            >>> import saiunit as u
+            >>> import brainunit as u
             >>> neurons = bps.hh_psc_alpha_clopath(in_size=10)
             >>> neurons.init_state()
             >>> V_test = u.math.array([[-70., -10., 0., 5., 20.]]) * u.mV
@@ -1018,7 +1018,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
           (e.g., Clopath synapse models) can read these values after :meth:`update`
           completes.
         - Integration is performed with an adaptive vectorized RKF45 loop.
-          All arithmetic is unit-aware via ``saiunit.math``.
+          All arithmetic is unit-aware via ``brainunit.math``.
         """
         t = brainstate.environ.get('t')
         dt = brainstate.environ.get_dt()

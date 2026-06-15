@@ -31,7 +31,7 @@ import math
 import unittest
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import numpy as np
 from scipy.integrate import odeint
 

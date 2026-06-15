@@ -28,7 +28,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import brainstate
-import saiunit as u
+import brainunit as u
 
 from brainpy_state import (Simulator, iaf_tum_2000, iaf_psc_exp, dc_generator,
                            voltmeter)

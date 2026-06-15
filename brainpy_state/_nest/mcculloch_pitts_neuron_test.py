@@ -24,7 +24,7 @@ import unittest
 
 import braintools
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax.numpy as jnp
 
 from brainpy_state._nest.mcculloch_pitts_neuron import mcculloch_pitts_neuron

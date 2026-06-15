@@ -19,7 +19,7 @@
 import math
 
 import brainstate
-import saiunit as u
+import brainunit as u
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -170,7 +170,7 @@ class sinusoidal_gamma_generator(NESTDevice):
     rate : ArrayLike, optional
         Scalar mean firing rate in spikes/s (Hz), shape ``()`` after
         conversion. Accepted as a scalar ``ArrayLike`` or a
-        :class:`saiunit.Quantity` convertible to ``u.Hz``.
+        :class:`brainunit.Quantity` convertible to ``u.Hz``.
         Must satisfy ``0 <= amplitude <= rate``.
         Default is ``0.0 * u.Hz``.
     amplitude : ArrayLike, optional
@@ -312,7 +312,7 @@ class sinusoidal_gamma_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.sinusoidal_gamma_generator(
        ...         in_size=(2, 3),
@@ -335,7 +335,7 @@ class sinusoidal_gamma_generator(NESTDevice):
 
        >>> import brainpy
        >>> import brainstate
-       >>> import saiunit as u
+       >>> import brainunit as u
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     gen = brainpy.state.sinusoidal_gamma_generator(
        ...         individual_spike_trains=False

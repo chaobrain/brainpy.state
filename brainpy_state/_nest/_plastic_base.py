@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
-import saiunit as u
+import brainunit as u
 
 __all__ = [
     'to_scalar_float', 'to_ms', 'to_unit_interval', 'to_scalar_int',
@@ -80,7 +80,7 @@ def weight_to_pa(weight):
 
 def unit_of(q):
     """Return the unit of a Quantity (helper so specs that bind a parameter
-    named ``u`` need not reference the shadowed ``saiunit`` module by name)."""
+    named ``u`` need not reference the shadowed ``brainunit`` module by name)."""
     return u.get_unit(q)
 
 
