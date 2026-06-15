@@ -442,16 +442,35 @@ class Simulator(brainstate.nn.Module):
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
         self._connections = []                # (pre_pop, post_pop, model_name, proj), registration order
+        self._positions = {}                  # id(pop) -> (n, ndim) Quantity coords (spatial populations)
 
     # -- node creation -----------------------------------------------------
-    def create(self, model_cls, size=1, *, params=None, **kw) -> NodeView:
+    def create(self, model_cls, size=1, *, params=None, positions=None, **kw) -> NodeView:
         """Instantiate a population/device and return a :class:`NodeView`.
 
         Generators are deferred (realised per target at :meth:`connect`) so each
         target receives an independent train, mirroring NEST fan-out.
+
+        ``positions=<spatial layer>`` attaches node coordinates to a neuron
+        population (NEST ``Create(model, positions=spatial.grid/free(...))``). A
+        :func:`~brainpy_state._nest_spatial.grid` / concrete
+        :func:`~brainpy_state._nest_spatial.free` layer *derives* the population
+        size from its coordinates (the ``size`` argument is ignored); a deferred
+        ``free`` layer (sampled from a distribution) draws ``size`` positions. The
+        coordinates are stored under ``id(population)`` so a
+        :func:`~brainpy_state._nest_spatial.spatial_pairwise_bernoulli` rule can be
+        bound to them at :meth:`connect`.
         """
         p = dict(params or {})
         p.update(kw)
+        coords = None
+        if positions is not None:
+            if _is_generator(model_cls):
+                raise ValueError(
+                    'create(positions=...) is not supported for generators/injectors; '
+                    'spatial layers attach to neuron populations.'
+                )
+            size, coords = self._resolve_positions(positions, size)
         if _is_generator(model_cls):
             k = _n_channels(size)
             if k > 1:
@@ -466,6 +485,8 @@ class Simulator(brainstate.nn.Module):
             return NodeView([_GenSegment(_GeneratorSpec(model_cls, p))])
         mod = model_cls(size, **p)
         setattr(self, f'_node_{id(mod)}', mod)
+        if coords is not None:
+            self._positions[id(mod)] = coords      # spatial layer -> per-population coords
         # Volume transmitters are driven in phase 0 (before projections) and expose
         # the dopamine concentration ``n`` as State; they emit no spikes, so they
         # get no _SpikeHolder (phase 2 skips them) and are registered for phase 0.
@@ -487,6 +508,19 @@ class Simulator(brainstate.nn.Module):
         if getattr(mod, '_emission_attr', None) is not None:
             setattr(self, f'_emit_holder_{id(mod)}', _SpikeHolder(_flat_size(mod)))
         return NodeView.of(mod)
+
+    def _resolve_positions(self, layer, size):
+        """Resolve a spatial layer to ``(n, coords)`` for :meth:`create`.
+
+        Concrete layers (``grid`` / array-backed ``free``) derive the population
+        size from their coordinates; a deferred ``free`` layer draws ``size``
+        positions from its distribution with a reproducible per-population key.
+        """
+        if layer.is_deferred:
+            n = _n_channels(size)
+            key = jax.random.key(self._derive_seed(None, len(self._positions)))
+            return n, layer.sample(n, key)
+        return layer.n, layer.coords
 
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
