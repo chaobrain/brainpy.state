@@ -1,5 +1,7 @@
 # Neurons — NEST parity gap
 
+**As of:** 2026-06-16 · clusters 00–28 merged.
+
 ## 1. Scope
 
 Covers IAF (psc/cond/multisynapse/ps/lossless), AdEx (`aeif_*`), GIF, GLIF, HH,
@@ -13,7 +15,7 @@ MAT, Izhikevich, rate (`lin_rate`, `siegert_neuron`, `tanh_rate`, `sigmoid_rate*
 (`ht_neuron`).
 
 Upstream reference: <https://nest-simulator.readthedocs.io/en/stable/models/index.html>
-(neuron section of catalog snapshot: 73 entries).
+(neuron section of catalog snapshot: 74 entries).
 
 Lead implementations actually read for this analysis:
 `brainpy_state/_nest/iaf_psc_alpha.py` (lines 1-274 confirm full NEST
@@ -29,10 +31,11 @@ modules. Where extrapolation was used, it is flagged in §5.
 Most ported neurons present NEST-compatible parameter surfaces but lack
 numerical validation against upstream NEST traces. The AdEx and rate families
 have NEST-comparison tests; the IAF, GIF, GLIF, HH, MAT, Izhikevich, binary,
-point-process, multi-compartment, and Brunel-Wang families do not. Ten NEST
-neurons are entirely missing from `_nest/`: the e-prop family (8 models) and
-both `parrot_neuron` variants. MUSIC proxies are intentionally unsupported per
-spec §7.
+point-process, multi-compartment, and Brunel-Wang families do not. Nine NEST
+neurons are absent from `_nest/`: the e-prop family (8 models, **out of scope —
+ported in the sibling `braintrace` package**) and `parrot_neuron_ps` (the
+precise-spike variant). `parrot_neuron` itself is now implemented (PR #57).
+MUSIC proxies are intentionally unsupported per spec §7.
 
 | Bucket | Count | Notes |
 |---|---:|---|
@@ -40,9 +43,9 @@ spec §7.
 | unvalidated | ~40 | Present and parameter-compatible, no NEST-trace test |
 | partial | 0 known | (none identified at family level — see §5 for per-model risks) |
 | divergent | 23 | AdEx and rate families: parameter-compatible *and* nest-comparison test exists; classified divergent because surrogate-gradient (`spk_fun`) extensions are additive to NEST and intentional. Plus `pp_cond_exp_mc_urbanczik` (cluster-21): per-compartment live-NEST parity in the `_validation` harness |
-| missing | 10 | e-prop (8) + `parrot_neuron`, `parrot_neuron_ps` |
+| missing | 9 | e-prop (8, out of scope → `braintrace`) + `parrot_neuron_ps` |
 | unsupported | 7 | MUSIC proxies (catalogued in `nest-catalog-snapshot.md` §7) |
-| **total NEST neurons surveyed** | **73** | per snapshot §1 |
+| **total NEST neurons surveyed** | **74** | per snapshot §1 |
 
 Reading note: "divergent" here means the model exists, matches NEST parameters,
 *and* has a `nest`-importing comparison test in its `*_test.py`. The divergence
@@ -128,14 +131,14 @@ trace-tolerance in the test and confirming pass.
 | `lin_rate` | divergent | `brainpy_state/_nest/lin_rate.py` | <https://nest-simulator.readthedocs.io/en/stable/models/lin_rate.html> | `lin_rate_test.py` (Y) | |
 | `mat2_psc_exp` | unvalidated | `brainpy_state/_nest/mat2_psc_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/mat2_psc_exp.html> | `mat2_psc_exp_test.py` (N) | multi-timescale adaptive threshold |
 | `mcculloch_pitts_neuron` | unvalidated | `brainpy_state/_nest/mcculloch_pitts_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/mcculloch_pitts_neuron.html> | `mcculloch_pitts_neuron_test.py` (N) | binary deterministic |
-| `parrot_neuron` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/parrot_neuron.html> | — | spike-repeater; used pervasively in NEST examples as fan-out fan-in glue |
+| `parrot_neuron` | unvalidated | `brainpy_state/_nest/parrot_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/parrot_neuron.html> | `parrot_neuron_test.py` (N) | spike-repeater (fan-out/fan-in glue); PR #57 enforces the unit-gate weight at connect time. Self-consistency test only — no live-NEST trace check yet |
 | `parrot_neuron_ps` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/parrot_neuron_ps.html> | — | precise-spike variant |
 | `pp_cond_exp_mc_urbanczik` | divergent | `brainpy_state/_nest/pp_cond_exp_mc_urbanczik.py` | <https://nest-simulator.readthedocs.io/en/stable/models/pp_cond_exp_mc_urbanczik.html> | `pp_cond_exp_mc_urbanczik_test.py` (N) + `_validation/urbanczik_synapse_parity_test.py` (Y) | multi-compartment + point-process; per-compartment parity vs live NEST (cluster-21): dendritic `V_d` exact, somatic `V_s`, and `V_W_star`/`delta_Pi` == closed-form on `V_d` |
 | `pp_psc_delta` | unvalidated | `brainpy_state/_nest/pp_psc_delta.py` | <https://nest-simulator.readthedocs.io/en/stable/models/pp_psc_delta.html> | `pp_psc_delta_test.py` (N) | point process |
 | `rate_neuron_ipn` | divergent | `brainpy_state/_nest/rate_neuron_ipn.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_ipn.html> | `rate_neuron_ipn_test.py` (Y) | |
-| `rate_neuron_opn` | divergent | `brainpy_state/_nest/rate_neuron_opn.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_opn.html> | `rate_neuron_opn_test.py` (Y) | |
-| `rate_transformer_node` | divergent | `brainpy_state/_nest/rate_transformer_node.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html> | `rate_transformer_node_test.py` (Y) | |
-| `siegert_neuron` | divergent | `brainpy_state/_nest/siegert_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/siegert_neuron.html> | `siegert_neuron_test.py` (Y) | mean-field |
+| `rate_neuron_opn` | unvalidated | `brainpy_state/_nest/rate_neuron_opn.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_neuron_opn.html> | `rate_neuron_opn_test.py` (N) | self-consistency only — no live-NEST test |
+| `rate_transformer_node` | unvalidated | `brainpy_state/_nest/rate_transformer_node.py` | <https://nest-simulator.readthedocs.io/en/stable/models/rate_transformer_node.html> | `rate_transformer_node_test.py` (N) + `_validation/rate_transformer_node_substrate_test.py` (N) | substrate test only (no nest); no dedicated live-NEST parity |
+| `siegert_neuron` | divergent | `brainpy_state/_nest/siegert_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/siegert_neuron.html> | `siegert_neuron_test.py` (N) + `_validation/siegert_diffusion_test.py` (Y) + `_validation/brunel_siegert_test.py` (Y) | mean-field; live-NEST parity via the diffusion + Brunel-Siegert harness tests |
 | `sigmoid_rate` | divergent | `brainpy_state/_nest/sigmoid_rate.py` | <https://nest-simulator.readthedocs.io/en/stable/models/sigmoid_rate.html> | `sigmoid_rate_test.py` (Y) | |
 | `sigmoid_rate_gg_1998` | divergent | `brainpy_state/_nest/sigmoid_rate_gg_1998.py` | <https://nest-simulator.readthedocs.io/en/stable/models/sigmoid_rate_gg_1998.html> | `sigmoid_rate_gg_1998_test.py` (Y) | |
 | `spike_train_injector` | divergent | `brainpy_state/_nest/spike_train_injector.py` | <https://nest-simulator.readthedocs.io/en/stable/models/spike_train_injector.html> | `spike_train_injector_test.py` (Y) | injector neuron — see also `devices-gap.md` |
@@ -149,20 +152,22 @@ is documented under neurons in upstream):
 
 ## 4. Missing or incomplete functionality
 
-**Entirely missing (10):**
+**Out of scope → `braintrace` (8):**
 
 - `eprop_iaf`, `eprop_iaf_adapt`, `eprop_iaf_adapt_bsshslm_2020`,
   `eprop_iaf_bsshslm_2020`, `eprop_iaf_psc_delta`, `eprop_iaf_psc_delta_adapt`,
-  `eprop_readout`, `eprop_readout_bsshslm_2020` — e-prop family (Bellec et al.
-  2020 and follow-ups). Not ported. Because `brainpy.state` already provides
-  surrogate-gradient training natively via brainstate/braintools, the cleanest
-  port may be to *interoperate* with the existing surrogate-gradient stack
-  rather than copy NEST's e-prop ODEs. Coordination with `synapses-plasticity-
-  gap.md` needed because the e-prop family ships its own `eprop_synapse` and
-  `eprop_learning_signal_connection`.
-- `parrot_neuron`, `parrot_neuron_ps` — small but pervasive in NEST examples
-  (Brunel, microcircuit, sinusoidal Poisson demos). Used as fan-out / fan-in
-  glue. Easy to port (under one screen of code in NEST itself).
+  `eprop_readout`, `eprop_readout_bsshslm_2020` — the e-prop family (Bellec et
+  al. 2020 and follow-ups) is **not** ported here; it lives in the sibling
+  `braintrace` package, alongside its `eprop_synapse` /
+  `eprop_learning_signal_connection`. `brainpy.state` provides
+  surrogate-gradient training natively via brainstate/braintools, so e-prop is
+  intentionally factored out rather than duplicated.
+
+**Genuinely still-missing (1):**
+
+- `parrot_neuron_ps` — the precise-spike variant of the spike-repeater. The
+  standard `parrot_neuron` is now ported (`brainpy_state/_nest/parrot_neuron.py`,
+  PR #57); only the sub-dt precise variant remains.
 
 **Variants potentially missing (extrapolation flagged):** None confirmed within
 families that are at least partially ported. The IAF, AdEx, GIF, GLIF, HH, MAT,
@@ -261,31 +266,30 @@ many are *not* per-file verified — flagged where so.
 
 ## 6. Validation gaps
 
-- **48 of the 117 ported modules in `_nest/` have no `import nest` in their
-  `*_test.py`** (`/tmp/unvalidated.txt`-style listing in this analysis). The
-  neuron subset of that 48 lacks NEST-trace comparison entirely.
-- **22 neurons do have `import nest` in their test** (AdEx family, rate family,
-  astrocyte, `cm_default`, `ignore_and_fire`, `spike_train_injector`), but
-  *no documented per-family tolerance + duration convention*. Even where
-  comparison code exists, the test header should state "compared quantity =
-  V_m, duration = T ms, dt = X ms, atol = Y, rtol = Z, max observed diff = …".
-  Currently this is implicit — `aeif_cond_alpha_test.py:448` imports nest but
-  the test header does not document tolerance.
-- **No shared validation harness.** Each `*_test.py` re-implements its own NEST
-  comparison glue. A shared helper would standardise: ResetKernel, parameter
-  marshalling, multimeter setup, trace alignment, tolerance assertions.
-  Cross-link: `numerical-validation-gap.md` Task 8.
+- **The shared harness now exists.** `brainpy_state/_nest/_validation/` carries
+  140 files, 120 of them `@requires_nest` live-NEST parity tests, on a shared
+  `nest_compare.py` (`requires_nest`, `compare_trace`, `compare_distributional`)
+  + `tolerance_conventions.py` (documented categories A–E). The implicit-tolerance
+  era described in earlier drafts of this section is over — see
+  `numerical-validation-gap.md` for the harness reference.
+- **Per-model trace coverage is now broad, not bimodal.** The AdEx and rate
+  families, every conductance/current spike-bridge neuron (clusters 17b/25/28),
+  the multi-compartment Urbanczik model (cluster 21), the gap-junction HH pair
+  (cluster 15b), and the astrocyte path all carry live-NEST parity tests under
+  `_validation/`. Many base `*_psc_*` / `*_cond_*` families still rely on their
+  in-module `*_test.py` for self-consistency only (flagged `unvalidated` in §3)
+  and are the remaining promotion targets.
+- **Residual neuron-level gap:** `pp_psc_delta` has a self-consistency
+  `pp_psc_delta_test.py` but no dedicated `_validation` parity test yet.
 
 ## 7. Prioritized roadmap
 
-- **P0 — Build a shared NEST-trace comparison harness.** [M]
-  Rationale: the same comparison glue is repeated across ~22 test files, and
-  ~48 ported modules lack any comparison at all. A reusable
-  `brainpy_state/_nest/_validation/nest_compare.py` with documented tolerance
-  conventions unblocks promoting families to `implemented`. Acceptance: at
-  least 5 neuron tests use it; tolerance, duration, dt, and PRNG-seeding
-  protocol are documented in the harness module's docstring; the harness skips
-  by default under `pytest -m "not requires_nest"`.
+- **P0 — Build a shared NEST-trace comparison harness.** [M] — ✅ **DONE.**
+  `brainpy_state/_nest/_validation/nest_compare.py` + `tolerance_conventions.py`
+  ship with documented tolerance categories (A–E), `requires_nest` skip-gating,
+  and 120 live-NEST tests across the tree. Remaining work is breadth of
+  adoption (promoting the `unvalidated` base families below), not building the
+  harness.
 
 - **P0 — Promote IAF psc family to `implemented` with the new harness.** [L]
   Rationale: IAF psc is the most-used base family in NEST examples and is
@@ -303,11 +307,10 @@ many are *not* per-file verified — flagged where so.
   tree topology equivalence (coordinate with `nest-status/index.rst:89`
   self-disclosure on multi-compartment experimental status).
 
-- **P1 — Port `parrot_neuron` and `parrot_neuron_ps`.** [S]
-  Rationale: needed for direct ports of NEST examples (Brunel uses
-  `parrot_neuron` as a relay). Acceptance: both models present in
-  `brainpy_state/_nest/`, with NEST-comparison tests verifying spike-time
-  preservation (precise variant: sub-dt accuracy).
+- **P1 — Port `parrot_neuron_ps`.** [S]
+  `parrot_neuron` is done (`brainpy_state/_nest/parrot_neuron.py`, PR #57).
+  Only the precise-spike variant remains. Acceptance: `parrot_neuron_ps`
+  present with a NEST-comparison test verifying sub-dt spike-time preservation.
 
 - **P1 — Promote AdEx family from `divergent` to `implemented`.** [M]
   Tests already import `nest`; missing is the per-test documented tolerance
@@ -326,13 +329,10 @@ many are *not* per-file verified — flagged where so.
   to ignore. Acceptance: convention page exists and is linked from every NEST
   neuron's docstring.
 
-- **P2 — Port the e-prop family.** [XL]
-  Rationale: brainpy.state already supports surrogate-gradient training; e-prop
-  is an alternative formulation. Strategic decision: port verbatim from NEST,
-  or wire e-prop semantics through the existing surrogate-gradient stack?
-  Either path is multi-week. Acceptance: at minimum `eprop_iaf` + `eprop_readout`
-  + `eprop_synapse` work end-to-end on a small classification task with a
-  documented learning curve comparable to NEST's e-prop example.
+- **Out of scope — the e-prop family → `braintrace`.** [n/a]
+  The e-prop neurons + `eprop_synapse` are ported in the sibling `braintrace`
+  package, not here; `brainpy.state` covers surrogate-gradient training through
+  brainstate/braintools. This is a deliberate factoring, not a backlog item.
 
 - **P2 — Audit precise-spike-time variants (`*_ps`, `iaf_psc_exp_ps_lossless`).** [M]
   Rationale: NEST's regula-falsi root-finding and Krishnan's lossless predicate

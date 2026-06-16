@@ -11,13 +11,14 @@ output is a list of doc-tier porting targets.
 Upstream reference: <https://nest-simulator.readthedocs.io/en/stable/>
 
 Evidence basis:
-- Repo doc inventory (run 2026-05-11):
+- Repo doc inventory (run 2026-06-16):
   ```
   docs/index.rst
-  docs/changelog.md
+  changelog.md  (repo root — NOT under docs/)
   docs/api/{base,brainpy-*,nest-*,index}.rst
   docs/brainpy-guide/{architecture,neurons,synapses,projections}.ipynb + index.rst
   docs/quickstart/{5min-tutorial,overview}.ipynb + installation.rst + index.rst
+  docs/nest-guide/{index,stdp-divergences}.rst (partial porting guide — STDP only)
   docs/nest-status/index.rst (the public Experimental caveats page)
   docs/examples/gallery.rst
   ```
@@ -33,18 +34,21 @@ Evidence basis:
 ## 2. Parity summary
 
 Repo has the foundational tiers (quickstart, brainpy-guide, API reference,
-public NEST caveats). The biggest gap is the **absence of a `docs/nest-guide/`
-porting tutorial tier** — the doc-portfolio analog of `network-api-gap.md`'s
-P0 (`nest_compat` shim). Several other NEST tiers (Connection management,
-Recording from simulations, Randomness, Tutorials) are absent. The
+public NEST caveats). A **`docs/nest-guide/` porting tier now exists but is
+partial** — `docs/nest-guide/index.rst` + `stdp-divergences.rst` cover only the
+STDP trace-storage divergence; the full Create → Connect → Simulate → Plot
+porting tutorial is the residual. Several other NEST tiers (Connection
+management, Recording from simulations, Randomness, Tutorials, Glossary) are
+absent. The 75 NEST-style port scripts in `examples/nest/` exist but are **not
+yet wired into the rendered `docs/examples/gallery.rst`**. The
 Parallel-computing tier is intentionally divergent (JAX device sharding vs.
 MPI).
 
 | Bucket | Count | Notes |
 |---|---:|---|
 | implemented | 1 | quickstart + brainpy-guide cover brainpy-style modeling well |
-| partial | 4 | API ref (autosummary stubs only); examples (gallery without ports); installation (no NEST-compat install guidance); changelog (present but not NEST-segmented) |
-| missing | 6 | `docs/nest-guide/` porting tutorial; Connection management guide; Recording from simulations guide; Randomness in JAX vs. NEST guide; PyNEST API mapping reference; NEST tutorials series |
+| partial | 5 | `docs/nest-guide/` (exists — STDP divergences only; full porting tutorial residual); API ref (autosummary stubs only); examples (gallery not yet wired to `examples/nest/` ports); installation (no NEST-compat install guidance); changelog (present but not NEST-segmented) |
+| missing | 5 | Connection management guide; Recording from simulations guide; Randomness in JAX vs. NEST guide; PyNEST API mapping reference; NEST tutorials series |
 | divergent | 1 | Parallel computing (JAX device sharding instead of MPI — needs a dedicated doc) |
 | unsupported | 1 | NESTML/SLI modeling-language documentation (spec §7) |
 
@@ -54,7 +58,7 @@ MPI).
 |---|---|---|---|---|
 | Installation | partial | `docs/quickstart/installation.rst` | <https://nest-simulator.readthedocs.io/en/stable/installation/index.html> | exists, but no NEST-compat / extras-installation guidance; NEST users expect MPI/Python-version notes |
 | Getting started | implemented | `docs/quickstart/5min-tutorial.ipynb`, `overview.ipynb` | <https://nest-simulator.readthedocs.io/en/stable/get_started/get_started.html> | brainpy-style; doesn't cover NEST-compat surface (which is absent — `network-api-gap.md`) |
-| **PyNEST porting guide** | **missing** | none | n/a (this is the user-facing analog of `network-api-gap.md` P0) | **most consequential gap** — see roadmap P0 |
+| **PyNEST porting guide** | **partial** | `docs/nest-guide/index.rst`, `stdp-divergences.rst` | n/a (this is the user-facing analog of `network-api-gap.md` P0) | exists but covers only the STDP trace-storage divergence; the full Create → Connect → Simulate → Plot tutorial is the residual — see roadmap P0 |
 | Tutorials (multi-part PyNEST series) | missing | `docs/brainpy-guide/` covers brainpy style only | <https://nest-simulator.readthedocs.io/en/stable/tutorials/pynest_tutorial/index.html> | NEST's 4-part PyNEST tutorial walks new users through Create → Connect → Simulate → Plot |
 | Networks (Connection management) | missing | none | <https://nest-simulator.readthedocs.io/en/stable/synapses/connectivity_concepts.html> | NEST's flagship Connect doc; absent from repo |
 | Spatially structured networks | missing | none | <https://nest-simulator.readthedocs.io/en/stable/networks/spatially_structured_networks.html> | blocked by `network-api-gap.md` spatial roadmap |
@@ -67,22 +71,26 @@ MPI).
 | Parallel computing | divergent (no doc) | none | <https://nest-simulator.readthedocs.io/en/stable/hpc/parallel_computing.html> | brainpy.state uses JAX device sharding; a "Parallel computing in brainpy.state vs. NEST" doc would lay out the mapping |
 | PyNEST API reference | missing | none | <https://nest-simulator.readthedocs.io/en/stable/ref_material/pynest_api/index.html> | blocked by absence of the API surface (`network-api-gap.md`); even a "see the corresponding brainpy.state idiom" mapping table would be load-bearing |
 | Glossary | missing | none | <https://nest-simulator.readthedocs.io/en/stable/ref_material/glossary.html> | useful for NEST users learning brainpy.state terminology |
-| Examples gallery | partial | `docs/examples/gallery.rst` | <https://nest-simulator.readthedocs.io/en/stable/examples/index.html> | brainpy-style only; cross-link `examples-gap.md` |
+| Examples gallery | partial | `docs/examples/gallery.rst` | <https://nest-simulator.readthedocs.io/en/stable/examples/index.html> | brainpy-style only; `examples/nest/` now holds ~75 NEST-style port scripts but they are **not yet surfaced** in the rendered gallery — that wiring is the residual; cross-link `examples-gap.md` |
 | Public NEST-status page (caveats) | implemented | `docs/nest-status/index.rst` | n/a | the authoritative user-facing scope/limitations page |
 | Internal gap analysis | implemented (this document set) | `docs/nest-status/internal/` | n/a | excluded from Sphinx build |
 | NESTML / SLI modeling-language docs | unsupported | n/a | upstream | spec §7 — brainpy.state authors models in Python directly |
-| Changelog | partial | `docs/changelog.md` | n/a | exists; doesn't segment NEST vs. brainpy-style changes |
+| Changelog | partial | `changelog.md` (repo root) | n/a | exists; doesn't segment NEST vs. brainpy-style changes |
 
 ## 4. Missing or incomplete functionality
 
-**Tier-level gaps (6):**
+**Tier-level gaps (5):**
 
-- **`docs/nest-guide/`** — porting tutorial from PyNEST → brainpy.state. Single
-  most consequential doc gap. Should cover: (a) creating neurons, (b) creating
-  generators, (c) connecting populations, (d) recording, (e) simulation +
-  Run/Cleanup, (f) plasticity, (g) plotting results. Each step side-by-side
-  as a PyNEST snippet + brainpy.state equivalent (using `nest_compat` once it
-  exists, raw API meanwhile).
+- **`docs/nest-guide/` full porting tutorial** — the guide tier now **exists but
+  is partial**: `docs/nest-guide/index.rst` + `docs/nest-guide/stdp-divergences.rst`
+  currently cover only the STDP trace-storage (`tau_minus`) divergence and the
+  nearest-neighbour pairing conventions. The residual is the full porting
+  tutorial: (a) creating neurons, (b) creating generators, (c) connecting
+  populations, (d) recording, (e) simulation + Run/Cleanup, (f) plasticity,
+  (g) plotting results. Each step side-by-side as a PyNEST snippet +
+  brainpy.state equivalent (using `nest_compat` once it exists, raw API
+  meanwhile). The index page is already in the `docs/index.rst` toctree and
+  warning-cross-links the public `nest-status/index.rst`.
 - **Connection management guide** — explain what `pairwise_bernoulli`,
   `fixed_indegree`, etc. mean in NEST and how to express each in brainpy.state.
   Blocked by absence of the API surface but the *concepts* can be documented
@@ -112,8 +120,9 @@ MPI).
 - **Devices reference (`docs/api/nest-devices.rst`)**: same as above plus a
   pointer to `devices-gap.md` recording-semantics caveats.
 - **Examples gallery (`docs/examples/gallery.rst`)**: add a "NEST porting
-  examples" section (initially empty, filled by `examples-gap.md` ports as
-  they land).
+  examples" section that surfaces the ~75 NEST-style port scripts now sitting
+  in `examples/nest/`. The scripts exist; the residual is the gallery wiring
+  (grid cards / toctree entries pointing at them). Cross-link `examples-gap.md`.
 - **Changelog**: segment NEST-compat changes into their own subsection so
   NEST users tracking parity progress can find changes affecting them.
 
@@ -152,19 +161,21 @@ quality-gate checks should be in place:
 - **Cross-reference integrity**: every cross-link from a per-axis gap doc to
   another (e.g. `network-api-gap.md` → `docs-portfolio-gap.md`) should
   resolve. To be checked in Task 10.
-- **Code example correctness**: when `docs/nest-guide/` lands, every PyNEST
-  snippet in it should run against NEST and every brainpy.state snippet
-  should run against the repo. A simple `doctest` or notebook-CI step.
+- **Code example correctness**: as the `docs/nest-guide/` porting tutorial
+  lands, every PyNEST snippet in it should run against NEST and every
+  brainpy.state snippet should run against the repo. A simple `doctest` or
+  notebook-CI step.
 
 ## 7. Prioritized roadmap
 
-- **P0 — Create `docs/nest-guide/` and write the porting tutorial.** [L]
-  Rationale: most consequential single doc improvement. Acceptance:
-  `docs/nest-guide/index.rst` exists and the tutorial covers Create →
-  Connect → Simulate → Plot side-by-side as PyNEST + brainpy.state (using
-  `nest_compat` once available, or raw brainpy.state idioms meanwhile);
-  linked from the public `nest-status/index.rst` Experimental warning;
-  buildable in Sphinx.
+- **P0 — Extend `docs/nest-guide/` with the full porting tutorial.** [L]
+  Rationale: most consequential single doc improvement. The guide tier already
+  exists (`docs/nest-guide/index.rst` + `stdp-divergences.rst`, in the
+  `docs/index.rst` toctree and warning-cross-linked to `nest-status/index.rst`),
+  but currently covers only the STDP trace-storage divergence. Acceptance: the
+  guide gains a tutorial covering Create → Connect → Simulate → Plot
+  side-by-side as PyNEST + brainpy.state (using `nest_compat` once available, or
+  raw brainpy.state idioms meanwhile); buildable in Sphinx.
 
 - **P0 — Add a PyNEST→brainpy.state cheatsheet.** [S]
   Part of `docs/nest-guide/` (subpage). Acceptance: a single table that maps
@@ -226,8 +237,8 @@ quality-gate checks should be in place:
   node) and points to brainpy.state equivalents (or "no equivalent — see X").
 
 - **P2 — Segment changelog by NEST vs. brainpy-style changes.** [S]
-  Acceptance: `docs/changelog.md` gains a top-level "NEST-compat" subsection;
-  changes affecting NEST parity are entered there.
+  Acceptance: the repo-root `changelog.md` gains a top-level "NEST-compat"
+  subsection; changes affecting NEST parity are entered there.
 
 - **P2 — Doc-CI: doctest/notebook-CI for the porting tutorial.** [M]
   Acceptance: a GitHub Actions job runs the tutorial code blocks against
