@@ -28,8 +28,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Job-level backstop so a hung test fails the run in minutes, not the 6 h GitHub
     # default. The pytest --timeout below catches a hang first and names the test; this
-    # caps the worst case. A normal run is ~30 min.
-    timeout-minutes: 60
+    # caps the worst case. macOS/Windows finish ~30 min; ubuntu runs -n 2 (OOM
+    # mitigation, see the test step) so it takes ~60 min — 90 leaves headroom.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -66,6 +67,12 @@ jobs:
         # --timeout fails (and names) any single test that hangs >10 min instead of
         # stalling the worker until the job is cancelled; the thread method is required
         # because Windows has no SIGALRM.
+        #
+        # ubuntu runs -n 2, not auto (=4): the 16 GB Linux runner OOMs under 4 concurrent
+        # JAX/XLA compilations now that the suite has grown — the VM gets a shutdown
+        # signal at ~75% (intermittently, right at the memory edge). macOS passes at 3
+        # workers and Windows at 4, so 2 gives ubuntu a safe margin. This ~doubles ubuntu
+        # wall-time (hence the 90-min job cap above); macOS/Windows keep -n auto.
         env:
           OMP_NUM_THREADS: "1"
-        run: pytest brainpy_state/ -m "not requires_nest" -n auto --timeout=600 --timeout-method=thread
+        run: pytest brainpy_state/ -m "not requires_nest" -n ${{ matrix.os == 'ubuntu-latest' && '2' || 'auto' }} --timeout=600 --timeout-method=thread
