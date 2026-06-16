@@ -14,7 +14,7 @@ import brainstate
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from examples.nest_like.gap_junctions_two_neurons import run_two_neuron, synchrony_gap
 from examples.nest_like.gap_junctions_inhibitory_network import run_network, golomb_chi

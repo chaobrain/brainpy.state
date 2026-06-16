@@ -3,7 +3,7 @@ r"""NEST-faithful ``stdp_triplet_synapse`` — Pfister-Gerstner triplet STDP spe
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The triplet rule
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The triplet rule
 (Pfister & Gerstner, 2006) augments pair STDP with a **second, slower trace on each
 side**: potentiation at a post spike is scaled by the slow *post* trace and
 depression at a pre spike by the slow *pre* trace, capturing frequency-dependent
@@ -12,13 +12,13 @@ plasticity that pair models miss. This is the first model to use the substrate's
 ``(fast, slow)`` so the substrate allocates two per-neuron trace columns per side.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

@@ -1,4 +1,4 @@
-from brainpy_state._nest_base._base import NESTNeuron
+from brainpy_state._nest_base.base import NESTNeuron
 
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #

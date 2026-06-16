@@ -35,7 +35,7 @@ import brainunit as u
 import numpy as np
 from scipy.integrate import odeint
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state._nest_neuron.astrocyte_lr_1994 import astrocyte_lr_1994
 

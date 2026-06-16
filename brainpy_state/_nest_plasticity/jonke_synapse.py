@@ -3,19 +3,19 @@ r"""NEST-faithful ``jonke_synapse`` — exponential-weight-dependence STDP spec 
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The Jonke et al.
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The Jonke et al.
 (2015) rule generalises pair STDP with an **exponential weight factor**
 :math:`\Phi_\pm(w) = \exp(\mu_\pm w)` on each side plus a constant **offset**
 :math:`\beta` (a heterosynaptic / activity-independent bias).
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

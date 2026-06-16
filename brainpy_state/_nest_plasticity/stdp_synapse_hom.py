@@ -2,7 +2,7 @@
 """NEST-faithful ``stdp_synapse_hom`` — homogeneous-parameter pair STDP spec.
 
 Rebuilt as a thin reuse of :class:`~brainpy_state._nest_plasticity.stdp_synapse.stdp_synapse`
-on the frozen :class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`
+on the frozen :class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`
 substrate. In NEST ``stdp_synapse_hom`` stores the plasticity parameters
 (``lambda``, ``alpha``, ``mu_plus``, ``mu_minus``, ``tau_plus``, ``Wmax``) as
 *common* properties shared by every synapse of the model (a memory optimisation,

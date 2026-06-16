@@ -46,7 +46,7 @@ import jax.numpy as jnp
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import brainunit as u
 
@@ -144,7 +144,7 @@ class TestGapJunctionTwoNeuronParity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         jax.clear_caches()                       # stiff-HH x64 hygiene (cluster 21)
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
         cls.ns = _nest_two_neuron()              # (samples, 2)
         cls.bp = _bp_two_neuron()                # (samples, 2)
 

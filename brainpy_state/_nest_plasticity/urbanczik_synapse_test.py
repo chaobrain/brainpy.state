@@ -3,7 +3,7 @@
 
 The rebuild is a frozen parameter spec plus a pure
 ``update(state, ctx) -> (new_state, w_eff)`` kernel on the
-:class:`~brainpy_state._nest_network._event_plastic.VoltageCoupledPlasticProj`
+:class:`~brainpy_state._nest_network.event_plastic.VoltageCoupledPlasticProj`
 substrate. These NEST-free tests pin:
 
 * the spec declarations the substrate dispatches on (two pre-traces ``(tau_L,
@@ -27,10 +27,10 @@ import numpy.testing as npt
 import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state._nest_plasticity.urbanczik_synapse import urbanczik_synapse
-from brainpy_state._nest_network._event_plastic import KernelContext
+from brainpy_state._nest_network.event_plastic import KernelContext
 
 
 # --------------------------------------------------------------------------

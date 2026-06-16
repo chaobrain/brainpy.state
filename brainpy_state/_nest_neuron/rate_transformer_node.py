@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import Size
 
-from brainpy_state._nest_base._base import NESTNeuron
+from brainpy_state._nest_base.base import NESTNeuron
 
 __all__ = [
     'rate_transformer_node',

@@ -26,8 +26,8 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'hh_psc_alpha_clopath',
@@ -207,7 +207,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
     **4. Numerical Integration**
 
     Uses a JAX-based adaptive RKF45 integrator via
-    :class:`~brainpy_state._nest_base._utils.AdaptiveRungeKuttaStep` to match
+    :class:`~brainpy_state._nest_base.utils.AdaptiveRungeKuttaStep` to match
     NEST's GSL RKF45 adaptive integrator. Default tolerance is
     ``gsl_error_tol=1e-6``. All neurons are integrated simultaneously in a
     vectorized fashion.
@@ -977,7 +977,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
 
         **Integration details:**
 
-        - Uses :class:`~brainpy_state._nest_base._utils.AdaptiveRungeKuttaStep` with
+        - Uses :class:`~brainpy_state._nest_base.utils.AdaptiveRungeKuttaStep` with
           method ``'RKF45'`` for vectorized integration of all neurons simultaneously.
         - The ODE right-hand side includes all 11 state equations with full coupling.
         - Alpha-kernel normalization ensures a weight of 1 pA produces a peak PSC of 1 pA.

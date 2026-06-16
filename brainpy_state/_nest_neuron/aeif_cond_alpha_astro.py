@@ -26,8 +26,8 @@ import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, validate_aeif_overflow, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'aeif_cond_alpha_astro',
@@ -122,7 +122,7 @@ class aeif_cond_alpha_astro(NESTNeuron):
     **4. SIC delivery semantics**
 
     The astrocyte slow-inward current (SIC) is delivered on the JAX substrate by
-    a :class:`~brainpy_state._nest_network._event_proj.EventProjection` — the
+    a :class:`~brainpy_state._nest_network.event_proj.EventProjection` — the
     ``sic_connection`` — that deposits ``weight·SIC`` into this neuron's labelled
     ``'I_SIC'`` *current* channel each step (``add_current_input``). Each
     :meth:`update` reads (and pops) that channel **before** the unlabelled
@@ -672,7 +672,7 @@ class aeif_cond_alpha_astro(NESTNeuron):
         r"""Advance the neuron by one simulation step.
 
         The astrocyte slow-inward current (SIC) is delivered by a
-        :class:`~brainpy_state._nest_network._event_proj.EventProjection` (the
+        :class:`~brainpy_state._nest_network.event_proj.EventProjection` (the
         ``sic_connection``) that deposits ``weight·SIC`` into this neuron's labelled
         ``'I_SIC'`` *current* channel each step. ``update`` reads (and pops) that
         channel, stores it into ``I_sic`` (pA) for the next step — a one-step delay,

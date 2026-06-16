@@ -27,8 +27,8 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'iaf_bw_2001',
@@ -535,7 +535,7 @@ class iaf_bw_2001(NESTNeuron):
         r"""Map a NEST receptor type to this model's delta-input channel label.
 
         Routes ``Simulator.connect(..., receptor_type=k)`` through the named-channel
-        deposit path: :class:`~brainpy_state._nest_network._event_proj.EventProjection` tags
+        deposit path: :class:`~brainpy_state._nest_network.event_proj.EventProjection` tags
         the deposit with the returned label, which the model reads back via
         ``sum_delta_inputs(label=...)``. Exposing this resolver (instead of a stacked
         ``n_receptors`` port) is what lets a Simulator connection reach the AMPA, GABA

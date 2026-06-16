@@ -33,7 +33,7 @@ import numpy as np
 import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import (
     stdp_synapse, stdp_synapse_hom, stdp_pl_synapse_hom, jonke_synapse,

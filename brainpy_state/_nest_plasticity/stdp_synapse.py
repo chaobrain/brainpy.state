@@ -3,7 +3,7 @@
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The substrate
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The substrate
 maintains the per-pre-neuron ``K+`` trace (``pre_trace_tau=tau_plus``) and the
 per-post-neuron ``K-`` trace (``post_trace_tau=tau_minus``); the kernel applies
 **potentiation on the post spike** (using ``K+``) and **depression on the pre
@@ -12,13 +12,13 @@ is equal to NEST's deferred ``stdp_synapse::send()`` at every send (pre-spike)
 time — where NEST's ``weight_recorder`` samples.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

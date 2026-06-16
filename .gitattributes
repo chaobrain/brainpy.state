@@ -1,3 +1,86 @@
+# Cross-platform line-ending policy (Linux / macOS / Windows).
+#
+# Everything text is stored as LF in the repository and checked out as LF on
+# every OS, so a file has identical bytes on Linux, macOS, and Windows. Git for
+# Windows handles LF transparently and modern editors (VS Code, PyCharm, etc.)
+# respect it, so there is no need for per-developer core.autocrlf settings.
+# The only exceptions are Windows-native shell scripts, which require CRLF.
+#
+# After changing this file, run `git add --renormalize .` once to rewrite any
+# files that were previously committed with mixed/CRLF endings.
+
+# Auto-detect text files and normalize them to LF in the repo and working tree.
 * text=auto eol=lf
-*.bat text eol=crlf
-*.cmd text eol=crlf
+
+# ---------------------------------------------------------------------------
+# Source & text — force LF, enable language-aware diffs where useful
+# ---------------------------------------------------------------------------
+*.py      text diff=python
+*.pyi     text diff=python
+*.pyx     text diff=python
+*.pxd     text diff=python
+*.rst     text
+*.md      text diff=markdown
+*.txt     text
+*.cfg     text
+*.ini     text
+*.toml    text
+*.yml     text
+*.yaml    text
+*.json    text
+*.ipynb   text
+*.sh      text eol=lf
+Makefile  text eol=lf
+
+# ---------------------------------------------------------------------------
+# Windows-only scripts — must be CRLF to run on Windows
+# ---------------------------------------------------------------------------
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# ---------------------------------------------------------------------------
+# Binary — never normalize, never diff as text
+# ---------------------------------------------------------------------------
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.svg     binary
+*.pdf     binary
+*.mat     binary
+*.npy     binary
+*.npz     binary
+*.h5      binary
+*.hdf5    binary
+*.pkl     binary
+*.pickle  binary
+*.so      binary
+*.pyd     binary
+*.dylib   binary
+*.dll     binary
+*.gz      binary
+*.bz2     binary
+*.xz      binary
+*.zip     binary
+
+# ---------------------------------------------------------------------------
+# GitHub Linguist — keep language stats focused on the library source
+# ---------------------------------------------------------------------------
+docs/**       linguist-documentation
+examples/**   linguist-documentation
+*.ipynb       linguist-documentation
+changelog.md  linguist-documentation
+
+# ---------------------------------------------------------------------------
+# git archive / source exports — drop dev-only paths
+# ---------------------------------------------------------------------------
+.github/         export-ignore
+.gitattributes   export-ignore
+.gitignore       export-ignore
+.claudeignore    export-ignore
+.claude/         export-ignore
+.idea/           export-ignore
+dev/             export-ignore
+develop/         export-ignore

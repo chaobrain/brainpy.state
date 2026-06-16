@@ -3,7 +3,7 @@
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on the
-:class:`~brainpy_state._nest_network._event_plastic.VoltageCoupledPlasticProj`
+:class:`~brainpy_state._nest_network.event_plastic.VoltageCoupledPlasticProj`
 substrate (primitive #2). The Urbanczik-Senn rule (Urbanczik & Senn, 2014) makes
 dendritic synapses learn so the dendritic potential predicts the somatically
 imposed firing rate: each synapse integrates the product of its presynaptic trace
@@ -53,14 +53,14 @@ References
    ``nestkernel/urbanczik_archiving_node_impl.h``.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     to_ms, to_scalar_float, unit_of, validate_delay, validate_receptor_type,
     weight_to_pa,
 )

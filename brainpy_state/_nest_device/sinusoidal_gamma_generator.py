@@ -25,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTDevice
+from brainpy_state._nest_base.base import NESTDevice
 
 __all__ = [
     'sinusoidal_gamma_generator',

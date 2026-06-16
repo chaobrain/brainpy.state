@@ -36,7 +36,7 @@ import numpy as np
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import braintools
 from brainpy import state as bps

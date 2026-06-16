@@ -3,7 +3,7 @@ r"""NEST-faithful ``stdp_nn_pre_centered_synapse`` — presynaptic-centered near
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. In the
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. In the
 presynaptic-centered scheme (Morrison, Diesmann & Gerstner 2008, fig. 7B) the
 presynaptic trace ``Kplus`` **accumulates** (``+1`` per pre, decays at ``tau_plus``)
 but is **reset to 0 on every post spike** (``stdp_nn_pre_centered_synapse.h:69-74``):
@@ -16,13 +16,13 @@ trace (``pre_trace_tau = None``). Only the nearest ``K-`` comes from the substra
 (``post_trace_mode = 'nearest'``).
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

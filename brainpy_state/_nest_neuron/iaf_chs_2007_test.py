@@ -26,7 +26,7 @@ import numpy as np
 from brainpy.state import iaf_chs_2007
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _reference_step(state, params, w_step):

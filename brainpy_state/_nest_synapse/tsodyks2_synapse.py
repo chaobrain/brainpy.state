@@ -2,20 +2,20 @@
 """NEST-faithful ``tsodyks2_synapse`` — multiplicative STP spec + pure rule.
 
 Rebuilt as a frozen spec + pure ``update(state, ctx)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. Per-edge
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. Per-edge
 ``weight`` and per-edge state ``u`` (utilization), ``x`` (available resources),
 ``t_lastspike``; shared ``U``, ``tau_rec``, ``tau_fac``. The delivered amplitude
 is ``w_eff = x*u * weight`` with ``x`` updated **before** ``u`` (using the old
 ``u``), exactly as in NEST ``models/tsodyks2_synapse.h``.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, to_unit_interval, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

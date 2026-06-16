@@ -23,7 +23,7 @@ Run:  python examples/nest_like/clopath_synapse_spike_pairing.py
 import jax
 import brainstate
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import numpy as np
 import brainunit as u

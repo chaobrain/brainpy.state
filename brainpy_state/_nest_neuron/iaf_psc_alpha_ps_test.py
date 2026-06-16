@@ -25,7 +25,7 @@ import jax
 from brainpy.state import iaf_psc_alpha_ps
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 class TestIAFPscAlphaPS(unittest.TestCase):

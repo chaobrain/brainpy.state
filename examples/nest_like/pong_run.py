@@ -35,7 +35,7 @@ import brainstate
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import examples.nest_like.pong as pong
 from examples.nest_like.pong_networks import PongNetRSTDP, PongNetDopa

@@ -40,7 +40,7 @@ import jax.numpy as jnp
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import brainunit as u
 
@@ -156,7 +156,7 @@ class TestGapInhibitoryNetworkParity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         jax.clear_caches()                                   # stiff-HH x64 hygiene (21)
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
         skip_n = int(SKIP_MS / 0.5)                          # NEST multimeter at 0.5 ms
         skip_b = int(SKIP_MS / DT)                           # brainpy voltmeter at dt
         cls.chi_nest = {GAP_ASYNC: [], GAP_SYNC: []}

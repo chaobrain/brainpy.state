@@ -26,10 +26,10 @@ import jax.numpy as jnp
 import numpy as np
 from brainpy.state import iaf_psc_exp_htum
 
-from brainpy_state._nest_base._utils import propagator_exp as _propagator_exp
+from brainpy_state._nest_base.utils import propagator_exp as _propagator_exp
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 class TestIAFPscExpHtum(unittest.TestCase):

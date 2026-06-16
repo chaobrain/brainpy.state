@@ -10,10 +10,10 @@ jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import static_synapse
-from brainpy_state._nest_network._event_plastic import KernelContext
+from brainpy_state._nest_network.event_plastic import KernelContext
 
 
 def _ctx(E):

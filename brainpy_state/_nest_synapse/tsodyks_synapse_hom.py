@@ -2,7 +2,7 @@
 """NEST-faithful ``tsodyks_synapse_hom`` — homogeneous Tsodyks STP spec + rule.
 
 Rebuilt as a frozen parameter spec plus a pure ``update(state, ctx)`` rule
-kernel that runs on :class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`.
+kernel that runs on :class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`.
 The ``_hom`` variant shares ``weight``, ``U`` and the time constants across all
 connections (NEST common properties) and keeps ``x, y, u, t_lastspike``
 per-edge. It uses NEST's *plain-exp* propagator form (``Pzz = exp(-h/tau_rec)``,
@@ -11,13 +11,13 @@ per-edge. It uses NEST's *plain-exp* propagator form (``Pzz = exp(-h/tau_rec)``,
 distinct, so each is kept exactly as NEST has it.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of, validate_delay,
     validate_receptor_type, weight_to_pa,
 )
