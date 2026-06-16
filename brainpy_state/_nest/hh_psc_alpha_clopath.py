@@ -655,6 +655,11 @@ class hh_psc_alpha_clopath(NESTNeuron):
         dt = brainstate.environ.get_dt()
         self.ref_count = u.math.asarray(u.math.ceil(self.t_ref / dt), dtype=ditype)
 
+        # Enroll in the Simulator multi-receptor spike->current bridge (goal 28,
+        # design A, pA variant): receptor_type=1 -> I_syn_ex, =2 -> I_syn_in. The
+        # bridge's default receptor_input_unit is already u.pA, so no override is needed.
+        self.n_receptors = 2
+
     def _validate_parameters(self):
         r"""Validate parameter constraints at construction time.
 
@@ -944,7 +949,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
         new_extra = DotDict({**extra, 'V_old': new_V_old})
         return state, new_extra
 
-    def update(self, x=0. * u.pA):
+    def update(self, x=0. * u.pA, w_by_rec=None):
         r"""Advance the neuron by one simulation step.
 
         Integrates the full 11-dimensional Hodgkin-Huxley dynamics by one time step,
@@ -994,6 +999,15 @@ class hh_psc_alpha_clopath(NESTNeuron):
             ``self.varshape``. Added to ``I_e`` and synaptic currents in the membrane
             equation. Buffered for one step (applied in the **next** update call).
             Default is ``0. * u.pA``.
+        w_by_rec : ArrayLike or None, optional
+            Per-receptor synaptic current jumps supplied by the Simulator's
+            multi-receptor bridge, shape ``(*varshape, n_receptors)`` as a
+            dimensionless ``pA`` mantissa. Column 0 (``receptor_type=1``) drives the
+            excitatory current ``I_syn_ex`` and column 1 (``receptor_type=2``) the
+            inhibitory current ``I_syn_in`` (the inhibitory kick is negated below, so
+            ``I_syn_in`` builds negative, matching NEST). When ``None`` (the legacy
+            path), the jumps are self-pulled from the ``label='w_ex'/'w_in'`` delta
+            inputs instead.
 
         Returns
         -------
@@ -1075,9 +1089,19 @@ class hh_psc_alpha_clopath(NESTNeuron):
         u_bb = ode_state.u_bar_bar
         r = extra.r
 
-        # Synaptic spike inputs (applied after integration).
-        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.I_syn_ex.value), label='w_ex')
-        w_in = self.sum_delta_inputs(u.math.zeros_like(self.I_syn_in.value), label='w_in')
+        # Synaptic spike inputs (applied after integration). Source-only bridge (goal
+        # 28): the Simulator gathers the per-port pA deposit (shape
+        # ``(*varshape, n_receptors)``) and passes it via ``w_by_rec`` -- column 0 ->
+        # I_syn_ex, column 1 -> I_syn_in; the legacy path self-pulls the
+        # ``label='w_ex'/'w_in'`` delta inputs. Only the *source* of w_ex/w_in swaps;
+        # the alpha kick (including the inhibitory negation) below is untouched.
+        if w_by_rec is not None:
+            w_by_rec = jnp.asarray(w_by_rec, dtype=dftype)
+            w_ex = w_by_rec[..., 0] * u.pA
+            w_in = w_by_rec[..., 1] * u.pA
+        else:
+            w_ex = self.sum_delta_inputs(u.math.zeros_like(self.I_syn_ex.value), label='w_ex')
+            w_in = self.sum_delta_inputs(u.math.zeros_like(self.I_syn_in.value), label='w_in')
         pscon_ex = np.e / self.tau_syn_ex  # 1/ms
         pscon_in = np.e / self.tau_syn_in  # 1/ms
 
