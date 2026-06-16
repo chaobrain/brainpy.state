@@ -161,6 +161,54 @@ class SudokuNet:
                          rule=bps.explicit_edges(stim_pre, stim_post),
                          weight=0.0 * u.pA, delay=DELAY * u.ms, comm='sparse')
 
+        # Wide readout: one spike_recorder taps every cell (columns in neuron order).
+        self.recorder = self.sim.create(bps.spike_recorder)
+        self.sim.connect(self.cells, self.recorder)
+
+    def read_counts(self, res):
+        """Per-population spike counts for the chunk in ``res``.
+
+        Parameters
+        ----------
+        res : brainpy.state.SimulationResult
+            The result of the most recent :meth:`~brainpy.state.Simulator.cont` chunk.
+
+        Returns
+        -------
+        numpy.ndarray
+            ``(9, 9, 9)`` integer array: spikes summed over the chunk and over each
+            population's ``pop_size`` neurons, indexed ``[row, col, digit]``.
+        """
+        spikes = np.asarray(res.spikes(self.recorder))             # (n_steps, n_total)
+        per_neuron = spikes.sum(axis=0)                            # (n_total,)
+        return per_neuron.reshape(9, 9, 9, self.pop_size).sum(axis=-1).astype(int)
+
+    def read_solution(self, res):
+        """Decode a ``(9, 9)`` solution from a chunk by argmax-per-cell with tiebreak.
+
+        For each cell the digit whose population fired most wins; ties (including the
+        all-silent case) are broken uniformly at random via ``numpy.random`` -- seed it
+        for reproducibility. Digits are returned in 1..9 (NEST's convention).
+
+        Parameters
+        ----------
+        res : brainpy.state.SimulationResult
+            The result of the most recent :meth:`~brainpy.state.Simulator.cont` chunk.
+
+        Returns
+        -------
+        numpy.ndarray
+            ``(9, 9)`` integer array of decoded digits (1..9).
+        """
+        counts = self.read_counts(res)
+        sol = np.zeros((9, 9), dtype=int)
+        for r in range(9):
+            for c in range(9):
+                dc = counts[r, c]
+                winners = np.flatnonzero(dc == dc.max())
+                sol[r, c] = int(np.random.choice(winners)) + 1
+        return sol
+
     def _clue_cell_weights(self, puzzle):
         """Return the ``(n_total,)`` per-cell stim weight (pA) for a puzzle's clues."""
         puzzle = np.asarray(puzzle)

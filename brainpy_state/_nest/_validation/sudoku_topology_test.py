@@ -160,6 +160,34 @@ class TestStimClueWeights(unittest.TestCase):
         np.testing.assert_allclose(net.stim_weights_pA(), 0.0)
 
 
+class TestReadout(unittest.TestCase):
+    """Per-chunk readout: population spike counts -> argmax-with-tiebreak solution."""
+
+    def test_read_counts_and_solution_shapes(self):
+        from examples.nest.sudoku_net import SudokuNet
+        net = SudokuNet(seed=0)
+        net.sim.reset_rollout()
+        res = net.sim.cont(20.0 * u.ms)
+        counts = net.read_counts(res)
+        self.assertEqual(counts.shape, (9, 9, 9))
+        self.assertTrue(np.issubdtype(counts.dtype, np.integer))
+        sol = net.read_solution(res)
+        self.assertEqual(sol.shape, (9, 9))
+        self.assertGreaterEqual(int(sol.min()), 1)
+        self.assertLessEqual(int(sol.max()), 9)
+
+    def test_read_solution_tiebreak_deterministic_under_seed(self):
+        from examples.nest.sudoku_net import SudokuNet
+        net = SudokuNet(seed=0)
+        net.sim.reset_rollout()
+        res = net.sim.cont(20.0 * u.ms)
+        np.random.seed(123)
+        sol1 = net.read_solution(res)
+        np.random.seed(123)
+        sol2 = net.read_solution(res)
+        np.testing.assert_array_equal(sol1, sol2)
+
+
 class TestDriveRates(unittest.TestCase):
     """The Poisson drives fire at SudokuNet's configured rates (sampling tolerance).
 
