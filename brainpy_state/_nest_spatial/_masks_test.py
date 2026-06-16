@@ -42,5 +42,49 @@ class TestMasks(unittest.TestCase):
         np.testing.assert_array_equal(m[0], [True, False])
 
 
+class TestDoughnut(unittest.TestCase):
+    def test_annulus_boundary_inner_exclusive_outer_inclusive(self):
+        from brainpy_state._nest_spatial._masks import doughnut
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.2, 0.0], [0.3, 0.0], [0.5, 0.0], [0.7, 0.0], [0.8, 0.0]]) * u.um
+        m = np.asarray(doughnut(0.3, 0.7).contains(pre, post))
+        # 0.3 < d <= 0.7 : d=0.3 excluded, d=0.7 included
+        np.testing.assert_array_equal(m[0], [False, False, True, True, False])
+
+    def test_inner_zero_excludes_only_center(self):
+        from brainpy_state._nest_spatial._masks import doughnut, circular
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.0, 0.0], [0.5, 0.0]]) * u.um
+        d = np.asarray(doughnut(0.0, 1.0).contains(pre, post))
+        c = np.asarray(circular(1.0).contains(pre, post))
+        np.testing.assert_array_equal(d[0], [False, True])     # center (d=0) excluded
+        np.testing.assert_array_equal(c[0], [True, True])      # circular includes center
+
+    def test_inner_equals_outer_is_empty(self):
+        from brainpy_state._nest_spatial._masks import doughnut
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.0, 0.0], [0.5, 0.0], [0.5, 0.0]]) * u.um
+        m = np.asarray(doughnut(0.5, 0.5).contains(pre, post))
+        self.assertFalse(bool(m.any()))
+
+
+class TestRectangular(unittest.TestCase):
+    def test_unrotated_box_on_displacement(self):
+        from brainpy_state._nest_spatial._masks import rectangular
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.2, 0.2], [0.6, 0.0]]) * u.um
+        m = np.asarray(rectangular([-0.5, -0.5], [0.5, 0.5]).contains(pre, post))
+        np.testing.assert_array_equal(m[0], [True, False])
+
+    def test_azimuth_90_rotates_acceptance(self):
+        from brainpy_state._nest_spatial._masks import rectangular
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.8, 0.0]]) * u.um               # disp (0.8, 0)
+        tall = rectangular([-0.2, -1.0], [0.2, 1.0])        # x:+-0.2 -> excludes (0.8,0)
+        rot = rectangular([-0.2, -1.0], [0.2, 1.0], azimuth_angle=90.0)  # becomes wide -> includes
+        self.assertFalse(bool(np.asarray(tall.contains(pre, post))[0, 0]))
+        self.assertTrue(bool(np.asarray(rot.contains(pre, post))[0, 0]))
+
+
 if __name__ == '__main__':
     unittest.main()
