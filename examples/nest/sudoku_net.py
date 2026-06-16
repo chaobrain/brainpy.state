@@ -1,0 +1,160 @@
+# Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
+r"""Spiking WTA constraint network that relaxes a Sudoku puzzle (NEST §3.10 port).
+
+A faithful brainpy ``Simulator`` port of NEST's ``pynest/examples/sudoku/sudoku_net.py``.
+The network is **one** population of ``9*9*9 * pop_size`` ``iaf_psc_exp`` neurons whose
+inhibitory connectivity encodes the Sudoku constraints: a population coding digit ``d``
+in cell ``(r, c)`` inhibits every population coding the same digit in the same row,
+column, or 3x3 box, and every population coding a *different* digit in the same cell.
+Background Poisson noise drives exploration; per-population Poisson stimulation clamps
+the clues. Driven by the noise the network settles on states that read out as valid
+Sudoku grids.
+
+The port differs from NEST only in *construction*, not dynamics: the 510 300 inhibitory
+edges are realized as **one** sparse :func:`brainpy.state.explicit_edges` projection
+(not 729 separate ``Connect`` calls), so ``Simulator.cont()`` compiles the relaxation
+chunk once and reuses it across the host-side relaxation loop instead of retracing.
+
+See Also
+--------
+examples.nest.sudoku_puzzles : the puzzle bank + solution validator.
+examples.nest.sudoku : the runnable host-loop solver harness.
+
+Notes
+-----
+Units follow NEST's ``iaf_psc_exp`` convention exactly: capacitance in **pF**, injected
+current in **pA**, synaptic weights in **pA** (negative ⇒ inhibitory), times in ms,
+voltages in mV. In particular ``C_m = 0.25 pF`` and ``I_e = 0.5 pA`` are NEST's bundled
+values taken in NEST's native units -- *not* nF/nA (which would scale every synaptic
+PSP 1000x below the bias current and collapse the competition into tonic firing).
+"""
+import jax
+
+jax.config.update('jax_enable_x64', True)
+
+import numpy as np
+import brainstate
+import brainunit as u
+
+brainstate.environ.set(precision=64, platform='cpu')
+
+import braintools
+from brainpy import state as bps
+
+# -- NEST constants (verbatim from sudoku_net.py, in NEST's native units) ----------
+N_POPULATIONS = 9 ** 3              # 729 = rows x cols x digits
+DT = 0.1                            # ms, integration step
+DELAY = 1.0                         # ms, every synapse
+NOISE_RATE = 350.0                  # Hz, background poisson_generator
+STIM_RATE = 200.0                   # Hz, per-population clue stimulation
+INTER_NEURON_WEIGHT = -0.2          # pA, inhibitory WTA/constraint synapse
+WEIGHT_NOISE = 1.6                  # pA, background noise -> neuron
+WEIGHT_STIM = 1.3                   # pA, clue stimulation -> neuron
+
+#: ``iaf_psc_exp`` parameters, verbatim from NEST (pF / pA / ms / mV).
+NEURON_PARAMS = dict(
+    C_m=0.25 * u.pF, I_e=0.5 * u.pA, tau_m=20.0 * u.ms, t_ref=2.0 * u.ms,
+    tau_syn_ex=5.0 * u.ms, tau_syn_in=5.0 * u.ms,
+    V_reset=-70.0 * u.mV, E_L=-65.0 * u.mV, V_th=-50.0 * u.mV,
+)
+
+
+def _inhibitory_edge_arrays(pop_size):
+    """Build the inhibitory WTA/constraint edge list as ``(pre_idx, post_idx)`` arrays.
+
+    Vectorized (``np.repeat`` / ``np.tile``) port of NEST's row/col/box/cell inhibition.
+    For every source population ``(r, c, d)`` the unique target *neuron* set is the union
+    of same-digit row, same-digit column, same-digit box, and same-cell other-digit
+    populations, minus the source population itself.
+
+    Parameters
+    ----------
+    pop_size : int
+        Neurons per population.
+
+    Returns
+    -------
+    pre_idx, post_idx : numpy.ndarray
+        Equal-length 1-D int arrays of segment-local source/target neuron indices.
+    """
+    ni = np.arange(N_POPULATIONS * pop_size).reshape(9, 9, 9, pop_size)
+    pre_list, post_list = [], []
+    for r in range(9):
+        for c in range(9):
+            br, bc = (r // 3) * 3, (c // 3) * 3
+            box = ni[br:br + 3, bc:bc + 3]
+            for d in range(9):
+                src = ni[r, c, d]
+                tgt = np.unique(np.concatenate(
+                    (ni[r, :, d], ni[:, c, d], box[:, :, d], ni[r, c, :]), axis=None))
+                tgt = np.setdiff1d(tgt, src)
+                pre_list.append(np.repeat(src, tgt.size))
+                post_list.append(np.tile(tgt, src.size))
+    return np.concatenate(pre_list), np.concatenate(post_list)
+
+
+class SudokuNet:
+    r"""Build-once spiking WTA network for Sudoku, driven by a host relaxation loop.
+
+    Parameters
+    ----------
+    seed : int, optional
+        Seed for ``brainstate.random`` (membrane-potential init + Poisson trains).
+        Default ``0``.
+    pop_size : int, optional
+        Neurons per ``(row, col, digit)`` population. Default ``5`` (NEST's value).
+    noise_rate : float, optional
+        Background Poisson rate in Hz. Default ``350.0``.
+    stim_rate : float, optional
+        Per-population clue-stimulation Poisson rate in Hz. Default ``200.0``.
+
+    Attributes
+    ----------
+    sim : brainpy.state.Simulator
+        The compiled simulator (build once; never rebuilt per chunk/puzzle).
+    cells : brainpy.state.NodeView
+        The single ``iaf_psc_exp`` population of ``N_POPULATIONS * pop_size`` neurons,
+        indexed ``((row*9 + col)*9 + digit)*pop_size + k``.
+
+    Notes
+    -----
+    Neuron ``((r*9 + c)*9 + d)*pop_size + k`` belongs to population
+    ``p = (r*9 + c)*9 + d``, which owns neurons ``[pop_size*p, pop_size*p + pop_size)``.
+    """
+
+    def __init__(self, seed=0, pop_size=5, noise_rate=NOISE_RATE, stim_rate=STIM_RATE):
+        self.seed = int(seed)
+        self.pop_size = int(pop_size)
+        self.n_total = N_POPULATIONS * self.pop_size
+        self.noise_rate = float(noise_rate)
+        self.stim_rate = float(stim_rate)
+
+        brainstate.random.seed(self.seed)
+        self.sim = bps.Simulator(dt=DT * u.ms)
+
+        params = dict(NEURON_PARAMS)
+        params['V_initializer'] = braintools.init.Uniform(-65.0 * u.mV, -55.0 * u.mV)
+        self.cells = self.sim.create(bps.iaf_psc_exp, self.n_total, params=params)
+
+        # Inhibitory WTA/constraint topology: ONE sparse explicit-edge projection.
+        pre, post = _inhibitory_edge_arrays(self.pop_size)
+        self.sim.connect(
+            self.cells, self.cells,
+            rule=bps.explicit_edges(pre, post),
+            weight=INTER_NEURON_WEIGHT * u.pA, delay=DELAY * u.ms, comm='sparse')
+
+    def inhibitory_edges(self):
+        """Return the realized inhibitory edge set as ``{(pre_neuron, post_neuron), ...}``.
+
+        Reads the live connectivity via
+        :meth:`~brainpy.state.Simulator.get_connections`, filtered to ``cells -> cells``.
+
+        Returns
+        -------
+        set of tuple of int
+            Segment-local ``(source, target)`` neuron-index pairs.
+        """
+        conns = self.sim.get_connections(source=self.cells, target=self.cells)
+        src = np.asarray(conns.get('source')).tolist()
+        tgt = np.asarray(conns.get('target')).tolist()
+        return set(zip(src, tgt))
