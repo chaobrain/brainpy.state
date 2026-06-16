@@ -204,6 +204,169 @@ objection into a Lessons entry, do **not** silently diverge.
   two demos exercising it; the sibling conductance-bridge sweep (from 17b) remains the other open
   substrate follow-up.
 
+### 25-conductance-bridge-sweep — 2026-06-15
+
+- **Shipped:** the **eight remaining conductance neurons** enrolled into the 17b
+  multi-receptor spike→conductance bridge, closing the "silent dead conductance path"
+  gap with **zero substrate change**. `aeif_cond_alpha`, `aeif_cond_exp`, `iaf_cond_beta`
+  (the alpha·exp·beta **micro-parity gate** that first resolved design A), then
+  `iaf_cond_alpha`, `iaf_cond_exp_sfa_rr`, `gif_cond_exp`, `hh_cond_exp_traub`,
+  `iaf_chxk_2008` (a **migration**). Each gets `n_receptors=2` /
+  `receptor_input_unit=u.nS` + a source-only `w_by_rec` dual-path arm in `update()` (the
+  legacy self-pull is the `else` branch) and a per-model parity test
+  `_validation/<m>_conductance_test.py` (4 law + 2 live-NEST). Shared bridge edge cases
+  (weight=0, convergent scatter-add→2×, seam-zero, `receptor_type` out-of-range) fold
+  into `aeif_cond_exp_conductance_test.py`. Branch
+  `worktree-nest-goal+25-conductance-bridge-sweep` (11 commits). `neurons-gap.md` §4
+  follow-up **cleared** + §3 eight rows flipped; `examples/nest/README.md` `multimeter_file`
+  noted now-portable.
+- **Parity (vs live NEST 3.9.0):** every model's `V_m` within `VM_TOL`
+  (1e-3 mV + `align_steps=3`) and `g_ex`/`g_in` within `COND_TOL` (1e-3), for exc
+  (`receptor_type=1` / NEST `+W`) and inh (`=2` / NEST `−W`). Micro-parity residuals (the
+  design-A gate): alpha `V_m` **1.72e-6 mV** / `g_ex` 3.3e-7; exp 1.72e-6 / 1.6e-7; beta
+  6.95e-6 / 1.2e-4 — all far inside the bands. Stiff/subthreshold cells match to ~**1e-12**
+  in the non-stiff regime (HH `g_ex`/`g_in` are autonomous-linear → exact). No-regression:
+  all eight existing `I_e` suites stay byte-identical (the self-pull `else` supplies the
+  same guaranteed 0). Touched-model coverage **94–98 %**.
+- **API discovered/changed:** **design A resolved — the bridge is source-only /
+  kinetics-agnostic.** Declaring `n_receptors` + the `w_by_rec` arm enrolls *any*
+  conductance neuron with **zero `_simulator.py` change**, regardless of synapse class
+  (alpha `dg += (e/τ)·w`, exp `g += w`, beta `dg += pscon_β·w`) — only the *source* of
+  `w_ex`/`w_in` swaps (blob column `k-1` vs `sum_delta_inputs(label=…)`). The micro-parity
+  trio proved this before the mechanical sweep. **`iaf_chxk_2008` migration:** its bespoke
+  `update(w_ex=, w_in=)` kwargs → canonical `w_by_rec` (the two NEST-reference step tests
+  re-pointed to stacked `w_by_rec`, numbers unchanged — behaviour-preserving).
+- **Gotchas:** (1) **stiff cells** (`gif_cond_exp`, `hh_cond_exp_traub`, `iaf_chxk_2008`)
+  need `jax.clear_caches()` + x64 (`precision=64`) or the float32 trace-cache collides
+  across collection order (21-Lessons). (2) **`hh_cond_exp_traub` has no stable rest** — at
+  defaults it is an autonomous oscillator (spontaneous AP ~11 ms), and hyperpolarising to
+  `V_m=-80` makes it *more* excitable (rebound: a 1 nS EPSP fires). Held quiescent at
+  `V_m_init=-75 mV, I_e=0`, subthreshold, with the law tests comparing **driven-vs-baseline**
+  (relaxation alone clears `E_L+1`). A full AP splits the stiff Dormand-Prince vs GSL solvers
+  by volts — only the subthreshold regime matches tightly. (3) `gif_cond_exp` fires
+  **stochastically**; subthreshold drive keeps the hazard `λ₀·exp((V−V_T*)/Δ_V)` ~0 so both
+  sims stay silent. (4) `iaf_chxk_2008` *does* rest at `E_L` (proper IAF) — standard template
+  applies; keep subthreshold so the intrinsic AHP stays inert. (5) no newly-activated
+  demo/test assertion path exists (grep-confirmed) — nothing to update.
+- **For next clusters:** the **conductance family now has no silent dead spike path** — any
+  `connect(spikes, neuron, receptor_type=1/2)` drives `g_ex`/`g_in` with NEST-sign routing.
+  Still-open sibling: the **current-based** `aeif_psc_*` / `hh_psc_alpha_clopath` self-pull
+  `label='w_ex'/'w_in'` too but take `pA`, not the `nS` conductance bridge — a related but
+  distinct seam (no `receptor_input_unit` scaling), not touched here.
+
+### 20-spatial — 2026-06-15
+
+- **Shipped:** the **spatial-connectivity API** (`nest.spatial.*` was the last genuinely-absent
+  capability). A new **`brainpy_state/_nest_spatial/`** submodule (sibling of `_nest`/`_network`,
+  **not** inside `_nest`) holds position layers (`grid`, `free`, 2-D/3-D), the `distance`
+  sentinel + `displacement`/`pairwise_distance`, the `gaussian` kernel, `circular`/`spherical`/
+  `box` masks, the `spatial_pairwise_bernoulli` rule, and query helpers (`center_element`,
+  `Distance`, `target_nodes`, `target_positions`). Re-exported as **`brainpy.state.spatial`**.
+  The Simulator seam: **`create(positions=spatial.*)`** (coords attach to a population) +
+  **`get_position`** (NEST `GetPosition`). Four demos — `spatial_grid_iaf`, `spatial_gaussex`,
+  `spatial_3d_gauss`, `spatial_csa` (native CSA) — plus a `csa_example` documented placeholder,
+  with three validation files (`_validation/spatial_{grid,gaussian_kernel,3d}_test.py`). Branch
+  `worktree-nest-goal+20-spatial`.
+- **Parity (vs live NEST 3.9.0):** **grid coordinates exact**, element-for-element
+  (`GetPosition`, 2-D + 3-D) and the centre element (`FindCenterElement`). **Gaussian kernel
+  distributional:** empirical `p(d)` binned by distance matches NEST bin-by-bin —
+  gaussex max\|bp−NEST\| ≈ **0.016** (21083 vs 20980 edges, 0.5 %); 3-D max\|bp−NEST\| ≈ **0.008**
+  (129437 vs 130758 edges, ≈1 %), both also tracking the analytic Gaussian. Box mask is a hard
+  per-axis cutoff; `allow_autapses=False` removes every self-edge. **87 spatial tests, 100 %
+  `_nest_spatial` coverage.**
+- **API discovered/changed:** the spatial rule rides the **existing** `connect(rule=)` with
+  **no signature change** beyond `create(positions=)`. `create` stores coords in
+  `self._positions[id(pop)]` (grid/concrete-`free` derive size from coords; deferred `free`
+  draws `size` with a per-pop key). The bind happens at the **top of `_connect_pair`**, gated on
+  `getattr(rule, '_is_spatial', False)`: `_bind_spatial_coords` slices each side's coords by the
+  segment's local indices and returns `rule.with_coords(pre, post)` — a **pure clone**, so every
+  downstream path (static, plastic, diffusion, gap, sic) samples one coordinate-bound rule and
+  the `ConnRule.sample(n_pre, n_post, *, key, pre_is_post, allow_autapses, allow_multapses)`
+  contract is unchanged. `target_nodes`/`target_positions` read realized adjacency back via
+  `get_connections` (population-local indices). **Reuse this pattern**: any new distance-rule
+  variant subclasses/feeds `SpatialConnRule`; any new query helper takes `(sim, source, target)`.
+- **Gotchas:** (1) **Diagonal/autapse trap in distributional binning** — for a self-connection
+  with `allow_autapses=False`, the `n` diagonal `(i,i)` pairs have `d=0` but are *unconnectable*;
+  they must be **excluded from the candidate-pair denominator** or the `d≈0` bin's empirical
+  fraction is diluted toward 0 (cost me a RED on the 3-D law test). a≠b connects (gaussex) don't
+  hit this — `a_i→b_i` at `d=0` is a real, allowed edge. (2) **`free(distribution)` infers
+  dimensionality from `extent` XOR `num_dimensions`** — passing both raises; the 3-D demo extent
+  `[1.5,1.5,1.5]` already implies 3-D, so don't also pass `num_dimensions=3`. (3) **Units:** bare
+  floats on coords/extent/std become `u.um` via `_as_len`, so `gaussian(std=0.5)` is 0.5 µm and
+  `d/std` is dimensionless — never multiply a Quantity distance by a bare std. (4) **NEST grid
+  convention** (now NEST-confirmed, not just pinned): `x = c−L/2+(col+0.5)·L/n`,
+  `y = c+L/2−(row+0.5)·L/n`, node `k`=col·n_rows+row (column slow, row fast); default extent is
+  the unit hypercube. (5) **Distributional tests use a fixed brainpy seed** so the structural
+  (NEST-free) class is deterministic; only the bp-vs-NEST band tolerates PRNG divergence.
+- **For next clusters:** the **primitives + seam are the substrate** for the rest of
+  `nest.spatial`. Queued (all additive, no seam change): per-axis `spatial.pos.x/y/z` /
+  `source_pos`/`target_pos` expressions (kernels currently consume only the `distance` scalar);
+  the `exponential`/`gabor`/`gamma` distance distributions (mirror `_GaussianKernel`); the other
+  mask shapes (rectangular/doughnut/elliptical — mirror `_RadialMask`/`_BoxMask`); nearest-element
+  / `SelectNodesByMask`; layer dump/plot helpers. The `_positions` registry + `get_position` +
+  `target_*` helpers are the read-side substrate; `with_coords`-clone binding is the write-side
+  substrate. See `network-api-gap.md` §3.10 (now mostly **done/partial**) for the precise residual.
+
+### 24-tripartite-connect — 2026-06-15
+
+- **Shipped:** the `Simulator`-level **`tripartite_connect`** + **`third_factor_bernoulli_with_pool`**
+  astrocyte-pool rule (NEST's `TripartiteConnect`), and the **three §3.8 pool-rule demos**
+  promoted from skipped placeholders to real ports. One realized primary `pre→post` sample is
+  shared across three arms — primary, `third_in` (`pre→astro`, delta IP3) and `third_out`
+  (`astro→post`, the 15d `sic_connection`) — reusing the merged static + SIC paths with **no new
+  deposit primitive**. New: `_network/_rules.py` `_ExplicitEdges` (precomputed-edge rule) +
+  `_ThirdFactorBernoulliWithPool` + `third_factor_bernoulli_with_pool` factory;
+  `_network/_connectivity.py` `build_pool_map` + `sample_third_factor_pairing`; `_simulator.py`
+  `tripartite_connect`/`_connect_tripartite_arm`/`_tripartite_segment`. Tests:
+  `_network/_simulator_tripartite_test.py` (NEST-free structural),
+  `_nest/_validation/tripartite_connect_test.py` (live-NEST GATE, 7), and the three demo parity
+  suites (`astrocyte_small_network_test.py` 3, `astrocyte_brunel_test.py` 5) — **79 touched
+  tests pass**. Examples: `astrocyte_small_network.py`, `astrocyte_brunel_{bernoulli,fixed_indegree}.py`.
+  Branch `worktree-nest-goal+24-tripartite-connect`. **§3.8 complete; `network-api-gap`
+  TripartiteConnect + third-factor rows flip to implemented.**
+- **Parity (vs live NEST 3.9.0):** the GATE validates Design A two ways — **block** (`p=1`,
+  `pool_type='block'`) realized edge-sets are **bit-identical** to NEST across all three arms;
+  **random** pools match seed-by-seed on `n2n`/`n2a`/`a2n` counts (category D, 5 %), with the hard
+  **pool invariant** (distinct astrocytes per target ≤ `pool_size`) asserted on the NEST side too.
+  `astrocyte_small_network` is deterministic per-sample parity: IP3 `~3e-6` / Ca `~6e-5` / `V_pre`
+  `~0.01` (CAT_A) / `I_SIC` `~0.7 %` (loosened `SIC_TOL`, log-onset ×10) under `ASTRO_TOL` align.
+  The two `astrocyte_brunel_*` ports are **connectivity-distributional** (n2n/n2a/a2n/inh seed-mean
+  counts, CAT_D) for both primary rules — not rate parity.
+- **API discovered/changed:** `tripartite_connect(pre, post, third, *, conn_spec,
+  third_factor_conn_spec, syn_specs={'primary'|'third_in'|'third_out': {...}}, seed, comm,
+  allow_autapses, allow_multapses)` returns `(primary, third_in, third_out)` projections (`third_*`
+  are `None` when no edge pairs, e.g. `p_third=0`). The **shared-sample** mechanism is
+  `_ExplicitEdges(ConnSpec)` — a `ConnRule` whose `sample()` returns its precomputed `ConnSpec`, so
+  `_connect_pair` wires the *same* realized edges on every arm instead of re-drawing.
+  `_ThirdFactorBernoulliWithPool.sample_third(primary_spec, n_post, n_third, *, key)` →
+  `(third_in_spec, third_out_spec)`. **Constraints the next cluster must respect:** each role must
+  be a **single-population, single-segment** view (a prefix slice like `neurons[:N_ex]` is fine;
+  `a + b` and deferred generators raise `NotImplementedError`); `third_out` is forced onto
+  `comm='dense'` (the `sic_connection` `as_current` path). The Brunel ports satisfy the single-
+  segment rule by making **one** neuron pop and slicing `ex = neurons[:N_ex]`, `post = neurons`.
+- **Gotchas:** (1) **NEST `rng_seed` must be in `(0, 2^32-1)`** — it rejects 0 with `BadProperty`,
+  while brainpy/jax accept `seed=0`. The block-parity test seeds **both** sides with `1` (block is
+  deterministic, seed-irrelevant); never pass 0 to a NEST kernel. (2) **A synaptically-driven,
+  near-critical spiking `V_m` is unsuitable for sample-wise parity** — `astrocyte_small_network`'s
+  `V_post` diverged ~25 mV from a single spike-timing flip even though IP3/Ca/`V_pre` matched to
+  ~1e-5; validate the *loop coupling* (IP3→Ca→`I_SIC`) and the *driver* `V_pre`, drop the driven
+  `V_post`. (3) **Astrocyte SIC ignition has a ~250–300 ms latency** (slow Ca integrator) — a
+  dynamics-law window shorter than that sees `I_SIC.max()==0` and reads as "loop dead"; the Brunel
+  law uses a 400 ms window + an IP3-climb assertion. (4) **Dense-merge sums duplicate-edge weights**
+  = NEST's multigraph dynamics (N edges of weight w ≡ one merged edge of weight N·w);
+  `realized_edges()` reports the *unique* edge-set. Confirmed empirically (`3.59 = 3.59` on a 2×2×1
+  minimal net) — no multiplicity bug. (5) **Coverage under JAX SIGABRTs** if any trace core is
+  active during `jax/__init__`; the working recipe is *pre-import jax/jaxlib/brainstate before
+  `cov.start()`* + `COVERAGE_CORE=sysmon` + `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` (else the `jaxtyping`
+  pytest plugin re-imports numpy under assertion-rewrite → "cannot load module more than once").
+  **Touched-code coverage = 100 %** (90/90 new statements across `_rules`/`_connectivity`/`_simulator`).
+- **For next clusters:** `sic_connection` is now consumed twice (15d bidirectional loop + cluster-24
+  `third_out`); reuse `tripartite_connect`'s single-segment + `_ExplicitEdges` shared-sample pattern
+  for any "one sample → many arms" rule (e.g. `CollocatedSynapses`). The static-vs-`tsodyks`
+  divergence on the primary/`third_in` arms is connectivity-neutral and documented; a future
+  STP-on-tripartite pass would swap the arm synapse only. Bucket-3 model clusters fully closed bar
+  the Siegert `diffusion_connection` (→ 15c).
+
 ### 17b-astro-demos — 2026-06-15
 
 - **Shipped:** the two substrate-ready **§3.8 astrocyte demos** on the `Simulator` API +

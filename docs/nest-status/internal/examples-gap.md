@@ -286,26 +286,49 @@ bridge to populate them), so the demo's Poisson drive left the presynaptic neuro
 `aeif_cond_alpha_astro_test.py` (V_m/g_ex/g_in ~1e-6 vs live NEST). The same self-pull-only
 gap remains in sibling conductance neurons (`aeif_cond_alpha`, `aeif_cond_exp`,
 `iaf_cond_alpha`, `iaf_cond_beta`, `gif_cond_exp`, …) — tracked in `neurons-gap.md` as a
-follow-up. The `small_network` / `astrocyte_brunel_*` variants additionally need NEST's
-`TripartiteConnect` astrocyte-pool rule (`third_factor_bernoulli_with_pool`), which is
-**out of scope** (cluster-15d spec §7 — no new connectivity rule); they ship as
-documented skipped placeholders, their per-edge tripartite physics already validated.
+follow-up.
+
+The `small_network` / `astrocyte_brunel_*` variants needed NEST's `TripartiteConnect`
+astrocyte-pool rule (`third_factor_bernoulli_with_pool`), which **landed in cluster 24**:
+`Simulator.tripartite_connect(pre, post, third, conn_spec, third_factor_conn_spec,
+syn_specs)` samples the primary `pre→post` edges **once** and shares that realization
+across all three arms — primary (`pre→post`), `third_in` (`pre→astro`), `third_out`
+(`astro→post`, the `sic_connection`) — reusing the existing static + `sic_connection`
+(15d) paths with **no new deposit primitive** (an internal `_ExplicitEdges` rule feeds
+the shared sample into the ordinary `_connect_pair`/`_connect_sic`). The pool sampler
+`third_factor_bernoulli_with_pool(p, pool_size, pool_type)` supports both `block`
+(non-overlapping) and `random` pools. Design was arbitrated by a live-NEST micro-parity
+(`tripartite_connect_test.py`): the deterministic **block** edge sets are *bit-identical*
+to `nest.TripartiteConnect` (n2n/n2a/a2n), and **random** pools match seed-mean
+distinct-edge counts within category D. All three demos are now **ported** with live-NEST
+parity. Synapse divergence: the ports use **static** synapses on the primary/third_in arms
+(the 15d-validated SIC loop) where NEST's demos use `tsodyks_synapse`; the connectivity is
+identical, so the parity is unaffected.
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
 | `astrocyte_single.py` | **implemented** | `examples/nest/astrocyte_single.py` | one `astrocyte_lr_1994` + Poisson → IP3/Ca, plus a downstream `aeif_cond_alpha_astro` to expose `I_SIC`. Live-NEST parity IP3/Ca/I_SIC (`astrocyte_single_test.py`, 17b) |
 | `astrocyte_interaction.py` | **implemented** | `examples/nest/astrocyte_interaction.py` | tripartite two-neuron + one-astrocyte SIC loop; faithful Poisson drive (spike→conductance fix). Live-NEST parity V_pre/IP3/Ca/I_SIC (`astrocyte_interaction_test.py`, 17b) |
-| `astrocyte_small_network.py` | skipped placeholder | `examples/nest/astrocyte_small_network.py` | needs `TripartiteConnect` (`third_factor_bernoulli_with_pool`, pool_size=1/block); out of scope (15d spec §7). Marker test; per-edge SIC physics validated |
-| `astrocyte_brunel_bernoulli.py` | skipped placeholder | `examples/nest/astrocyte_brunel_bernoulli.py` | Brunel + astrocytes via `TripartiteConnect` (pool_size=10/random, pairwise_bernoulli primary); same pool-rule blocker. Marker test |
-| `astrocyte_brunel_fixed_indegree.py` | skipped placeholder | `examples/nest/astrocyte_brunel_fixed_indegree.py` | as above, fixed-indegree primary rule. Marker test |
+| `astrocyte_small_network.py` | **implemented** | `examples/nest/astrocyte_small_network.py` | `tripartite_connect` (`third_factor_bernoulli_with_pool`, pool_size=1/block, 24). Deterministic; live-NEST loop-trace parity V_pre/IP3/Ca/I_SIC (`astrocyte_small_network_test.py`) |
+| `astrocyte_brunel_bernoulli.py` | **implemented** | `examples/nest/astrocyte_brunel_bernoulli.py` | Brunel + astrocytes via `tripartite_connect` (pool_size=10/random, `pairwise_bernoulli` primary, 24); one sliced neuron pop (E=`neurons[:N_ex]`). Live-NEST connectivity-distributional parity (`astrocyte_brunel_test.py`) |
+| `astrocyte_brunel_fixed_indegree.py` | **implemented** | `examples/nest/astrocyte_brunel_fixed_indegree.py` | as above, `fixed_indegree` primary rule (24). Shares `astrocyte_brunel_bernoulli.build`; live-NEST connectivity-distributional parity |
 
 ### 3.9 Spatial demos
 
+The spatial API landed (goal 20): `brainpy.state.spatial.*` (layers, distance, `gaussian`
+kernel, masks, `spatial_pairwise_bernoulli`, query helpers) + `Simulator.create(positions=)`
+and `get_position`. Four representative demos are ported with live-NEST parity (NEST 3.9.0);
+the remaining `spatial/` tutorials are variants over the same primitives. See `network-api-gap.md`
+§3.10 for the API-surface status and `examples/nest/README.md` §3.9.
+
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `spatial/` (subdir) | missing | none | depends on `nest.spatial.*` which is absent (`network-api-gap.md` §3.10). Blocked by that P2. |
-| `csa_example.py` | missing | none | Connection Set Algebra — `conngen` rule, also absent |
-| `csa_spatial_example.py` | missing | none | |
+| `spatial/grid_iaf.py` | done | `examples/nest/spatial_grid_iaf.py` | 4×3 grid; exact coord + centre parity vs NEST `GetPosition`/`FindCenterElement` |
+| `spatial/gaussex.py` | done | `examples/nest/spatial_gaussex.py` | Gaussian kernel + circular mask; empirical `p(d)` matches NEST bin-by-bin (max\|Δ\|≈0.016) |
+| `spatial/test_3d_gauss.py` | done | `examples/nest/spatial_3d_gauss.py` | 3-D free layer + box mask + no autapses; curve parity (max\|Δ\|≈0.008) |
+| `csa_spatial_example.py` | done (native) | `examples/nest/spatial_csa.py` | CSA Gaussian re-expressed as `spatial_pairwise_bernoulli(gaussian, circular)` — no libneurosim |
+| `csa_example.py` | placeholder | `examples/nest/csa_example.py` | CSA/`conngen` mechanism not ported; documents `csa.random(0.1)` → `pairwise_bernoulli(0.1)` |
+| `spatial/` (other tutorials) | missing | none | `conncon_*`, `connex*`, `grid_iaf_oc`, `test_3d`, … — variants over the now-present primitives |
 
 ### 3.10 Pedagogical / advanced
 

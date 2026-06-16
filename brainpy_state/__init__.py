@@ -131,10 +131,12 @@ from ._network import (
     fixed_indegree,
     pairwise_bernoulli,
     fixed_total_number,
+    third_factor_bernoulli_with_pool,
 )
 
 from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
 from . import _dist as dist  # noqa: F401  -- exposed as brainpy.state.dist
+from . import _nest_spatial as spatial  # noqa: F401  -- exposed as brainpy.state.spatial
 
 # =============================================================================
 # NEST-Compatible Models
@@ -575,6 +577,8 @@ __all__ = [
     'fixed_indegree',
     'pairwise_bernoulli',
     'fixed_total_number',
+    'third_factor_bernoulli_with_pool',
     'network',
     'dist',
+    'spatial',
 ]

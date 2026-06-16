@@ -34,7 +34,7 @@ from brainpy_state._nest.volume_transmitter import volume_transmitter as _volume
 from brainpy_state._network._event_plastic import EventPlasticProj, VoltageCoupledPlasticProj
 from brainpy_state._network._event_proj import EventProjection
 from brainpy_state._network._nodeview import NodeView, _Segment, _flat_size
-from brainpy_state._network._rules import all_to_all, one_to_one
+from brainpy_state._network._rules import all_to_all, one_to_one, _ExplicitEdges
 
 __all__ = ['Simulator', 'SimulationResult']
 
@@ -448,16 +448,35 @@ class Simulator(brainstate.nn.Module):
         self._vt_nodes = []                   # volume_transmitter nodes (phase-0 update)
         self._proj_counter = itertools.count()
         self._connections = []                # (pre_pop, post_pop, model_name, proj), registration order
+        self._positions = {}                  # id(pop) -> (n, ndim) Quantity coords (spatial populations)
 
     # -- node creation -----------------------------------------------------
-    def create(self, model_cls, size=1, *, params=None, **kw) -> NodeView:
+    def create(self, model_cls, size=1, *, params=None, positions=None, **kw) -> NodeView:
         """Instantiate a population/device and return a :class:`NodeView`.
 
         Generators are deferred (realised per target at :meth:`connect`) so each
         target receives an independent train, mirroring NEST fan-out.
+
+        ``positions=<spatial layer>`` attaches node coordinates to a neuron
+        population (NEST ``Create(model, positions=spatial.grid/free(...))``). A
+        :func:`~brainpy_state._nest_spatial.grid` / concrete
+        :func:`~brainpy_state._nest_spatial.free` layer *derives* the population
+        size from its coordinates (the ``size`` argument is ignored); a deferred
+        ``free`` layer (sampled from a distribution) draws ``size`` positions. The
+        coordinates are stored under ``id(population)`` so a
+        :func:`~brainpy_state._nest_spatial.spatial_pairwise_bernoulli` rule can be
+        bound to them at :meth:`connect`.
         """
         p = dict(params or {})
         p.update(kw)
+        coords = None
+        if positions is not None:
+            if _is_generator(model_cls):
+                raise ValueError(
+                    'create(positions=...) is not supported for generators/injectors; '
+                    'spatial layers attach to neuron populations.'
+                )
+            size, coords = self._resolve_positions(positions, size)
         if _is_generator(model_cls):
             k = _n_channels(size)
             if k > 1:
@@ -472,6 +491,8 @@ class Simulator(brainstate.nn.Module):
             return NodeView([_GenSegment(_GeneratorSpec(model_cls, p))])
         mod = model_cls(size, **p)
         setattr(self, f'_node_{id(mod)}', mod)
+        if coords is not None:
+            self._positions[id(mod)] = coords      # spatial layer -> per-population coords
         # Volume transmitters are driven in phase 0 (before projections) and expose
         # the dopamine concentration ``n`` as State; they emit no spikes, so they
         # get no _SpikeHolder (phase 2 skips them) and are registered for phase 0.
@@ -499,6 +520,83 @@ class Simulator(brainstate.nn.Module):
         if getattr(mod, '_emission_attr', None) is not None:
             setattr(self, f'_emit_holder_{id(mod)}', _SpikeHolder(_flat_size(mod)))
         return NodeView.of(mod)
+
+    def get_position(self, view: NodeView):
+        """Node coordinates of a spatial population/view (NEST ``GetPosition``).
+
+        Parameters
+        ----------
+        view : NodeView
+            A single-segment view over a population created with ``create(positions=...)``.
+
+        Returns
+        -------
+        Quantity
+            ``(n, ndim)`` coordinates (length units) in the view's node order.
+
+        Raises
+        ------
+        ValueError
+            If the population was not created with ``positions=``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            >>> from brainpy import state as bp
+            >>> import brainunit as u
+            >>> sim = bp.Simulator(dt=0.1 * u.ms)
+            >>> pop = sim.create(bp.iaf_psc_alpha, positions=bp.spatial.grid([4, 3], extent=[2.0, 1.5]))
+            >>> [round(float(v), 2) for v in u.get_magnitude(sim.get_position(pop).to(u.um))[0]]
+            [-0.75, 0.5]
+        """
+        seg = view.segments[0]
+        try:
+            coords = self._positions[id(seg.population)]
+        except KeyError:
+            raise ValueError(
+                'get_position requires a population created with create(positions=...).'
+            )
+        return coords[seg.indices]
+
+    def _resolve_positions(self, layer, size):
+        """Resolve a spatial layer to ``(n, coords)`` for :meth:`create`.
+
+        Concrete layers (``grid`` / array-backed ``free``) derive the population
+        size from their coordinates; a deferred ``free`` layer draws ``size``
+        positions from its distribution with a reproducible per-population key.
+        """
+        if layer.is_deferred:
+            n = _n_channels(size)
+            key = jax.random.key(self._derive_seed(None, len(self._positions)))
+            return n, layer.sample(n, key)
+        return layer.n, layer.coords
+
+    def _bind_spatial_coords(self, rule, pre_seg, post_seg):
+        """Bind a spatial rule to the sliced pre/post coordinates of this connect.
+
+        Looks up each population's stored coordinates (from ``create(positions=...)``),
+        slices them by the segment's local indices so the rows align with the edge
+        index space the projection uses, and returns a coordinate-bound rule clone.
+        Raises if either side is a device/generator (no population) or was not created
+        with positions.
+        """
+        pre_pop = pre_seg.population
+        post_pop = post_seg.population
+        if pre_pop is None or post_pop is None:
+            raise ValueError(
+                'a spatial connection rule requires neuron populations on both sides; '
+                'generators/devices carry no positions.'
+            )
+        try:
+            pre_all = self._positions[id(pre_pop)]
+            post_all = self._positions[id(post_pop)]
+        except KeyError:
+            raise ValueError(
+                'a spatial connection rule requires both populations to be created '
+                'with create(positions=...).'
+            )
+        return rule.with_coords(pre_all[pre_seg.indices], post_all[post_seg.indices])
 
     # -- connection --------------------------------------------------------
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
@@ -579,6 +677,153 @@ class Simulator(brainstate.nn.Module):
         if not projs:
             return None
         return projs[0] if len(projs) == 1 else projs
+
+    @staticmethod
+    def _tripartite_segment(view: NodeView, role: str) -> _Segment:
+        """Extract the single population segment of a tripartite role, or raise.
+
+        ``tripartite_connect`` operates on single-population, single-segment views
+        (the astrocyte demos all use single populations; the Brunel excitatory
+        source is a prefix slice ``pop[:N_ex]``). A multi-segment view (e.g.
+        ``a + b``) or a deferred generator is rejected with a clear message.
+        """
+        if len(view.segments) != 1:
+            raise NotImplementedError(
+                f'tripartite_connect requires a single-population view for {role!r}, '
+                f'got {len(view.segments)} segments; concatenated views are not supported.')
+        seg = view.segments[0]
+        if isinstance(seg, _GenSegment):
+            raise NotImplementedError(
+                f'tripartite_connect {role!r} must be a created population, not a '
+                'deferred generator.')
+        return seg
+
+    def tripartite_connect(self, pre: NodeView, post: NodeView, third: NodeView, *,
+                           conn_spec, third_factor_conn_spec, syn_specs=None,
+                           seed: Optional[int] = None, comm: str = 'dense',
+                           allow_autapses: bool = True, allow_multapses: bool = True):
+        r"""Wire a tripartite ``pre -> post`` + astrocyte network (NEST ``TripartiteConnect``).
+
+        Samples the **primary** ``pre -> post`` edges **once** via ``conn_spec`` and
+        shares that single realization across three projections (NEST's tripartite
+        semantics):
+
+        1. **primary** ``pre -> post`` (the direct synapse, ``syn_specs['primary']``).
+        2. For each realized primary edge ``(pre_i -> post_j)``, the
+           ``third_factor_conn_spec`` (:func:`~brainpy_state._network._rules.third_factor_bernoulli_with_pool`)
+           runs a Bernoulli(``p``) trial; if it succeeds the edge is paired with one
+           astrocyte drawn from ``post_j``'s pool, creating
+           **third_in** ``pre_i -> astro`` (``syn_specs['third_in']``, delta IP3) and
+           **third_out** ``astro -> post_j`` (``syn_specs['third_out']``, a
+           :class:`~brainpy_state.sic_connection`).
+
+        Reuses the existing static :class:`~brainpy_state._network._event_proj.EventProjection`
+        path for primary + third_in and the merged ``sic_connection`` (``as_current``)
+        path for third_out; no new deposit primitive. Each arm is registered for
+        :meth:`get_connections`.
+
+        Parameters
+        ----------
+        pre, post, third : NodeView
+            Single-population views for the presynaptic, postsynaptic, and
+            astrocyte populations. ``pre`` may be a prefix slice (e.g. the Brunel
+            excitatory population ``neurons[:N_ex]``).
+        conn_spec : ConnRule
+            The primary one-directional rule, e.g.
+            :func:`~brainpy_state.pairwise_bernoulli` or
+            :func:`~brainpy_state.fixed_indegree`.
+        third_factor_conn_spec : _ThirdFactorBernoulliWithPool
+            The astrocyte-pool rule from
+            :func:`~brainpy_state.third_factor_bernoulli_with_pool`.
+        syn_specs : dict, optional
+            ``{'primary': {...}, 'third_in': {...}, 'third_out': {...}}``; each value
+            is a dict of :meth:`connect` keyword arguments (``weight``, ``delay``,
+            ``receptor_type``, ``synapse``). ``third_out`` typically carries
+            ``{'synapse': sic_connection(...)}``. Missing entries default to ``{}``
+            (a plain unit-weight static delta).
+        seed : int, optional
+            Base PRNG seed for the whole tripartite sample (primary + pairing +
+            pool). The same seed reproduces the same realized edges.
+        comm : {'dense', 'sparse'}, default 'dense'
+            Communication mode for the primary / third_in arms; third_out (the
+            ``sic_connection``) always rides ``'dense'`` (a graded current).
+        allow_autapses, allow_multapses : bool, default True
+            Passed to the primary ``conn_spec.sample``.
+
+        Returns
+        -------
+        tuple
+            ``(primary_proj, third_in_proj, third_out_proj)``. ``third_in_proj`` and
+            ``third_out_proj`` are ``None`` when no primary edge was paired (e.g.
+            ``p=0``).
+
+        Examples
+        --------
+        .. code-block:: python
+
+            >>> import brainunit as u
+            >>> from brainpy import state as bp
+            >>> sim = bp.Simulator(dt=0.1 * u.ms)
+            >>> pre = sim.create(bp.aeif_cond_alpha_astro, 10, params={'I_e': 1000.0 * u.pA})
+            >>> post = sim.create(bp.aeif_cond_alpha_astro, 10, params={'I_e': 1000.0 * u.pA})
+            >>> astro = sim.create(bp.astrocyte_lr_1994, 5, params={'delta_IP3': 0.2})
+            >>> prim, tin, tout = sim.tripartite_connect(
+            ...     pre, post, astro,
+            ...     conn_spec=bp.pairwise_bernoulli(1.0),
+            ...     third_factor_conn_spec=bp.third_factor_bernoulli_with_pool(
+            ...         p=1.0, pool_size=1, pool_type='block'),
+            ...     syn_specs={'primary': {'weight': 1.0 * u.nS, 'receptor_type': 1},
+            ...                'third_in': {'weight': 1.0},
+            ...                'third_out': {'synapse': bp.sic_connection(weight=1.0)}},
+            ...     seed=0)
+            >>> tout._channel_label
+            'I_SIC'
+        """
+        pre_seg = self._tripartite_segment(pre, 'pre')
+        post_seg = self._tripartite_segment(post, 'post')
+        third_seg = self._tripartite_segment(third, 'third')
+        n_pre = int(pre_seg.indices.shape[0])
+        n_post = int(post_seg.indices.shape[0])
+        n_third = int(third_seg.indices.shape[0])
+        syn_specs = syn_specs or {}
+
+        # One shared sample: the primary edges, then the derived third arms.
+        key = jax.random.key(0 if seed is None else int(seed))
+        k_primary, k_third = jax.random.split(key)
+        pre_is_post = pre_seg.population is post_seg.population
+        primary_spec = conn_spec.sample(
+            n_pre, n_post, key=k_primary, pre_is_post=pre_is_post,
+            allow_autapses=allow_autapses, allow_multapses=allow_multapses)
+        third_in_spec, third_out_spec = third_factor_conn_spec.sample_third(
+            primary_spec, n_post, n_third, key=k_third)
+
+        primary_proj = self._connect_tripartite_arm(
+            pre_seg, post_seg, primary_spec, syn_specs.get('primary', {}), seed, comm)
+        if third_in_spec.n_edges > 0:
+            third_in_proj = self._connect_tripartite_arm(
+                pre_seg, third_seg, third_in_spec, syn_specs.get('third_in', {}), seed, comm)
+            # third_out (astro -> post) rides the sic_connection / as_current path,
+            # which requires comm='dense' (a graded current).
+            third_out_proj = self._connect_tripartite_arm(
+                third_seg, post_seg, third_out_spec, syn_specs.get('third_out', {}),
+                seed, 'dense')
+        else:
+            third_in_proj = third_out_proj = None
+        return primary_proj, third_in_proj, third_out_proj
+
+    def _connect_tripartite_arm(self, pre_seg, post_seg, spec, syn_spec, seed, comm):
+        """Wire one tripartite arm from an explicit (shared) edge ``spec``.
+
+        Delegates to :meth:`_connect_pair` with an
+        :class:`~brainpy_state._network._rules._ExplicitEdges` rule so the projection
+        uses the *precomputed* edges instead of re-sampling, threading the arm's
+        ``syn_spec`` (``weight`` / ``delay`` / ``receptor_type`` / ``synapse``).
+        """
+        return self._connect_pair(
+            pre_seg, post_seg, _ExplicitEdges(spec),
+            syn_spec.get('weight'), syn_spec.get('delay'),
+            allow_autapses=True, allow_multapses=True, seed=seed, comm=comm,
+            receptor_type=syn_spec.get('receptor_type'), synapse=syn_spec.get('synapse'))
 
     def get_connections(self, source=None, target=None, synapse=None):
         """Enumerate realized synapses across projections (NEST ``GetConnections``).
@@ -1152,6 +1397,11 @@ class Simulator(brainstate.nn.Module):
                       receptor_type=None, synapse=None, vt=None):
         ordinal = next(self._proj_counter)
         post_pop = post_seg.population
+        # Spatial rule: bind this connect's sliced pre/post coordinates onto a pure
+        # rule clone before any dispatch, so every downstream path (static, plastic,
+        # diffusion, gap, sic) samples an identical, coordinate-bound rule.
+        if getattr(rule, '_is_spatial', False):
+            rule = self._bind_spatial_coords(rule, pre_seg, post_seg)
         # Diffusion coupling (siegert mean-field): a diffusion_connection is not a
         # plastic projection -- the Simulator routes it as a dual-channel seam deposit
         # (drift -> mu, diffusion -> sigma^2). Dispatch before the plastic path.
