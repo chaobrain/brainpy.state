@@ -150,7 +150,7 @@ objection into a Lessons entry, do **not** silently diverge.
   projection; 350 Hz noise (all-to-all) + a 200 Hz generator → 729 parrots → cells stim relay
   whose per-clue weights toggle live via `get_connections(...).set('weight', ...)`; host
   `cont(100 ms)` relaxation loop with host-side early-exit. Branch `worktree-nest-goal+26-sudoku`;
-  PR #TBD.
+  PR #81.
 - **Parity (vs live NEST 3.9.0):** **distributional, documented-partial** (the §3.14 posture).
   Easy near-complete board: brainpy solves at NEST's solve rate (both 3/3 seeds, ~chunk 1–2).
   Hard board (puzzle 4, NEST's default): **neither** completes within a practical budget —
