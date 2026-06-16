@@ -144,5 +144,59 @@ class TestDistributions(unittest.TestCase):
         self.assertAlmostEqual(g, math.exp(-3.0), places=6)
 
 
+class TestAnisotropicKernels(unittest.TestCase):
+    """gabor / gaussian2D two-axis kernels vs the exact NEST formulas (X=|dx|, Y=|dy|)."""
+
+    def test_gabor_matches_formula(self):
+        from brainpy_state._nest_spatial._kernels import gabor
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[3.0, 0.0]]) * u.um
+        k = gabor(distance.x, distance.y, theta=0.0, gamma=1.0, std=1.0, lam=2.0, psi=0.0)
+        got = float(u.get_magnitude(k._eval_pair(pre, post)[0, 0]))
+        X, Y = 3.0, 0.0
+        ref = max(math.cos(2 * math.pi * Y / 2.0), 0.0) * math.exp(-(X ** 2 + Y ** 2) / 2.0)
+        self.assertAlmostEqual(got, ref, places=6)
+
+    def test_gabor_rectifies_to_zero(self):
+        from brainpy_state._nest_spatial._kernels import gabor
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.0, 1.0]]) * u.um            # Y=1 -> cos(pi) = -1 -> rectified to 0
+        k = gabor(distance.x, distance.y, lam=2.0)
+        self.assertAlmostEqual(float(u.get_magnitude(k._eval_pair(pre, post)[0, 0])), 0.0, places=7)
+
+    def test_gabor_rotated_and_phased(self):
+        from brainpy_state._nest_spatial._kernels import gabor
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[1.0, 2.0]]) * u.um
+        k = gabor(distance.x, distance.y, theta=90.0, gamma=2.0, std=1.5, lam=3.0, psi=30.0)
+        got = float(u.get_magnitude(k._eval_pair(pre, post)[0, 0]))
+        X, Y, th = 1.0, 2.0, math.radians(90.0)
+        xp = X * math.cos(th) + Y * math.sin(th)
+        yp = -X * math.sin(th) + Y * math.cos(th)
+        ref = (max(math.cos(2 * math.pi * yp / 3.0 + math.radians(30.0)), 0.0)
+               * math.exp(-(4.0 * xp ** 2 + yp ** 2) / (2 * 1.5 ** 2)))
+        self.assertAlmostEqual(got, ref, places=6)
+
+    def test_gaussian2D_reduces_to_product_when_rho0(self):
+        from brainpy_state._nest_spatial._kernels import gaussian2D
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[2.0, 4.0]]) * u.um
+        k = gaussian2D(distance.x, distance.y, std_x=1.0, std_y=2.0, rho=0.0)
+        got = float(u.get_magnitude(k._eval_pair(pre, post)[0, 0]))
+        ref = math.exp(-(2.0 ** 2) / 2.0) * math.exp(-(4.0 ** 2) / (2 * 2.0 ** 2))
+        self.assertAlmostEqual(got, ref, places=6)
+
+    def test_gaussian2D_with_correlation(self):
+        from brainpy_state._nest_spatial._kernels import gaussian2D
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[1.0, 1.0]]) * u.um
+        k = gaussian2D(distance.x, distance.y, std_x=1.0, std_y=1.0, rho=0.5)
+        got = float(u.get_magnitude(k._eval_pair(pre, post)[0, 0]))
+        X, Y, rho = 1.0, 1.0, 0.5
+        Cx = 1 / (2 * (1 - rho ** 2)); Cy = Cx; Cxy = rho / ((1 - rho ** 2))
+        ref = math.exp(-X ** 2 * Cx - Y ** 2 * Cy + X * Y * Cxy)
+        self.assertAlmostEqual(got, ref, places=6)
+
+
 if __name__ == '__main__':
     unittest.main()
