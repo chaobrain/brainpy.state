@@ -11,9 +11,6 @@ step (``post_state_reads=('u_bar_minus','u_bar_plus','V')``). The kernel applies
 **depression on the pre spike** (LTD from ``u_bar_minus``) and **potentiation
 continuously while the post is depolarized** (LTP from ``V`` and ``u_bar_plus``),
 the voltage-based rule of Clopath et al. (2010).
-
-The previous imperative (NEST history-buffer) implementation lives in
-:mod:`brainpy_state._nest._legacy_clopath_synapse`.
 """
 from __future__ import annotations
 
