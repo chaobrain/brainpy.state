@@ -52,11 +52,14 @@ class SpatialConnRule(ConnRule):
         return SpatialConnRule(self.p, self.mask, self.allow_autapses, pre_pos, post_pos)
 
     def _prob_matrix(self):
-        d = pairwise_distance(self._pre_pos, self._post_pos)       # Quantity (n_pre, n_post)
-        if callable(self.p):
+        if hasattr(self.p, '_eval_pair'):                          # spatial kernel (scalar / per-axis)
+            prob = jnp.asarray(self.p._eval_pair(self._pre_pos, self._post_pos))
+        elif callable(self.p):                                     # bare p(distance) callable
+            d = pairwise_distance(self._pre_pos, self._post_pos)   # Quantity (n_pre, n_post)
             prob = jnp.asarray(self.p(d))
         else:
-            prob = jnp.broadcast_to(jnp.asarray(float(self.p)), d.shape)
+            prob = jnp.broadcast_to(jnp.asarray(float(self.p)),
+                                    (self._pre_pos.shape[0], self._post_pos.shape[0]))
         prob = jnp.clip(prob, 0.0, 1.0)
         if self.mask is not None:
             cand = self.mask.contains(self._pre_pos, self._post_pos)

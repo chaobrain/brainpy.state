@@ -107,6 +107,15 @@ class TestSpatialRule(unittest.TestCase):
         s2 = _sample(r, 64, 64, seed=2)
         self.assertNotEqual(s1.n_edges, s2.n_edges)
 
+    def test_per_axis_kernel_is_anisotropic(self):
+        # A single x-column grid: every node shares x, so gaussian(distance.x, std->0)
+        # connects EVERY pair (|dx|=0). A scalar-distance kernel would connect only the
+        # 5 diagonal self-pairs. Proves _prob_matrix routes the per-axis expression.
+        a = grid([1, 5], extent=[1.0, 1.0])
+        r = _bind(spatial_pairwise_bernoulli(p=gaussian(distance.x, std=1e-9)), a, a)
+        prob = np.asarray(r._prob_matrix())
+        self.assertEqual(int((prob > 0.5).sum()), 25)
+
     def test_2d_vs_3d_free_shapes(self):
         a2 = grid([4, 4], extent=[1.0, 1.0])
         a3 = grid([3, 3, 3], extent=[1.0, 1.0, 1.0])

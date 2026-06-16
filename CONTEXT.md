@@ -139,6 +139,47 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 27-spatial-extensions — 2026-06-16
+
+- **Shipped:** the **full residual `nest.spatial.*` surface** (network-api-gap §3.10 rows 157–163,
+  now all **done**) as a **purely additive** follow-up to cluster 20 — **zero change to the
+  binding seam**. In `brainpy_state/_nest_spatial/`: per-axis **`distance.x/.y/.z`** + the
+  **`pos`/`source_pos`/`target_pos`** accessors and an **expression family** (`_kernels.py`); four
+  new distributions **`exponential`/`gamma`/`gabor`/`gaussian2D`** (+ `mean` on `gaussian`); four
+  new masks **`rectangular`/`doughnut`/`elliptical`/`ellipsoidal`** (`_masks.py`); queries
+  **`nearest_element`/`select_nodes_by_mask`** + exporters **`dump_layer_nodes`/`dump_layer_connections`**
+  (`_helpers.py`); smoke-only **`plot_layer`/`plot_targets`/`plot_sources`/`plot_probability_parameter`**
+  (new `_plot.py`, matplotlib lazily imported). Demo `examples/nest/spatial_gabor.py` (gabor in a
+  tilted ellipse). Five validation suites `_validation/spatial_{exponential,gamma,gabor,masks,queries}_test.py`.
+  Branch `nest-goal-27-spatial-extensions`.
+- **Parity (vs live NEST 3.9.0):** **exact, not just distributional.** All five distance
+  distributions match **element-wise to machine precision** (max\|Δ\| ≈ 1e-16) via a *read-back*
+  trick (see Gotchas). All seven masks give **exact node-set parity** (sym-diff 0) including rotated
+  `azimuth`/`polar` and 3-D `ellipsoidal`. `nearest_element`/`select_nodes_by_mask` match
+  `FindNearestElement`/`SelectNodesByMask` exactly; `dump_layer_*` text matches `DumpLayer*`
+  (coords/weight/delay/displacement identical). **104 `_nest_spatial` tests + 24 validation tests;
+  99 % `_nest_spatial` coverage.**
+- **API discovered/changed:** the one new mechanism is an **expression** protocol — objects with
+  **`_eval_pair(pre_pos, post_pos) -> (n_pre,n_post)` Quantity**; kernels consume an expression and
+  re-expose `_eval_pair`; `SpatialConnRule._prob_matrix` dispatches on `hasattr(p,'_eval_pair')`
+  (a **≤6-line** change, the *only* edit to `_rule.py`; `with_coords`/`sample` contract untouched).
+  `pos` is the per-**node** variant: it raises in the Connect path and instead exposes
+  `_eval_nodes(coords)` for node-level use. Masks now return a **plain bool `(n_pre,n_post)`** from
+  `contains` (the ellipse mask works in um-magnitude space); the rule's `jnp.where(cand, …)` accepts
+  that unchanged.
+- **Gotchas:** (1) **read-back parity** — to compare a kernel to NEST *deterministically*, set
+  `weight = <spatial param>` on an all-to-all `pairwise_bernoulli(p=1)` and read `GetConnections`
+  back; this materialises `p(d)` per ordered pair with **no PRNG**, far stronger than distributional
+  bands. (2) **`distance.x`/`.y` are ABSOLUTE in NEST** (probed: both connect directions read back
+  `+1.0`), so `gabor`/`gaussian2D` use `|dx|`, `|dy|`. (3) **`box` is 3-D-only in NEST** — a 2-D box
+  is `rectangular`; our `box` stays 2-D/3-D-permissive (documented divergence). (4) NEST
+  `CreateMask(masktype, specs)` takes **two args**, not one dict. (5) `DumpLayer*` writes **1-based
+  global ids**; ours writes **0-based local** — normalise by the layer's first gid. (6) saiunit
+  Quantity `.reshape(1, -1)` rejects `-1`; use `[None, :]`.
+- **For next clusters:** **§3.10 spatial/topology is fully closed** (goals 20 + 27). The expression
+  `_eval_pair` protocol is the extension point for any future NEST `Parameter`-style spatial
+  arithmetic (`2 * distance`, `nest.math.*` on spatial params) should that surface ever be ported.
+
 ### 28-psc-spike-current-sweep — 2026-06-16
 
 - **Shipped:** the **three current-based `pA` siblings** of the 25 conductance seam
