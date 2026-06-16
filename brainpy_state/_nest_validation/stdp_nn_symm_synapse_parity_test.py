@@ -29,7 +29,7 @@ import numpy as np
 import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import stdp_nn_symm_synapse
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest

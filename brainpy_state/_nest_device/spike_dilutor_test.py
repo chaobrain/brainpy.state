@@ -32,7 +32,7 @@ import numpy as np
 
 from brainpy_state._nest_device.spike_dilutor import spike_dilutor
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 class TestSpikeDilutorParameters(unittest.TestCase):

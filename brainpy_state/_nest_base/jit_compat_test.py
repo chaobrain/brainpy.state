@@ -44,7 +44,7 @@ import brainpy_state as B
 from brainpy_state._nest_base._base import NESTNeuron
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 # Models whose ``update`` cannot currently be JIT-compiled, with the reason.

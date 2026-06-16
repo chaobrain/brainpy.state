@@ -34,7 +34,7 @@ import brainunit as u
 from brainstate import transform
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import brainpy_state
 from brainpy_state import tsodyks_synapse, tsodyks_synapse_hom, tsodyks2_synapse

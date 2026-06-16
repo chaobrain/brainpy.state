@@ -24,7 +24,7 @@ import jax.numpy as jnp
 import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state._nest_network import all_to_all, one_to_one
 from brainpy_state._nest_network._event_proj import EventProjection

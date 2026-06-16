@@ -8,7 +8,7 @@ import numpy as np
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import Simulator, iaf_psc_exp
 from brainpy_state._nest_network import (

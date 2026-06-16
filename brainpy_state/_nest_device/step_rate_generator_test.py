@@ -33,7 +33,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy.state import step_rate_generator
 

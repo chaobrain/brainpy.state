@@ -28,7 +28,7 @@ import numpy.testing as npt
 import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy.state import aeif_cond_alpha
 

@@ -42,7 +42,7 @@ from brainpy.state import hh_psc_alpha_clopath
 from scipy.integrate import solve_ivp
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _nest_hh_clopath_dynamics(t, y, g_Na, g_K, g_L, E_Na, E_K, E_L, C_m, I_e, I_stim,

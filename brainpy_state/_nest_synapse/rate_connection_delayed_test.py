@@ -26,7 +26,7 @@ import numpy as np
 from brainpy.state import lin_rate_ipn, rate_connection_delayed
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _is_nest_available():

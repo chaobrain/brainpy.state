@@ -8,7 +8,7 @@ jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import pytest
 

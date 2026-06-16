@@ -31,7 +31,7 @@ import numpy.testing as npt
 from brainpy_state import aeif_cond_alpha_astro
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _rhs(y, is_refractory, i_stim, i_sic, p):

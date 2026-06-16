@@ -44,7 +44,7 @@ from scipy.integrate import solve_ivp
 from brainpy_state import hh_cond_exp_traub
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _nest_hh_cond_exp_traub_dynamics(t, y, g_Na, g_K, g_L, E_Na, E_K, E_L,

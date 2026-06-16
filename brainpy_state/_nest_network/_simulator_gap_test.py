@@ -26,7 +26,7 @@ import brainstate
 import brainunit as u
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import (hh_psc_alpha_gap, hh_cond_beta_gap_traub, iaf_psc_alpha,
                            voltmeter, Simulator, all_to_all, one_to_one)
@@ -255,7 +255,7 @@ class TestGapBehavior(unittest.TestCase):
     def setUp(self):
         import jax as _jax
         _jax.clear_caches()
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def _two_neuron_sim(self, v0=-10.0, v1=None, g=0.5, t=150.0, resting_gating=False):
         v1 = hh_psc_alpha_gap._NEST_V_INIT if v1 is None else v1

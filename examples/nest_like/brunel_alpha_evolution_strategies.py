@@ -19,7 +19,7 @@ Run:  python examples/nest_like/brunel_alpha_evolution_strategies.py
 import jax
 import brainstate
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import numpy as np
 import scipy.special as sp

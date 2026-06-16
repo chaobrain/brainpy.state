@@ -22,7 +22,7 @@ jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import stdp_facetshw_synapse_hom
 from brainpy_state._nest_network._event_plastic import EventPlasticProj, KernelContext

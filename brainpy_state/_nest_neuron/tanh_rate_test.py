@@ -29,7 +29,7 @@ import numpy.testing as npt
 from brainpy.state import tanh_rate_ipn, tanh_rate_opn
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _is_nest_available():

@@ -45,7 +45,7 @@ import braintools
 import brainunit as u
 import jax.numpy as jnp
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state._nest_neuron.glif_cond import glif_cond
 

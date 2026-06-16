@@ -27,7 +27,7 @@ import numpy as np
 from brainpy.state import iaf_psc_alpha_multisynapse
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def alpha_fn(t, tau_syn):

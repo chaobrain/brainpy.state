@@ -42,7 +42,7 @@ import numpy as np
 from brainpy_state._nest_neuron.mat2_psc_exp import mat2_psc_exp
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 class TestMat2PscExp(unittest.TestCase):

@@ -126,7 +126,7 @@ def _best_aligned_residual(ref, cand, max_shift=2):
 class TestStpEmissionSeam(unittest.TestCase):
     def setUp(self):
         jax.config.update('jax_enable_x64', True)
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_stp_emission_matches_three_phase_reference(self):
         # The Simulator's receptor_type=1 delivery reproduces the validated manual
