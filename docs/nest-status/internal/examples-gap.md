@@ -336,7 +336,7 @@ the remaining `spatial/` tutorials are variants over the same primitives. See `n
 |---|---|---|---|
 | `compartmental_model/` (subdir) | implemented | `examples/nest/two_comps.py`, `examples/nest/receptors_and_current.py` | dendritic-tree models on `cm_default` (active vs passive dendrite; per-compartment AMPA / NMDA / GABA + DC). Live-NEST `v_comp` / gating / `g_r,g_d` parity + NEST-free dendritic-amplification laws |
 | `pong/` (subdir) | implemented | `examples/nest/pong.py`, `pong_networks.py`, `pong_run.py` | RL demo: `PongNetRSTDP` (host R-STDP on static synapses) + `PongNetDopa` (dopaminergic actor–critic) on the `Simulator.cont` / `host_drive` persistent-rollout substrate. Component-deterministic parity (`calculate_stdp` vs live NEST; dopamine reward→potentiation pathway) + bounded behavioural learning |
-| `sudoku/` (subdir) | missing | none | stochastic WTA constraint-satisfaction. Investigated and found intractable to bring to solve-rate parity on the current substrate — recorded TODO (CONTEXT.md §3.10 lesson) |
+| `sudoku/` (subdir) | implemented | `examples/nest/sudoku.py`, `sudoku_net.py`, `sudoku_puzzles.py` | stochastic WTA constraint-satisfaction: 3645 `iaf_psc_exp` neurons (729 pops × 5), row/col/box/cell inhibition (510 300 edges) as **one** sparse `explicit_edges` projection, 350 Hz background noise + per-clue 200 Hz parrot-relay stimulation, host `cont(100 ms)` relaxation loop. **Distributional (documented-partial) parity** (§3.14 posture): matches live NEST's solve rate on a near-complete board (both ~100 % over seeds); on a hard board (puzzle 4, NEST's default) neither solver completes within a practical chunk budget and brainpy tracks NEST's best fraction-correct. The earlier "intractable" verdict was a unit bug (pF/pA vs nF/nA), not a substrate limit |
 | `structural_plasticity.py` | unsupported | none | spec §7 (no structural plasticity) |
 | `store_restore_network.py` | unsupported | none | kernel-state serialization is NEST-internal |
 | `music_cont_out_proxy_example/` | unsupported | none | spec §7 (MUSIC) |
@@ -491,11 +491,10 @@ The examples-as-validation point above is the headline: porting NEST examples
   Blocked by `network-api-gap.md` spatial roadmap. Acceptance: at least one
   spatial example ports cleanly via `nest_compat.spatial.*`.
 
-- **P2 — `sudoku/` demo.** [L]
-  Rationale: demonstrates a stochastic WTA constraint-satisfaction pattern.
-  (`pong/` is **done** — see §3.10: `PongNetRSTDP` + `PongNetDopa` on the
-  `Simulator.cont` / `host_drive` persistent-rollout substrate.) Lower priority
-  because it's niche but high-profile when present. Acceptance: the noise-driven
-  WTA network solves at a rate matching the NEST example within the documented
-  stochastic variance — currently intractable on the substrate (recorded TODO,
-  CONTEXT.md §3.10 lesson).
+- **P2 — `sudoku/` demo.** ✅ **Done** — see §3.10: `examples/nest/sudoku.py`
+  (+ `sudoku_net.py`, `sudoku_puzzles.py`). The noise-driven WTA solves a
+  near-complete board at live-NEST's solve rate (both ~100 % over seeds); a hard
+  board is a measured **documented-partial** — neither NEST nor brainpy completes
+  puzzle 4 in a practical budget, and brainpy tracks NEST's best fraction-correct.
+  Built on the public `explicit_edges` rule + the `cont()` host-relaxation seam.
+  The original "intractable" verdict was a unit bug (pF/pA), not a substrate limit.

@@ -139,6 +139,55 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 26-sudoku — 2026-06-16
+
+- **Shipped:** the **§3.10 `sudoku/` port** — the one item cluster 19 deferred as
+  "intractable". `examples/nest/sudoku.py` (runnable harness: `solve_puzzle`/`solve_seeds`
+  build-once relaxation + two-panel figure + `--puzzle/--seeds/--quick/--out` CLI),
+  `sudoku_net.py` (`SudokuNet` build-once network + `SudokuSolver` host loop), `sudoku_puzzles.py`
+  (8-board bank + `validate_solution` + `make_easy_puzzle`). 3645 `iaf_psc_exp` neurons
+  (729 pops × 5); row/col/box/cell inhibition (510 300 edges) as **ONE** sparse `explicit_edges`
+  projection; 350 Hz noise (all-to-all) + a 200 Hz generator → 729 parrots → cells stim relay
+  whose per-clue weights toggle live via `get_connections(...).set('weight', ...)`; host
+  `cont(100 ms)` relaxation loop with host-side early-exit. Branch `nest-goal/26-sudoku`; PR #TBD.
+- **Parity (vs live NEST 3.9.0):** **distributional, documented-partial** (the §3.14 posture).
+  Easy near-complete board: brainpy solves at NEST's solve rate (both 3/3 seeds, ~chunk 1–2).
+  Hard board (puzzle 4, NEST's default): **neither** completes within a practical budget —
+  NEST's own example plateaus ~0.81–0.93 fraction-correct over 100 chunks; brainpy tracks it
+  (best ratio ≥ NEST − 0.3, both > 0.5). The earlier "intractable" verdict was a **unit bug**,
+  not a substrate limit (see Gotchas). Suite: topology edge-set vs an independent reference
+  (510 300 edges), clue-clamp dynamics, drive-rate probes, for_loop-lowering guard, 10 NEST-free
+  harness tests, + the `@requires_nest` solve-rate parity (2). Coverage: sudoku_net 100 % /
+  sudoku_puzzles 100 % / sudoku.py 97 %.
+- **API discovered/changed:** **public `brainpy.state.explicit_edges(pre_idx, post_idx)`**
+  (`_network/_rules.py`) — wraps the internal `_ExplicitEdges`/`ConnSpec` so an example can build
+  an arbitrary directed edge list as one `comm='sparse'` projection from the public namespace;
+  validates 1-D, equal-length, integer index arrays. This is the key to "build once": the
+  510 300 constraint edges and the parrot→cell stim fabric are each a single projection, so
+  `cont()` traces the relaxation chunk once and reuses it (no per-chunk/per-puzzle retrace).
+  Per-edge live weight write (`get_connections.set('weight', per_cell[tgt]*u.pA)`, keyed by
+  **target** so it's edge-order-robust) re-clamps clues between chunks without recompile — the
+  same seam pong used for static weights, now driving generator-relayed input.
+- **Gotchas:** (1) **The "intractable" verdict was a UNIT BUG.** `iaf_psc_exp` takes `C_m` in
+  **pF** and `I_e`/weights in **pA** (exactly like NEST); NEST's bundled `0.25`/`0.5` are
+  `0.25 pF` / `0.5 pA` — the file's `nF`/`nA` comments are WRONG. Reading them as nF/nA scales
+  every synaptic PSP ~1000× below the bias current, so inhibition can't gate firing and the grid
+  collapses to bias-driven tonic spiking (every cell the same digit). With native pF/pA the WTA
+  competition is healthy and clues lock. **Trust the integrator's unit contract over a source
+  file's unit comments.** (2) **Generators have baked, un-addressable weights** — to make clue
+  stimulation *live-toggleable* you cannot reweight a `poisson_generator`→cell edge; relay
+  through `parrot_neuron`s (generator→parrots at unit gate weight 1.0, parrots→cells via
+  `explicit_edges` whose weights you then set). A non-unit generator→parrot weight raises.
+  (3) **Readout tiebreak needs a seed** — decoding is argmax-per-cell over population spike
+  counts with a uniform `np.random.choice` tiebreak (incl. the all-silent case), so seed
+  `np.random` alongside `brainstate.random` for reproducibility.
+- **For next clusters:** `explicit_edges` is now the public primitive for **arbitrary structured
+  connectivity** (any precomputed edge list → one sparse projection) — reach for it instead of
+  looping `Connect`/per-population projections when the topology is known on the host; it's what
+  keeps `cont()` from retracing. The §3.10 pedagogical group is now **complete** (no deferred
+  items). `cont()` + per-edge-weight + parrot-relay-input is the full closed-loop recipe:
+  persistent rollout, live static-weight re-clamp, and live-gated device input, all no-recompile.
+
 ### 19-pedagogical — 2026-06-16
 
 - **Shipped:** the **§3.10 pedagogical group** — AdEx figures, compartmental dendrites, and the
