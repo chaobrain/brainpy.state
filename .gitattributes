@@ -1,3 +1,75 @@
+# Auto-detect text files and normalize line endings to LF in the repo.
 * text=auto eol=lf
-*.bat text eol=crlf
-*.cmd text eol=crlf
+
+# ---------------------------------------------------------------------------
+# Source & text — force LF, enable language-aware diffs where useful
+# ---------------------------------------------------------------------------
+*.py      text diff=python
+*.pyi     text diff=python
+*.pyx     text diff=python
+*.pxd     text diff=python
+*.rst     text
+*.md      text diff=markdown
+*.txt     text
+*.cfg     text
+*.ini     text
+*.toml    text
+*.yml     text
+*.yaml    text
+*.json    text
+*.ipynb   text
+*.sh      text eol=lf
+Makefile  text eol=lf
+
+# ---------------------------------------------------------------------------
+# Windows-only scripts — force CRLF
+# ---------------------------------------------------------------------------
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# ---------------------------------------------------------------------------
+# Binary — never normalize, never diff as text
+# ---------------------------------------------------------------------------
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.svg     binary
+*.pdf     binary
+*.mat     binary
+*.npy     binary
+*.npz     binary
+*.h5      binary
+*.hdf5    binary
+*.pkl     binary
+*.pickle  binary
+*.so      binary
+*.pyd     binary
+*.dylib   binary
+*.dll     binary
+*.gz      binary
+*.bz2     binary
+*.xz      binary
+*.zip     binary
+
+# ---------------------------------------------------------------------------
+# GitHub Linguist — keep language stats focused on the library source
+# ---------------------------------------------------------------------------
+docs/**       linguist-documentation
+examples/**   linguist-documentation
+*.ipynb       linguist-documentation
+changelog.md  linguist-documentation
+
+# ---------------------------------------------------------------------------
+# git archive / source exports — drop dev-only paths
+# ---------------------------------------------------------------------------
+.github/         export-ignore
+.gitattributes   export-ignore
+.gitignore       export-ignore
+.claudeignore    export-ignore
+.claude/         export-ignore
+.idea/           export-ignore
+dev/             export-ignore
+develop/         export-ignore

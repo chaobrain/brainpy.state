@@ -121,16 +121,16 @@ class LeakyRateReadout(brainstate.nn.Module):
         self.decay = u.math.exp(-brainstate.environ.get_dt() / self.tau)
 
         # weights
-        self.weight = brainstate.ParamState(brainstate.init.param(w_init, (self.in_size[0], self.out_size[0])))
+        self.weight = brainstate.ParamState(braintools.init.param(w_init, (self.in_size[0], self.out_size[0])))
 
     def init_state(self, batch_size=None, **kwargs):
         self.r = brainstate.HiddenState(
-            brainstate.init.param(brainstate.init.Constant(0.), self.out_size, batch_size)
+            braintools.init.param(braintools.init.Constant(0.), self.out_size, batch_size)
         )
 
     def reset_state(self, batch_size=None, **kwargs):
-        self.r.value = brainstate.init.param(
-            brainstate.init.Constant(0.), self.out_size, batch_size
+        self.r.value = braintools.init.param(
+            braintools.init.Constant(0.), self.out_size, batch_size
         )
 
     def update(self, x):
