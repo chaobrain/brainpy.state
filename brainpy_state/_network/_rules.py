@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import jax
+import jax.numpy as jnp
 
 from brainpy_state._network._connectivity import (
     ConnSpec,
@@ -17,7 +18,7 @@ from brainpy_state._network._connectivity import (
 
 __all__ = ['ConnRule', 'all_to_all', 'one_to_one', 'fixed_indegree',
            'pairwise_bernoulli', 'fixed_total_number',
-           'third_factor_bernoulli_with_pool']
+           'third_factor_bernoulli_with_pool', 'explicit_edges']
 
 
 class ConnRule:
@@ -133,6 +134,74 @@ class _ExplicitEdges(ConnRule):
 
     def sample(self, n_pre, n_post, *, key, pre_is_post, allow_autapses, allow_multapses):
         return self._spec
+
+
+def explicit_edges(pre_idx, post_idx) -> _ExplicitEdges:
+    """Return a rule wiring exactly the given ``(pre_idx[i], post_idx[i])`` edges.
+
+    A connection rule built from a *precomputed* edge list, for topologies that are
+    easier to enumerate directly than to express through a sampling rule (e.g. the
+    structured inhibitory graph of a constraint-satisfaction network). The edges are
+    handed to the same projection paths used by the sampling rules, so a single call
+    realizes the whole topology as **one** projection -- avoiding the per-edge /
+    per-group projection explosion (and the per-``cont()`` retrace) of many small
+    :meth:`~brainpy.state.Simulator.connect` calls.
+
+    Parameters
+    ----------
+    pre_idx, post_idx : array_like of int
+        Equal-length 1-D arrays of segment-local source/target neuron indices, in the
+        coordinate frame of the populations passed to
+        :meth:`~brainpy.state.Simulator.connect`. Edge ``i`` connects
+        ``pre_idx[i] -> post_idx[i]``. Order is preserved and duplicates are kept --
+        the caller controls multapses.
+
+    Returns
+    -------
+    _ExplicitEdges
+        A connection rule returning the precomputed edge set verbatim (the sampling
+        ``key`` / autapse / multapse flags are ignored).
+
+    Raises
+    ------
+    ValueError
+        If ``pre_idx`` / ``post_idx`` are not 1-D, differ in length, or are not
+        integer-typed.
+
+    See Also
+    --------
+    brainpy.state.all_to_all
+    brainpy.state.Simulator.connect
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import numpy as np
+        >>> import brainunit as u
+        >>> from brainpy import state as bp
+        >>> sim = bp.Simulator(dt=0.1 * u.ms)
+        >>> pop = sim.create(bp.iaf_psc_exp, 5)
+        >>> # wire 0->1, 0->4, 2->3 as one sparse projection
+        >>> pre = np.array([0, 0, 2])
+        >>> post = np.array([1, 4, 3])
+        >>> _ = sim.connect(pop, pop, rule=bp.explicit_edges(pre, post),
+        ...                 weight=-0.2 * u.pA, comm='sparse')
+        >>> len(sim.get_connections(source=pop, target=pop))
+        3
+    """
+    pre = jnp.asarray(pre_idx)
+    post = jnp.asarray(post_idx)
+    if pre.ndim != 1 or post.ndim != 1:
+        raise ValueError(
+            f'pre_idx/post_idx must be 1-D, got {pre.ndim}-D and {post.ndim}-D')
+    if pre.shape[0] != post.shape[0]:
+        raise ValueError(
+            f'pre_idx/post_idx must have equal length, got {pre.shape[0]} and {post.shape[0]}')
+    if not (jnp.issubdtype(pre.dtype, jnp.integer) and jnp.issubdtype(post.dtype, jnp.integer)):
+        raise ValueError(
+            f'pre_idx/post_idx must be integer arrays, got dtypes {pre.dtype} and {post.dtype}')
+    return _ExplicitEdges(ConnSpec(pre, post, int(pre.shape[0])))
 
 
 class _ThirdFactorBernoulliWithPool:

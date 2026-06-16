@@ -121,6 +121,7 @@ from ._network import (
     pairwise_bernoulli,
     fixed_total_number,
     third_factor_bernoulli_with_pool,
+    explicit_edges,
 )
 
 from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
@@ -567,6 +568,7 @@ __all__ = [
     'pairwise_bernoulli',
     'fixed_total_number',
     'third_factor_bernoulli_with_pool',
+    'explicit_edges',
     'network',
     'dist',
     'spatial',

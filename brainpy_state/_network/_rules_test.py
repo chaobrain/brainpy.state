@@ -2,12 +2,18 @@
 import unittest
 
 import jax
+jax.config.update('jax_enable_x64', True)
 import jax.numpy as jnp
 import numpy as np
+import brainstate
+import brainunit as u
 
+brainstate.environ.set(precision=64, platform='cpu')
+
+from brainpy_state import Simulator, iaf_psc_exp
 from brainpy_state._network import (
     all_to_all, one_to_one, fixed_indegree, pairwise_bernoulli,
-    fixed_total_number, third_factor_bernoulli_with_pool,
+    fixed_total_number, third_factor_bernoulli_with_pool, explicit_edges,
 )
 from brainpy_state._network._connectivity import ConnSpec
 from brainpy_state._network._rules import _ExplicitEdges
@@ -105,6 +111,62 @@ class TestExplicitEdges(unittest.TestCase):
         b = rule.sample(99, 99, key=jax.random.key(42), pre_is_post=False,
                         allow_autapses=True, allow_multapses=True)
         np.testing.assert_array_equal(np.asarray(a.pre_idx), np.asarray(b.pre_idx))
+
+
+class TestExplicitEdgesPublic(unittest.TestCase):
+    """Public ``explicit_edges(pre_idx, post_idx)`` factory + end-to-end wiring."""
+
+    def test_factory_wraps_spec(self):
+        rule = explicit_edges([0, 1, 2], [3, 4, 5])
+        self.assertIsInstance(rule, _ExplicitEdges)
+        spec = rule.sample(9, 9, key=jax.random.key(0), pre_is_post=False,
+                           allow_autapses=True, allow_multapses=True)
+        np.testing.assert_array_equal(np.asarray(spec.pre_idx), [0, 1, 2])
+        np.testing.assert_array_equal(np.asarray(spec.post_idx), [3, 4, 5])
+        self.assertEqual(spec.n_edges, 3)
+
+    def test_rejects_length_mismatch(self):
+        with self.assertRaises(ValueError):
+            explicit_edges(np.array([0, 1]), np.array([0, 1, 2]))
+
+    def test_rejects_non_1d(self):
+        with self.assertRaises(ValueError):
+            explicit_edges(np.zeros((2, 2), int), np.zeros((2, 2), int))
+
+    def test_rejects_non_integer(self):
+        with self.assertRaises(ValueError):
+            explicit_edges(np.array([0.0, 1.0]), np.array([1.0, 0.0]))
+
+    def test_wires_exact_pairs_via_get_connections(self):
+        # The linchpin for sudoku: one sparse explicit-edge projection, read back
+        # exactly the (pre, post) pairs it was given (order-independent set equality).
+        pre = np.array([0, 0, 2, 3], dtype=int)
+        post = np.array([1, 4, 4, 0], dtype=int)
+        sim = Simulator(dt=0.1 * u.ms)
+        a = sim.create(iaf_psc_exp, 5)
+        sim.connect(a, a, rule=explicit_edges(pre, post),
+                    weight=-0.2 * u.pA, delay=1.0 * u.ms, comm='sparse')
+        conns = sim.get_connections(source=a, target=a)
+        got = set(zip(np.asarray(conns.get('source')).tolist(),
+                      np.asarray(conns.get('target')).tolist()))
+        self.assertEqual(got, set(zip(pre.tolist(), post.tolist())))
+
+    def test_per_edge_weight_set_roundtrip(self):
+        # De-risks the clue clamp: per-edge weights settable on an explicit-edge
+        # sparse projection, keyed by the edge's target neuron (order-robust).
+        pre = np.array([0, 0, 1, 1], dtype=int)
+        post = np.array([2, 3, 4, 5], dtype=int)
+        sim = Simulator(dt=0.1 * u.ms)
+        a = sim.create(iaf_psc_exp, 6)
+        sim.connect(a, a, rule=explicit_edges(pre, post),
+                    weight=0.0 * u.pA, delay=1.0 * u.ms, comm='sparse')
+        conns = sim.get_connections(source=a, target=a)
+        tgt = np.asarray(conns.get('target'))
+        new_w = np.where(tgt >= 4, 1.3, 0.0)          # weight keyed by target neuron
+        conns.set('weight', new_w * u.pA)
+        rt = sim.get_connections(source=a, target=a)
+        got = u.Quantity(rt.get('weight')).to_decimal(u.pA)
+        np.testing.assert_allclose(got, np.where(np.asarray(rt.get('target')) >= 4, 1.3, 0.0))
 
 
 class TestThirdFactorBernoulliWithPool(unittest.TestCase):
