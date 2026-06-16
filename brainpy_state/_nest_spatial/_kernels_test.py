@@ -40,5 +40,43 @@ class TestGaussianKernel(unittest.TestCase):
         self.assertIn('distance', repr(distance))
 
 
+class TestExpressions(unittest.TestCase):
+    """The axis/scalar expression family evaluated on bound (pre, post) positions."""
+
+    def setUp(self):
+        # disp[i, j] = post[j] - pre[i]
+        self.pre = jnp.array([[0.0, 0.0], [1.0, 2.0]]) * u.um
+        self.post = jnp.array([[3.0, 0.0], [0.0, 5.0]]) * u.um
+
+    def test_scalar_distance_eval_pair(self):
+        g = distance._eval_pair(self.pre, self.post)
+        self.assertEqual(g.shape, (2, 2))
+        gm = np.asarray(u.get_magnitude(g.to(u.um)))
+        self.assertAlmostEqual(gm[0, 0], 3.0, places=6)          # (0,0)->(3,0)
+        self.assertAlmostEqual(gm[0, 1], 5.0, places=6)          # (0,0)->(0,5)
+        self.assertAlmostEqual(gm[1, 0], np.sqrt(8.0), places=6) # (1,2)->(3,0)
+
+    def test_axis_distance_is_abs_per_axis(self):
+        gx = np.asarray(u.get_magnitude(distance.x._eval_pair(self.pre, self.post).to(u.um)))
+        gy = np.asarray(u.get_magnitude(distance.y._eval_pair(self.pre, self.post).to(u.um)))
+        # |post_x - pre_x|: disp[1,0] = (2,-2) -> |x|=2 ; disp[0,0]=(3,0)->|x|=3
+        self.assertAlmostEqual(gx[1, 0], 2.0, places=6)
+        self.assertAlmostEqual(gx[0, 0], 3.0, places=6)
+        # |post_y - pre_y|: disp[0,1] = (0,5) -> |y|=5
+        self.assertAlmostEqual(gy[0, 1], 5.0, places=6)
+
+    def test_axis_z_on_2d_layer_raises(self):
+        with self.assertRaises(ValueError):
+            distance.z._eval_pair(self.pre, self.post)
+
+    def test_gaussian_consumes_axis_distance(self):
+        # gaussian(distance.x, std=1) == exp(-|dx|^2 / 2)
+        k = gaussian(distance.x, std=1.0)
+        g = np.asarray(u.get_magnitude(k._eval_pair(self.pre, self.post)))
+        dx = np.abs(np.asarray(u.get_magnitude(self.post.to(u.um)))[None, :, 0]
+                    - np.asarray(u.get_magnitude(self.pre.to(u.um)))[:, None, 0])
+        np.testing.assert_allclose(g, np.exp(-(dx ** 2) / 2.0), atol=1e-6)
+
+
 if __name__ == '__main__':
     unittest.main()
