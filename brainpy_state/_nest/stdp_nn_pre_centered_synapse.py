@@ -13,8 +13,7 @@ spike depresses with the nearest preceding post. Because the reset is triggered 
 pre to different posts reset at different times), so it is carried in
 :meth:`edge_state_init` and decayed in-kernel — *not* the substrate's per-pre-neuron
 trace (``pre_trace_tau = None``). Only the nearest ``K-`` comes from the substrate
-(``post_trace_mode = 'nearest'``). The previous imperative implementation lived in
-:mod:`brainpy_state._nest._legacy_stdp_synapse`.
+(``post_trace_mode = 'nearest'``).
 """
 from __future__ import annotations
 

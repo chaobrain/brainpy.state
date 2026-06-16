@@ -8,10 +8,7 @@ non-plastic: no per-edge state evolves and the effective weight is just the
 constant (per-edge) ``weight`` — identical to :class:`static_synapse`. Its one
 distinguishing feature, a delay that need *not* be an integer multiple of the
 simulation step, is realised by the substrate's ``fractional_delay`` output-carry
-seam, opted into here via the class attribute ``fractional_delay = True``. The
-previous imperative implementation (off-grid event queue, ``send``/``update``
-machinery) now lives in :mod:`brainpy_state._nest._legacy_imperative` as
-``ImperativeSynapseBase`` for clusters not yet rebuilt onto the substrate.
+seam, opted into here via the class attribute ``fractional_delay = True``.
 """
 from __future__ import annotations
 

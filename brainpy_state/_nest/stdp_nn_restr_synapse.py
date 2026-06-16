@@ -14,8 +14,7 @@ postsynaptic history window ``(t_lastspike-d, t_spike-d]`` is non-empty. Here th
 nearest traces come from the substrate (``pre_trace_mode = post_trace_mode = 'nearest'``)
 and the gates are two per-edge eligibility flags carried in :meth:`edge_state_init`: a
 spike makes its own side *available* and *consumes* the opposite side, so each spike
-pairs at most once. The previous imperative implementation lived in
-:mod:`brainpy_state._nest._legacy_stdp_synapse`.
+pairs at most once.
 """
 from __future__ import annotations
 

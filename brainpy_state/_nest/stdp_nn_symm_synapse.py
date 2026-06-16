@@ -11,8 +11,7 @@ post spike. NEST realises this by having both traces **reset to 1 on their own s
 rather than accumulate (``stdp_nn_symm_synapse.h:66-71``); here both the per-pre ``K+``
 and per-post ``K-`` traces declare the substrate's ``'nearest'`` trace mode, so the
 rule kernel itself is **byte-identical to** :class:`stdp_synapse` — the nearest-ness
-lives entirely in what the substrate *stores*. The previous imperative implementation
-lived in :mod:`brainpy_state._nest._legacy_stdp_synapse`.
+lives entirely in what the substrate *stores*.
 """
 from __future__ import annotations
 

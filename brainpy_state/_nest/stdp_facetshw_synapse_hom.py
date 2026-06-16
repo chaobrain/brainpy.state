@@ -20,8 +20,7 @@ Two charges accumulate between readouts, both in the substrate's ``'nearest'`` m
 Both are folded in at the **pre** step, because NEST runs the readout *before*
 accumulating the current ``send``'s pairing — so the causal contribution captured at a
 post is deferred (``causal_pending``) and folded at the next pre, after that pre's
-readout. The previous imperative implementation lived in
-:mod:`brainpy_state._nest._legacy_stdp_synapse`'s sibling module.
+readout.
 """
 from __future__ import annotations
 

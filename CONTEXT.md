@@ -139,6 +139,24 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### cleanup-remove-legacy-synapses — 2026-06-16
+
+- **Shipped:** removed the 6 retired `_legacy_*` modules under `_nest/` (~6,100 lines):
+  `_legacy_imperative` (`ImperativeSynapseBase`), `_legacy_clopath_synapse`,
+  `_legacy_stdp_synapse`, `_legacy_urbanczik_synapse`, and the two legacy test files. These
+  were the pre-substrate imperative ports, retired from the active path when the STDP-core
+  (`04`), Clopath (`07`), and Urbanczik (`21`) synapses were rebuilt as spec+rule kernels.
+  Nothing in production imported them (private modules, not in `__init__`); only their own
+  tests did. Also scrubbed 14 now-dangling `:mod:` docstring cross-references in the live
+  synapse modules. Branch `worktree-remove-legacy-nest-synapses`.
+- **Parity:** n/a (dead-code removal). Verified repo-wide grep clean, all 14 edited modules
+  import cleanly, and **189** NEST-free rule tests pass across the affected synapses.
+- **Gotchas:** the `04-stdp-core` entry below read as if `stdp_nn_*` / `bernoulli` /
+  `cont_delay` "route to" the legacy modules — they never did (docstring mentions only); the
+  rebuilt specs were already self-contained, so removal was a no-op for the active path.
+- **For next clusters:** retired reference implementations don't need to live in the tree —
+  git history preserves them. Keep an oracle only if a *current* test actually drives it.
+
 ### 19-pedagogical — 2026-06-16
 
 - **Shipped:** the **§3.10 pedagogical group** — AdEx figures, compartmental dendrites, and the
@@ -1783,7 +1801,8 @@ objection into a Lessons entry, do **not** silently diverge.
   gains a post-neuron analog-State reader (`_network/_event_plastic.py`); `clopath_synapse`
   becomes a frozen spec + pure `update(state, ctx) -> (new_state, w_eff)` kernel
   (`_nest/clopath_synapse.py`, legacy history-buffer port moved to
-  `_legacy_clopath_synapse.py`); `Simulator.connect` dispatches to
+  `_legacy_clopath_synapse.py` — *removed 2026-06-16; see `cleanup-remove-legacy-synapses`*);
+  `Simulator.connect` dispatches to
   `VoltageCoupledPlasticProj` when the spec declares `post_state_reads`. Ships a NEST-free
   `clopath_synapse_rule_test.py` (**100 %** line coverage, 19 tests) and a live-NEST
   `_validation/clopath_synapse_parity_test.py` (+ `_clopath_drive.py`). Branch
@@ -1931,7 +1950,9 @@ objection into a Lessons entry, do **not** silently diverge.
   (below). The legacy imperative STDP stays **only** for out-of-cluster models
   (`stdp_nn_*`, `stdp_dopamine`, `stdp_facetshw`, `bernoulli`, `cont_delay` →
   `_legacy_imperative`/`_legacy_stdp_synapse`); the 7 core names now route to the
-  new specs. Spec files + `_plastic_base` at **100 %** line coverage. Branch
+  new specs. *(Update 2026-06-16: `_legacy_imperative` / `_legacy_stdp_synapse` removed — the
+  listed models only referenced them in docstrings, never imported them; see
+  `cleanup-remove-legacy-synapses`.)* Spec files + `_plastic_base` at **100 %** line coverage. Branch
   `nest-goal/04-stdp-core`.
 - **Parity (live NEST 3.9.0):** all 7 match NEST to **machine precision** —
   single spike-pair Δt sweep (both signs) at **CAT_B** (atol 1e-6) and 5 s
@@ -2213,7 +2234,8 @@ objection into a Lessons entry, do **not** silently diverge.
   `tsodyks_synapse`, `tsodyks_synapse_hom`, `tsodyks2_synapse`,
   `quantal_stp_synapse`. The old imperative base was relocated to
   `_nest/_legacy_imperative.py` (`ImperativeSynapseBase`) and the 7 not-yet-ported
-  models redirected onto it. `sim.connect(pre, post, synapse=<spec>, …)` now
+  models redirected onto it. *(Update 2026-06-16: `_legacy_imperative` removed; see
+  `cleanup-remove-legacy-synapses`.)* `sim.connect(pre, post, synapse=<spec>, …)` now
   builds an `EventPlasticProj` (Scope C). Tests: substrate unit suite
   (`_event_plastic_test.py`), 6 NEST-free rule tests, `_simulator_plastic_test.py`,
   and 3 live-NEST parity tests (`_validation/{static_synapse,stp,quantal_stp}_parity_test.py`).

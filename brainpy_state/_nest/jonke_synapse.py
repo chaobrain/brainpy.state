@@ -6,9 +6,7 @@ Rebuilt as a frozen parameter spec plus a pure, vectorized
 :class:`~brainpy_state._network._event_plastic.EventPlasticProj`. The Jonke et al.
 (2015) rule generalises pair STDP with an **exponential weight factor**
 :math:`\Phi_\pm(w) = \exp(\mu_\pm w)` on each side plus a constant **offset**
-:math:`\beta` (a heterosynaptic / activity-independent bias). The previous
-imperative implementation lived in :mod:`brainpy_state._nest._legacy_imperative`
-(shared base).
+:math:`\beta` (a heterosynaptic / activity-independent bias).
 """
 from __future__ import annotations
 

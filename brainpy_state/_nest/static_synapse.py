@@ -4,10 +4,7 @@
 Rebuilt as a frozen parameter spec plus the simplest possible pure rule kernel
 on :class:`~brainpy_state._network._event_plastic.EventPlasticProj`: the
 effective weight is just the (per-edge) constant ``weight``, and no state
-evolves. The previous imperative implementation (event queue, ``send``/``update``
-machinery) now lives in
-:mod:`brainpy_state._nest._legacy_imperative` as ``ImperativeSynapseBase`` for
-clusters not yet rebuilt onto the substrate.
+evolves.
 """
 from __future__ import annotations
 

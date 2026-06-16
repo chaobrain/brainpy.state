@@ -10,8 +10,6 @@ depression at a pre spike by the slow *pre* trace, capturing frequency-dependent
 plasticity that pair models miss. This is the first model to use the substrate's
 **multi-trace seam** — ``pre_trace_tau`` / ``post_trace_tau`` are *tuples*
 ``(fast, slow)`` so the substrate allocates two per-neuron trace columns per side.
-The previous imperative implementation lived in
-:mod:`brainpy_state._nest._legacy_stdp_synapse` (shared imperative base).
 """
 from __future__ import annotations
 
