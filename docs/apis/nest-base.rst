@@ -27,16 +27,3 @@ runtime (e.g. ``isinstance(model, NESTPlasticity)``).
    NESTPlasticity
    NESTDevice
 
-
-Class Hierarchy
----------------
-
-.. code-block:: text
-
-   brainstate.nn.Dynamics
-     └─ Dynamics                 (_base.py)
-          ├─ Neuron              (_base.py)
-          │    └─ NESTNeuron     (_nest_base/_base.py)
-          ├─ NESTSynapse         (_nest_base/_base.py)
-          │    └─ NESTPlasticity (_nest_base/_base.py)
-          └─ NESTDevice          (_nest_base/_base.py)
