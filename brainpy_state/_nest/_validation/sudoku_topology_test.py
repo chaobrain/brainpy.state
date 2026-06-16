@@ -10,11 +10,14 @@ the live solve-rate parity lives in ``sudoku_solve_test.py`` (``@requires_nest``
 import unittest
 
 import brainstate
+import brainunit as u
 import jax
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
+
+from brainpy_state import Simulator, poisson_generator, parrot_neuron, spike_recorder
 
 from examples.nest.sudoku_puzzles import get_puzzle, validate_solution, N_PUZZLES
 
@@ -122,6 +125,72 @@ class TestSudokuNetTopology(unittest.TestCase):
         net = SudokuNet(seed=0)
         got = net.inhibitory_edges()                           # set of (pre, post) pairs
         self.assertEqual(got, reference_inhibitory_edges(pop_size=net.pop_size))
+
+
+class TestStimClueWeights(unittest.TestCase):
+    """``set_input_config`` clamps clue populations at ``weight_stim`` and zeroes the rest."""
+
+    def test_set_input_config_sets_clue_weights(self):
+        from examples.nest.sudoku_net import SudokuNet, WEIGHT_STIM
+        net = SudokuNet(seed=0)
+        puzzle = get_puzzle(4)
+        net.set_input_config(puzzle)
+        w = net.stim_weights_pA()                              # (n_total,) cell-indexed, pA
+        ps = net.pop_size
+        for r in range(9):
+            for c in range(9):
+                v = int(puzzle[r, c])
+                for d in range(9):
+                    p = (r * 9 + c) * 9 + d
+                    expect = WEIGHT_STIM if (v != 0 and d == v - 1) else 0.0
+                    np.testing.assert_allclose(w[ps * p: ps * p + ps], expect)
+
+    def test_reset_input_zeroes_all_clue_weights(self):
+        from examples.nest.sudoku_net import SudokuNet
+        net = SudokuNet(seed=0)
+        net.set_input_config(get_puzzle(4))
+        self.assertGreater(float(net.stim_weights_pA().sum()), 0.0)   # some clues set
+        net.reset_input()
+        np.testing.assert_allclose(net.stim_weights_pA(), 0.0)
+
+    def test_set_input_config_dream_board_clamps_nothing(self):
+        from examples.nest.sudoku_net import SudokuNet
+        net = SudokuNet(seed=0)
+        net.set_input_config(get_puzzle(0))                    # all-zero "dream" board
+        np.testing.assert_allclose(net.stim_weights_pA(), 0.0)
+
+
+class TestDriveRates(unittest.TestCase):
+    """The Poisson drives fire at SudokuNet's configured rates (sampling tolerance).
+
+    Probes the exact drive path SudokuNet uses -- a ``poisson_generator`` at rate ``R``
+    relayed 1:1 through a ``parrot_neuron`` -- at the example's own ``NOISE_RATE`` /
+    ``STIM_RATE`` constants, on a tiny net (fast; no need to run the 510k-edge WTA).
+    """
+
+    @staticmethod
+    def _measure_relayed_rate(rate_hz, sim_ms=3000.0, seed=0):
+        sim = Simulator(dt=0.1 * u.ms)
+        gen = sim.create(poisson_generator, rate=rate_hz * u.Hz)
+        relay = sim.create(parrot_neuron, 1)
+        rec = sim.create(spike_recorder)
+        sim.connect(gen, relay, weight=1.0, delay=1.0 * u.ms)
+        sim.connect(relay, rec)
+        brainstate.random.seed(seed)
+        sim.reset_rollout()
+        res = sim.cont(sim_ms * u.ms)
+        n = float(np.asarray(res.spikes(rec)).sum())
+        return n / (sim_ms / 1000.0)
+
+    def test_noise_rate_is_350hz(self):
+        from examples.nest.sudoku_net import NOISE_RATE
+        self.assertAlmostEqual(NOISE_RATE, 350.0)
+        self.assertLess(abs(self._measure_relayed_rate(NOISE_RATE) - 350.0), 45.0)
+
+    def test_stim_rate_is_200hz(self):
+        from examples.nest.sudoku_net import STIM_RATE
+        self.assertAlmostEqual(STIM_RATE, 200.0)
+        self.assertLess(abs(self._measure_relayed_rate(STIM_RATE) - 200.0), 35.0)
 
 
 if __name__ == '__main__':

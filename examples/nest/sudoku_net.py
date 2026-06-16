@@ -143,6 +143,72 @@ class SudokuNet:
             rule=bps.explicit_edges(pre, post),
             weight=INTER_NEURON_WEIGHT * u.pA, delay=DELAY * u.ms, comm='sparse')
 
+        # Background noise: one generator, all_to_all -> N independent Poisson trains.
+        self.noise = self.sim.create(bps.poisson_generator, rate=self.noise_rate * u.Hz)
+        self.sim.connect(self.noise, self.cells, rule=bps.all_to_all,
+                         weight=WEIGHT_NOISE * u.pA, delay=DELAY * u.ms)
+
+        # Clue stimulation: one 200 Hz generator -> 729 parrots (one independent train
+        # each), then each parrot -> its population's pop_size cells via a single sparse
+        # explicit-edge projection whose weights are toggled per puzzle (0 <-> 1.3 pA).
+        self.stim_gen = self.sim.create(bps.poisson_generator, rate=self.stim_rate * u.Hz)
+        self.parrots = self.sim.create(bps.parrot_neuron, N_POPULATIONS)
+        self.sim.connect(self.stim_gen, self.parrots, rule=bps.all_to_all,
+                         weight=1.0, delay=DELAY * u.ms)            # unit gate weight
+        stim_pre = np.repeat(np.arange(N_POPULATIONS), self.pop_size)   # parrot p
+        stim_post = np.arange(self.n_total)                             # cell pop_size*p+k
+        self.sim.connect(self.parrots, self.cells,
+                         rule=bps.explicit_edges(stim_pre, stim_post),
+                         weight=0.0 * u.pA, delay=DELAY * u.ms, comm='sparse')
+
+    def _clue_cell_weights(self, puzzle):
+        """Return the ``(n_total,)`` per-cell stim weight (pA) for a puzzle's clues."""
+        puzzle = np.asarray(puzzle)
+        w = np.zeros(self.n_total)
+        for r, c in np.argwhere(puzzle != 0):
+            d = int(puzzle[r, c]) - 1
+            p = (int(r) * 9 + int(c)) * 9 + d
+            w[self.pop_size * p: self.pop_size * p + self.pop_size] = WEIGHT_STIM
+        return w
+
+    def set_input_config(self, puzzle):
+        """Clamp the clues of ``puzzle`` by weighting their stimulation edges.
+
+        For every clued cell ``(r, c)`` with value ``v``, the parrot->cell edges feeding
+        population ``p = (r*9 + c)*9 + (v - 1)`` are set to ``weight_stim`` (1.3 pA); all
+        other stimulation edges are set to 0. This is a live ``State`` write -- no
+        recompile -- so it may be called between relaxation chunks.
+
+        Parameters
+        ----------
+        puzzle : numpy.ndarray
+            ``(9, 9)`` clue array (see :func:`~examples.nest.sudoku_puzzles.get_puzzle`);
+            zero-valued cells are left unstimulated.
+        """
+        per_cell = self._clue_cell_weights(puzzle)
+        conns = self.sim.get_connections(source=self.parrots, target=self.cells)
+        tgt = np.asarray(conns.get('target'))                      # cell index per edge
+        conns.set('weight', per_cell[tgt] * u.pA)                  # keyed by target cell
+
+    def reset_input(self):
+        """Set all stimulation (parrot->cell) weights to 0 -- unclamp every cell."""
+        conns = self.sim.get_connections(source=self.parrots, target=self.cells)
+        conns.set('weight', np.zeros(int(len(conns))) * u.pA)
+
+    def stim_weights_pA(self):
+        """Return the live per-cell stimulation weight as a ``(n_total,)`` array in pA.
+
+        Indexed by *cell* (``stim_weights_pA()[pop_size*p + k]`` is the stim weight into
+        neuron ``k`` of population ``p``), so the result is independent of the internal
+        edge ordering.
+        """
+        conns = self.sim.get_connections(source=self.parrots, target=self.cells)
+        tgt = np.asarray(conns.get('target'))
+        w = np.asarray(u.Quantity(conns.get('weight')).to_decimal(u.pA))
+        out = np.zeros(self.n_total)
+        out[tgt] = w
+        return out
+
     def inhibitory_edges(self):
         """Return the realized inhibitory edge set as ``{(pre_neuron, post_neuron), ...}``.
 
