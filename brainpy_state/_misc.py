@@ -14,9 +14,30 @@
 # ==============================================================================
 
 
-def set_module_as(module: str):
-    def wrapper(fun: callable):
-        fun.__module__ = module
-        return fun
+from typing import Callable, TypeVar, Union
+
+T = TypeVar('T', bound=Union[Callable, type])
+
+
+def set_module_as(module: str) -> Callable[[T], T]:
+    """Decorator overriding the ``__module__`` of a function or class.
+
+    Reassigning ``__module__`` makes an object appear to belong to its public
+    module (e.g. ``brainpy.state``) in documentation, ``repr`` and ``help``
+    output, even though it is implemented in a private submodule. Both
+    functions and classes are supported; the decorated object is returned
+    unchanged apart from its ``__module__`` attribute.
+
+    Args:
+      module: Public module path to assign, e.g. ``'brainpy.state'``.
+
+    Returns:
+      A decorator that sets ``__module__`` on the function or class it wraps
+      and returns it unchanged.
+    """
+
+    def wrapper(obj: T) -> T:
+        obj.__module__ = module
+        return obj
 
     return wrapper

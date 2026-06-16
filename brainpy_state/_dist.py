@@ -14,6 +14,8 @@ import jax
 import jax.numpy as jnp
 import brainunit as u
 
+from brainpy_state._misc import set_module_as
+
 __all__ = ['Distribution', 'Normal', 'LogNormal', 'Uniform']
 
 
@@ -25,6 +27,11 @@ class Distribution:
         raise NotImplementedError
 
 
+# ``set_module_as`` is the outer decorator so it runs *after* ``@dataclass``
+# finishes: this reassigns ``__module__`` only on the fully-built class, the
+# same timing as a post-definition assignment, so dataclass construction never
+# resolves field types against the non-existent ``brainpy.state.dist`` module.
+@set_module_as('brainpy.state.dist')
 @dataclass
 class Normal(Distribution):
     mean: float
@@ -43,6 +50,7 @@ class Normal(Distribution):
         return u.maybe_decimal(u.Quantity(samples, unit=mean_unit))
 
 
+@set_module_as('brainpy.state.dist')
 @dataclass
 class LogNormal(Distribution):
     mean: float
@@ -52,6 +60,7 @@ class LogNormal(Distribution):
         return jnp.exp(self.mean + self.std * jax.random.normal(key, shape))
 
 
+@set_module_as('brainpy.state.dist')
 @dataclass
 class Uniform(Distribution):
     low: float
@@ -69,10 +78,3 @@ class Uniform(Distribution):
         if low_unit == u.UNITLESS:
             return samples
         return u.maybe_decimal(u.Quantity(samples, unit=low_unit))
-
-
-# Override __module__ after class definitions to avoid dataclass type-
-# resolution looking up a non-existent ``brainpy.state.dist`` module.
-Normal.__module__ = 'brainpy.state.dist'
-LogNormal.__module__ = 'brainpy.state.dist'
-Uniform.__module__ = 'brainpy.state.dist'
