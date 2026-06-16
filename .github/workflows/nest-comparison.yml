@@ -27,6 +27,10 @@ jobs:
   nest-comparison:
     name: nest-comparison (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    # Job-level backstop (this is the slow suite — hundreds of live-NEST parity tests).
+    # The pytest --timeout below catches a single hung test first; this caps the whole
+    # job well under the 6 h GitHub default.
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +58,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flit pytest pytest-xdist
+          pip install flit pytest pytest-xdist pytest-timeout
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
           pip install -e .
 
@@ -63,6 +67,8 @@ jobs:
         # spreads them across the runner cores. Each worker is a separate process with its
         # own NEST kernel (every test ResetKernel()s), so live NEST is process-safe here
         # (verified locally: the astro parity classes pass under -n auto).
+        # --timeout fails (and names) any single test that hangs >15 min instead of
+        # stalling a worker; the thread method is used (no SIGALRM dependency).
         env:
           OMP_NUM_THREADS: "1"
-        run: pytest brainpy_state/ -m requires_nest -n auto
+        run: pytest brainpy_state/ -m requires_nest -n auto --timeout=900 --timeout-method=thread

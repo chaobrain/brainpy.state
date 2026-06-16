@@ -14,6 +14,7 @@ train, up to a constant pipeline shift), and ``host_current_drive`` → iaf repr
 ``dc_generator`` → iaf (same charging trace). A reschedule test then proves the host
 can change the active input across ``cont()`` chunks with no recompile.
 """
+import os
 import unittest
 
 import brainstate
@@ -31,6 +32,12 @@ from brainpy_state import (host_spike_drive, host_current_drive, spike_generator
 from brainpy_state._network import Simulator, one_to_one, all_to_all
 
 DT = 0.1
+
+# Wall-clock recompile-timing checks compare per-chunk wall-time ratios — meaningful only
+# on an unloaded local machine. On shared CI runners (noisy neighbours, variable cores)
+# the ratio is unreliable, so skip there; the deterministic oracle + reschedule-behaviour
+# tests still cover correctness on CI. Run locally for the no-recompile (R1) guard.
+_SKIP_TIMING_ON_CI = os.environ.get('CI') is not None
 
 
 def _fire_steps(arr):
@@ -171,6 +178,8 @@ class TestHostDriveReschedule(unittest.TestCase):
             winners.append(int(fired[0]))
         self.assertEqual(winners, [0, 2, 1])
 
+    @unittest.skipIf(_SKIP_TIMING_ON_CI,
+                     'wall-clock recompile timing is unreliable on shared CI runners')
     def test_reschedule_reuses_compiled_rollout(self):
         # R1 guard: a schedule rewrite changes only State *contents* (fixed shape),
         # so the per-chunk for_loop is compiled once (chunk 0) and reused — later

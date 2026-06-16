@@ -24,6 +24,7 @@ behavioural, never per-sample). This module covers both halves:
   rises from zero and the winning neuron is biased toward the target (below uniform
   chance). Aggregate only; thresholds are deliberately loose.
 """
+import os
 import time
 import unittest
 
@@ -167,6 +168,14 @@ class TestApplyRstdpFormula(unittest.TestCase):
         self.assertEqual(changed_rows.tolist(), [7], 'only the target input row should change')
 
 
+# Wall-clock recompile timing is reliable only on an unloaded local machine; shared CI
+# runners make the ratio noisy. Skip on CI (correctness is covered by the deterministic
+# parity/learning tests); run locally for the no-recompile (R1) performance guard.
+_SKIP_TIMING_ON_CI = os.environ.get('CI') is not None
+
+
+@unittest.skipIf(_SKIP_TIMING_ON_CI,
+                 'wall-clock recompile timing is unreliable on shared CI runners')
 class TestRstdpRecompileInvariant(unittest.TestCase):
     """Per-turn weight overwrite + schedule rewrite reuse the compiled rollout (R1)."""
 
