@@ -110,6 +110,16 @@ class TestFigureAndCLI(unittest.TestCase):
                 harness.main()
             self.assertTrue(out.exists())
 
+    def test_main_explicit_args_non_quick_branch(self):
+        # Exercises the non-quick CLI path (explicit --puzzle/--seeds/--max-iterations).
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / 'sudoku.png'
+            argv = ['sudoku.py', '--puzzle', 'easy', '--seeds', '1',
+                    '--max-iterations', '6', '--out', str(out)]
+            with mock.patch('sys.argv', argv):
+                harness.main()
+            self.assertTrue(out.exists())
+
     def test_main_skips_plot_when_matplotlib_missing(self):
         # Force the matplotlib-absent branch and confirm main degrades gracefully.
         import io
