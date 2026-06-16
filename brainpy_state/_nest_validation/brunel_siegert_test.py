@@ -49,7 +49,7 @@ def _load_run():
     ``examples`` is not an importable package (no top-level ``__init__``), so the
     example is loaded directly from its file under the repository root.
     """
-    path = (pathlib.Path(__file__).resolve().parents[3]
+    path = (pathlib.Path(__file__).resolve().parents[2]
             / 'examples' / 'nest' / 'brunel_siegert.py')
     spec = importlib.util.spec_from_file_location('brunel_siegert_example', path)
     mod = importlib.util.module_from_spec(spec)
