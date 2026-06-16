@@ -70,6 +70,7 @@ from .correlation_detector import correlation_detector
 from .correlomatrix_detector import correlomatrix_detector
 from .correlospinmatrix_detector import correlospinmatrix_detector
 from .dc_generator import dc_generator
+from .host_drive import host_spike_drive, host_current_drive
 # ---------------------------------------------------------------------------
 # Gap junctions and special connections
 # ---------------------------------------------------------------------------
@@ -232,6 +233,9 @@ __all__ = [
     'dc_generator',
     'noise_generator',
     'step_current_generator',
+    # Host-clamped input devices (closed-loop / Simulator.cont rollouts)
+    'host_spike_drive',
+    'host_current_drive',
     'step_rate_generator',
 
     # Stimulation devices - Spike generators

@@ -483,6 +483,12 @@ class Simulator(brainstate.nn.Module):
         # gets a _SpikeHolder.
         if isinstance(mod, (_spike_recorder, _multimeter)):
             return NodeView([_Segment(mod, jnp.arange(1))])
+        # Current-injecting devices (host_current_drive) are driven via the
+        # _current_injectors path (phase 1b), like a dc_generator: they emit pA, not
+        # spikes, so they get no _SpikeHolder (phase 2 would otherwise double-drive
+        # the schedule counter). connect() registers them as injectors.
+        if getattr(mod, '_injects_current', False):
+            return NodeView.of(mod)
         holder = _SpikeHolder(_flat_size(mod))
         setattr(self, f'_holder_{id(mod)}', holder)
         # A neuron that integrates short-term plasticity *presynaptically* (declares
@@ -1203,6 +1209,16 @@ class Simulator(brainstate.nn.Module):
                     delay=delay, receptor_type=receptor_type, seed=seed)
         else:
             pre_pop = pre_seg.population
+            if getattr(pre_pop, '_injects_current', False):
+                # A non-deferred host_current_drive: register it as a current
+                # injector reading its host-set schedule (same ring-buffer path as a
+                # dc_generator), keeping the host's stable handle so the schedule can
+                # be rewritten between cont() chunks. No holder, no projection.
+                comp, ncomp = self._resolve_current_compartment(post_pop, receptor_type)
+                self._current_injectors.append(
+                    (pre_pop, post_pop, post_seg.indices, weight,
+                     f'cur_inj_{ordinal}', comp, ncomp))
+                return None
             source_pop = pre_pop
             holder = getattr(self, f'_holder_{id(pre_pop)}')
             if synapse is not None:
