@@ -1,270 +1,229 @@
-# Numerical validation — NEST parity gap (cross-cutting)
+# Numerical validation — NEST parity status (cross-cutting)
+
+_As of 2026-06-16._
 
 ## 1. Scope
 
-Cross-cutting inventory of NEST-comparison test coverage across all ported
-modules in `brainpy_state/_nest/`. Per-family validation-coverage rollup,
-identification of families that need a NEST-comparison harness before
-promotion from Experimental → Beta, and a shared-infrastructure proposal.
+Cross-cutting status of NEST-comparison test coverage across all ported modules
+in `brainpy_state/_nest/`. This page used to be a proposal to *build* a
+validation harness; that harness has since shipped and the cluster backlog
+(00–28) that filled it out has fully merged. The page now records the shipped
+reality: what the harness is, what it covers, the tolerance conventions it
+enforces, and the genuine residual gaps that remain.
 
 Upstream reference: not applicable — this is a repo-internal classification.
 
-Evidence basis:
-- `grep -l "import nest" brainpy_state/_nest/*_test.py | wc -l` → **69**
-  (run 2026-05-11).
-- Total ported module files: **117** in `brainpy_state/_nest/__init__.py`
-  exports (one of which is `_base`, not a model — so 116 user-visible models).
-- Tests grep `import nest` inside individual test methods (lazy import,
-  skipped via `try/except ImportError`), not at module top. So the count is
-  authoritative only if checked with the full file scan, which this analysis
-  does.
-- 69 modules have at least one `import nest` test method.
-- 48 modules (47 models + `_base`) have no `import nest` reference test.
+Evidence basis (verified 2026-06-16):
+- `brainpy_state/_nest/_validation/` exists and holds **140 files**, of which
+  **120** carry `@requires_nest` (live-NEST parity) and/or analytic checks.
+- The harness ships its own unit tests (`nest_compare_test.py`,
+  `tolerance_conventions_test.py`) that run with or without NEST installed.
+- **122** non-test modules in `brainpy_state/_nest/`; **75** ports under
+  `examples/nest/`, each backed by a `_validation` parity test.
+- Cluster backlog 00–28 all merged (cluster 18, e-prop, moved to the sibling
+  `braintrace` package and is out of scope here).
 
 ## 2. Parity summary
 
-NEST-comparison test coverage is **bimodal** by family. AdEx, rate models,
-all devices (generators / recorders / detectors), and most synapses+plasticity
-rules have NEST-comparison tests. The entire spiking-neuron set apart from
-AdEx (IAF psc/cond/specialized, GIF, GLIF, HH, MAT, Izhikevich, binary,
-point-process) and the entire STP family have **zero** NEST-comparison
-coverage.
+NEST-comparison coverage is now broad rather than bimodal. The shared harness
+(`nest_compare.py` + `tolerance_conventions.py`) is the single comparison path,
+and nearly every ported model has a `_validation` parity test that imports it.
+AdEx, the IAF psc / cond / specialized families, GIF, GLIF, HH (incl. the
+gap-junction variants), MAT/AMAT, Izhikevich, binary stochastic neurons, rate
+models, the full device set (generators / recorders / detectors), and the
+synapse + plasticity families (static, STDP, STP/Tsodyks, quantal STP, Clopath,
+Urbanczik, Jonke, Vogels-Sprekeler) all have parity tests under
+`_validation/`.
 
-Even where tests exist, **no test header documents tolerance, duration, dt,
-or PRNG-seeding protocol**. Promotion to `implemented` (per the taxonomy in
-the spec §3) requires that documentation step to land per-family.
+Tolerance, comparison mode, and the multi-seed protocol are no longer
+undocumented per-test conventions: they live in `tolerance_conventions.py`
+(categories A–E) and are imported by every parity test, so the question "did it
+match NEST, and within what tolerance?" is asked the same way everywhere.
 
-| Bucket | Count | % | Notes |
-|---|---:|---:|---|
-| modules with `import nest` test | 69 | 59 % | High-level coverage; tolerance unspecified |
-| modules without `import nest` test | 48 | 41 % | Includes `_base` (1 module, not a model) — effective gap is 47 |
-| modules with documented tolerance + duration | 0 | 0 % | No `*_test.py` header documents these |
-| **total ported modules** | **117** | | |
+| Bucket | Status | Notes |
+|---|---|---|
+| Shared comparison harness | **shipped** | `nest_compare.py`, `tolerance_conventions.py`, `conftest.py`, `README.md` + self-tests |
+| Tolerance conventions (A–E) | **documented + importable** | `tolerance_conventions.py` is the single source of truth |
+| `@requires_nest` marker + skip-guard | **shipped** | registered in `conftest.py`; defined in `nest_compare.py` |
+| Per-model parity tests | **~all ported models** | 120 of 140 `_validation` files carry `@requires_nest` |
+| Genuine residual | **small** | see §6 — chiefly `pp_psc_delta`; do **not** claim 100 % parity |
 
-## 3. Evidence-backed mapping table — per-family rollup
+## 3. The shipped harness
 
-| Family | n_models | n_with_nest_test | coverage % | Lead test sample | Compared quantity (heuristic) | Notes |
-|---|---:|---:|---:|---|---|---|
-| AdEx (`aeif_*`) | 9 | 9 | 100 % | `aeif_cond_alpha_test.py:448-491` | V_m trace via multimeter | full family covered |
-| IAF psc (`iaf_psc_*` incl. multisynapse + ps + lossless) | 10 | 0 | **0 %** | — | n/a | **largest gap** — base family of NEST |
-| IAF cond (`iaf_cond_*` incl. mc + beta + sfa_rr) | 5 | 0 | **0 %** | — | n/a | **gap** |
-| IAF specialized (`iaf_bw_2001*`, `iaf_chs_2007`, `iaf_chxk_2008`, `iaf_tum_2000`) | 5 | 0 | **0 %** | — | n/a | **gap** |
-| MAT / AMAT (`mat2_psc_exp`, `amat2_psc_exp`) | 2 | 0 | **0 %** | — | n/a | **gap** |
-| GIF (`gif_*`) | 5 | 0 | **0 %** | — | n/a | **gap** |
-| GIF population (`gif_pop_psc_exp`) | (1 of 5 above) | 0 | **0 %** | — | n/a | population statistics needed |
-| GLIF (`glif_*`) | 3 | 0 | **0 %** | — | n/a | **gap** |
-| HH (`hh_*`, `ht_neuron`) | 6 | 0 | **0 %** | — | n/a | **gap** — includes Hill-Tononi |
-| Izhikevich (`izhikevich`) | 1 | 0 | **0 %** | — | n/a | **gap** |
-| Binary (`erfc_neuron`, `ginzburg_neuron`, `mcculloch_pitts_neuron`) | 3 | 0 | **0 %** | — | n/a | PRNG distributional |
-| Point process (`pp_psc_delta`, `pp_cond_exp_mc_urbanczik`) | 2 | 1 | 50 % | `_validation/urbanczik_synapse_parity_test.py` (Y) | dendritic/somatic V + `V_W_star`/`delta_Pi` | `pp_cond_exp_mc_urbanczik` validated (cluster-21); `pp_psc_delta` unvalidated |
-| Multi-compartment (`cm_default`, `iaf_cond_alpha_mc`) | 2 | 1 | 50 % | `cm_default_test.py` (Y) | V_m + compartment traces | `iaf_cond_alpha_mc` unvalidated |
-| Astrocyte (`astrocyte_lr_1994`) | 1 | 1 | 100 % | `astrocyte_lr_1994_test.py` (Y) | astrocyte state | covered |
-| Other neurons (`ignore_and_fire`, `spike_train_injector`) | 2 | 2 | 100 % | `ignore_and_fire_test.py` (Y), `spike_train_injector_test.py` (Y) | spike times | covered |
-| Rate models (`lin_rate`, `tanh_rate`, `sigmoid_rate*`, `threshold_lin_rate`, `gauss_rate`, `siegert_neuron`, `rate_neuron_ipn/opn`, `rate_transformer_node`) | 10 | 10 | 100 % | `lin_rate_test.py` (Y) | rate state | full family covered |
-| **Neurons total** | **66** | **24** | **36 %** | | | |
-| Static + bernoulli + cont_delay + diffusion + gap + sic + rate-connection + ht_synapse | 9 | 9 | 100 % | `static_synapse_test.py` (Y) | weight / current | covered |
-| STDP family (`stdp_*` × 9) | 9 | 9 | 100 % | `stdp_synapse_test.py` (Y) | weight trajectory | covered |
-| STP family (`tsodyks*` × 3, `quantal_stp_synapse`) | 4 | 0 | **0 %** | — | n/a | **gap** |
-| Clopath / Urbanczik / Jonke / Vogels-Sprekeler | 4 | 4 | 100 % | `clopath_synapse_test.py` (Y) | weight trajectory | covered |
-| `volume_transmitter` | 1 | 0 | **0 %** | — | n/a | **gap** — couples to dopamine STDP |
-| **Synapses + plasticity total** | **27** | **22** | **81 %** | | | |
-| Generators (15: ac, dc, step current/rate, Poisson 4×, sinusoidal 2×, gamma sup, ppd sup, mip, pulsepacket, noise, spike) | 15 | 15 | 100 % | `poisson_generator_test.py` (Y) | spike times / current | covered |
-| Recorders (multimeter, spike_recorder, weight_recorder) | 3 | 3 | 100 % | `multimeter_test.py` (Y) | event lists | covered |
-| Detectors (4: correlation, correlomatrix, correlospinmatrix, spin) | 4 | 4 | 100 % | `correlation_detector_test.py` (Y) | covariance | covered |
-| Spike utilities (`spike_dilutor`, `spike_train_injector`) | 2 | 2 | 100 % | `spike_dilutor_test.py` (Y) | spike times | covered (spike_train_injector also classed as neuron) |
-| **Devices total** | **24** | **24** | **100 %** | | | |
+`brainpy_state/_nest/_validation/` is the live-NEST parity harness. It is the
+shared answer to "did it match NEST?": every parity test imports the same
+comparison engine and the same documented tolerances.
 
-(Numbers above sum across overlapping categories — `_base` excluded; `spike_train_injector` and `volume_transmitter` counted in their primary categories.)
+- **`nest_compare.py`** — the comparison engine:
+  - `requires_nest` — decorator/skip-guard that skips a `TestCase` class or
+    method when `import nest` fails and tags the `requires_nest` pytest marker
+    (so `pytest -m requires_nest` selects the live-NEST tests).
+  - `compare_trace(reference, candidate, *, tol, metric)` — deterministic
+    per-sample / max-abs comparison (categories A/B/C). Pass test is the
+    division-free numpy-allclose form `max|a − b| ≤ atol + rtol·max|ref|`, with
+    an optional `±align_steps` integer-shift search to absorb a recorder
+    one-step offset.
+  - `compare_distributional(reference_samples, candidate_samples, *, tol,
+    metric, statistic)` — multi-seed statistical comparison (category D). Never
+    compares per-sample; aggregates each side (`"mean"`, `"cv"`, or `"autocorr"`)
+    and compares the aggregate.
+  - `nest_compare(nest_fn, brainpy_fn, *, mode, tol, seeds, statistic)` — the
+    umbrella convenience that *runs* the two callables and dispatches to the
+    right comparator.
+  - `ComparisonResult` with `.assert_()` — the comparators return a result
+    object; `.assert_()` raises `AssertionError(detail)` on failure.
+- **`tolerance_conventions.py`** — the single source of truth for *what
+  tolerance for what kind of model* (categories A–E + the multi-seed protocol +
+  sim defaults). Importable, unit-aware constants.
+- **`conftest.py`** — registers the `requires_nest` pytest marker (no
+  `PytestUnknownMarkWarning`).
+- **`README.md`** — how to write a parity test.
+- **Self-tests** — `nest_compare_test.py` and `tolerance_conventions_test.py`
+  exercise the engine and the constants. The core comparators take
+  already-computed metric values (plain floats/arrays or `brainunit`
+  quantities), so they are pure and unit-testable *without* NEST installed.
 
-## 4. Missing or incomplete functionality
+### Two comparison modes
 
-**Families with zero NEST-comparison coverage:**
+| Mode | When | How it compares | Category | Helper |
+|---|---|---|---|---|
+| `trace` | deterministic drive (same dt, fixed input, analytic / mean-field) | per-sample / max-abs error, optional ±1-step recorder alignment | A, B, C | `compare_trace` |
+| `distributional` | PRNG-divergent drive (Poisson, random connectivity, stochastic neurons) | seed-**aggregated** statistic (the mean), **never** per-sample | D | `compare_distributional` |
 
-- IAF psc (10 models)
-- IAF cond (5 models)
-- IAF specialized (5 models)
-- MAT (2 models)
-- GIF (5 models)
-- GLIF (3 models)
-- HH (6 models)
-- Izhikevich (1 model)
-- Binary (3 models)
-- Point process (2 models)
-- STP family (4 plasticity rules)
-- `volume_transmitter`
-- `iaf_cond_alpha_mc` (the multi-compartment with no NEST test, alongside the
-  validated `cm_default`)
+NEST and JAX draw from independent PRNG streams, so anything stochastic is
+compared distributionally — averaged over seeds, never spike-by-spike.
 
-**No documented tolerance/duration/dt convention.** All 69 modules with NEST
-imports lack a per-test or per-family tolerance + duration + dt convention.
-This is the structural reason no module is currently classified `implemented`
-(spec §3).
+## 4. Tolerance conventions (implemented)
 
-**No shared validation harness.** Each `*_test.py` re-implements its own NEST
-comparison glue: `nest.ResetKernel()`, parameter marshalling, multimeter
-setup, trace alignment, tolerance assertions. This works but invites drift
-(different tests use different conventions) and is a barrier to onboarding
-new model validations.
+These were once a proposal; they now live as importable, unit-aware constants
+in `tolerance_conventions.py` and are consumed by `nest_compare.py`. Categories
+A–E span the comparison space the parity harness covers (V_m trace, firing
+rate, weight trajectory, PSC-amplitude train, F-I curve / spike timing).
 
-**No reusable test infrastructure** for:
-- multi-seed PRNG distributional comparisons (binary neurons, STP, Bernoulli
-  synapses)
-- weight-trajectory comparisons (STDP, STP — needed for the synapse
-  promotions)
-- spike-time precise comparisons (`*_ps` variants, `parrot_neuron_ps` when
-  ported)
-- ~~gap-junction waveform-relaxation convergence~~ **Resolved (cluster-15b)** — the port
-  reproduces NEST's `use_wfr=False` regime with an explicit one-step-lagged difference
-  current (no waveform relaxation to converge); parity is the 2-neuron micro-parity +
-  distributional network coherence in `_validation/gap_junction_*parity_test.py`
-- spatial / topology connectivity statistics (when spatial lands)
+| Cat | Kind | Example metric | Tolerance | Constant(s) |
+|---|---|---|---|---|
+| A | adaptive numerical integrator | aeif / HH / izhikevich `V_m` | `atol 1e-3 mV`, `rtol 1e-3` | `CAT_A` |
+| B | analytic exact propagator | linear `iaf_psc_*` `V_m` / PSC | `atol 1e-6 mV`, `rtol 1e-6` (near-exact) | `CAT_B`, `CAT_B_ALIGNED` |
+| C | conductance / coupled / mean-field | `iaf_cond_*`, `siegert_neuron` rate | `1e-3 mV` trace / `5 %` rate | `CAT_C`, `CAT_C_RATE` |
+| D | distributional (PRNG-divergent) | network firing rate, ISI CV | mean `5 %`, `≥ 4` seeds | `CAT_D` |
+| E | spike-time / event-count | `*_ps`, PSC peak timing, event counts | `|ΔN| ≤ 2`, `|Δstep| ≤ 1` | `CAT_E` |
 
-## 5. Semantic & numerical risks
+- **CAT_A** — `TraceTolerance(1e-3 mV, 1e-3)`. Adaptive RKF45 integrator V_m /
+  state trace.
+- **CAT_B** — `TraceTolerance(1e-6 mV, 1e-6)`. Analytic exact-propagator trace
+  (near-exact); the propagator should match NEST to round-off.
+- **CAT_B_ALIGNED** — same analytic family but `align_steps=1` and a looser
+  `5e-2 mV` atol, to tolerate a one-step multimeter recorder offset (the
+  pipeline-latency case).
+- **CAT_C** — `TraceTolerance(1e-3 mV, 1e-3)`. Conductance / coupled
+  deterministic trace (`iaf_cond_*`, multi-compartment).
+- **CAT_C_RATE** — `TraceTolerance(0.0, 5e-2)`. Mean-field rate fixed point in
+  Hz, compared purely relatively.
+- **CAT_D** — `DistributionalTolerance(rate_rtol=5e-2, mean_diff_pct=2e-2,
+  autocorr_max_diff=5e-2, n_seeds=N_SEEDS_DEFAULT)`. PRNG-divergent multi-seed
+  statistic; compare the aggregate, never per-sample.
+- **CAT_E** — `SpikeTimeTolerance(max_count_diff=2, max_peak_step_diff=1)`.
+  Spike-time / event-count; `±1` step ≈ `dt`.
 
-- **PRNG divergence (cross-cutting).** NEST and JAX use independent PRNG
-  streams. Spec §7 establishes bit-exact unsupported, distributional in
-  scope. Concrete implication: validation tests for binary neurons, MIP
-  generator, Poisson generators, Bernoulli synapses, quantal STP, etc., must
-  use distributional metrics (mean firing rate, ISI CV, covariance) not
-  per-event equality. Documented tolerance widens accordingly.
-- **Integration-step coupling.** NEST uses fixed dt with min-delay-based
-  slice scheduling and ring buffers. `brainpy.state` uses adaptive RKF45 for
-  category A/C models and analytical propagators for category B. At matched
-  dt these *should* converge but at the level of round-off; promoting any
-  cat-A model to `implemented` requires verifying the RKF45 tolerance
-  (`atol`, `rtol`) matches whatever NEST GSL settings the model uses.
-- **Refractory rounding.** NEST rounds `t_ref` to a multiple of `dt`. Verify
-  round-toward-zero vs. round-up convention per family.
-- **Spike-threshold timing.** NEST checks `V_m >= V_th` after the propagator
-  step. Most repo families likely match this; needs per-family confirmation.
-- **Delay handling.** NEST uses min-delay-based scheduling; brainpy.state
-  uses brainstate delay containers. *Behavior should match at matched delays
-  but timing-edge cases (delay exactly at min_delay boundary, delay across
-  Run/Cleanup) may differ.* Test harness should pin a specific delay regime.
-- **Recording-device semantic divergence.** Cross-link `devices-gap.md` §5.
-  Trace comparison harnesses must define whether they compare in-memory
-  state arrays or backend-flushed events — these may differ in stamping.
-- **Reset semantics.** `nest.ResetKernel()` destroys everything;
-  brainpy.state has no kernel. The shared harness must wrap NEST-side
-  ResetKernel + brainpy-side fresh-state construction in a single setUp
-  helper.
-- **Multi-seed averaging.** For PRNG-distributional tests, 1 seed is not
-  enough. The harness should default to N ≥ 5 seeds and accept a tighter
-  per-seed tolerance plus a looser distributional tolerance.
+Simulation defaults are also exported: `T_DEFAULT = 1000 ms`, `DT_DEFAULT =
+0.1 ms`, `N_SEEDS_DEFAULT = 5`.
 
-## 6. Validation infrastructure gaps
+**Multi-seed protocol (category D).** Because NEST and JAX draw from independent
+PRNG streams, PRNG-divergent drives are never compared per-sample. The
+convention is to run `N ≥ N_SEEDS_DEFAULT` seeds per side and compare the
+seed-**mean** (a handful of legacy single-realization tests use one seed, a
+documented limitation).
 
-There is **no reusable harness** in
-`brainpy_state/_nest/_validation/` (the directory itself does not exist).
-Concretely, the harness should provide:
+`TraceTolerance.atol` is unit-aware: a `brainunit` Quantity in mV for voltage
+traces, and a plain `float` for dimensionless / rate metrics. The `compare_*`
+engine consumes these constants; `tolerance_conventions.py` itself holds no
+logic.
 
-- `nest_compare(model_factory, params, dt, T, record, seeds, tol)` — runs the
-  brainpy.state model and the matching NEST model under matched seeds, records
-  the same recordable(s) on both, and asserts trace agreement within
-  `tol = (atol, rtol)`.
-- `pytest` marker `@pytest.mark.requires_nest` and conftest skipping (so the
-  harness is opt-in: `pytest -m requires_nest`).
-- Per-family base classes (`NESTNeuronComparisonCase`,
-  `NESTSynapseComparisonCase`, `NESTDeviceComparisonCase`) that subclass
-  `unittest.TestCase` and provide the boilerplate.
-- A documented tolerance-naming convention:
-  `cat_A_default = (atol=1e-3 mV, rtol=1e-3)`,
-  `cat_B_default = (atol=1e-6 mV, rtol=1e-6)` (analytical propagator should
-  be near-exact),
-  `cat_C_default = (atol=1e-3 mV, rtol=1e-3)`,
-  `distributional_default = mean_diff_pct=2 %, autocorr_max_diff=0.05`.
-- A documented `T_default = 1000 ms`, `dt_default = 0.1 ms`, `n_seeds_default = 5`.
+## 5. Writing a parity test
 
-## 7. Prioritized roadmap
+A parity test is a plain `unittest.TestCase`. Run the NEST side and the
+brainpy.state `Simulator` side however you like, hand the **computed metric** to
+a comparator, and call `.assert_()`:
 
-- **P0 — Build the shared NEST-comparison harness.** [M]
-  Rationale: prerequisite for every other validation-related P0 across the
-  per-axis docs (cross-link `neurons-gap.md` P0, `synapses-plasticity-gap.md`
-  P0, `devices-gap.md` P0). Acceptance: `brainpy_state/_nest/_validation/`
-  exists with `nest_compare.py`, `comparison_base.py`,
-  `tolerance_conventions.py`, and a README documenting the harness.
-  `@pytest.mark.requires_nest` is registered in `conftest.py`. At least 3
-  existing tests (e.g. `aeif_cond_alpha_test.py`, `iaf_psc_alpha_test.py`,
-  `multimeter_test.py`) are refactored to use it, *demonstrating no
-  behavioral regression*.
+```python
+import unittest
+from brainpy_state._nest._validation.nest_compare import (
+    requires_nest, compare_trace, compare_distributional,
+)
+from brainpy_state._nest._validation.tolerance_conventions import CAT_C_RATE, CAT_D
 
-- **P0 — Promote IAF psc family from 0 % validation coverage.** [L]
-  Rationale: highest-priority family (most-used in NEST benchmarks).
-  Cross-link `neurons-gap.md` P0. Acceptance: all 10 `iaf_psc_*` variants
-  have NEST-comparison tests using the harness; each documents tolerance,
-  duration, dt; CI green on a NEST-installed runner.
 
-- **P0 — Promote IAF cond family from 0 % validation coverage.** [L]
-  Cross-link `neurons-gap.md` P0. Acceptance: all 5 `iaf_cond_*` variants
-  validated with the harness.
+@requires_nest                       # skips cleanly when `import nest` fails
+class TestMyModelParity(unittest.TestCase):
+    def test_meanfield_rate(self):                 # deterministic -> trace mode
+        bp = run_brainpy()                         # Simulator run -> a rate (Hz)
+        ns = run_nest()                            # live-NEST run -> a rate (Hz)
+        compare_trace(ns, bp, tol=CAT_C_RATE, metric="exc rate").assert_()
 
-- **P0 — Validate the STP family (`tsodyks*`, `quantal_stp_synapse`,
-  `volume_transmitter`).** [M]
-  Cross-link `synapses-plasticity-gap.md` P0. Acceptance: 5 plasticity
-  rules + 1 device validated with the harness.
+    def test_network_rate(self):                   # PRNG-divergent -> distributional
+        bp = [run_brainpy(seed=s) for s in range(4)]
+        ns = [run_nest(seed=s + 1) for s in range(4)]   # offset to decorrelate streams
+        compare_distributional(ns, bp, tol=CAT_D, metric="exc rate").assert_()
+```
 
-- **P0 — Document tolerance conventions in a single page.** [S]
-  Acceptance: `docs/nest-status/internal/numerical-validation-gap.md`
-  becomes the canonical reference for tolerance defaults (linked from the
-  harness README); per-category defaults (A/B/C/D/E) documented.
+Carve-outs the harness recognizes: docs-only items are exercised by doctest (no
+live-NEST run); items blocked on an unlanded API ship a
+`@unittest.skip("blocked on <api>")` placeholder rather than a missing test.
 
-- **P1 — Promote AdEx family from `divergent` to `implemented`.** [M]
-  Cross-link `neurons-gap.md` P1. Acceptance: all 9 `aeif_*` tests refactored
-  to use the harness with documented tolerance.
+## 6. Genuine remaining gaps
 
-- **P1 — Promote rate models from `divergent` to `implemented`.** [M]
-  Acceptance: all 10 rate models refactored to use the harness with
-  documented tolerance; `siegert_neuron` adds a mean-field-equivalence test
-  separate from the trace test.
+Coverage is broad but **not** 100 %. The real residual:
 
-- **P1 — Validate GIF family.** [L]
-  Acceptance: at least `gif_psc_exp`, `gif_cond_exp` validated; population
-  variant (`gif_pop_psc_exp`) has its own population-statistics test.
+- **`pp_psc_delta`** — the model is present (`brainpy_state/_nest/pp_psc_delta.py`)
+  but has **no dedicated `_validation` parity test** with a live-NEST trace
+  comparison. This is the headline residual: its sibling point-process model
+  `pp_cond_exp_mc_urbanczik` *is* validated (cluster-21, via
+  `_validation/urbanczik_synapse_parity_test.py`), but `pp_psc_delta` is not.
+- **Any model whose only coverage is a unit / law test** (no live-NEST trace or
+  distributional comparison). These have an analytic or self-consistency check
+  but no `@requires_nest` parity test, so they are not on the same footing as
+  the trace-validated families. Audit before claiming a family is "fully
+  validated."
 
-- **P1 — Validate GLIF family.** [M]
-  Acceptance: `glif_psc`, `glif_cond`, `glif_psc_double_alpha` validated.
+Do **not** over-claim. The harness exists and nearly every P0 from the old
+roadmap has shipped, but the page should keep naming the residual above rather
+than asserting universal parity.
 
-- **P1 — Validate HH family.** [L]
-  Acceptance: `hh_psc_alpha`, `hh_cond_exp_traub`, `hh_cond_beta_gap_traub`,
-  `hh_psc_alpha_clopath`, `hh_psc_alpha_gap`, `ht_neuron` validated. Gap-junction
-  variants are validated against NEST's `use_wfr=False` regime (explicit one-step
-  lag, **not** waveform relaxation): `hh_psc_alpha_gap` ✓ done in cluster-15b
-  (`_validation/gap_junction_parity_test.py` + the inhibitory-network parity);
-  `hh_cond_beta_gap_traub` shares the seam (gap-capable) but its own gap-parity test
-  is still pending. The remaining four HH models keep their single-neuron parity gap.
+## 7. Permanently out of scope
 
-- **P1 — Validate MAT, Izhikevich, point-process families.** [M]
-  Acceptance: `mat2_psc_exp`, `amat2_psc_exp`, `izhikevich`, `pp_psc_delta`
-  validated (`pp_cond_exp_mc_urbanczik` ✓ done in cluster-21 via
-  `_validation/urbanczik_synapse_parity_test.py`).
+These are deliberate non-goals, not gaps to close:
 
-- **P1 — Validate binary stochastic family (distributional).** [S]
-  Acceptance: `erfc_neuron`, `ginzburg_neuron`, `mcculloch_pitts_neuron`
-  validated with distributional metrics (mean firing rate, autocorrelation).
+- **Bit-exact RNG reproduction vs NEST.** NEST and JAX use independent PRNG
+  streams; spike-by-spike equality of stochastic drives is not a goal. Anything
+  PRNG-divergent is validated distributionally (category D) — seed-mean firing
+  rate, ISI CV, covariance functions — never per-event equality.
+- **MPI / distributed determinism.** Parity is validated single-process; MPI /
+  distributed bit-for-bit determinism is not in scope.
 
-- **P1 — Validate `iaf_cond_alpha_mc` (multi-compartment).** [M]
-  Acceptance: compartment-tree topology and V_m traces match NEST.
+## 8. Methodology note — measuring harness coverage
 
-- **P2 — Validate IAF specialized models (`iaf_bw_2001*`, `iaf_chs_2007`,
-  `iaf_chxk_2008`, `iaf_tum_2000`).** [M]
-  `iaf_bw_2001*` are NMDA-sensitive; document NMDA saturation regime in the
-  test. Acceptance: each validated; `iaf_tum_2000` STP coupling to the
-  synapse-side `tsodyks*` family is also exercised.
+To measure coverage of the harness itself, use a directory-scoped run:
 
-- **P2 — Add gap-junction parity test.** [M] — **DONE for `hh_psc_alpha_gap` (cluster-15b).**
-  Validated against NEST's `use_wfr=False` regime (explicit one-step lag, not waveform
-  relaxation): the 2-`hh_psc_alpha_gap` micro-parity matches NEST to machine precision
-  between spikes (`_validation/gap_junction_parity_test.py`) and the inhibitory-network
-  Golomb coherence matches distributionally
-  (`_validation/gap_junction_inhibitory_network_parity_test.py`). Remaining: an analogous
-  `hh_cond_beta_gap_traub` gap-parity regression (shares the seam; not yet covered).
+```bash
+coverage run -m pytest \
+    brainpy_state/_nest/_validation/tolerance_conventions_test.py \
+    brainpy_state/_nest/_validation/nest_compare_test.py
+coverage report --include='brainpy_state/_nest/_validation/*'
+```
 
-- **P2 — CI parity-check matrix.** [M]
-  Acceptance: GitHub Actions workflow runs the harness with NEST installed
-  (separate from the default CI which doesn't require NEST); failures
-  produce a regression report.
+Do **not** use a dotted `--source=` / `--cov=<module>` form: pre-importing the
+package under coverage's C tracer double-initializes jaxlib/absl and SIGABRTs.
+Scope the report with `--include=` after a plain `coverage run` instead.
 
-- **P2 — Validation-progress badge.** [S]
-  Acceptance: per-family validation coverage is auto-computed from the
-  harness's test markers and displayed in a generated table in
-  `nest-status/index.rst`.
+Running the suite:
+
+```bash
+# everything in the package (harness self-tests run; NEST tests run if nest present, else skip)
+python -m pytest brainpy_state/_nest/_validation/ -q
+
+# only the live-NEST parity tests
+python -m pytest brainpy_state/_nest/_validation/ -m requires_nest -q
+```
+
+Without NEST installed, the `@requires_nest` tests skip cleanly and the harness
+self-tests still pass.

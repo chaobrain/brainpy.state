@@ -12,7 +12,7 @@ binary-state detector (`spin_detector`).
 
 Upstream reference:
 <https://nest-simulator.readthedocs.io/en/stable/models/index.html> (devices
-sections of catalog snapshot §§3-6: 24 devices total, excluding MUSIC proxies).
+sections of catalog snapshot §§3-6: 25 devices total, excluding MUSIC proxies).
 
 Lead implementations actually read for this analysis:
 - `brainpy_state/_nest/multimeter.py` (lines 44-155 confirm full NEST device-
@@ -23,13 +23,13 @@ Lead implementations actually read for this analysis:
   gating semantics).
 - `brainpy_state/_nest/poisson_generator.py` (lines 46-103 confirm `rate`,
   `start`, `stop`, `origin` with NEST-compatible bounds).
-- Family extrapolation to remaining 21 devices.
+- Family extrapolation to remaining 22 devices.
 
 ## 2. Parity summary
 
-All 24 NEST devices (excluding MUSIC proxies, which are unsupported per spec §7)
+All 25 NEST devices (excluding MUSIC proxies, which are unsupported per spec §7)
 are ported and have NEST-comparison tests at the test-file level. The
-`docs/nest-status/index.rst:92-93` self-disclosure flags "recording-device
+`docs/nest-status/index.rst:93-94` self-disclosure flags "recording-device
 fidelity" as not yet fully matching NEST's device model — meaning the
 *parameter surface* matches NEST but the *output-buffering / event-emission
 semantics* may diverge. Validate this concretely.
@@ -37,12 +37,13 @@ semantics* may diverge. Validate this concretely.
 | Bucket | Count | Notes |
 |---|---:|---|
 | implemented | 0 | (no device test has documented tolerance + event-count parity convention) |
+| nest_validated | 2 | `weight_recorder` (cluster-09 send-view audit) and `volume_transmitter` (`_validation/volume_transmitter_parity_test.py`) have live-NEST parity tests |
 | unvalidated | 0 | All ported devices have `import nest` in their test |
 | partial | 0 known | Per family-level structural check |
-| divergent | 24 | All ported devices: have NEST tests, but output-buffering / event-emission semantics flagged as divergent in `nest-status/index.rst:92-93` |
+| divergent | 23 | All other ported devices: have NEST tests, but output-buffering / event-emission semantics flagged as divergent in `nest-status/index.rst:93-94` |
 | missing | 0 | All in-scope NEST devices ported |
 | unsupported | 7 | MUSIC proxies (catalog §7) |
-| **total NEST devices surveyed (excl. MUSIC)** | **24** | per snapshot §§3-6 |
+| **total NEST devices surveyed (excl. MUSIC)** | **25** | per snapshot §§3-6 |
 
 ## 3. Evidence-backed mapping table
 
@@ -89,7 +90,7 @@ semantics* may diverge. Validate this concretely.
 |---|---|---|---|---|---|
 | `spike_dilutor` | divergent | `brainpy_state/_nest/spike_dilutor.py` | <https://nest-simulator.readthedocs.io/en/stable/models/spike_dilutor.html> | `spike_dilutor_test.py` (Y) | per-spike Bernoulli relay; PRNG distributional |
 | `spike_train_injector` | divergent | `brainpy_state/_nest/spike_train_injector.py` | <https://nest-simulator.readthedocs.io/en/stable/models/spike_train_injector.html> | `spike_train_injector_test.py` (Y) | acts as a neuron + injects prescribed spike train (cross-link `neurons-gap.md`) |
-| `volume_transmitter` | unvalidated | `brainpy_state/_nest/volume_transmitter.py` | <https://nest-simulator.readthedocs.io/en/stable/models/volume_transmitter.html> | `volume_transmitter_test.py` (N) | listed here for completeness; primary classification in `synapses-plasticity-gap.md` |
+| `volume_transmitter` | nest_validated | `brainpy_state/_nest/volume_transmitter.py` | <https://nest-simulator.readthedocs.io/en/stable/models/volume_transmitter.html> | `volume_transmitter_rule_test.py` (N, law/unit), `_validation/volume_transmitter_parity_test.py` (Y, live-NEST) | listed here for completeness; primary classification in `synapses-plasticity-gap.md` |
 
 ### MUSIC proxies (unsupported — see spec §7)
 
@@ -99,10 +100,10 @@ semantics* may diverge. Validate this concretely.
 
 ## 4. Missing or incomplete functionality
 
-- **Nothing entirely missing** among in-scope NEST devices. All 24 are ported,
+- **Nothing entirely missing** among in-scope NEST devices. All 25 are ported,
   all have `import nest` comparison tests.
 - **Output-buffering / event-emission semantics divergence** is signalled in
-  `docs/nest-status/index.rst:92-93`. Concretely this means:
+  `docs/nest-status/index.rst:93-94`. Concretely this means:
   - NEST recorders maintain per-device event buffers that grow during
     `Simulate()` and are flushed to the chosen recording-backend
     (`memory`, `ascii`, `sionlib`, …) on schedule.
@@ -155,29 +156,34 @@ semantics* may diverge. Validate this concretely.
 
 ## 6. Validation gaps
 
-- All 24 devices have `import nest` in their tests, but **none document a
-  per-test tolerance/duration/parameter-set protocol** in the test header.
-- No regression test verifies **stamp-step-by-stamp-step parity** between
-  multimeter output and NEST multimeter output for the same neuron + input
-  configuration.
-- No test asserts that `spike_recorder` produces the **same exact event
-  array** (timestamps + sender IDs) as NEST under matched seed + matched dt.
-- No regression covers the **start-exclusive / stop-inclusive** boundary
-  behavior at `t == start` and `t == stop` exactly.
-- No tests cover the **recording-backend** divergence (no file-backed
-  recorders in repo).
+- All 25 devices have `import nest` in their tests, with per-device parity
+  protocols now anchored in `_validation/` (tolerance conventions in
+  `tolerance_conventions.py`).
+- ✅ **Resolved.** Multimeter stamp-step parity is covered:
+  `_validation/multimeter_file_test.py::test_all_recordables_match_nest`
+  compares every recordable (`V_m`, `I_syn_ex`, `I_syn_in`) against live NEST
+  at category B (`CAT_B_GEN`) via `compare_trace`.
+- ✅ **Resolved.** `spike_recorder` exact-event parity is covered:
+  `_validation/device_parity_test.py` asserts the exact event count and
+  stamp-step time against NEST (`test_counts_and_stamp_step`) plus the
+  distributional mean-count match (`test_mean_count_matches_nest_within_tolerance`).
+- No dedicated regression yet pins the **start-exclusive / stop-inclusive**
+  boundary behavior at `t == start` and `t == stop` exactly (the stamp-step
+  test exercises one boundary but not the full parametric sweep).
+- **Genuinely open (P2).** No tests cover the **recording-backend** divergence
+  (no file-backed `ascii` / `sionlib` recorders in repo).
 
 ## 7. Prioritized roadmap
 
-- **P0 — Make recording-device parity concrete with a single canonical test.** [M]
-  Rationale: the user-facing `nest-status/index.rst:92-93` says recording
-  semantics diverge, but the concrete divergence is undocumented. A reference
-  test that runs `iaf_psc_alpha` + `multimeter` for 1 s in both NEST and
-  brainpy.state under matched seeds, then computes max-abs-diff per recordable,
-  pins down the divergence (or shows it's smaller than tolerance). Acceptance:
-  test exists at `brainpy_state/_nest/_validation/recorder_parity_test.py`;
-  documents max observed divergence; `nest-status/index.rst:92-93` either
-  upgrades the language or links to the test as the concrete description.
+- **P0 — Make recording-device parity concrete with a canonical test.** ✅ **Done.**
+  The user-facing `nest-status/index.rst:93-94` flags recording semantics as
+  divergent; recorder parity is now pinned concretely by two live-NEST tests:
+  `brainpy_state/_nest/_validation/multimeter_file_test.py` runs an
+  `iaf_psc_exp` + `multimeter` against live NEST and asserts every recordable
+  (`V_m`, `I_syn_ex`, `I_syn_in`) matches at category B via `compare_trace`,
+  and `brainpy_state/_nest/_validation/device_parity_test.py` asserts
+  `spike_recorder` exact event count + stamp-step parity. (No standalone
+  `recorder_parity_test.py` is needed — these two files cover it.)
 
 - **P0 — Document the stamp-step gating convention.** [S]
   Rationale: `multimeter.py:96-99` and `spike_recorder.py:51-52` are precise
@@ -206,13 +212,16 @@ semantics* may diverge. Validate this concretely.
   Acceptance: documented in docstring + test asserts repo behavior matches
   NEST `precise_times=True` semantics or documents the difference.
 
-- **P2 — File-backed recording backends.** [L]
+- **P2 — File-backed recording backends.** [L] (genuinely open)
   Rationale: NEST supports `ascii`, `sionlib`, etc. `brainpy.state` only
-  supports in-memory. Most users of brainpy.state are JAX-pipeline users who
-  don't need file backends, but porting NEST scripts that rely on them
-  requires the equivalent. Acceptance: at minimum an `ascii`-equivalent
-  backend that writes to `.dat` files on `Simulate()` completion is available
-  for `spike_recorder` and `multimeter`.
+  supports in-memory PyTree storage — no file-backend equivalents exist. Most
+  users of brainpy.state are JAX-pipeline users who don't need file backends,
+  but porting NEST scripts that rely on them requires the equivalent. The
+  ported scripts `examples/nest/multimeter_file.py` and
+  `examples/nest/recording_demo.py` reproduce the trace content in memory but
+  **skip the file-backend (`set_data_path` / `.dat` write) step**. Acceptance:
+  at minimum an `ascii`-equivalent backend that writes to `.dat` files on
+  `Simulate()` completion is available for `spike_recorder` and `multimeter`.
 
 - **P2 — Stamp-step bit-exact recorder test.** [M]
   Rationale: confirm that for analytical-propagator neurons (Category B),

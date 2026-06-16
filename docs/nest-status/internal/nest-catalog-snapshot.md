@@ -8,9 +8,8 @@
 - PyNEST API listing: <https://nest-simulator.readthedocs.io/en/stable/ref_material/pynest_api/index.html>
 - Spatially structured networks: <https://nest-simulator.readthedocs.io/en/stable/networks/spatially_structured_networks.html>
 
-**Purpose:** Frozen baseline for the gap analysis in this directory. Re-run the
-fetch steps in `../../superpowers/plans/2026-05-11-nest-gap-analysis.md`
-Task 1 to refresh.
+**Purpose:** Frozen baseline for the gap analysis in this directory. See
+`./index.md` for the gap-analysis overview and refresh procedure.
 
 ---
 
@@ -93,7 +92,7 @@ Task 1 to refresh.
 | `tanh_rate` | Rate | tanh gain | https://nest-simulator.readthedocs.io/en/stable/models/tanh_rate.html |
 | `threshold_lin_rate` | Rate | Threshold-linear gain | https://nest-simulator.readthedocs.io/en/stable/models/threshold_lin_rate.html |
 
-**Total NEST neurons in this snapshot:** 73.
+**Total NEST neurons in this snapshot:** 74.
 
 ## 2. Synapses and plasticity
 
@@ -360,7 +359,7 @@ network construction from SONATA HDF5/CSV/JSON files.
 
 | Category | Count |
 |---|---|
-| Neurons (excl. MUSIC proxies) | 73 |
+| Neurons (excl. MUSIC proxies) | 74 |
 | Synapses + plasticity | 32 |
 | Stimulation generators | 15 |
 | Recorders | 3 |

@@ -11,12 +11,14 @@ Upstream reference:
 (listing also obtained from GitHub: `gh api repos/nest/nest-simulator/contents/pynest/examples`).
 
 Evidence basis:
-- `find docs/examples/ -type f` shows only `gallery.rst` (5.7 KB) — no notebooks,
-  no scripts.
-- `cat docs/examples/gallery.rst` (read in this analysis) lists 14 examples
-  under three rubrics: classical network models, oscillations, and SNN
-  training. **None of these are NEST-style ports.** They use brainpy.state's
-  native compositional API.
+- `examples/nest/` now holds **~75 NEST-style port scripts** (clusters 00–28),
+  each paired with a live-NEST (or analytic) parity test under
+  `brainpy_state/_nest/_validation/`. This is the porting-target list, realized.
+- `docs/examples/gallery.rst` (5.7 KB) still lists only the original 14
+  brainpy-style examples (classical network models, oscillations, SNN
+  training) under their native compositional API — the `examples/nest/` ports
+  are **not yet wired into the rendered gallery** (the residual; see
+  `docs-portfolio-gap.md`).
 - Upstream NEST examples list (~70 top-level scripts + ~10 subdirectories,
   retrieved 2026-05-11) covers: Brunel family, balanced random networks,
   COBA/CUBA, gap junctions, GIF/GLIF demos, HH demos, IAF Tum 2000 STP
@@ -26,17 +28,21 @@ Evidence basis:
 
 ## 2. Parity summary
 
-The example portfolio gap is total: **zero NEST examples are ported into the
-repo's example gallery**. The 14 examples present are brainpy-style E-I
-networks and SNN training scripts — useful in their own right but not
-demonstrating the NEST-compat surface to NEST users. This is the most direct
-documentation-side blocker for NEST porting.
+The example-porting work is essentially complete: **~75 NEST-style scripts now
+live in `examples/nest/`**, spanning the flagship Brunel family, single-neuron
+pedagogy, plasticity, recording, generator, spatial, astrocyte, rate, and
+compartmental demos, plus pong and sudoku — each backed by a live-NEST (or
+analytic) parity test. The residual is twofold: (1) **wiring these ports into
+the rendered `gallery.rst`** so NEST users can discover them (a docs task, not
+a porting task — `docs-portfolio-gap.md`), and (2) a small **out-of-scope
+tail** (e-prop → `braintrace`; `ht_neuron` intrinsic-currents; MUSIC / SONATA /
+HPC / structural-plasticity by design).
 
 | Bucket | Count | Notes |
 |---|---:|---|
-| implemented (ported + reproducing NEST result) | 0 | |
-| partial (concept covered by a non-NEST-style example) | ~4 | COBA / CUBA / E-I balanced / HH-COBA in `gallery.rst` overlap conceptually with Brunel-style examples |
-| missing | ~50+ | flagship Brunel family + microcircuit + most plasticity / recording / spatial / astrocyte / e-prop / SONATA demos |
+| implemented (ported + reproducing NEST result) | ~53 | clusters 00–28: flagship Brunel family + single-neuron / plasticity / recording / generator / spatial / astrocyte / rate / compartmental / sudoku / pong demos, each with a live-NEST (or analytic) parity test |
+| partial (concept covered by a non-NEST-style example) | ~0 | the former `gallery.rst` COBA / CUBA / E-I overlaps are now superseded by the direct Brunel ports below |
+| missing | ~10 | out-of-scope tail only: the **e-prop** subdir (ported in `braintrace`), `ht_neuron` intrinsic-currents (cluster-14 deferral), and the optional `spatial/` tutorial variants (`conncon_*` / `connex*` / `grid_iaf_oc` / `test_3d`) over now-present primitives |
 | unsupported | ~5 | MUSIC examples (`music_cont_out_proxy_example/`), SONATA (`sonata_example/`), structural plasticity (`structural_plasticity.py`), HPC benchmark (`hpc_benchmark.py` requires MPI), `store_restore_network.py` (kernel-state serialization) |
 | **upstream NEST example scripts surveyed** | **≈ 70 + 10 subdirs** | per the gh-api listing 2026-05-11 |
 
@@ -50,11 +56,11 @@ exists.
 
 | NEST example | Status | brainpy.state equivalent | NEST upstream | Notes |
 |---|---|---|---|---|
-| `brunel_alpha_nest.py` | missing | partial: `examples/102_EI_net_1996.py`, `103_COBA_2005.py`, `104_CUBA_2005.py` are similar in spirit | <https://nest-simulator.readthedocs.io/en/stable/auto_examples/brunel_alpha_nest.html> | The single most-cited NEST example. Uses `iaf_psc_alpha`, `poisson_generator`, `spike_recorder`, all present in repo. P0 port target. |
-| `brunel_delta_nest.py` | missing | partial: same as above | upstream | Delta-current variant of Brunel |
-| `brunel_exp_multisynapse_nest.py` | missing | none | upstream | Exercises multi-port AdEx; cross-link `neurons-gap.md` multisynapse |
+| `brunel_alpha_nest.py` | implemented | `examples/nest/brunel_alpha.py` (+ `_validation/brunel_alpha_test.py`) | <https://nest-simulator.readthedocs.io/en/stable/auto_examples/brunel_alpha_nest.html> | The single most-cited NEST example (`iaf_psc_alpha` + `poisson_generator` + `spike_recorder`); the Phase-1 flagship port with live-NEST parity (sparse CSR comm path at `order=2500`, PR #39/#40) |
+| `brunel_delta_nest.py` | implemented | `examples/nest/brunel_delta.py` (+ `_validation/brunel_delta_test.py`) | upstream | Delta-current variant of Brunel, live-NEST parity |
+| `brunel_exp_multisynapse_nest.py` | implemented | `examples/nest/brunel_exp_multisynapse.py` (+ `_validation/brunel_exp_multisynapse_test.py`) | upstream | Multi-port AdEx variant (cross-link `neurons-gap.md` multisynapse), live-NEST parity |
 | `brunel_siegert_nest.py` | implemented | `examples/nest/brunel_siegert.py` | upstream | Mean-field Brunel: `siegert_neuron` + dual-channel `diffusion_connection`, relaxed end-to-end through the `Simulator`; 32.03 vs NEST 32.03 spks/s (0.00 %) and matches the closed-form Siegert fixed point to ~3e-13 (cluster 15c; §3.6) |
-| `brunel_alpha_evolution_strategies.py` | missing | none | upstream | Optimizer-tuned Brunel |
+| `brunel_alpha_evolution_strategies.py` | implemented | `examples/nest/brunel_alpha_evolution_strategies.py` (+ `_validation/brunel_alpha_evolution_strategies_test.py`) | upstream | Optimizer-tuned Brunel, ported with parity test |
 
 ### 3.2 Single- and few-neuron demos
 
@@ -128,8 +134,8 @@ need connection-weight introspection (`GetConnections`/`SynapseCollection`,
 | `cross_check_mip_corrdet.py` | implemented | `examples/nest/cross_check_mip_corrdet.py` | eager `mip_generator`+`correlation_detector`; cross-correlogram `CAT_D` autocorr (ext. E) |
 | `correlospinmatrix_detector_two_neuron.py` | implemented | `examples/nest/correlospinmatrix_detector_two_neuron.py` | `ginzburg`→`mcculloch_pitts` binary correlator; means/cov `CAT_D` (ext. E; fixed `mcculloch_pitts` rng) |
 | `precise_spiking.py` | implemented | `examples/nest/precise_spiking.py` | grid `iaf_psc_exp` vs precise `iaf_psc_exp_ps`; onset-aligned spikes `CAT_E` |
-| `plot_weight_matrices.py` | blocked | skipped placeholder | needs `GetConnections`/`SynapseCollection` (`network-api-gap.md` §3.1, §3.8) |
-| `synapsecollection.py` | blocked | skipped placeholder | needs `SynapseCollection` + named rules + `Parameter` weights (`network-api-gap.md` §3.8, §3.1, §3.9, §3.11) |
+| `plot_weight_matrices.py` | implemented | `examples/nest/plot_weight_matrices.py` (+ `_validation/plot_weight_matrices_test.py`) | unblocked by cluster `23` (`get_connections`→`SynapseCollection` `.get`/`.set`); the only runtime skip is a benign matplotlib guard |
+| `synapsecollection.py` | implemented | `examples/nest/synapsecollection.py` (+ `_validation/synapsecollection_test.py`) | unblocked by cluster `23` (`SynapseCollection` lazy view); `.get`/`.set` over the projection edge State |
 
 ### 3.5 Single-neuron model demos
 
@@ -163,11 +169,11 @@ harness this cluster builds.
 | `glif_cond_neuron.py` | implemented | `examples/nest/glif_cond_neuron.py` | 5 mechanism levels; `g_1`/`g_2` full-trace + spike counts exact, subthreshold `V_m`/`threshold` ~1e-13 mV (seam F) |
 | `glif_psc_neuron.py` | implemented | `examples/nest/glif_psc_neuron.py` | 5 levels, current-based; `I_syn`/`I` full-trace ~2e-15 pA + counts exact, `V_m` ~0.03 mV (`CAT_B_ALIGNED`); Poisson window via parrot (seam F/G) |
 | `glif_psc_double_alpha_neuron.py` | implemented | `examples/nest/glif_psc_double_alpha_neuron.py` | 3 kernel configs; subthreshold `V_m`/`I_syn` full-trace ~1e-13 mV / ~1e-15 pA (seam F) |
-| `iaf_tum_2000_short_term_depression.py` | missing | none | LIF + integrated STP, depression regime |
-| `iaf_tum_2000_short_term_facilitation.py` | missing | none | LIF + integrated STP, facilitation regime |
-| `mc_neuron.py` | missing | none | multi-compartment demo — exercises `iaf_cond_alpha_mc` (flagged experimental) |
-| `BrodyHopfield.py` | missing | none | spike-coding network |
-| `CampbellSiegert.py` | missing | none | mean-field cross-check |
+| `iaf_tum_2000_short_term_depression.py` | implemented | `examples/nest/iaf_tum_2000_short_term_depression.py` (+ `_validation/iaf_tum_2000_stp_test.py`) | LIF + integrated STP, depression regime; parity via the shared `iaf_tum_2000_stp` test |
+| `iaf_tum_2000_short_term_facilitation.py` | implemented | `examples/nest/iaf_tum_2000_short_term_facilitation.py` (+ `_validation/iaf_tum_2000_stp_test.py`) | LIF + integrated STP, facilitation regime; parity via the shared `iaf_tum_2000_stp` test |
+| `mc_neuron.py` | implemented | `examples/nest/mc_neuron.py` (+ `_validation/mc_neuron_test.py`) | three-compartment demo (`iaf_cond_alpha_mc`), live-NEST parity |
+| `BrodyHopfield.py` | implemented | `examples/nest/BrodyHopfield.py` (+ `_validation/BrodyHopfield_test.py`) | spike-coding network, parity test |
+| `CampbellSiegert.py` | implemented | `examples/nest/CampbellSiegert.py` (+ `_validation/CampbellSiegert_test.py`) | mean-field cross-check (analytic carve-out) |
 
 ### 3.6 Network demos
 
@@ -345,156 +351,64 @@ the remaining `spatial/` tutorials are variants over the same primitives. See `n
 
 ## 4. Missing or incomplete functionality
 
-The entire NEST examples portfolio is missing from the repo (except where
-conceptually-overlapping brainpy-style examples exist for E-I balanced
-networks, COBA, and HH-COBA). Concretely:
+The portfolio is substantially ported (~75 scripts, §3). The residual is a
+short tail:
 
-- **Flagship benchmarks**: Brunel family (5 variants), HPC benchmark.
-- **Single-neuron pedagogy**: `one_neuron.py`, `one_neuron_with_noise.py`,
-  `if_curve.py`, `balancedneuron.py`, `testiaf.py`, `vinit_example.py`.
-- **Plasticity demos**: every Clopath, STDP, STP, Urbanczik demo.
-- **Recording demos**: full multimeter / spike_recorder / weight_recorder
-  pedagogy + correlation-detector regressions.
-- **Single-neuron model demos**: HH, AdEx, GIF, GLIF, MAT, IAF Tum 2000, Brody-
-  Hopfield, Campbell-Siegert, multi-compartment, intrinsic-currents.
-- **Network demos**: rate networks (substrate-ready, cluster 15a — demo port
-  pending) and the `ht_neuron` intrinsic-currents demos (blocked on the
-  Hill-Tononi primitive) only. Wang 2002, Brette 2007, EI-clustered,
-  perturbation-sensitivity, artificial-synchrony, repeated-stimulation, and
-  both gap-junction demos (cluster 15b) are ported (§3.6).
-- **Generator demos**: sinusoidal Poisson + gamma and pulse packets are ported (§3.7).
-- **Astrocyte demos**: the `astrocytes/` Brunel-variant series (deferred to post-bucket-3,
-  pending `sic_connection` + an astrocyte rate model).
-- **Spatial and SONATA**: blocked by API absence; classified `unsupported`
-  until the underlying API lands.
+- **`ht_neuron` intrinsic-currents demos** — out of scope: the Hill–Tononi
+  primitive is not ported (cluster-14 deferral). Other intrinsic-currents
+  pedagogy is covered.
+- **Optional `spatial/` tutorial variants** (`conncon_*`, `connex*`,
+  `grid_iaf_oc`, `test_3d`) — the underlying spatial primitives all ship
+  (clusters 20/27, §3.9); these are extra tutorial scripts over them, not new
+  capability.
+- **By design unsupported** (not gaps): the HPC benchmark (`hpc_benchmark.py`,
+  requires MPI), `structural_plasticity.py`, the MUSIC examples, the SONATA
+  subdir, and `store_restore_network.py` (kernel-state serialization).
+
+The e-prop subdir is ported in the sibling **`braintrace`** package, not here.
 
 ## 5. Semantic & numerical risks
 
 - **Each port is also a validation harness.** A ported Brunel example *is*
-  an end-to-end NEST-comparison test (firing rate, mean ISI, CV of ISI).
-  Skipping the example means losing the regression — and losing the
-  promotion-blocking parity check.
+  an end-to-end NEST-comparison test (firing rate, mean ISI, CV of ISI); the
+  parity tests live in `brainpy_state/_nest/_validation/` (140 files, 120
+  live-NEST). The risk is upkeep: a dropped port is a dropped regression.
 - **`aeif_cond_beta_multisynapse` multi-receptor broadcasting (`n>1`).** The
   `aeif_cond_beta_multisynapse.py` port (§3.5) drives a **single** neuron
   (`n=1`). With `n>1` neurons *and* multiple receptor ports, the per-port
-  conductance state does not broadcast correctly against the population axis
-  (the receptor axis and the neuron axis collide), so a multi-neuron
-  multi-receptor AdEx population is not yet trustworthy. Single-neuron
-  multi-receptor traces are exact; the limitation is purely the `n>1 ×
-  receptors` shape. Fix belongs with the `aeif` model, not the example.
-- **Multimeter file-backend gap.** `multimeter_file.py` and `recording_demo.py`
-  use NEST's `ascii` / `sionlib` backends; the repo doesn't have these
-  (`devices-gap.md` P2). Ports either skip the file-backend step or rely on
-  the P2 work landing first.
-- **Plasticity examples need volume-transmitter parity.** Several plasticity
-  demos require `stdp_dopamine_synapse` + `volume_transmitter` which are
-  unvalidated (`synapses-plasticity-gap.md`).
-- **Spatial examples are blocked.** Every example in `spatial/`,
-  `csa_example.py`, and `csa_spatial_example.py` depends on the absent
-  spatial API.
-- **`structural_plasticity.py` is genuinely unsupported.** Not a gap, by
-  design.
-- **HPC benchmark requires MPI.** Not a gap, by design.
+  conductance state does not broadcast cleanly against the population axis
+  (receptor axis × neuron axis collide), so a multi-neuron multi-receptor AdEx
+  population is not yet trustworthy. Single-neuron multi-receptor traces are
+  exact; the limitation is the `n>1 × receptors` shape and belongs with the
+  `aeif` model, not the example.
+- **Multimeter file-backend step.** `multimeter_file.py` and `recording_demo.py`
+  are ported, but NEST's `ascii` / `sionlib` recording backends are not
+  implemented (`devices-gap.md` P2); those ports skip the file-backend step and
+  record in-memory instead.
+
+Resolved risks (previously listed here, now closed):
+
+- **Plasticity volume-transmitter parity** — `stdp_dopamine_synapse` +
+  `volume_transmitter` are now validated against live NEST
+  (`_validation/{stdp_dopamine_synapse,volume_transmitter}_parity_test.py`).
+- **Spatial examples** — no longer blocked: the spatial API shipped (clusters
+  20/27) and the spatial demos are ported (§3.9).
+- **`structural_plasticity.py` / HPC benchmark** — genuinely unsupported by
+  design (structural-plasticity primitive / MPI), not gaps.
 
 ## 6. Validation gaps
 
-The examples-as-validation point above is the headline: porting NEST examples
-*is* the most rigorous form of validation. Specific gaps:
+The examples-as-validation principle is now realized: the NEST ports are backed
+by `brainpy_state/_nest/_validation/` (140 files, 120 `requires_nest` live-NEST
+tests + analytic checks), covering the flagship Brunel family, plasticity
+learning curves, the correlation/detector regression (`cross_check_mip_corrdet.py`
+is ported, §3.4), and the generator / spatial / astrocyte demos.
 
-- No port of any Brunel variant → no flagship-level network parity test.
-- No port of any plasticity demo → STDP / STP / Clopath learning-curve
-  regression is absent end-to-end.
-- No port of `cross_check_mip_corrdet.py` → no detector regression at
-  network level.
-- Per-example pass/fail is undefined because no examples are ported. Define
-  in the roadmap below.
+Residual validation gaps (full list in `numerical-validation-gap.md`):
 
-## 7. Prioritized roadmap
+- **`pp_psc_delta`** — model present (`pp_psc_delta.py`), but no dedicated
+  `_validation` parity test yet.
 
-- **P0 — Port `brunel_alpha_nest.py` as the flagship example.** [L]
-  Rationale: most-cited NEST example, exercises `iaf_psc_alpha` +
-  `poisson_generator` + `spike_recorder` — all three present, IAF psc family
-  P0-priority validation per `neurons-gap.md`. Acceptance:
-  `examples/nest/brunel_alpha.py` exists; produces population firing-rate +
-  CV of ISI matching NEST's example within 5 % over a 1 s window; uses
-  `nest_compat` shim from `network-api-gap.md` P0; a CI test in
-  `brainpy_state/_nest/_validation/brunel_test.py` runs it (skipped by
-  default) and asserts the comparison.
-
-- **P0 — Port `one_neuron.py` + `one_neuron_with_noise.py` as the first-day
-  pedagogy.** [S]
-  Rationale: simplest possible PyNEST script — paired with a
-  `nest_compat`-using equivalent it makes the porting story visible to new
-  users. Acceptance: both ports live in `docs/nest-guide/examples/`
-  (cross-link `docs-portfolio-gap.md`) and render with comments comparing
-  PyNEST and `nest_compat` calls side by side.
-
-- **P0 — Port `multimeter_file.py` or an in-memory equivalent.** [M]
-  Rationale: serves as the recording-device parity test that
-  `devices-gap.md` P0 already prescribes. Acceptance: example port produces
-  the same per-step `V_m` trace as the NEST example (modulo recording
-  backend); test in `_validation/recorder_parity_test.py` references it.
-
-- **P1 — Port the rest of the Brunel family.** [L]
-  `brunel_delta_nest.py`, `brunel_exp_multisynapse_nest.py`,
-  `brunel_siegert_nest.py`. Acceptance: each ported, firing-rate stat
-  matches NEST.
-
-- **P1 — Port `clopath_synapse_small_network.py` +
-  `clopath_synapse_spike_pairing.py`.** [M]
-  Rationale: validates Clopath end-to-end. Acceptance: weight trajectory
-  matches NEST over 5 s within tolerance.
-
-- **P1 — Port `evaluate_quantal_stp_synapse.py` and
-  `evaluate_tsodyks2_synapse.py`.** [M]
-  Rationale: doubles as STP validation called out in
-  `synapses-plasticity-gap.md` P0. Acceptance: PSC amplitude train matches
-  NEST.
-
-- **P1 — Port `astrocytes/astrocyte_brunel_*` (at least the
-  `fixed_indegree` variant).** [L]
-  Rationale: the astrocyte family is already validated at unit level; the
-  network-level demo proves it composes. Acceptance: astrocyte-modulated
-  firing rate matches NEST.
-
-- **P1 — Port pedagogical singles: `if_curve.py`, `balancedneuron.py`,
-  `testiaf.py`, `vinit_example.py`.** [M]
-  Acceptance: all four ported; each produces the same plotted curve / final
-  state as NEST.
-
-- **P2 — Port HH demos (`hh_psc_alpha.py`, `hh_phaseplane.py`).** [M]
-  Acceptance: phase-plane plot matches NEST.
-
-- **P2 — Port GIF / GLIF / MAT / IAF Tum 2000 single-neuron demos.** [M]
-  Acceptance: each ported; trace matches NEST.
-
-- **P2 — Port `wang_decision_making.py`.** [L] — **DONE (cluster 22).** The
-  `iaf_bw_2001` recurrent-NMDA seam was generalized (design A resolved to option
-  (a): the graded presynaptic emission over `connect(receptor_type=NMDA,
-  comm='dense')` matches live NEST to ~5e-15), and the Wang WTA decision network was
-  ported with distributional live-NEST parity (±coherence→A/B, winner ≫ loser,
-  unbiased at 0). See §3.6.
-
-- **P2 — Port gap-junction demos (`gap_junctions_*`).** [M] — **DONE (cluster 15b).**
-  Both demos ported on the explicit-lag difference-deposit seam — option (a): full-lag
-  `I_gap,i = Σ_j g_ij (V_j[n−1] − V_i[n−1])` into the post current channel, NEST's
-  `use_wfr=False` regime, no waveform relaxation. 2-neuron micro-parity matches live NEST
-  to machine precision between spikes (`gap_junction_parity_test.py`); the inhibitory
-  network's Golomb coherence matches distributionally at async/sync gap weights
-  (`gap_junction_inhibitory_network_parity_test.py`). See §3.6.
-
-- **P2 — Port correlation-demos (`cross_check_mip_corrdet.py`,
-  `correlospinmatrix_detector_two_neuron.py`).** [M]
-  Acceptance: covariance matrix matches NEST.
-
-- **P2 — Spatial examples.** [XL]
-  Blocked by `network-api-gap.md` spatial roadmap. Acceptance: at least one
-  spatial example ports cleanly via `nest_compat.spatial.*`.
-
-- **P2 — `sudoku/` demo.** ✅ **Done** — see §3.10: `examples/nest/sudoku.py`
-  (+ `sudoku_net.py`, `sudoku_puzzles.py`). The noise-driven WTA solves a
-  near-complete board at live-NEST's solve rate (both ~100 % over seeds); a hard
-  board is a measured **documented-partial** — neither NEST nor brainpy completes
-  puzzle 4 in a practical budget, and brainpy tracks NEST's best fraction-correct.
-  Built on the public `explicit_edges` rule + the `cont()` host-relaxation seam.
-  The original "intractable" verdict was a unit bug (pF/pA), not a substrate limit.
+The astrocyte path is fully covered: `sic_connection` + `astrocyte_lr_1994` +
+`aeif_cond_alpha_astro` each have `_validation` parity tests
+(`astrocyte_{sic,brunel,interaction,single,small_network}_test.py`).
