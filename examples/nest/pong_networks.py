@@ -37,9 +37,10 @@ import brainunit as u
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-from brainpy_state import (Simulator, host_spike_drive, parrot_neuron, iaf_psc_exp,
-                           spike_recorder, noise_generator, static_synapse,
-                           one_to_one, all_to_all)
+from brainpy_state import (Simulator, host_spike_drive, host_current_drive,
+                           parrot_neuron, iaf_psc_exp, spike_recorder, noise_generator,
+                           poisson_generator, static_synapse, stdp_dopamine_synapse,
+                           volume_transmitter, one_to_one, all_to_all)
 
 #: Integration step (ms); all §3.10 demos run at 0.1 ms / float64 / CPU.
 DT = 0.1
@@ -195,6 +196,10 @@ class PongNetBase:
         self.target_index = int(input_cell)
         self.input_train = self.input_t_offset + np.arange(N_INPUT_SPIKES) * ISI
         steps = np.round(self.input_train / DT).astype(int)
+        # Spikes scheduled past the turn never fire (NEST rewrites the generator each
+        # turn before they would) — clip them, so a large input_t_offset (Dopa's 32 ms)
+        # simply drops the train's tail rather than wrapping the schedule counter.
+        steps = steps[steps < self.poll_steps]
         schedule = np.zeros((self.poll_steps, self.num_neurons))
         schedule[steps, input_cell] = 1.0
         self._drive.set_schedule(schedule)
@@ -337,3 +342,133 @@ class PongNetRSTDP(PongNetBase):
 
     def __repr__(self):
         return ('noisy ' if self.apply_noise else 'clean ') + 'R-STDP'
+
+
+class PongNetDopa(PongNetBase):
+    """Pong learner with dopaminergic plasticity driven by an actor–critic circuit.
+
+    The input→motor synapses are ``stdp_dopamine_synapse`` edges whose weights evolve
+    online from a broadcast dopamine concentration ``n(t)`` (a ``volume_transmitter``).
+    A *critic* — three ``iaf_psc_exp`` populations (striatum, ventral pallidum, and
+    dopaminergic neurons) — turns each turn's performance into that dopamine signal
+    (Potjans et al., 2011): the host injects a reward *current* into the dopaminergic
+    neurons proportional to the fraction of motor activity at the target cell, and
+    their spikes drive the transmitter. The reward current occupies the first
+    ``input_t_offset`` ms of each turn (the input spiketrain starts after it).
+
+    Unlike R-STDP the input→motor weights are **not** host-written: they evolve inside
+    ``cont()`` from the dopamine signal. The only host write per turn is the reward
+    schedule (a fixed-shape :class:`host_current_drive` rewrite — no recompile).
+
+    The initial input→motor / input→striatum weights are set to the mean at connect
+    (NEST draws ``Normal(mean, 8)``; the 0.6 % jitter is immaterial and symmetry is
+    broken by the poisson background of the noisy variant).
+    """
+
+    #: Base reward current applied regardless of performance (pA).
+    baseline_reward = 100.0
+    #: Maximum reward current applied to the dopaminergic neurons (pA).
+    max_reward = 1000
+    #: Scaling factor from target-activity fraction to reward current (pA).
+    dopa_signal_factor = 4800
+    #: Offset (ms) of the input spiketrain — reserves the turn's start for the reward.
+    input_t_offset = 32
+    #: Initial mean weight for input→motor synapses (pA).
+    mean_weight = 1275.0
+    #: Standard deviation of the NEST initial-weight draw (recorded; see class doc).
+    weight_std = 8
+    #: Neurons per critic population.
+    n_critic = 8
+    #: Weight from striatum / VP to the dopaminergic neurons (pA).
+    w_da = -1150
+    #: Weight from striatum to VP (pA).
+    w_str_vp = -250
+    #: Delay (ms) on the direct striatum→dopaminergic connection.
+    d_dir = 200
+    #: Rate (Hz) of the poisson background generators (noisy variant).
+    poisson_rate = 15
+
+    # stdp_dopamine_synapse common properties (NEST ``SetDefaults``); A_minus / tau_minus
+    # stay at the NEST-matching spec defaults (1.5 / 20 ms).
+    syn_A_plus = 0.85
+    syn_tau_plus = 45.0
+    syn_tau_c = 70.0
+    syn_tau_n = 30.0
+    syn_b = 0.028
+    syn_Wmin = 1220
+    syn_Wmax = 1550
+
+    def __init__(self, apply_noise=True, num_neurons=20, *, seed=0):
+        super().__init__(apply_noise, num_neurons, seed=seed)
+
+        self.vt = self.sim.create(volume_transmitter, tau_n=self.syn_tau_n * u.ms)
+
+        if apply_noise:
+            motor_mean, motor_wmax = self.mean_weight, self.syn_Wmax
+        else:
+            # No poisson background → compensate with stronger weights and a wider clamp.
+            motor_mean, motor_wmax = self.mean_weight * 1.3, 1750
+
+        self.motor_proj = self.sim.connect(
+            self.input_neurons, self.motor_neurons,
+            synapse=self._dopa_synapse(motor_mean, motor_wmax), rule=all_to_all, vt=self.vt)
+
+        if apply_noise:
+            self.poisson_noise = self.sim.create(
+                poisson_generator, num_neurons, params={'rate': self.poisson_rate * u.Hz})
+            self.sim.connect(self.poisson_noise, self.motor_neurons, rule=one_to_one,
+                             weight=self.mean_weight * u.pA)
+
+        # Critic: striatum -> VP -> dopaminergic neurons -> volume_transmitter.
+        self.striatum = self.sim.create(iaf_psc_exp, self.n_critic)
+        self.sim.connect(self.input_neurons, self.striatum,
+                         synapse=self._dopa_synapse(self.mean_weight, self.syn_Wmax),
+                         rule=all_to_all, vt=self.vt)
+        self.vp = self.sim.create(iaf_psc_exp, self.n_critic)
+        self.sim.connect(self.striatum, self.vp, rule=all_to_all, weight=self.w_str_vp * u.pA)
+        self.dopa = self.sim.create(iaf_psc_exp, self.n_critic)
+        self.sim.connect(self.vp, self.dopa, rule=all_to_all, weight=self.w_da * u.pA)
+        self.sim.connect(self.striatum, self.dopa, rule=all_to_all,
+                         weight=self.w_da * u.pA, delay=self.d_dir * u.ms)
+        self.sim.connect(self.dopa, self.vt)
+
+        # Host-set reward current into the dopaminergic neurons (first input_t_offset ms).
+        reward_view = self.sim.create(host_current_drive, self.n_critic,
+                                      params={'window': self.poll_steps})
+        self.sim.connect(reward_view, self.dopa, rule=one_to_one)
+        self._reward_drive = reward_view.segments[0].population
+        self._offset_steps = int(round(self.input_t_offset / DT))
+
+        self.sim.reset_rollout()
+
+    def _dopa_synapse(self, weight, wmax):
+        """An ``stdp_dopamine_synapse`` spec with NEST's PongNetDopa common properties."""
+        return stdp_dopamine_synapse(
+            weight=weight * u.pA, A_plus=self.syn_A_plus,
+            tau_plus=self.syn_tau_plus * u.ms, tau_c=self.syn_tau_c * u.ms,
+            tau_n=self.syn_tau_n * u.ms, b=self.syn_b, Wmin=self.syn_Wmin, Wmax=wmax)
+
+    def apply_synaptic_plasticity(self):
+        """Inject a reward current into the dopaminergic neurons for the next turn.
+
+        The current is proportional to the fraction of the last turn's motor activity
+        at the target neuron (clipped to ``max_reward``), scheduled across the first
+        ``input_t_offset`` ms of the next turn. The dopamine-driven weight change itself
+        happens inside ``cont()``; this only sets the signal. :meth:`calculate_reward`
+        is then called for the performance metrics (and to pick the winning neuron).
+        """
+        counts = self.get_spike_counts()
+        target_n_spikes = counts[self.target_index]
+        total_n_spikes = max(int(counts.sum()), 1)
+        reward_current = self.dopa_signal_factor * target_n_spikes / total_n_spikes \
+            + self.baseline_reward
+        reward_current = min(reward_current, self.max_reward)
+
+        schedule = np.zeros((self.poll_steps, self.n_critic))
+        schedule[:self._offset_steps, :] = reward_current
+        self._reward_drive.set_schedule(schedule)
+
+        self.calculate_reward()
+
+    def __repr__(self):
+        return ('noisy ' if self.apply_noise else 'clean ') + 'TD'
