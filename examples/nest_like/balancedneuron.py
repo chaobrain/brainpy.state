@@ -21,7 +21,7 @@ import numpy as np
 import brainunit as u
 from scipy.optimize import bisect
 
-from brainpy_state import (Simulator, iaf_psc_alpha, poisson_generator,
+from brainpy.state import (Simulator, iaf_psc_alpha, poisson_generator,
                            voltmeter, spike_recorder)
 
 # NEST balancedneuron parameters.

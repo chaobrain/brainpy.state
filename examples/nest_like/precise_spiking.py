@@ -36,7 +36,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, iaf_psc_exp, iaf_psc_exp_ps,
+from brainpy.state import (Simulator, iaf_psc_exp, iaf_psc_exp_ps,
                            dc_generator, voltmeter, spike_recorder)
 
 #: Injected DC amplitude (pA) — the upstream's suprathreshold drive.

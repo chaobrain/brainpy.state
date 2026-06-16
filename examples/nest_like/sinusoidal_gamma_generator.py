@@ -46,7 +46,7 @@ import numpy as np
 import brainunit as u
 import brainstate.transform as transform
 
-from brainpy_state import sinusoidal_gamma_generator
+from brainpy.state import sinusoidal_gamma_generator
 
 #: DC (mean) rate of the drive (Hz).
 RATE = 100.0

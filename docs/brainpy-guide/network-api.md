@@ -15,7 +15,7 @@ points produce the same underlying `brainstate.nn.Module` tree:
 ```python
 import brainstate
 import brainunit as u
-import brainpy_state as bps
+from brainpy import state as bps
 
 brainstate.environ.set(dt=0.1 * u.ms)
 
@@ -110,7 +110,7 @@ Two ways to capture state during `simulate()`:
 2. **`Recorder` + `NESTDevice`** — full NEST-faithful recorder semantics:
 
    ```python
-   from brainpy_state._nest_device.spike_recorder import spike_recorder
+   from brainpy.state import spike_recorder
 
    class Net(bps.Network):
        def __init__(self):

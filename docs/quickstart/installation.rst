@@ -93,12 +93,11 @@ To verify that ``brainpy.state`` is installed correctly:
 
 .. code-block:: python
 
-   import brainpy_state
    import brainpy
    import brainstate
    import brainunit as u
 
-   print(f"brainpy.state version: {brainpy_state.__version__}")
+   print(f"brainpy.state version: {brainpy.state.__version__}")
    print(f"brainstate version: {brainstate.__version__}")
 
    # Test basic functionality

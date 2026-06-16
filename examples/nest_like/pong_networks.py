@@ -37,7 +37,7 @@ import brainunit as u
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64)
 
-from brainpy_state import (Simulator, host_spike_drive, host_current_drive,
+from brainpy.state import (Simulator, host_spike_drive, host_current_drive,
                            parrot_neuron, iaf_psc_exp, spike_recorder, noise_generator,
                            poisson_generator, static_synapse, stdp_dopamine_synapse,
                            volume_transmitter, one_to_one, all_to_all)

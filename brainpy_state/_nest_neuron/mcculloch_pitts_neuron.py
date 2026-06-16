@@ -180,7 +180,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> import brainpy_state as bst
+       >>> from brainpy import state as bst
        >>>
        >>> # Create a single McCulloch-Pitts neuron with threshold 0.5 mV
        >>> neuron = bst.mcculloch_pitts_neuron(1, theta=0.5 * u.mV)

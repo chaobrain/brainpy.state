@@ -263,7 +263,7 @@ class rate_transformer_node(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy_state as bst
+        >>> from brainpy import state as bst
         >>> import brainunit as u
         >>> import brainstate
         >>> # Create a transformer node with 10 units
@@ -281,7 +281,7 @@ class rate_transformer_node(NESTNeuron):
     .. code-block:: python
 
         >>> import numpy as np
-        >>> import brainpy_state as bst
+        >>> from brainpy import state as bst
         >>> # Define sigmoid activation
         >>> def sigmoid(h):
         ...     return 1.0 / (1.0 + np.exp(-h))
@@ -301,7 +301,7 @@ class rate_transformer_node(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy_state as bst
+        >>> from brainpy import state as bst
         >>> import brainunit as u
         >>> import brainstate
         >>> transformer = bst.rate_transformer_node(in_size=3)
@@ -318,7 +318,7 @@ class rate_transformer_node(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainpy_state as bst
+        >>> from brainpy import state as bst
         >>> import numpy as np
         >>> # ReLU applied per-event before summation
         >>> relu = lambda h: np.maximum(0, h)

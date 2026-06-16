@@ -423,8 +423,8 @@ class Simulator(brainstate.nn.Module):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import iaf_psc_alpha, poisson_generator, spike_recorder
-       >>> from brainpy_state.network import Simulator, all_to_all
+       >>> from brainpy.state import iaf_psc_alpha, poisson_generator, spike_recorder
+       >>> from brainpy.state import Simulator, all_to_all
        >>> sim = Simulator(dt=0.1 * u.ms)
        >>> pop = sim.create(iaf_psc_alpha, 10)
        >>> noise = sim.create(poisson_generator, rate=8000. * u.Hz)

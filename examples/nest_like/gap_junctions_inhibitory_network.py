@@ -29,7 +29,7 @@ import brainunit as u
 
 from brainpy.state import (Simulator, hh_psc_alpha_gap, voltmeter, spike_recorder,
                            poisson_generator, all_to_all, fixed_indegree)
-from brainpy_state._nest_synapse.gap_junction import gap_junction
+from brainpy.state import gap_junction
 from examples.nest_like.gap_junctions_two_neurons import resting_gating
 
 INH = 50             # inhibitory in-degree per neuron (demo scale; reduced for tiny runs)

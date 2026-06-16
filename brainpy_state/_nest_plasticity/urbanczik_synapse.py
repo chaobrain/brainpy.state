@@ -148,7 +148,7 @@ class urbanczik_synapse(NESTPlasticity):
     .. code-block:: python
 
         >>> import brainunit as u
-        >>> from brainpy_state import urbanczik_synapse
+        >>> from brainpy.state import urbanczik_synapse
         >>> s = urbanczik_synapse(weight=1.0 * u.pA)
         >>> s.is_homogeneous_weight, s.post_state_reads
         (False, ('delta_Pi',))

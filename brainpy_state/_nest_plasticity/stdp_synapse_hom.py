@@ -58,7 +58,7 @@ class stdp_synapse_hom(stdp_synapse):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_synapse, stdp_synapse_hom
+       >>> from brainpy.state import stdp_synapse, stdp_synapse_hom
        >>> s = stdp_synapse_hom(weight=5.0, lambda_=0.01)
        >>> isinstance(s, stdp_synapse)          # thin reuse of the pair kernel
        True

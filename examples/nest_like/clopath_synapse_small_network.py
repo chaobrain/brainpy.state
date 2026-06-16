@@ -20,10 +20,9 @@ pairing and **depress**. The recurrent weight matrix is recorded with
 
 ``aeif_psc_delta_clopath`` is a **delta** neuron, so the bare ``clopath_synapse``
 weight is in **mV**. The neuron parameters, delays, init weight and 5 % parity
-band are the cluster-07 ones (shared via
-:mod:`brainpy_state._nest_validation._clopath_drive`); per edge this is exactly
-the validated pairing protocol, so the matrix matches NEST within the documented
-Clopath band (LTD near-exact, LTP within 5 %).
+band are the cluster-07 ones; per edge this is exactly the validated pairing
+protocol, so the matrix matches NEST within the documented Clopath band (LTD
+near-exact, LTP within 5 %).
 
 Run:  python examples/nest_like/clopath_synapse_small_network.py
 """
@@ -34,10 +33,30 @@ brainstate.environ.set(precision=64)
 
 import numpy as np
 import brainunit as u
+import braintools
 
-from brainpy_state import (Simulator, spike_generator, clopath_synapse,
-                           static_synapse, all_to_all)
-from brainpy_state._nest_validation import _clopath_drive as drv
+from brainpy.state import (Simulator, spike_generator, clopath_synapse,
+                           static_synapse, all_to_all, aeif_psc_delta_clopath)
+
+# -- canonical cluster-07 Clopath protocol constants ------------------------------
+DT = 0.1            # ms, resolution
+RELAY_D = 0.1       # spike_generator -> driver delay (ms) == one step
+INIT_W = 0.5        # initial Clopath weight (mV; aeif_psc_delta_clopath is a delta model)
+DRIVE_W = 80.0      # post driver weight (mV voltage jump -> forces the V_clamp spike)
+DELAY_UBARS = 0.1   # ms; aligned to the substrate's one-step read lag
+
+
+def clopath_neuron(sim, n=1):
+    """Create ``n`` ``aeif_psc_delta_clopath`` neurons with the canonical parameters."""
+    return sim.create(
+        aeif_psc_delta_clopath, n,
+        E_L=-70.6 * u.mV, V_peak=33.0 * u.mV, C_m=281.0 * u.pF, theta_minus=-70.6 * u.mV,
+        theta_plus=-45.3 * u.mV, A_LTD=14.0e-5, A_LTP=8.0e-5, tau_u_bar_minus=10.0 * u.ms,
+        tau_u_bar_plus=7.0 * u.ms, delay_u_bars=DELAY_UBARS * u.ms, a=4.0 * u.nS,
+        b=0.0805 * u.pA, V_reset=-49.6 * u.mV, V_clamp=33.0 * u.mV, t_clamp=2.0 * u.ms,
+        t_ref=0.0 * u.ms, I_e=0.0 * u.pA,
+        V_initializer=braintools.init.Constant(-70.6 * u.mV))
+
 
 #: Number of recurrent excitatory Clopath neurons.
 N = 3
@@ -73,15 +92,15 @@ def run():
         ``(pre, post)`` local indices for each weight column, in the projection's
         CSR (sorted-by-pre) order.
     """
-    sim = Simulator(dt=drv.DT * u.ms)
-    pop = drv._our_clopath_neuron(sim, n=N)
-    rec = sim.connect(pop, pop, synapse=clopath_synapse(weight=drv.INIT_W * u.mV),
-                      rule=all_to_all, allow_autapses=False, delay=drv.RELAY_D * u.ms)
+    sim = Simulator(dt=DT * u.ms)
+    pop = clopath_neuron(sim, n=N)
+    rec = sim.connect(pop, pop, synapse=clopath_synapse(weight=INIT_W * u.mV),
+                      rule=all_to_all, allow_autapses=False, delay=RELAY_D * u.ms)
     sim.record_weight(rec)
     for i in range(N):
         sg = sim.create(spike_generator, spike_times=np.asarray(TRAINS[i]) * u.ms)
-        sim.connect(sg, pop[i], synapse=static_synapse(weight=drv.DRIVE_W * u.mV),
-                    delay=drv.RELAY_D * u.ms)
+        sim.connect(sg, pop[i], synapse=static_synapse(weight=DRIVE_W * u.mV),
+                    delay=RELAY_D * u.ms)
     res = sim.simulate(T_SIM * u.ms)
     times = np.asarray(u.get_mantissa(res.times / u.ms))
     weights = np.asarray(u.get_mantissa(res.weight_trace(rec) / u.mV))
@@ -119,7 +138,7 @@ def main():
     times, weights, edges = run()
     final = weights[-1]
     print("Clopath small recurrent network (brainpy.state, w in mV, init "
-          f"{drv.INIT_W})")
+          f"{INIT_W})")
     print("  final recurrent weight matrix (rows = pre, cols = post):")
     M = weight_matrix(final, edges)
     for i in range(N):
@@ -127,9 +146,9 @@ def main():
                         for j in range(N))
         print(f"    {row}")
     print(f"  forward edges mean {np.mean([w for (i, j), w in zip(edges, final) if j > i]):.4f} "
-          f"(> {drv.INIT_W} = potentiated), "
+          f"(> {INIT_W} = potentiated), "
           f"backward mean {np.mean([w for (i, j), w in zip(edges, final) if j < i]):.4f} "
-          f"(< {drv.INIT_W} = depressed)")
+          f"(< {INIT_W} = depressed)")
 
     try:
         import matplotlib.pyplot as plt
@@ -139,11 +158,11 @@ def main():
             ax0.plot(times, weights[:, c], color="C0" if fwd else "C3",
                      lw=1.2, label="forward (i<j)" if (fwd and c == 0) else
                      ("backward (i>j)" if (not fwd and c == 2) else None))
-        ax0.axhline(drv.INIT_W, color="0.6", ls=":", lw=1)
+        ax0.axhline(INIT_W, color="0.6", ls=":", lw=1)
         ax0.set_xlabel("time (ms)"); ax0.set_ylabel("recurrent weight (mV)")
         ax0.set_title("Clopath weight evolution"); ax0.legend(fontsize=8)
-        im = ax1.imshow(weight_matrix(final, edges, fill=drv.INIT_W),
-                        cmap="RdBu_r", vmin=drv.INIT_W - 0.04, vmax=drv.INIT_W + 0.04)
+        im = ax1.imshow(weight_matrix(final, edges, fill=INIT_W),
+                        cmap="RdBu_r", vmin=INIT_W - 0.04, vmax=INIT_W + 0.04)
         ax1.set_title("final weight matrix"); ax1.set_xlabel("post"); ax1.set_ylabel("pre")
         ax1.set_xticks(range(N)); ax1.set_yticks(range(N))
         fig.colorbar(im, ax=ax1, label="w (mV)")

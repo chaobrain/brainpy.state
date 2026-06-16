@@ -46,7 +46,7 @@ class static_synapse(NESTSynapse):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import static_synapse
+       >>> from brainpy.state import static_synapse
        >>> s = static_synapse(weight=20.0 * u.pA)
        >>> s.is_homogeneous_weight
        False

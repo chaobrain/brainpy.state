@@ -42,7 +42,7 @@ import numpy as np
 import brainunit as u
 import jax.numpy as jnp
 
-from brainpy_state import (Simulator, SpikeTime, iaf_psc_alpha, voltmeter,
+from brainpy.state import (Simulator, SpikeTime, iaf_psc_alpha, voltmeter,
                            one_to_one, pulsepacket_generator)
 
 #: Number of spikes per packet (NEST ``activity``).

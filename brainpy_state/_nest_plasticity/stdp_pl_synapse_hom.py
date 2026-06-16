@@ -94,7 +94,7 @@ class stdp_pl_synapse_hom(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_pl_synapse_hom
+       >>> from brainpy.state import stdp_pl_synapse_hom
        >>> s = stdp_pl_synapse_hom(weight=5.0, mu=0.4, lambda_=0.1)
        >>> s.is_homogeneous_weight, s.edge_state_init()
        (False, {})

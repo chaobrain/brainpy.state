@@ -83,7 +83,7 @@ class ht_synapse(NESTPlasticity):
     --------
     .. code-block:: python
 
-       >>> from brainpy_state import ht_synapse
+       >>> from brainpy.state import ht_synapse
        >>> s = ht_synapse()
        >>> s.is_homogeneous_weight, s.stochastic
        (False, False)

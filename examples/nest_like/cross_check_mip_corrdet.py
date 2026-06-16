@@ -32,7 +32,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import mip_generator, correlation_detector
+from brainpy.state import mip_generator, correlation_detector
 
 #: Simulation resolution (ms).
 RESOLUTION = 0.1

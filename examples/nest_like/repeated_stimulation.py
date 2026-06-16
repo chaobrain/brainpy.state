@@ -26,7 +26,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (
+from brainpy.state import (
     Simulator, poisson_generator, parrot_neuron, spike_recorder,
 )
 

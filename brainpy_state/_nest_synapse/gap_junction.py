@@ -181,7 +181,7 @@ class gap_junction(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainpy_state as bp
+        >>> from brainpy import state as bp
         >>> import brainunit as u
         >>>
         >>> # Create gap junction with 10 nS conductance

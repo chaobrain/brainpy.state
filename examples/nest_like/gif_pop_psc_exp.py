@@ -56,9 +56,9 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, gif_psc_exp, gif_pop_psc_exp,
+from brainpy.state import (Simulator, gif_psc_exp, gif_pop_psc_exp,
                            step_current_generator, spike_recorder)
-from brainpy_state import fixed_indegree
+from brainpy.state import fixed_indegree
 
 # ---------------------------------------------------------------------------
 # Parameters (NEST gif_pop_psc_exp.py verbatim).

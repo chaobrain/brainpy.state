@@ -363,9 +363,7 @@ class aeif_cond_alpha_multisynapse(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state._nest_neuron.aeif_cond_alpha_multisynapse import (
-       ...     aeif_cond_alpha_multisynapse,
-       ... )
+       >>> from brainpy.state import aeif_cond_alpha_multisynapse
        >>> _ = brainstate.environ.context(dt=0.1 * u.ms, t=0.0 * u.ms)
        >>> neu = aeif_cond_alpha_multisynapse(
        ...     in_size=4,

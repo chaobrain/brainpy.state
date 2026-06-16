@@ -41,7 +41,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, iaf_cond_alpha_mc, dc_generator,
+from brainpy.state import (Simulator, iaf_cond_alpha_mc, dc_generator,
                            step_current_generator, spike_generator,
                            multimeter, spike_recorder)
 

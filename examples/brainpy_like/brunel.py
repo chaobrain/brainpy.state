@@ -11,7 +11,7 @@ import brainstate
 import jax.numpy as jnp
 import brainunit as u
 
-from brainpy_state import (
+from brainpy.state import (
     Builder, LIF, Expon, COBA, FixedIndegreeProj,
 )
 

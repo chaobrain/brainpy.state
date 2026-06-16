@@ -40,7 +40,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, cm_default, spike_generator, multimeter
+from brainpy.state import Simulator, cm_default, spike_generator, multimeter
 
 DT = 0.1        # resolution [ms]
 T_SIM = 160.0   # total simulation time [ms]

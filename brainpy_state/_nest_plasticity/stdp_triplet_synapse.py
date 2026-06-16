@@ -111,7 +111,7 @@ class stdp_triplet_synapse(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_triplet_synapse
+       >>> from brainpy.state import stdp_triplet_synapse
        >>> s = stdp_triplet_synapse(weight=5.0)
        >>> s.is_homogeneous_weight, s.edge_state_init()
        (False, {})

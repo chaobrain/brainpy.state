@@ -20,7 +20,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy_state import (Simulator, aeif_cond_exp, noise_generator,
+from brainpy.state import (Simulator, aeif_cond_exp, noise_generator,
                            spike_recorder)
 
 # NEST if_curve neuron parameters (aeif_cond_exp).

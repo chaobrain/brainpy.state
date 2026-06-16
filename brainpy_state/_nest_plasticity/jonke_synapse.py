@@ -98,7 +98,7 @@ class jonke_synapse(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import jonke_synapse
+       >>> from brainpy.state import jonke_synapse
        >>> s = jonke_synapse(weight=10.0, mu_plus=0.1)
        >>> s.is_homogeneous_weight, s.edge_state_init()
        (False, {})

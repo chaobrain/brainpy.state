@@ -157,7 +157,7 @@ class stdp_facetshw_synapse_hom(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_facetshw_synapse_hom
+       >>> from brainpy.state import stdp_facetshw_synapse_hom
        >>> s = stdp_facetshw_synapse_hom(weight=33.333, Wmax=100.0)
        >>> round(s.weight_per_lut_entry, 3)
        6.667

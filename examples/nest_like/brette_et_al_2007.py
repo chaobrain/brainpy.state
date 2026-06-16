@@ -44,7 +44,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy_state import (
+from brainpy.state import (
     Simulator, fixed_indegree, one_to_one,
     iaf_cond_exp, iaf_psc_exp, poisson_generator, spike_recorder,
 )

@@ -34,7 +34,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, aeif_cond_beta_multisynapse,
+from brainpy.state import (Simulator, aeif_cond_beta_multisynapse,
                            spike_generator, multimeter)
 
 #: NEST ``aeif_cond_beta_multisynapse`` params set by the example (4 receptors;

@@ -19,7 +19,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy_state import (
+from brainpy.state import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_exp_multisynapse, poisson_generator, spike_recorder,
 )

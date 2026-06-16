@@ -278,7 +278,7 @@ class hh_cond_exp_traub(NESTNeuron):
 
        >>> import brainstate as bst
        >>> import brainunit as u
-       >>> from brainpy_state import hh_cond_exp_traub
+       >>> from brainpy.state import hh_cond_exp_traub
        >>>
        >>> # Create a population of 100 Traub HH neurons
        >>> neurons = hh_cond_exp_traub(100)
@@ -460,7 +460,7 @@ class hh_cond_exp_traub(NESTNeuron):
 
            >>> import brainstate as bst
            >>> import brainunit as u
-           >>> from brainpy_state import hh_cond_exp_traub
+           >>> from brainpy.state import hh_cond_exp_traub
            >>>
            >>> # Initialize with default rest state
            >>> neurons = hh_cond_exp_traub(100)
@@ -572,7 +572,7 @@ class hh_cond_exp_traub(NESTNeuron):
 
            >>> import brainunit as u
            >>> import jax.numpy as jnp
-           >>> from brainpy_state import hh_cond_exp_traub
+           >>> from brainpy.state import hh_cond_exp_traub
            >>>
            >>> neurons = hh_cond_exp_traub(10)
            >>> neurons.init_state()

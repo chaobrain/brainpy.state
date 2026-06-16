@@ -54,7 +54,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy_state import (Simulator, iaf_psc_alpha, ac_generator,
+from brainpy.state import (Simulator, iaf_psc_alpha, ac_generator,
                            noise_generator, spike_recorder)
 
 # --- NEST BrodyHopfield parameters (verbatim) --------------------------------

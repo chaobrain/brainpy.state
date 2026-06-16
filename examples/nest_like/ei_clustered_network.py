@@ -52,7 +52,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_psc_exp, spike_recorder, all_to_all
+from brainpy.state import Simulator, iaf_psc_exp, spike_recorder, all_to_all
 
 #: Excitatory / inhibitory population sizes (NEST canonical 4000/1000 scaled 10x).
 N_E = 400

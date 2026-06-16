@@ -20,6 +20,12 @@ from ._compat import check_brainpy_compatibility
 check_brainpy_compatibility()
 del check_brainpy_compatibility
 
+# Namespace guard: this package is private; users must reach it through brainpy.state.
+from ._namespace import enforce_namespace_access
+
+enforce_namespace_access()
+del enforce_namespace_access
+
 from ._version import __version_info__, __version__
 
 # =============================================================================
@@ -251,6 +257,11 @@ from ._nest_device import (
 )
 
 __all__ = [
+    # =========================================================================
+    # Package metadata (re-exported through the brainpy.state namespace)
+    # =========================================================================
+    '__version__', '__version_info__',
+
     # =========================================================================
     # Base Models
     # =========================================================================

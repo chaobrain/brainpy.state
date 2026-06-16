@@ -134,7 +134,7 @@ class cont_delay_synapse(NESTSynapse):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state import cont_delay_synapse
+       >>> from brainpy.state import cont_delay_synapse
        >>> brainstate.environ.set(dt=0.1 * u.ms)
        >>> s = cont_delay_synapse(weight=20.0 * u.pA, delay=0.17 * u.ms)
        >>> s.fractional_delay

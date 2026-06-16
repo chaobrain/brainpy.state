@@ -42,7 +42,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, glif_cond, spike_generator,
+from brainpy.state import (Simulator, glif_cond, spike_generator,
                            step_current_generator, poisson_generator,
                            parrot_neuron, multimeter, spike_recorder)
 
