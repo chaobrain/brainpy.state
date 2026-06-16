@@ -13,6 +13,12 @@
 # limitations under the License.
 # ==============================================================================
 
+from ._compat import _parse_release
+
 __version__ = "0.0.5"
-__version_info__ = tuple(map(int, __version__.split(".")))
+# Robust release-segment parse: never crash on PEP 440 suffixes (".post1", "rc1",
+# ".dev0", "+local"). Falls back to (0, 0, 0) only if __version__ is malformed.
+__version_info__ = _parse_release(__version__) or (0, 0, 0)
+
+del _parse_release
 
