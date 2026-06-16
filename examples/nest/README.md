@@ -611,6 +611,74 @@ must track the analytic Gaussian *and* live NEST's empirical curve, plus a seed-
 (`_validation/spatial_{grid,gaussian_kernel,3d}_test.py`). Each example also runs standalone in
 CI without NEST.
 
+## Pedagogical demos (§3.10)
+
+NEST's §3.10 "pedagogical / advanced" group — single-cell AdEx figures, multi-compartment
+dendrites, and a reinforcement-learning game — each a faithful port with a live-NEST parity
+test plus a NEST-free law/behaviour companion. Run any directly, e.g.
+`python examples/nest/two_comps.py`.
+
+### AdEx figures (Brette & Gerstner 2005)
+
+- **`brette_gerstner_fig_2c.py`** — **spike-frequency adaptation** in an adaptive exponential
+  integrate-and-fire neuron (`aeif_cond_alpha`). Two DC pulses (500 pA, then 800 pA) drive a
+  single cell whose inter-spike intervals lengthen as the adaptation current `w` accumulates —
+  the SFA hallmark of Figure 2C.
+- **`brette_gerstner_fig_3d.py`** — **post-inhibitory rebound** (`aeif_cond_exp`; `a = 80 nS`,
+  `b = 80.5 pA`, `tau_w = 720 ms`). An 800 pA *inhibitory* step hyperpolarises the membrane; on
+  release the adaptation current drives a rebound burst back through threshold (Figure 3D).
+
+### Compartmental models (`cm_default`)
+
+Both build a soma+dendrite tree on NEST's multi-compartment `cm_default`, exercising the
+committed Simulator seam for per-compartment state, receptors, and device routing.
+
+- **`two_comps.py`** — **active vs passive dendrites.** The same soma+dendrite is built twice —
+  once with a passive dendrite, once with active Na/K channels — and driven identically through
+  `AMPA_NMDA` receptors on soma and dendrite; the active dendrite amplifies and sharpens the
+  dendritic response relative to the passive cable.
+- **`receptors_and_current.py`** — **multiple receptor types + steady current.** A passive
+  soma+2-dendrite tree carries `GABA` on the soma, `AMPA` on dendrite 1, and `AMPA_NMDA` on
+  dendrite 2, each driven through its receptor index, plus a 1 pA DC injection into dendrite 1 —
+  showing the distinct AMPA / NMDA / GABA signatures attenuating electrotonically across
+  compartments.
+
+### Pong — reinforcement learning (Wunderlich et al. 2019)
+
+A pure-Python game plus two spiking learners that map the ball's y-cell to a paddle move,
+trained turn-by-turn on the **persistent-rollout substrate added for this group**
+(`Simulator.cont` + `host_drive`, below).
+
+- **`pong.py`** — the pure-`numpy` `GameOfPong` (ball, paddles, 32×20 grid); no spiking
+  machinery, so it is stepped from the host loop between turns.
+- **`pong_networks.py`** — the two learners over a 20-cell input→motor map. **`PongNetRSTDP`**
+  rewrites static-synapse weights on the host after each 200 ms turn by the reward-modulated
+  STDP rule (`learning_rate · calculate_stdp · reward`, a per-edge spike-timing correlation);
+  **`PongNetDopa`** instead lets `stdp_dopamine_synapse` edges evolve online *inside* the
+  rollout, driven by an actor–critic circuit (striatum → ventral pallidum → dopaminergic
+  neurons → `volume_transmitter`) whose reward current the host injects each turn.
+- **`pong_run.py`** — the `AIPong` host loop (a faithful port of NEST's `run_simulations.py`)
+  pits two learners head-to-head and emits a learning-curve comparison. Because each network
+  owns its own `Simulator` + `volume_transmitter`, any pairing trains — including two
+  dopaminergic players, which NEST's single global transmitter forbids. Run
+  `python examples/nest/pong_run.py --quick`.
+
+**Substrate added for pong (reusable).** Driving a model in host-interleaved chunks needs two
+new primitives, both promoted into the package:
+
+- **`Simulator.cont(duration)`** — a non-re-initialising sibling of `simulate()`: state persists
+  across calls (biological time accumulates), so a host loop can read recordings, rewrite a
+  `host_drive` schedule, or overwrite static weights between chunks while the compiled per-chunk
+  `for_loop` is reused (no recompile). `reset_rollout()` starts a fresh rollout at `t = 0`.
+- **`host_spike_drive` / `host_current_drive`** — State-backed input devices holding a
+  `(window, n)` per-step schedule; `set_schedule()` rewrites the State *contents* (fixed shape)
+  between `cont()` chunks, so changing which input fires this turn — or how large the reward
+  current is — never retraces the rollout.
+
+> NEST's §3.10 **`sudoku/`** demo (a noise-driven WTA constraint-satisfaction network) was
+> investigated and found intractable to bring to solve-rate parity on the current substrate; it
+> is carried as a documented TODO (`CONTEXT.md`, `examples-gap.md` §3.10).
+
 ## Validation
 
 Live-NEST parity tests live in
@@ -856,3 +924,30 @@ The grid layout was pinned empirically against live NEST (`x = c−L/2 + (col+0.
 substrate's `p(d)` tracks the analytic law and NEST's realized curve bin-by-bin; the 3-D demo
 additionally checks the `box` mask is a hard per-axis cutoff and `allow_autapses=False` removes
 every self-edge. Each demo's NEST-free companion (the structural class) runs in CI.
+
+### Pedagogical demos (§3.10)
+
+The AdEx figures and compartmental demos are **deterministic** ports, compared per-sample
+against live NEST; pong is a **reinforcement-learning** demo whose game trajectory
+PRNG-diverges, so its parity is component-deterministic plus behavioural (as for
+`wang_decision_making` above), never per-sample.
+
+| Port | metric | brainpy vs NEST |
+|---|---|---|
+| `brette_gerstner_fig_2c` | AdEx sub-threshold `V_m` (500 pA, spike-free), `CAT_A` ; spike pattern `CAT_E` | < 1e-3 mV ; \|ΔN\| ≤ 2, first spike ≤ 1 step |
+| `brette_gerstner_fig_3d` | hyperpolarised-plateau `V_m`, `CAT_A` ; rebound burst `CAT_E` | < 0.02 mV ; \|ΔN\| ≤ 2, first spike ≤ 1 step |
+| `two_comps` | soma/dend `v_comp` ; Na/K `m,h,n` ; AMPA/NMDA `g_r,g_d` | soma AP ~0.03 mV (active-tip residual ~0.56 mV) ; gating 6e-3 ; conductance ~1e-15 nS |
+| `receptors_and_current` | DC-only `V_m` (`CAT_C`) ; synaptic-drive `V_m` (`CAT_C`) | ~1e-13 mV ; ~1e-2 mV |
+| `pong` `calculate_stdp` | R-STDP correlation vs NEST's own `PongNetRSTDP.calculate_stdp` | bit-for-bit (pinned, e.g. 67.6377405226) |
+| `pong` dopamine pathway | reward current → dopaminergic firing → input→motor weight change | potentiation (reward) vs depression (no reward), sign-correct ; weights bounded `[Wmin, Wmax]` |
+
+The compartmental residuals are the integrator-and-tap precision floor: the `two_comps`
+active-dendrite *tip* carries a ~0.56 mV sub-step-peak sensitivity (the Na/K spike is sharper
+than `dt` and `cm_default` has no reset to re-anchor it), while the soma AP and the
+deterministic double-exponential conductances match to ~float noise. For pong, the host
+`calculate_stdp` correlation reproduces NEST's method bit-for-bit, the dopaminergic
+reward→potentiation pathway is sign-checked against a zero-reward control, and a bounded
+fixed-seed head-to-head run is asserted only to be well-formed (weights inside `[Wmin, Wmax]`,
+paddles tracking within the field, the reward baseline rising off zero). The `Simulator.cont`
+persistent rollout and `host_drive` clamped input underneath the turn loop are themselves
+oracle-tested against one long `simulate()` and against chunked live-NEST accumulation.

@@ -139,6 +139,71 @@ objection into a Lessons entry, do **not** silently diverge.
 > - **For next clusters:** <advice, blockers found, scope adjustments>.
 > ```
 
+### 19-pedagogical — 2026-06-16
+
+- **Shipped:** the **§3.10 pedagogical group** — AdEx figures, compartmental dendrites, and the
+  pong RL demo — closing §3.10 bar the `sudoku/` TODO. (1) `brette_gerstner_fig_2c.py`
+  (spike-frequency adaptation, `aeif_cond_alpha`) + `fig_3d.py` (post-inhibitory rebound,
+  `aeif_cond_exp`), each with a live-NEST `V_m` parity test (`CAT_A` sub-threshold window +
+  `CAT_E` spike pattern) and a NEST-free law class. (2) `two_comps.py` (active vs passive
+  dendrite) + `receptors_and_current.py` (per-compartment AMPA / NMDA / GABA + DC), both on the
+  committed **`cm_default` Simulator seam** (multi-compartment state + multi-receptor routing +
+  device→compartment wiring). (3) the **pong** RL demo: `pong.py` (pure-numpy game),
+  `pong_networks.py` (`PongNetRSTDP` host-STDP on static synapses + `PongNetDopa` dopaminergic
+  actor–critic), `pong_run.py` (`AIPong` head-to-head harness), built on two **new reusable
+  substrate primitives** — `Simulator.cont()` (persistent rollout) and `host_spike_drive` /
+  `host_current_drive` (State-clamped per-step input). Branch `worktree-nest-goal+19-pedagogical`;
+  feature commits `a153e2d`…`0624353`. **`sudoku/` deferred** as a documented TODO (below).
+- **Parity (vs live NEST 3.9.0):** *deterministic* ports compared per-sample — `fig_2c`/`fig_3d`
+  sub-threshold `V_m` < 1e-3 mV (`CAT_A`), spike pattern within `CAT_E` (count ≤ 2, first spike
+  ≤ 1 step); `two_comps` soma AP ~0.03 mV / Na-K gating 6e-3 / conductance ~1e-15 nS (active-
+  dendrite *tip* residual ~0.56 mV — a sub-`dt` Na/K peak with no `cm_default` reset to re-anchor
+  it, so it rides a 1.0 mV band); `receptors_and_current` DC-only ~1e-13 mV, synaptic-drive
+  ~1e-2 mV (`CAT_C`). **Pong RL is NOT per-sample** (see Gotchas): `calculate_stdp` reproduces
+  NEST's own method bit-for-bit (pinned literals, e.g. 67.6377405226, places=8); the dopamine
+  reward→potentiation pathway is sign-checked vs a zero-reward control; behaviour is a bounded
+  well-formedness assertion (weights inside `[Wmin, Wmax]`, paddles in-field, reward baseline off
+  zero). `cont()` itself is oracle-tested — chunked `cont()` == one long `simulate()` (`CAT_B`) +
+  chunked live-NEST accumulation. Full §3.10 suite green (substrate+pong **41 passed / 2 skipped**,
+  brette+compartmental **19 passed**); new-module coverage host_drive 97 % / pong.py 99 % /
+  pong_networks 99 % / pong_run 97 %.
+- **API discovered/changed:** **`Simulator.cont(duration)`** — a non-re-init sibling of
+  `simulate()` (both now share `_run_window`; `simulate` = `reset_rollout` + `_run_window`).
+  `cont()` keeps `_base_t` / `_base_i` so biological time, device counters, and the `environ` step
+  index continue across chunks; the compiled per-chunk `for_loop` is reused as long as only State
+  *contents* change. `reset_rollout()` restarts at `t=0`; `cont()` lazily inits on first call.
+  **`host_spike_drive` / `host_current_drive`** (`brainpy_state/_nest/host_drive.py`, exported
+  inner + `brainpy.state`) — a `(window, n)` `ShortTermState` schedule read one row/step via a
+  wrapping counter; `set_schedule(arr)` overwrites contents (fixed shape → no retrace). The spike
+  role is a holder-backed source (wire `one_to_one`→`parrot`, weight 1.0); the current role
+  declares `_injects_current` and routes through the `dc_generator` ring-buffer path. The host
+  keeps a live handle via `view.segments[0].population`. **Per-edge static-weight overwrite**:
+  `get_connections(src, tgt).set('weight', arr*u.pA)` mutates the live weight State in place (no
+  recompile) — allowed on `static_synapse`, **refused** on rule-managed plastic weights
+  (`PongNetDopa`'s dopamine edges raise `ValueError`), which is the right guard.
+- **Gotchas:** (1) **RL parity is PRNG-divergent by construction** — the pong policy is a
+  stochastic argmax over noisy motor spikes, so the game trajectory cannot match NEST per-sample.
+  The faithful split is *component-deterministic* (the translation-invariant `calculate_stdp`
+  matches NEST bit-for-bit; the dopamine pathway sign-matches) **plus** *behavioural* (bounded
+  well-formedness), never a learning-curve compare — the same posture as `wang_decision_making`.
+  (2) **Subthreshold motor neurons are not a bug** — 20×1300 pA input alone is sub-threshold for
+  `iaf_psc_exp`; NEST relies on the `noise_generator` (noisy variant) or scaled-up weights (clean)
+  to reach threshold. Reproduce both faithfully rather than "fixing" the silence. (3) **The
+  recompile guard is the whole game** — every per-turn change must be a fixed-shape `State.value`
+  write (`set_schedule`, `set('weight')`), never a retraced Python constant; the
+  recompile-invariant tests (steady turn ≪ first turn) catch a regression but **self-skip under
+  machine load** (timing inconclusive), so isolate the timed region. (4) **Noisy variants are
+  ~5× slower** (per-step Gaussian RNG, *not* a recompile — flat per-turn times confirm it); keep
+  CI smoke runs on the clean variants + tiny turn counts. (5) **`sudoku/` intractable** — its
+  noise-driven WTA constraint network did not reach NEST's solve rate within a practical substrate
+  config; deferred as a TODO (`examples-gap.md` §3.10) rather than shipped half-working.
+- **For next clusters:** `cont()` + `host_drive` are the reusable **closed-loop / clamped-input**
+  seam — any host-in-the-loop demo (online learning, neuromorphic control, interactive stimulus)
+  should build on them rather than re-deriving a `for_loop` driver. `sudoku/` is the one §3.10
+  item left (needs a tractable WTA-relaxation formulation). The `cm_default` seam (Phase 3) now has
+  two demos exercising it; the sibling conductance-bridge sweep (from 17b) remains the other open
+  substrate follow-up.
+
 ### 25-conductance-bridge-sweep — 2026-06-15
 
 - **Shipped:** the **eight remaining conductance neurons** enrolled into the 17b

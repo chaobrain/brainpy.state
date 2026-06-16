@@ -205,6 +205,12 @@ def _read_recordable(pop, name):
         state = getattr(pop, attr, None)
         if state is not None:
             return state.value
+    # Models with per-instance dynamic recordable names (cm_default: ``v_comp0``,
+    # ``m_Na_1``, ``g_r_AN_AMPA_1``, … keyed by compartment/receptor layout known
+    # only to the instance) self-resolve via ``read_recordable``.
+    resolver = getattr(pop, 'read_recordable', None)
+    if resolver is not None:
+        return resolver(name)
     raise KeyError(
         f'recordable {name!r} (tried {entry}) is not available on '
         f'{type(pop).__name__}'
@@ -498,6 +504,12 @@ class Simulator(brainstate.nn.Module):
         # gets a _SpikeHolder.
         if isinstance(mod, (_spike_recorder, _multimeter)):
             return NodeView([_Segment(mod, jnp.arange(1))])
+        # Current-injecting devices (host_current_drive) are driven via the
+        # _current_injectors path (phase 1b), like a dc_generator: they emit pA, not
+        # spikes, so they get no _SpikeHolder (phase 2 would otherwise double-drive
+        # the schedule counter). connect() registers them as injectors.
+        if getattr(mod, '_injects_current', False):
+            return NodeView.of(mod)
         holder = _SpikeHolder(_flat_size(mod))
         setattr(self, f'_holder_{id(mod)}', holder)
         # A neuron that integrates short-term plasticity *presynaptically* (declares
@@ -1447,6 +1459,16 @@ class Simulator(brainstate.nn.Module):
                     delay=delay, receptor_type=receptor_type, seed=seed)
         else:
             pre_pop = pre_seg.population
+            if getattr(pre_pop, '_injects_current', False):
+                # A non-deferred host_current_drive: register it as a current
+                # injector reading its host-set schedule (same ring-buffer path as a
+                # dc_generator), keeping the host's stable handle so the schedule can
+                # be rewritten between cont() chunks. No holder, no projection.
+                comp, ncomp = self._resolve_current_compartment(post_pop, receptor_type)
+                self._current_injectors.append(
+                    (pre_pop, post_pop, post_seg.indices, weight,
+                     f'cur_inj_{ordinal}', comp, ncomp))
+                return None
             source_pop = pre_pop
             holder = getattr(self, f'_holder_{id(pre_pop)}')
             if synapse is not None:
@@ -1762,19 +1784,69 @@ class Simulator(brainstate.nn.Module):
                         u.get_mantissa(getattr(m, emit_attr).value), dtype=dftype)
 
     def simulate(self, duration, *, dt=None) -> SimulationResult:
-        """Run for ``duration`` and return recorded spikes and analog traces.
+        """Run for ``duration`` from a freshly initialised state.
 
         Spike recorders are stacked as ``(n_steps, n_recorded)`` arrays; analog
         recorders (``voltmeter`` / ``multimeter``) tap their target population's
         State each step (after the update) into ``(n_steps, n_recorded)`` traces
         keyed by recordable. The run's time axis is exposed as ``res.times``.
+
+        This re-initialises ALL state (``init_all_states``) and runs one window from
+        ``t = 0``. To continue a rollout across windows *without* re-initialising —
+        interleaving host-side work between chunks (read recordings, rewrite
+        ``host_drive`` schedules, overwrite static weights) — use :meth:`cont`.
         """
-        import brainstate.transform as transform
+        if dt is None:
+            dt = self._dt
+        self.reset_rollout(dt=dt)
+        return self._run_window(duration, dt)
+
+    def reset_rollout(self, *, dt=None):
+        """Initialise all state and start a fresh persistent rollout at ``t = 0``.
+
+        Calls ``brainstate.nn.init_all_states(self)`` and zeroes the accumulated
+        rollout clock (``_base_t`` / ``_base_i``). :meth:`simulate` calls this for
+        you; call it explicitly before a :meth:`cont` loop to (re)start cleanly.
+        """
         if dt is None:
             dt = self._dt
         brainstate.nn.init_all_states(self)
-        times = u.math.arange(0.0 * u.get_unit(dt), duration, dt)
-        indices = u.math.arange(times.size)
+        self._base_t = 0.0 * u.get_unit(dt)
+        self._base_i = 0
+        self._rollout_ready = True
+
+    def cont(self, duration, *, dt=None) -> SimulationResult:
+        """Continue the rollout for ``duration`` WITHOUT re-initialising state.
+
+        Unlike :meth:`simulate`, state persists across calls (biological time
+        accumulates), so a host loop can interleave Python work between chunks —
+        read this window's recordings, rewrite a ``host_drive`` schedule, or
+        overwrite static weights via ``get_connections(...).set('weight', ...)`` —
+        while the compiled per-chunk ``for_loop`` is reused (no recompile as long as
+        only State *contents* change). Lazily initialises on the first call (or
+        after :meth:`reset_rollout`). Each call returns a :class:`SimulationResult`
+        for that window, whose ``times`` are absolute (offset by the accumulated
+        rollout clock).
+        """
+        if dt is None:
+            dt = self._dt
+        if not getattr(self, '_rollout_ready', False):
+            self.reset_rollout(dt=dt)
+        return self._run_window(duration, dt)
+
+    def _run_window(self, duration, dt) -> SimulationResult:
+        """Run one ``for_loop`` window of ``duration`` over the rollout clock and
+        stack the spike / analog / weight taps, then advance the clock.
+
+        Shared by :meth:`simulate` (after a re-init, ``_base_t == 0``) and
+        :meth:`cont` (no re-init): ``times`` / ``indices`` are offset by the
+        accumulated ``_base_t`` / ``_base_i`` so the device counters, time axis, and
+        ``environ`` step index continue across windows.
+        """
+        import brainstate.transform as transform
+        local = u.math.arange(0.0 * u.get_unit(dt), duration, dt)
+        times = self._base_t + local
+        indices = self._base_i + u.math.arange(local.size)
         taps = dict(self._taps)
         analog = dict(self._analog_taps)
         weight_taps = dict(self._weight_taps)
@@ -1801,5 +1873,7 @@ class Simulator(brainstate.nn.Module):
             arr = jnp.asarray(stacked_w[rid])          # (T, E) mantissa
             unit = getattr(proj, '_w_unit', u.UNITLESS)
             weights[rid] = arr if unit is u.UNITLESS else u.maybe_decimal(arr * unit)
+        self._base_t = self._base_t + local.size * dt
+        self._base_i = self._base_i + int(local.size)
         return SimulationResult(recordings, duration, dt, traces=traces, times=times,
                                 weights=weights)

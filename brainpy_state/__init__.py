@@ -154,6 +154,9 @@ from ._nest import (
     dc_generator,
     noise_generator,
     step_current_generator,
+    # Host-clamped input devices (closed-loop / Simulator.cont rollouts)
+    host_spike_drive,
+    host_current_drive,
     step_rate_generator,
 
     # Stimulation devices - Spike generators
@@ -383,6 +386,9 @@ __all__ = [
     'dc_generator',
     'noise_generator',
     'step_current_generator',
+    # Host-clamped input devices (closed-loop / Simulator.cont rollouts)
+    'host_spike_drive',
+    'host_current_drive',
     'step_rate_generator',
 
     # Stimulation devices - Spike generators

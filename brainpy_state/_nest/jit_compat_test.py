@@ -62,8 +62,6 @@ KNOWN_NON_JITTABLE = {
     'rate_neuron_opn': 'Python-int delay-queue step indexing',
     'rate_transformer_node': 'Python-int delay-queue step indexing',
     'siegert_neuron': 'np.ndindex mean-field integration + int step indexing',
-    # Abstract compartmental builder: ``update`` is intentionally not implemented.
-    'cm_default': 'compartmental builder; update() not implemented',
     # Pre-existing shape bug unrelated to parameter validation: with the default
     # configuration the NMDA receptor array is empty (shape (n, 0)) and the RK
     # integrator's weighted sum fails to broadcast against the (n,) state.
@@ -78,6 +76,21 @@ CONSTRUCTION_KWARGS = {
         E_rev=jnp.array([0.0, -85.0]) * u.mV,
         tau_rise=jnp.array([1.0, 1.0]) * u.ms,
         tau_decay=jnp.array([5.0, 5.0]) * u.ms,
+    ),
+    # cm_default needs a morphology + receptors to enter its State-based update()
+    # path (a bare ``cm_default(2)`` stays in legacy host-loop mode with no State).
+    'cm_default': dict(
+        compartments=[
+            {'parent_idx': -1, 'params': {
+                'C_m': 89.0, 'g_C': 0.0, 'g_L': 8.9, 'e_L': -75.0, 'v_comp': -75.0,
+                'gbar_Na': 4608.0, 'e_Na': 60.0, 'gbar_K': 956.0, 'e_K': -90.0}},
+            {'parent_idx': 0, 'params': {
+                'C_m': 1.9, 'g_C': 1.26, 'g_L': 0.19, 'e_L': -70.0, 'v_comp': -70.0}},
+        ],
+        receptors=[
+            {'comp_idx': 0, 'receptor_type': 'AMPA'},
+            {'comp_idx': 1, 'receptor_type': 'AMPA_NMDA'},
+        ],
     ),
 }
 
