@@ -110,7 +110,7 @@ Two ways to capture state during `simulate()`:
 2. **`Recorder` + `NESTDevice`** — full NEST-faithful recorder semantics:
 
    ```python
-   from brainpy_state._nest.spike_recorder import spike_recorder
+   from brainpy_state._nest_device.spike_recorder import spike_recorder
 
    class Net(bps.Network):
        def __init__(self):
