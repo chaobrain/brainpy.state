@@ -77,6 +77,29 @@ class TestExpressions(unittest.TestCase):
                     - np.asarray(u.get_magnitude(self.pre.to(u.um)))[:, None, 0])
         np.testing.assert_allclose(g, np.exp(-(dx ** 2) / 2.0), atol=1e-6)
 
+    def test_source_pos_broadcasts_source_coord(self):
+        from brainpy_state._nest_spatial._kernels import source_pos
+        g = np.asarray(u.get_magnitude(source_pos.x._eval_pair(self.pre, self.post).to(u.um)))
+        np.testing.assert_allclose(g, [[0.0, 0.0], [1.0, 1.0]], atol=1e-6)   # rows = pre_x
+
+    def test_target_pos_broadcasts_target_coord(self):
+        from brainpy_state._nest_spatial._kernels import target_pos
+        g = np.asarray(u.get_magnitude(target_pos.y._eval_pair(self.pre, self.post).to(u.um)))
+        np.testing.assert_allclose(g, [[0.0, 5.0], [0.0, 5.0]], atol=1e-6)   # cols = post_y
+
+    def test_pos_in_connect_path_raises(self):
+        from brainpy_state._nest_spatial._kernels import pos
+        with self.assertRaises(ValueError):
+            pos.x._eval_pair(self.pre, self.post)
+
+    def test_pos_eval_nodes_returns_axis_column(self):
+        from brainpy_state._nest_spatial._kernels import pos
+        coords = jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) * u.um
+        gx = np.asarray(u.get_magnitude(pos.x._eval_nodes(coords).to(u.um)))
+        gy = np.asarray(u.get_magnitude(pos.y._eval_nodes(coords).to(u.um)))
+        np.testing.assert_allclose(gx, [1.0, 3.0, 5.0], atol=1e-6)
+        np.testing.assert_allclose(gy, [2.0, 4.0, 6.0], atol=1e-6)
+
 
 if __name__ == '__main__':
     unittest.main()

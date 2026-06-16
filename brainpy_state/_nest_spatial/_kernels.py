@@ -19,7 +19,7 @@ import brainunit as u
 from brainpy_state._nest_spatial._distance import displacement, pairwise_distance
 from brainpy_state._nest_spatial._layers import _as_len
 
-__all__ = ['distance', 'gaussian']
+__all__ = ['distance', 'pos', 'source_pos', 'target_pos', 'gaussian']
 
 _AXES = ('x', 'y', 'z')
 
@@ -85,6 +85,92 @@ class _DistanceSentinel(_Expr):
 
 #: Singleton representing the pairwise Euclidean distance between two nodes.
 distance = _DistanceSentinel()
+
+
+class _SourcePos(_Expr):
+    """Source-node position on an axis, broadcast over targets (NEST ``source_pos.x/.y/.z``)."""
+
+    def __init__(self, axis):
+        self.axis = int(axis)
+
+    def _eval_pair(self, pre_pos, post_pos):
+        if self.axis >= pre_pos.shape[-1]:
+            raise ValueError(f'source_pos.{_AXES[self.axis]} needs a {self.axis + 1}-D layer')
+        col = pre_pos[:, self.axis][:, None]              # (n_pre, 1)
+        return u.math.broadcast_to(col, (pre_pos.shape[0], post_pos.shape[0]))
+
+    def __repr__(self):
+        return f'spatial.source_pos.{_AXES[self.axis]}'
+
+
+class _TargetPos(_Expr):
+    """Target-node position on an axis, broadcast over sources (NEST ``target_pos.x/.y/.z``)."""
+
+    def __init__(self, axis):
+        self.axis = int(axis)
+
+    def _eval_pair(self, pre_pos, post_pos):
+        if self.axis >= post_pos.shape[-1]:
+            raise ValueError(f'target_pos.{_AXES[self.axis]} needs a {self.axis + 1}-D layer')
+        row = post_pos[:, self.axis][None, :]             # (1, n_post)
+        return u.math.broadcast_to(row, (pre_pos.shape[0], post_pos.shape[0]))
+
+    def __repr__(self):
+        return f'spatial.target_pos.{_AXES[self.axis]}'
+
+
+class _NodePos(_Expr):
+    """Single-node position on an axis (NEST ``pos.x/.y/.z``); invalid in the connect path."""
+
+    def __init__(self, axis):
+        self.axis = int(axis)
+
+    def _eval_pair(self, pre_pos, post_pos):
+        raise ValueError(
+            'pos.{a} is a single-node position parameter and cannot be used when connecting; '
+            'use source_pos.{a} / target_pos.{a} (two-node) or distance.{a}'.format(
+                a=_AXES[self.axis]))
+
+    def _eval_nodes(self, coords):
+        if self.axis >= coords.shape[-1]:
+            raise ValueError(f'pos.{_AXES[self.axis]} needs a {self.axis + 1}-D layer')
+        return coords[:, self.axis]
+
+    def __repr__(self):
+        return f'spatial.pos.{_AXES[self.axis]}'
+
+
+class _AxisHolder:
+    """Exposes ``.x/.y/.z`` building a given per-axis expression class (NEST ``pos`` etc.)."""
+    __module__ = 'brainpy.state'
+
+    def __init__(self, factory, name):
+        self._factory = factory
+        self._name = name
+
+    @property
+    def x(self):
+        """Per-axis expression on the x-axis."""
+        return self._factory(0)
+
+    @property
+    def y(self):
+        """Per-axis expression on the y-axis."""
+        return self._factory(1)
+
+    @property
+    def z(self):
+        """Per-axis expression on the z-axis."""
+        return self._factory(2)
+
+    def __repr__(self):
+        return f'spatial.{self._name}'
+
+
+#: Per-node position accessors (NEST ``nest.spatial.pos`` / ``source_pos`` / ``target_pos``).
+pos = _AxisHolder(_NodePos, 'pos')
+source_pos = _AxisHolder(_SourcePos, 'source_pos')
+target_pos = _AxisHolder(_TargetPos, 'target_pos')
 
 
 def _as_input(x):
