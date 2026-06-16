@@ -204,7 +204,7 @@ cython_debug/
 /docs_state/_static/logos/
 /docs_state/changelog.md
 /examples_classic/dynamics_training/data/
-/docs/api/generated/
+/docs/apis/generated/
 /claude_implement_nest_models.sh
 /claude_logs/
 /codex_logs/

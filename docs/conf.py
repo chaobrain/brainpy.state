@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../'))
 shutil.copyfile('../changelog.md', './changelog.md')
 shutil.rmtree('./_build', ignore_errors=True)
 shutil.rmtree('./__pycache__', ignore_errors=True)
-shutil.rmtree('./api/generated', ignore_errors=True)
+shutil.rmtree('apis/generated', ignore_errors=True)
 
 # -- Project information -----------------------------------------------------
 
