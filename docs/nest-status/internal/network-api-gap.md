@@ -154,13 +154,13 @@ is the NEST-style facade.
 |---|---|---|---|---|---|
 | `nest.spatial.grid(shape, extent, ...)` | **done** | `brainpy.state.spatial.grid` | <https://nest-simulator.readthedocs.io/en/stable/networks/spatially_structured_networks.html> | `_nest_spatial/_layers_test.py`, `_validation/spatial_grid_test.py` | exact coord parity vs NEST (2-D + 3-D) |
 | `nest.spatial.free(pos, ...)` | **done** | `brainpy.state.spatial.free` | upstream | `_nest_spatial/_layers_test.py`, `_validation/spatial_3d_test.py` | array- or distribution-backed (2-D/3-D) |
-| `nest.spatial.pos.{x,y,z}` / `source_pos.{x,y,z}` / `target_pos.{x,y,z}` | missing | none | upstream | — | per-axis position expressions for use in Connect (kernel only consumes `distance` so far) |
-| `nest.spatial.distance` / `.x/.y/.z` | partial | `brainpy.state.spatial.distance` (+ `displacement`, `pairwise_distance`) | upstream | `_nest_spatial/_distance_test.py`, `_kernels_test.py` | scalar `distance` sentinel done; per-axis `.x/.y/.z` not yet |
-| `nest.spatial_distributions.exponential / gaussian / gaussian2D / gabor / gamma` | partial | `brainpy.state.spatial.gaussian` | upstream | `_nest_spatial/_kernels_test.py`, `_validation/spatial_gaussian_kernel_test.py` | `gaussian` done (distributional parity); exponential/gabor/gamma queued |
-| `Mask` types (rectangular, circular, doughnut, elliptical, grid, box, spherical, ellipsoidal) | partial | `spatial.circular` / `spatial.spherical` / `spatial.box` | upstream | `_nest_spatial/_masks_test.py` | circular/spherical/box done (hard cutoff parity); rectangular/doughnut/elliptical queued |
-| `GetPosition`, `GetSourcePositions`, `GetTargetPositions`, `FindNearestElement`, `FindCenterElement`, `Displacement`, `Distance`, `SelectNodesByMask` | partial | `Simulator.get_position`, `spatial.target_positions`, `spatial.target_nodes`, `spatial.center_element`, `spatial.Distance` | upstream | `_nest_spatial/_helpers_test.py`, `_validation/spatial_grid_test.py` | GetPosition/GetTargetPositions/GetTargetNodes/FindCenterElement/Distance done; nearest-element/by-mask queued |
-| `DumpLayerConnections`, `DumpLayerNodes` | missing | none (use `get_connections` / `get_position`) | upstream | — | spatial export helpers |
-| `PlotLayer`, `PlotTargets`, `PlotSources`, `PlotProbabilityParameter` | missing | none (matplotlib used directly in demos) | upstream | — | spatial visualization helpers |
+| `nest.spatial.pos.{x,y,z}` / `source_pos.{x,y,z}` / `target_pos.{x,y,z}` | **done** | `spatial.pos` / `spatial.source_pos` / `spatial.target_pos` (`.x/.y/.z`) | upstream | `_nest_spatial/_kernels_test.py` | per-axis position expressions consumable by kernels; `source_pos`/`target_pos` bind in Connect, `pos` is a per-node accessor |
+| `nest.spatial.distance` / `.x/.y/.z` | **done** | `brainpy.state.spatial.distance` (+ `.x/.y/.z`, `displacement`, `pairwise_distance`) | upstream | `_nest_spatial/_distance_test.py`, `_kernels_test.py` | scalar sentinel + per-axis `.x/.y/.z` (absolute, NEST convention); read-back parity vs live NEST |
+| `nest.spatial_distributions.exponential / gaussian / gaussian2D / gabor / gamma` | **done** | `spatial.gaussian` / `exponential` / `gamma` / `gabor` / `gaussian2D` | upstream | `_nest_spatial/_kernels_test.py`, `_validation/spatial_{gaussian_kernel,exponential,gamma,gabor}_test.py` | all five match live NEST element-wise to machine precision (weight read-back) |
+| `Mask` types (rectangular, circular, doughnut, elliptical, grid, box, spherical, ellipsoidal) | **done** | `spatial.circular` / `spherical` / `box` / `rectangular` / `doughnut` / `elliptical` / `ellipsoidal` | upstream | `_nest_spatial/_masks_test.py`, `_validation/spatial_masks_test.py` | hard-cutoff node-set parity vs live NEST incl. rotated (`azimuth`/`polar`) + 3-D; `box` is 2-D/3-D here vs NEST 3-D-only (`rectangular` is the 2-D box) |
+| `GetPosition`, `GetSourcePositions`, `GetTargetPositions`, `FindNearestElement`, `FindCenterElement`, `Displacement`, `Distance`, `SelectNodesByMask` | **done** | `Simulator.get_position`, `spatial.target_positions` / `target_nodes` / `center_element` / `nearest_element` / `Distance` / `select_nodes_by_mask` | upstream | `_nest_spatial/_helpers_test.py`, `_validation/spatial_{grid,queries}_test.py` | `nearest_element`/`select_nodes_by_mask` match live NEST exactly (node-index/node-set) |
+| `DumpLayerConnections`, `DumpLayerNodes` | **done** | `spatial.dump_layer_nodes` / `spatial.dump_layer_connections` | upstream | `_nest_spatial/_helpers_test.py`, `_validation/spatial_queries_test.py` | text parity vs `DumpLayer*` (coords/weight/delay/displacement identical; local 0-based vs NEST 1-based ids) |
+| `PlotLayer`, `PlotTargets`, `PlotSources`, `PlotProbabilityParameter` | **done** | `spatial.plot_layer` / `plot_targets` / `plot_sources` / `plot_probability_parameter` | upstream | `_nest_spatial/_plot_test.py` | matplotlib lazily imported; smoke-tested (returns a `Figure`) |
 | `Create(model, positions=spatial.*)` + `spatial` pairwise-Bernoulli rule | **done** | `Simulator.create(positions=)` + `spatial.spatial_pairwise_bernoulli` | upstream | `_network/_simulator_spatial_test.py`, `_nest_spatial/_rule_test.py` | coords attach to a population; spatial rule rides `connect(rule=)` unchanged |
 
 ### 3.11 Random / math / logic Parameter operators
@@ -195,15 +195,20 @@ or `weight=2 * nest.spatial.distance`. `brainpy.state` requires concrete arrays
 at projection-instantiation time. This breaks NEST examples that use
 `Parameter` arithmetic.
 
-**Spatial / topology.** The core of `nest.spatial` + `nest.spatial_distributions` **landed**
-(goal 20): `grid`/`free` layers (2-D/3-D), the `distance` sentinel + `gaussian` kernel,
-`circular`/`spherical`/`box` masks, the `spatial_pairwise_bernoulli` rule (riding the existing
-`Simulator.connect`), and the `GetPosition`/`GetTargetPositions`/`GetTargetNodes`/
-`FindCenterElement`/`Distance` query helpers — all under `brainpy.state.spatial`, validated
-against live NEST 3.9.0 (exact grid coords; distributional kernel parity). Remaining surface
-(per-axis `pos.x/y/z` expressions, the exponential/gabor/gamma distributions, the other mask
-shapes, nearest-element / by-mask selection, layer dump/plot helpers) is queued; the
-primitives and seam are in place to add them incrementally.
+**Spatial / topology.** *Complete (goals 20 + 27).* The full `nest.spatial` +
+`nest.spatial_distributions` surface lives under `brainpy.state.spatial`, validated against live
+NEST 3.9.0: `grid`/`free` layers (2-D/3-D); the `distance` sentinel **with per-axis `.x/.y/.z`**
+and the `pos`/`source_pos`/`target_pos` position accessors; all five distance distributions
+(`gaussian`/`exponential`/`gamma`/`gabor`/`gaussian2D`, machine-precision weight-read-back parity);
+all seven masks (`circular`/`spherical`/`box`/`rectangular`/`doughnut`/`elliptical`/`ellipsoidal`,
+exact node-set parity incl. rotated + 3-D); the `spatial_pairwise_bernoulli` rule (riding the
+existing `Simulator.connect` unchanged); the query helpers
+`GetPosition`/`GetTargetPositions`/`GetTargetNodes`/`FindCenterElement`/`Distance` plus
+`nearest_element` (`FindNearestElement`) and `select_nodes_by_mask` (`SelectNodesByMask`); the
+`dump_layer_nodes`/`dump_layer_connections` exporters (text parity vs `DumpLayer*`); and the
+matplotlib-gated `plot_layer`/`plot_targets`/`plot_sources`/`plot_probability_parameter` helpers
+(smoke-tested). The cluster-27 additions were **purely additive** — zero change to the cluster-20
+binding seam.
 
 **`CollocatedSynapses`.** No support for multiple synapse types on the same
 edge pair at once. NEST users wire AMPA + NMDA on the same pre→post pair in
