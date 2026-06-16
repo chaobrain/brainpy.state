@@ -14,7 +14,7 @@ examples.nest.sudoku : the runnable host-loop solver harness.
 """
 import numpy as np
 
-__all__ = ['N_PUZZLES', 'get_puzzle', 'validate_solution']
+__all__ = ['N_PUZZLES', 'get_puzzle', 'validate_solution', 'make_easy_puzzle']
 
 #: Number of bundled puzzle configurations (indices ``0`` .. ``N_PUZZLES - 1``).
 N_PUZZLES = 8
@@ -146,6 +146,46 @@ def get_puzzle(puzzle_index):
         raise ValueError(
             f'No puzzle for index {puzzle_index}; expected 0..{N_PUZZLES - 1}.')
     return np.array(_PUZZLES[puzzle_index], dtype=np.uint8)
+
+
+def make_easy_puzzle(n_blank=12, seed=0):
+    """Return a near-complete, solvable board: a valid grid with cells cleared.
+
+    Useful as a fast-converging board for demos and solve-rate parity: the spiking WTA
+    (in NEST and brainpy alike) reliably completes a board with only a handful of blanks
+    within a couple of relaxation chunks, where it does not reliably crack a hard board.
+
+    Parameters
+    ----------
+    n_blank : int, optional
+        Number of cells to clear from a complete valid grid. Default ``12``.
+    seed : int, optional
+        Seed selecting which cells are cleared (independent of any solver seed), so the
+        same ``(n_blank, seed)`` always yields the same board. Default ``0``.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(9, 9)`` ``uint8`` puzzle (clues are the un-cleared cells of a valid grid).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from examples.nest.sudoku_puzzles import make_easy_puzzle, validate_solution
+        >>> puzzle = make_easy_puzzle(12, seed=0)
+        >>> puzzle.shape
+        (9, 9)
+        >>> int((puzzle == 0).sum())          # exactly n_blank cells cleared
+        12
+    """
+    grid = np.array([[((i * 3 + i // 3 + j) % 9) + 1 for j in range(9)] for i in range(9)],
+                    dtype=np.uint8)
+    rng = np.random.RandomState(int(seed))
+    idx = rng.choice(81, int(n_blank), replace=False)
+    flat = grid.flatten()
+    flat[idx] = 0
+    return flat.reshape(9, 9)
 
 
 def validate_solution(puzzle, solution):

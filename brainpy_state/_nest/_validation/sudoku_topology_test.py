@@ -108,6 +108,13 @@ class TestPuzzleHelpers(unittest.TestCase):
         self.assertFalse(valid)
         self.assertFalse(bool(rows[0]) and bool(cols[0]))      # row/col 0 flagged invalid
 
+    def test_make_easy_puzzle_clues_match_a_valid_grid(self):
+        from examples.nest.sudoku_puzzles import make_easy_puzzle
+        puzzle = make_easy_puzzle(12, seed=0)
+        self.assertEqual(int((puzzle == 0).sum()), 12)
+        valid, *_ = validate_solution(puzzle, _valid_grid())   # source grid solves it
+        self.assertTrue(valid)
+
     def test_validate_solution_folds_in_clue_mismatch(self):
         sol = _valid_grid()
         puzzle = np.zeros((9, 9), int)
