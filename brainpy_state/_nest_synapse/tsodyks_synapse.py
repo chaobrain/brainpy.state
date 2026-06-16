@@ -2,7 +2,7 @@
 """NEST-faithful ``tsodyks_synapse`` — Tsodyks (2000) STP spec + pure rule.
 
 Rebuilt as a frozen parameter spec plus a pure ``update(state, ctx)`` rule
-kernel on :class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`.
+kernel on :class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`.
 Per-edge ``weight`` and per-edge state ``x`` (recovered), ``y`` (active),
 ``u`` (utilization), ``t_lastspike``; shared ``U`` and time constants. Uses
 NEST's ``expm1`` propagator form (``Pzz = expm1(-h/tau_rec)``, ``x -= Pzz*z``);
@@ -11,13 +11,13 @@ uses the algebraically-equal plain-exp form. Each is kept exactly as NEST has it
 (they are floating-point distinct).
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, to_unit_interval, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

@@ -1,4 +1,15 @@
-# Auto-detect text files and normalize line endings to LF in the repo.
+# Cross-platform line-ending policy (Linux / macOS / Windows).
+#
+# Everything text is stored as LF in the repository and checked out as LF on
+# every OS, so a file has identical bytes on Linux, macOS, and Windows. Git for
+# Windows handles LF transparently and modern editors (VS Code, PyCharm, etc.)
+# respect it, so there is no need for per-developer core.autocrlf settings.
+# The only exceptions are Windows-native shell scripts, which require CRLF.
+#
+# After changing this file, run `git add --renormalize .` once to rewrite any
+# files that were previously committed with mixed/CRLF endings.
+
+# Auto-detect text files and normalize them to LF in the repo and working tree.
 * text=auto eol=lf
 
 # ---------------------------------------------------------------------------
@@ -22,7 +33,7 @@
 Makefile  text eol=lf
 
 # ---------------------------------------------------------------------------
-# Windows-only scripts — force CRLF
+# Windows-only scripts — must be CRLF to run on Windows
 # ---------------------------------------------------------------------------
 *.bat     text eol=crlf
 *.cmd     text eol=crlf

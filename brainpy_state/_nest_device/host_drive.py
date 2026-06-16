@@ -31,7 +31,7 @@ import brainunit as u
 import jax.numpy as jnp
 from brainstate.typing import Size
 
-from brainpy_state._nest_base._base import NESTDevice
+from brainpy_state._nest_base.base import NESTDevice
 
 __all__ = [
     'host_spike_drive',

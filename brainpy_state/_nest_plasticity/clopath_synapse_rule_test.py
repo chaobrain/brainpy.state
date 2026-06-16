@@ -17,7 +17,7 @@ import brainunit as u
 
 brainstate.environ.set(precision=64)
 
-from brainpy_state._nest_network._event_plastic import KernelContext  # noqa: E402
+from brainpy_state._nest_network.event_plastic import KernelContext  # noqa: E402
 from brainpy_state._nest_plasticity.clopath_synapse import clopath_synapse  # noqa: E402
 
 # NEST defaults

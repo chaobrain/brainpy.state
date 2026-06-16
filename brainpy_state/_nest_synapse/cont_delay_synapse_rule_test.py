@@ -24,7 +24,7 @@ brainstate.environ.set(precision=64)
 brainstate.environ.set(dt=0.1 * u.ms)                    # resolution floor reference
 
 from brainpy_state import cont_delay_synapse
-from brainpy_state._nest_network._event_plastic import KernelContext
+from brainpy_state._nest_network.event_plastic import KernelContext
 
 
 def _ctx(E, pre=None):

@@ -27,8 +27,8 @@ import jax.numpy as jnp
 import jax.scipy.special as jax_special
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, cond_any
 
 __all__ = [
     'siegert_neuron',

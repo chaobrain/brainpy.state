@@ -15,7 +15,7 @@ import brainunit as u
 brainstate.environ.set(precision=64)
 
 from brainpy_state import tsodyks_synapse
-from brainpy_state._nest_network._event_plastic import KernelContext
+from brainpy_state._nest_network.event_plastic import KernelContext
 
 
 def _ref_tsodyks(seq_h, U=0.5, tpsc=3., tfac=0., trec=800., w=1.0):

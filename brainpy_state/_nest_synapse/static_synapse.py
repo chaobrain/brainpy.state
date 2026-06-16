@@ -2,17 +2,17 @@
 """NEST-faithful ``static_synapse`` — fixed-weight synapse spec + trivial rule.
 
 Rebuilt as a frozen parameter spec plus the simplest possible pure rule kernel
-on :class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`: the
+on :class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`: the
 effective weight is just the (per-edge) constant ``weight``, and no state
 evolves.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
+from brainpy_state._nest_base.plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
 
 __all__ = ['static_synapse']
 
@@ -32,7 +32,7 @@ class static_synapse(NESTSynapse):
     delay : Quantity, optional
         Homogeneous axonal delay; must be finite and strictly positive. Grid
         quantization (NEST rounds to integer steps, minimum one step) is handled
-        by the substrate's :class:`~brainpy_state._brainpy._delay.InputDelay`.
+        by the substrate's :class:`~brainpy_state._brainpy.delay.InputDelay`.
         Default ``1.0 ms``.
     receptor_type : int, optional
         Postsynaptic receptor port (non-negative integer). Default ``0``.

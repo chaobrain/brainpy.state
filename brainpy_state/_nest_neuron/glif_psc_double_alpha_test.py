@@ -55,7 +55,7 @@ import brainunit as u
 brainstate.environ.set(precision=64)
 
 from brainpy_state._nest_neuron.glif_psc_double_alpha import glif_psc_double_alpha
-from brainpy_state._nest_base._utils import alpha_propagator_p31_p32
+from brainpy_state._nest_base.utils import alpha_propagator_p31_p32
 
 
 # ---------------------------------------------------------------------------

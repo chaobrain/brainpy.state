@@ -3,7 +3,7 @@ r"""NEST-faithful ``ht_synapse`` — Hill-Tononi vesicle-pool depression spec + 
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The Hill-Tononi
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The Hill-Tononi
 (2005) model is **depression-only and presynaptic**: a normalized vesicle pool
 :math:`P \in [0, 1]` recovers exponentially toward ``1`` between spikes and
 depletes multiplicatively on each presynaptic spike; the delivered amplitude is
@@ -13,13 +13,13 @@ window, no ``Wmax``), structurally a depression-only sibling of
 imperative implementation lived in this same module (legacy ``NESTSynapse`` base).
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, to_unit_interval, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

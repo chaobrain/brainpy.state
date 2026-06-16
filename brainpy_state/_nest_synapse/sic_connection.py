@@ -5,7 +5,7 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #
@@ -37,7 +37,7 @@ class sic_connection(NESTSynapse):
     astrocyte's per-step ``SIC``) and the integer ``delay_steps``, validates the
     sender/receiver model pair, and is consumed by :class:`~brainpy_state.Simulator`,
     which builds the routing — an ``as_current``
-    :class:`~brainpy_state._nest_network._event_proj.EventProjection` that reads the
+    :class:`~brainpy_state._nest_network.event_proj.EventProjection` that reads the
     astrocyte's emission holder and deposits ``weight·SIC`` into the neuron's labelled
     ``'I_SIC'`` current channel each step.
 

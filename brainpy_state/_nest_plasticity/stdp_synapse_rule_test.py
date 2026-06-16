@@ -21,7 +21,7 @@ import brainunit as u
 brainstate.environ.set(precision=64)
 
 from brainpy_state import stdp_synapse
-from brainpy_state._nest_network._event_plastic import KernelContext
+from brainpy_state._nest_network.event_plastic import KernelContext
 
 
 def _ctx(pre_spike, post_spike, pre_trace, post_trace, E=1, t=10.0, dt=1.0):

@@ -21,7 +21,7 @@ import brainunit as u
 
 brainstate.environ.set(precision=64)
 
-from brainpy_state._nest_network._event_plastic import KernelContext  # noqa: E402
+from brainpy_state._nest_network.event_plastic import KernelContext  # noqa: E402
 from brainpy_state._nest_plasticity.stdp_dopamine_synapse import stdp_dopamine_synapse  # noqa: E402
 
 # NEST defaults (stdp_dopamine_synapse.cpp:45-56)

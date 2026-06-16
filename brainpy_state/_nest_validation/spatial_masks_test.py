@@ -25,7 +25,7 @@ except Exception:
 
 from brainpy_state import Simulator, iaf_psc_alpha
 from brainpy_state._nest_spatial import grid, spatial_pairwise_bernoulli
-from brainpy_state._nest_spatial._masks import rectangular, doughnut, elliptical, ellipsoidal
+from brainpy_state._nest_spatial.masks import rectangular, doughnut, elliptical, ellipsoidal
 from brainpy_state._nest_validation.nest_compare import requires_nest
 
 S2, E2 = [5, 5], [4.0, 4.0]
@@ -76,7 +76,7 @@ class TestMaskGeometry(unittest.TestCase):
 
     def test_doughnut_is_circular_difference(self):
         # doughnut(in, out) == circular(out) minus circular(in) (inner exclusive).
-        from brainpy_state._nest_spatial._masks import circular
+        from brainpy_state._nest_spatial.masks import circular
         inner, outer = 0.9, 1.8
         outer_adj = _bp_adj(S2, E2, circular(outer))
         inner_adj = _bp_adj(S2, E2, circular(inner))
@@ -86,7 +86,7 @@ class TestMaskGeometry(unittest.TestCase):
         self.assertEqual(len(doughnut_adj & inner_adj), 0)   # nothing strictly inside inner
 
     def test_elliptical_major_equals_minor_is_circular(self):
-        from brainpy_state._nest_spatial._masks import circular
+        from brainpy_state._nest_spatial.masks import circular
         self.assertEqual(_bp_adj(S2, E2, elliptical(2.4, 2.4)),
                          _bp_adj(S2, E2, circular(1.2)))      # semi == radius
 

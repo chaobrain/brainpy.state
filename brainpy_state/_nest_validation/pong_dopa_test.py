@@ -34,7 +34,7 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64)
 
 from brainpy_state import spike_recorder
-from brainpy_state._nest_network._event_plastic import VoltageCoupledPlasticProj
+from brainpy_state._nest_network.event_plastic import VoltageCoupledPlasticProj
 import examples.nest_like.pong_networks as pn
 
 DT = pn.DT

@@ -24,7 +24,7 @@ import brainunit as bu
 import jax
 import numpy as np
 from brainpy.state import iaf_psc_exp, iaf_tum_2000
-from brainpy_state._nest_base._utils import propagator_exp
+from brainpy_state._nest_base.utils import propagator_exp
 
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64)

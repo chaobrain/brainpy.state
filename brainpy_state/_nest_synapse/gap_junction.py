@@ -5,7 +5,7 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 # Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
 #

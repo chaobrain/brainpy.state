@@ -25,8 +25,8 @@ import jax.numpy as jnp
 import numpy as np
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, cond_any
 
 __all__ = [
     'gif_psc_exp',

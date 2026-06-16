@@ -25,7 +25,7 @@ import numpy as np
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTNeuron
+from brainpy_state._nest_base.base import NESTNeuron
 
 __all__ = [
     'iaf_psc_delta',

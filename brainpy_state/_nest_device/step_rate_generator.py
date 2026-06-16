@@ -22,8 +22,8 @@ import braintools
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTDevice
-from brainpy_state._nest_base._utils import stack_schedule_values
+from brainpy_state._nest_base.base import NESTDevice
+from brainpy_state._nest_base.utils import stack_schedule_values
 
 __all__ = [
     'step_rate_generator',

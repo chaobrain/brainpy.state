@@ -385,7 +385,7 @@ def bp_dopamine_weight_trace(rule, pre_fire, post_fire, dopa_arrival, n_steps, *
     import jax.numpy as jnp
     import brainunit as u
     from brainstate import transform
-    from brainpy_state._nest_network._event_plastic import VoltageCoupledPlasticProj
+    from brainpy_state._nest_network.event_plastic import VoltageCoupledPlasticProj
     from brainpy_state._nest_device.volume_transmitter import volume_transmitter
 
     class _Sink:                                   # delivery target (ignored); not None

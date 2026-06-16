@@ -2,21 +2,21 @@
 """NEST-faithful ``static_synapse_hom_w`` — homogeneous-weight static synapse.
 
 Rebuilt as a frozen spec + trivial pure rule on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. Identical to
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. Identical to
 :class:`~brainpy_state._nest_synapse.static_synapse.static_synapse` except the weight is
 a single value shared by every connection (NEST common property): the substrate
 stores ``'weight'`` as a 0-d :class:`brainstate.ParamState`. Per-connection
 ``delay`` and ``receptor_type`` remain settable.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 from typing import Mapping
 
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
+from brainpy_state._nest_base.plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
 
 __all__ = ['static_synapse_hom_w']
 

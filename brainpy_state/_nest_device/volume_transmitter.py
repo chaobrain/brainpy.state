@@ -5,7 +5,7 @@ Rebuilt as a :class:`brainstate.nn.Module` device that maintains the dopamine
 concentration ``n(t)`` as a broadcast :class:`brainstate.HiddenState`, computed
 once per step and read identically by every edge of a dopamine-modulated
 projection (the cluster-08 ``signal_reads`` seam of
-:class:`~brainpy_state._nest_network._event_plastic.VoltageCoupledPlasticProj`).
+:class:`~brainpy_state._nest_network.event_plastic.VoltageCoupledPlasticProj`).
 
 The previous imperative ring-buffer port (NEST delivery stamps, spike-history
 lists, host scalars) is retired: with the online per-step weight integral, the
@@ -28,8 +28,8 @@ import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTDevice
-from brainpy_state._nest_base._plastic_base import to_ms, to_scalar_int
+from brainpy_state._nest_base.base import NESTDevice
+from brainpy_state._nest_base.plastic_base import to_ms, to_scalar_int
 
 __all__ = [
     'volume_transmitter',

@@ -23,7 +23,7 @@ import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTDevice
+from brainpy_state._nest_base.base import NESTDevice
 
 __all__ = [
     'spike_generator',

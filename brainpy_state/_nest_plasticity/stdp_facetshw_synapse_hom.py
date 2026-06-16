@@ -3,7 +3,7 @@ r"""NEST-faithful ``stdp_facetshw_synapse_hom`` — FACETS/BrainScaleS hardware 
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. Unlike the pair-based
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. Unlike the pair-based
 ``stdp_*`` models this is a *hardware* model (Schemmel et al. 2006; Pfeil et al. 2012):
 the synapse holds a 4-bit discrete weight and two analogue charges, and a periodic
 controller (the "readout cycle") quantises the weight, compares the charges to
@@ -23,14 +23,14 @@ post is deferred (``causal_pending``) and folded at the next pre, after that pre
 readout.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     to_ms, to_scalar_float, to_scalar_int, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

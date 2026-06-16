@@ -3,7 +3,7 @@ r"""NEST-faithful ``stdp_pl_synapse_hom`` — power-law STDP spec + pure rule ke
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. Power-law STDP
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. Power-law STDP
 (Morrison et al. 2007): potentiation is **multiplicative and sub-linear** in the
 weight (:math:`w^\mu`, :math:`\mu < 1`), depression is **linear** in the weight,
 and there is **no upper bound** ``Wmax`` — the sub-linear potentiation provides
@@ -12,13 +12,13 @@ other ``*_hom`` models the parameters are NEST *common* properties; here they ar
 rule-level.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )
