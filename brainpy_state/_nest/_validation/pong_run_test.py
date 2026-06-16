@@ -20,6 +20,7 @@ convergence threshold:
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 import brainstate
 import jax
@@ -113,6 +114,79 @@ class TestPlotComparison(unittest.TestCase):
             out = pr.plot_comparison(result, path)
             self.assertEqual(out, path)
             self.assertTrue(os.path.exists(path) and os.path.getsize(path) > 0)
+
+
+class _FakePlayer:
+    """A minimal duck-typed pong learner — exercises AIPong's host loop without spiking."""
+
+    def __init__(self, winning_neuron=0):
+        self.winning_neuron = winning_neuron
+        self._reward_hist = []
+
+    def set_input_spiketrain(self, cell):
+        pass
+
+    def run_turn(self):
+        return None
+
+    def apply_synaptic_plasticity(self):
+        self._reward_hist.append(np.zeros(20))
+
+    def reset(self):
+        pass
+
+    def get_performance_data(self):
+        return self._reward_hist, []
+
+    def __repr__(self):
+        return 'fake'
+
+
+class TestAIPongScoring(unittest.TestCase):
+    """AIPong books a goal and resets the ball when a paddle misses (harness bookkeeping)."""
+
+    def _score_after_miss(self, *, ball_x, paddle_attr, paddle_y):
+        game = pong.GameOfPong()
+        game.ball.x_pos = ball_x
+        game.ball.y_pos = 0.5
+        getattr(game, paddle_attr).y_pos = paddle_y   # parked far from the ball -> a miss
+        result = pr.AIPong(_FakePlayer(), _FakePlayer(), game).run_games(max_runs=1)
+        return result['score']
+
+    def test_right_scores_when_left_paddle_misses(self):
+        # Ball at the left edge, left paddle parked away -> the right player scores.
+        self.assertEqual(self._score_after_miss(
+            ball_x=0.01, paddle_attr='l_paddle', paddle_y=0.95), (0, 1))
+
+    def test_left_scores_when_right_paddle_misses(self):
+        # Ball at the right edge, right paddle parked away -> the left player scores.
+        self.assertEqual(self._score_after_miss(
+            ball_x=pong.GameOfPong.x_length - 0.01, paddle_attr='r_paddle',
+            paddle_y=0.95), (1, 0))
+
+
+class TestMainCli(unittest.TestCase):
+    """``main`` parses args, prints a summary, and writes the figure (heavy run stubbed)."""
+
+    def test_quick_run_glue(self):
+        fake = {
+            'players': ('clean R-STDP', 'noisy R-STDP'),
+            'rewards': (np.array([0.0, 0.1]), np.array([0.0, 0.2])),
+            'score': (1, 0),
+        }
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, 'cmp.png')
+            argv = ['pong_run.py', '--quick', '--seed', '0', '--out', out,
+                    '--players', 'r', 'rn']
+            with mock.patch.object(pr, 'run_comparison', return_value=fake), \
+                    mock.patch('sys.argv', argv):
+                pr.main()
+            # When matplotlib is available main writes the figure; otherwise it skips it.
+            try:
+                import matplotlib  # noqa: F401
+                self.assertTrue(os.path.exists(out))
+            except ImportError:
+                pass
 
 
 if __name__ == '__main__':
