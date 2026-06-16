@@ -3,20 +3,20 @@
 
 Rebuilt as a frozen parameter spec plus a pure, *stochastic*
 ``update(state, ctx)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The synapse is
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The synapse is
 non-plastic: on each presynaptic spike it delivers the full (per-edge) ``weight``
 with probability ``p_transmit`` and drops it otherwise — a per-edge Bernoulli gate
 on the delivered amplitude, with **no weight state evolving**.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import jax
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     to_unit_interval, unit_of, validate_delay, validate_receptor_type, weight_to_pa,
 )
 

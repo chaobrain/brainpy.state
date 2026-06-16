@@ -31,7 +31,7 @@ import numpy as np
 
 from brainpy_state._nest_device.gamma_sup_generator import gamma_sup_generator
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _run_bp_counts_and_spikes(

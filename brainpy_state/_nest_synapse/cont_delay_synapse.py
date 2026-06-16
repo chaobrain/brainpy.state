@@ -3,7 +3,7 @@
 
 Rebuilt as a frozen parameter spec plus the plain static ``update(state, ctx)``
 rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The synapse is
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The synapse is
 non-plastic: no per-edge state evolves and the effective weight is just the
 constant (per-edge) ``weight`` — identical to :class:`static_synapse`. Its one
 distinguishing feature, a delay that need *not* be an integer multiple of the
@@ -11,13 +11,13 @@ simulation step, is realised by the substrate's ``fractional_delay`` output-carr
 seam, opted into here via the class attribute ``fractional_delay = True``.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import brainstate
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
+from brainpy_state._nest_base.plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
 
 __all__ = ['cont_delay_synapse']
 

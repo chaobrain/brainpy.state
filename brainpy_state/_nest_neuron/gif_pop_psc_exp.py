@@ -22,8 +22,8 @@ import brainunit as u
 import numpy as np
 from brainstate.typing import Size
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer
 
 __all__ = [
     'gif_pop_psc_exp',

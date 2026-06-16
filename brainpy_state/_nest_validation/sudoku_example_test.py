@@ -17,7 +17,7 @@ import jax
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from examples.nest_like import sudoku as harness
 from examples.nest_like.sudoku_puzzles import get_puzzle, make_easy_puzzle

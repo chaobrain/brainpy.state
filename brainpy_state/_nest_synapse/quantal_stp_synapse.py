@@ -2,7 +2,7 @@
 """NEST-faithful ``quantal_stp_synapse`` — probabilistic-release STP spec + rule.
 
 Rebuilt as a frozen spec + a pure, *stochastic* ``update(state, ctx)`` rule
-kernel on :class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`.
+kernel on :class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`.
 Each connection has ``n`` (static) release sites; ``a`` are currently available.
 On a spike: facilitate ``u``, stochastically recover depleted sites, then
 release ``n_rel ~ Binomial(a, u)`` sites, delivering ``w_eff = n_rel * weight``
@@ -10,14 +10,14 @@ and depleting ``a``. The PRNG differs from NEST, so parity is **distributional**
 (mean release converges to the ``tsodyks2`` limit).
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import jax
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_int, to_unit_interval, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

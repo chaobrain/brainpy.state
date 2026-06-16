@@ -32,7 +32,7 @@ import numpy as np
 
 from brainpy_state._nest_device.poisson_generator import poisson_generator
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _run_bp_counts(

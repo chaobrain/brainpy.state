@@ -24,8 +24,8 @@ import jax
 import jax.numpy as jnp
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import cond_any
 
 __all__ = [
     'ginzburg_neuron',

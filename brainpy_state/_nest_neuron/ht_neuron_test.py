@@ -111,7 +111,7 @@ def _m_NMDA(V, m_eq, m_fast, m_slow, instant_unblock_NMDA=False):
     return A1 * m_fast + A2 * m_slow
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 # ---------------------------------------------------------------------------

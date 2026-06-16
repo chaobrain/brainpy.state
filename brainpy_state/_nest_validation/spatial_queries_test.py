@@ -19,7 +19,7 @@ import brainstate
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 import brainunit as u
 
@@ -30,8 +30,8 @@ except Exception:
 
 from brainpy_state import Simulator, iaf_psc_alpha
 from brainpy_state._nest_spatial import grid, spatial_pairwise_bernoulli
-from brainpy_state._nest_spatial._masks import circular, elliptical
-from brainpy_state._nest_spatial._helpers import (
+from brainpy_state._nest_spatial.masks import circular, elliptical
+from brainpy_state._nest_spatial.helpers import (
     nearest_element, select_nodes_by_mask, dump_layer_nodes, dump_layer_connections,
 )
 from brainpy_state._nest_validation.nest_compare import requires_nest

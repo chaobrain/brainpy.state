@@ -3,7 +3,7 @@
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on the
-:class:`~brainpy_state._nest_network._event_plastic.VoltageCoupledPlasticProj`
+:class:`~brainpy_state._nest_network.event_plastic.VoltageCoupledPlasticProj`
 substrate (primitive #2). The substrate maintains the per-pre-neuron presynaptic
 trace ``x_bar`` (``pre_trace_tau=tau_x``) and, via the **post-state reader**,
 samples the post neuron's membrane and low-pass filtered voltages per edge each
@@ -13,14 +13,14 @@ continuously while the post is depolarized** (LTP from ``V`` and ``u_bar_plus``)
 the voltage-based rule of Clopath et al. (2010).
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type,
 )

@@ -194,7 +194,7 @@ class TestDefaultParameters(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
             self.neuron = pp_cond_exp_mc_urbanczik(1)
             self.neuron.init_state()
@@ -335,7 +335,7 @@ class TestStateInitialization(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_default_init(self):
         with brainstate.environ.context(dt=self.dt, t=0.0 * u.ms):
@@ -406,7 +406,7 @@ class TestSubthresholdDynamics(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def _step(self, neuron, step_idx, x=0.0 * u.pA,
               soma_exc=None, soma_inh=None, dend_exc=None, dend_inh=None):
@@ -652,7 +652,7 @@ class TestSpikeGeneration(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_low_rate_at_rest(self):
         r"""At rest (V_m = E_L = -70 mV), rate should be low but nonzero."""
@@ -701,7 +701,7 @@ class TestRefractoryPeriod(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_refractory_counter_decrement(self):
         r"""Refractory counter should decrement each step."""
@@ -752,7 +752,7 @@ class TestUrbanczikHistory(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_history_populated(self):
         r"""History should be populated after each step."""
@@ -818,7 +818,7 @@ class TestCurrentInput(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_soma_current_input_delayed(self):
         r"""External current should be delayed by one step (NEST ring buffer)."""
@@ -850,7 +850,7 @@ class TestPopulation(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_identical_neurons_match(self):
         r"""Two identical neurons with same RNG should produce same output."""
@@ -897,7 +897,7 @@ class TestFullReferenceTrace(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_subthreshold_with_somatic_excitation(self):
         r"""Compare trace with somatic excitatory conductance input."""
@@ -1032,7 +1032,7 @@ class TestUrbanczikLearningSignal(unittest.TestCase):
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)
         self.dt = 0.1 * u.ms
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def test_V_W_star_computation(self):
         r"""Verify V_W_star dendritic prediction formula."""

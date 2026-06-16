@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import Size
 
-from brainpy_state._nest_base._base import NESTNeuron
+from brainpy_state._nest_base.base import NESTNeuron
 
 __all__ = [
     'parrot_neuron',
@@ -80,7 +80,7 @@ class parrot_neuron(NESTNeuron):
       no-ops.
     - Incoming events are read through the standard delta-input seam
       (:meth:`~brainpy_state._base.Dynamics.sum_delta_inputs`), the same channel
-      an :class:`~brainpy_state._nest_network._event_proj.EventProjection` deposits
+      an :class:`~brainpy_state._nest_network.event_proj.EventProjection` deposits
       into. The summed arriving input (with the canonical unit gate weight) is the
       spike count for the step and is relayed as the output multiplicity. The
       :class:`~brainpy_state.network.Simulator` captures this model's output

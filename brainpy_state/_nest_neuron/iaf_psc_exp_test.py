@@ -27,7 +27,7 @@ import brainunit as u
 from brainpy.state import iaf_psc_exp
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _propagator_exp(tau_syn, tau_m, c_m, h):

@@ -26,7 +26,7 @@ import numpy as np
 from brainstate.typing import ArrayLike, Size
 
 from brainpy_state._nest_neuron.lin_rate import _lin_rate_base
-from brainpy_state._nest_base._utils import is_tracer
+from brainpy_state._nest_base.utils import is_tracer
 
 __all__ = [
     'tanh_rate_ipn',

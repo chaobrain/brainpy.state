@@ -26,7 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy.state import iaf_cond_beta
 

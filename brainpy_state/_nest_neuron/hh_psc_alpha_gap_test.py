@@ -43,7 +43,7 @@ from brainpy.state import hh_psc_alpha_gap
 from scipy.integrate import solve_ivp
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _nest_hh_gap_dynamics(t, y, g_Na, g_Kv1, g_Kv3, g_L, E_Na, E_K, E_L,

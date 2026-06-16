@@ -35,7 +35,7 @@ import numpy as np
 import numpy.testing as npt
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy.state import spike_generator
 

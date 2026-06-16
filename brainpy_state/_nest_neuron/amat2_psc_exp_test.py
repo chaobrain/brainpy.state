@@ -44,7 +44,7 @@ import numpy as np
 from brainpy_state._nest_neuron.amat2_psc_exp import amat2_psc_exp
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 def _compute_propagators(h, taum, tauE, tauI, tauV, c, beta, tau_1, tau_2):

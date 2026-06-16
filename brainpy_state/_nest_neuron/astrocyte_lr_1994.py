@@ -22,8 +22,8 @@ import brainunit as u
 from brainstate.typing import Size
 from brainstate.util import DotDict
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, AdaptiveRungeKuttaStep
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, AdaptiveRungeKuttaStep
 
 __all__ = [
     'astrocyte_lr_1994',

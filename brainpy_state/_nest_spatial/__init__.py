@@ -22,34 +22,34 @@ Mirrors NEST's ``nest.spatial`` / ``nest.spatial_distributions`` surface, re-exp
 # ---------------------------------------------------------------------------
 # Position layers
 # ---------------------------------------------------------------------------
-from ._layers import Layer, grid, free
+from .layers import Layer, grid, free
 # ---------------------------------------------------------------------------
 # Distance / displacement
 # ---------------------------------------------------------------------------
-from ._distance import displacement, pairwise_distance
+from .distance import displacement, pairwise_distance
 # ---------------------------------------------------------------------------
 # Distance kernels + the distance sentinel / position expressions
 # ---------------------------------------------------------------------------
-from ._kernels import (distance, pos, source_pos, target_pos,
+from .kernels import (distance, pos, source_pos, target_pos,
                        gaussian, exponential, gamma, gabor, gaussian2D)
 # ---------------------------------------------------------------------------
 # Spatial masks
 # ---------------------------------------------------------------------------
-from ._masks import (circular, spherical, box,
+from .masks import (circular, spherical, box,
                      rectangular, doughnut, elliptical, ellipsoidal)
 # ---------------------------------------------------------------------------
 # Connection rule
 # ---------------------------------------------------------------------------
-from ._rule import SpatialConnRule, spatial_pairwise_bernoulli
+from .rule import SpatialConnRule, spatial_pairwise_bernoulli
 # ---------------------------------------------------------------------------
 # Query / dump helpers
 # ---------------------------------------------------------------------------
-from ._helpers import (center_element, Distance, nearest_element, select_nodes_by_mask,
+from .helpers import (center_element, Distance, nearest_element, select_nodes_by_mask,
                        dump_layer_nodes, dump_layer_connections, target_nodes, target_positions)
 # ---------------------------------------------------------------------------
 # Plot helpers (matplotlib lazily imported inside each function)
 # ---------------------------------------------------------------------------
-from ._plot import plot_layer, plot_targets, plot_sources, plot_probability_parameter
+from .plot import plot_layer, plot_targets, plot_sources, plot_probability_parameter
 
 __all__ = [
     'Layer',

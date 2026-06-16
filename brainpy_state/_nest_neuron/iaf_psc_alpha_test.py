@@ -132,7 +132,7 @@ class TestIAFPscAlpha(unittest.TestCase):
     def setUpClass(cls):
         # Match NEST's double-precision CPU behavior as closely as possible.
         jax.config.update('jax_enable_x64', True)
-        brainstate.environ.set(precision=64, platform='cpu')
+        brainstate.environ.set(precision=64)
 
     def setUp(self):
         brainstate.environ.set(dt=0.1 * u.ms)

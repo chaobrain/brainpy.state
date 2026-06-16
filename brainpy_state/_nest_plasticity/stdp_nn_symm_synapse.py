@@ -3,7 +3,7 @@ r"""NEST-faithful ``stdp_nn_symm_synapse`` — symmetric nearest-neighbour STDP 
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on
-:class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`. The *symmetric*
+:class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`. The *symmetric*
 nearest-neighbour pairing scheme (Morrison, Diesmann & Gerstner 2008, fig. 7A) pairs
 each spike only with its nearest partner on the other side: a post spike facilitates
 with the nearest preceding pre spike, a pre spike depresses with the nearest preceding
@@ -14,13 +14,13 @@ rule kernel itself is **byte-identical to** :class:`stdp_synapse` — the neares
 lives entirely in what the substrate *stores*.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     frozen, to_ms, to_scalar_float, unit_of,
     validate_delay, validate_receptor_type, weight_to_pa,
 )

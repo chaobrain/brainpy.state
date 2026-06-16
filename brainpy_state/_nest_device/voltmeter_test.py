@@ -5,7 +5,7 @@ import unittest
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 class TestVoltmeter(unittest.TestCase):
@@ -21,7 +21,7 @@ class TestVoltmeter(unittest.TestCase):
 
     def test_is_a_multimeter(self):
         from brainpy_state import voltmeter, multimeter
-        from brainpy_state._nest_base._base import NESTDevice
+        from brainpy_state._nest_base.base import NESTDevice
         vm = voltmeter()
         self.assertIsInstance(vm, multimeter)
         self.assertIsInstance(vm, NESTDevice)

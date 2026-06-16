@@ -22,10 +22,10 @@ jax.config.update('jax_enable_x64', True)
 import brainstate
 import brainunit as u
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state import stdp_facetshw_synapse_hom
-from brainpy_state._nest_network._event_plastic import EventPlasticProj, KernelContext
+from brainpy_state._nest_network.event_plastic import EventPlasticProj, KernelContext
 
 WPLE = 100.0 / 15.0          # weight_per_lut_entry for default Wmax=100, 16-entry LUT
 LUT0 = [2, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15]

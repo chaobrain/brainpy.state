@@ -35,7 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy.state import dc_generator, iaf_psc_delta
 

@@ -2,17 +2,17 @@
 """NEST-faithful ``static_synapse`` — fixed-weight synapse spec + trivial rule.
 
 Rebuilt as a frozen parameter spec plus the simplest possible pure rule kernel
-on :class:`~brainpy_state._nest_network._event_plastic.EventPlasticProj`: the
+on :class:`~brainpy_state._nest_network.event_plastic.EventPlasticProj`: the
 effective weight is just the (per-edge) constant ``weight``, and no state
 evolves.
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTSynapse
+from brainpy_state._nest_base.base import NESTSynapse
 
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
+from brainpy_state._nest_base.plastic_base import unit_of, validate_delay, validate_receptor_type, weight_to_pa
 
 __all__ = ['static_synapse']
 

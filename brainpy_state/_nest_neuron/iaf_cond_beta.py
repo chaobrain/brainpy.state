@@ -26,8 +26,8 @@ import brainunit as u
 from brainstate.typing import ArrayLike, Size
 from brainstate.util import DotDict
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, AdaptiveRungeKuttaStep, cond_any
 
 __all__ = [
     'iaf_cond_beta',

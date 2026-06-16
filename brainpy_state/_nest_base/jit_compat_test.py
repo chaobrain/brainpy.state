@@ -22,7 +22,7 @@ method wrapped in :func:`brainstate.transform.jit`.  Tracing ``update`` exercise
 the same machinery as ``jax.jit`` / ``brainstate.transform.for_loop`` (scan),
 so a model that traces cleanly here is safe to embed in a jitted simulation.
 
-Parameter-validation guards are routed through :func:`brainpy_state._nest_base._utils.cond_any`,
+Parameter-validation guards are routed through :func:`brainpy_state._nest_base.utils.cond_any`,
 which returns ``False`` for JAX tracers so that ``if`` checks are skipped during
 tracing instead of raising ``TracerBoolConversionError``.
 
@@ -41,10 +41,10 @@ import jax.numpy as jnp
 import brainunit as u
 
 import brainpy_state as B
-from brainpy_state._nest_base._base import NESTNeuron
+from brainpy_state._nest_base.base import NESTNeuron
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 
 # Models whose ``update`` cannot currently be JIT-compiled, with the reason.

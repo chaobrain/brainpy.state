@@ -25,8 +25,8 @@ import numpy as np
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
 
-from brainpy_state._nest_base._base import NESTNeuron
-from brainpy_state._nest_base._utils import is_tracer, propagator_exp, cond_any
+from brainpy_state._nest_base.base import NESTNeuron
+from brainpy_state._nest_base.utils import is_tracer, propagator_exp, cond_any
 
 __all__ = [
     'iaf_psc_exp',
@@ -91,7 +91,7 @@ class iaf_psc_exp(NESTNeuron):
        \left(e^{-h/\tau_m} - e^{-h/\tau_{\mathrm{syn}}}\right),
 
     where :math:`P_{21}` is evaluated numerically stably by
-    :func:`~brainpy_state._nest_base._utils.propagator_exp`. Let :math:`V_\mathrm{rel} = V_m - E_L`.
+    :func:`~brainpy_state._nest_base.utils.propagator_exp`. Let :math:`V_\mathrm{rel} = V_m - E_L`.
     The candidate membrane update is
 
     .. math::
@@ -134,7 +134,7 @@ class iaf_psc_exp(NESTNeuron):
     - Construction enforces ``V_reset < V_th``, ``C_m > 0``, ``tau_m > 0``,
       ``tau_syn_ex > 0``, ``tau_syn_in > 0``, ``t_ref >= 0``, ``rho >= 0``,
       and ``delta >= 0``.
-    - :func:`~brainpy_state._nest_base._utils.propagator_exp` uses a singular fallback
+    - :func:`~brainpy_state._nest_base.utils.propagator_exp` uses a singular fallback
       :math:`(h/C_m)\exp(-h/\tau_m)` when ``tau_syn`` is numerically close
       to ``tau_m``, avoiding cancellation in
       :math:`(e^{-h/\tau_m} - e^{-h/\tau_{\mathrm{syn}}})/(\tau_m - \tau_{\mathrm{syn}})`.

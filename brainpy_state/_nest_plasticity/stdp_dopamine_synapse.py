@@ -3,7 +3,7 @@
 
 Rebuilt as a frozen parameter spec plus a pure, vectorized
 ``update(state, ctx) -> (new_state, w_eff)`` rule kernel on the
-:class:`~brainpy_state._nest_network._event_plastic.VoltageCoupledPlasticProj`
+:class:`~brainpy_state._nest_network.event_plastic.VoltageCoupledPlasticProj`
 substrate (primitive #2). Two ingredients drive the weight:
 
 * a **per-edge eligibility trace** ``c`` (cluster-05 ``edge_state_init`` machinery)
@@ -22,14 +22,14 @@ online per-step integral coincides with NEST's deferred trajectory at the
 send/trigger sampling times (the cluster-04 "online <-> deferred equality").
 """
 from __future__ import annotations
-from brainpy_state._nest_base._base import NESTPlasticity
+from brainpy_state._nest_base.base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 from brainstate.typing import ArrayLike
 
-from brainpy_state._nest_base._plastic_base import (
+from brainpy_state._nest_base.plastic_base import (
     to_ms, to_scalar_float, unit_of, validate_delay, validate_receptor_type, weight_to_pa,
 )
 

@@ -29,7 +29,7 @@ import jax
 import numpy as np
 
 jax.config.update('jax_enable_x64', True)
-brainstate.environ.set(precision=64, platform='cpu')
+brainstate.environ.set(precision=64)
 
 from brainpy_state._nest_validation.nest_compare import requires_nest
 from examples.nest_like.sudoku_net import SudokuNet, SudokuSolver
