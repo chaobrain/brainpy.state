@@ -86,5 +86,50 @@ class TestRectangular(unittest.TestCase):
         self.assertTrue(bool(np.asarray(rot.contains(pre, post))[0, 0]))
 
 
+class TestElliptical(unittest.TestCase):
+    def test_axis_aligned(self):
+        from brainpy_state._nest_spatial._masks import elliptical
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        # semi-major 1 (x), semi-minor 0.5 (y): in iff dx^2 + 4 dy^2 <= 1
+        post = jnp.array([[0.9, 0.0], [1.1, 0.0], [0.0, 0.4], [0.0, 0.6]]) * u.um
+        m = np.asarray(elliptical(2.0, 1.0).contains(pre, post))
+        np.testing.assert_array_equal(m[0], [True, False, True, False])
+
+    def test_major_equals_minor_is_circular(self):
+        from brainpy_state._nest_spatial._masks import elliptical, circular
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.9, 0.0], [0.0, 0.9], [0.8, 0.8]]) * u.um
+        e = np.asarray(elliptical(2.0, 2.0).contains(pre, post))   # semi 1 == circular(1)
+        c = np.asarray(circular(1.0).contains(pre, post))
+        np.testing.assert_array_equal(e[0], c[0])
+
+    def test_rotated_90_swaps_axes(self):
+        from brainpy_state._nest_spatial._masks import elliptical
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[0.9, 0.0], [0.0, 0.9]]) * u.um
+        aligned = np.asarray(elliptical(2.0, 1.0).contains(pre, post))
+        rot = np.asarray(elliptical(2.0, 1.0, azimuth_angle=90.0).contains(pre, post))
+        np.testing.assert_array_equal(aligned[0], [True, False])
+        np.testing.assert_array_equal(rot[0], [False, True])
+
+
+class TestEllipsoidal(unittest.TestCase):
+    def test_axis_aligned_3d(self):
+        from brainpy_state._nest_spatial._masks import ellipsoidal
+        pre = jnp.array([[0.0, 0.0, 0.0]]) * u.um
+        # semi 1,1,0.5: in iff dx^2 + dy^2 + 4 dz^2 <= 1
+        post = jnp.array([[0.9, 0, 0], [0, 0.9, 0], [0, 0, 0.4], [0, 0, 0.6]]) * u.um
+        m = np.asarray(ellipsoidal(2.0, 2.0, 1.0).contains(pre, post))
+        np.testing.assert_array_equal(m[0], [True, True, True, False])
+
+    def test_equal_axes_is_spherical(self):
+        from brainpy_state._nest_spatial._masks import ellipsoidal, spherical
+        pre = jnp.array([[0.0, 0.0, 0.0]]) * u.um
+        post = jnp.array([[0.9, 0, 0], [0, 0, 0.9], [0.7, 0.7, 0.0], [0.8, 0.8, 0.0]]) * u.um
+        e = np.asarray(ellipsoidal(2.0, 2.0, 2.0).contains(pre, post))   # sphere radius 1
+        s = np.asarray(spherical(1.0).contains(pre, post))
+        np.testing.assert_array_equal(e[0], s[0])
+
+
 if __name__ == '__main__':
     unittest.main()

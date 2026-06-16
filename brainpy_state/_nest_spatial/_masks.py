@@ -14,9 +14,10 @@ import math
 import brainunit as u
 
 from brainpy_state._nest_spatial._distance import displacement, pairwise_distance
-from brainpy_state._nest_spatial._layers import _as_len
+from brainpy_state._nest_spatial._layers import _LEN, _as_len
 
-__all__ = ['circular', 'spherical', 'box', 'rectangular', 'doughnut']
+__all__ = ['circular', 'spherical', 'box', 'rectangular', 'doughnut',
+           'elliptical', 'ellipsoidal']
 
 
 class _RadialMask:
@@ -90,6 +91,55 @@ class _RectangularMask:
         ge = u.math.all(disp >= self.lower_left, axis=-1)
         le = u.math.all(disp <= self.upper_right, axis=-1)
         return ge & le
+
+
+class _EllipseMask:
+    """Rotated ellipse (2-D) / ellipsoid (3-D) on the displacement (NEST ``elliptical`` / ``ellipsoidal``).
+
+    A target is included iff the source-anchored displacement, after rotation into the ellipse
+    frame, satisfies ``sum_k (n_k / semi_k)**2 <= 1`` where ``semi = axis / 2``. Mirrors NEST's
+    ``EllipseMask<2>``/``EllipseMask<3>`` (``mask.cpp``): the ``major``/``minor``/``polar`` arguments
+    are the *full* axis lengths, the angles are in degrees, and the squared coordinates make the
+    sign convention of the rotation immaterial.
+    """
+    __module__ = 'brainpy.state'
+
+    def __init__(self, major_axis, minor_axis, polar_axis=None,
+                 azimuth_angle=0.0, polar_angle=0.0, anchor=None):
+        self.major = _as_len(major_axis)
+        self.minor = _as_len(minor_axis)
+        self.polar = _as_len(polar_axis) if polar_axis is not None else None
+        self.azimuth_angle = float(azimuth_angle)
+        self.polar_angle = float(polar_angle)
+        self.anchor = _as_len(anchor) if anchor is not None else None
+        self.ndim = 2 if polar_axis is None else 3
+
+    def contains(self, pre_pos, post_pos):
+        """Boolean ``(n_pre, n_post)``: displacement inside the (rotated) ellipse / ellipsoid."""
+        disp = displacement(pre_pos, post_pos)               # (n_pre, n_post, d) Quantity
+        d = u.get_magnitude(disp.to(_LEN))                   # bare micrometres
+        if self.anchor is not None:
+            d = d - u.get_magnitude(self.anchor.to(_LEN))
+        dx, dy = d[..., 0], d[..., 1]
+        az = math.radians(self.azimuth_angle)
+        ac, asn = math.cos(az), math.sin(az)
+        maj = float(u.get_magnitude(self.major.to(_LEN)))
+        mn = float(u.get_magnitude(self.minor.to(_LEN)))
+        xs, ys = 4.0 / maj ** 2, 4.0 / mn ** 2               # (n/semi)**2 = n**2 * 4/axis**2
+        if self.ndim == 2:
+            nx = dx * ac + dy * asn
+            ny = dx * asn - dy * ac
+            return (nx ** 2 * xs + ny ** 2 * ys) <= 1.0
+        dz = d[..., 2]
+        pol = math.radians(self.polar_angle)
+        pc, ps = math.cos(pol), math.sin(pol)
+        plr = float(u.get_magnitude(self.polar.to(_LEN)))
+        zs = 4.0 / plr ** 2
+        base = dx * ac + dy * asn
+        nx = base * pc - dz * ps
+        ny = dx * asn - dy * ac
+        nz = base * ps + dz * pc
+        return (nx ** 2 * xs + ny ** 2 * ys + nz ** 2 * zs) <= 1.0
 
 
 def circular(radius) -> _RadialMask:
@@ -173,3 +223,64 @@ def doughnut(inner_radius, outer_radius) -> _DoughnutMask:
         >>> mask = bp.spatial.doughnut(0.3, 0.7)
     """
     return _DoughnutMask(inner_radius, outer_radius)
+
+
+def elliptical(major_axis, minor_axis, azimuth_angle=0.0, anchor=None) -> _EllipseMask:
+    """Elliptical mask (2-D): displacement inside a rotated ellipse (NEST ``elliptical``).
+
+    Parameters
+    ----------
+    major_axis, minor_axis : float or Quantity
+        Full lengths of the two principal axes (not semi-axes). ``major_axis == minor_axis``
+        degenerates to :func:`circular` of radius ``major_axis / 2``.
+    azimuth_angle : float, optional
+        Rotation of the ellipse about its anchor, in degrees. Default ``0``.
+    anchor : sequence of float or Quantity, optional
+        Offset of the ellipse centre from the source node (on the displacement). Default origin.
+
+    Returns
+    -------
+    _EllipseMask
+        A hard-cutoff elliptical mask.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from brainpy import state as bp
+        >>> mask = bp.spatial.elliptical(4.0, 2.0, azimuth_angle=45.0)
+    """
+    return _EllipseMask(major_axis, minor_axis, azimuth_angle=azimuth_angle, anchor=anchor)
+
+
+def ellipsoidal(major_axis, minor_axis, polar_axis, azimuth_angle=0.0,
+                polar_angle=0.0, anchor=None) -> _EllipseMask:
+    """Ellipsoidal mask (3-D): displacement inside a rotated ellipsoid (NEST ``ellipsoidal``).
+
+    Parameters
+    ----------
+    major_axis, minor_axis, polar_axis : float or Quantity
+        Full lengths of the three principal axes (not semi-axes). All three equal degenerates to
+        :func:`spherical` of radius ``major_axis / 2``.
+    azimuth_angle : float, optional
+        Rotation about the polar (z) axis, in degrees. Default ``0``.
+    polar_angle : float, optional
+        Tilt of the polar axis away from z, in degrees (applied after the azimuthal rotation,
+        NEST ``R_y(-polar) . R_z(-azimuth)``). Default ``0``.
+    anchor : sequence of float or Quantity, optional
+        Offset of the ellipsoid centre from the source node. Default origin.
+
+    Returns
+    -------
+    _EllipseMask
+        A hard-cutoff ellipsoidal mask.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from brainpy import state as bp
+        >>> mask = bp.spatial.ellipsoidal(4.0, 2.0, 1.0, azimuth_angle=30.0, polar_angle=15.0)
+    """
+    return _EllipseMask(major_axis, minor_axis, polar_axis=polar_axis,
+                        azimuth_angle=azimuth_angle, polar_angle=polar_angle, anchor=anchor)
