@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Distance-dependent pairwise-Bernoulli connection rule.
 
-``spatial_pairwise_bernoulli`` is an ordinary :class:`~brainpy_state._network._rules.ConnRule`
+``spatial_pairwise_bernoulli`` is an ordinary :class:`~brainpy_state._nest_network._rules.ConnRule`
 that additionally needs the pre/post node coordinates. It is constructed *unbound*; the
 :class:`~brainpy_state.Simulator` binds sliced positions via :meth:`SpatialConnRule.with_coords`
 at ``connect`` time, then the existing static / plastic projection paths sample it unchanged.
@@ -13,8 +13,8 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from brainpy_state._network._rules import ConnRule
-from brainpy_state._network._connectivity import ConnSpec
+from brainpy_state._nest_network._rules import ConnRule
+from brainpy_state._nest_network._connectivity import ConnSpec
 from brainpy_state._nest_spatial._distance import pairwise_distance
 
 __all__ = ['SpatialConnRule', 'spatial_pairwise_bernoulli']

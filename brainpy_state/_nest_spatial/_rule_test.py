@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 
-from brainpy_state._network._rules import ConnRule
+from brainpy_state._nest_network._rules import ConnRule
 from brainpy_state._nest_spatial._layers import grid
 from brainpy_state._nest_spatial._distance import pairwise_distance
 from brainpy_state._nest_spatial._kernels import distance, gaussian

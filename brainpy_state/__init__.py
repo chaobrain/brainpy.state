@@ -78,7 +78,7 @@ from ._brainpy import (
 # Network API
 # =============================================================================
 
-from ._network import (
+from ._nest_network import (
     Network,
     Builder,
     Recorder,
@@ -104,7 +104,7 @@ from ._network import (
     explicit_edges,
 )
 
-from . import _network as network  # noqa: F401  -- exposed as brainpy.state.network
+from . import _nest_network as network  # noqa: F401  -- exposed as brainpy.state.network
 from . import _dist as dist  # noqa: F401  -- exposed as brainpy.state.dist
 from . import _nest_spatial as spatial  # noqa: F401  -- exposed as brainpy.state.spatial
 
@@ -112,53 +112,13 @@ from . import _nest_spatial as spatial  # noqa: F401  -- exposed as brainpy.stat
 # NEST-Compatible Models
 # =============================================================================
 
-from ._nest import (
-    # base class
-    NESTSynapse,
+from ._nest_base import (
     NESTDevice,
     NESTNeuron,
+    NESTSynapse,
     NESTPlasticity,
-
-    # Stimulation devices - Current generators
-    ac_generator,
-    dc_generator,
-    noise_generator,
-    step_current_generator,
-    # Host-clamped input devices (closed-loop / Simulator.cont rollouts)
-    host_spike_drive,
-    host_current_drive,
-    step_rate_generator,
-
-    # Stimulation devices - Spike generators
-    spike_generator,
-    spike_train_injector,
-    spike_dilutor,
-
-    # Stimulation devices - Poisson generators
-    inhomogeneous_poisson_generator,
-    poisson_generator,
-    poisson_generator_ps,
-    sinusoidal_poisson_generator,
-
-    # Stimulation devices - Other generators
-    gamma_sup_generator,
-    mip_generator,
-    ppd_sup_generator,
-    pulsepacket_generator,
-    sinusoidal_gamma_generator,
-
-    # Recording devices
-    correlation_detector,
-    correlomatrix_detector,
-    correlospinmatrix_detector,
-    multimeter,
-    voltmeter,
-    spike_recorder,
-    spin_detector,
-    volume_transmitter,
-    weight_recorder,
-
-    # IAF neurons - current-based (psc)
+)
+from ._nest_neuron import (
     iaf_psc_alpha,
     iaf_psc_alpha_multisynapse,
     iaf_psc_alpha_ps,
@@ -169,22 +129,16 @@ from ._nest import (
     iaf_psc_exp_multisynapse,
     iaf_psc_exp_ps,
     iaf_psc_exp_ps_lossless,
-
-    # IAF neurons - conductance-based (cond)
     iaf_cond_alpha,
     iaf_cond_alpha_mc,
     iaf_cond_beta,
     iaf_cond_exp,
     iaf_cond_exp_sfa_rr,
-
-    # IAF neurons - specialized variants
     iaf_bw_2001,
     iaf_bw_2001_exact,
     iaf_chs_2007,
     iaf_chxk_2008,
     iaf_tum_2000,
-
-    # Adaptive Exponential IF (aeif) neurons
     aeif_cond_alpha,
     aeif_cond_alpha_astro,
     aeif_cond_alpha_multisynapse,
@@ -194,44 +148,28 @@ from ._nest import (
     aeif_psc_delta,
     aeif_psc_delta_clopath,
     aeif_psc_exp,
-
-    # Generalized IF (gif) neurons
     gif_cond_exp,
     gif_cond_exp_multisynapse,
     gif_pop_psc_exp,
     gif_psc_exp,
     gif_psc_exp_multisynapse,
-
-    # Multi-timescale Adaptive Threshold (mat) neurons
     amat2_psc_exp,
     mat2_psc_exp,
-
-    # Generalized LIF (glif) neurons
     glif_cond,
     glif_psc,
     glif_psc_double_alpha,
-
-    # Hodgkin-Huxley family
     hh_cond_beta_gap_traub,
     hh_cond_exp_traub,
     hh_psc_alpha,
     hh_psc_alpha_clopath,
     hh_psc_alpha_gap,
     ht_neuron,
-
-    # Izhikevich neuron
     izhikevich,
-
-    # Point process neurons
     pp_cond_exp_mc_urbanczik,
     pp_psc_delta,
-
-    # Binary neurons
     erfc_neuron,
     ginzburg_neuron,
     mcculloch_pitts_neuron,
-
-    # Rate neurons
     gauss_rate_ipn,
     lin_rate_ipn,
     lin_rate_opn,
@@ -245,27 +183,27 @@ from ._nest import (
     tanh_rate_opn,
     threshold_lin_rate_ipn,
     threshold_lin_rate_opn,
-
-    # Astrocyte models
     astrocyte_lr_1994,
-
-    # Other spiking neurons
+    cm_default,
     ignore_and_fire,
     parrot_neuron,
-
-    # Static synapses
+)
+from ._nest_synapse import (
     bernoulli_synapse,
     cont_delay_synapse,
     static_synapse,
     static_synapse_hom_w,
-
-    # Short-term plasticity synapses
     quantal_stp_synapse,
     tsodyks2_synapse,
     tsodyks_synapse,
     tsodyks_synapse_hom,
-
-    # STDP synapses
+    diffusion_connection,
+    gap_junction,
+    rate_connection_delayed,
+    rate_connection_instantaneous,
+    sic_connection,
+)
+from ._nest_plasticity import (
     stdp_dopamine_synapse,
     stdp_facetshw_synapse_hom,
     stdp_nn_pre_centered_synapse,
@@ -275,23 +213,41 @@ from ._nest import (
     stdp_synapse,
     stdp_synapse_hom,
     stdp_triplet_synapse,
-
-    # Voltage-based / specialized synapses
     clopath_synapse,
     ht_synapse,
     jonke_synapse,
     urbanczik_synapse,
     vogels_sprekeler_synapse,
-
-    # Gap junctions and special connections
-    diffusion_connection,
-    gap_junction,
-    rate_connection_delayed,
-    rate_connection_instantaneous,
-    sic_connection,
-
-    # Multi-compartment models
-    cm_default,
+)
+from ._nest_device import (
+    ac_generator,
+    dc_generator,
+    noise_generator,
+    step_current_generator,
+    host_spike_drive,
+    host_current_drive,
+    step_rate_generator,
+    spike_generator,
+    spike_train_injector,
+    spike_dilutor,
+    inhomogeneous_poisson_generator,
+    poisson_generator,
+    poisson_generator_ps,
+    sinusoidal_poisson_generator,
+    gamma_sup_generator,
+    mip_generator,
+    ppd_sup_generator,
+    pulsepacket_generator,
+    sinusoidal_gamma_generator,
+    correlation_detector,
+    correlomatrix_detector,
+    correlospinmatrix_detector,
+    multimeter,
+    voltmeter,
+    spike_recorder,
+    spin_detector,
+    volume_transmitter,
+    weight_recorder,
 )
 
 __all__ = [
