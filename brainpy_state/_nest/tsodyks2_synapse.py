@@ -9,6 +9,7 @@ is ``w_eff = x*u * weight`` with ``x`` updated **before** ``u`` (using the old
 ``u``), exactly as in NEST ``models/tsodyks2_synapse.h``.
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import jax.numpy as jnp
 import brainunit as u
@@ -24,7 +25,7 @@ __all__ = ['tsodyks2_synapse']
 _UNSET = object()
 
 
-class tsodyks2_synapse:
+class tsodyks2_synapse(NESTSynapse):
     r"""Tsodyks (2-variable) short-term-plasticity synapse spec.
 
     Parameters
@@ -88,6 +89,7 @@ class tsodyks2_synapse:
         tau_rec: ArrayLike = 800.0 * u.ms,
         tau_fac: ArrayLike = 0.0 * u.ms,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

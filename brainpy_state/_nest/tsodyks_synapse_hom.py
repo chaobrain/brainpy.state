@@ -11,6 +11,7 @@ per-edge. It uses NEST's *plain-exp* propagator form (``Pzz = exp(-h/tau_rec)``,
 distinct, so each is kept exactly as NEST has it.
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import jax.numpy as jnp
 import brainunit as u
@@ -24,7 +25,7 @@ from ._plastic_base import (
 __all__ = ['tsodyks_synapse_hom']
 
 
-class tsodyks_synapse_hom:
+class tsodyks_synapse_hom(NESTSynapse):
     r"""Homogeneous Tsodyks (2000) short-term-plasticity synapse spec.
 
     Shares ``weight``, ``U``, ``tau_psc``, ``tau_fac`` and ``tau_rec`` across all
@@ -102,6 +103,7 @@ class tsodyks_synapse_hom:
         y: ArrayLike = 0.0,
         u: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

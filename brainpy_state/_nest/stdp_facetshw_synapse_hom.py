@@ -23,6 +23,7 @@ post is deferred (``causal_pending``) and folded at the next pre, after that pre
 readout.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
@@ -45,7 +46,7 @@ _DEFAULT_CONFIG_1 = (0, 1, 0, 0)
 _DEFAULT_RESET_PATTERN = (1, 1, 1, 1, 1, 1)
 
 
-class stdp_facetshw_synapse_hom:
+class stdp_facetshw_synapse_hom(NESTPlasticity):
     r"""FACETS/BrainScaleS hardware STDP synapse spec (NEST ``stdp_facetshw_synapse_hom``).
 
     A hardware-constrained STDP model with a **4-bit discrete weight** updated only at
@@ -193,6 +194,7 @@ class stdp_facetshw_synapse_hom:
         synapses_per_driver: ArrayLike = 50,
         driver_readout_time: ArrayLike = 15.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

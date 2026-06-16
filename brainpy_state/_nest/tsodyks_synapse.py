@@ -11,6 +11,7 @@ uses the algebraically-equal plain-exp form. Each is kept exactly as NEST has it
 (they are floating-point distinct).
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import jax.numpy as jnp
 import brainunit as u
@@ -24,7 +25,7 @@ from ._plastic_base import (
 __all__ = ['tsodyks_synapse']
 
 
-class tsodyks_synapse:
+class tsodyks_synapse(NESTSynapse):
     r"""Tsodyks, Uziel & Markram (2000) short-term-plasticity synapse spec.
 
     On each presynaptic spike the per-edge state is propagated over the
@@ -101,6 +102,7 @@ class tsodyks_synapse:
         y: ArrayLike = 0.0,
         u: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

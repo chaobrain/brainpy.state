@@ -10,6 +10,7 @@ and depleting ``a``. The PRNG differs from NEST, so parity is **distributional**
 (mean release converges to the ``tsodyks2`` limit).
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import jax
 import jax.numpy as jnp
@@ -26,7 +27,7 @@ __all__ = ['quantal_stp_synapse']
 _UNSET = object()
 
 
-class quantal_stp_synapse:
+class quantal_stp_synapse(NESTSynapse):
     r"""Quantal (binomial) short-term-plasticity synapse spec.
 
     Parameters
@@ -96,6 +97,7 @@ class quantal_stp_synapse:
         tau_rec: ArrayLike = 800.0 * u.ms,
         tau_fac: ArrayLike = 0.0 * u.ms,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

@@ -53,6 +53,7 @@ References
    ``nestkernel/urbanczik_archiving_node_impl.h``.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
@@ -84,7 +85,7 @@ def _to_unit_mantissa(value, unit, *, name: str) -> float:
     return to_scalar_float(value, name=name)
 
 
-class urbanczik_synapse:
+class urbanczik_synapse(NESTPlasticity):
     r"""Dendritic prediction-error plasticity synapse spec (NEST ``urbanczik_synapse``).
 
     Implements the Urbanczik-Senn rule: with :math:`\bar{s}_L`, :math:`\bar{s}_s`
@@ -178,6 +179,7 @@ class urbanczik_synapse:
         dend_tau_syn_ex: ArrayLike = 3.0 * u.ms,
         dend_tau_syn_in: ArrayLike = 3.0 * u.ms,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

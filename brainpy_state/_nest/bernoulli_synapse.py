@@ -9,6 +9,7 @@ with probability ``p_transmit`` and drops it otherwise — a per-edge Bernoulli 
 on the delivered amplitude, with **no weight state evolving**.
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import jax
 import jax.numpy as jnp
@@ -22,7 +23,7 @@ from ._plastic_base import (
 __all__ = ['bernoulli_synapse']
 
 
-class bernoulli_synapse:
+class bernoulli_synapse(NESTSynapse):
     r"""Static synapse with stochastic (Bernoulli) transmission (NEST ``bernoulli_synapse``).
 
     Each presynaptic spike on edge ``e`` is transmitted *independently per
@@ -111,6 +112,7 @@ class bernoulli_synapse:
         receptor_type: int = 0,
         p_transmit: ArrayLike = 1.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

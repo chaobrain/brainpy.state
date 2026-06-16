@@ -7,6 +7,7 @@ effective weight is just the (per-edge) constant ``weight``, and no state
 evolves.
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import brainunit as u
 from brainstate.typing import ArrayLike
@@ -16,7 +17,7 @@ from ._plastic_base import unit_of, validate_delay, validate_receptor_type, weig
 __all__ = ['static_synapse']
 
 
-class static_synapse:
+class static_synapse(NESTSynapse):
     r"""Fixed-weight, fixed-delay synapse spec (NEST ``static_synapse``).
 
     A presynaptic spike on edge ``e`` delivers the constant amplitude
@@ -65,6 +66,7 @@ class static_synapse:
         delay: ArrayLike = 1.0 * u.ms,
         receptor_type: int = 0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

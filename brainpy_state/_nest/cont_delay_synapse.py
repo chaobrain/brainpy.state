@@ -11,6 +11,7 @@ simulation step, is realised by the substrate's ``fractional_delay`` output-carr
 seam, opted into here via the class attribute ``fractional_delay = True``.
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 import brainstate
 import brainunit as u
@@ -46,7 +47,7 @@ def _validate_min_delay(delay) -> None:
         )
 
 
-class cont_delay_synapse:
+class cont_delay_synapse(NESTSynapse):
     r"""Static synapse with a continuous, sub-timestep delay (NEST ``cont_delay_synapse``).
 
     Delivery is identical to :class:`static_synapse` — each presynaptic spike on
@@ -157,6 +158,7 @@ class cont_delay_synapse:
         delay: ArrayLike = 1.0 * u.ms,
         receptor_type: int = 0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

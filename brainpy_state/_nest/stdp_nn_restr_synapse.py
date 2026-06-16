@@ -17,6 +17,7 @@ spike makes its own side *available* and *consumes* the opposite side, so each s
 pairs at most once.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -35,7 +36,7 @@ def _nest_sign(v: float) -> int:
     return int(v >= 0.0) - int(v < 0.0)
 
 
-class stdp_nn_restr_synapse:
+class stdp_nn_restr_synapse(NESTPlasticity):
     r"""Restricted symmetric nearest-neighbour STDP synapse spec (NEST ``stdp_nn_restr_synapse``).
 
     Like :class:`stdp_nn_symm_synapse`, both ``K+`` and ``K-`` run in the substrate's
@@ -151,6 +152,7 @@ class stdp_nn_restr_synapse:
         mu_minus: ArrayLike = 1.0,
         Wmax: ArrayLike = 100.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

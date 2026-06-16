@@ -12,6 +12,7 @@ is equal to NEST's deferred ``stdp_synapse::send()`` at every send (pre-spike)
 time — where NEST's ``weight_recorder`` samples.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -30,7 +31,7 @@ def _nest_sign(v: float) -> int:
     return int(v >= 0.0) - int(v < 0.0)
 
 
-class stdp_synapse:
+class stdp_synapse(NESTPlasticity):
     r"""Pair-based spike-timing-dependent plasticity synapse spec (NEST ``stdp_synapse``).
 
     On the substrate the per-pre ``K+`` and per-post ``K-`` traces decay-then-add
@@ -125,6 +126,7 @@ class stdp_synapse:
         Wmax: ArrayLike = 100.0,
         Kplus: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

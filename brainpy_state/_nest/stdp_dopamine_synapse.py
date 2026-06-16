@@ -22,6 +22,7 @@ online per-step integral coincides with NEST's deferred trajectory at the
 send/trigger sampling times (the cluster-04 "online <-> deferred equality").
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
@@ -35,7 +36,7 @@ from ._plastic_base import (
 __all__ = ['stdp_dopamine_synapse']
 
 
-class stdp_dopamine_synapse:
+class stdp_dopamine_synapse(NESTPlasticity):
     r"""Dopamine-modulated STDP synapse spec (NEST ``stdp_dopamine_synapse``).
 
     The weight is driven by the product of a slow per-edge eligibility trace ``c``
@@ -160,6 +161,7 @@ class stdp_dopamine_synapse:
         Wmax: ArrayLike = 200.0,
         c: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

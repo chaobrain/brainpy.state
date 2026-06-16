@@ -11,6 +11,7 @@ spike additionally depresses by a constant :math:`\alpha\eta`, driving the
 postsynaptic firing rate toward a target set by :math:`\alpha`.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -29,7 +30,7 @@ def _nest_sign(v: float) -> int:
     return int(v >= 0.0) - int(v < 0.0)
 
 
-class vogels_sprekeler_synapse:
+class vogels_sprekeler_synapse(NESTPlasticity):
     r"""Symmetric inhibitory-plasticity synapse spec (NEST ``vogels_sprekeler_synapse``).
 
     The substrate maintains a **single, symmetric** trace constant ``tau`` on both
@@ -125,6 +126,7 @@ class vogels_sprekeler_synapse:
         Wmax: ArrayLike = 1.0,
         Kplus: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

@@ -13,6 +13,7 @@ window, no ``Wmax``), structurally a depression-only sibling of
 imperative implementation lived in this same module (legacy ``NESTSynapse`` base).
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -26,7 +27,7 @@ from ._plastic_base import (
 __all__ = ['ht_synapse']
 
 
-class ht_synapse:
+class ht_synapse(NESTPlasticity):
     r"""Hill-Tononi vesicle-pool depression synapse spec (NEST ``ht_synapse``).
 
     Trace-free and presynaptic: the kernel keeps a per-edge vesicle pool ``P`` and
@@ -107,6 +108,7 @@ class ht_synapse:
         delta_P: ArrayLike = 0.125,
         P: ArrayLike = 1.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

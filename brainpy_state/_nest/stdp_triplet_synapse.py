@@ -12,6 +12,7 @@ plasticity that pair models miss. This is the first model to use the substrate's
 ``(fast, slow)`` so the substrate allocates two per-neuron trace columns per side.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -25,7 +26,7 @@ from ._plastic_base import (
 __all__ = ['stdp_triplet_synapse']
 
 
-class stdp_triplet_synapse:
+class stdp_triplet_synapse(NESTPlasticity):
     r"""Triplet spike-timing-dependent plasticity synapse spec (NEST ``stdp_triplet_synapse``).
 
     Four traces drive the rule — a fast/slow pair on each side, all decay-then-add
@@ -141,6 +142,7 @@ class stdp_triplet_synapse:
         Kplus: ArrayLike = 0.0,
         Kplus_triplet: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

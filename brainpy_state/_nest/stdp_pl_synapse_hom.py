@@ -12,6 +12,7 @@ other ``*_hom`` models the parameters are NEST *common* properties; here they ar
 rule-level.
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -25,7 +26,7 @@ from ._plastic_base import (
 __all__ = ['stdp_pl_synapse_hom']
 
 
-class stdp_pl_synapse_hom:
+class stdp_pl_synapse_hom(NESTPlasticity):
     r"""Power-law spike-timing-dependent plasticity synapse spec (NEST ``stdp_pl_synapse_hom``).
 
     The substrate maintains the per-pre ``K+`` trace (``pre_trace_tau=tau_plus``)
@@ -119,6 +120,7 @@ class stdp_pl_synapse_hom:
         mu: ArrayLike = 0.4,
         Kplus: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

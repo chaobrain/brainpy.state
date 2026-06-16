@@ -9,6 +9,7 @@ stores ``'weight'`` as a 0-d :class:`brainstate.ParamState`. Per-connection
 ``delay`` and ``receptor_type`` remain settable.
 """
 from __future__ import annotations
+from ._base import NESTSynapse
 
 from typing import Mapping
 
@@ -20,7 +21,7 @@ from ._plastic_base import unit_of, validate_delay, validate_receptor_type, weig
 __all__ = ['static_synapse_hom_w']
 
 
-class static_synapse_hom_w:
+class static_synapse_hom_w(NESTSynapse):
     r"""Static synapse with a single weight shared across all connections.
 
     Parameters
@@ -69,6 +70,7 @@ class static_synapse_hom_w:
         delay: ArrayLike = 1.0 * u.ms,
         receptor_type: int = 0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

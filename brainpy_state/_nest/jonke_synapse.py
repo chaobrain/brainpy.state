@@ -9,6 +9,7 @@ Rebuilt as a frozen parameter spec plus a pure, vectorized
 :math:`\beta` (a heterosynaptic / activity-independent bias).
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import brainunit as u
@@ -22,7 +23,7 @@ from ._plastic_base import (
 __all__ = ['jonke_synapse']
 
 
-class jonke_synapse:
+class jonke_synapse(NESTPlasticity):
     r"""Exponential-weight-dependence STDP synapse spec (NEST ``jonke_synapse``).
 
     The substrate maintains the per-pre ``K+`` trace (``pre_trace_tau=tau_plus``)
@@ -126,6 +127,7 @@ class jonke_synapse:
         Wmax: ArrayLike = 100.0,
         Kplus: ArrayLike = 0.0,
     ):
+        super().__init__(in_size=1)
         self.weight = weight_to_pa(weight)
         self.weight_unit = unit_of(self.weight)
         validate_delay(delay)

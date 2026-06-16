@@ -23,9 +23,10 @@ Four marker base classes that categorise every model in
 
 - :class:`NESTDevice`      -- stimulation and recording devices.
 - :class:`NESTNeuron`      -- point-neuron and population-neuron models.
-- :class:`NESTSynapse`     -- static synapse and connection models.
-- :class:`NESTPlasticity`  -- activity-dependent plasticity synapse models
-  (short-term plasticity, STDP, voltage-based learning rules, …).
+- :class:`NESTSynapse`     -- static synapse, short-term-plasticity, and
+  connection models.
+- :class:`NESTPlasticity`  -- long-term / activity-history plasticity synapse
+  models (STDP and voltage-based learning rules).
 
 Each class is intentionally kept empty; all behaviour is inherited from
 the BrainPy / BrainState parent classes.
@@ -65,13 +66,16 @@ class NESTSynapse(Dynamics):
     """Abstract base class for all NEST-compatible synapse models.
 
     Covers static synapses (``static_synapse``, ``static_synapse_hom_w``,
-    ``bernoulli_synapse``, ``cont_delay_synapse``), gap junctions
-    (``gap_junction``, ``diffusion_connection``), rate connections
+    ``bernoulli_synapse``, ``cont_delay_synapse``), short-term-plasticity
+    synapses (``tsodyks_synapse``, ``tsodyks_synapse_hom``, ``tsodyks2_synapse``,
+    ``quantal_stp_synapse``), gap junctions (``gap_junction``,
+    ``diffusion_connection``), rate connections
     (``rate_connection_instantaneous``, ``rate_connection_delayed``),
-    and other non-plastic connection models (``sic_connection``).
+    and other connection models (``sic_connection``).
 
-    Plasticity synapse models (STP, STDP, voltage-based learning rules)
-    inherit from the more specific :class:`NESTPlasticity` subclass.
+    Long-term / activity-history plasticity synapse models (STDP, voltage-based
+    learning rules) inherit from the more specific :class:`NESTPlasticity`
+    subclass.
     """
     __module__ = 'brainpy.state'
 
@@ -80,13 +84,9 @@ class NESTPlasticity(NESTSynapse):
     """Abstract base class for all NEST-compatible plasticity synapse models.
 
     Subclass of :class:`NESTSynapse` that marks models whose synaptic
-    weights change as a function of neural activity.  Three broad families
-    are covered:
-
-    **Short-Term Plasticity (STP)**
-        Transient, reversible weight changes on the timescale of individual
-        spikes: ``tsodyks_synapse``, ``tsodyks_synapse_hom``,
-        ``tsodyks2_synapse``, ``quantal_stp_synapse``.
+    weights change as a long-term function of neural activity history.  Two
+    broad families are covered (short-term plasticity is a plain
+    :class:`NESTSynapse`):
 
     **Spike-Timing Dependent Plasticity (STDP)**
         Long-term weight changes driven by pre/post spike timing:

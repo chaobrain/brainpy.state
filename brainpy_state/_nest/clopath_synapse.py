@@ -13,6 +13,7 @@ continuously while the post is depolarized** (LTP from ``V`` and ``u_bar_plus``)
 the voltage-based rule of Clopath et al. (2010).
 """
 from __future__ import annotations
+from ._base import NESTPlasticity
 
 import jax.numpy as jnp
 import numpy as np
@@ -44,7 +45,7 @@ def _to_mv(value, *, name: str) -> float:
     return to_scalar_float(value, name=name)
 
 
-class clopath_synapse:
+class clopath_synapse(NESTPlasticity):
     r"""Voltage-based spike-timing-dependent plasticity synapse spec (NEST ``clopath_synapse``).
 
     Weight updates follow Clopath et al. (2010): a presynaptic spike depresses the
@@ -165,6 +166,7 @@ class clopath_synapse:
         theta_plus: ArrayLike = -45.3 * u.mV,
         theta_minus: ArrayLike = -70.6 * u.mV,
     ):
+        super().__init__(in_size=1)
         # Clopath's reference neuron aeif_psc_delta_clopath is a *delta* model
         # whose input seam is a voltage jump (mV), so a bare weight defaults to mV
         # (unlike the pA current synapses). An explicit Quantity is honored as-is,
