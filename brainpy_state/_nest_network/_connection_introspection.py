@@ -35,7 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 
-from brainpy_state._brainpy._delay import InputDelay
+from brainpy_state._brainpy.delay import InputDelay
 
 __all__ = ['ProjEdges', 'SynapseCollection']
 

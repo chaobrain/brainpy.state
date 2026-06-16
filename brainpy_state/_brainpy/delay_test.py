@@ -25,7 +25,7 @@ import numpy.testing as npt
 import brainunit as u
 
 import brainpy_state as brainpy_state_pkg
-from brainpy_state._brainpy._delay import InputDelay
+from brainpy_state._brainpy.delay import InputDelay
 from brainpy_state import (AlignPostProj, CurrentProj, LIF, Expon, CUBA)
 
 

@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import brainunit as u
 
-from brainpy_state._brainpy._delay import InputDelay
+from brainpy_state._brainpy.delay import InputDelay
 from brainpy_state._nest_network._connectivity import resolve_param
 from brainpy_state._nest_network._nodeview import _flat_size
 from brainpy_state._nest_network._projections import _DenseMatMul, _ReceptorScatter, _SparseEventMatMul

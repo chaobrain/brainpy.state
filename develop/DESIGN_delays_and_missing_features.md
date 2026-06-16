@@ -107,7 +107,7 @@ delay seam. The buffer and the per-step read are encapsulated in a small module 
 every projection (and the gap junctions, later) shares one implementation.
 
 ```python
-# new: brainpy_state/_brainpy/_delay.py
+# new: brainpy_state/_brainpy/delay.py
 class DelayedSource(brainstate.nn.Module):
     """Maintain a delay buffer over ``source.<state>`` and read it each step.
 

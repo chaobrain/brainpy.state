@@ -27,7 +27,7 @@ from brainstate.util import get_unique_name
 
 from brainpy_state._base import Dynamics
 from brainpy_state._mixin import BindCondData, AlignPost
-from ._delay import InputDelay
+from .delay import InputDelay
 from .synouts import SynOut
 
 __all__ = [
