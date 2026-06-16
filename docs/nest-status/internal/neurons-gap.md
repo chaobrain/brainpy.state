@@ -72,10 +72,10 @@ trace-tolerance in the test and confirming pass.
 | `aeif_cond_alpha_multisynapse` | divergent | `brainpy_state/_nest/aeif_cond_alpha_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_alpha_multisynapse.html> | `aeif_cond_alpha_multisynapse_test.py` (Y) | multi-receptor port semantics covered |
 | `aeif_cond_beta_multisynapse` | divergent | `brainpy_state/_nest/aeif_cond_beta_multisynapse.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_beta_multisynapse.html> | `aeif_cond_beta_multisynapse_test.py` (Y) | |
 | `aeif_cond_exp` | divergent | `brainpy_state/_nest/aeif_cond_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_cond_exp.html> | `aeif_cond_exp_test.py` (Y) + `aeif_cond_exp_conductance_test.py` (Y) | **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (exp micro-parity arbiter; carries the shared bridge edge-case tests) |
-| `aeif_psc_alpha` | divergent | `brainpy_state/_nest/aeif_psc_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_alpha.html> | `aeif_psc_alpha_test.py` (Y) | |
+| `aeif_psc_alpha` | divergent | `brainpy_state/_nest/aeif_psc_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_alpha.html> | `aeif_psc_alpha_test.py` (Y) + `aeif_psc_alpha_psc_current_test.py` (Y) | **spike→current bridged (28)** — `receptor_type=1`→I_ex / `=2`→I_in (pA, the bridge default; no `receptor_input_unit` override), live-NEST V_m/I_ex/I_in parity (alpha pA arbiter; carries the shared bridge edge-case tests) |
 | `aeif_psc_delta` | divergent | `brainpy_state/_nest/aeif_psc_delta.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_delta.html> | `aeif_psc_delta_test.py` (Y) | |
 | `aeif_psc_delta_clopath` | divergent | `brainpy_state/_nest/aeif_psc_delta_clopath.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_delta_clopath.html> | `aeif_psc_delta_clopath_test.py` (Y) | Clopath voltage-trace plasticity exercised |
-| `aeif_psc_exp` | divergent | `brainpy_state/_nest/aeif_psc_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_exp.html> | `aeif_psc_exp_test.py` (Y) | |
+| `aeif_psc_exp` | divergent | `brainpy_state/_nest/aeif_psc_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/aeif_psc_exp.html> | `aeif_psc_exp_test.py` (Y) + `aeif_psc_exp_psc_current_test.py` (Y) | **spike→current bridged (28)** — `receptor_type=1`→I_ex / `=2`→I_in (pA), live-NEST V_m/I_ex/I_in parity (exp pA arbiter; the exponential synapse applies the jump directly so only the *source* of w_ex/w_in swaps) |
 | `amat2_psc_exp` | unvalidated | `brainpy_state/_nest/amat2_psc_exp.py` | <https://nest-simulator.readthedocs.io/en/stable/models/amat2_psc_exp.html> | `amat2_psc_exp_test.py` (N) | self-consistency only |
 | `cm_default` | divergent | `brainpy_state/_nest/cm_default.py` | <https://nest-simulator.readthedocs.io/en/stable/models/cm_default.html> | `cm_default_test.py` (Y) | multi-compartment; high-risk surface (per `nest-status/index.rst`) |
 | `eprop_iaf` | missing | — | <https://nest-simulator.readthedocs.io/en/stable/models/eprop_iaf.html> | — | not ported |
@@ -100,7 +100,7 @@ trace-tolerance in the test and confirming pass.
 | `hh_cond_beta_gap_traub` | unvalidated | `brainpy_state/_nest/hh_cond_beta_gap_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_beta_gap_traub.html> | `hh_cond_beta_gap_traub_test.py` (N) | gap-junction-capable HH — couples to `gap_junction` synapse. **cluster-15b:** declares `_emission_attr='V'` (gap seam) + per-neuron gating-init fix (heterogeneous-init regression in test). Standalone live-NEST gap parity pending (`hh_psc_alpha_gap` is the validated reference for the shared seam) |
 | `hh_cond_exp_traub` | unvalidated | `brainpy_state/_nest/hh_cond_exp_traub.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_cond_exp_traub.html> | `hh_cond_exp_traub_test.py` (N) + `hh_cond_exp_traub_conductance_test.py` (Y) | **spike→conductance bridged (25)** — `receptor_type=1`→g_ex / `=2`→g_in, live-NEST V_m/g_ex/g_in parity (held quiescent `V_m_init=-75 mV` + subthreshold so the stiff Na/K AP never fires; g_ex/g_in match to ~1e-12) |
 | `hh_psc_alpha` | unvalidated | `brainpy_state/_nest/hh_psc_alpha.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha.html> | `hh_psc_alpha_test.py` (N) | |
-| `hh_psc_alpha_clopath` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_clopath.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_clopath.html> | `hh_psc_alpha_clopath_test.py` (N) | |
+| `hh_psc_alpha_clopath` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_clopath.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_clopath.html> | `hh_psc_alpha_clopath_test.py` (N) + `hh_psc_alpha_clopath_psc_current_test.py` (Y) | **spike→current bridged (28)** — `receptor_type=1`→I_syn_ex / `=2`→I_syn_in (pA; the inhibitory kick keeps NEST's negative weight so I_syn_in is negative), live-NEST V_m/I_syn_ex/I_syn_in parity (stiff cell: x64 + held subthreshold). Status stays `unvalidated`: only the spike→current path is NEST-checked, the I_e dynamics are not |
 | `hh_psc_alpha_gap` | unvalidated | `brainpy_state/_nest/hh_psc_alpha_gap.py` | <https://nest-simulator.readthedocs.io/en/stable/models/hh_psc_alpha_gap.html> | `hh_psc_alpha_gap_test.py` (N) + `_validation/gap_junction_parity_test.py` (Y) + `_validation/gap_junction_inhibitory_network_parity_test.py` (Y) | gap-junction-capable HH. **cluster-15b:** declares `_emission_attr='V'` (gap seam) + per-neuron gating-init fix; gap-coupled membrane matches live NEST to machine precision between spikes (2-neuron micro-parity, `use_wfr=False`) + distributional network coherence. (Standalone single-neuron parity still folds into the HH-family P1.) |
 | `ht_neuron` | unvalidated | `brainpy_state/_nest/ht_neuron.py` | <https://nest-simulator.readthedocs.io/en/stable/models/ht_neuron.html> | `ht_neuron_test.py` (N) | Hill-Tononi 2005; ~70 KB implementation suggests complex state |
 | `iaf_bw_2001` | unvalidated | `brainpy_state/_nest/iaf_bw_2001.py` | <https://nest-simulator.readthedocs.io/en/stable/models/iaf_bw_2001.html> | `iaf_bw_2001_test.py` (N) | NMDA channels (simplified) |
@@ -188,9 +188,16 @@ now declares `n_receptors=2` / `receptor_input_unit=u.nS` and the source-only
 `w_by_rec`. The bridge is **source-only / kinetics-agnostic** (confirmed by an
 alpha·exp·beta micro-parity gate before the sweep): declaring `n_receptors` + the
 arm enrolls a model with zero Simulator change, regardless of synapse class. **This
-follow-up is cleared.** (The current-based `aeif_psc_*` / `hh_psc_alpha_clopath`
-siblings self-pull too but take `pA`, not the `nS` conductance bridge — a related
-but distinct question, still open, not covered by this note.)
+follow-up is cleared.** The current-based `pA` siblings were then swept by **goal
+28** — `aeif_psc_alpha`, `aeif_psc_exp`, `hh_psc_alpha_clopath` each declare
+`n_receptors=2` and the same source-only `w_by_rec` dual-path arm, but at the
+bridge's **default `pA`** (no `receptor_input_unit` override), with a per-model
+spike→current parity test (Law + live-NEST `V_m`/`I_ex`/`I_in`, or
+`I_syn_ex`/`I_syn_in` for hh — which keeps NEST's negative inhibitory weight) in
+`brainpy_state/_nest/_validation/<m>_psc_current_test.py`. This confirms the bridge
+is **agnostic in unit too**: the one arm carries the `nS` and `pA` families
+unchanged. `aeif_psc_delta` / `aeif_psc_delta_clopath` stay out of scope — delta
+synapses inject directly via `label='w_delta'`, not the `w_ex`/`w_in` seam.
 
 ## 5. Semantic & numerical risks
 
