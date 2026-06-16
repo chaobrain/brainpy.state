@@ -13,7 +13,7 @@ plotted against pairing frequency (the upstream figure).
 ``aeif_psc_delta_clopath`` is a **delta** neuron, so the bare ``clopath_synapse``
 weight is in **mV** (not pA). The protocol, parameters, and frozen 5 % parity band
 are the ones validated in cluster 07 and shared via
-:mod:`brainpy_state._nest._validation._clopath_drive`; this script is the
+:mod:`brainpy_state._nest_validation._clopath_drive`; this script is the
 user-facing presentation of that proof. The presynaptic train relays through a
 ``spike_generator`` directly into the plastic edge (in NEST a ``parrot_neuron``
 relays it, since a device cannot drive a plastic synapse).
@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 import numpy as np
 import brainunit as u
 
-from brainpy_state._nest._validation import _clopath_drive as drv
+from brainpy_state._nest_validation import _clopath_drive as drv
 
 #: Pairing frequencies (Hz) of the five trains in each ordering (upstream).
 RHO = np.array([10.0, 20.0, 30.0, 40.0, 50.0])

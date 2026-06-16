@@ -8,7 +8,7 @@ distributions, retrieves the connections with ``nest.GetConnections()`` (a
 ``SynapseCollection``), and reads / sets ``.source``, ``.target``, ``.weight`` to
 build weight matrices. This port reproduces every idiom with
 :meth:`Simulator.get_connections` and
-:class:`~brainpy_state._network._connection_introspection.SynapseCollection`:
+:class:`~brainpy_state._nest_network._connection_introspection.SynapseCollection`:
 
 * ``get(['source', 'target', 'weight'])`` — read several attributes at once;
 * ``set('weight', values)`` — per-edge write-back, round-tripped through ``get``;

@@ -21,7 +21,7 @@ pairing and **depress**. The recurrent weight matrix is recorded with
 ``aeif_psc_delta_clopath`` is a **delta** neuron, so the bare ``clopath_synapse``
 weight is in **mV**. The neuron parameters, delays, init weight and 5 % parity
 band are the cluster-07 ones (shared via
-:mod:`brainpy_state._nest._validation._clopath_drive`); per edge this is exactly
+:mod:`brainpy_state._nest_validation._clopath_drive`); per edge this is exactly
 the validated pairing protocol, so the matrix matches NEST within the documented
 Clopath band (LTD near-exact, LTP within 5 %).
 
@@ -37,7 +37,7 @@ import brainunit as u
 
 from brainpy_state import (Simulator, spike_generator, clopath_synapse,
                            static_synapse, all_to_all)
-from brainpy_state._nest._validation import _clopath_drive as drv
+from brainpy_state._nest_validation import _clopath_drive as drv
 
 #: Number of recurrent excitatory Clopath neurons.
 N = 3

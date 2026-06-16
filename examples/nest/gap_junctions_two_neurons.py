@@ -31,8 +31,8 @@ import numpy as np
 import brainunit as u
 
 from brainpy.state import Simulator, hh_psc_alpha_gap, voltmeter, all_to_all
-from brainpy_state._nest.gap_junction import gap_junction
-from brainpy_state._nest.hh_psc_alpha_gap import _hh_psc_alpha_gap_equilibrium
+from brainpy_state._nest_synapse.gap_junction import gap_junction
+from brainpy_state._nest_neuron.hh_psc_alpha_gap import _hh_psc_alpha_gap_equilibrium
 
 I_E = 100.0          # pA, constant drive
 V_PERTURB = -10.0    # mV, the perturbed cell's initial voltage

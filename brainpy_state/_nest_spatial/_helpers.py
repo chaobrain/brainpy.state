@@ -3,7 +3,7 @@
 
 :func:`center_element` and :func:`Distance` are pure layer-level queries. :func:`target_nodes`
 and :func:`target_positions` read the *realized* adjacency back out of a built network
-(via :meth:`brainpy_state._network._simulator.Simulator.get_connections`), mirroring NEST's
+(via :meth:`brainpy_state._nest_network._simulator.Simulator.get_connections`), mirroring NEST's
 ``GetTargetNodes`` / ``GetTargetPositions``.
 """
 from __future__ import annotations
@@ -218,7 +218,7 @@ def target_nodes(sim, source, target):
     r"""Realized target indices of each source node (NEST ``GetTargetNodes``).
 
     Reads the built network's adjacency back out (via
-    :meth:`~brainpy_state._network._simulator.Simulator.get_connections`) and groups
+    :meth:`~brainpy_state._nest_network._simulator.Simulator.get_connections`) and groups
     the realized target indices by source node.
 
     Parameters
