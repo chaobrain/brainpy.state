@@ -333,7 +333,7 @@ class iaf_psc_exp(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state._nest_neuron.iaf_psc_exp import iaf_psc_exp
+       >>> from brainpy.state import iaf_psc_exp
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = iaf_psc_exp(in_size=(3,), I_e=250. * u.pA, delta=0. * u.mV)
        ...     neu.init_state()
@@ -345,7 +345,7 @@ class iaf_psc_exp(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state._nest_neuron.iaf_psc_exp import iaf_psc_exp
+       >>> from brainpy.state import iaf_psc_exp
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = iaf_psc_exp(
        ...         in_size=10,

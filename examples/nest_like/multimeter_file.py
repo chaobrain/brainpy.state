@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_psc_exp, multimeter, spike_generator
+from brainpy.state import Simulator, iaf_psc_exp, multimeter, spike_generator
 
 #: Recordables tapped from ``iaf_psc_exp`` (NEST vocabulary).
 RECORD_FROM = ('V_m', 'I_syn_ex', 'I_syn_in')

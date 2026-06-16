@@ -33,7 +33,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_tum_2000, dc_generator, voltmeter
+from brainpy.state import Simulator, iaf_tum_2000, dc_generator, voltmeter
 
 # Membrane parameters (Tsodyks-Pawelzik-Markram 1998, Fig 1A; depression regime).
 TAU_M = 40.0                       # membrane time constant [ms]

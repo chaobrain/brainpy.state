@@ -44,7 +44,7 @@ import numpy as np
 import brainunit as u
 import brainstate.transform as transform
 
-from brainpy_state import sinusoidal_poisson_generator
+from brainpy.state import sinusoidal_poisson_generator
 
 #: DC (mean) rate of the sinusoidal drive (Hz).
 RATE = 100.0

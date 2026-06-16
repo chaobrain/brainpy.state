@@ -100,7 +100,7 @@ class stdp_synapse(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_synapse
+       >>> from brainpy.state import stdp_synapse
        >>> s = stdp_synapse(weight=1.0, tau_plus=20.0 * u.ms)
        >>> s.is_homogeneous_weight, s.edge_state_init()
        (False, {})

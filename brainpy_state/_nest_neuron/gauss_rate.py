@@ -335,7 +335,7 @@ class gauss_rate_ipn(_gauss_rate_base):
 
     .. code-block:: python
 
-        >>> import brainpy_state as bpst
+        >>> from brainpy import state as bpst
         >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.set_dt(0.1 * u.ms)

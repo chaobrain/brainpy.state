@@ -335,9 +335,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state._nest_neuron.iaf_psc_exp_multisynapse import (
-       ...     iaf_psc_exp_multisynapse,
-       ... )
+       >>> from brainpy.state import iaf_psc_exp_multisynapse
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = iaf_psc_exp_multisynapse(
        ...         in_size=2,
@@ -355,9 +353,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state._nest_neuron.iaf_psc_exp_multisynapse import (
-       ...     iaf_psc_exp_multisynapse,
-       ... )
+       >>> from brainpy.state import iaf_psc_exp_multisynapse
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
        ...     neu = iaf_psc_exp_multisynapse(in_size=1, tau_syn=(2.0,) * u.ms)
        ...     neu.init_state()

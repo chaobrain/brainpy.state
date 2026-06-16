@@ -128,7 +128,7 @@ class stdp_dopamine_synapse(NESTPlasticity):
     .. code-block:: python
 
         >>> import brainunit as u
-        >>> from brainpy_state import stdp_dopamine_synapse
+        >>> from brainpy.state import stdp_dopamine_synapse
         >>> s = stdp_dopamine_synapse(weight=1.0, b=0.0)
         >>> s.is_homogeneous_weight, s.signal_reads, s.post_state_reads
         (False, ('n',), ())

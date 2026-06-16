@@ -44,7 +44,7 @@ import jax.numpy as jnp
 import brainunit as u
 from brainstate.util import DotDict
 
-from brainpy_state import hh_psc_alpha
+from brainpy.state import hh_psc_alpha
 
 brainstate.environ.set(dt=0.1 * u.ms)
 

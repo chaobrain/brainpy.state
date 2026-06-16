@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — Public API is `brainpy.state` only
+
+- The package is now used exclusively through the public `brainpy.state` namespace.
+  A direct `import brainpy_state` (or `from brainpy_state import ...`) from user code
+  now raises `ImportError` pointing to `brainpy.state`. The blessed `brainpy.state`
+  shim, `pytest`, `sphinx`, and the `BRAINPY_STATE_ALLOW_DIRECT_IMPORT=1` override
+  remain exempt, so internal source, tests, and doc builds are unaffected. The guard
+  lives in `brainpy_state/_namespace.py::enforce_namespace_access()`.
+- `brainpy.state.__version__` / `brainpy.state.__version_info__` are now exposed.
+- All examples, docs, and public-API docstrings now import from `brainpy.state`
+  (e.g. `from brainpy import state as ...` / `from brainpy.state import ...`) and no
+  longer reach into private `brainpy_state._*` submodules.
+
 ### Fixed — Correctness bugs in BrainPy-style (`_brainpy`) models
 
 - **HH-family spike output (`HH`, `MorrisLecar`, `WangBuzsakiHH`).** These models

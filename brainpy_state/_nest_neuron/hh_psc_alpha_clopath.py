@@ -561,7 +561,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
     .. code-block:: python
 
         >>> import brainstate as bst
-        >>> import brainpy_state as bps
+        >>> from brainpy import state as bps
         >>> import brainunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
         >>> neurons = bps.hh_psc_alpha_clopath(
@@ -846,7 +846,7 @@ class hh_psc_alpha_clopath(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainpy_state as bps
+            >>> from brainpy import state as bps
             >>> import brainunit as u
             >>> neurons = bps.hh_psc_alpha_clopath(in_size=10)
             >>> neurons.init_state()

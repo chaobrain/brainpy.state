@@ -25,7 +25,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy_state import Simulator, hh_psc_alpha, multimeter, spike_recorder
+from brainpy.state import Simulator, hh_psc_alpha, multimeter, spike_recorder
 
 #: NEST ``hh_psc_alpha`` default parameters (excluding the swept ``I_e``).
 MODEL_PARAMS = dict(

@@ -31,15 +31,33 @@ import numpy as np
 import brainunit as u
 
 from brainpy.state import Simulator, hh_psc_alpha_gap, voltmeter, all_to_all
-from brainpy_state._nest_synapse.gap_junction import gap_junction
-from brainpy_state._nest_neuron.hh_psc_alpha_gap import _hh_psc_alpha_gap_equilibrium
+from brainpy.state import gap_junction
 
 I_E = 100.0          # pA, constant drive
 V_PERTURB = -10.0    # mV, the perturbed cell's initial voltage
 GAP_WEIGHT = 0.5     # nS, gap conductance
 DT = 0.05            # ms
 T = 351.0            # ms
-VR = hh_psc_alpha_gap._NEST_V_INIT          # -69.604... mV, resting default
+VR = -69.60401191631222  # mV, hh_psc_alpha_gap resting default (NEST V_m init)
+
+
+def equilibrium_gating(V):
+    r"""Equilibrium gating ``(m, h, n, p)`` of ``hh_psc_alpha_gap`` at voltage ``V`` (mV).
+
+    Steady states :math:`x_\infty = \alpha_x / (\alpha_x + \beta_x)` for the
+    Mancilla et al. (2007) rate functions used by ``hh_psc_alpha_gap``. Used only
+    to set matched initial conditions; not part of the simulation loop.
+    """
+    alpha_m = 40.0 * (V - 75.5) / (1.0 - np.exp(-(V - 75.5) / 13.5))
+    beta_m = 1.2262 / np.exp(V / 42.248)
+    alpha_h = 0.0035 / np.exp(V / 24.186)
+    beta_h = 0.017 * (51.25 + V) / (1.0 - np.exp(-(51.25 + V) / 5.2))
+    alpha_n = 0.014 * (V + 44.0) / (1.0 - np.exp(-(V + 44.0) / 2.3))
+    beta_n = 0.0043 / np.exp((V + 44.0) / 34.0)
+    alpha_p = (V - 95.0) / (1.0 - np.exp(-(V - 95.0) / 11.8))
+    beta_p = 0.025 / np.exp(V / 22.222)
+    return (alpha_m / (alpha_m + beta_m), alpha_h / (alpha_h + beta_h),
+            alpha_n / (alpha_n + beta_n), alpha_p / (alpha_p + beta_p))
 
 
 def resting_gating():
@@ -48,7 +66,7 @@ def resting_gating():
     Returns a params dict so a perturbed ``V_m`` does not drag the gating with it -- the
     cell starts with resting gating exactly as in NEST's ``Create`` + ``SetStatus(V_m)``.
     """
-    m, h, n, p = _hh_psc_alpha_gap_equilibrium(VR)
+    m, h, n, p = equilibrium_gating(VR)
     return dict(Act_m_init=m, Inact_h_init=h, Act_n_init=n, Inact_p_init=p)
 
 

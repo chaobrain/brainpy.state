@@ -18,7 +18,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_cond_exp_sfa_rr, voltmeter
+from brainpy.state import Simulator, iaf_cond_exp_sfa_rr, voltmeter
 
 
 def build(vinit=-70.0, simtime=75.0):

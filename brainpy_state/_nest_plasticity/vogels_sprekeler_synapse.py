@@ -101,7 +101,7 @@ class vogels_sprekeler_synapse(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import vogels_sprekeler_synapse
+       >>> from brainpy.state import vogels_sprekeler_synapse
        >>> s = vogels_sprekeler_synapse(weight=0.5, alpha=0.12, eta=0.001)
        >>> s.is_homogeneous_weight, s.edge_state_init()
        (False, {})

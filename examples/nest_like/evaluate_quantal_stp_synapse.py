@@ -35,7 +35,7 @@ import braintools
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, iaf_psc_exp, spike_generator, multimeter,
+from brainpy.state import (Simulator, iaf_psc_exp, spike_generator, multimeter,
                            quantal_stp_synapse, tsodyks2_synapse)
 
 #: Resolution (ms).

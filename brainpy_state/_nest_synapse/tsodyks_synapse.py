@@ -75,7 +75,7 @@ class tsodyks_synapse(NESTSynapse):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import tsodyks_synapse
+       >>> from brainpy.state import tsodyks_synapse
        >>> s = tsodyks_synapse(U=0.5)
        >>> s.is_homogeneous_weight
        False

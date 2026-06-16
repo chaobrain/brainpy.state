@@ -74,7 +74,7 @@ class TestPlotRequiresMatplotlib(unittest.TestCase):
     def test_clear_error_when_absent(self):
         # The lazy import path raises a clear ImportError when matplotlib is missing.
         import builtins
-        from brainpy_state._nest_spatial import _plot
+        from brainpy_state._nest_spatial import plot as _plot
         real_import = builtins.__import__
 
         def fake_import(name, *a, **k):

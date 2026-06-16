@@ -39,7 +39,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, glif_psc, glif_psc_double_alpha,
+from brainpy.state import (Simulator, glif_psc, glif_psc_double_alpha,
                            spike_generator, multimeter, spike_recorder)
 
 RESOLUTION = 0.05               # ms; NEST example resolution

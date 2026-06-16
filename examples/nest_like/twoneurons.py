@@ -20,7 +20,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_psc_alpha, voltmeter
+from brainpy.state import Simulator, iaf_psc_alpha, voltmeter
 
 
 def build(I_e=376.0, weight=20.0, delay=1.0, simtime=1000.0):

@@ -40,7 +40,7 @@ import brainunit as u
 from scipy.optimize import fmin
 from scipy.special import erf
 
-from brainpy_state import (Simulator, iaf_psc_alpha, poisson_generator,
+from brainpy.state import (Simulator, iaf_psc_alpha, poisson_generator,
                            voltmeter, spike_recorder)
 
 # --- NEST CampbellSiegert parameters (single Poisson source variant) ---------

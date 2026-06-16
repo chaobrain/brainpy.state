@@ -18,7 +18,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_psc_alpha, voltmeter, spike_recorder
+from brainpy.state import Simulator, iaf_psc_alpha, voltmeter, spike_recorder
 
 
 def build(dt=0.1, I_e=376.0, simtime=1000.0):

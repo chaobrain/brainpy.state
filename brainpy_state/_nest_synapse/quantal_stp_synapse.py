@@ -69,7 +69,7 @@ class quantal_stp_synapse(NESTSynapse):
     --------
     .. code-block:: python
 
-       >>> from brainpy_state import quantal_stp_synapse
+       >>> from brainpy.state import quantal_stp_synapse
        >>> s = quantal_stp_synapse()
        >>> s.stochastic
        True

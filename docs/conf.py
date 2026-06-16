@@ -32,9 +32,9 @@ from highlight_lexer import fix_ipython2_lexer_in_notebooks
 
 fix_ipython2_lexer_in_notebooks(os.path.dirname(os.path.abspath(__file__)))
 
-import brainpy_state
+from importlib.metadata import version as _pkg_version
 
-release = brainpy_state.__version__
+release = _pkg_version("brainpy_state")
 
 # -- General configuration ---------------------------------------------------
 

@@ -104,7 +104,7 @@ class parrot_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainunit as u
-        >>> from brainpy_state import (Simulator, parrot_neuron,
+        >>> from brainpy.state import (Simulator, parrot_neuron,
         ...                            poisson_generator, iaf_psc_alpha)
         >>> sim = Simulator(dt=0.1 * u.ms)
         >>> pg = sim.create(poisson_generator, rate=1000. * u.Hz)

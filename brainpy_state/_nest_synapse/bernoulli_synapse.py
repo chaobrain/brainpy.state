@@ -89,7 +89,7 @@ class bernoulli_synapse(NESTSynapse):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import bernoulli_synapse
+       >>> from brainpy.state import bernoulli_synapse
        >>> s = bernoulli_synapse(weight=20.0 * u.pA, p_transmit=0.5)
        >>> s.stochastic
        True

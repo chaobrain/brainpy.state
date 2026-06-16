@@ -37,8 +37,8 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_psc_alpha, fixed_indegree
-from brainpy_state import dist
+from brainpy.state import Simulator, iaf_psc_alpha, fixed_indegree
+from brainpy.state import dist
 
 # --- NEST plot_weight_matrices parameters (verbatim) -------------------------
 NE = 100            # number of excitatory neurons

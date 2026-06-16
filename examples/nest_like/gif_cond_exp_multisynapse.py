@@ -35,7 +35,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, gif_cond_exp_multisynapse,
+from brainpy.state import (Simulator, gif_cond_exp_multisynapse,
                            spike_generator, multimeter)
 
 #: NEST ``gif_cond_exp_multisynapse`` params set by the example (2 receptors;

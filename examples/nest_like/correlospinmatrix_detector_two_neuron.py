@@ -41,7 +41,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (ginzburg_neuron, mcculloch_pitts_neuron,
+from brainpy.state import (ginzburg_neuron, mcculloch_pitts_neuron,
                            correlospinmatrix_detector)
 
 #: Target mean activity of the autonomous neuron n1 (gain ``2*m_x`` -> 0.5).

@@ -42,10 +42,10 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, iaf_psc_alpha, one_to_one, all_to_all,
+from brainpy.state import (Simulator, iaf_psc_alpha, one_to_one, all_to_all,
                            pairwise_bernoulli, fixed_total_number, fixed_indegree,
                            static_synapse, stdp_synapse)
-from brainpy_state import dist
+from brainpy.state import dist
 
 DT = 0.1            # resolution [ms]
 

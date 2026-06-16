@@ -34,7 +34,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import (Simulator, iaf_psc_exp, poisson_generator,
+from brainpy.state import (Simulator, iaf_psc_exp, poisson_generator,
                            spike_recorder, multimeter)
 
 #: Poisson drive rate (Hz) — the upstream's saturating 1 MHz.

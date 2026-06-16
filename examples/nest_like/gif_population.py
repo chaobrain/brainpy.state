@@ -41,8 +41,8 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, gif_psc_exp, poisson_generator, spike_recorder
-from brainpy_state import fixed_indegree, all_to_all
+from brainpy.state import Simulator, gif_psc_exp, poisson_generator, spike_recorder
+from brainpy.state import fixed_indegree, all_to_all
 
 DT = 0.1            # resolution [ms]
 T_SIM = 2000.0      # simulation time [ms]

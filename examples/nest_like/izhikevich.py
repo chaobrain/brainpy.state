@@ -37,7 +37,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy_state import Simulator, izhikevich, multimeter, spike_recorder
+from brainpy.state import Simulator, izhikevich, multimeter, spike_recorder
 
 # Canonical Izhikevich (2003) regime parameters: (a, b, c [mV], d [mV]).
 REGIMES = {

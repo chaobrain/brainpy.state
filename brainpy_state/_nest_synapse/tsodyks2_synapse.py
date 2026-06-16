@@ -64,7 +64,7 @@ class tsodyks2_synapse(NESTSynapse):
     --------
     .. code-block:: python
 
-       >>> from brainpy_state import tsodyks2_synapse
+       >>> from brainpy.state import tsodyks2_synapse
        >>> s = tsodyks2_synapse(U=0.5)
        >>> s.edge_state_init()['t_lastspike']
        -1.0

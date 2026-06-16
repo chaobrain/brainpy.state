@@ -357,7 +357,7 @@ class astrocyte_lr_1994(NESTNeuron):
 
        >>> import brainstate as bst
        >>> import brainunit as u
-       >>> import brainpy_state as bps
+       >>> from brainpy import state as bps
        >>> with bst.environ.context(dt=0.1 * u.ms):
        ...     astro = bps.astrocyte_lr_1994(in_size=10)
        ...     astro.init_state()

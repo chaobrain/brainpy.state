@@ -117,7 +117,7 @@ class stdp_nn_pre_centered_synapse(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_nn_pre_centered_synapse
+       >>> from brainpy.state import stdp_nn_pre_centered_synapse
        >>> s = stdp_nn_pre_centered_synapse(weight=1.0, tau_plus=20.0 * u.ms)
        >>> s.post_trace_mode, s.pre_trace_tau
        ('nearest', None)

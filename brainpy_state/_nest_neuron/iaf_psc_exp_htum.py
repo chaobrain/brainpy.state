@@ -306,7 +306,7 @@ class iaf_psc_exp_htum(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> from brainpy_state._nest_neuron.iaf_psc_exp_htum import iaf_psc_exp_htum
+       >>> from brainpy.state import iaf_psc_exp_htum
        >>> brainstate.environ.set(dt=0.1 * u.ms, t=0.0 * u.ms)
        >>> neu = iaf_psc_exp_htum(
        ...     in_size=(2,),

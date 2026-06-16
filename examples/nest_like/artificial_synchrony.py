@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy_state import Simulator, iaf_psc_alpha, voltmeter, all_to_all
+from brainpy.state import Simulator, iaf_psc_alpha, voltmeter, all_to_all
 
 #: Population size.
 N = 64

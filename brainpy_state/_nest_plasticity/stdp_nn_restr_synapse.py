@@ -125,7 +125,7 @@ class stdp_nn_restr_synapse(NESTPlasticity):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> from brainpy_state import stdp_nn_restr_synapse
+       >>> from brainpy.state import stdp_nn_restr_synapse
        >>> s = stdp_nn_restr_synapse(weight=1.0, tau_plus=20.0 * u.ms)
        >>> s.pre_trace_mode, s.post_trace_mode
        ('nearest', 'nearest')

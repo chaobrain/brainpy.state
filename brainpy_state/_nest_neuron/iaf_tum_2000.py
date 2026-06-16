@@ -404,7 +404,7 @@ class iaf_tum_2000(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as bu
-       >>> from brainpy_state._nest_neuron.iaf_tum_2000 import iaf_tum_2000
+       >>> from brainpy.state import iaf_tum_2000
        >>> brainstate.environ.set(dt=0.1 * bu.ms, t=0.0 * bu.ms)
        >>> neu = iaf_tum_2000(
        ...     in_size=(2,),

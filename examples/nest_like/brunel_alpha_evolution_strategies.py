@@ -26,7 +26,7 @@ import scipy.special as sp
 import brainunit as u
 import braintools
 
-from brainpy_state import (
+from brainpy.state import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_alpha, poisson_generator, spike_recorder,
 )
