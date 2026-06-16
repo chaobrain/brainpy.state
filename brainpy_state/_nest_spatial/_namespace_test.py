@@ -21,6 +21,18 @@ class TestSpatialNamespace(unittest.TestCase):
                      'displacement', 'Layer', 'SpatialConnRule'):
             self.assertTrue(hasattr(B.spatial, name), name)
 
+    def test_cluster27_surface_reachable_through_namespace(self):
+        # Group A-F additions (positions, distributions, masks, queries, dump, plot).
+        for name in ('pos', 'source_pos', 'target_pos',
+                     'exponential', 'gamma', 'gabor', 'gaussian2D',
+                     'rectangular', 'doughnut', 'elliptical', 'ellipsoidal',
+                     'nearest_element', 'select_nodes_by_mask',
+                     'dump_layer_nodes', 'dump_layer_connections',
+                     'plot_layer', 'plot_targets', 'plot_sources',
+                     'plot_probability_parameter'):
+            self.assertTrue(hasattr(B.spatial, name), name)
+            self.assertIn(name, B.spatial.__all__, name)
+
 
 if __name__ == '__main__':
     unittest.main()
