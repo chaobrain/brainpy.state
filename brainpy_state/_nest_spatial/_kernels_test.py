@@ -1,5 +1,6 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """NEST-free unit tests for distance kernels (gaussian) + the distance sentinel."""
+import math
 import unittest
 
 import jax.numpy as jnp
@@ -99,6 +100,48 @@ class TestExpressions(unittest.TestCase):
         gy = np.asarray(u.get_magnitude(pos.y._eval_nodes(coords).to(u.um)))
         np.testing.assert_allclose(gx, [1.0, 3.0, 5.0], atol=1e-6)
         np.testing.assert_allclose(gy, [2.0, 4.0, 6.0], atol=1e-6)
+
+
+class TestDistributions(unittest.TestCase):
+    """exponential / gamma scalar-distance kernels vs the exact NEST formulas."""
+
+    def test_exponential_value(self):
+        from brainpy_state._nest_spatial._kernels import exponential
+        k = exponential(distance, beta=2.0)
+        d = jnp.array([0.0, 2.0, 4.0]) * u.um
+        got = np.asarray(u.get_magnitude(k(d)))
+        np.testing.assert_allclose(got, np.exp(-np.array([0.0, 1.0, 2.0])), atol=1e-6)
+
+    def test_exponential_peak_one_at_zero(self):
+        from brainpy_state._nest_spatial._kernels import exponential
+        self.assertAlmostEqual(float(u.get_magnitude(exponential(distance, beta=0.7)(0.0 * u.um))),
+                               1.0, places=10)
+
+    def test_gamma_matches_pdf(self):
+        from brainpy_state._nest_spatial._kernels import gamma
+        kappa, theta = 2.0, 1.5
+        k = gamma(distance, kappa=kappa, theta=theta)
+        d = jnp.array([0.5, 1.0, 3.0]) * u.um
+        got = np.asarray(u.get_magnitude(k(d)))
+        ref = [x ** (kappa - 1) * math.exp(-x / theta) / (theta ** kappa * math.gamma(kappa))
+               for x in (0.5, 1.0, 3.0)]
+        np.testing.assert_allclose(got, ref, rtol=1e-5)
+
+    def test_gamma_shape1_is_exponential(self):
+        # kappa=1 -> gamma reduces to exponential/theta: x^0 e^{-x/θ}/(θ Γ(1)) = e^{-x/θ}/θ
+        from brainpy_state._nest_spatial._kernels import gamma
+        k = gamma(distance, kappa=1.0, theta=2.0)
+        got = float(u.get_magnitude(k(2.0 * u.um)))
+        self.assertAlmostEqual(got, math.exp(-1.0) / 2.0, places=6)
+
+    def test_kernels_take_per_axis_input(self):
+        # the distributions accept a per-axis expression, not just scalar distance
+        from brainpy_state._nest_spatial._kernels import exponential
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[3.0, 4.0]]) * u.um
+        # exponential(distance.x, beta=1) -> exp(-|dx|) = exp(-3)
+        g = float(u.get_magnitude(exponential(distance.x, beta=1.0)._eval_pair(pre, post)[0, 0]))
+        self.assertAlmostEqual(g, math.exp(-3.0), places=6)
 
 
 if __name__ == '__main__':

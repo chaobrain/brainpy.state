@@ -14,12 +14,15 @@ expression evaluates, given the rule's bound sliced positions ``pre_pos (n_pre, 
 """
 from __future__ import annotations
 
+import jax.numpy as jnp
+from jax.scipy.special import gammaln
 import brainunit as u
 
 from brainpy_state._nest_spatial._distance import displacement, pairwise_distance
-from brainpy_state._nest_spatial._layers import _as_len
+from brainpy_state._nest_spatial._layers import _LEN, _as_len
 
-__all__ = ['distance', 'pos', 'source_pos', 'target_pos', 'gaussian']
+__all__ = ['distance', 'pos', 'source_pos', 'target_pos',
+           'gaussian', 'exponential', 'gamma']
 
 _AXES = ('x', 'y', 'z')
 
@@ -233,3 +236,102 @@ def gaussian(x=distance, mean=0.0, std=1.0) -> _GaussianKernel:
         1.0
     """
     return _GaussianKernel(std, mean=mean, x=x)
+
+
+class _ExponentialKernel:
+    r"""Exponential distance kernel ``p(d) = \exp(-d / \beta)`` (peak 1 at ``d=0``)."""
+    __module__ = 'brainpy.state'
+
+    def __init__(self, beta, x=distance):
+        self.beta = _as_len(beta)
+        self._input = _as_input(x)
+
+    def __call__(self, d):
+        return u.math.exp(-(d / self.beta))               # dimensionless ratio
+
+    def _eval_pair(self, pre_pos, post_pos):
+        return self(self._input._eval_pair(pre_pos, post_pos))
+
+
+def exponential(x=distance, beta=1.0) -> _ExponentialKernel:
+    r"""Exponential distance-dependent connection probability.
+
+    Returns a callable ``p(d) = exp(-d / beta)`` matching NEST's
+    ``nest.spatial_distributions.exponential(distance, beta)``.
+
+    Parameters
+    ----------
+    x : object, optional
+        The :data:`distance` sentinel (or a per-axis expression such as ``distance.x``).
+    beta : float or Quantity, optional
+        Decay length; bare floats are taken in micrometres. Default ``1``.
+
+    Returns
+    -------
+    callable
+        ``p(d)`` mapping a distance (Quantity) to a connection probability.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from brainpy import state as bp
+        >>> import brainunit as u
+        >>> p = bp.spatial.exponential(bp.spatial.distance, beta=2.0)
+        >>> float(u.get_magnitude(p(0.0 * u.um)))
+        1.0
+    """
+    return _ExponentialKernel(beta, x=x)
+
+
+class _GammaKernel:
+    r"""Gamma distance kernel ``p(d) = d^{\kappa-1} e^{-d/\theta} / (\theta^\kappa \Gamma(\kappa))``."""
+    __module__ = 'brainpy.state'
+
+    def __init__(self, kappa, theta, x=distance):
+        self.kappa = float(kappa)
+        self.theta = _as_len(theta)
+        self._input = _as_input(x)
+
+    def __call__(self, d):
+        # Mirror NEST GammaParameter (bare magnitudes in the canonical length unit).
+        x = u.get_magnitude(d.to(_LEN))
+        th = float(u.get_magnitude(self.theta.to(_LEN)))
+        delta = jnp.exp(-self.kappa * jnp.log(th) - gammaln(self.kappa))
+        return x ** (self.kappa - 1.0) * jnp.exp(-x / th) * delta
+
+    def _eval_pair(self, pre_pos, post_pos):
+        return self(self._input._eval_pair(pre_pos, post_pos))
+
+
+def gamma(x=distance, kappa=1.0, theta=1.0) -> _GammaKernel:
+    r"""Gamma distance-dependent connection probability.
+
+    Returns a callable ``p(d) = d^{kappa-1} exp(-d/theta) / (theta^kappa Gamma(kappa))``
+    matching NEST's ``nest.spatial_distributions.gamma(distance, kappa, theta)``.
+
+    Parameters
+    ----------
+    x : object, optional
+        The :data:`distance` sentinel (or a per-axis expression such as ``distance.x``).
+    kappa : float, optional
+        Shape parameter. Default ``1``.
+    theta : float or Quantity, optional
+        Scale parameter (length); bare floats are taken in micrometres. Default ``1``.
+
+    Returns
+    -------
+    callable
+        ``p(d)`` mapping a distance (Quantity) to a connection probability.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from brainpy import state as bp
+        >>> import brainunit as u
+        >>> p = bp.spatial.gamma(bp.spatial.distance, kappa=2.0, theta=1.5)
+        >>> float(u.get_magnitude(p(1.5 * u.um))) > 0.0
+        True
+    """
+    return _GammaKernel(kappa, theta, x=x)
