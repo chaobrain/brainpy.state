@@ -1,11 +1,23 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Spatially-structured connectivity for brainpy.state.
 
-Mirrors NEST's ``nest.spatial`` / ``nest.spatial_distributions`` surface: position
-layers (:func:`grid`, :func:`free`), a distance kernel (:func:`gaussian`) and the
-:data:`distance` sentinel, spatial masks (:func:`circular`, :func:`spherical`,
-:func:`box`), the :func:`spatial_pairwise_bernoulli` connection rule, and query
-helpers (:func:`center_element`, :func:`Distance`). Re-exported as ``brainpy.state.spatial``.
+Mirrors NEST's ``nest.spatial`` / ``nest.spatial_distributions`` surface, re-exported as
+``brainpy.state.spatial``:
+
+- **Position layers** — :func:`grid`, :func:`free`.
+- **Distance / position expressions** — the :data:`distance` sentinel (with per-axis
+  :data:`distance.x` / ``.y`` / ``.z``) plus the :data:`pos` / :data:`source_pos` /
+  :data:`target_pos` coordinate accessors.
+- **Distance distributions** — :func:`gaussian`, :func:`exponential`, :func:`gamma`, and the
+  anisotropic :func:`gabor` / :func:`gaussian2D`.
+- **Masks** — :func:`circular`, :func:`spherical`, :func:`box`, :func:`rectangular`,
+  :func:`doughnut`, :func:`elliptical`, :func:`ellipsoidal`.
+- **Connection rule** — :func:`spatial_pairwise_bernoulli`.
+- **Queries** — :func:`center_element`, :func:`nearest_element`, :func:`Distance`,
+  :func:`select_nodes_by_mask`, :func:`target_nodes`, :func:`target_positions`.
+- **Dump / plot** — :func:`dump_layer_nodes`, :func:`dump_layer_connections`, and the
+  matplotlib-gated :func:`plot_layer` / :func:`plot_targets` / :func:`plot_sources` /
+  :func:`plot_probability_parameter`.
 """
 # ---------------------------------------------------------------------------
 # Position layers
@@ -16,21 +28,28 @@ from ._layers import Layer, grid, free
 # ---------------------------------------------------------------------------
 from ._distance import displacement, pairwise_distance
 # ---------------------------------------------------------------------------
-# Distance kernels + the distance sentinel
+# Distance kernels + the distance sentinel / position expressions
 # ---------------------------------------------------------------------------
-from ._kernels import distance, gaussian
+from ._kernels import (distance, pos, source_pos, target_pos,
+                       gaussian, exponential, gamma, gabor, gaussian2D)
 # ---------------------------------------------------------------------------
 # Spatial masks
 # ---------------------------------------------------------------------------
-from ._masks import circular, spherical, box
+from ._masks import (circular, spherical, box,
+                     rectangular, doughnut, elliptical, ellipsoidal)
 # ---------------------------------------------------------------------------
 # Connection rule
 # ---------------------------------------------------------------------------
 from ._rule import SpatialConnRule, spatial_pairwise_bernoulli
 # ---------------------------------------------------------------------------
-# Query helpers
+# Query / dump helpers
 # ---------------------------------------------------------------------------
-from ._helpers import center_element, Distance, target_nodes, target_positions
+from ._helpers import (center_element, Distance, nearest_element, select_nodes_by_mask,
+                       dump_layer_nodes, dump_layer_connections, target_nodes, target_positions)
+# ---------------------------------------------------------------------------
+# Plot helpers (matplotlib lazily imported inside each function)
+# ---------------------------------------------------------------------------
+from ._plot import plot_layer, plot_targets, plot_sources, plot_probability_parameter
 
 __all__ = [
     'Layer',
@@ -39,14 +58,33 @@ __all__ = [
     'displacement',
     'pairwise_distance',
     'distance',
+    'pos',
+    'source_pos',
+    'target_pos',
     'gaussian',
+    'exponential',
+    'gamma',
+    'gabor',
+    'gaussian2D',
     'circular',
     'spherical',
     'box',
+    'rectangular',
+    'doughnut',
+    'elliptical',
+    'ellipsoidal',
     'SpatialConnRule',
     'spatial_pairwise_bernoulli',
     'center_element',
     'Distance',
+    'nearest_element',
+    'select_nodes_by_mask',
+    'dump_layer_nodes',
+    'dump_layer_connections',
     'target_nodes',
     'target_positions',
+    'plot_layer',
+    'plot_targets',
+    'plot_sources',
+    'plot_probability_parameter',
 ]

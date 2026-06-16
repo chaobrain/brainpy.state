@@ -8,9 +8,7 @@ Vogels-Sprekeler (2011) rule is a **symmetric** STDP with a **constant**
 presynaptic depression, designed to homeostatically balance excitation and
 inhibition: every pre↔post pairing potentiates by :math:`\eta K`, and every pre
 spike additionally depresses by a constant :math:`\alpha\eta`, driving the
-postsynaptic firing rate toward a target set by :math:`\alpha`. The previous
-imperative implementation lived in :mod:`brainpy_state._nest._legacy_imperative`
-(shared base).
+postsynaptic firing rate toward a target set by :math:`\alpha`.
 """
 from __future__ import annotations
 

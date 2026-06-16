@@ -457,6 +457,11 @@ class aeif_psc_exp(NESTNeuron):
         # Mirror NEST overflow guard for exponential term at spike time.
         validate_aeif_overflow(v_peak, v_th, delta_t)
 
+        # Enroll in the Simulator multi-receptor spike->current bridge (goal 28,
+        # design A, pA variant): receptor_type=1 -> I_ex, =2 -> I_in. The bridge's
+        # default receptor_input_unit is already u.pA, so no override is needed.
+        self.n_receptors = 2
+
     def init_state(self, **kwargs):
         r"""Initialize persistent and short-term state variables.
 
@@ -592,7 +597,7 @@ class aeif_psc_exp(NESTNeuron):
         new_extra = DotDict({**extra, 'spike_mask': spike_mask, 'r': r, 'unstable': unstable})
         return new_state, new_extra
 
-    def update(self, x=0.0 * u.pA):
+    def update(self, x=0.0 * u.pA, w_by_rec=None):
         r"""Advance neuron state by one simulation timestep.
 
         Performs one simulation step of the adaptive exponential integrate-and-fire
@@ -625,6 +630,13 @@ class aeif_psc_exp(NESTNeuron):
             External current input. Units: pA. Default: 0.0 pA.
             Shape: scalar or broadcastable to ``(*in_size,)``.
             Combined with ``current_inputs`` and stored in ``I_stim`` for next step.
+        w_by_rec : ArrayLike or None, optional
+            Per-receptor synaptic current jumps supplied by the Simulator's
+            multi-receptor bridge, shape ``(*varshape, n_receptors)`` as a
+            dimensionless ``pA`` mantissa. Column 0 (``receptor_type=1``) is added to
+            the excitatory current ``I_ex`` and column 1 (``receptor_type=2``) to the
+            inhibitory current ``I_in``. When ``None`` (the legacy path), the jumps are
+            self-pulled from the ``label='w_ex'/'w_in'`` delta inputs instead.
 
         Returns
         -------
@@ -693,9 +705,18 @@ class aeif_psc_exp(NESTNeuron):
         # Decrement refractory counter.
         r = u.math.where(r > 0, r - 1, r)
 
-        # Synaptic spike inputs (applied after integration).
-        w_ex = self.sum_delta_inputs(u.math.zeros_like(self.I_ex.value), label='w_ex')
-        w_in = self.sum_delta_inputs(u.math.zeros_like(self.I_in.value), label='w_in')
+        # Synaptic spike inputs (applied after integration). Source-only bridge (goal
+        # 28): the Simulator gathers the per-port pA deposit (shape
+        # ``(*varshape, n_receptors)``) and passes it via ``w_by_rec`` -- column 0 ->
+        # I_ex, column 1 -> I_in; the legacy path self-pulls the ``label='w_ex'/'w_in'``
+        # delta inputs. Only the *source* of w_ex/w_in swaps; the exp jump is untouched.
+        if w_by_rec is not None:
+            w_by_rec = jnp.asarray(w_by_rec, dtype=dftype)
+            w_ex = w_by_rec[..., 0] * u.pA
+            w_in = w_by_rec[..., 1] * u.pA
+        else:
+            w_ex = self.sum_delta_inputs(u.math.zeros_like(self.I_ex.value), label='w_ex')
+            w_in = self.sum_delta_inputs(u.math.zeros_like(self.I_in.value), label='w_in')
 
         # Apply synaptic spike inputs (current-based: direct addition in pA).
         I_ex = I_ex + w_ex

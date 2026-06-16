@@ -24,13 +24,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install flit
+      - name: Install build
         run: |
           python -m pip install --upgrade pip
-          python -m pip install flit
+          python -m pip install build
 
       - name: Build package
-        run: flit build
+        run: python -m build
 
       - name: Store distribution packages
         uses: actions/upload-artifact@v7

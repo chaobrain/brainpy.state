@@ -9,8 +9,7 @@ weight (:math:`w^\mu`, :math:`\mu < 1`), depression is **linear** in the weight,
 and there is **no upper bound** ``Wmax`` — the sub-linear potentiation provides
 the soft bound, while a hard lower clip keeps the weight non-negative. As for the
 other ``*_hom`` models the parameters are NEST *common* properties; here they are
-rule-level. The previous imperative implementation lives in
-:mod:`brainpy_state._nest._legacy_imperative` (shared base).
+rule-level.
 """
 from __future__ import annotations
 

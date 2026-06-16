@@ -6,10 +6,7 @@ Rebuilt as a frozen parameter spec plus a pure, *stochastic*
 :class:`~brainpy_state._network._event_plastic.EventPlasticProj`. The synapse is
 non-plastic: on each presynaptic spike it delivers the full (per-edge) ``weight``
 with probability ``p_transmit`` and drops it otherwise — a per-edge Bernoulli gate
-on the delivered amplitude, with **no weight state evolving**. The previous
-imperative implementation (``np.random`` host RNG + ``send`` machinery) now lives
-in :mod:`brainpy_state._nest._legacy_imperative` as ``ImperativeSynapseBase`` for
-clusters not yet rebuilt onto the substrate.
+on the delivered amplitude, with **no weight state evolving**.
 """
 from __future__ import annotations
 

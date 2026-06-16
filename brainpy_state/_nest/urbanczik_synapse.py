@@ -20,10 +20,6 @@ plasticity integrand ``PI = (tau_L_trace - tau_s_trace) · δΠ`` and its
 ``w = init_weight + (PI_integral - PI_exp_integral) · PREFACTOR``, clipped to
 ``[Wmin, Wmax]``).
 
-The previous imperative (NEST event-driven ``send()``) implementation lives in
-:mod:`brainpy_state._nest._legacy_urbanczik_synapse` and remains the no-NEST
-reference oracle.
-
 Notes
 -----
 **Online reformulation.** NEST applies the rule event-driven: on each presynaptic

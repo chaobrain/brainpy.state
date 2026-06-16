@@ -189,6 +189,123 @@ objection into a Lessons entry, do **not** silently diverge.
   items). `cont()` + per-edge-weight + parrot-relay-input is the full closed-loop recipe:
   persistent rollout, live static-weight re-clamp, and live-gated device input, all no-recompile.
 
+### 27-spatial-extensions — 2026-06-16
+
+- **Shipped:** the **full residual `nest.spatial.*` surface** (network-api-gap §3.10 rows 157–163,
+  now all **done**) as a **purely additive** follow-up to cluster 20 — **zero change to the
+  binding seam**. In `brainpy_state/_nest_spatial/`: per-axis **`distance.x/.y/.z`** + the
+  **`pos`/`source_pos`/`target_pos`** accessors and an **expression family** (`_kernels.py`); four
+  new distributions **`exponential`/`gamma`/`gabor`/`gaussian2D`** (+ `mean` on `gaussian`); four
+  new masks **`rectangular`/`doughnut`/`elliptical`/`ellipsoidal`** (`_masks.py`); queries
+  **`nearest_element`/`select_nodes_by_mask`** + exporters **`dump_layer_nodes`/`dump_layer_connections`**
+  (`_helpers.py`); smoke-only **`plot_layer`/`plot_targets`/`plot_sources`/`plot_probability_parameter`**
+  (new `_plot.py`, matplotlib lazily imported). Demo `examples/nest/spatial_gabor.py` (gabor in a
+  tilted ellipse). Five validation suites `_validation/spatial_{exponential,gamma,gabor,masks,queries}_test.py`.
+  Branch `nest-goal-27-spatial-extensions`.
+- **Parity (vs live NEST 3.9.0):** **exact, not just distributional.** All five distance
+  distributions match **element-wise to machine precision** (max\|Δ\| ≈ 1e-16) via a *read-back*
+  trick (see Gotchas). All seven masks give **exact node-set parity** (sym-diff 0) including rotated
+  `azimuth`/`polar` and 3-D `ellipsoidal`. `nearest_element`/`select_nodes_by_mask` match
+  `FindNearestElement`/`SelectNodesByMask` exactly; `dump_layer_*` text matches `DumpLayer*`
+  (coords/weight/delay/displacement identical). **104 `_nest_spatial` tests + 24 validation tests;
+  99 % `_nest_spatial` coverage.**
+- **API discovered/changed:** the one new mechanism is an **expression** protocol — objects with
+  **`_eval_pair(pre_pos, post_pos) -> (n_pre,n_post)` Quantity**; kernels consume an expression and
+  re-expose `_eval_pair`; `SpatialConnRule._prob_matrix` dispatches on `hasattr(p,'_eval_pair')`
+  (a **≤6-line** change, the *only* edit to `_rule.py`; `with_coords`/`sample` contract untouched).
+  `pos` is the per-**node** variant: it raises in the Connect path and instead exposes
+  `_eval_nodes(coords)` for node-level use. Masks now return a **plain bool `(n_pre,n_post)`** from
+  `contains` (the ellipse mask works in um-magnitude space); the rule's `jnp.where(cand, …)` accepts
+  that unchanged.
+- **Gotchas:** (1) **read-back parity** — to compare a kernel to NEST *deterministically*, set
+  `weight = <spatial param>` on an all-to-all `pairwise_bernoulli(p=1)` and read `GetConnections`
+  back; this materialises `p(d)` per ordered pair with **no PRNG**, far stronger than distributional
+  bands. (2) **`distance.x`/`.y` are ABSOLUTE in NEST** (probed: both connect directions read back
+  `+1.0`), so `gabor`/`gaussian2D` use `|dx|`, `|dy|`. (3) **`box` is 3-D-only in NEST** — a 2-D box
+  is `rectangular`; our `box` stays 2-D/3-D-permissive (documented divergence). (4) NEST
+  `CreateMask(masktype, specs)` takes **two args**, not one dict. (5) `DumpLayer*` writes **1-based
+  global ids**; ours writes **0-based local** — normalise by the layer's first gid. (6) saiunit
+  Quantity `.reshape(1, -1)` rejects `-1`; use `[None, :]`.
+- **For next clusters:** **§3.10 spatial/topology is fully closed** (goals 20 + 27). The expression
+  `_eval_pair` protocol is the extension point for any future NEST `Parameter`-style spatial
+  arithmetic (`2 * distance`, `nest.math.*` on spatial params) should that surface ever be ported.
+
+### 28-psc-spike-current-sweep — 2026-06-16
+
+- **Shipped:** the **three current-based `pA` siblings** of the 25 conductance seam
+  enrolled into the same multi-receptor spike→current bridge, closing the audit
+  follow-up that 25 left open — with **zero substrate change**. `aeif_psc_alpha`
+  (alpha, the **pA edge-case carrier**), `aeif_psc_exp` (exp), `hh_psc_alpha_clopath`
+  (HH, stiff). Each gets `n_receptors=2` (in `__init__`) + a source-only `w_by_rec`
+  dual-path arm in `update()` (the legacy self-pull is the byte-identical `else`
+  branch) at the **bridge default `pA`** — NO `receptor_input_unit` override (the one
+  knob that differs from 25's `u.nS`). Per-model test
+  `_validation/<m>_psc_current_test.py` (4 law + 2 live-NEST; `aeif_psc_alpha` also
+  carries the 4 shared bridge edge-case tests). Branch
+  `nest-goal/28-psc-spike-current-sweep` (3 commits). `neurons-gap.md` §3 rows
+  75/78/103 + §4 follow-up flipped to **cleared**.
+- **Audit (reproduce gate):** confirmed **DEAD** for all three before the fix — plain
+  `connect(spikes, n, weight=)` left `V_m` pinned at rest with no error (the unlabeled
+  delta deposit misses the model's `label='w_ex'/'w_in'` read), and `receptor_type=k`
+  raised `AttributeError` on the missing `n_receptors`. The same two failure modes
+  17b/25 found on the conductance side.
+- **Parity (vs live NEST 3.9.0), aligned (`align_steps=3`):** AdEx pair `V_m`
+  **1.72e-6 mV** (identical to 25's AdEx micro-parity — same core), `I_ex`/`I_in`
+  ≤1.1e-5; HH `V_m` **4.96e-5 mV**, `I_ex` 1.6e-4 (stiff adaptive RK45 vs GSL, still
+  ~5 orders inside the band). exc = `receptor_type=1`/NEST `+W`, inh = `=2`/NEST `−W`.
+  No-regression: all three existing `I_e` suites stay byte-identical (**49 passed + 2
+  skipped** combined; `hh` alone **39/39**) — the self-pull `else` supplies the same
+  guaranteed 0. Touched-model coverage **96 / 96 / 98 %**.
+- **API discovered/changed:** **the bridge is agnostic in *unit* too, not just
+  kinetics.** 25 proved source-only/kinetics-agnostic across `nS` synapse classes; 28
+  shows the identical arm carries the `pA` family by simply *omitting* the
+  `receptor_input_unit` override (bridge `runit` defaults `u.pA`). One mechanism now
+  spans conductance (`nS`) and current (`pA`) neurons with zero `_simulator.py` change.
+  **Sign routing differs by model:** aeif records `I_ex`/`I_in` as positive magnitudes
+  (`dV/dt = … + I_ex − I_in`), but `hh_psc_alpha_clopath` **keeps NEST's negative
+  inhibitory weight** (`handle()`), so its `I_syn_in` recordable is **negative** — its
+  law test asserts `min(I_syn_in) < 0` (not `> 0` like aeif). Direct recordable
+  comparison either way, no sign flip.
+- **Gotchas:** (1) **`n_receptors` MUST live in `__init__`, not `init_state`** —
+  `EventProjection.__init__` reads `int(post.n_receptors)` at *connect* time, before
+  `init_state` runs; placing it in `init_state` reintroduces the `AttributeError`.
+  (2) **tau asymmetry sets the weights:** NEST default `tau_syn_in=2.0 ms ≫
+  tau_syn_ex=0.2 ms`, so per pA the inhibitory deflection is ~10× the excitatory — a
+  clear-but-subthreshold exc needs a far larger weight (aeif EXC=300/INH=120; hh
+  EXC=200/INH=120). (3) **stiff `hh_psc_alpha_clopath`** needs `jax.clear_caches()` +
+  x64; AP onset is at w≈500 pA, so hold subthreshold and compare **driven-vs-baseline**
+  (rest is flat at −65.000 mV, drift 4e-4). (4) **the raw (unaligned) residual at a PSC
+  jump is the full weight** (300 pA): brainpy and NEST step the synaptic current one
+  sample apart (ring-buffer/delay convention) — `align_steps=3` absorbs it and the
+  post-alignment match is the 1e-6–1e-4 above; same convention as 25, do **not** read
+  the raw diff as a parity failure. (5) no demo/example drives these three
+  (grep-confirmed) — nothing newly alive.
+- **For next clusters:** **the current-based `aeif_psc_*` / `hh_psc_alpha_clopath` seam
+  is now closed** — `connect(spikes, neuron, receptor_type=1/2)` drives `I_ex`/`I_in`
+  (or `I_syn_ex`/`I_syn_in`) with NEST-sign routing. With 17b + 25 + 28 the
+  spike→{conductance, current} bridge now covers **every** audited self-pull neuron.
+  Deliberately still out of scope: `aeif_psc_delta` / `aeif_psc_delta_clopath` inject
+  directly via `label='w_delta'` (delta synapse, no `w_ex`/`w_in` seam) — a different
+  mechanism, not this bridge.
+
+### cleanup-remove-legacy-synapses — 2026-06-16
+
+- **Shipped:** removed the 6 retired `_legacy_*` modules under `_nest/` (~6,100 lines):
+  `_legacy_imperative` (`ImperativeSynapseBase`), `_legacy_clopath_synapse`,
+  `_legacy_stdp_synapse`, `_legacy_urbanczik_synapse`, and the two legacy test files. These
+  were the pre-substrate imperative ports, retired from the active path when the STDP-core
+  (`04`), Clopath (`07`), and Urbanczik (`21`) synapses were rebuilt as spec+rule kernels.
+  Nothing in production imported them (private modules, not in `__init__`); only their own
+  tests did. Also scrubbed 14 now-dangling `:mod:` docstring cross-references in the live
+  synapse modules. Branch `worktree-remove-legacy-nest-synapses`.
+- **Parity:** n/a (dead-code removal). Verified repo-wide grep clean, all 14 edited modules
+  import cleanly, and **189** NEST-free rule tests pass across the affected synapses.
+- **Gotchas:** the `04-stdp-core` entry below read as if `stdp_nn_*` / `bernoulli` /
+  `cont_delay` "route to" the legacy modules — they never did (docstring mentions only); the
+  rebuilt specs were already self-contained, so removal was a no-op for the active path.
+- **For next clusters:** retired reference implementations don't need to live in the tree —
+  git history preserves them. Keep an oracle only if a *current* test actually drives it.
+
 ### 19-pedagogical — 2026-06-16
 
 - **Shipped:** the **§3.10 pedagogical group** — AdEx figures, compartmental dendrites, and the
@@ -1833,7 +1950,8 @@ objection into a Lessons entry, do **not** silently diverge.
   gains a post-neuron analog-State reader (`_network/_event_plastic.py`); `clopath_synapse`
   becomes a frozen spec + pure `update(state, ctx) -> (new_state, w_eff)` kernel
   (`_nest/clopath_synapse.py`, legacy history-buffer port moved to
-  `_legacy_clopath_synapse.py`); `Simulator.connect` dispatches to
+  `_legacy_clopath_synapse.py` — *removed 2026-06-16; see `cleanup-remove-legacy-synapses`*);
+  `Simulator.connect` dispatches to
   `VoltageCoupledPlasticProj` when the spec declares `post_state_reads`. Ships a NEST-free
   `clopath_synapse_rule_test.py` (**100 %** line coverage, 19 tests) and a live-NEST
   `_validation/clopath_synapse_parity_test.py` (+ `_clopath_drive.py`). Branch
@@ -1981,7 +2099,9 @@ objection into a Lessons entry, do **not** silently diverge.
   (below). The legacy imperative STDP stays **only** for out-of-cluster models
   (`stdp_nn_*`, `stdp_dopamine`, `stdp_facetshw`, `bernoulli`, `cont_delay` →
   `_legacy_imperative`/`_legacy_stdp_synapse`); the 7 core names now route to the
-  new specs. Spec files + `_plastic_base` at **100 %** line coverage. Branch
+  new specs. *(Update 2026-06-16: `_legacy_imperative` / `_legacy_stdp_synapse` removed — the
+  listed models only referenced them in docstrings, never imported them; see
+  `cleanup-remove-legacy-synapses`.)* Spec files + `_plastic_base` at **100 %** line coverage. Branch
   `nest-goal/04-stdp-core`.
 - **Parity (live NEST 3.9.0):** all 7 match NEST to **machine precision** —
   single spike-pair Δt sweep (both signs) at **CAT_B** (atol 1e-6) and 5 s
@@ -2263,7 +2383,8 @@ objection into a Lessons entry, do **not** silently diverge.
   `tsodyks_synapse`, `tsodyks_synapse_hom`, `tsodyks2_synapse`,
   `quantal_stp_synapse`. The old imperative base was relocated to
   `_nest/_legacy_imperative.py` (`ImperativeSynapseBase`) and the 7 not-yet-ported
-  models redirected onto it. `sim.connect(pre, post, synapse=<spec>, …)` now
+  models redirected onto it. *(Update 2026-06-16: `_legacy_imperative` removed; see
+  `cleanup-remove-legacy-synapses`.)* `sim.connect(pre, post, synapse=<spec>, …)` now
   builds an `EventPlasticProj` (Scope C). Tests: substrate unit suite
   (`_event_plastic_test.py`), 6 NEST-free rule tests, `_simulator_plastic_test.py`,
   and 3 live-NEST parity tests (`_validation/{static_synapse,stp,quantal_stp}_parity_test.py`).

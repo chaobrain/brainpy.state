@@ -9,8 +9,7 @@ per-post-neuron ``K-`` trace (``post_trace_tau=tau_minus``); the kernel applies
 **potentiation on the post spike** (using ``K+``) and **depression on the pre
 spike** (using ``K-``), the online all-to-all scheme (Morrison et al. 2008) that
 is equal to NEST's deferred ``stdp_synapse::send()`` at every send (pre-spike)
-time — where NEST's ``weight_recorder`` samples. The previous imperative
-implementation lives in :mod:`brainpy_state._nest._legacy_stdp_synapse`.
+time — where NEST's ``weight_recorder`` samples.
 """
 from __future__ import annotations
 
