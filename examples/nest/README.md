@@ -675,9 +675,21 @@ new primitives, both promoted into the package:
   between `cont()` chunks, so changing which input fires this turn — or how large the reward
   current is — never retraces the rollout.
 
-> NEST's §3.10 **`sudoku/`** demo (a noise-driven WTA constraint-satisfaction network) was
-> investigated and found intractable to bring to solve-rate parity on the current substrate; it
-> is carried as a documented TODO (`CONTEXT.md`, `examples-gap.md` §3.10).
+NEST's §3.10 **`sudoku/`** demo (a noise-driven WTA constraint-satisfaction network) is ported
+in [`sudoku.py`](sudoku.py) (with [`sudoku_net.py`](sudoku_net.py) and
+[`sudoku_puzzles.py`](sudoku_puzzles.py)): 3645 `iaf_psc_exp` neurons (729 populations of 5)
+whose row/column/box/cell inhibition is realized as **one** sparse `explicit_edges` projection,
+driven by 350 Hz background noise plus per-clue 200 Hz parrot-relay stimulation, and relaxed by
+a host-side `cont()` loop that reads out each cell's winning digit from the per-chunk spike
+tally and stops as soon as the grid validates. The network is built **once**; the clue clamp is
+re-applied between chunks by a live per-edge weight write (no recompile).
+
+It is a *stochastic* solver, so parity with NEST is **distributional**: a near-complete board
+(`--puzzle easy`) is solved at NEST's own solve rate (both ~100 % across seeds), while a hard
+board (`--puzzle 4`, NEST's default) is a measured **documented-partial** — neither simulator
+completes it within a practical chunk budget, and brainpy tracks NEST's best fraction-correct.
+Run `PYTHONPATH=. python examples/nest/sudoku.py --quick` for a fast smoke solve, or
+`--puzzle easy --seeds 5` to see the solve rate.
 
 ## Validation
 
