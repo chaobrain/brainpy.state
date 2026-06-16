@@ -102,6 +102,46 @@ class TestExpressions(unittest.TestCase):
         np.testing.assert_allclose(gy, [2.0, 4.0, 6.0], atol=1e-6)
 
 
+class TestExpressionEdges(unittest.TestCase):
+    """The per-axis guards, reprs and gamma's expression path (edge coverage)."""
+
+    def setUp(self):
+        self.pre = jnp.array([[0.0, 0.0], [1.0, 2.0]]) * u.um     # 2-D layer
+        self.post = jnp.array([[3.0, 0.0], [0.0, 5.0]]) * u.um
+        self.coords2d = jnp.array([[1.0, 2.0], [3.0, 4.0]]) * u.um
+
+    def test_source_pos_z_on_2d_raises(self):
+        from brainpy_state._nest_spatial._kernels import source_pos
+        with self.assertRaises(ValueError):
+            source_pos.z._eval_pair(self.pre, self.post)
+
+    def test_target_pos_z_on_2d_raises(self):
+        from brainpy_state._nest_spatial._kernels import target_pos
+        with self.assertRaises(ValueError):
+            target_pos.z._eval_pair(self.pre, self.post)
+
+    def test_pos_z_eval_nodes_on_2d_raises(self):
+        from brainpy_state._nest_spatial._kernels import pos
+        with self.assertRaises(ValueError):
+            pos.z._eval_nodes(self.coords2d)
+
+    def test_reprs_name_the_axis(self):
+        from brainpy_state._nest_spatial._kernels import pos, source_pos, target_pos
+        self.assertEqual(repr(distance.x), 'spatial.distance.x')
+        self.assertEqual(repr(source_pos.y), 'spatial.source_pos.y')
+        self.assertEqual(repr(target_pos.z), 'spatial.target_pos.z')
+        self.assertEqual(repr(pos.x), 'spatial.pos.x')
+        self.assertEqual(repr(pos), 'spatial.pos')
+
+    def test_gamma_eval_pair_consumes_axis_expression(self):
+        from brainpy_state._nest_spatial._kernels import gamma
+        pre = jnp.array([[0.0, 0.0]]) * u.um
+        post = jnp.array([[3.0, 4.0]]) * u.um
+        # gamma(distance.x, kappa=1, theta=2) on |dx|=3 == e^{-3/2}/2
+        g = float(u.get_magnitude(gamma(distance.x, kappa=1.0, theta=2.0)._eval_pair(pre, post)[0, 0]))
+        self.assertAlmostEqual(g, math.exp(-1.5) / 2.0, places=6)
+
+
 class TestDistributions(unittest.TestCase):
     """exponential / gamma scalar-distance kernels vs the exact NEST formulas."""
 
