@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/sinusoidal_gamma_generator.py``.
+"""Live-NEST parity for ``examples/nest_like/sinusoidal_gamma_generator.py``.
 
 NEST's §3.7 ``sinusoidal_gamma_generator`` demo draws spikes from a gamma renewal
 process of order ``m`` whose rate follows ``λ(t) = max(0, dc + ac·sin(2πf t + φ))``.
@@ -29,7 +29,7 @@ except Exception:
 
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_distributional
 from brainpy_state._nest_validation.tolerance_conventions import CAT_D, DistributionalTolerance
-from examples.nest.sinusoidal_gamma_generator import AMPLITUDE as AMPLITUDE_FIXTURE
+from examples.nest_like.sinusoidal_gamma_generator import AMPLITUDE as AMPLITUDE_FIXTURE
 
 SEEDS = (0, 1, 2, 3, 4)
 #: Gamma order for the CV parity comparison.
@@ -46,7 +46,7 @@ MAX_LAG = 30
 
 def _nest_events(seed, order, amplitude, simtime):
     """Spike (senders, times) from a NEST sinusoidal_gamma_generator → parrots."""
-    from examples.nest.sinusoidal_gamma_generator import (
+    from examples.nest_like.sinusoidal_gamma_generator import (
         RATE, FREQUENCY, PHASE, N_TARGETS, DT)
     nest.ResetKernel()
     nest.resolution = DT
@@ -77,7 +77,7 @@ def _nest_cv(seed, order, simtime):
 
 def _nest_pop_autocorr(seed, amplitude, order, simtime):
     """Per-bin population spike-count autocorrelation from NEST (modulated case)."""
-    from examples.nest.sinusoidal_gamma_generator import PST_BIN
+    from examples.nest_like.sinusoidal_gamma_generator import PST_BIN
     _senders, times = _nest_events(seed, order, amplitude, simtime)
     counts = np.histogram(times, bins=int(round(simtime / PST_BIN)),
                           range=(0.0, simtime))[0].astype(float)
@@ -106,7 +106,7 @@ class TestSinusoidalGammaStructural(unittest.TestCase):
         gc.collect()
 
     def test_cv_approaches_one_over_sqrt_m(self):
-        from examples.nest.sinusoidal_gamma_generator import cv_by_order, ORDERS
+        from examples.nest_like.sinusoidal_gamma_generator import cv_by_order, ORDERS
         cvs = cv_by_order(seed=0)
         for m, cv in zip(ORDERS, cvs):
             self.assertAlmostEqual(cv, 1.0 / np.sqrt(m), delta=0.12)   # CV ≈ 1/√m
@@ -114,17 +114,17 @@ class TestSinusoidalGammaStructural(unittest.TestCase):
         self.assertTrue(np.all(np.diff(cvs) < 0.0))
 
     def test_order_one_is_poisson(self):
-        from examples.nest.sinusoidal_gamma_generator import run_spikes, pooled_isis, isi_cv
+        from examples.nest_like.sinusoidal_gamma_generator import run_spikes, pooled_isis, isi_cv
         cv = isi_cv(pooled_isis(run_spikes(seed=0, order=1, amplitude=0.0)))
         self.assertAlmostEqual(cv, 1.0, delta=0.1)        # m=1 ≡ Poisson, CV → 1
 
     def test_binary_emission(self):
-        from examples.nest.sinusoidal_gamma_generator import run_spikes
+        from examples.nest_like.sinusoidal_gamma_generator import run_spikes
         spk = run_spikes(seed=0, simtime=300.0, order=2, amplitude=AMPLITUDE_FIXTURE)
         self.assertLessEqual(int(spk.max()), 1)           # renewal: ≤ 1 spike/step
 
     def test_modulated_rate_tracks_lambda(self):
-        from examples.nest.sinusoidal_gamma_generator import (
+        from examples.nest_like.sinusoidal_gamma_generator import (
             run_spikes, population_psth, lam_of_t, MODULATED_ORDER)
         spk = run_spikes(seed=0, order=MODULATED_ORDER, amplitude=AMPLITUDE_FIXTURE)
         centers, psth = population_psth(spk)
@@ -132,7 +132,7 @@ class TestSinusoidalGammaStructural(unittest.TestCase):
         self.assertGreater(corr, 0.85)                    # rate profile preserved
 
     def test_individual_vs_shared_modes(self):
-        from examples.nest.sinusoidal_gamma_generator import run_spikes
+        from examples.nest_like.sinusoidal_gamma_generator import run_spikes
         indiv = run_spikes(seed=0, simtime=300.0, order=2, individual=True)
         shared = run_spikes(seed=0, simtime=300.0, order=2, individual=False)
         self.assertFalse(bool(np.all(indiv == indiv[:, :1])))
@@ -144,7 +144,7 @@ class TestSinusoidalGammaStructural(unittest.TestCase):
         # compiled for_loop (traced once). Drive a multi-channel instance directly.
         import brainstate.transform as transform
         from brainpy_state import sinusoidal_gamma_generator
-        from examples.nest.sinusoidal_gamma_generator import RATE, FREQUENCY
+        from examples.nest_like.sinusoidal_gamma_generator import RATE, FREQUENCY
         n_targets, n_steps, dt = 8, 300, 0.1
         gen = sinusoidal_gamma_generator(
             in_size=n_targets, rate=RATE * u.Hz, amplitude=0.0 * u.Hz,
@@ -168,7 +168,7 @@ class TestSinusoidalGammaStructural(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.sinusoidal_gamma_generator import main
+        from examples.nest_like.sinusoidal_gamma_generator import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()
@@ -194,7 +194,7 @@ class TestSinusoidalGammaParity(unittest.TestCase):
         gc.collect()
 
     def test_cv_matches_nest_distributional(self):
-        from examples.nest.sinusoidal_gamma_generator import (
+        from examples.nest_like.sinusoidal_gamma_generator import (
             run_spikes, pooled_isis, isi_cv, SIMTIME)
 
         def bp_cv(seed):
@@ -211,7 +211,7 @@ class TestSinusoidalGammaParity(unittest.TestCase):
                                metric="sinusoidal_gamma ISI-CV", statistic="cv").assert_()
 
     def test_modulated_autocorr_matches_nest_distributional(self):
-        from examples.nest.sinusoidal_gamma_generator import (
+        from examples.nest_like.sinusoidal_gamma_generator import (
             run_spikes, population_psth, MODULATED_ORDER, SIMTIME, PST_BIN, DT)
 
         def bp_autocorr(seed):

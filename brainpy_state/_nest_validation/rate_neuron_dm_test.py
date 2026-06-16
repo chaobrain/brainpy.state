@@ -40,7 +40,7 @@ except Exception:
     nest = None
 
 from brainpy_state._nest_validation.nest_compare import requires_nest
-from examples.nest.rate_neuron_dm import run_scenario, W_INH
+from examples.nest_like.rate_neuron_dm import run_scenario, W_INH
 
 LAM = 0.1                              # decision-unit passive decay lambda
 N_SEEDS = 5                            # distributional sample (bounds live-NEST wall-clock)
@@ -110,7 +110,7 @@ class TestRateNeuronDmStructure(unittest.TestCase):
 def _nest_scenario(sigma, dE, dt=0.1, T_each=100.0, seed=0):
     """The two-unit WTA decision net in live NEST (``use_wfr=False``); ``(r1, r2)``.
 
-    Mirrors :func:`examples.nest.rate_neuron_dm.run_scenario`: a no-evidence phase
+    Mirrors :func:`examples.nest_like.rate_neuron_dm.run_scenario`: a no-evidence phase
     (``mu=0``) then an evidence phase (``mu = 1 +/- dE``). NEST continues the state across
     the two ``Simulate`` calls; for ``sigma=0`` phase 1 leaves both units at the initial
     ``rate=0``, so the evidence phase starts from the same state brainpy resets to.

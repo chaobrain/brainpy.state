@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/recording_demo.py``.
+"""Live-NEST parity for ``examples/nest_like/recording_demo.py``.
 
 NEST's ``recording_demo`` is a recording-API tour: a ``poisson_generator`` drives
 an ``iaf_psc_exp`` whose spikes are captured by a ``spike_recorder``. The drive
@@ -35,7 +35,7 @@ SEEDS = (0, 1, 2, 3)
 
 def _nest_rate(seed, simtime):
     """Firing rate (spks/s) of the NEST iaf_psc_exp under the same Poisson drive."""
-    from examples.nest.recording_demo import RATE, WEIGHT, DELAY
+    from examples.nest_like.recording_demo import RATE, WEIGHT, DELAY
     nest.ResetKernel()
     nest.resolution = 0.1
     nest.rng_seed = seed + 1                     # offset to decorrelate from JAX
@@ -55,7 +55,7 @@ class TestRecordingDemoStructural(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_structural_recording_invariants(self):
-        from examples.nest.recording_demo import build
+        from examples.nest_like.recording_demo import build
         sim, sr, mm, _n, _t = build(seed=0, simtime=50.0)
         res = sim.simulate(50.0 * u.ms)
         nsteps = 500
@@ -70,7 +70,7 @@ class TestRecordingDemoStructural(unittest.TestCase):
         self.assertGreater(res.n_events(sr), 0)
 
     def test_read_spikes_steps_vs_ms_consistent(self):
-        from examples.nest.recording_demo import build, read_spikes
+        from examples.nest_like.recording_demo import build, read_spikes
         sim, sr, _mm, _n, _t = build(seed=0, simtime=50.0)
         res = sim.simulate(50.0 * u.ms)
         steps = read_spikes(res, sr, time_in_steps=True)
@@ -86,7 +86,7 @@ class TestRecordingDemoStructural(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.recording_demo import main
+        from examples.nest_like.recording_demo import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()
@@ -103,7 +103,7 @@ class TestRecordingDemoParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_rate_matches_nest_distributional(self):
-        from examples.nest.recording_demo import build
+        from examples.nest_like.recording_demo import build
 
         def bp_rate(seed):
             sim, sr, _mm, _n, _t = build(seed=seed, simtime=SIMTIME)

@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/aeif_cond_beta_multisynapse.py``.
+"""Live-NEST parity for ``examples/nest_like/aeif_cond_beta_multisynapse.py``.
 
 This is the first demo to exercise the multi-receptor routing seam
 (``connect(receptor_type=k)``) end to end, so it is validated on two fronts:
@@ -36,7 +36,7 @@ import brainunit as u
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-from examples.nest.aeif_cond_beta_multisynapse import (
+from examples.nest_like.aeif_cond_beta_multisynapse import (
     run_traces, MODEL_PARAMS, DELAYS, WEIGHTS, SPIKE_TIME)
 
 # Category A with the one-step recorder-offset alignment (RKF45 conductance trace,

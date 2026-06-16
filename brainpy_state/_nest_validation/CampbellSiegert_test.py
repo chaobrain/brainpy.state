@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Analytic cross-check for the Campbell & Siegert demo (§3.5) — a documented carve-out.
 
-The demo ``examples/nest/CampbellSiegert.py`` drives an ``iaf_psc_alpha`` population
+The demo ``examples/nest_like/CampbellSiegert.py`` drives an ``iaf_psc_alpha`` population
 with Poisson input and compares the empirical free-membrane statistics and firing
 rate against two analytic predictions: Campbell's theorem (mean + variance of the
 free ``V_m``) and Siegert's stationary-rate approximation.
@@ -33,7 +33,7 @@ import brainunit as u
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-import examples.nest.CampbellSiegert as demo
+import examples.nest_like.CampbellSiegert as demo
 
 # Shorter than the demo's 20 s (enough for the mean to converge well) and averaged
 # over several seeds so the low-count rate estimate is not flaky.

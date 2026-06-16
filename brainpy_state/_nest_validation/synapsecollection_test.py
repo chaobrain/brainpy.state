@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Parity for the synapsecollection demo (§3.4 connection introspection).
 
-The demo ``examples/nest/synapsecollection.py`` exercises the
+The demo ``examples/nest_like/synapsecollection.py`` exercises the
 ``GetConnections``/``SynapseCollection`` API across several rules, synapse models
 and weight distributions: ``get(['source','target','weight'])``,
 ``set('weight', ...)`` round-trips, and ``get_connections`` filtered by
@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_distributional, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.synapsecollection as demo
+import examples.nest_like.synapsecollection as demo
 
 try:
     import nest

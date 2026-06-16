@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Distributional / phase-locking carve-out for the BrodyHopfield demo (§3.5).
 
-The demo ``examples/nest/BrodyHopfield.py`` drives a population of ``iaf_psc_alpha``
+The demo ``examples/nest_like/BrodyHopfield.py`` drives a population of ``iaf_psc_alpha``
 neurons with a *shared* 35 Hz subthreshold oscillation, *independent* Gaussian
 noise, and a per-neuron DC bias ramp, and shows that the spikes synchronize to the
 oscillation (Brody & Hopfield 2003, Fig. 1).
@@ -45,7 +45,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_distributional, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.BrodyHopfield as demo
+import examples.nest_like.BrodyHopfield as demo
 
 try:
     import nest

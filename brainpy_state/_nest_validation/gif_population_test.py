@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Distributional parity for the gif_population demo (§3.5).
 
-The demo ``examples/nest/gif_population.py`` runs a recurrently-connected
+The demo ``examples/nest_like/gif_population.py`` runs a recurrently-connected
 population of ``gif_psc_exp`` neurons driven by Poisson noise. Spike-frequency
 adaptation makes the population oscillate on the adaptation time scale (Schwalger
 et al. 2017).
@@ -39,7 +39,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_distributional, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.gif_population as demo
+import examples.nest_like.gif_population as demo
 
 try:
     import nest

@@ -36,8 +36,8 @@ import brainunit as u
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-import examples.nest.pong_networks as pn
-from examples.nest.pong_networks import calculate_stdp, DT
+import examples.nest_like.pong_networks as pn
+from examples.nest_like.pong_networks import calculate_stdp, DT
 from brainpy_state._nest_validation.nest_compare import requires_nest
 from brainpy_state._nest_validation import _pong_drive as drv
 

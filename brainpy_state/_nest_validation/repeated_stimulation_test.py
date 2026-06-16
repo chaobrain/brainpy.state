@@ -23,7 +23,7 @@ try:
 except Exception:
     nest = None
 
-from examples.nest.repeated_stimulation import (
+from examples.nest_like.repeated_stimulation import (
     build, run_trials, window_count, RATE, T_START, T_STOP, TRIAL_DURATION,
 )
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_distributional

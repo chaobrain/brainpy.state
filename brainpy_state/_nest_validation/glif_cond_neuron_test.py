@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity + mechanism-subset checks for ``examples/nest/glif_cond_neuron.py``.
+"""Live-NEST parity + mechanism-subset checks for ``examples/nest_like/glif_cond_neuron.py``.
 
 The conductance-based GLIF neuron is validated at all five mechanism levels on
 several fronts:
@@ -52,7 +52,7 @@ import brainunit as u
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-from examples.nest.glif_cond_neuron import (
+from examples.nest_like.glif_cond_neuron import (
     run_traces, GLIF_LEVELS, ESPIKE_TIMES, ISPIKE_TIMES, ESPIKE_W, ISPIKE_W,
     STEP_AMP, STEP_START, STEP_STOP, RESOLUTION, SIMTIME, RECORD_FROM)
 

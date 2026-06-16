@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/one_neuron.py``.
+"""Live-NEST parity for ``examples/nest_like/one_neuron.py``.
 
 NEST's ``one_neuron`` drives an ``iaf_psc_alpha`` with a constant ``I_e`` and
 records ``V_m`` with a ``voltmeter``. ``I_e = 376 pA`` lands just above rheobase
@@ -42,7 +42,7 @@ class TestOneNeuronParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_subthreshold_charge_matches_nest(self):
-        from examples.nest.one_neuron import build
+        from examples.nest_like.one_neuron import build
         sim, vm, _neuron, _simtime = build(I_e=376.0, simtime=80.0)
         res = sim.simulate(80.0 * u.ms)
         bp_v = np.asarray(u.get_mantissa(res.trace(vm, "V_m") / u.mV)).reshape(-1)
@@ -53,7 +53,7 @@ class TestOneNeuronParity(unittest.TestCase):
                       metric="one_neuron V_m charge").assert_()
 
     def test_drive_is_suprathreshold(self):
-        from examples.nest.one_neuron import build
+        from examples.nest_like.one_neuron import build
         sim, vm, _neuron, _simtime = build(I_e=376.0, simtime=1000.0)
         res = sim.simulate(1000.0 * u.ms)
         bp_v = np.asarray(u.get_mantissa(res.trace(vm, "V_m") / u.mV)).reshape(-1)

@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/vinit_example.py``.
+"""Live-NEST parity for ``examples/nest_like/vinit_example.py``.
 
 NEST's ``vinit_example`` runs the ``iaf_cond_exp_sfa_rr`` neuron with no input
 from several initial membrane voltages and records the passive relaxation toward
@@ -47,7 +47,7 @@ class TestVinitExampleParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_relaxation_matches_nest_for_each_vinit(self):
-        from examples.nest.vinit_example import build
+        from examples.nest_like.vinit_example import build
         worst = 0.0
         for vinit in VINITS:
             with self.subTest(vinit=vinit):

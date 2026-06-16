@@ -79,14 +79,14 @@ class TestAnisotropicStructure(unittest.TestCase):
         self.assertAlmostEqual(got, ref, places=10)
 
     def test_example_run_smoke(self):
-        from examples.nest.spatial_gabor import run
+        from examples.nest_like.spatial_gabor import run
         coords, ctr, tgt = run(shape=(12, 12))
         self.assertEqual(coords.shape, (144, 2))
         self.assertGreaterEqual(tgt.shape[0], 1)
 
     def test_example_targets_inside_ellipse(self):
         # every realised target of the centre lies in the tilted ellipse (mask is a hard cutoff).
-        from examples.nest.spatial_gabor import run
+        from examples.nest_like.spatial_gabor import run
         major, minor, theta = 3.0, 1.0, 45.0
         coords, ctr, tgt = run(shape=(20, 20), major=major, minor=minor, theta=theta)
         c = np.asarray(u.get_magnitude(coords.to(u.um)))[ctr]

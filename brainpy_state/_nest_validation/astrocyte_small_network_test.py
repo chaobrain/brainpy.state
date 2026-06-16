@@ -57,7 +57,7 @@ except Exception:                                         # pragma: no cover - e
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance, CAT_A
 
-from examples.nest.astrocyte_small_network import run
+from examples.nest_like.astrocyte_small_network import run
 
 DT = 0.1
 SIC_DELAY_STEPS = 10

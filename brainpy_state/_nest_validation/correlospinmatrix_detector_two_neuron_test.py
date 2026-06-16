@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/correlospinmatrix_detector_two_neuron.py``.
+"""Live-NEST parity for ``examples/nest_like/correlospinmatrix_detector_two_neuron.py``.
 
 NEST's ``correlospinmatrix_detector_two_neuron`` (Ginzburg & Sompolinsky 1994,
 Fig. 1) wires a stochastic ``ginzburg_neuron`` (n1) into a deterministic
@@ -49,7 +49,7 @@ SEEDS = (0, 1, 2, 3, 4)
 
 def _nest_run(seed, simtime):
     """Build the live-NEST two-neuron network and return its ``count_covariance``."""
-    from examples.nest.correlospinmatrix_detector_two_neuron import (
+    from examples.nest_like.correlospinmatrix_detector_two_neuron import (
         M_X, TAU_M, RESOLUTION, TAU_MAX, DELTA_TAU, WEIGHT)
     nest.ResetKernel()
     nest.local_num_threads = 1
@@ -75,7 +75,7 @@ class TestCorrelospinmatrixStructural(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_silent_pair_gives_zero_covariance(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import (
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import (
             run_correlospinmatrix, mean_activities, covariance_matrix, RESOLUTION)
         n = 2000
         y = np.zeros(n)
@@ -88,7 +88,7 @@ class TestCorrelospinmatrixStructural(unittest.TestCase):
         np.testing.assert_array_equal(cov, 0)
 
     def test_square_wave_reconstructs_duty_and_autocovariance(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import (
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import (
             run_correlospinmatrix, mean_activities, covariance_matrix, RESOLUTION)
         # ch0: 100 periods of [60 up, 40 down] -> duty 0.6; ch1 silent.
         up, down, k = 60, 40, 100
@@ -113,7 +113,7 @@ class TestCorrelospinmatrixStructural(unittest.TestCase):
         np.testing.assert_array_equal(cov[0, 1], 0.0)
 
     def test_simulate_pair_shapes_and_binary(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import simulate_pair, RESOLUTION
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import simulate_pair, RESOLUTION
         y1, y2 = simulate_pair(seed=0, simtime=2000.0)
         n = int(round(2000.0 / RESOLUTION))
         self.assertEqual(y1.shape, (n,))
@@ -125,7 +125,7 @@ class TestCorrelospinmatrixStructural(unittest.TestCase):
         self.assertLess(y1.mean(), 0.7)
 
     def test_normalization_requires_simtime(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import (
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import (
             mean_activities, covariance_matrix)
         cc = np.zeros((2, 2, 2001))
         with self.assertRaises(ValueError):
@@ -136,7 +136,7 @@ class TestCorrelospinmatrixStructural(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.correlospinmatrix_detector_two_neuron import main
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main(seed=1, simtime=2000.0)
@@ -151,7 +151,7 @@ class TestCorrelospinmatrixParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def _bp_count_covariances(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import (
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import (
             simulate_pair, run_correlospinmatrix, RESOLUTION)
         out = []
         for s in SEEDS:
@@ -160,7 +160,7 @@ class TestCorrelospinmatrixParity(unittest.TestCase):
         return out
 
     def test_mean_activities_match_nest(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import (
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import (
             mean_activities, RESOLUTION)
         bp_cc = self._bp_count_covariances()
         ne_cc = [_nest_run(s, SIMTIME) for s in SEEDS]
@@ -173,7 +173,7 @@ class TestCorrelospinmatrixParity(unittest.TestCase):
                                    statistic="mean", metric=label).assert_()
 
     def test_covariance_functions_match_nest(self):
-        from examples.nest.correlospinmatrix_detector_two_neuron import (
+        from examples.nest_like.correlospinmatrix_detector_two_neuron import (
             mean_activities, covariance_matrix, RESOLUTION)
         bp_cc = self._bp_count_covariances()
         ne_cc = [_nest_run(s, SIMTIME) for s in SEEDS]

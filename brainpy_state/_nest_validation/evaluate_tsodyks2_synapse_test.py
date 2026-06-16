@@ -51,7 +51,7 @@ _BAND = tc.TraceTolerance(5e-2 * u.mV, 1e-3, align_steps=2, label="B",
 
 def _nest_vm(regime, weight):
     """Post V_m for one regime via spike_generator -> parrot -> tsodyks2 -> iaf."""
-    from examples.nest.evaluate_tsodyks2_synapse import TRAIN, T_SIM, REGIMES, DT
+    from examples.nest_like.evaluate_tsodyks2_synapse import TRAIN, T_SIM, REGIMES, DT
     p = REGIMES[regime]
     nest.ResetKernel()
     nest.resolution = DT
@@ -78,7 +78,7 @@ class TestTsodyks2Example(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def _run(self, regime):
-        from examples.nest.evaluate_tsodyks2_synapse import run, WEIGHT
+        from examples.nest_like.evaluate_tsodyks2_synapse import run, WEIGHT
         nest_v = _nest_vm(regime, WEIGHT)
         _, bp_v = run(regime)
         m = min(len(nest_v), len(bp_v))
@@ -94,7 +94,7 @@ class TestTsodyks2Example(unittest.TestCase):
     def test_regimes_are_distinct(self):
         # the example must actually select different dynamics per regime: a
         # depressing burst shrinks, a facilitating burst grows.
-        from examples.nest.evaluate_tsodyks2_synapse import run, burst_peak_ratio
+        from examples.nest_like.evaluate_tsodyks2_synapse import run, burst_peak_ratio
         _, dep = run("depression")
         _, fac = run("facilitation")
         self.assertLess(burst_peak_ratio(dep), 1.0, "depression burst must shrink")

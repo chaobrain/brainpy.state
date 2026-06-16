@@ -8,7 +8,7 @@ The repo records the dense per-step weight trajectory as an analog State-tap
 :meth:`~brainpy_state.network.SimulationResult.weight_trace`, and the parity drives'
 ``bp_weight_trace``). This module masks that trajectory to its **send steps**,
 reproducing the recorder's ``(time, weight)`` event series with no imperative device
-(``CONTEXT.md`` Part 2.7: weight recording reuses the analog State-tap, not a hook).
+(``develop/NEST_PARITY_LEDGER.md`` Part 2.7: weight recording reuses the analog State-tap, not a hook).
 
 The two helpers compose: :func:`send_steps_from_pre` turns a presynaptic spike train
 into the per-edge send mask, and :func:`weight_recorder_events` samples the weight

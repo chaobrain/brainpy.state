@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""NEST-free structural checks for the §3.10 ``sudoku/`` port.
 
-The always-run "no-NEST companion" for ``examples/nest/sudoku*.py``: pure-Python
+The always-run "no-NEST companion" for ``examples/nest_like/sudoku*.py``: pure-Python
 puzzle helpers, the inhibitory WTA/constraint edge set (vs an independent reference
 builder), Poisson rates, the clue-clamp weight write, the per-chunk readout, and the
 ``for_loop`` lowering of the relaxation chunk. None of this needs a live NEST install;
@@ -19,7 +19,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 from brainpy_state import Simulator, poisson_generator, parrot_neuron, spike_recorder
 
-from examples.nest.sudoku_puzzles import get_puzzle, validate_solution, N_PUZZLES
+from examples.nest_like.sudoku_puzzles import get_puzzle, validate_solution, N_PUZZLES
 
 
 def reference_inhibitory_edges(pop_size=5):
@@ -109,7 +109,7 @@ class TestPuzzleHelpers(unittest.TestCase):
         self.assertFalse(bool(rows[0]) and bool(cols[0]))      # row/col 0 flagged invalid
 
     def test_make_easy_puzzle_clues_match_a_valid_grid(self):
-        from examples.nest.sudoku_puzzles import make_easy_puzzle
+        from examples.nest_like.sudoku_puzzles import make_easy_puzzle
         puzzle = make_easy_puzzle(12, seed=0)
         self.assertEqual(int((puzzle == 0).sum()), 12)
         valid, *_ = validate_solution(puzzle, _valid_grid())   # source grid solves it
@@ -128,7 +128,7 @@ class TestSudokuNetTopology(unittest.TestCase):
     """The net's inhibitory edge set == the independent reference (exact set equality)."""
 
     def test_inhibitory_edge_set_equals_reference(self):
-        from examples.nest.sudoku_net import SudokuNet
+        from examples.nest_like.sudoku_net import SudokuNet
         net = SudokuNet(seed=0)
         got = net.inhibitory_edges()                           # set of (pre, post) pairs
         self.assertEqual(got, reference_inhibitory_edges(pop_size=net.pop_size))
@@ -138,7 +138,7 @@ class TestStimClueWeights(unittest.TestCase):
     """``set_input_config`` clamps clue populations at ``weight_stim`` and zeroes the rest."""
 
     def test_set_input_config_sets_clue_weights(self):
-        from examples.nest.sudoku_net import SudokuNet, WEIGHT_STIM
+        from examples.nest_like.sudoku_net import SudokuNet, WEIGHT_STIM
         net = SudokuNet(seed=0)
         puzzle = get_puzzle(4)
         net.set_input_config(puzzle)
@@ -153,7 +153,7 @@ class TestStimClueWeights(unittest.TestCase):
                     np.testing.assert_allclose(w[ps * p: ps * p + ps], expect)
 
     def test_reset_input_zeroes_all_clue_weights(self):
-        from examples.nest.sudoku_net import SudokuNet
+        from examples.nest_like.sudoku_net import SudokuNet
         net = SudokuNet(seed=0)
         net.set_input_config(get_puzzle(4))
         self.assertGreater(float(net.stim_weights_pA().sum()), 0.0)   # some clues set
@@ -161,7 +161,7 @@ class TestStimClueWeights(unittest.TestCase):
         np.testing.assert_allclose(net.stim_weights_pA(), 0.0)
 
     def test_set_input_config_dream_board_clamps_nothing(self):
-        from examples.nest.sudoku_net import SudokuNet
+        from examples.nest_like.sudoku_net import SudokuNet
         net = SudokuNet(seed=0)
         net.set_input_config(get_puzzle(0))                    # all-zero "dream" board
         np.testing.assert_allclose(net.stim_weights_pA(), 0.0)
@@ -171,7 +171,7 @@ class TestReadout(unittest.TestCase):
     """Per-chunk readout: population spike counts -> argmax-with-tiebreak solution."""
 
     def test_read_counts_and_solution_shapes(self):
-        from examples.nest.sudoku_net import SudokuNet
+        from examples.nest_like.sudoku_net import SudokuNet
         net = SudokuNet(seed=0)
         net.sim.reset_rollout()
         res = net.sim.cont(20.0 * u.ms)
@@ -184,7 +184,7 @@ class TestReadout(unittest.TestCase):
         self.assertLessEqual(int(sol.max()), 9)
 
     def test_read_solution_tiebreak_deterministic_under_seed(self):
-        from examples.nest.sudoku_net import SudokuNet
+        from examples.nest_like.sudoku_net import SudokuNet
         net = SudokuNet(seed=0)
         net.sim.reset_rollout()
         res = net.sim.cont(20.0 * u.ms)
@@ -200,7 +200,7 @@ class TestForLoopLowering(unittest.TestCase):
     Python step loop (cluster-12 discipline; the property that makes the solver tractable)."""
 
     def test_chunk_rollout_lowers_under_for_loop(self):
-        from examples.nest.sudoku_net import SudokuNet
+        from examples.nest_like.sudoku_net import SudokuNet
         net = SudokuNet(seed=0)
         sim = net.sim
 
@@ -228,7 +228,7 @@ class TestSolver(unittest.TestCase):
     """``SudokuSolver`` runs the host relaxation loop and exits gracefully."""
 
     def test_solve_returns_shaped_result_and_respects_max_iterations(self):
-        from examples.nest.sudoku_net import SudokuNet, SudokuSolver
+        from examples.nest_like.sudoku_net import SudokuNet, SudokuSolver
         net = SudokuNet(seed=0)
         solver = SudokuSolver(net)
         solution, valid, chunks = solver.solve(get_puzzle(4), max_iterations=3, seed=0)
@@ -263,12 +263,12 @@ class TestDriveRates(unittest.TestCase):
         return n / (sim_ms / 1000.0)
 
     def test_noise_rate_is_350hz(self):
-        from examples.nest.sudoku_net import NOISE_RATE
+        from examples.nest_like.sudoku_net import NOISE_RATE
         self.assertAlmostEqual(NOISE_RATE, 350.0)
         self.assertLess(abs(self._measure_relayed_rate(NOISE_RATE) - 350.0), 45.0)
 
     def test_stim_rate_is_200hz(self):
-        from examples.nest.sudoku_net import STIM_RATE
+        from examples.nest_like.sudoku_net import STIM_RATE
         self.assertAlmostEqual(STIM_RATE, 200.0)
         self.assertLess(abs(self._measure_relayed_rate(STIM_RATE) - 200.0), 35.0)
 

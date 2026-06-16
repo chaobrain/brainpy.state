@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the two ``iaf_tum_2000`` short-term-plasticity demos.
 
-The §3.5 demos ``examples/nest/iaf_tum_2000_short_term_depression.py`` and
+The §3.5 demos ``examples/nest_like/iaf_tum_2000_short_term_depression.py`` and
 ``…_facilitation.py`` port NEST's Figure-1A/1B reproduction: two ``iaf_tum_2000``
 neurons, the presynaptic one driven by a ``dc_generator`` into a regular ~20 Hz
 train, a ``static_synapse`` on ``receptor_type=1`` carrying the *graded released
@@ -54,8 +54,8 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.iaf_tum_2000_short_term_depression as dep_demo
-import examples.nest.iaf_tum_2000_short_term_facilitation as fac_demo
+import examples.nest_like.iaf_tum_2000_short_term_depression as dep_demo
+import examples.nest_like.iaf_tum_2000_short_term_facilitation as fac_demo
 
 try:
     import nest

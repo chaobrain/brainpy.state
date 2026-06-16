@@ -37,7 +37,7 @@ try:
 except Exception:
     nest = None
 
-from examples.nest.sensitivity_to_perturbation import (
+from examples.nest_like.sensitivity_to_perturbation import (
     network_rate, run_sensitivity, first_spike_after, divergence,
     NE, NI, KE, KI, J, G, JEXT, RATE_EXT, VMIN, VMAX,
 )

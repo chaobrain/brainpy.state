@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/pulsepacket.py``.
+"""Live-NEST parity for ``examples/nest_like/pulsepacket.py``.
 
 NEST's §3.7 ``pulsepacket`` demo emits Gaussian-jittered synchronous spike packets
 from a ``pulsepacket_generator`` and compares the neuron-averaged membrane
@@ -32,7 +32,7 @@ except Exception:
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_distributional
 from brainpy_state._nest_validation.tolerance_conventions import CAT_D
 
-from examples.nest.pulsepacket import (
+from examples.nest_like.pulsepacket import (
     generate_packet, packet_stats, packet_psth, averaged_membrane,
     analytical_excursion, excursion_window,
     ACTIVITY, SDEV, PULSE_T, N_NEURONS, SIMTIME, DT, PST_BIN)
@@ -134,7 +134,7 @@ class TestPulsepacketStructural(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.pulsepacket import main
+        from examples.nest_like.pulsepacket import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()

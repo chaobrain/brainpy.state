@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Learning smoke test for ``examples/nest/urbanczik_synapse_example.py``.
+"""Learning smoke test for ``examples/nest_like/urbanczik_synapse_example.py``.
 
 The demo trains plastic ``urbanczik_synapse`` edges onto the dendrite of a
 ``pp_cond_exp_mc_urbanczik`` neuron whose soma is driven by a conductance teacher
@@ -33,7 +33,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 brainstate.environ.set(precision=64, platform="cpu")
 
-from examples.nest.urbanczik_synapse_example import INIT_W, run
+from examples.nest_like.urbanczik_synapse_example import INIT_W, run
 
 
 class TestUrbanczikExampleLearns(unittest.TestCase):

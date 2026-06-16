@@ -82,7 +82,7 @@ class TestStdpNnSymmSynapseParity(unittest.TestCase):
         # pre", the physically correct nearest semantics) and does not reproduce it.
         # Placing the pair at P0=500 makes that phantom term < CAT_B atol for every
         # dt<0 (exp(-461/20)~1e-10), so depression parity is asserted cleanly. dt>0
-        # (post after pre) never triggers the phantom. See CONTEXT.md Lessons (05).
+        # (post after pre) never triggers the phantom. See develop/NEST_PARITY_LEDGER.md Lessons (05).
         P0, P_flush = 500.0, 720.0           # flush pre records the deferred LTP
         for dt in (-40., -20., -10., -5., 5., 10., 20., 40.):
             with self.subTest(dt=dt):

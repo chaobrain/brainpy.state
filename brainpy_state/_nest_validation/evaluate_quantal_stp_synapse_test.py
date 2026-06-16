@@ -58,7 +58,7 @@ _D2 = 1.0   # parrot -> synapse axonal delay == quantal_stp_synapse default dela
 
 def _nest_mean_vm(regime, seed):
     """Seed-mean post V_m via spike_generator -> parrot -> quantal_stp -> iaf."""
-    from examples.nest.evaluate_quantal_stp_synapse import (
+    from examples.nest_like.evaluate_quantal_stp_synapse import (
         TRAIN, T_SIM, REGIMES, WEIGHT, N_SITES)
     p = REGIMES[regime]
     nest.ResetKernel()
@@ -95,7 +95,7 @@ class TestQuantalStpExampleParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def _run(self, regime, label):
-        from examples.nest.evaluate_quantal_stp_synapse import mean_vm, SEEDS
+        from examples.nest_like.evaluate_quantal_stp_synapse import mean_vm, SEEDS
         ref = [_nest_mean_vm(regime, s) for s in SEEDS]
         cand = [mean_vm(regime, s) for s in SEEDS]
         compare_distributional(ref, cand, tol=tc.CAT_D, metric=label).assert_()
@@ -116,7 +116,7 @@ class TestQuantalStpExampleBehavior(unittest.TestCase):
     def test_seed_controls_realization(self):
         # the per-run seed must reach the release PRNG through the Simulator: a
         # fixed seed reproduces exactly, different seeds give different draws.
-        from examples.nest.evaluate_quantal_stp_synapse import run
+        from examples.nest_like.evaluate_quantal_stp_synapse import run
         _, a1 = run("depression", seed=1)
         _, a1b = run("depression", seed=1)
         _, a2 = run("depression", seed=2)
@@ -126,7 +126,7 @@ class TestQuantalStpExampleBehavior(unittest.TestCase):
     def test_seed_mean_tracks_deterministic_limit(self):
         # the upstream's point: the stochastic seed-mean converges to the
         # deterministic tsodyks2 envelope (weight = n * w).
-        from examples.nest.evaluate_quantal_stp_synapse import (
+        from examples.nest_like.evaluate_quantal_stp_synapse import (
             seed_mean_trace, deterministic_reference, REGIMES)
         for regime in REGIMES:
             _, mean_tr = seed_mean_trace(regime)
@@ -138,7 +138,7 @@ class TestQuantalStpExampleBehavior(unittest.TestCase):
     def test_regimes_are_distinct(self):
         # high-U depression releases far more on the first spike than low-U
         # facilitation, so the seed-mean first EPSP peaks differ clearly.
-        from examples.nest.evaluate_quantal_stp_synapse import seed_mean_trace
+        from examples.nest_like.evaluate_quantal_stp_synapse import seed_mean_trace
         t, dep = seed_mean_trace("depression")
         _, fac = seed_mean_trace("facilitation")
         win = (t >= 50.0) & (t < 64.0)        # the first EPSP, before spike 2 (65 ms)

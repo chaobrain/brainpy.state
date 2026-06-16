@@ -129,7 +129,7 @@ class stdp_facetshw_synapse_hom(NESTPlasticity):
     driver_readout_time`` collapses to ``driver_readout_time`` and every synapse's first
     readout offset is 0, which is what this spec models (``next_readout`` starts at 0).
     True multi-driver round-robin grouping for ``E > synapses_per_driver`` (staggered
-    per-synapse offsets) is out of scope. See ``CONTEXT.md`` Lessons (05).
+    per-synapse offsets) is out of scope. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (05).
 
     **Deferred accumulation.** NEST accumulates the ``send``'s pairing *after* the
     readout, so a readout never sees the charge from the pair that triggered it. The

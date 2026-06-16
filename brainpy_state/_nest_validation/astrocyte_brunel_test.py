@@ -50,8 +50,8 @@ from brainpy_state import pairwise_bernoulli, fixed_indegree
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_distributional
 from brainpy_state._nest_validation.tolerance_conventions import CAT_D
 
-from examples.nest.astrocyte_brunel_bernoulli import build, run as run_bernoulli
-from examples.nest.astrocyte_brunel_fixed_indegree import run as run_fixed_indegree
+from examples.nest_like.astrocyte_brunel_bernoulli import build, run as run_bernoulli
+from examples.nest_like.astrocyte_brunel_fixed_indegree import run as run_fixed_indegree
 
 DT = 0.1
 

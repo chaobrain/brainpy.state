@@ -114,7 +114,7 @@ class TestSpatial3DStructure(unittest.TestCase):
         self.assertLess(float(np.mean(np.abs(emp - ana))), 0.025)
 
     def test_example_run_smoke(self):
-        from examples.nest.spatial_3d_gauss import run
+        from examples.nest_like.spatial_3d_gauss import run
         coords, ctr, tgt, dist = run(n=300)
         self.assertEqual(coords.shape, (300, 3))
         self.assertEqual(dist.shape[0], tgt.shape[0])

@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/cross_check_mip_corrdet.py``.
+"""Live-NEST parity for ``examples/nest_like/cross_check_mip_corrdet.py``.
 
 NEST's ``cross_check_mip_corrdet`` builds correlated trains with a
 ``mip_generator`` (shared parent Poisson, per-child copy probability ``p_copy``)
@@ -43,7 +43,7 @@ def _normalize(hist):
 
 def _nest_crosscorr(seed, simtime):
     """Normalized cross-correlogram from the live-NEST mip + correlation_detector."""
-    from examples.nest.cross_check_mip_corrdet import (
+    from examples.nest_like.cross_check_mip_corrdet import (
         RATE, P_COPY, DELTA_TAU, TAU_MAX, RESOLUTION)
     nest.ResetKernel()
     nest.local_num_threads = 1
@@ -70,7 +70,7 @@ class TestCrossCheckSelfConsistency(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_detector_matches_corr_spikes_sorted(self):
-        from examples.nest.cross_check_mip_corrdet import (
+        from examples.nest_like.cross_check_mip_corrdet import (
             generate_trains, detect_crosscorr, reference_crosscorr)
         mat = generate_trains(seed=0, simtime=5000.0)
         hist = detect_crosscorr(mat)['count_histogram']
@@ -91,7 +91,7 @@ class TestCrossCheckSelfConsistency(unittest.TestCase):
         self.assertGreater(hist[center], 1.5 * np.median(hist))
 
     def test_histogram_shape_and_events(self):
-        from examples.nest.cross_check_mip_corrdet import generate_trains, detect_crosscorr
+        from examples.nest_like.cross_check_mip_corrdet import generate_trains, detect_crosscorr
         mat = generate_trains(seed=1, simtime=2000.0)
         det = detect_crosscorr(mat)
         self.assertEqual(det['count_histogram'].shape, (21,))   # 1 + 2*(100/10)
@@ -101,7 +101,7 @@ class TestCrossCheckSelfConsistency(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.cross_check_mip_corrdet import main
+        from examples.nest_like.cross_check_mip_corrdet import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main(seed=0, simtime=2000.0)                        # short run for the smoke
@@ -118,7 +118,7 @@ class TestCrossCheckMipCorrdetParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_normalized_crosscorr_matches_nest_distributional(self):
-        from examples.nest.cross_check_mip_corrdet import (
+        from examples.nest_like.cross_check_mip_corrdet import (
             generate_trains, detect_crosscorr)
 
         def bp_fn(seed):

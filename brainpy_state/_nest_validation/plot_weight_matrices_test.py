@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Parity for the plot_weight_matrices demo (§3.4 connection introspection).
 
-The demo ``examples/nest/plot_weight_matrices.py`` builds an E/I network with
+The demo ``examples/nest_like/plot_weight_matrices.py`` builds an E/I network with
 ``fixed_indegree`` connectivity (excitatory weights ``Normal(20, 0.5)`` pA,
 inhibitory ``-g`` times as large) and extracts the four ``EE / EI / IE / II``
 weight matrices via :meth:`Simulator.get_connections` — the
@@ -31,7 +31,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_distributional, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.plot_weight_matrices as demo
+import examples.nest_like.plot_weight_matrices as demo
 
 try:
     import nest

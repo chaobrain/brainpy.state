@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/one_neuron_with_noise.py``.
+"""Live-NEST parity for ``examples/nest_like/one_neuron_with_noise.py``.
 
 NEST's ``one_neuron_with_noise`` drives an ``iaf_psc_alpha`` from a 2-channel
 ``poisson_generator`` (rates 80 kHz / 15 kHz) with signed per-channel weights
@@ -49,7 +49,7 @@ class TestOneNeuronWithNoiseParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_rate_matches_nest_distributional(self):
-        from examples.nest.one_neuron_with_noise import build
+        from examples.nest_like.one_neuron_with_noise import build
 
         def bp_rate(seed):
             sim, _vm, sr, _neuron, _t = build(seed=seed, simtime=SIMTIME)

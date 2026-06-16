@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/hh_psc_alpha.py``.
+"""Live-NEST parity for ``examples/nest_like/hh_psc_alpha.py``.
 
 NEST's ``hh_psc_alpha`` is a Hodgkin–Huxley neuron integrated with an adaptive
 RKF45 step (category A). Two complementary checks:
@@ -80,7 +80,7 @@ def _nest_rate(I_e, dt=0.1, simtime=1000.0, warmup=200.0):
 @requires_nest
 class TestHHParity(unittest.TestCase):
     def test_subthreshold_trace_matches_nest(self):
-        from examples.nest.hh_psc_alpha import run_traces
+        from examples.nest_like.hh_psc_alpha import run_traces
         I_e, dt, simtime = 200.0, 0.1, 100.0
         bp = run_traces(I_e=I_e, dt=dt, simtime=simtime)
         ns = _nest_traces(I_e, dt=dt, simtime=simtime)
@@ -92,7 +92,7 @@ class TestHHParity(unittest.TestCase):
             compare_trace(ns[g], bp[g][1:], tol=CAT_A_GATE, metric=f"hh {g}").assert_()
 
     def test_fi_curve_matches_nest(self):
-        from examples.nest.hh_psc_alpha import fi_curve
+        from examples.nest_like.hh_psc_alpha import fi_curve
         # Amps in the repetitive-firing regime (below ~700 pA the neuron fires only
         # onset spikes then falls quiescent, so the post-warmup rate is 0 on both
         # sides — not a meaningful rate comparison).

@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/testiaf.py``.
+"""Live-NEST parity for ``examples/nest_like/testiaf.py``.
 
 NEST's ``testiaf`` injects a constant ``I_e = 376 pA`` into an ``iaf_psc_alpha``
 and records ``V_m`` and spikes at three resolutions ``dt in {0.1, 0.5, 1.0}`` ms
@@ -46,7 +46,7 @@ def _nest_run(dt, simtime):
 @requires_nest
 class TestTestiafParity(unittest.TestCase):
     def test_vm_and_spike_count_match_nest_across_dt(self):
-        from examples.nest.testiaf import build
+        from examples.nest_like.testiaf import build
         for dt in DTS:
             with self.subTest(dt=dt):
                 brainstate.environ.set(dt=dt * u.ms)

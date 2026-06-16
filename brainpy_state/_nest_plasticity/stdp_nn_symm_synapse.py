@@ -83,7 +83,7 @@ class stdp_nn_symm_synapse(NESTPlasticity):
     **NEST divergence — ``tau_minus`` location.** In NEST ``tau_minus`` is a parameter
     of the *postsynaptic neuron* (``ArchivingNode``), not the synapse; here it is a
     synapse-spec attribute driving the substrate's per-post ``K-`` trace, so STDP runs
-    standalone. See ``CONTEXT.md`` Lessons (cluster 04). The live-NEST parity drive sets
+    standalone. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (cluster 04). The live-NEST parity drive sets
     the post node's ``tau_minus`` to match.
 
     **No ``Kplus`` parameter.** Unlike :class:`stdp_synapse`, the symmetric scheme has no

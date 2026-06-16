@@ -22,7 +22,7 @@
 # This is the Hodgkin-Huxley variant (benchmark 3) of the FACETS simulator review.
 # The integrate-and-fire benchmarks 1 (COBA, iaf_cond_exp) and 2 (CUBA, iaf_psc_exp)
 # of the same review are ported on the brainpy.state Simulator API, with live-NEST
-# rate-band parity, in ``examples/nest/brette_et_al_2007.py``.
+# rate-band parity, in ``examples/nest_like/brette_et_al_2007.py``.
 #
 
 import brainunit as u

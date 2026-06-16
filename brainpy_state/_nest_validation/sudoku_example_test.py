@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-r"""NEST-free tests for the §3.10 ``sudoku`` runnable harness (:mod:`examples.nest.sudoku`).
+r"""NEST-free tests for the §3.10 ``sudoku`` runnable harness (:mod:`examples.nest_like.sudoku`).
 
 The whole harness imports only ``brainpy.state`` + the pure-Python puzzle bank, never
 ``nest`` -- so these tests *running green without* ``@requires_nest`` is itself the
@@ -19,8 +19,8 @@ import numpy as np
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-from examples.nest import sudoku as harness
-from examples.nest.sudoku_puzzles import get_puzzle, make_easy_puzzle
+from examples.nest_like import sudoku as harness
+from examples.nest_like.sudoku_puzzles import get_puzzle, make_easy_puzzle
 
 
 class TestPureHelpers(unittest.TestCase):

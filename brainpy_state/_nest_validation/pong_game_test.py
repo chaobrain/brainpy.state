@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-r"""Pure-Python game-logic checks for the §3.10 pong port (``examples/nest/pong.py``).
+r"""Pure-Python game-logic checks for the §3.10 pong port (``examples/nest_like/pong.py``).
 
 No spiking machinery and no live NEST: the game is a deterministic 1:1 translation
 of NEST's ``pong.py``, so these tests pin the reflection, scoring, grid-cell, and
@@ -15,7 +15,7 @@ import numpy as np
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-import examples.nest.pong as pong
+import examples.nest_like.pong as pong
 
 
 class TestPongGame(unittest.TestCase):

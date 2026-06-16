@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Brunel multi-receptor firing-rate parity: brainpy.state Simulator vs live NEST.
 
-Drives the faithful ``examples/nest/brunel_exp_multisynapse.py`` port at a small
+Drives the faithful ``examples/nest_like/brunel_exp_multisynapse.py`` port at a small
 order and asserts the excitatory rate lands within 5 % of a live NEST run built
 from identical parameters (100 receptor ports, uniformly-routed synapses).
 
@@ -75,7 +75,7 @@ def _nest_rates(order, simtime, seed):
 class TestBrunelExpMultisynapseParity(unittest.TestCase):
     def test_excitatory_rate_within_5pct_of_nest(self):
         import numpy as np
-        from examples.nest.brunel_exp_multisynapse import build
+        from examples.nest_like.brunel_exp_multisynapse import build
         bp, ns = [], []
         for seed in range(N_SEEDS):
             sim, esr, _isr, _n, _t = build(order=ORDER, simtime=SIMTIME,

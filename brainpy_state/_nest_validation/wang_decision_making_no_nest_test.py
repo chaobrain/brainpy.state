@@ -16,7 +16,7 @@ import brainunit as u
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-from examples.nest.wang_decision_making import (build, run_decision,
+from examples.nest_like.wang_decision_making import (build, run_decision,
                                                 decision_from_rates)
 
 

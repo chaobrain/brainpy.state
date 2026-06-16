@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/twoneurons.py``.
+"""Live-NEST parity for ``examples/nest_like/twoneurons.py``.
 
 NEST's ``twoneurons`` drives ``neuron_1`` (``iaf_psc_alpha``, ``I_e = 376 pA``),
 connects it to ``neuron_2`` through a static synapse (``w = 20 pA``, ``d = 1 ms``),
@@ -50,7 +50,7 @@ class TestTwoNeuronsParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_both_traces_match_nest(self):
-        from examples.nest.twoneurons import build
+        from examples.nest_like.twoneurons import build
         sim, vm1, vm2, _n1, _n2, _t = build(simtime=SIMTIME)
         res = sim.simulate(SIMTIME * u.ms)
         bp_v1 = np.asarray(u.get_mantissa(res.trace(vm1, "V_m") / u.mV)).reshape(-1)

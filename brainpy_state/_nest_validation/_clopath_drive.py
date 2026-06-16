@@ -19,7 +19,7 @@ decoupled ``iaf`` driven to spike. Two drives live here:
   ``V_clamp`` at chosen times; the weight is read from NEST's ``weight_recorder`` /
   our ``weight_trace`` after five-or-six pairs.
 
-**NEST divergences encoded here (documented in the spec + CONTEXT.md cluster-07).**
+**NEST divergences encoded here (documented in the spec + develop/NEST_PARITY_LEDGER.md cluster-07).**
 
 * ``delay_u_bars`` is set to **one resolution step** (0.1 ms), not NEST's 4.0 ms
   default. NEST evaluates LTP/LTD against ring-buffered post voltages delayed by

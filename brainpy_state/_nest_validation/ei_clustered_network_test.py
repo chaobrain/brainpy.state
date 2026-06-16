@@ -48,7 +48,7 @@ try:
 except Exception:
     nest = None
 
-from examples.nest.ei_clustered_network import (
+from examples.nest_like.ei_clustered_network import (
     simulate, build, cluster_weight_matrix, cluster_weights, cv_isi,
     cluster_rate_std, population_rate, rbn_weights, psc_to_psp, rheobase,
     N_E, N_I, Q, REP, RJ, WARMUP, SIMTIME, DT, BCP, GEI, GIE, GII,

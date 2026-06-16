@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Demo-port parity for ``examples/nest/astrocyte_interaction.py`` (goal 17b).
+"""Demo-port parity for ``examples/nest_like/astrocyte_interaction.py`` (goal 17b).
 
 NEST's ``astrocyte_interaction`` is a tripartite loop: a presynaptic
 ``aeif_cond_alpha_astro`` projects to a postsynaptic neuron (direct EPSP) and to an
@@ -33,7 +33,7 @@ try:
 except Exception:                                   # pragma: no cover - env dependent
     nest = None
 
-from examples.nest.astrocyte_interaction import run
+from examples.nest_like.astrocyte_interaction import run
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance, CAT_A
 

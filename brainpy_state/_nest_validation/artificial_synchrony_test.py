@@ -35,7 +35,7 @@ try:
 except Exception:
     nest = None
 
-from examples.nest.artificial_synchrony import (
+from examples.nest_like.artificial_synchrony import (
     build, run_synchrony, calc_synchrony, graded_v0,
     N, DT, SIMTIME, T_START, I_E, C_M, TAU_M, TAU_SYN, V_RESET, V_TH, T_REF, DELAY,
 )

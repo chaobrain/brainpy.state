@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the Brette & Gerstner Fig 2C AdEx demo (§3.10).
 
-The demo ``examples/nest/brette_gerstner_fig_2c.py`` drives one
+The demo ``examples/nest_like/brette_gerstner_fig_2c.py`` drives one
 ``aeif_cond_alpha`` with a 500 pA sub-threshold pulse ``[0, 200) ms`` followed
 by an 800 pA spiking pulse ``[500, 1000) ms`` and reproduces the
 spike-frequency-adaptation figure.
@@ -39,7 +39,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-import examples.nest.brette_gerstner_fig_2c as demo
+import examples.nest_like.brette_gerstner_fig_2c as demo
 
 try:
     import nest

@@ -107,7 +107,7 @@ class TestClopathSmallNetworkExampleParity(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from examples.nest.clopath_synapse_small_network import run, TRAINS, T_SIM
+        from examples.nest_like.clopath_synapse_small_network import run, TRAINS, T_SIM
         brainstate.environ.set(dt=drv.DT * u.ms)
         cls.times, cls.weights, cls.edges = run()
         cls.our_final = {e: float(cls.weights[-1, c]) for c, e in enumerate(cls.edges)}
@@ -160,7 +160,7 @@ class TestClopathSmallNetworkExampleBehavior(unittest.TestCase):
         # the demo exists to show directional structure emerging: with the
         # 0->1->2 firing order, forward edges (i<j) potentiate above the 0.5
         # baseline and backward edges (i>j) depress below it.
-        from examples.nest.clopath_synapse_small_network import run
+        from examples.nest_like.clopath_synapse_small_network import run
         _, weights, edges = run()
         final = weights[-1]
         for c, (i, j) in enumerate(edges):
@@ -175,7 +175,7 @@ class TestClopathSmallNetworkExampleBehavior(unittest.TestCase):
     def test_weight_trace_records_evolution(self):
         # the recorded matrix has one column per directed edge, starts at INIT_W,
         # and actually moves (the rule is doing something).
-        from examples.nest.clopath_synapse_small_network import run, N
+        from examples.nest_like.clopath_synapse_small_network import run, N
         times, weights, edges = run()
         self.assertEqual(len(edges), N * (N - 1))
         self.assertEqual(weights.shape[1], N * (N - 1))
@@ -186,7 +186,7 @@ class TestClopathSmallNetworkExampleBehavior(unittest.TestCase):
     def test_weight_matrix_assembler(self):
         # weight_matrix scatters the per-edge vector into an n x n matrix with a
         # NaN (absent) diagonal -- there are no autapses.
-        from examples.nest.clopath_synapse_small_network import run, weight_matrix, N
+        from examples.nest_like.clopath_synapse_small_network import run, weight_matrix, N
         _, weights, edges = run()
         M = weight_matrix(weights[-1], edges)
         self.assertEqual(M.shape, (N, N))

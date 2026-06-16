@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/multimeter_file.py``.
+"""Live-NEST parity for ``examples/nest_like/multimeter_file.py``.
 
 NEST's ``multimeter_file`` records several analog variables from a spike-driven
 neuron. This in-memory port records ``V_m``/``I_syn_ex``/``I_syn_in`` from an
@@ -40,7 +40,7 @@ CAT_B_GEN = TraceTolerance(1e-3, 1e-6, align_steps=2, label="B",
 
 def _nest_traces(simtime):
     """Record V_m/I_syn_ex/I_syn_in from a NEST iaf_psc_exp under the same drive."""
-    from examples.nest.multimeter_file import (
+    from examples.nest_like.multimeter_file import (
         SPIKE_TIMES_EX, SPIKE_TIMES_IN, W_EX, W_IN, DELAY, RECORD_FROM)
     nest.ResetKernel()
     nest.resolution = 0.1
@@ -67,7 +67,7 @@ class TestMultimeterFileStructural(unittest.TestCase):
         import io
         import contextlib
         from unittest import mock
-        from examples.nest.multimeter_file import main
+        from examples.nest_like.multimeter_file import main
 
         # Suppress the plot artifact: patch savefig if matplotlib is present,
         # otherwise main() takes its own graceful no-matplotlib branch.
@@ -93,7 +93,7 @@ class TestMultimeterFileParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_all_recordables_match_nest(self):
-        from examples.nest.multimeter_file import build, RECORD_FROM
+        from examples.nest_like.multimeter_file import build, RECORD_FROM
         sim, mm, _neuron, _t = build(simtime=SIMTIME)
         res = sim.simulate(SIMTIME * u.ms)
 

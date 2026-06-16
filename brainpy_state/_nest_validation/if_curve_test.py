@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/if_curve.py``.
+"""Live-NEST parity for ``examples/nest_like/if_curve.py``.
 
 NEST's ``if_curve`` measures the transfer function of an ``aeif_cond_exp``
 population driven by a white-noise current ``I_mean + I_std * W(t)`` from a
@@ -58,7 +58,7 @@ def _nest_rate(mean, std, seed, n=N_NEURONS, simtime=SIMTIME):
 @requires_nest
 class TestIfCurveParity(unittest.TestCase):
     def test_deterministic_point_matches_nest(self):
-        from examples.nest.if_curve import output_rate
+        from examples.nest_like.if_curve import output_rate
         mean, std = DET_POINT
         bp = output_rate(mean, std, n_neurons=N_NEURONS, seed=0, simtime=SIMTIME)
         ns = _nest_rate(mean, std, seed=0)
@@ -67,7 +67,7 @@ class TestIfCurveParity(unittest.TestCase):
                       metric=f"if_curve rate mean={mean} std={std}").assert_()
 
     def test_noisy_points_match_nest_distributional(self):
-        from examples.nest.if_curve import output_rate
+        from examples.nest_like.if_curve import output_rate
         for mean, std in NOISE_POINTS:
             with self.subTest(mean=mean, std=std):
                 bp = [output_rate(mean, std, n_neurons=N_NEURONS, seed=s,

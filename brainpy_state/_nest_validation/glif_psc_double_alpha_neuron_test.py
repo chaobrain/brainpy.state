@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity + shape checks for ``examples/nest/glif_psc_double_alpha_neuron.py``.
+"""Live-NEST parity + shape checks for ``examples/nest_like/glif_psc_double_alpha_neuron.py``.
 
 ``glif_psc_double_alpha`` is ``glif_psc`` with a *double* alpha synaptic kernel
 (fast alpha + ``amp_slow`` x slow alpha) and is driven here with all spike
@@ -38,7 +38,7 @@ import brainunit as u
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-from examples.nest.glif_psc_double_alpha_neuron import (
+from examples.nest_like.glif_psc_double_alpha_neuron import (
     run_traces, CONFIGS, MECH_OFF, TAU_PSC, ESPIKES, ESPIKE_W, RECORD_FROM,
     RESOLUTION, SIMTIME)
 

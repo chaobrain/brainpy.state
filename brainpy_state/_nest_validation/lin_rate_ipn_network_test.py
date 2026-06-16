@@ -161,7 +161,7 @@ class TestLinRateIpnNetworkStructure(unittest.TestCase):
 
     def test_example_run_smoke(self):
         """The example script runs standalone (no NEST) and returns finite rate traces."""
-        from examples.nest.lin_rate_ipn_network import run
+        from examples.nest_like.lin_rate_ipn_network import run
         rate_e0, rate_i0, times, rate_e, rate_i = run(order=5, T=30.0)
         self.assertTrue(np.all(np.isfinite(rate_e0)) and np.all(np.isfinite(rate_i0)))
         self.assertEqual(rate_e.shape[1], 20)   # NE = 4 * order = 20

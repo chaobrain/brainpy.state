@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/sinusoidal_poisson_generator.py``.
+"""Live-NEST parity for ``examples/nest_like/sinusoidal_poisson_generator.py``.
 
 NEST's §3.7 ``sinusoidal_poisson_generator`` demo drives parrot relays with an
 inhomogeneous Poisson train of rate ``λ(t) = max(0, dc + ac·sin(2πf t + φ))``. The
@@ -34,7 +34,7 @@ SEEDS = (0, 1, 2, 3, 4)
 
 def _nest_pop_autocorr(seed, simtime):
     """Per-bin population spike-count autocorrelation from NEST (same recipe as bp)."""
-    from examples.nest.sinusoidal_poisson_generator import (
+    from examples.nest_like.sinusoidal_poisson_generator import (
         RATE, AMPLITUDE, FREQUENCY, PHASE, N_TARGETS, PST_BIN, DT, MAX_LAG,
     )
     nest.ResetKernel()
@@ -74,7 +74,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         gc.collect()
 
     def test_psth_tracks_lambda(self):
-        from examples.nest.sinusoidal_poisson_generator import (
+        from examples.nest_like.sinusoidal_poisson_generator import (
             run_spikes, population_psth, lam_of_t)
         spk = run_spikes(seed=0, individual=True)
         centers, psth = population_psth(spk)
@@ -84,7 +84,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         self.assertGreater(psth.max() / max(psth.min(), 1e-9), 1.5)   # modulation visible
 
     def test_individual_vs_shared_modes(self):
-        from examples.nest.sinusoidal_poisson_generator import run_spikes
+        from examples.nest_like.sinusoidal_poisson_generator import run_spikes
         indiv = run_spikes(seed=0, simtime=200.0, individual=True)
         shared = run_spikes(seed=0, simtime=200.0, individual=False)
         # individual: the N target columns are not all identical (independent trains)
@@ -94,7 +94,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         self.assertGreater(int(shared.sum()), 0)
 
     def test_ac_zero_is_stationary(self):
-        from examples.nest.sinusoidal_poisson_generator import (
+        from examples.nest_like.sinusoidal_poisson_generator import (
             run_spikes, population_psth, RATE, FREQUENCY)
         spk = run_spikes(seed=0, simtime=500.0, individual=True, amplitude=0.0)
         centers, psth = population_psth(spk)
@@ -105,7 +105,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         self.assertLess(abs(np.corrcoef(psth, sin_wave)[0, 1]), 0.4)
 
     def test_ac_greater_than_dc_clamps_rate(self):
-        from examples.nest.sinusoidal_poisson_generator import (
+        from examples.nest_like.sinusoidal_poisson_generator import (
             run_spikes, population_psth, RATE)
         # ac > dc: λ would go negative -> clamped at 0, so troughs are near-empty.
         spk = run_spikes(seed=0, simtime=500.0, individual=True, amplitude=2.0 * RATE)
@@ -115,7 +115,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         self.assertGreater(psth.max(), 1.5 * RATE)     # peak well above dc
 
     def test_autocorr_carries_modulation_period(self):
-        from examples.nest.sinusoidal_poisson_generator import (
+        from examples.nest_like.sinusoidal_poisson_generator import (
             run_spikes, spike_count_autocorr, FREQUENCY, PST_BIN)
         acf = spike_count_autocorr(run_spikes(seed=0, individual=True))
         self.assertAlmostEqual(acf[0], 1.0, places=9)  # lag-0 normalized
@@ -124,7 +124,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         self.assertGreater(acf[period_bins], 0.3)      # one-period echo peak
 
     def test_dt_invariance(self):
-        from examples.nest.sinusoidal_poisson_generator import run_spikes, population_psth
+        from examples.nest_like.sinusoidal_poisson_generator import run_spikes, population_psth
         m1 = population_psth(run_spikes(seed=0, dt=0.1, simtime=500.0))[1]
         m2 = population_psth(run_spikes(seed=0, dt=0.05, simtime=500.0), dt=0.05)[1]
         self.assertAlmostEqual(m1.mean(), m2.mean(), delta=0.08 * m1.mean())
@@ -136,7 +136,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
         # Simulator fan-out demo does not use.
         import brainstate.transform as transform
         from brainpy_state import sinusoidal_poisson_generator
-        from examples.nest.sinusoidal_poisson_generator import RATE, AMPLITUDE, FREQUENCY
+        from examples.nest_like.sinusoidal_poisson_generator import RATE, AMPLITUDE, FREQUENCY
         n_targets, n_steps, dt = 8, 200, 0.1
         gen = sinusoidal_poisson_generator(
             in_size=n_targets, rate=RATE * u.Hz, amplitude=AMPLITUDE * u.Hz,
@@ -159,7 +159,7 @@ class TestSinusoidalPoissonStructural(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.sinusoidal_poisson_generator import main
+        from examples.nest_like.sinusoidal_poisson_generator import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()
@@ -183,7 +183,7 @@ class TestSinusoidalPoissonParity(unittest.TestCase):
         gc.collect()
 
     def test_psth_autocorr_matches_nest_distributional(self):
-        from examples.nest.sinusoidal_poisson_generator import (
+        from examples.nest_like.sinusoidal_poisson_generator import (
             run_spikes, spike_count_autocorr, SIMTIME)
 
         bp = [spike_count_autocorr(run_spikes(seed=s, individual=True)) for s in SEEDS]

@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Brunel mean-field (Siegert) rate parity: closed form and live NEST.
 
-The rewritten ``examples/nest/brunel_siegert.py`` relaxes three ``siegert_neuron``
+The rewritten ``examples/nest_like/brunel_siegert.py`` relaxes three ``siegert_neuron``
 nodes -- excitatory, inhibitory, and a constant driving node that replaces the
 Poisson background -- coupled by ``diffusion_connection`` end-to-end through the
 :class:`~brainpy.state.Simulator` (a single compiled ``for_loop``, no Python step
@@ -50,7 +50,7 @@ def _load_run():
     example is loaded directly from its file under the repository root.
     """
     path = (pathlib.Path(__file__).resolve().parents[2]
-            / 'examples' / 'nest' / 'brunel_siegert.py')
+            / 'examples' / 'nest_like' / 'brunel_siegert.py')
     spec = importlib.util.spec_from_file_location('brunel_siegert_example', path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

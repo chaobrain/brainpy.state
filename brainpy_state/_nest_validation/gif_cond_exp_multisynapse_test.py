@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/gif_cond_exp_multisynapse.py``.
+"""Live-NEST parity for ``examples/nest_like/gif_cond_exp_multisynapse.py``.
 
 Like ``aeif_cond_beta_multisynapse`` this drives the multi-receptor routing seam
 (``connect(receptor_type=k)``), here on a *generalized-IAF* neuron whose two
@@ -40,7 +40,7 @@ import brainunit as u
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-from examples.nest.gif_cond_exp_multisynapse import (
+from examples.nest_like.gif_cond_exp_multisynapse import (
     run_traces, MODEL_PARAMS, DELAYS, WEIGHTS, SPIKE_TIME)
 
 # Category A with the one-step recorder-offset alignment (RKF45 subthreshold V_m).

@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the three-compartment ``iaf_cond_alpha_mc`` demo (§3.5).
 
-The demo ``examples/nest/mc_neuron.py`` drives a three-compartment neuron through
+The demo ``examples/nest_like/mc_neuron.py`` drives a three-compartment neuron through
 all nine receptors: per-compartment current pulses (receptors 7-9), per-compartment
 excitatory/inhibitory spike trains (receptors 1-6), and a somatic rheobase step.
 This exercises the full Simulator device→compartment routing seam end to end.
@@ -37,7 +37,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.mc_neuron as demo
+import examples.nest_like.mc_neuron as demo
 
 try:
     import nest

@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Validation for ``examples/nest/hh_phaseplane.py``.
+"""Validation for ``examples/nest_like/hh_phaseplane.py``.
 
 This demo is a phase-plane **analysis** carve-out, not a spike-train parity demo,
 so it is validated in two complementary layers:
@@ -39,7 +39,7 @@ import brainunit as u
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-from examples.nest.hh_phaseplane import (
+from examples.nest_like.hh_phaseplane import (
     vector_field, nullclines, ap_trajectory, DELTA_N)
 
 # Category A, no recorder-offset alignment (states are read directly; both the

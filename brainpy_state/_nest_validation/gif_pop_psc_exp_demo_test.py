@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Mesoscopic-vs-microscopic parity for the gif_pop_psc_exp demo (§3.5).
 
-The demo ``examples/nest/gif_pop_psc_exp.py`` simulates the same finite
+The demo ``examples/nest_like/gif_pop_psc_exp.py`` simulates the same finite
 two-population GIF network two ways: a **mesoscopic** population-rate model
 (:class:`gif_pop_psc_exp`, host-side NumPy) and the **microscopic** network of
 individual ``gif_psc_exp`` neurons (Simulator, one compiled ``for_loop``). The
@@ -40,7 +40,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_distributional, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.gif_pop_psc_exp as demo
+import examples.nest_like.gif_pop_psc_exp as demo
 
 try:
     import nest

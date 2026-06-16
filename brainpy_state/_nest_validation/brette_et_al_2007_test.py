@@ -43,7 +43,7 @@ from brainpy_state import (
 from brainpy_state._nest_validation.nest_compare import requires_nest, compare_trace
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-from examples.nest.brette_et_al_2007 import (
+from examples.nest_like.brette_et_al_2007 import (
     simulate_coba, simulate_cuba, connection_counts, population_rate, NE, NI)
 
 #: iaf_cond_exp parameters (NEST COBA benchmark defaults).

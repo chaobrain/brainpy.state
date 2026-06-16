@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the three-receptor + dc ``cm_default`` demo (§3.10).
 
-The demo ``examples/nest/receptors_and_current.py`` puts a different receptor on
+The demo ``examples/nest_like/receptors_and_current.py`` puts a different receptor on
 each compartment of a passive soma+2-dendrite tree — ``GABA`` (soma), ``AMPA``
 (dend1), ``AMPA_NMDA`` (dend2) — drives each by its receptor index, and injects a
 steady 1 pA into dend1 with a ``dc_generator`` (whose ``receptor_type`` is the
@@ -42,7 +42,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.receptors_and_current as demo
+import examples.nest_like.receptors_and_current as demo
 
 try:
     import nest

@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the Brette & Gerstner Fig 3D AdEx demo (§3.10).
 
-The demo ``examples/nest/brette_gerstner_fig_3d.py`` hyperpolarises one
+The demo ``examples/nest_like/brette_gerstner_fig_3d.py`` hyperpolarises one
 ``aeif_cond_exp`` with an 800 pA inhibitory step over ``[0, 400) ms``; on release
 the membrane rebounds through threshold and fires a short burst (post-inhibitory
 rebound).
@@ -35,7 +35,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation.tolerance_conventions import TraceTolerance
 
-import examples.nest.brette_gerstner_fig_3d as demo
+import examples.nest_like.brette_gerstner_fig_3d as demo
 
 try:
     import nest

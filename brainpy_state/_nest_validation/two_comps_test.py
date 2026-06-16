@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the two-compartment ``cm_default`` demo (§3.10).
 
-The demo ``examples/nest/two_comps.py`` builds the same soma+dendrite tree twice
+The demo ``examples/nest_like/two_comps.py`` builds the same soma+dendrite tree twice
 — once with a **passive** dendrite (cm_pas), once with an **active** Na/K dendrite
 (cm_act) — and drives both with identical somatic (10/13/16 ms, 5 nS) and dendritic
 (70/73/76 ms, 2 nS) spike trains through ``AMPA_NMDA`` receptors. This exercises the
@@ -42,7 +42,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.two_comps as demo
+import examples.nest_like.two_comps as demo
 
 try:
     import nest

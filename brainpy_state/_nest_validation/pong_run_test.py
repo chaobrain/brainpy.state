@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""§3.10 pong — ``AIPong`` head-to-head harness: the closed game/learn loop is well-formed.
 
-:mod:`examples.nest.pong_run` orchestrates already-validated pieces — the persistent
+:mod:`examples.nest_like.pong_run` orchestrates already-validated pieces — the persistent
 :meth:`Simulator.cont` rollout (``_simulator_cont_test``), the ``host_drive`` clamped input
 (``host_drive_test``), and the two learners (``pong_rstdp_test`` / ``pong_dopa_test``). Their
 game-by-game trajectories PRNG-diverge from NEST (RL is non-deterministic across simulators),
@@ -29,8 +29,8 @@ import numpy as np
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-import examples.nest.pong as pong
-import examples.nest.pong_run as pr
+import examples.nest_like.pong as pong
+import examples.nest_like.pong_run as pr
 
 
 class TestHarnessSmoke(unittest.TestCase):

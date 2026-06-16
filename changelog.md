@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — Design notes
 
-- `DESIGN_delays_and_missing_features.md` — proposal for first-class synaptic
+- `develop/DESIGN_delays_and_missing_features.md` — proposal for first-class synaptic
   delays (`delay=` on projections, built on `brainstate` delay primitives), plus
   missing input generators (section/step/ramp/sinusoidal/Ornstein–Uhlenbeck/Wiener)
   and reduced neuron models (FitzHugh–Nagumo, Hindmarsh–Rose, `CobaLIF`/`CubaLIF`),
@@ -156,7 +156,7 @@ for the implementation plan.
   results) instead of a dense weight matrix. Memory-light fan-out makes the
   flagship runnable at NEST's native `order=2500` (~1.9 GB vs a multi-GB dense
   matrix); `comm='dense'` remains the default for small networks.
-- `examples/nest/brunel_alpha.py` — faithful port of NEST's `brunel_alpha_nest.py`
+- `examples/nest_like/brunel_alpha.py` — faithful port of NEST's `brunel_alpha_nest.py`
   (alpha-synapse random balanced network, `ComputePSPnorm`/LambertW calibration)
   onto the `Simulator` API; defaults to `order=2500` with sparse comm.
 - Live-NEST validation harness in `brainpy_state/_nest/_validation/`:
@@ -181,12 +181,12 @@ for the implementation plan.
 
 ### Added — Brunel variant ports (`delta`, `exp_multisynapse`, `siegert`, evolution strategies)
 
-- `examples/nest/brunel_delta.py` — port of NEST's `brunel_delta_nest.py` driving
+- `examples/nest_like/brunel_delta.py` — port of NEST's `brunel_delta_nest.py` driving
   the real `iaf_psc_delta` neuron. Delta synapses deliver the weight as a direct
   membrane-voltage jump (mV, via `sum_delta_inputs`), so connection weights are in
   `u.mV` rather than pA. Reuses the `Simulator` unchanged. Live-NEST parity:
   **58.5 vs 58.2 spks/s (0.55 %)** at `order=200`.
-- `examples/nest/brunel_exp_multisynapse.py` — port of NEST's
+- `examples/nest_like/brunel_exp_multisynapse.py` — port of NEST's
   `brunel_exp_multisynapse_nest.py` driving `iaf_psc_exp_multisynapse` with 100
   receptor ports (`tau_syn` spanning 0.1–1.09 ms). Each connection routes to a
   uniformly-drawn port via a new `connect(..., receptor_type='uniform')` path. The
@@ -194,7 +194,7 @@ for the implementation plan.
   validation records the **full** excitatory population and averages over four RNG
   seeds for a low-variance estimator: **25.8 vs 24.8 spks/s (≈4 %)**, within the
   5 % bound.
-- `examples/nest/brunel_siegert.py` — port of NEST's `brunel_siegert_nest.py`, a
+- `examples/nest_like/brunel_siegert.py` — port of NEST's `brunel_siegert_nest.py`, a
   mean-field analysis of the `brunel_delta` network. Three real `siegert_neuron`
   rate nodes (excitatory, inhibitory, constant drive) are integrated in
   pseudo-time to the self-consistent fixed point (Hahne et al. 2017, eqs. 27–30);
@@ -202,7 +202,7 @@ for the implementation plan.
   NEST's `diffusion_connection`. The spiking `Simulator` does not apply, so the
   three nodes are wired by hand. Asymptotic rate matches live NEST **exactly**
   (32.03 vs 32.03 spks/s, 0.00 %).
-- `examples/nest/brunel_alpha_evolution_strategies.py` — port of NEST's
+- `examples/nest_like/brunel_alpha_evolution_strategies.py` — port of NEST's
   `brunel_alpha_evolution_strategies.py`. A separable Natural Evolution Strategies
   optimizer (Wierstra et al. 2014; verbatim NumPy port) tunes the drive `eta` and
   the inhibition ratio `g` of a Brunel alpha network toward target rate / CV /

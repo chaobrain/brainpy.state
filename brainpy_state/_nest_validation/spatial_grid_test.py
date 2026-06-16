@@ -77,7 +77,7 @@ class TestSpatialGridStructure(unittest.TestCase):
         self.assertEqual(center_element(grid([4, 3], extent=[2.0, 1.5])), 4)
 
     def test_example_run_smoke(self):
-        from examples.nest.spatial_grid_iaf import run
+        from examples.nest_like.spatial_grid_iaf import run
         coords = run()
         self.assertEqual(coords.shape, (12, 2))
         np.testing.assert_allclose(

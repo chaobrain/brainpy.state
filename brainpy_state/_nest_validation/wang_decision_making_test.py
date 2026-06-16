@@ -3,7 +3,7 @@
 
 Builds the *same* reduced, mean-field-preserving network (``ne=200, ni=50``;
 recurrent weights scaled by ``N_full / N``) in **brainpy.state** (the ported
-``examples/nest/wang_decision_making.py``) and in **live NEST** (the upstream
+``examples/nest_like/wang_decision_making.py``) and in **live NEST** (the upstream
 ``iaf_bw_2001`` model wired by hand here), then compares the *decision behaviour*
 over a handful of seeds.
 
@@ -48,7 +48,7 @@ except Exception:
     nest = None
 
 from brainpy_state._nest_validation.nest_compare import requires_nest
-from examples.nest.wang_decision_making import (
+from examples.nest_like.wang_decision_making import (
     EPOP, IPOP, G, F, NE_FULL, NI_FULL, W_PLUS, W_MINUS, DELAY, DELAY_EXT,
     SIGNAL_START, SIGNAL_DUR, RATE_BG, _signal_rates, decision_from_rates,
     run_decision)
@@ -63,7 +63,7 @@ LATE = slice(int(2000 / DT), int(2500 / DT))   # post-signal attractor window
 def _nest_rates(coherence, seed, ne, ni, T, dt=DT):
     """Run the reduced Wang network in live NEST; return (rate_a, rate_b) in Hz.
 
-    Mirrors ``examples.nest.wang_decision_making.build`` connection-for-connection
+    Mirrors ``examples.nest_like.wang_decision_making.build`` connection-for-connection
     (same block-structured WTA weights, same N_full/N scaling, the same per-interval
     signal envelope via the shared ``_signal_rates``) so any decision difference is
     dynamics, not wiring.

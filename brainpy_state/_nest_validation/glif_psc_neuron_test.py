@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity + mechanism-subset checks for ``examples/nest/glif_psc_neuron.py``.
+"""Live-NEST parity + mechanism-subset checks for ``examples/nest_like/glif_psc_neuron.py``.
 
 The current-based GLIF neuron is validated at all five mechanism levels. Unlike
 its conductance sibling ``glif_cond`` (RKF45-integrated alpha conductances),
@@ -61,7 +61,7 @@ from brainpy_state._nest_validation.nest_compare import requires_nest, compare_t
 from brainpy_state._nest_validation.tolerance_conventions import (
     TraceTolerance, CAT_B_ALIGNED)
 
-from examples.nest.glif_psc_neuron import (
+from examples.nest_like.glif_psc_neuron import (
     run_traces, GLIF_LEVELS, TAU_SYN, ESPIKE_TIMES, ISPIKE_TIMES, ESPIKE_W,
     ISPIKE_W, STEP_AMP, STEP_START, STEP_STOP, RESOLUTION, SIMTIME, RECORD_FROM)
 

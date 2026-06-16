@@ -32,8 +32,8 @@ jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
 from brainpy_state._nest_validation.nest_compare import requires_nest
-from examples.nest.sudoku_net import SudokuNet, SudokuSolver
-from examples.nest.sudoku_puzzles import get_puzzle, make_easy_puzzle, validate_solution
+from examples.nest_like.sudoku_net import SudokuNet, SudokuSolver
+from examples.nest_like.sudoku_puzzles import get_puzzle, make_easy_puzzle, validate_solution
 
 NEST_SUDOKU_DIR = ('/mnt/d/codes/githubs/computational_neuroscience/'
                    'nest-simulator/pynest/examples/sudoku')

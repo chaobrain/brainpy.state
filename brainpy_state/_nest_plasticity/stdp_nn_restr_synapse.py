@@ -93,13 +93,13 @@ class stdp_nn_restr_synapse(NESTPlasticity):
     **NEST divergence — ``tau_minus`` location.** In NEST ``tau_minus`` is a parameter
     of the *postsynaptic neuron* (``ArchivingNode``), not the synapse; here it is a
     synapse-spec attribute driving the substrate's per-post ``K-`` trace. See
-    ``CONTEXT.md`` Lessons (cluster 04).
+    ``develop/NEST_PARITY_LEDGER.md`` Lessons (cluster 04).
 
     **Phantom-pre-at-0 (shared with symm).** NEST's first send (``t_lastspike_=0``)
     facilitates a post preceding the first pre against a virtual pre at ``t=0``; the
     substrate's ``pre_avail`` flag starts at 0, so that post is simply not eligible — the
     physically correct nearest behaviour. Parity is asserted where this is absent/below
-    tolerance. See ``CONTEXT.md`` Lessons (05).
+    tolerance. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (05).
 
     The eager substrate applies potentiation at post-spike steps and depression at
     pre-spike steps; NEST defers both to the next ``send``. The cumulative op set is

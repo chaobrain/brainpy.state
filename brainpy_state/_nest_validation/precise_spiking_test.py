@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/precise_spiking.py``.
+"""Live-NEST parity for ``examples/nest_like/precise_spiking.py``.
 
 NEST's ``precise_spiking`` drives a grid model (``iaf_psc_exp``) and its precise
 twin (``iaf_psc_exp_ps``) with the same DC current at several resolutions and
@@ -74,7 +74,7 @@ class TestPreciseSpikingStructural(unittest.TestCase):
     """The grid-vs-precise contrast — the demo's payload, NEST-free."""
 
     def test_grid_fires_on_grid(self):
-        from examples.nest.precise_spiking import run_grid
+        from examples.nest_like.precise_spiking import run_grid
         out = run_grid(dt=0.1)
         steps = out["spike_steps"]
         self.assertGreater(steps.size, 0)
@@ -87,7 +87,7 @@ class TestPreciseSpikingStructural(unittest.TestCase):
         self.assertEqual(out["vm"].shape[0], out["times"].shape[0])
 
     def test_precise_fires_off_grid(self):
-        from examples.nest.precise_spiking import run_grid, run_precise
+        from examples.nest_like.precise_spiking import run_grid, run_precise
         out = run_precise(dt=0.1)
         st = out["spike_times"]
         self.assertGreater(st.size, 0)
@@ -101,7 +101,7 @@ class TestPreciseSpikingStructural(unittest.TestCase):
                              CAT_E.max_count_diff)
 
     def test_precise_time_is_resolution_robust(self):
-        from examples.nest.precise_spiking import run_precise
+        from examples.nest_like.precise_spiking import run_precise
         # Onset-aligned precise firing period is set by the continuous dynamics,
         # so it barely moves with the integration step (unlike the grid model).
         p1 = _relative(run_precise(dt=0.1)["spike_times"])
@@ -113,7 +113,7 @@ class TestPreciseSpikingStructural(unittest.TestCase):
     def test_main_smoke(self):
         import io
         import contextlib
-        from examples.nest.precise_spiking import main
+        from examples.nest_like.precise_spiking import main
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             main()
@@ -126,7 +126,7 @@ class TestPreciseSpikingStructural(unittest.TestCase):
 @requires_nest
 class TestPreciseSpikingParity(unittest.TestCase):
     def test_grid_matches_nest(self):
-        from examples.nest.precise_spiking import run_grid, RESOLUTIONS, SIMTIME, STIM_CURRENT
+        from examples.nest_like.precise_spiking import run_grid, RESOLUTIONS, SIMTIME, STIM_CURRENT
         for dt in RESOLUTIONS:
             bp = run_grid(dt=dt)
             bp_times = bp["spike_steps"] * dt
@@ -134,7 +134,7 @@ class TestPreciseSpikingParity(unittest.TestCase):
             _assert_spike_parity(self, bp_times, ne_times, dt, f"grid dt={dt}")
 
     def test_precise_matches_nest(self):
-        from examples.nest.precise_spiking import run_precise, RESOLUTIONS, SIMTIME, STIM_CURRENT
+        from examples.nest_like.precise_spiking import run_precise, RESOLUTIONS, SIMTIME, STIM_CURRENT
         for dt in RESOLUTIONS:
             bp = run_precise(dt=dt)
             ne_times = _nest_spike_times("iaf_psc_exp_ps", dt, SIMTIME, STIM_CURRENT)

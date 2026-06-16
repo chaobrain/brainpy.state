@@ -4,7 +4,7 @@ r"""§3.10 pong — ``PongNetDopa`` dopaminergic actor-critic learner: wiring + 
 The dopamine *substrate* (``stdp_dopamine_synapse`` weight trajectory and the
 ``volume_transmitter`` ``n(t)``) is already validated against live NEST to tight
 bands (``stdp_dopamine_synapse_parity_test`` / ``volume_transmitter_parity_test``).
-What :class:`~examples.nest.pong_networks.PongNetDopa` adds is the *actor-critic
+What :class:`~examples.nest_like.pong_networks.PongNetDopa` adds is the *actor-critic
 wiring* and the host reward-current seam, and (like all the pong RL learners) its
 game-by-game trajectory PRNG-diverges from NEST. So this module pins the new pieces
 deterministically rather than per-sample:
@@ -35,7 +35,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 
 from brainpy_state import spike_recorder
 from brainpy_state._nest_network._event_plastic import VoltageCoupledPlasticProj
-import examples.nest.pong_networks as pn
+import examples.nest_like.pong_networks as pn
 
 DT = pn.DT
 

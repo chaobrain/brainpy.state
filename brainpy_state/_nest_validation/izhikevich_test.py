@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the Izhikevich firing-regime demo (§3.5).
 
-The demo ``examples/nest/izhikevich.py`` drives a single ``izhikevich`` neuron with
+The demo ``examples/nest_like/izhikevich.py`` drives a single ``izhikevich`` neuron with
 a constant 10 pA current in each of the four canonical regimes (RS / IB / CH / FS)
 and records ``V_m`` and ``U_m`` through a multimeter.
 
@@ -30,7 +30,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.izhikevich as demo
+import examples.nest_like.izhikevich as demo
 
 try:
     import nest

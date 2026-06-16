@@ -48,7 +48,7 @@ class TestClopathSpikePairingExample(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from examples.nest.clopath_synapse_spike_pairing import run, normalized_weight_change
+        from examples.nest_like.clopath_synapse_spike_pairing import run, normalized_weight_change
         brainstate.environ.set(dt=drv.DT * u.ms)
         cls.normalized_weight_change = staticmethod(normalized_weight_change)
         cls.rho, cls.post_pre, cls.pre_post, cls.our_w = run()

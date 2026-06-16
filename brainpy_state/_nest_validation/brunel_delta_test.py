@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Brunel delta-synapse firing-rate parity: brainpy.state Simulator vs live NEST.
 
-Drives the faithful ``examples/nest/brunel_delta.py`` port at a small order and
+Drives the faithful ``examples/nest_like/brunel_delta.py`` port at a small order and
 asserts the recorded excitatory rate lands within 5 % of a live NEST run built
 from identical parameters. Skipped when ``nest`` is unavailable.
 """
@@ -61,7 +61,7 @@ def _nest_rates(order, simtime):
 @requires_nest
 class TestBrunelDeltaParity(unittest.TestCase):
     def test_excitatory_rate_within_5pct_of_nest(self):
-        from examples.nest.brunel_delta import build
+        from examples.nest_like.brunel_delta import build
         sim, esr, _isr, _n, _t = build(order=ORDER, simtime=SIMTIME)
         res = sim.simulate(SIMTIME * u.ms)
         bp_rate = res.rate(esr.segments[0].population)

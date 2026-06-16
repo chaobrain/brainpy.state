@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Live-NEST parity for the MAT / AMAT adaptive-threshold demo (§3.5).
 
-The demo ``examples/nest/mat_psc_exp.py`` drives a ``mat2_psc_exp`` and an
+The demo ``examples/nest_like/mat_psc_exp.py`` drives a ``mat2_psc_exp`` and an
 ``amat2_psc_exp`` neuron with constant current and records the membrane potential
 ``V_m`` and the composite moving threshold ``V_th = omega + V_th_1 + V_th_2
 [+ V_th_v]`` through a multimeter.
@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64, platform='cpu')
 from brainpy_state._nest_validation.nest_compare import compare_trace, requires_nest
 from brainpy_state._nest_validation import tolerance_conventions as tc
 
-import examples.nest.mat_psc_exp as demo
+import examples.nest_like.mat_psc_exp as demo
 
 try:
     import nest

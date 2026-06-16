@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Live-NEST parity for ``examples/nest/balancedneuron.py``.
+"""Live-NEST parity for ``examples/nest_like/balancedneuron.py``.
 
 NEST's ``balancedneuron`` bisects the inhibitory Poisson rate so an
 ``iaf_psc_alpha`` driven by signed-weight excitatory/inhibitory Poisson channels
@@ -56,7 +56,7 @@ class TestBalancedNeuronParity(unittest.TestCase):
         brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_bisected_inhibitory_rate_matches_nest(self):
-        from examples.nest.balancedneuron import find_inhibitory_rate
+        from examples.nest_like.balancedneuron import find_inhibitory_rate
 
         root_bp = find_inhibitory_rate(simtime=SIMTIME, lower=LOWER, upper=UPPER,
                                        prec=XTOL, seed=0)

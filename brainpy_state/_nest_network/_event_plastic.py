@@ -2,7 +2,7 @@
 """EventPlasticProj — JAX-native, event-driven plastic projection substrate.
 
 This is the first of the three typed plasticity primitives described in
-``CONTEXT.md`` Part 2.5. It owns the *compute*: a CSR edge layout (reusing the
+``develop/NEST_PARITY_LEDGER.md`` Part 2.5. It owns the *compute*: a CSR edge layout (reusing the
 :class:`~brainpy_state._nest_network._projections._SparseEventMatMul` convention),
 an :class:`~brainpy_state._brainpy._delay.InputDelay` axonal delay seam,
 rule-declared per-edge / per-neuron :class:`brainstate.State` allocation, and

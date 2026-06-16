@@ -19,7 +19,7 @@ import numpy as np
 jax.config.update('jax_enable_x64', True)
 brainstate.environ.set(precision=64, platform='cpu')
 
-from examples.nest.sudoku_net import SudokuNet
+from examples.nest_like.sudoku_net import SudokuNet
 
 
 def _relax(net, puzzle, n_chunks=3, chunk_ms=100.0, seed=0):
