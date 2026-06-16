@@ -1908,6 +1908,9 @@ objection into a Lessons entry, do **not** silently diverge.
     `brainpy_state` **untraced**, then `coverage.start()` + `importlib.reload` the spec
     modules (covers their module-level lines) before running the rule tests in-process;
     coverage is by file-line so the cached classes still trace method bodies.
+    *(Update 2026-06-16: `install_exp_euler_patch()` and `brainpy_state/_exp_euler.py`
+    have since been removed — `brainstate.nn.exp_euler_step` was fixed upstream
+    (brainstate>=0.5.0). The import-time C-path that coredumped no longer exists.)*
 - **For next clusters:** the `nearest` mode + eligibility-flag + per-edge-trace +
   charge/readout idioms now cover every nearest-neighbour and hardware-LUT shape by
   **writing specs only**. Remaining legacy-imperative STDP: `stdp_dopamine` (needs a global
