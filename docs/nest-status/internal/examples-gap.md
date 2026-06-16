@@ -311,14 +311,14 @@ documented skipped placeholders, their per-edge tripartite physics already valid
 
 | NEST example | Status | brainpy.state equivalent | Notes |
 |---|---|---|---|
-| `compartmental_model/` (subdir) | missing | none | dendritic-tree models on `cm_default` |
-| `pong/` (subdir) | missing | none | reinforcement-learning demo |
-| `sudoku/` (subdir) | missing | none | constraint-satisfaction with stochastic neurons |
+| `compartmental_model/` (subdir) | implemented | `examples/nest/two_comps.py`, `examples/nest/receptors_and_current.py` | dendritic-tree models on `cm_default` (active vs passive dendrite; per-compartment AMPA / NMDA / GABA + DC). Live-NEST `v_comp` / gating / `g_r,g_d` parity + NEST-free dendritic-amplification laws |
+| `pong/` (subdir) | implemented | `examples/nest/pong.py`, `pong_networks.py`, `pong_run.py` | RL demo: `PongNetRSTDP` (host R-STDP on static synapses) + `PongNetDopa` (dopaminergic actor–critic) on the `Simulator.cont` / `host_drive` persistent-rollout substrate. Component-deterministic parity (`calculate_stdp` vs live NEST; dopamine reward→potentiation pathway) + bounded behavioural learning |
+| `sudoku/` (subdir) | missing | none | stochastic WTA constraint-satisfaction. Investigated and found intractable to bring to solve-rate parity on the current substrate — recorded TODO (CONTEXT.md §3.10 lesson) |
 | `structural_plasticity.py` | unsupported | none | spec §7 (no structural plasticity) |
 | `store_restore_network.py` | unsupported | none | kernel-state serialization is NEST-internal |
 | `music_cont_out_proxy_example/` | unsupported | none | spec §7 (MUSIC) |
 | `sonata_example/` | unsupported | none | spec §7 (SONATA) |
-| `brette_gerstner_fig_2c.py`, `brette_gerstner_fig_3d.py` | missing | none | reproduces figures from AdEx paper |
+| `brette_gerstner_fig_2c.py`, `brette_gerstner_fig_3d.py` | implemented | `examples/nest/brette_gerstner_fig_2c.py`, `brette_gerstner_fig_3d.py` | AdEx pedagogical figures: spike-frequency adaptation (`aeif_cond_alpha`) + post-inhibitory rebound (`aeif_cond_exp`). Sub-threshold `V_m` parity (CAT_A, < 1e-3 mV) + spike-pattern (CAT_E) |
 
 ## 4. Missing or incomplete functionality
 
@@ -468,9 +468,11 @@ The examples-as-validation point above is the headline: porting NEST examples
   Blocked by `network-api-gap.md` spatial roadmap. Acceptance: at least one
   spatial example ports cleanly via `nest_compat.spatial.*`.
 
-- **P2 — `pong/` and `sudoku/` demos.** [L]
-  Rationale: demonstrates RL / constraint-satisfaction patterns. Lower
-  priority because they're niche but high-profile when present.
-  Acceptance: both ported; functional behavior (pong: ball-tracking accuracy;
-  sudoku: solve rate) matches the NEST examples within the documented
-  stochastic variance.
+- **P2 — `sudoku/` demo.** [L]
+  Rationale: demonstrates a stochastic WTA constraint-satisfaction pattern.
+  (`pong/` is **done** — see §3.10: `PongNetRSTDP` + `PongNetDopa` on the
+  `Simulator.cont` / `host_drive` persistent-rollout substrate.) Lower priority
+  because it's niche but high-profile when present. Acceptance: the noise-driven
+  WTA network solves at a rate matching the NEST example within the documented
+  stochastic variance — currently intractable on the substrate (recorded TODO,
+  CONTEXT.md §3.10 lesson).
