@@ -11,6 +11,7 @@ from brainpy_state._nest_spatial._layers import grid
 from brainpy_state._nest_spatial._distance import pairwise_distance
 from brainpy_state._nest_spatial._masks import circular
 from brainpy_state._nest_spatial._rule import spatial_pairwise_bernoulli
+from brainpy_state._nest_spatial._masks import box
 from brainpy_state._nest_spatial._helpers import (
     center_element, Distance, target_nodes, target_positions,
 )
@@ -76,6 +77,107 @@ class TestTargetQueries(unittest.TestCase):
         # the returned coords are exactly the target nodes' coords
         np.testing.assert_allclose(
             u.get_magnitude(tp[12].to(u.um)), u.get_magnitude(coords[tn[12]].to(u.um)))
+
+
+class TestDumpHelpers(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(platform='cpu')
+
+    def _sim(self):
+        sim = Simulator(dt=0.1 * u.ms)
+        pop = sim.create(iaf_psc_alpha, positions=grid([5, 5], extent=[4.0, 4.0]))
+        sim.connect(pop, pop, rule=spatial_pairwise_bernoulli(p=1.0, mask=circular(1.0)),
+                    weight=1.0 * u.pA, delay=1.0 * u.ms)
+        return sim, pop
+
+    def test_dump_layer_nodes_index_and_coords(self):
+        import os, tempfile
+        from brainpy_state._nest_spatial._helpers import dump_layer_nodes
+        sim, pop = self._sim()
+        path = tempfile.mktemp(suffix='.txt')
+        text = dump_layer_nodes(sim, pop, path)
+        rows = [ln.split() for ln in text.strip().split('\n')]
+        self.assertEqual(len(rows), 25)                         # one line per node
+        self.assertEqual([int(r[0]) for r in rows], list(range(25)))   # local index column
+        coords = np.array([[float(r[1]), float(r[2])] for r in rows])
+        ref = np.asarray(u.get_magnitude(sim.get_position(pop).to(u.um)))
+        np.testing.assert_allclose(coords, ref, atol=1e-6)
+        self.assertTrue(os.path.exists(path))                  # file actually written
+        os.remove(path)
+
+    def test_dump_layer_connections_displacement_weight_delay(self):
+        import os, tempfile
+        from brainpy_state._nest_spatial._helpers import dump_layer_connections
+        sim, pop = self._sim()
+        path = tempfile.mktemp(suffix='.txt')
+        text = dump_layer_connections(sim, pop, pop, path)
+        rows = [ln.split() for ln in text.strip().split('\n')]
+        coords = np.asarray(u.get_magnitude(sim.get_position(pop).to(u.um)))
+        sc = sim.get_connections(source=pop, target=pop)
+        self.assertEqual(len(rows), len(sc))                   # one line per edge
+        for r in rows:
+            s, t = int(r[0]), int(r[1])
+            self.assertAlmostEqual(float(r[2]), 1.0, places=6)  # weight (pA)
+            self.assertAlmostEqual(float(r[3]), 1.0, places=6)  # delay (ms)
+            np.testing.assert_allclose([float(r[4]), float(r[5])],
+                                       coords[t] - coords[s], atol=1e-6)  # target - source
+        os.remove(path)
+
+
+class TestNearestElement(unittest.TestCase):
+    def setUp(self):
+        # nodes at x = -1, 0, +1 (y = 0): idx 0, 1, 2.
+        self.layer = grid([3, 1], extent=[3.0, 1.0])
+
+    def test_single_location_returns_int(self):
+        from brainpy_state._nest_spatial._helpers import nearest_element
+        out = nearest_element(self.layer, [0.9, 0.0])
+        self.assertIsInstance(out, int)
+        self.assertEqual(out, 2)
+
+    def test_list_of_locations_returns_list(self):
+        from brainpy_state._nest_spatial._helpers import nearest_element
+        out = nearest_element(self.layer, [[0.9, 0.0], [-0.9, 0.0]])
+        self.assertEqual(out, [2, 0])
+
+    def test_quantity_location(self):
+        from brainpy_state._nest_spatial._helpers import nearest_element
+        self.assertEqual(nearest_element(self.layer, [0.9, 0.0] * u.um), 2)
+
+    def test_tie_returns_lowest_index(self):
+        from brainpy_state._nest_spatial._helpers import nearest_element
+        # x = -0.5 is equidistant to node 0 (-1) and node 1 (0); lowest wins.
+        self.assertEqual(nearest_element(self.layer, [-0.5, 0.0]), 0)
+
+    def test_find_all_returns_every_tie(self):
+        from brainpy_state._nest_spatial._helpers import nearest_element
+        out = nearest_element(self.layer, [-0.5, 0.0], find_all=True)
+        self.assertEqual(out, [0, 1])
+
+
+class TestSelectNodesByMask(unittest.TestCase):
+    def setUp(self):
+        # 3x3 grid, spacing 2/3: center idx 4, orthogonal neighbours at 0.667, diagonals at 0.943.
+        self.layer = grid([3, 3], extent=[2.0, 2.0])
+
+    def test_circular_at_origin_selects_plus_shape(self):
+        from brainpy_state._nest_spatial._helpers import select_nodes_by_mask
+        from brainpy_state._nest_spatial._masks import circular
+        out = select_nodes_by_mask(self.layer, [0.0, 0.0], circular(0.7))
+        self.assertEqual(sorted(out), [1, 3, 4, 5, 7])
+
+    def test_box_is_directional(self):
+        from brainpy_state._nest_spatial._helpers import select_nodes_by_mask
+        # displacement x in [0, 10]: only nodes with x >= 0 (columns 1 and 2).
+        out = select_nodes_by_mask(self.layer, [0.0, 0.0], box([0.0, -10.0], [10.0, 10.0]))
+        self.assertEqual(sorted(out), [3, 4, 5, 6, 7, 8])
+
+    def test_anchor_offset(self):
+        from brainpy_state._nest_spatial._helpers import select_nodes_by_mask
+        from brainpy_state._nest_spatial._masks import circular
+        # anchored on node 7's coord (0.667, 0); radius 0.3 isolates node 7 alone.
+        out = select_nodes_by_mask(self.layer, [2.0 / 3.0, 0.0], circular(0.3))
+        self.assertEqual(sorted(out), [7])
 
 
 if __name__ == '__main__':
