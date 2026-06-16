@@ -188,6 +188,51 @@ class TestReadout(unittest.TestCase):
         np.testing.assert_array_equal(sol1, sol2)
 
 
+class TestForLoopLowering(unittest.TestCase):
+    """The 100 ms chunk rollout lowers via ``cont()``'s ``for_loop`` -- one trace, not a
+    Python step loop (cluster-12 discipline; the property that makes the solver tractable)."""
+
+    def test_chunk_rollout_lowers_under_for_loop(self):
+        from examples.nest.sudoku_net import SudokuNet
+        net = SudokuNet(seed=0)
+        sim = net.sim
+
+        # Spy on the per-step update: under for_loop the body is *traced once*, so the
+        # Python-level update is called O(1) times regardless of step count. A bare
+        # Python step loop would call it once per step (== n_steps).
+        calls = [0]
+        orig_update = sim.update
+
+        def counting_update(*args, **kwargs):
+            calls[0] += 1
+            return orig_update(*args, **kwargs)
+
+        sim.update = counting_update
+        sim.reset_rollout()
+        n_steps = 50                                           # 5 ms at dt = 0.1 ms
+        res = sim.cont(n_steps * 0.1 * u.ms)
+        self.assertLess(calls[0], 10, 'rollout did not lower under for_loop (Python step loop?)')
+        spikes = np.asarray(res.spikes(net.recorder))
+        self.assertEqual(spikes.shape, (n_steps, net.n_total))
+        self.assertTrue(np.all(np.isfinite(spikes)))
+
+
+class TestSolver(unittest.TestCase):
+    """``SudokuSolver`` runs the host relaxation loop and exits gracefully."""
+
+    def test_solve_returns_shaped_result_and_respects_max_iterations(self):
+        from examples.nest.sudoku_net import SudokuNet, SudokuSolver
+        net = SudokuNet(seed=0)
+        solver = SudokuSolver(net)
+        solution, valid, chunks = solver.solve(get_puzzle(4), max_iterations=3, seed=0)
+        self.assertEqual(solution.shape, (9, 9))
+        self.assertIn(bool(valid), (True, False))
+        self.assertLessEqual(chunks, 3)
+        self.assertGreaterEqual(chunks, 1)
+        self.assertGreaterEqual(int(solution.min()), 1)
+        self.assertLessEqual(int(solution.max()), 9)
+
+
 class TestDriveRates(unittest.TestCase):
     """The Poisson drives fire at SudokuNet's configured rates (sampling tolerance).
 

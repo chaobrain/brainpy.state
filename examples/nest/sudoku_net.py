@@ -41,6 +41,8 @@ brainstate.environ.set(precision=64, platform='cpu')
 import braintools
 from brainpy import state as bps
 
+from examples.nest.sudoku_puzzles import validate_solution
+
 # -- NEST constants (verbatim from sudoku_net.py, in NEST's native units) ----------
 N_POPULATIONS = 9 ** 3              # 729 = rows x cols x digits
 DT = 0.1                            # ms, integration step
@@ -272,3 +274,72 @@ class SudokuNet:
         src = np.asarray(conns.get('source')).tolist()
         tgt = np.asarray(conns.get('target')).tolist()
         return set(zip(src, tgt))
+
+
+# default relaxation budget: NEST runs up to 10 s of biological time in 100 ms chunks
+DEFAULT_SIM_TIME_MS = 100.0
+DEFAULT_MAX_ITERATIONS = 100
+
+
+class SudokuSolver:
+    r"""Drive a :class:`SudokuNet` with NEST's host-side relaxation loop.
+
+    The network is built once; :meth:`solve` clamps the clues, resets the rollout, then
+    repeatedly advances the *same* compiled ``cont()`` chunk, reading out a candidate
+    solution after each chunk and stopping as soon as it validates (or the iteration
+    budget is exhausted). State (membrane potentials, synaptic currents) evolves
+    continuously across chunks -- only the per-chunk spike tally drives the readout --
+    exactly as NEST interleaves ``reset_spike_recorders()`` with a continuous
+    ``Simulate``.
+
+    Parameters
+    ----------
+    net : SudokuNet
+        The build-once network to relax.
+
+    See Also
+    --------
+    SudokuNet : the spiking network this loop drives.
+    """
+
+    def __init__(self, net):
+        self.net = net
+
+    def solve(self, puzzle, max_iterations=DEFAULT_MAX_ITERATIONS,
+              sim_time_ms=DEFAULT_SIM_TIME_MS, seed=0):
+        """Relax ``puzzle`` until a valid solution is read out or the budget runs out.
+
+        Parameters
+        ----------
+        puzzle : numpy.ndarray
+            ``(9, 9)`` clue array (see :func:`~examples.nest.sudoku_puzzles.get_puzzle`).
+        max_iterations : int, optional
+            Maximum number of relaxation chunks. Default ``100`` (NEST's ``10 s / 100 ms``).
+        sim_time_ms : float, optional
+            Biological duration of each chunk in ms. Default ``100.0``.
+        seed : int, optional
+            Seed for ``numpy.random`` (readout tiebreak) and ``brainstate.random``
+            (membrane init + Poisson trains). Default ``0``.
+
+        Returns
+        -------
+        solution : numpy.ndarray
+            The last decoded ``(9, 9)`` grid (digits 1..9).
+        valid : bool
+            Whether ``solution`` is a valid solution of ``puzzle``.
+        chunks : int
+            Number of relaxation chunks run (``<= max_iterations``); the
+            chunks-to-solution when ``valid`` is ``True``.
+        """
+        np.random.seed(seed)
+        brainstate.random.seed(seed)
+        self.net.set_input_config(puzzle)
+        self.net.sim.reset_rollout()
+
+        run, valid, solution = 0, False, None
+        while not valid and run < max_iterations:
+            res = self.net.sim.cont(sim_time_ms * u.ms)
+            solution = self.net.read_solution(res)
+            valid, _boxes, _rows, _cols = validate_solution(puzzle, solution)
+            run += 1
+        return solution, bool(valid), run
