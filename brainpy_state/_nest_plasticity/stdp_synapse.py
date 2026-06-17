@@ -89,7 +89,7 @@ class stdp_synapse(NESTPlasticity):
 
     **Parity note.** The consolidated NEST vs. brainpy.state divergence reference
     — trace-storage move, the family parameter-location map, and the parity-test
-    links — is in :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-tau-minus`).
+    links — is in :doc:`/nest-style/divergences/stdp` (:ref:`stdp-tau-minus`).
 
     References
     ----------

@@ -108,7 +108,7 @@ class stdp_nn_restr_synapse(NESTPlasticity):
 
     **Parity note.** The exact nearest-neighbour pairing convention, the NEST
     source citation, and the single-pair regression test are documented in
-    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-nn-restr`).
+    :doc:`/nest-style/divergences/stdp` (:ref:`stdp-nn-restr`).
 
     References
     ----------

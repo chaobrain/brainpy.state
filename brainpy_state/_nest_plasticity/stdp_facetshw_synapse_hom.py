@@ -140,7 +140,7 @@ class stdp_facetshw_synapse_hom(NESTPlasticity):
 
     **Parity note.** The charge-accumulation / LUT-readout pairing convention, the
     NEST keys and single-driver scope, and the parity test are documented in
-    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-facetshw`).
+    :doc:`/nest-style/divergences/stdp` (:ref:`stdp-facetshw`).
 
     References
     ----------

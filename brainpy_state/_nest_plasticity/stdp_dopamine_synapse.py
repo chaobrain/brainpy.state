@@ -112,7 +112,7 @@ class stdp_dopamine_synapse(NESTPlasticity):
 
     **Parity note.** The ``n``/``tau_n``-on-``volume_transmitter`` move, the
     online-vs-deferred band, and the parity test are documented in
-    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-dopamine`).
+    :doc:`/nest-style/divergences/stdp` (:ref:`stdp-dopamine`).
 
     References
     ----------

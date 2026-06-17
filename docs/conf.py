@@ -36,6 +36,22 @@ from importlib.metadata import version as _pkg_version
 
 release = _pkg_version("brainpy_state")
 
+# Register attribute-alias submodules so autosummary/autodoc can resolve dotted
+# paths like ``brainpy.state.spatial.Layer``. ``brainpy.state.spatial`` and
+# ``brainpy.state.network`` are real module objects exposed as attributes on the
+# public shim, but are not importable as dotted paths until registered here.
+import sys as _sys
+
+try:
+    import brainpy.state as _bps
+
+    for _alias in ("spatial", "network"):
+        _mod = getattr(_bps, _alias, None)
+        if _mod is not None:
+            _sys.modules[f"brainpy.state.{_alias}"] = _mod
+except Exception:
+    pass
+
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -48,7 +64,6 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
-    'sphinx_autodoc_typehints',
     'myst_nb',
     'matplotlib.sphinxext.plot_directive',
     'sphinx_thebe',
@@ -76,6 +91,13 @@ napoleon_use_param = True
 napoleon_use_rtype = True
 napoleon_preprocess_types = True
 napoleon_attr_annotations = True
+# Types are documented in the NumPy "Parameters" sections (rendered by napoleon),
+# so keep signatures uncluttered and let the docstrings be the single source of
+# truth. NOTE: do not re-add the third-party ``sphinx_autodoc_typehints`` here --
+# it injects ``:type:`` fields into napoleon's already-rendered ``:param:`` field
+# lists, producing "Field list ends without a blank line" warnings at every
+# Parameters->Attributes boundary.
+autodoc_typehints = "none"
 napoleon_custom_sections = [
     'Additional State Variables',
     'Attributes (State Variables)',
@@ -150,15 +172,16 @@ html_css_files = ['css/theme.css']
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
-jupyter_execute_notebooks = "off"
 thebe_config = {
     "repository_url": "https://github.com/binder-examples/jupyter-stacks-datascience",
     "repository_branch": "master",
 }
 
 # -- Options for myst ----------------------------------------------
-# Notebook cell execution timeout; defaults to 30.
-execution_timeout = 200
+# MyST-NB: do not execute notebooks at build time. Notebooks render from their
+# stored outputs (if any). CI can flip this to "auto"/"force" to execute.
+nb_execution_mode = "off"
+nb_execution_timeout = 200
 
 autodoc_default_options = {
     'exclude-members': '....,default_rng',

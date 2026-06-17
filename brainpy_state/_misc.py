@@ -28,12 +28,16 @@ def set_module_as(module: str) -> Callable[[T], T]:
     functions and classes are supported; the decorated object is returned
     unchanged apart from its ``__module__`` attribute.
 
-    Args:
-      module: Public module path to assign, e.g. ``'brainpy.state'``.
+    Parameters
+    ----------
+    module : str
+        Public module path to assign, e.g. ``'brainpy.state'``.
 
-    Returns:
-      A decorator that sets ``__module__`` on the function or class it wraps
-      and returns it unchanged.
+    Returns
+    -------
+    callable
+        A decorator that sets ``__module__`` on the function or class it wraps
+        and returns it unchanged.
     """
 
     def wrapper(obj: T) -> T:

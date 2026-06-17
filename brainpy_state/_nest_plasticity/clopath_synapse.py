@@ -122,7 +122,7 @@ class clopath_synapse(NESTPlasticity):
 
     **Parity note.** The parameter-location moves, the ``delay_u_bars`` divergence
     and its 5 % band, and the parity test are documented in
-    :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-param-location`,
+    :doc:`/nest-style/divergences/stdp` (:ref:`stdp-param-location`,
     :ref:`stdp-numerical-divergences`).
 
     References
