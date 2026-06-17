@@ -1,48 +1,59 @@
 ``brainpy.state`` documentation
 =====================================
 
-`brainpy.state <https://github.com/chaobrain/brainpy.state>`_ provides spiking
-neural network models built on `JAX <https://github.com/jax-ml/jax>`_ and the
-`brainstate <https://github.com/chaobrain/brainstate>`_ state-management system.
-It is the point-neuron modeling layer of the
-`BrainX ecosystem <https://brainx.chaobrain.com>`_.
+`brainpy.state <https://github.com/chaobrain/brainpy.state>`_ is the
+point-neuron modeling layer of the `BrainX ecosystem
+<https://brainx.chaobrain.com>`_. It provides spiking neural network models
+built on `JAX <https://github.com/jax-ml/jax>`_ and the `brainstate
+<https://github.com/chaobrain/brainstate>`_ state-management system.
+
+**One differentiable substrate, two worlds.** ``brainpy.state`` is designed so
+that the *same* models serve both **brain simulation** (biophysical networks,
+spike rasters, conductance dynamics) and **brain-inspired computing**
+(surrogate-gradient training, online learning). The bridge is a small set of
+ideas — explicit **State**, **physical units**, and the distinctive
+**AlignPre / AlignPost** synaptic projection design — that keep memory linear in
+the number of neurons while remaining fully differentiable. See
+:doc:`concepts/alignpre-alignpost` for the keystone chapter.
+
+.. figure:: /_static/bridging-concept.png
+   :alt: A bridge diagram. On the left, a blue "Brain Simulation" panel with a
+         network schematic, a spike raster, and a conductance-versus-time trace;
+         on the right, an orange "Brain-Inspired Computing" panel with a
+         feedforward network, a loss-versus-training-step curve, and a
+         surrogate-gradient symbol. An arc across the top links the two panels,
+         labelled "surrogate gradients" and "linear-memory online learning". Both
+         panels rest on a single platform bar reading "One differentiable
+         substrate", whose three pills read "State", "Physical units", and
+         "AlignPre / AlignPost".
+   :width: 100%
+   :align: center
+
+   **Two worlds on one substrate.** The same ``State``-based, unit-aware models —
+   wired with AlignPre / AlignPost projections — drive both biophysical **brain
+   simulation** and gradient-trained **brain-inspired computing**. Surrogate
+   gradients and linear-memory online learning are the bridge between them.
 
 
-.. admonition:: API maturity
-   :class: important
+Two model families
+^^^^^^^^^^^^^^^^^^^
 
-   ``brainpy.state`` ships two model families with different maturity levels:
+``brainpy.state`` ships two complementary, production-ready model families on a
+shared substrate:
 
-   - **Stable** — Base classes (``Dynamics``, ``Neuron``, ``Synapse``) and
-     **BrainPy-style models** (45+ neurons, synapses, projections, readouts,
-     input generators). Public API is stable for the 0.0.x series and
-     recommended for production use and surrogate-gradient training.
-   - **Experimental — In Development** — **NEST-compatible models** (119+
-     neurons, synapses, plasticity, devices). These are under active
-     development; parameter names, defaults, and numerical behavior may change
-     without notice. Use them for exploration and validation, but pin your
-     dependency version and expect breaking changes.
+- **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx,
+  HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, GABAa, BioNMDA), projections
+  (``AlignPostProj``, ``DeltaProj``, …), readouts, input generators, and
+  short-term plasticity, in the tradition of `BrainPy
+  <https://brainpy.readthedocs.io/>`_. The idiomatic entry point — start here.
+- **NEST-compatible models** — JAX re-implementations of `NEST simulator
+  <https://nest-simulator.readthedocs.io/>`_ neuron, synapse, plasticity (STDP,
+  STP), and device models with NEST parameter names, validated against live
+  NEST with formal tolerance bands. The migration path for NEST users.
 
-   See the :doc:`NEST-style status page <nest-status/index>` for what is
-   currently available and what users should not rely on yet.
-
-
-What's in the library
-^^^^^^^^^^^^^^^^^^^^^
-
-- **Base classes** — ``Dynamics``, ``Neuron``, ``Synapse``: the abstract
-  foundation every model inherits from.
-- **BrainPy-style models** (Stable, 45+) — high-level, composable neurons
-  (LIF, ALIF, AdEx, HH, Izhikevich, ...), synapses (Expon, Alpha, AMPA, GABA,
-  NMDA), projections, readouts, input generators, and short-term plasticity,
-  designed in the tradition of `BrainPy <https://brainpy.readthedocs.io/>`_.
-- **NEST-compatible models** (Experimental, 119+) — JAX re-implementations
-  of `NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron,
-  synapse, plasticity (STDP, STP), and device models with NEST-compatible
-  parameter names.
-- All parameters carry **physical units** via `brainunit
-  <https://github.com/chaobrain/brainunit>`_; BrainPy-style neurons support
-  surrogate-gradient training out of the box.
+All parameters carry **physical units** via `brainunit
+<https://github.com/chaobrain/brainunit>`_, and every model compiles through JAX
+to CPU, GPU, and TPU.
 
 
 Installation
@@ -77,12 +88,12 @@ Installation
           pip install -U BrainX
 
 
-Quick Example
+Quick example
 ^^^^^^^^^^^^^
 
-A small excitatory–inhibitory balanced network using the Stable BrainPy-style
-API. See the :doc:`5-minute tutorial <quickstart/5min-tutorial>` for the full
-walkthrough.
+A small excitatory–inhibitory balanced network (COBA) built from the
+BrainPy-style API. See the :doc:`5-minute tour <get-started/5-minute-tour>` for
+the full walkthrough.
 
 .. code-block:: python
 
@@ -127,6 +138,14 @@ walkthrough.
                return self.N.get_spike()
 
 
+   net = EINet()
+   brainstate.nn.init_all_states(net)
+
+   with brainstate.environ.context(dt=0.1 * u.ms):
+       times = u.math.arange(0. * u.ms, 1000. * u.ms, brainstate.environ.get_dt())
+       spikes = brainstate.transform.for_loop(lambda t: net.update(t, 20. * u.mA), times)
+
+
 ----
 
 Learn more
@@ -137,44 +156,44 @@ Learn more
    .. grid-item::
       :columns: 6 6 6 4
 
-      .. card:: :material-regular:`rocket_launch;2em` 5-Minute Tutorial
+      .. card:: :material-regular:`rocket_launch;2em` Get Started
          :class-card: sd-text-black sd-bg-light
-         :link: quickstart/5min-tutorial.html
+         :link: get-started/index.html
+
+   .. grid-item::
+      :columns: 6 6 6 4
+
+      .. card:: :material-regular:`hub;2em` Core Concepts
+         :class-card: sd-text-black sd-bg-light
+         :link: concepts/index.html
 
    .. grid-item::
       :columns: 6 6 6 4
 
       .. card:: :material-regular:`library_books;2em` BrainPy-style Guide
          :class-card: sd-text-black sd-bg-light
-         :link: brainpy-guide/index.html
+         :link: brainpy-style/index.html
 
    .. grid-item::
       :columns: 6 6 6 4
 
-      .. card:: :material-regular:`explore;2em` Examples Gallery
+      .. card:: :material-regular:`science;2em` NEST-Compatible Hub
          :class-card: sd-text-black sd-bg-light
-         :link: examples/gallery.html
+         :link: nest-style/index.html
 
    .. grid-item::
       :columns: 6 6 6 4
 
       .. card:: :material-regular:`data_exploration;2em` API Reference
          :class-card: sd-text-black sd-bg-light
-         :link: api/index.html
+         :link: apis/index.html
 
    .. grid-item::
       :columns: 6 6 6 4
 
-      .. card:: :material-regular:`science;2em` NEST-style Status
+      .. card:: :material-regular:`explore;2em` Examples Gallery
          :class-card: sd-text-black sd-bg-light
-         :link: nest-status/index.html
-
-   .. grid-item::
-      :columns: 6 6 6 4
-
-      .. card:: :material-regular:`settings;2em` BrainX Ecosystem
-         :class-card: sd-text-black sd-bg-light
-         :link: https://brainx.chaobrain.com
+         :link: examples/brainpy-gallery.html
 
 
 ----
@@ -188,52 +207,56 @@ See also the ecosystem
 - `brainunit <https://github.com/chaobrain/brainunit>`_ — physical units for neuroscience
 - `brainevent <https://github.com/chaobrain/brainevent>`_ — event-driven sparse operators
 - `braintools <https://github.com/chaobrain/braintools>`_ — surrogate gradients, analysis, and utilities
+- `braintrace <https://github.com/chaobrain/braintrace>`_ — linear-memory online learning for spiking networks
 
 
 .. toctree::
    :hidden:
    :maxdepth: 1
-   :caption: Tutorials
+   :caption: Get Started
 
-   quickstart/index.rst
-   brainpy-guide/index.rst
-   examples/gallery.rst
+   get-started/index
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: Core Concepts
+
+   concepts/index
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: BrainPy-style Modeling
+
+   brainpy-style/index
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: NEST-Compatible
+
+   nest-style/index
 
 
 .. toctree::
    :hidden:
    :maxdepth: 2
-   :caption: API Reference (Stable)
+   :caption: API Reference
 
-   api/base
-   api/brainpy-neurons
-   api/brainpy-synapses
-   api/brainpy-projections
-   api/brainpy-synouts
-   api/brainpy-plasticity
-   api/brainpy-readouts
-   api/brainpy-inputs
+   apis/index
 
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
-   :caption: Experimental (NEST-Compatible)
+   :maxdepth: 1
+   :caption: Examples
 
-   nest-status/index
-   api/nest-base
-   api/nest-neurons
-   api/nest-synapses
-   api/nest-plasticity
-   api/nest-devices
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: NEST Porting Guide
-
-   nest-guide/index
+   examples/brainpy-gallery
+   examples/nest-gallery
 
 
 .. toctree::
@@ -242,3 +265,5 @@ See also the ecosystem
    :caption: Project
 
    changelog.md
+   project/citing
+   project/ecosystem

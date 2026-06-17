@@ -3,7 +3,7 @@
 
 NEST-free introspection test (collected by CI's ``pytest brainpy_state/``). It
 keeps the docstring -> docs cross-links from rotting and *executes* the runnable
-doctests on ``docs/nest-guide/stdp-divergences.rst`` — the divergence reference
+doctests on ``docs/nest-style/divergences/stdp.rst`` — the divergence reference
 page authored in cluster 10. The page's ``brainpy.state`` examples cannot be
 collected by ``--doctest-modules`` (the spec classes set
 ``__module__='brainpy.state'``, so ``DocTestFinder`` skips them), so they live in
@@ -26,10 +26,10 @@ import brainpy_state as bps
 # when the package is installed without the docs tree, so the page-dependent
 # tests skip rather than error in that environment.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_PAGE = _REPO_ROOT / 'docs' / 'nest-guide' / 'stdp-divergences.rst'
+_PAGE = _REPO_ROOT / 'docs' / 'nest-style' / 'divergences' / 'stdp.rst'
 
 # The stable cross-link marker every target docstring must carry.
-_DOC_LINK = ':doc:`/nest-guide/stdp-divergences`'
+_DOC_LINK = ':doc:`/nest-style/divergences/stdp`'
 
 # Each ``stdp_*``/``clopath_``/``stdp_dopamine_`` spec -> the section anchor its
 # Parity note points at. Every anchor must be defined in the page (no dangling

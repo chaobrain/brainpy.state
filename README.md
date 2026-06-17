@@ -13,41 +13,27 @@
 </p>
 
 
-[`brainpy.state`](https://github.com/chaobrain/brainpy.state) provides **spiking neural network models** built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate). It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/).
+[`brainpy.state`](https://github.com/chaobrain/brainpy.state) is **one differentiable substrate that bridges brain simulation and brain-inspired computing**. It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/), built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate).
 
-The library ships two model families:
+The same building blocks let you run biophysical spiking networks *and* train them with gradient descent — because the projections that keep simulation memory-efficient are exactly what make gradient-based and online learning memory-efficient too. That bridge was introduced in the [ICLR 2024 paper](https://openreview.net/forum?id=AU2gS9ut61) and is the keystone of the [Core Concepts](https://brainx.chaobrain.com/brainpy-state/concepts/index.html).
 
-- **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, GABA, NMDA), projections, readouts, input generators, and short-term plasticity, designed in the tradition of [BrainPy](https://brainpy.readthedocs.io/).
-- **NEST-compatible models** — JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neurons, synapses, plasticity (STDP, STP), and devices that preserve NEST's parameter names and unit conventions.
+`brainpy.state` ships **two model families**, both production-ready:
 
-All parameters carry **physical units** via [brainunit](https://github.com/chaobrain/brainunit); BrainPy-style neurons are differentiable through surrogate gradients out of the box.
+- **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, GABAa, BioNMDA), the AlignPre/AlignPost projections, synaptic outputs (COBA / CUBA / MgBlock), short-term plasticity, readouts, and input generators, in the tradition of [BrainPy](https://brainpy.readthedocs.io/). Differentiable through surrogate gradients out of the box.
+- **NEST-compatible models** — JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neurons, synapses, plasticity (STDP, STP), and devices that preserve NEST's parameter names and unit conventions, numerically validated against a live NEST install within documented tolerance bands.
+
+All parameters carry **physical units** via [brainunit](https://github.com/chaobrain/brainunit), catching unit errors at construction time.
 
 
 ## Key features
 
+- **One differentiable substrate** — biophysical simulation and gradient-based / brain-inspired computing share the same neurons, synapses, and projections.
+- **Memory-efficient projections** — the AlignPre/AlignPost design aligns synaptic state to the pre- or post-synaptic neurons (`O(N)`) instead of to individual synapses (`O(N_pre · N_post)`), without approximation. See the [AlignPre/AlignPost concept page](https://brainx.chaobrain.com/brainpy-state/concepts/alignpre-alignpost.html).
 - **Composable architecture** — mix and match neurons, synapses, synaptic outputs (COBA / CUBA / MgBlock), and projections.
 - **Physical units everywhere** — parameters use `brainunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors at construction time.
-- **Differentiable** — surrogate gradients enable backpropagation through BrainPy-style spiking networks for gradient-based training.
-- **NEST-compatible parameter names** — port models from NEST with minimal friction (NEST-compatible API is experimental, see status below).
+- **Differentiable** — surrogate gradients enable backpropagation through spiking networks for gradient-based training.
+- **NEST parameter parity** — port models from NEST with minimal friction; the NEST-compatible family is numerically validated against a live NEST install within documented tolerance bands.
 - **Hardware-accelerated** — JAX backend with JIT compilation for CPU, GPU, and TPU.
-
-
-## API status and maturity
-
-`brainpy.state` ships two model families with different maturity levels. **The BrainPy-style API is stable; the NEST-compatible API is experimental.**
-
-| Component                                                              | Status            | Notes |
-|------------------------------------------------------------------------|-------------------|-------|
-| Base classes (`Dynamics`, `Neuron`, `Synapse`)                         | **Stable**        | Public API stable for the 0.0.x series |
-| BrainPy-style neurons (LIF, ALIF, AdEx, HH, Izhikevich, …)             | **Stable**        | 45+ models, fully tested |
-| BrainPy-style synapses, projections, readouts, input generators         | **Stable**        | COBA / CUBA / MgBlock, STP / STD, Expon / Alpha / AMPA / GABA / NMDA |
-| Surrogate-gradient training                                            | **Stable**        | All BrainPy-style neurons differentiable |
-| NEST-compatible neurons (IAF, AdEx, GIF, GLIF, HH, …)                  | **Experimental**  | Under active development; parameter names, defaults, and numerical behavior may change |
-| NEST-compatible synapses and plasticity (STDP, STP)                    | **Experimental**  | Under active development |
-| NEST-compatible devices (generators, recorders, detectors)             | **Experimental**  | Under active development |
-| Rate / binary neurons (NEST set)                                       | **Experimental**  | Subset of NEST set; coverage incomplete |
-
-See the [NEST-style status page](https://brainx.chaobrain.com/brainpy-state/nest-status/index.html) for what is currently available, what is incomplete, and what users should not yet rely on.
 
 
 ## Installation
@@ -76,7 +62,11 @@ pip install BrainX -U
 
 ## Quickstart
 
-A small excitatory–inhibitory balanced network using the Stable BrainPy-style API:
+`brainpy.state` offers two entry points, depending on which family you reach for. Both examples build a model from the **public `brainpy.state` namespace** and run it on the JAX backend.
+
+### 1. BrainPy-style — an excitatory–inhibitory balanced network
+
+A COBA E/I network wired with the memory-efficient `AlignPostProj`. The synaptic state lives on the post-synaptic neurons (`O(N_post)`) — see the [AlignPre/AlignPost concept page](https://brainx.chaobrain.com/brainpy-state/concepts/alignpre-alignpost.html) for why this is exact, not an approximation.
 
 ```python
 import brainpy
@@ -123,6 +113,7 @@ class EINet(brainstate.nn.Module):
 net = EINet()
 brainstate.nn.init_all_states(net)
 
+# Drive the model with brainstate.transform.for_loop — never a bare Python loop.
 with brainstate.environ.context(dt=0.1 * u.ms):
     times = u.math.arange(0. * u.ms, 1000. * u.ms, brainstate.environ.get_dt())
     spikes = brainstate.transform.for_loop(
@@ -130,44 +121,75 @@ with brainstate.environ.context(dt=0.1 * u.ms):
     )
 ```
 
-See [`examples/103_COBA_2005.py`](https://github.com/chaobrain/brainpy.state/blob/main/examples/103_COBA_2005.py) for the full version with visualization.
+See [`examples/brainpy_like/103_COBA_2005.py`](https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/103_COBA_2005.py) for the full version with a spike raster.
+
+### 2. NEST-like — a single neuron driven by a constant current
+
+The NEST-compatible family uses an explicit `Simulator` with NEST's `create` / `connect` / `simulate` workflow and NEST's parameter names. Here a single `iaf_psc_alpha` is driven by a constant current `I_e` and observed by a `voltmeter` (connected in the reversed direction, as in NEST).
+
+```python
+import jax
+import brainpy
+import brainstate
+import brainunit as u
+
+jax.config.update("jax_enable_x64", True)   # NEST-parity runs use float64
+brainstate.environ.set(precision=64)
+
+sim = brainpy.state.Simulator(dt=0.1 * u.ms)
+neuron = sim.create(brainpy.state.iaf_psc_alpha, 1, I_e=376.0 * u.pA)
+vm = sim.create(brainpy.state.voltmeter)
+sim.connect(vm, neuron)              # reversed: the voltmeter observes the neuron
+
+res = sim.simulate(1000.0 * u.ms)
+v_m = res.trace(vm, "V_m")           # membrane potential trace (with units)
+```
+
+See [`examples/nest_like/one_neuron.py`](https://github.com/chaobrain/brainpy.state/blob/main/examples/nest_like/one_neuron.py) for the full version with plotting, and the [NEST-compatible hub](https://brainx.chaobrain.com/brainpy-state/nest-style/index.html) for the tutorials, model directory, and validation evidence.
+
+
+## Two model families
+
+`brainpy.state` is organized around two model families that share one substrate — explicit `State`, physical units, and `brainstate.transform`-driven simulation. Both are production-ready; the API reference is organized by family for navigation, not by maturity.
+
+### BrainPy-style (native)
+
+The idiomatic, composable layer: 45+ neurons, the AlignPre/AlignPost projections, synaptic outputs, short-term plasticity, readouts, and input generators. Every BrainPy-style neuron is differentiable through surrogate gradients, so the same model you simulate you can also train. Start with the [BrainPy-style modeling guide](https://brainx.chaobrain.com/brainpy-state/brainpy-style/index.html).
+
+### NEST-compatible (validated against live NEST)
+
+JAX re-implementations of NEST neurons, synapses, plasticity rules, and devices that keep NEST's parameter names and unit conventions, so you can port a NEST model with minimal friction. Rather than asking you to take fidelity on trust, every model carries **live-NEST parity evidence**: numerical agreement is checked against a real NEST install within documented tolerance bands. See the [validation showcase](https://brainx.chaobrain.com/brainpy-state/nest-style/validation-status.html) for per-model parity results and tolerance categories.
 
 
 ## Documentation
 
-- **Docs site**: <https://brainx.chaobrain.com/brainpy-state/>
-- **5-minute tutorial**: <https://brainx.chaobrain.com/brainpy-state/quickstart/5min-tutorial.html>
-- **BrainPy-style modeling guide**: <https://brainx.chaobrain.com/brainpy-state/brainpy-guide/index.html>
-- **API reference**: <https://brainx.chaobrain.com/brainpy-state/api/index.html>
-- **NEST-style status**: <https://brainx.chaobrain.com/brainpy-state/nest-status/index.html>
+Full documentation: <https://brainx.chaobrain.com/brainpy-state/>
+
+- **Get started** (install → run → mental model): <https://brainx.chaobrain.com/brainpy-state/get-started/index.html>
+- **Core concepts** (the bridging thesis; AlignPre/AlignPost keystone): <https://brainx.chaobrain.com/brainpy-state/concepts/index.html>
+- **BrainPy-style modeling**: <https://brainx.chaobrain.com/brainpy-state/brainpy-style/index.html>
+- **NEST-compatible hub** (tutorials, models, validation): <https://brainx.chaobrain.com/brainpy-state/nest-style/index.html>
+- **API reference**: <https://brainx.chaobrain.com/brainpy-state/apis/index.html>
+- **Examples**: <https://brainx.chaobrain.com/brainpy-state/examples/brainpy-gallery.html>
 
 
 ## Examples and tutorials
 
-Runnable examples live in [`examples/`](https://github.com/chaobrain/brainpy.state/tree/main/examples) and are catalogued in the [Examples Gallery](https://brainx.chaobrain.com/brainpy-state/examples/gallery.html). Highlights:
+Runnable examples live in [`examples/`](https://github.com/chaobrain/brainpy.state/tree/main/examples): BrainPy-style scripts under [`examples/brainpy_like/`](https://github.com/chaobrain/brainpy.state/tree/main/examples/brainpy_like) and NEST-compatible ports under [`examples/nest_like/`](https://github.com/chaobrain/brainpy.state/tree/main/examples/nest_like). They are catalogued in the [BrainPy-style gallery](https://brainx.chaobrain.com/brainpy-state/examples/brainpy-gallery.html) and the [NEST gallery](https://brainx.chaobrain.com/brainpy-state/examples/nest-gallery.html). Highlights:
 
 - E-I balanced networks, COBA and CUBA variants
 - Gamma oscillations (Susin & Destexhe 2021: AI, CHING, ING, PING mechanisms)
 - Surrogate-gradient training on Fashion-MNIST and MNIST
 - Joglekar et al. 2018 cortical propagation model
-
-
-## Development status
-
-`brainpy.state` is in the 0.0.x series. The BrainPy-style API is considered
-stable for this series; the NEST-compatible API is under active development.
-Pin a specific version (`brainpy.state==0.0.4`) when reproducibility matters.
-
-- **Bug reports**: <https://github.com/chaobrain/brainpy.state/issues>
-- **Releases**: <https://github.com/chaobrain/brainpy.state/releases>
+- NEST ports: Brunel random balanced networks, gap-junction networks, astrocyte networks
 
 
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the
 development setup, coding conventions, testing guidance, and documentation
-workflow (including how to document new APIs and how to mark experimental
-features).
+workflow (including how to document new APIs and how to record live-NEST
+validation/parity evidence for NEST-compatible models).
 
 
 ## Ecosystem
@@ -180,6 +202,7 @@ features).
 | [brainunit](https://github.com/chaobrain/brainunit) | Physical units for neuroscience |
 | [brainevent](https://github.com/chaobrain/brainevent) | Event-driven sparse operators |
 | [braintools](https://github.com/chaobrain/braintools) | Surrogate gradients, analysis, and utilities |
+| [braintrace](https://github.com/chaobrain/braintrace) | Linear-memory online learning for spiking networks |
 
 
 ## Citing

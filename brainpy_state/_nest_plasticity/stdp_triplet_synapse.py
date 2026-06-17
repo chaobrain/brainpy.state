@@ -99,7 +99,7 @@ class stdp_triplet_synapse(NESTPlasticity):
 
     **Parity note.** The consolidated trace-storage and parameter-location
     reference (both post-trace constants move onto the synapse) and the parity-test
-    links are in :doc:`/nest-guide/stdp-divergences` (:ref:`stdp-tau-minus`).
+    links are in :doc:`/nest-style/divergences/stdp` (:ref:`stdp-tau-minus`).
 
     References
     ----------

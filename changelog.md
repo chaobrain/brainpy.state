@@ -440,8 +440,6 @@ introduced in [brainstate](https://github.com/chaobrain/brainstate).
 | braintools | 0.0.9 |
 | numpy | 1.15 |
 
----
-
 [0.0.4]: https://github.com/chaobrain/brainpy.state/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/chaobrain/brainpy.state/compare/v0.0.1...v0.0.3
 [0.0.1]: https://github.com/chaobrain/brainpy.state/releases/tag/v0.0.1

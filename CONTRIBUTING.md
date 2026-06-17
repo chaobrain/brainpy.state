@@ -225,9 +225,9 @@ Every new public class or function must ship with documentation:
   (e.g. `State Variables`, `Mathematical Model`, `Parameter Mapping`,
   `Implementation Notes`) — use them where they help readers.
 - **BrainPy-style models** — add an `autosummary` entry to the appropriate
-  page under `docs/api/brainpy-*.rst`.
+  page under `docs/apis/brainpy-*.rst`.
 - **NEST-compatible models** — add an `autosummary` entry to the appropriate
-  page under `docs/api/nest-*.rst`. Parameter names should match the upstream
+  page under `docs/apis/nest-*.rst`. Parameter names should match the upstream
   NEST documentation. Document any deliberate deviation in the docstring
   under a `Parameter Mapping` or `Implementation Notes` section.
 - For any new model file, also add a colocated `*_test.py` that exercises
@@ -235,27 +235,42 @@ Every new public class or function must ship with documentation:
 - Export the new symbol in `brainpy_state/__init__.py` (`__all__` plus the
   import) so it appears in the public API surface.
 
-### Marking experimental features
+### Documenting validation and live-NEST parity
 
-`brainpy.state` ships two model families with different maturity levels — see
-the README's "API status and maturity" section.
+`brainpy.state` ships two model families — BrainPy-style and NEST-compatible —
+both presented as production-ready. We do not carry "Stable" / "Experimental"
+maturity labels. Instead of labelling a model's maturity, **substantiate trust
+with evidence**: show that a NEST-compatible model numerically agrees with a
+live NEST install, and keep every docstring claim accurate.
 
-- **NEST-compatible models** (anything under `brainpy_state/_nest/`) are
-  collectively considered **Experimental — In Development**. Individual
-  models do not need their own banner; the family-level banner on
-  `docs/api/nest-*.rst` and the [NEST status page](docs/nest-status/index.rst)
-  cover the whole set.
-- **BrainPy-style features** that are not yet stable must include a Sphinx
-  `.. warning::` admonition at the top of the docstring labelled
-  **Experimental — In Development**, and must be omitted from the README
-  maturity table until promoted to Stable.
-- **Promoting a feature from Experimental to Stable** requires:
-  1. Full test coverage including parameter validation.
-  2. Removal of the warning admonition from the docstring.
-  3. Addition to the README maturity table.
-  4. A CHANGELOG entry under "API stability".
-- When in doubt, ship as Experimental. Promotion is cheap; demoting silently
-  breaks users.
+When you add or change a **NEST-compatible model** (anything under
+`brainpy_state/_nest/`):
+
+- **Add a parity test** under `brainpy_state/_nest_validation/` that compares the
+  model against a live NEST install. These tests are marked `requires_nest`; run
+  them with:
+  ```bash
+  pytest -m requires_nest
+  ```
+- **Record the tolerance category** the model meets (the A–E bands defined in
+  `brainpy_state/_nest_validation/tolerance_conventions.py`), and choose the
+  band the model is actually validated against — do not over-claim.
+- **Update the validation showcase** (`docs/nest-style/validation-status.rst`) so
+  the model's parity result and tolerance category appear in the per-family
+  table, and note any known coverage gaps.
+- **Document deliberate divergences.** If brainpy.state's behavior differs from
+  NEST (parameter location, where state lives, numerical band, pairing
+  convention), describe it in the docstring under a `Parameter Mapping` or
+  `Implementation Notes` section, and add it to the divergence catalog
+  (`docs/nest-style/divergences/`).
+
+For **all models** (both families):
+
+- **Keep docstrings claim-accurate.** State what the model does and what it has
+  been validated against; do not describe behavior or fidelity the tests do not
+  cover. Match upstream NEST parameter names for NEST-compatible models.
+- **Cover the model with tests** — default parameters plus at least one
+  parameter sweep (see "Documenting new APIs" above).
 
 ### Documentation review checklist for PRs
 
@@ -263,9 +278,12 @@ Before requesting review, confirm:
 
 - [ ] Docstrings present on all new public APIs (NumPy style).
 - [ ] New module exported via `__all__` in `brainpy_state/__init__.py`.
-- [ ] Added to the corresponding `docs/api/*.rst` page.
-- [ ] If NEST-compatible: parameter names match the upstream NEST documentation.
-- [ ] If experimental: no claims of stability in docstrings or README.
+- [ ] Added to the corresponding `docs/apis/*.rst` page.
+- [ ] If NEST-compatible: parameter names match the upstream NEST documentation,
+      a parity test exists under `brainpy_state/_nest_validation/`, and the
+      tolerance category is recorded in `docs/nest-style/validation-status.rst`.
+- [ ] Docstrings are claim-accurate (no behavior or fidelity beyond what the
+      tests cover).
 - [ ] `pytest brainpy_state/` passes locally.
 - [ ] Any executable code block in updated docs or notebooks runs
       end-to-end without errors.

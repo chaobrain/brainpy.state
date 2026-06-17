@@ -1,12 +1,3 @@
-.. warning::
-
-   **Experimental — In Development.** The NEST-compatible model family is
-   under active development. Parameter names, defaults, numerical behavior,
-   and the set of available models may change without notice across 0.0.x
-   releases. See the :doc:`NEST-style status page </nest-status/index>` for
-   current scope and limitations.
-
-
 NEST-Compatible Plasticity Models
 ==================================
 
