@@ -213,32 +213,11 @@ See also the ecosystem
 .. toctree::
    :hidden:
    :maxdepth: 1
-   :caption: Get Started
+   :caption: Tutorials
 
    get-started/index
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-   :caption: Core Concepts
-
    concepts/index
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-   :caption: BrainPy-style Modeling
-
    brainpy-style/index
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-   :caption: NEST-Compatible
-
    nest-style/index
 
 
