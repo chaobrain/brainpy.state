@@ -7,8 +7,7 @@ doctests on ``docs/nest-style/divergences/stdp.rst`` — the divergence referenc
 page authored in cluster 10. The page's ``brainpy.state`` examples cannot be
 collected by ``--doctest-modules`` (the spec classes set
 ``__module__='brainpy.state'``, so ``DocTestFinder`` skips them), so they live in
-the ``.rst`` and are run here via :func:`doctest.testfile`. See ``develop/NEST_PARITY_LEDGER.md``
-Lessons (10-stdp-docs).
+the ``.rst`` and are run here via :func:`doctest.testfile`.
 
 Uses the inner package name ``brainpy_state`` (per ``CLAUDE.md`` rule 9); the
 page's example code uses the public ``brainpy.state``.

@@ -9,7 +9,7 @@ working install fast.
 Requirements
 ============
 
-- **Python 3.10 or later**
+- **Python 3.11 or later**
 - The ``pip`` package manager
 - Linux (Ubuntu 16.04+), macOS (10.12+), or Windows
 

@@ -21,7 +21,7 @@ NEST wires the populations with ``fixed_outdegree``; brainpy.state exposes
 (identical expected in-degree, hence the same mean-field input). With ``sigma > 0`` the
 linear network fluctuates about its mean fixed point ``r* = (lambda I - W)^{-1} mu`` -- the
 deterministic fixed point asserted tightly against NEST in
-``brainpy_state/_nest/_validation/lin_rate_ipn_network_test.py``.
+``brainpy_state/_nest_validation/lin_rate_ipn_network_test.py``.
 
 Run:  PYTHONPATH=. python examples/nest_like/lin_rate_ipn_network.py
 """

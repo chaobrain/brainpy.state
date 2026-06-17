@@ -31,11 +31,11 @@ sender's per-spike NMDA gate increment; NEST requires the sender be an
 spike_offset`` over the NMDA channel (dense matmul — the sparse path would binarize
 the presynaptic value). That seam is validated against live NEST to machine
 precision, both feed-forward
-(``brainpy_state/_nest/_validation/iaf_bw_2001_nest_parity_test.py``) and
+(``brainpy_state/_nest_validation/iaf_bw_2001_nest_parity_test.py``) and
 **recurrently** — the design arbiter
-(``brainpy_state/_nest/_validation/iaf_bw_2001_recurrent_nmda_parity_test.py``).
+(``brainpy_state/_nest_validation/iaf_bw_2001_recurrent_nmda_parity_test.py``).
 Distributional winner-take-all parity for *this* network against live NEST is in
-``brainpy_state/_nest/_validation/wang_decision_making_test.py``.
+``brainpy_state/_nest_validation/wang_decision_making_test.py``.
 
 Scaling
 -------

@@ -55,7 +55,7 @@ We welcome code contributions! This includes:
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - Git
 - pip or conda
 
@@ -244,7 +244,7 @@ with evidence**: show that a NEST-compatible model numerically agrees with a
 live NEST install, and keep every docstring claim accurate.
 
 When you add or change a **NEST-compatible model** (anything under
-`brainpy_state/_nest/`):
+`brainpy_state/_nest_*/`):
 
 - **Add a parity test** under `brainpy_state/_nest_validation/` that compares the
   model against a live NEST install. These tests are marked `requires_nest`; run

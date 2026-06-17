@@ -38,7 +38,7 @@ All parameters carry **physical units** via [brainunit](https://github.com/chaob
 
 ## Installation
 
-`brainpy.state` requires Python ≥ 3.10 and runs on Linux, macOS, and Windows.
+`brainpy.state` requires Python ≥ 3.11 and runs on Linux, macOS, and Windows.
 
 ```bash
 pip install brainpy.state -U

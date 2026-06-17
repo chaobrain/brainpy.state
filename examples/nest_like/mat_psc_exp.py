@@ -22,7 +22,7 @@ Each neuron is driven by a constant current; the demo records both the membrane
 potential ``V_m`` and the composite adaptive threshold ``V_th`` through a
 multimeter, so you can watch ``V_m`` chase the moving threshold. The traces match
 a live NEST ``mat2_psc_exp`` / ``amat2_psc_exp`` to machine precision (see
-``brainpy_state/_nest/_validation/mat_psc_exp_test.py``).
+``brainpy_state/_nest_validation/mat_psc_exp_test.py``).
 
 Run:  PYTHONPATH=. python examples/nest_like/mat_psc_exp.py
 """

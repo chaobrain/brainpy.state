@@ -11,7 +11,7 @@ read back with ``res.trace(mm, name)``.
 The upstream records ``V_m``/``g_ex``/``g_in`` from a conductance-based
 ``iaf_cond_alpha``. Driving conductance synapses from a spike source needs a
 ``w_ex``/``w_in`` labelled-delta routing seam that the explicit ``Simulator``
-does not yet provide (a documented follow-up; see ``develop/NEST_PARITY_LEDGER.md`` Lessons). This
+does not yet provide (a documented follow-up). This
 port keeps the same demo *structure* — a multimeter recording several analog
 variables from a spike-driven neuron — on the current-based ``iaf_psc_exp``,
 whose recordables are ``V_m``, ``I_syn_ex`` and ``I_syn_in``. Two

@@ -34,7 +34,7 @@ AlignPost projection (see :doc:`/concepts/alignpre-alignpost`).
    :gutter: 3
 
    .. grid-item-card:: Brunel random network (Builder)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brunel.py
+      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/brunel.py
 
       Two populations, random fixed-indegree COBA wiring, built with the
       imperative ``Builder`` API — the flagship Network-API example.

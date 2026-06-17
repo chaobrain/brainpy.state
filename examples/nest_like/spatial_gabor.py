@@ -21,7 +21,7 @@ targets are read back with :func:`~brainpy.state.spatial.target_positions` (NEST
 ``GetTargetPositions``).
 
 The per-displacement probability is a fixed law, so the validation
-(``brainpy_state/_nest/_validation/spatial_gabor_test.py``) asserts the kernel matches live NEST's
+(``brainpy_state/_nest_validation/spatial_gabor_test.py``) asserts the kernel matches live NEST's
 ``spatial_distributions.gabor`` element-by-element and that the realized footprint stays inside the
 ellipse.
 

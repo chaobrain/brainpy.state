@@ -86,7 +86,7 @@ class vogels_sprekeler_synapse(NESTPlasticity):
     is maintained by the post neuron (``ArchivingNode``) under its ``tau_minus``;
     the symmetric rule requires ``tau_minus = tau``. Here ``tau`` is a single
     synapse-spec attribute driving both per-neuron traces, so the rule runs
-    standalone. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (cluster 04).
+    standalone.
 
     Online vs deferred: the substrate facilitates eagerly at post-spike steps,
     whereas NEST defers it to the next pre spike; the two coincide at pre-spike

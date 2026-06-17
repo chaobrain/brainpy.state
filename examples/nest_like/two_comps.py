@@ -26,7 +26,7 @@ Both connections carry NEST's 0.5 ms delay. Watching the somatic and dendritic
 voltages side by side shows how active dendritic channels (cm_act) amplify and
 sharpen the dendritic response relative to the purely passive cable (cm_pas).
 
-The live-NEST parity test (``brainpy_state/_nest/_validation/two_comps_test.py``)
+The live-NEST parity test (``brainpy_state/_nest_validation/two_comps_test.py``)
 drives a real ``cm_default`` with this identical wiring and confirms the per-
 compartment ``v_comp`` / gating / receptor-conductance traces match.
 

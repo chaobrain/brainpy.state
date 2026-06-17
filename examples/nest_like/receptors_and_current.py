@@ -21,7 +21,7 @@ NMDA-flavoured EPSPs on dend2, and the GABA IPSPs hyperpolarising the soma — a
 attenuated as they spread electrotonically to the other compartments.
 
 The live-NEST parity test
-(``brainpy_state/_nest/_validation/receptors_and_current_test.py``) drives a real
+(``brainpy_state/_nest_validation/receptors_and_current_test.py``) drives a real
 ``cm_default`` with this identical wiring and confirms the three compartment
 voltages match.
 

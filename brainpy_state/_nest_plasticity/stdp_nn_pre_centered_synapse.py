@@ -89,7 +89,7 @@ class stdp_nn_pre_centered_synapse(NESTPlasticity):
     -----
     **NEST divergence — ``tau_minus`` location.** In NEST ``tau_minus`` is a parameter
     of the *postsynaptic neuron* (``ArchivingNode``), not the synapse; here it drives the
-    substrate's per-post ``K-`` trace. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (cluster 04).
+    substrate's per-post ``K-`` trace.
 
     The eager substrate applies potentiation at post-spike steps and depression at
     pre-spike steps; NEST defers both to the next ``send`` (facilitating only the *first*

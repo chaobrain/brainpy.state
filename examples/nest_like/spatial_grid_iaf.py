@@ -17,7 +17,7 @@ column ``k // n_rows``, row ``k % n_rows`` and
     y_k = c_y + L_y/2 - (\\mathrm{row} + 0.5)\\,L_y / n_y .
 
 The coordinates are asserted to match live NEST element-for-element in
-``brainpy_state/_nest/_validation/spatial_grid_test.py``.
+``brainpy_state/_nest_validation/spatial_grid_test.py``.
 
 Run:  PYTHONPATH=. python examples/nest_like/spatial_grid_iaf.py
 """

@@ -15,8 +15,7 @@ D    distributional (PRNG-diverge)  network rate, ISI CV  mean 5 % (>=4 s) distr
 E    spike-time / event-count       ``*_ps``, PSC timing  |dN|<=2,|dt|<=1  trace
 ==== ============================== ===================== ================ ==============
 
-The A/B/C numbers come from ``develop/nest-status/internal/numerical-validation-gap.md``
-section 6. ``CAT_B_ALIGNED`` is the same analytic family but tolerates a one-step
+The A/B/C numbers follow the project's numerical-validation tolerance bands. ``CAT_B_ALIGNED`` is the same analytic family but tolerates a one-step
 multimeter offset (``align_steps=1``). ``CAT_C_RATE`` is the deterministic
 mean-field rate fixed point (Hz, compared purely relatively). ``D`` numbers the
 unnumbered "distributional" default; ``E`` covers precise spiking.

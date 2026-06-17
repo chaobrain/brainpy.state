@@ -166,7 +166,7 @@ Clopath ``delay_u_bars`` and online LTP (≤ 5 % band)
    NEST's deferred decayed-history sum; it grows with pairing frequency.
 :Tolerance asserted: A **documented 5 % band** plus exact direction and
    frequency-ordering (realised ≤ 3.31 %; a pure-LTD train matches to 0.002 %).
-:Parity test: ``brainpy_state/_nest/_validation/clopath_synapse_parity_test.py``.
+:Parity test: ``brainpy_state/_nest_validation/clopath_synapse_parity_test.py``.
 
 .. _stdp-dopamine:
 
@@ -181,7 +181,7 @@ Dopamine online-vs-deferred integration (~0.2 % band)
 :Tolerance asserted: A **~0.2 % band** (realised ``max|Δw| < 8e-3 pA`` over LTP /
    LTD / clamp / window sweeps spanning 50–200 pA), with direction and ordering
    exact.
-:Parity test: ``brainpy_state/_nest/_validation/stdp_dopamine_synapse_parity_test.py``.
+:Parity test: ``brainpy_state/_nest_validation/stdp_dopamine_synapse_parity_test.py``.
 
 .. _stdp-phantom-pre:
 
@@ -199,7 +199,7 @@ Nearest-neighbour "phantom pre at 0" (``stdp_nn_symm`` / ``stdp_nn_restr`` only)
 :Tolerance asserted: Not reproduced (documented). Parity sidesteps it with a
    leading pre spike, or by placing the first pre late enough that the
    ``exp(-(Δ)/tau_plus)`` phantom term sits below the test's absolute tolerance.
-:Parity tests: ``brainpy_state/_nest/_validation/stdp_nn_symm_synapse_parity_test.py``
+:Parity tests: ``brainpy_state/_nest_validation/stdp_nn_symm_synapse_parity_test.py``
    and ``…/stdp_nn_restr_synapse_parity_test.py``.
 
 
@@ -256,7 +256,7 @@ in the trace mode.
   19:1437–1467; Morrison, Diesmann & Gerstner (2008) *Biol. Cybern.* 98:459–478,
   fig. 7A.
 * **Divergence:** see :ref:`stdp-phantom-pre`.
-* **Parity test:** ``brainpy_state/_nest/_validation/stdp_nn_symm_synapse_parity_test.py``.
+* **Parity test:** ``brainpy_state/_nest_validation/stdp_nn_symm_synapse_parity_test.py``.
 
 
 .. _stdp-nn-restr:
@@ -278,7 +278,7 @@ makes its own side available and consumes the opposite, reproducing NEST's
 * **References:** Morrison, Diesmann & Gerstner (2008) *Biol. Cybern.*
   98:459–478, fig. 7C.
 * **Divergence:** see :ref:`stdp-phantom-pre`.
-* **Parity test:** ``brainpy_state/_nest/_validation/stdp_nn_restr_synapse_parity_test.py``.
+* **Parity test:** ``brainpy_state/_nest_validation/stdp_nn_restr_synapse_parity_test.py``.
 
 
 .. _stdp-nn-pre-centered:
@@ -309,7 +309,7 @@ accumulator that starts at 0).
   ``Kminus`` depression at 299–302; ``Kplus`` decay/+1 at 304).
 * **References:** Morrison, Diesmann & Gerstner (2008) *Biol. Cybern.*
   98:459–478, fig. 7B; Izhikevich & Desai (2003) *Neural Comput.* 15:1511–1523.
-* **Parity test:** ``brainpy_state/_nest/_validation/stdp_nn_pre_centered_synapse_parity_test.py``.
+* **Parity test:** ``brainpy_state/_nest_validation/stdp_nn_pre_centered_synapse_parity_test.py``.
 
 
 .. _stdp-facetshw:
@@ -339,7 +339,7 @@ its own pair's charge — an observable ordering that the parity test pins.
   readout.
 * **NEST source:** ``models/stdp_facetshw_synapse_hom.h`` and ``…_impl.h``
   (``send()``: readout, quantisation, LUT update).
-* **Parity test:** ``brainpy_state/_nest/_validation/stdp_facetshw_synapse_hom_parity_test.py``.
+* **Parity test:** ``brainpy_state/_nest_validation/stdp_facetshw_synapse_hom_parity_test.py``.
 
 
 See also

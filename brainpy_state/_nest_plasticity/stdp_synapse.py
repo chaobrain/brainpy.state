@@ -81,7 +81,7 @@ class stdp_synapse(NESTPlasticity):
     **NEST divergence — ``tau_minus`` location.** In NEST ``tau_minus`` is a
     parameter of the *postsynaptic neuron* (``ArchivingNode``), not the synapse;
     here it is a synapse-spec attribute that drives the substrate's per-post
-    ``K-`` trace, so STDP runs standalone. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (cluster 04).
+    ``K-`` trace, so STDP runs standalone.
 
     Online vs deferred: the substrate applies potentiation eagerly at post-spike
     steps, whereas NEST defers it to the next pre spike; the two coincide at

@@ -33,7 +33,7 @@ noise is a PRNG stream that diverges between NEST and JAX, so a per-sample
 comparison is meaningless; both simulators agree only *distributionally*. The
 phase-locking is imposed by the *deterministic* shared oscillation, so the phase
 statistics are the robust ground truth:
-``brainpy_state/_nest/_validation/BrodyHopfield_test.py`` asserts that the
+``brainpy_state/_nest_validation/BrodyHopfield_test.py`` asserts that the
 oscillation induces phase-locking (and that removing it abolishes it), and — when
 NEST is present — that the seed-averaged vector strength, firing rate and phase
 histogram match live NEST.

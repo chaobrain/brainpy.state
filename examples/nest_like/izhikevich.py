@@ -24,7 +24,7 @@ Each regime records both the membrane potential ``V_m`` and the recovery
 variable ``U_m`` through a multimeter, so the demo also exercises the ``U_m``
 recordable. The integration uses NEST's default ``consistent_integration=True``
 (forward Euler), so the traces match a live ``nest.izhikevich`` to machine
-precision (see ``brainpy_state/_nest/_validation/izhikevich_test.py``).
+precision (see ``brainpy_state/_nest_validation/izhikevich_test.py``).
 
 Run:  PYTHONPATH=. python examples/nest_like/izhikevich.py
 """

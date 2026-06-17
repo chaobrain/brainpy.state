@@ -5,7 +5,7 @@ Two populations (excitatory + inhibitory), random fixed-indegree connectivity,
 conductance-based synapses. Built with the imperative ``Builder`` style.
 
 Run:
-    python examples/brunel.py
+    python examples/brainpy_like/brunel.py
 """
 import brainstate
 import jax.numpy as jnp

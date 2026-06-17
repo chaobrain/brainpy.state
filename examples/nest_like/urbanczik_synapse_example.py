@@ -16,7 +16,7 @@ This is the user-facing presentation of cluster-21's rebuilt rule: a frozen
 ``urbanczik_synapse`` spec + pure ``update`` kernel on the
 ``VoltageCoupledPlasticProj`` substrate (primitive #2, the dendritic post-state
 reader), validated sample-for-sample against live NEST in
-``brainpy_state/_nest/_validation/urbanczik_synapse_parity_test.py``.
+``brainpy_state/_nest_validation/urbanczik_synapse_parity_test.py``.
 
 Implementation notes (vs the upstream NEST script)
 

@@ -91,7 +91,7 @@ class stdp_triplet_synapse(NESTPlasticity):
     both postsynaptic trace constants live on the *postsynaptic neuron*
     (``ArchivingNode``), not the synapse; here they are synapse-spec attributes
     driving the substrate's per-post ``o1`` / ``o2`` trace columns, so the triplet
-    rule runs standalone. See ``develop/NEST_PARITY_LEDGER.md`` Lessons (cluster 04).
+    rule runs standalone.
 
     Online vs deferred: the substrate potentiates eagerly at post-spike steps,
     whereas NEST defers it to the next pre spike; the two coincide at pre-spike

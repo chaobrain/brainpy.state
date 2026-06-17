@@ -72,7 +72,7 @@ class TestStdpNnRestrSynapseParity(unittest.TestCase):
     def test_single_pair_window_sweep(self):
         # P0=500 keeps the phantom-pre-at-0 facilitation (symm/restr have no Kplus
         # trace; the substrate seeds the gate/trace empty and does not model it)
-        # below CAT_B atol for every dt<0. See develop/NEST_PARITY_LEDGER.md Lessons (05).
+        # below CAT_B atol for every dt<0.
         P0, P_flush = 500.0, 720.0
         for dt in (-40., -20., -10., -5., 5., 10., 20., 40.):
             with self.subTest(dt=dt):

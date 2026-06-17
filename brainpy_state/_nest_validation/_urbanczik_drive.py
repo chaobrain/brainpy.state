@@ -26,7 +26,7 @@ here:
   (the substrate, unlike NEST, allows a generator as a plastic-edge source) and
   read the per-step ``weight_trace``.
 
-**NEST divergences encoded here (documented in the spec + develop/NEST_PARITY_LEDGER.md cluster-21).**
+**NEST divergences encoded here (documented in the spec).**
 
 * ``delay`` is one resolution step (``RELAY_D = 0.1 ms``). NEST integrates
   ``delta_Pi`` over the dendritic-delay window ``(t_last - d, t_spike - d]`` on each

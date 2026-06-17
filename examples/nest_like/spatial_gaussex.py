@@ -15,7 +15,7 @@ neuron is read back with :func:`~brainpy.state.spatial.target_positions` (NEST
 ``GetTargetPositions``).
 
 The per-distance connection probability is a fixed law, so the validation
-(``brainpy_state/_nest/_validation/spatial_gaussian_kernel_test.py``) asserts the empirical
+(``brainpy_state/_nest_validation/spatial_gaussian_kernel_test.py``) asserts the empirical
 ``p(d)`` follows the Gaussian (NEST-free) and matches live NEST's empirical curve within a
 distributional band (PRNG draws diverge sample-by-sample; the law does not).
 

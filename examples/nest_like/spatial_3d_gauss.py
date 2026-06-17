@@ -10,7 +10,7 @@ node is read back with :func:`~brainpy.state.spatial.target_positions` and its t
 distances are histogrammed (NEST's figure).
 
 Random layer positions diverge sample-by-sample from NEST (independent PRNGs), so the
-validation (``brainpy_state/_nest/_validation/spatial_3d_test.py``) checks the
+validation (``brainpy_state/_nest_validation/spatial_3d_test.py``) checks the
 position-independent **law**: the box-mask cutoff is hard, autapses are absent, and the
 empirical ``p(d)`` and edge count match live NEST distributionally.
 

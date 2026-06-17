@@ -25,7 +25,7 @@ all-to-all, exactly as in NEST.
 **Validation is a distributional carve-out, not a trace parity.** The GIF escape
 spiking and the Poisson drive are PRNG streams that diverge between NEST and JAX,
 so a per-sample comparison is meaningless; both simulators agree only
-*distributionally*. ``brainpy_state/_nest/_validation/gif_population_test.py``
+*distributionally*. ``brainpy_state/_nest_validation/gif_population_test.py``
 asserts (NEST-free) that the adaptation oscillation is present (the binned
 population-rate autocorrelation dips below zero at an intermediate lag) and that
 recurrence sharpens it, and — when NEST is present — that the seed-averaged

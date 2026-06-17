@@ -42,8 +42,7 @@ class stdp_synapse_hom(stdp_synapse):
     **NEST divergence — ``tau_minus`` location.** As for ``stdp_synapse``,
     ``tau_minus`` is a parameter of the postsynaptic neuron (``ArchivingNode``) in
     NEST, not the synapse; here it is a synapse-spec attribute driving the
-    substrate's per-post ``K-`` trace so STDP runs standalone. See ``develop/NEST_PARITY_LEDGER.md``
-    Lessons (cluster 04).
+    substrate's per-post ``K-`` trace so STDP runs standalone.
 
     **Parity note.** The consolidated NEST vs. brainpy.state divergence reference
     — trace-storage move, the family parameter-location map, and the parity-test

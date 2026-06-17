@@ -27,7 +27,7 @@ midway through the run. The Simulator lowers the whole simulation into one compi
 loop, so a parameter cannot be changed mid-run; the faithful Simulator-API
 equivalent is a ``step_current_generator`` that steps the soma current to 150 pA at
 700 ms (a timed device current into the soma current receptor). The live-NEST
-parity test (``brainpy_state/_nest/_validation/mc_neuron_test.py``) drives a real
+parity test (``brainpy_state/_nest_validation/mc_neuron_test.py``) drives a real
 ``iaf_cond_alpha_mc`` with this identical wiring and confirms the per-compartment
 ``V_m`` and ``g_ex`` / ``g_in`` traces match.
 
