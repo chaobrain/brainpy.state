@@ -217,15 +217,15 @@ See also the ecosystem
 
    get-started/index
    concepts/index
-   brainpy-style/index
-   nest-style/index
 
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
-   :caption: API Reference
+   :maxdepth: 1
+   :caption: Advanced Tutorials
 
+   brainpy-style/index
+   nest-style/index
    apis/index
 
 
