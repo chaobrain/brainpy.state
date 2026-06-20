@@ -244,7 +244,7 @@ class ac_generator(NESTDevice):
         start: ArrayLike = 0. * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0. * u.ms,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 

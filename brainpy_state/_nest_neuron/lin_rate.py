@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -70,7 +70,7 @@ class _lin_rate_base(NESTNeuron):
     #: φ-defining parameter names compared by :pyattr:`_phi_signature` for the
     #: ``linear_summation=False`` homogeneity guard. The default linear gain φ(h)=g·h
     #: is identified by ``g``; richer nonlinearities extend this.
-    _phi_param_names = ('g',)
+    _phi_param_names: tuple[str, ...] = ('g',)
 
     def __init__(
         self,
@@ -87,7 +87,7 @@ class _lin_rate_base(NESTNeuron):
         linear_summation: bool,
         rate_initializer: Callable,
         noise_initializer: Callable,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -379,7 +379,7 @@ class lin_rate_ipn(_lin_rate_base):
         rectify_output: bool = False,
         rate_initializer: Callable = braintools.init.Constant(0.0),
         noise_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,
@@ -543,7 +543,7 @@ class lin_rate_opn(_lin_rate_base):
         rate_initializer: Callable = braintools.init.Constant(0.0),
         noise_initializer: Callable = braintools.init.Constant(0.0),
         noisy_rate_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,

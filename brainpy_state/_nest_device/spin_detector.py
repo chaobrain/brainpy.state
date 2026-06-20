@@ -283,6 +283,14 @@ class spin_detector(NESTDevice):
 
     __module__ = 'brainpy.state'
 
+    # One-slot provisional-event buffer, initialized in ``_clear_last_event``.
+    # Annotated at class scope so the type is determinable in methods that use
+    # the buffer (which are defined before ``_clear_last_event`` in the body).
+    _last_sender: int
+    _last_stamp_step: int
+    _last_offset_ms: float
+    _last_state: int
+
     def __init__(
         self,
         in_size: Size = 1,
@@ -291,7 +299,7 @@ class spin_detector(NESTDevice):
         origin: ArrayLike = 0.0 * u.ms,
         time_in_steps: bool = False,
         frozen: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -360,7 +368,7 @@ class spin_detector(NESTDevice):
         self._events_times_steps: list[int] = []
         self._events_offsets: list[float] = []
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         del batch_size, kwargs
         self._clear_last_event()
         self.clear_events()
@@ -668,8 +676,8 @@ class spin_detector(NESTDevice):
     def _to_float_array(
         x,
         name: str,
-        default: float = None,
-        size: int = None,
+        default: float | None = None,
+        size: int | None = None,
         unit=None,
     ) -> np.ndarray:
         dftype = brainstate.environ.dftype()
@@ -703,8 +711,8 @@ class spin_detector(NESTDevice):
     def _to_int_array(
         x,
         name: str,
-        default: int = None,
-        size: int = None,
+        default: int | None = None,
+        size: int | None = None,
     ) -> np.ndarray:
         ditype = brainstate.environ.ditype()
         if x is None:

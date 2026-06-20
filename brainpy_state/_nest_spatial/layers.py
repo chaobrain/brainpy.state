@@ -8,7 +8,7 @@ carries node positions in 2-D or 3-D space (length units), which
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from collections.abc import Callable, Sequence
 
 import jax.numpy as jnp
 import brainunit as u
@@ -44,12 +44,12 @@ class Layer:
     sampler : callable, optional
         ``(n, key) -> Quantity (n, d)`` for a deferred free layer.
     """
-    coords: Optional[u.Quantity]
+    coords: u.Quantity | None
     ndim: int
-    shape: Optional[tuple] = None
-    extent: Optional[u.Quantity] = None
-    center: Optional[u.Quantity] = None
-    sampler: Optional[object] = None
+    shape: tuple | None = None
+    extent: u.Quantity | None = None
+    center: u.Quantity | None = None
+    sampler: Callable[..., u.Quantity] | None = None
 
     @property
     def is_deferred(self) -> bool:
@@ -74,6 +74,8 @@ class Layer:
         """
         if self.coords is not None:
             return self.coords
+        # A deferred layer (coords is None) is always constructed with a sampler.
+        assert self.sampler is not None, 'a deferred layer must carry a sampler'
         return self.sampler(n, key)
 
 

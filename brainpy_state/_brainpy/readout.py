@@ -17,7 +17,7 @@
 
 
 import numbers
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -108,7 +108,7 @@ class LeakyRateReadout(brainstate.nn.Module):
         out_size: Size,
         tau: ArrayLike = 5. * u.ms,
         w_init: Callable = braintools.init.KaimingNormal(),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(name=name)
 

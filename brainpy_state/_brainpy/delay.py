@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Optional, Union
 
 import brainstate
 import jax.numpy as jnp
@@ -73,8 +72,8 @@ class InputDelay(brainstate.nn.Module):
     def __init__(
         self,
         in_size: Size,
-        delay: Optional[Union[ArrayLike, u.Quantity]] = None,
-        indices: Optional[ArrayLike] = None,
+        delay: ArrayLike | u.Quantity | None = None,
+        indices: ArrayLike | None = None,
     ):
         super().__init__()
         self.in_size = (in_size,) if isinstance(in_size, int) else tuple(in_size)

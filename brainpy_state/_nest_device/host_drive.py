@@ -57,7 +57,7 @@ class _HostDrive(NESTDevice):
     #: Subclasses set this unit; ``None`` means a raw unitless count.
     _emit_unit = None
 
-    def __init__(self, in_size: Size = 1, *, window: int, name: str = None):
+    def __init__(self, in_size: Size = 1, *, window: int, name: str | None = None):
         super().__init__(in_size=in_size, name=name)
         if int(window) <= 0:
             raise ValueError(f'host_drive window must be a positive int, got {window!r}')

@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -350,7 +350,7 @@ class hh_cond_exp_traub(NESTNeuron):
         gsl_error_tol: ArrayLike = 1e-3,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

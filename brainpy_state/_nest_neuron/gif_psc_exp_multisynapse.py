@@ -84,7 +84,7 @@ References
        ``models/gif_psc_exp_multisynapse.cpp``.
 """
 
-from typing import Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
 
 import brainstate
 import braintools
@@ -437,11 +437,11 @@ class gif_psc_exp_multisynapse(NESTNeuron):
         q_sfa: Sequence[float] = (),    # mV values
         tau_stc: Sequence[float] = (),  # ms values
         q_stc: Sequence[float] = (),    # pA values
-        rng_key: Optional[jax.Array] = None,
+        rng_key: jax.Array | None = None,
         V_initializer: Callable = braintools.init.Constant(-70.0 * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
         # Accepted for backward compatibility but unused:
         gsl_error_tol: ArrayLike = 1e-6,
     ):

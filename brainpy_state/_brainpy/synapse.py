@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Optional, Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -103,7 +103,7 @@ class Alpha(Synapse):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         tau: ArrayLike = 8.0 * u.ms,
         g_initializer: ArrayLike | Callable = braintools.init.Constant(0. * u.mS),
     ):
@@ -113,11 +113,11 @@ class Alpha(Synapse):
         self.tau = braintools.init.param(tau, self.varshape)
         self.g_initializer = g_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
         self.h = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
         self.h.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
 
@@ -227,7 +227,7 @@ class AMPA(Synapse):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         alpha: ArrayLike = 0.98 / (u.ms * u.mM),
         beta: ArrayLike = 0.18 / u.ms,
         T: ArrayLike = 0.5 * u.mM,
@@ -356,7 +356,7 @@ class GABAa(AMPA):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         alpha: ArrayLike = 0.53 / (u.ms * u.mM),
         beta: ArrayLike = 0.18 / u.ms,
         T: ArrayLike = 1.0 * u.mM,
@@ -496,7 +496,7 @@ class BioNMDA(Synapse):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         alpha1: ArrayLike = 2.0 / u.ms,
         beta1: ArrayLike = 0.01 / u.ms,
         alpha2: ArrayLike = 1.0 / (u.ms * u.mM),

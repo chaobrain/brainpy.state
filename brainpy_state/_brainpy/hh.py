@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -171,12 +171,12 @@ class HH(Neuron):
         V_th: ArrayLike = 20. * u.mV,
         C: ArrayLike = 1.0 * u.ufarad,
         V_initializer: Callable = braintools.init.Uniform(-70. * u.mV, -60. * u.mV),
-        m_initializer: Callable = None,
-        h_initializer: Callable = None,
-        n_initializer: Callable = None,
+        m_initializer: Callable | None = None,
+        h_initializer: Callable | None = None,
+        n_initializer: Callable | None = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -223,7 +223,7 @@ class HH(Neuron):
     def n_inf(self, V):
         return self.n_alpha(V) / (self.n_alpha(V) + self.n_beta(V))
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState.init(self.V_initializer, self.varshape, batch_size)
         if self.m_initializer is None:
             self.m = brainstate.HiddenState(self.m_inf(self.V.value))
@@ -238,7 +238,7 @@ class HH(Neuron):
         else:
             self.n = brainstate.HiddenState.init(self.n_initializer, self.varshape, batch_size)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         if self.m_initializer is None:
             self.m.value = self.m_inf(self.V.value)
@@ -429,7 +429,7 @@ class MorrisLecar(Neuron):
         W_initializer: Callable = braintools.init.Constant(0.02),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -452,11 +452,11 @@ class MorrisLecar(Neuron):
         self.V_initializer = V_initializer
         self.W_initializer = W_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.W = brainstate.HiddenState(braintools.init.param(self.W_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.W.value = braintools.init.param(self.W_initializer, self.varshape, batch_size)
 
@@ -638,7 +638,7 @@ class WangBuzsakiHH(Neuron):
         n_initializer: Callable = braintools.init.Constant(0.32),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -681,12 +681,12 @@ class WangBuzsakiHH(Neuron):
     def n_inf(self, V):
         return self.n_alpha(V) / (self.n_alpha(V) + self.n_beta(V))
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.h = brainstate.HiddenState(braintools.init.param(self.h_initializer, self.varshape, batch_size))
         self.n = brainstate.HiddenState(braintools.init.param(self.n_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.h.value = braintools.init.param(self.h_initializer, self.varshape, batch_size)
         self.n.value = braintools.init.param(self.n_initializer, self.varshape, batch_size)

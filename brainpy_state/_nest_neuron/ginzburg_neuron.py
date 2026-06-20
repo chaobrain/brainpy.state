@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -334,7 +334,7 @@ class ginzburg_neuron(NESTNeuron):
         y_initializer: Callable = braintools.init.Constant(0.0),
         stochastic_update: bool = True,
         rng_seed: int = 0,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name)
 

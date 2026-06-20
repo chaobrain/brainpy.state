@@ -15,7 +15,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable, Union, Tuple
+from collections.abc import Callable
 
 import jax.numpy as jnp
 import brainstate
@@ -105,10 +105,10 @@ class SymmetryGapJunction(Projection):
 
     def __init__(
         self,
-        couples: Union[Tuple[brainstate.nn.Dynamics, brainstate.nn.Dynamics], brainstate.nn.Dynamics],
-        states: Union[str, Tuple[str, str]],
+        couples: tuple[brainstate.nn.Dynamics, brainstate.nn.Dynamics] | brainstate.nn.Dynamics,
+        states: str | tuple[str, str],
         conn: Callable,
-        weight: Union[Callable, ArrayLike],
+        weight: Callable | ArrayLike,
         param_type: type = brainstate.ParamState
     ):
         super().__init__()
@@ -333,7 +333,7 @@ class AsymmetryGapJunction(Projection):
         post: brainstate.nn.Dynamics,
         post_state: str,
         conn: Callable,
-        weight: Union[Callable, ArrayLike],
+        weight: Callable | ArrayLike,
         param_type: type = brainstate.ParamState
     ):
         super().__init__()

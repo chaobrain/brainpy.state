@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 import brainstate
 import braintools
@@ -497,10 +497,10 @@ class glif_cond(NESTNeuron):
         after_spike_currents: bool = False,
         adapting_threshold: bool = False,
         I_e: ArrayLike = 0.0 * u.pA,
-        V_initializer: Callable = None,
+        V_initializer: Callable | None = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

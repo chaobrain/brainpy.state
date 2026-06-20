@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import itertools
-from typing import Union
 
 import brainstate
 
@@ -36,8 +35,8 @@ class Builder(Network):
 
     def connect(
         self,
-        pre: Union[str, Dynamics],
-        post: Union[str, Dynamics],
+        pre: str | Dynamics,
+        post: str | Dynamics,
         *,
         rule: type,
         **kwargs,

@@ -318,7 +318,7 @@ class correlation_detector(NESTDevice):
         start: ArrayLike = 0.0 * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0.0 * u.ms,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -332,7 +332,7 @@ class correlation_detector(NESTDevice):
         self.origin = origin
 
         self._calib: _Calibration | None = None
-        self._incoming = [deque(), deque()]
+        self._incoming: list[deque[_Spike]] = [deque(), deque()]
         ditype = brainstate.environ.ditype()
         self._n_events = np.zeros((2,), dtype=ditype)
         dftype = brainstate.environ.dftype()
@@ -445,7 +445,7 @@ class correlation_detector(NESTDevice):
             'n_events': self.n_events,
         }
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset detector buffers and histogram state for current calibration.
 
         Parameters
@@ -799,8 +799,8 @@ class correlation_detector(NESTDevice):
     def _to_float_array(
         x,
         name: str,
-        default: float = None,
-        size: int = None,
+        default: float | None = None,
+        size: int | None = None,
         unit=None,
     ) -> np.ndarray:
         dftype = brainstate.environ.dftype()
@@ -834,8 +834,8 @@ class correlation_detector(NESTDevice):
     def _to_int_array(
         x,
         name: str,
-        default: int = None,
-        size: int = None,
+        default: int | None = None,
+        size: int | None = None,
     ) -> np.ndarray:
         ditype = brainstate.environ.ditype()
         if x is None:

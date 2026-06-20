@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -471,7 +471,7 @@ class rate_neuron_opn(_lin_rate_base):
         rate_initializer: Callable = braintools.init.Constant(0.0),
         noise_initializer: Callable = braintools.init.Constant(0.0),
         noisy_rate_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,

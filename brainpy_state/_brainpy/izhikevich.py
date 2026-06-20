@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -136,7 +136,7 @@ class Izhikevich(Neuron):
         u_initializer: Callable = braintools.init.Constant(0. * u.mV / u.ms),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -156,11 +156,11 @@ class Izhikevich(Neuron):
         self.V_initializer = V_initializer
         self.u_initializer = u_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.u = brainstate.HiddenState(braintools.init.param(self.u_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.u.value = braintools.init.param(self.u_initializer, self.varshape, batch_size)
 
@@ -324,7 +324,7 @@ class IzhikevichRef(Neuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -346,7 +346,7 @@ class IzhikevichRef(Neuron):
         self.u_initializer = u_initializer
         self.ref_var = ref_var
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.u = brainstate.HiddenState(braintools.init.param(self.u_initializer, self.varshape, batch_size))
         self.last_spike_time = brainstate.ShortTermState(
@@ -357,7 +357,7 @@ class IzhikevichRef(Neuron):
                 braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.u.value = braintools.init.param(self.u_initializer, self.varshape, batch_size)
         self.last_spike_time.value = braintools.init.param(

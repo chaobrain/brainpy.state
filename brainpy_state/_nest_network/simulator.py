@@ -15,7 +15,6 @@ from __future__ import annotations
 import copy
 import inspect
 import itertools
-from typing import Optional
 
 import brainstate
 import jax
@@ -238,12 +237,17 @@ class _GeneratorSpec:
         self.params = params
 
 
-class _GenSegment:
-    """A NodeView segment carrying a deferred generator spec (size unknown)."""
+class _GenSegment(_Segment):
+    """A NodeView segment carrying a deferred generator spec (size unknown).
+
+    Subclasses the frozen :class:`_Segment` so a ``_GenSegment`` is a genuine
+    NodeView segment (``NodeView`` stores ``list[_Segment]``); ``object.__setattr__``
+    is used because the base is ``frozen=True``.
+    """
     def __init__(self, spec: _GeneratorSpec):
-        self.spec = spec
-        self.population = None
-        self.indices = jnp.arange(0)
+        object.__setattr__(self, 'spec', spec)
+        object.__setattr__(self, 'population', None)
+        object.__setattr__(self, 'indices', jnp.arange(0))
 
 
 def _holder_reader(holder: _SpikeHolder):
@@ -602,7 +606,7 @@ class Simulator(brainstate.nn.Module):
     def connect(self, pre: NodeView, post: NodeView, *, rule=all_to_all,
                 weight=None, delay=None, comm: str = 'dense', receptor_type=None,
                 synapse=None, vt=None, allow_autapses: bool = True,
-                allow_multapses: bool = True, seed: Optional[int] = None):
+                allow_multapses: bool = True, seed: int | None = None):
         """Connect ``pre`` to ``post`` (or register a recorder tap).
 
         ``comm='sparse'`` routes the connectivity through a sparse CSR event
@@ -700,7 +704,7 @@ class Simulator(brainstate.nn.Module):
 
     def tripartite_connect(self, pre: NodeView, post: NodeView, third: NodeView, *,
                            conn_spec, third_factor_conn_spec, syn_specs=None,
-                           seed: Optional[int] = None, comm: str = 'dense',
+                           seed: int | None = None, comm: str = 'dense',
                            allow_autapses: bool = True, allow_multapses: bool = True):
         r"""Wire a tripartite ``pre -> post`` + astrocyte network (NEST ``TripartiteConnect``).
 

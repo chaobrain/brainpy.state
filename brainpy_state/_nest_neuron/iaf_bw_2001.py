@@ -15,7 +15,8 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import brainstate
 import braintools
@@ -439,7 +440,7 @@ class iaf_bw_2001(NESTNeuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -837,7 +838,9 @@ class iaf_bw_2001(NESTNeuron):
 
         for ev in spike_events:
             sender_model = 'iaf_bw_2001'
-            offset = 1.0
+            # offset arrives from untyped event dicts/tuples (the dict default and
+            # tuple-unpack both yield Any); keep it dynamically typed.
+            offset: Any = 1.0
 
             if isinstance(ev, dict):
                 receptor = ev.get('receptor_type', ev.get('receptor', 'AMPA'))

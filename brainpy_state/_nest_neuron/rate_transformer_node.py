@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -359,7 +359,7 @@ class rate_transformer_node(NESTNeuron):
         g: float = 1.0,
         input_nonlinearity: Callable | None = None,
         rate_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 

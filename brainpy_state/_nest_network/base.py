@@ -1,5 +1,4 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-from typing import Dict
 
 import brainstate
 import brainunit as u
@@ -35,17 +34,17 @@ class Network(brainstate.nn.Module):
             m()
 
     @property
-    def populations(self) -> Dict[str, Neuron]:
+    def populations(self) -> dict[str, Neuron]:
         return {k[-1]: m for k, m in self.nodes(allowed_hierarchy=(1, 1)).items()
                 if isinstance(m, Neuron)}
 
     @property
-    def projections(self) -> Dict[str, Projection]:
+    def projections(self) -> dict[str, Projection]:
         return {k[-1]: m for k, m in self.nodes(allowed_hierarchy=(1, 1)).items()
                 if isinstance(m, Projection)}
 
     @property
-    def devices(self) -> Dict[str, NESTDevice]:
+    def devices(self) -> dict[str, NESTDevice]:
         return {k[-1]: m for k, m in self.nodes(allowed_hierarchy=(1, 1)).items()
                 if isinstance(m, NESTDevice)}
 

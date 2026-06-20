@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Optional
 
 import brainstate
 import braintools
@@ -118,7 +117,7 @@ class STP(Synapse):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         U: ArrayLike = 0.15,
         tau_f: ArrayLike = 1500. * u.ms,
         tau_d: ArrayLike = 200. * u.ms,
@@ -130,7 +129,7 @@ class STP(Synapse):
         self.tau_d = braintools.init.param(tau_d, self.varshape)
         self.U = braintools.init.param(U, self.varshape)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.x = brainstate.HiddenState(
             braintools.init.param(braintools.init.Constant(1.), self.varshape, batch_size)
         )
@@ -138,7 +137,7 @@ class STP(Synapse):
             braintools.init.param(braintools.init.Constant(self.U), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.x.value = braintools.init.param(braintools.init.Constant(1.), self.varshape, batch_size)
         self.u.value = braintools.init.param(braintools.init.Constant(self.U), self.varshape, batch_size)
 
@@ -243,7 +242,7 @@ class STD(Synapse):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         tau: ArrayLike = 200. * u.ms,
         U: ArrayLike = 0.07,
     ):
@@ -253,12 +252,12 @@ class STD(Synapse):
         self.tau = braintools.init.param(tau, self.varshape)
         self.U = braintools.init.param(U, self.varshape)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.x = brainstate.HiddenState(
             braintools.init.param(braintools.init.Constant(1.), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.x.value = braintools.init.param(braintools.init.Constant(1.), self.varshape, batch_size)
 
     def update(self, pre_spike):

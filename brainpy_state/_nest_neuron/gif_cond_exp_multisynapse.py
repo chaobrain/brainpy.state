@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
 
 import brainstate
 import braintools
@@ -392,11 +392,11 @@ class gif_cond_exp_multisynapse(NESTNeuron):
         tau_stc: Sequence[float] = (),  # ms values
         q_stc: Sequence[float] = (),  # nA values
         gsl_error_tol: ArrayLike = 1e-3,
-        rng_key: Optional[jax.Array] = None,
+        rng_key: jax.Array | None = None,
         V_initializer: Callable = braintools.init.Constant(-70.0 * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -940,7 +940,7 @@ class gif_cond_exp_multisynapse(NESTNeuron):
 
         return u.math.asarray(spike_mask, dtype=dftype)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset all state variables to their initial values.
 
         Resets membrane potential, conductances, refractory counter,

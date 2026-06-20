@@ -484,7 +484,7 @@ class ppd_sup_generator(NESTDevice):
     def _is_active(self, curr_step: int) -> bool:
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Initialize occupancy arrays and NumPy RNG for all output trains.
 
         Allocates three :class:`brainstate.ShortTermState` arrays representing

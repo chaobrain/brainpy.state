@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Optional
 
 import brainunit as u
 from brainstate.typing import ArrayLike, Size
@@ -96,7 +95,7 @@ class voltmeter(multimeter):
         origin: ArrayLike = 0.0 * u.ms,
         time_in_steps: bool = False,
         frozen: bool = False,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,

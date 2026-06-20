@@ -326,7 +326,7 @@ class correlomatrix_detector(NESTDevice):
         start: ArrayLike = 0.0 * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0.0 * u.ms,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -476,7 +476,7 @@ class correlomatrix_detector(NESTDevice):
             'n_events': self.n_events,
         }
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset accumulated state and recalibrate from the environment.
 
         Clears the event queue, zeroes all accumulated arrays
@@ -900,8 +900,8 @@ class correlomatrix_detector(NESTDevice):
     def _to_float_array(
         x,
         name: str,
-        default: float = None,
-        size: int = None,
+        default: float | None = None,
+        size: int | None = None,
         unit=None,
     ) -> np.ndarray:
         dftype = brainstate.environ.dftype()
@@ -935,8 +935,8 @@ class correlomatrix_detector(NESTDevice):
     def _to_int_array(
         x,
         name: str,
-        default: int = None,
-        size: int = None,
+        default: int | None = None,
+        size: int | None = None,
     ) -> np.ndarray:
         ditype = brainstate.environ.ditype()
         if x is None:

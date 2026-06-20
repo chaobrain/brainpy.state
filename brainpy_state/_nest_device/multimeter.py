@@ -17,7 +17,7 @@
 
 import math
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 import brainstate
 import brainunit as u
@@ -291,7 +291,7 @@ class multimeter(NESTDevice):
         origin: ArrayLike = 0.0 * u.ms,
         time_in_steps: bool = False,
         frozen: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -301,7 +301,7 @@ class multimeter(NESTDevice):
         self._has_targets = False
         self._interval = interval
         self._offset = offset
-        self._record_from = ()
+        self._record_from: tuple[str, ...] = ()
 
         self.start = start
         self.stop = stop
@@ -386,7 +386,7 @@ class multimeter(NESTDevice):
         self._events_senders: list[int] = []
         self._events_values = {name: [] for name in self._record_from}
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         del batch_size, kwargs
         self.clear_events()
         self._pending.clear()
@@ -426,7 +426,7 @@ class multimeter(NESTDevice):
 
     def update(
         self,
-        data: Mapping[str, ArrayLike] = None,
+        data: Mapping[str, ArrayLike] | None = None,
         senders: ArrayLike = None,
     ):
         r"""Process one simulation step and optionally enqueue a new sample.

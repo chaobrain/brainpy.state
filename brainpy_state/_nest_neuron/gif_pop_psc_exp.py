@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import brainstate
 import brainunit as u
@@ -275,7 +275,7 @@ class gif_pop_psc_exp(NESTNeuron):
         len_kernel: int = -1,
         BinoRand: bool = True,
         rng_seed: int = 0,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name)
 

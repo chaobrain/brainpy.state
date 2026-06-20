@@ -55,6 +55,13 @@ version = {attr = "brainpy_state._version.__version__"}
 include = ["brainpy_state*"]
 
 
+# Ship the PEP 561 marker so type checkers treat brainpy_state (and its whole
+# subpackage tree) as a typed package for downstream users. A single marker at
+# the top-level package root is sufficient per PEP 561.
+[tool.setuptools.package-data]
+brainpy_state = ["py.typed"]
+
+
 [project.urls]
 "Bug Tracker" = "https://github.com/chaobrain/brainpy.state/issues"
 "Documentation" = "https://brainx.chaobrain.com/brainpy-state/"
@@ -78,3 +85,42 @@ tpu = ["jax[tpu]"]
 markers = [
     "requires_nest: live-NEST comparison test; needs the NEST simulator installed",
 ]
+
+
+[tool.mypy]
+# Pragmatic "real-bug" configuration: surface genuine type errors in this
+# package without enforcing whole-codebase `disallow_untyped_defs` (which would
+# bury the signal under thousands of "missing annotation" notes on JAX/array
+# scientific code). Run with `mypy -p brainpy_state`.
+python_version = "3.11"
+files = ["brainpy_state"]
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+no_implicit_optional = true
+# The pragmatic config does not check untyped function bodies, so mypy emits a
+# non-actionable "annotation-unchecked" note for every annotated local inside
+# one; silence that noise.
+disable_error_code = ["annotation-unchecked"]
+# Test modules intentionally abuse types (mocks, deliberate bad inputs); keep the
+# check focused on shipped source.
+exclude = '_test\.py$'
+
+# The brain* ecosystem ships py.typed but exposes large dynamically-generated
+# namespaces (e.g. brainunit units `u.mV`, `u.ms`) that a static checker cannot
+# see, producing ~1700 false "Module has no attribute" errors. Treat these deps
+# as opaque so the check focuses on brainpy_state's own type consistency. Other
+# untyped scientific deps are ignored the same way.
+[[tool.mypy.overrides]]
+module = [
+    "brainstate.*",
+    "brainunit.*",
+    "brainevent.*",
+    "braintools.*",
+    "jax.*",
+    "matplotlib.*",
+    "scipy.*",
+    "nest.*",
+]
+follow_imports = "skip"
+ignore_missing_imports = true

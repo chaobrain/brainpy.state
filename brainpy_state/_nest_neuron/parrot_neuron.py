@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Optional
 
 import brainstate
 import jax.numpy as jnp
@@ -121,7 +120,7 @@ class parrot_neuron(NESTNeuron):
     #: spiking neuron, so a parrot can relay more than one spike per step.
     _relays_multiplicity = True
 
-    def __init__(self, in_size: Size, name: Optional[str] = None):
+    def __init__(self, in_size: Size, name: str | None = None):
         super().__init__(in_size, name=name)
 
     def init_state(self, batch_size=None, **kwargs):

@@ -20,7 +20,8 @@ data-dependent host control flow, and all elementwise math is ``jnp``.
 """
 from __future__ import annotations
 
-from typing import Callable, NamedTuple, Optional, Protocol
+from typing import NamedTuple, Protocol
+from collections.abc import Callable
 
 import brainevent
 import brainstate
@@ -112,8 +113,8 @@ class KernelContext(NamedTuple):
     key: jax.Array
     pre_traces: jax.Array = None
     post_traces: jax.Array = None
-    post_states: dict = None
-    signals: dict = None
+    post_states: dict | None = None
+    signals: dict | None = None
 
 
 class PlasticSynapse(Protocol):
@@ -250,13 +251,13 @@ class EventPlasticProj(brainstate.nn.Module):
         conn=None,
         pre_idx=None,
         post_idx=None,
-        n_post_pop: Optional[int] = None,
-        post_spike: Optional[Callable[[], jax.Array]] = None,
+        n_post_pop: int | None = None,
+        post_spike: Callable[[], jax.Array] | None = None,
         pre_is_post: bool = False,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
-        seed: Optional[int] = None,
-        delta_key: Optional[str] = None,
+        seed: int | None = None,
+        delta_key: str | None = None,
         receptor_type=None,
     ):
         super().__init__()

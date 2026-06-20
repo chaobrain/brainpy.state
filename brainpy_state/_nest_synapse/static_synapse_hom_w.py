@@ -11,7 +11,7 @@ stores ``'weight'`` as a 0-d :class:`brainstate.ParamState`. Per-connection
 from __future__ import annotations
 from brainpy_state._nest_base.base import NESTSynapse
 
-from typing import Mapping
+from collections.abc import Mapping
 
 import brainunit as u
 from brainstate.typing import ArrayLike

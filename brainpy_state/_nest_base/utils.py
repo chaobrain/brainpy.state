@@ -23,7 +23,8 @@ This module extracts common helper functions used across 60+ model files in the
 parameter) and operate on plain NumPy / JAX arrays or brainunit quantities.
 """
 
-from typing import Callable, NamedTuple, Optional
+from typing import NamedTuple
+from collections.abc import Callable
 
 import brainstate
 import jax
@@ -542,12 +543,13 @@ class AdaptiveRungeKuttaStep:
         self,
         method: str,
         vf: Callable,
-        dt: Optional[u.Quantity['time']] = None,
+        # 'time' is a brainunit dimension tag, not a forward ref; mypy misreads the string literal.
+        dt: u.Quantity['time'] | None = None,  # type: ignore[name-defined]
         atol: float = 1e-6,
         rtol: float = 0.0,
-        min_h: Optional[u.Quantity] = None,
+        min_h: u.Quantity | None = None,
         max_iters: int = 100000,
-        event_fn: Optional[Callable] = None,
+        event_fn: Callable | None = None,
     ):
         if method not in tableau_mapping:
             raise ValueError(
@@ -582,7 +584,7 @@ class AdaptiveRungeKuttaStep:
         self,
         state: PyTree,
         h: u.Quantity,
-        extra: Optional[PyTree] = None
+        extra: PyTree | None = None
     ):
         """Integrate over one simulation timestep.
 
