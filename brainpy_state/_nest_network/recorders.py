@@ -2,7 +2,7 @@
 """Recorder — wires a passive NESTDevice to a source population attribute."""
 from __future__ import annotations
 
-from typing import Callable, Union
+from collections.abc import Callable
 
 import brainstate
 
@@ -33,7 +33,7 @@ class Recorder(brainstate.nn.Module):
     def __init__(
         self,
         source: Dynamics,
-        attr: Union[str, Callable],
+        attr: str | Callable,
         device,
     ):
         super().__init__()

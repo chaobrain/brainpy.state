@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import inspect
 import itertools
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import brainstate
 import jax
@@ -70,6 +70,10 @@ class EventProjection(brainstate.nn.Module):
     """
     __module__ = 'brainpy.state'
 
+    # Communication module: one of the three comm kinds, or None for the
+    # element-wise one_to_one path (which uses ``self._weight`` directly).
+    comm: _ReceptorScatter | _DenseMatMul | _SparseEventMatMul | None
+
     def __init__(
         self,
         *,
@@ -88,7 +92,7 @@ class EventProjection(brainstate.nn.Module):
         pre_is_post: bool = False,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ):
         super().__init__()
         # Graded current deposit (SIC) must ride the dense matmul; the sparse event

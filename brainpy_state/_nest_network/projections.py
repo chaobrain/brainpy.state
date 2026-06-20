@@ -2,7 +2,6 @@
 """Rule-based projection classes for the Network API."""
 from __future__ import annotations
 
-from typing import Optional
 
 import brainevent
 import brainstate
@@ -158,7 +157,7 @@ class _RuleProj(brainstate.nn.Module):
         out,
         allow_autapses: bool = True,
         allow_multapses: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ):
         super().__init__()
         if not isinstance(pre, Dynamics):

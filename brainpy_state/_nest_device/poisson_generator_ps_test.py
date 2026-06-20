@@ -289,5 +289,24 @@ class TestPoissonGeneratorPSVsNEST(unittest.TestCase):
         self.assertLess(float(np.mean(bp_counts_aligned[off_late])), 1e-12)
 
 
+class TestPoissonGeneratorPsScalarHelpers(unittest.TestCase):
+    """Regression tests for the ``dftype`` used-before-assignment bug.
+
+    ``_to_scalar_time_ms`` / ``_to_scalar_rate_hz`` previously bound ``dftype``
+    only inside the ``isinstance(value, u.Quantity)`` branch, so a plain-float
+    argument fell into the ``else`` branch and raised ``NameError`` at runtime.
+    """
+
+    def test_to_scalar_time_ms_accepts_plain_float(self):
+        result = poisson_generator_ps._to_scalar_time_ms(5.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 5.0)
+
+    def test_to_scalar_rate_hz_accepts_plain_float(self):
+        result = poisson_generator_ps._to_scalar_rate_hz(3.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 3.0)
+
+
 if __name__ == '__main__':
     unittest.main()

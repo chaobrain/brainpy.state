@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 import brainstate
 import braintools
@@ -412,7 +412,7 @@ class iaf_chs_2007(NESTNeuron):
         V_initializer: Callable = braintools.init.Constant(0.0),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -509,7 +509,7 @@ class iaf_chs_2007(NESTNeuron):
 
         self.last_spike_time = brainstate.ShortTermState(u.math.full(self.varshape, -1e7 * u.ms))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset all state variables to their initial values.
 
         Resets all state variables to the same values as :meth:`init_state`,

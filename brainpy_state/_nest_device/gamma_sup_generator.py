@@ -318,8 +318,8 @@ class gamma_sup_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -329,8 +329,8 @@ class gamma_sup_generator(NESTDevice):
 
     @staticmethod
     def _to_scalar_rate_hz(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.Hz), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -417,7 +417,7 @@ class gamma_sup_generator(NESTDevice):
     def _is_active(self, curr_step: int) -> bool:
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Initialize occupancy and RNG state for all output trains.
 
         Parameters

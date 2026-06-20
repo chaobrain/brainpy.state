@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 import brainstate
 import braintools
@@ -407,7 +407,7 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -636,7 +636,8 @@ class iaf_psc_exp_multisynapse(NESTNeuron):
             return out
         for ev in spike_events:
             if isinstance(ev, dict):
-                receptor = int(ev.get('receptor_type', ev.get('receptor', 1)))
+                raw_receptor = ev.get('receptor_type', ev.get('receptor', 1))
+                receptor = int(raw_receptor if raw_receptor is not None else 1)
                 weight = ev.get('weight', 0.0)
             else:
                 receptor, weight = ev

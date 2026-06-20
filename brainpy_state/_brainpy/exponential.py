@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Optional, Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -100,7 +100,7 @@ class Expon(Synapse, AlignPost):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         tau: ArrayLike = 8.0 * u.ms,
         g_initializer: ArrayLike | Callable = braintools.init.Constant(0. * u.mS),
     ):
@@ -110,10 +110,10 @@ class Expon(Synapse, AlignPost):
         self.tau = braintools.init.param(tau, self.varshape)
         self.g_initializer = g_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.g = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
 
     def update(self, x=None):
@@ -222,7 +222,7 @@ class DualExpon(Synapse, AlignPost):
     def __init__(
         self,
         in_size: Size,
-        name: Optional[str] = None,
+        name: str | None = None,
         tau_decay: ArrayLike = 10.0 * u.ms,
         tau_rise: ArrayLike = 1.0 * u.ms,
         amplitude: ArrayLike = 1.0,
@@ -255,11 +255,11 @@ class DualExpon(Synapse, AlignPost):
             )
         )
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.g_rise = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
         self.g_decay = brainstate.HiddenState.init(self.g_initializer, self.varshape, batch_size)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.g_rise.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
         self.g_decay.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
 

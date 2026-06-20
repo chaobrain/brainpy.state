@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -436,7 +436,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
         rectify_output: bool = False,
         rate_initializer: Callable = braintools.init.Constant(0.0),
         noise_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,
@@ -1050,7 +1050,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
         rate_initializer: Callable = braintools.init.Constant(0.0),
         noise_initializer: Callable = braintools.init.Constant(0.0),
         noisy_rate_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,

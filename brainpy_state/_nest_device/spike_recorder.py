@@ -275,7 +275,7 @@ class spike_recorder(NESTDevice):
         origin: ArrayLike = 0.0 * u.ms,
         time_in_steps: bool = False,
         frozen: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -341,7 +341,7 @@ class spike_recorder(NESTDevice):
         self._events_times_steps: list[int] = []
         self._events_offsets: list[float] = []
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         del batch_size, kwargs
         self.clear_events()
 
@@ -568,8 +568,8 @@ class spike_recorder(NESTDevice):
     def _to_float_array(
         x,
         name: str,
-        default: float = None,
-        size: int = None,
+        default: float | None = None,
+        size: int | None = None,
         unit=None,
     ) -> np.ndarray:
         dftype = brainstate.environ.dftype()
@@ -603,8 +603,8 @@ class spike_recorder(NESTDevice):
     def _to_int_array(
         x,
         name: str,
-        default: int = None,
-        size: int = None,
+        default: int | None = None,
+        size: int | None = None,
     ) -> np.ndarray:
         ditype = brainstate.environ.ditype()
         if x is None:

@@ -571,7 +571,7 @@ class sinusoidal_gamma_generator(NESTDevice):
             [old_lam, np.zeros(add_n, dtype=dftype)]
         )
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Initialize random key and per-train renewal state.
 
         Allocates three :class:`brainstate.ShortTermState` variables:

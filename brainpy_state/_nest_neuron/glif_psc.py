@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 import brainstate
 import braintools
@@ -472,11 +472,11 @@ class glif_psc(NESTNeuron):
         adapting_threshold: bool = False,
         I_e: ArrayLike = 0.0 * u.pA,
         gsl_error_tol: ArrayLike = 1e-6,
-        V_initializer: Callable = None,
+        V_initializer: Callable | None = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

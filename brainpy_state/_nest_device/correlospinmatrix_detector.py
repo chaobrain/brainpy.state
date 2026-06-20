@@ -337,7 +337,7 @@ class correlospinmatrix_detector(NESTDevice):
         start: ArrayLike = 0.0 * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0.0 * u.ms,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -447,7 +447,7 @@ class correlospinmatrix_detector(NESTDevice):
             'count_covariance': self.count_covariance,
         }
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset internal detector state.
 
         Parameters
@@ -879,8 +879,8 @@ class correlospinmatrix_detector(NESTDevice):
     def _to_float_array(
         x,
         name: str,
-        default: float = None,
-        size: int = None,
+        default: float | None = None,
+        size: int | None = None,
     ) -> np.ndarray:
         dftype = brainstate.environ.dftype()
         if x is None:
@@ -911,8 +911,8 @@ class correlospinmatrix_detector(NESTDevice):
     def _to_int_array(
         x,
         name: str,
-        default: int = None,
-        size: int = None,
+        default: int | None = None,
+        size: int | None = None,
     ) -> np.ndarray:
         ditype = brainstate.environ.ditype()
         if x is None:

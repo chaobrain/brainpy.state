@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -124,7 +124,7 @@ class IF(Neuron):
         V_initializer: Callable = braintools.init.Constant(0. * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -134,10 +134,10 @@ class IF(Neuron):
         self.V_th = braintools.init.param(V_th, self.varshape)
         self.V_initializer = V_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
 
     def get_spike(self, V=None):
@@ -257,7 +257,7 @@ class LIF(Neuron):
         V_initializer: Callable = braintools.init.Constant(0. * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -269,10 +269,10 @@ class LIF(Neuron):
         self.V_reset = braintools.init.param(V_reset, self.varshape)
         self.V_initializer = V_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
 
     def get_spike(self, V: ArrayLike = None):
@@ -408,7 +408,7 @@ class ExpIF(Neuron):
         V_initializer: Callable = braintools.init.Constant(-65. * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -422,10 +422,10 @@ class ExpIF(Neuron):
         self.delta_T = braintools.init.param(delta_T, self.varshape)
         self.V_initializer = V_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
 
     def get_spike(self, V: ArrayLike = None):
@@ -547,7 +547,7 @@ class ExpIFRef(Neuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -563,7 +563,7 @@ class ExpIFRef(Neuron):
         self.V_initializer = V_initializer
         self.ref_var = ref_var
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.last_spike_time = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
@@ -573,7 +573,7 @@ class ExpIFRef(Neuron):
                 braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
@@ -738,7 +738,7 @@ class AdExIF(Neuron):
         w_initializer: Callable = braintools.init.Constant(0. * u.mA),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -758,11 +758,11 @@ class AdExIF(Neuron):
         self.V_initializer = V_initializer
         self.w_initializer = w_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.w = brainstate.HiddenState(braintools.init.param(self.w_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
 
@@ -928,7 +928,7 @@ class AdExIFRef(Neuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -950,7 +950,7 @@ class AdExIFRef(Neuron):
         self.w_initializer = w_initializer
         self.ref_var = ref_var
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.w = brainstate.HiddenState(braintools.init.param(self.w_initializer, self.varshape, batch_size))
         self.last_spike_time = brainstate.ShortTermState(
@@ -961,7 +961,7 @@ class AdExIFRef(Neuron):
                 braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         self.last_spike_time.value = braintools.init.param(
@@ -1131,7 +1131,7 @@ class LIFRef(Neuron):
         V_initializer: Callable = braintools.init.Constant(0. * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -1144,13 +1144,13 @@ class LIFRef(Neuron):
         self.V_reset = braintools.init.param(V_reset, self.varshape)
         self.V_initializer = V_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.last_spike_time = brainstate.ShortTermState(
             braintools.init.param(braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.last_spike_time.value = braintools.init.param(
             braintools.init.Constant(-1e7 * u.ms), self.varshape, batch_size
@@ -1303,7 +1303,7 @@ class ALIF(Neuron):
         spk_reset: str = 'soft',
         V_initializer: Callable = braintools.init.Constant(0. * u.mV),
         a_initializer: Callable = braintools.init.Constant(0.),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -1320,11 +1320,11 @@ class ALIF(Neuron):
         self.V_initializer = V_initializer
         self.a_initializer = a_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.a = brainstate.HiddenState(braintools.init.param(self.a_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.a.value = braintools.init.param(self.a_initializer, self.varshape, batch_size)
 
@@ -1448,7 +1448,7 @@ class QuaIF(Neuron):
         V_initializer: Callable = braintools.init.Constant(-65. * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -1462,10 +1462,10 @@ class QuaIF(Neuron):
         self.c = braintools.init.param(c, self.varshape)
         self.V_initializer = V_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
 
     def get_spike(self, V: ArrayLike = None):
@@ -1607,7 +1607,7 @@ class AdQuaIF(Neuron):
         w_initializer: Callable = braintools.init.Constant(0. * u.mA),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -1625,11 +1625,11 @@ class AdQuaIF(Neuron):
         self.V_initializer = V_initializer
         self.w_initializer = w_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.w = brainstate.HiddenState(braintools.init.param(self.w_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
 
@@ -1772,7 +1772,7 @@ class AdQuaIFRef(Neuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -1792,7 +1792,7 @@ class AdQuaIFRef(Neuron):
         self.w_initializer = w_initializer
         self.ref_var = ref_var
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.w = brainstate.HiddenState(braintools.init.param(self.w_initializer, self.varshape, batch_size))
         self.last_spike_time = brainstate.ShortTermState(
@@ -1803,7 +1803,7 @@ class AdQuaIFRef(Neuron):
                 braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
         self.last_spike_time.value = braintools.init.param(
@@ -2009,7 +2009,7 @@ class Gif(Neuron):
         I2_initializer: Callable = braintools.init.Constant(0. * u.mA),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -2033,13 +2033,13 @@ class Gif(Neuron):
         self.I2_initializer = I2_initializer
         self.V_th_initializer = V_th_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.I1 = brainstate.HiddenState(braintools.init.param(self.I1_initializer, self.varshape, batch_size))
         self.I2 = brainstate.HiddenState(braintools.init.param(self.I2_initializer, self.varshape, batch_size))
         self.V_th = brainstate.HiddenState(braintools.init.param(self.V_th_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.I1.value = braintools.init.param(self.I1_initializer, self.varshape, batch_size)
         self.I2.value = braintools.init.param(self.I2_initializer, self.varshape, batch_size)
@@ -2224,7 +2224,7 @@ class GifRef(Neuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -2250,7 +2250,7 @@ class GifRef(Neuron):
         self.V_th_initializer = V_th_initializer
         self.ref_var = ref_var
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.I1 = brainstate.HiddenState(braintools.init.param(self.I1_initializer, self.varshape, batch_size))
         self.I2 = brainstate.HiddenState(braintools.init.param(self.I2_initializer, self.varshape, batch_size))
@@ -2263,7 +2263,7 @@ class GifRef(Neuron):
                 braintools.init.param(braintools.init.Constant(False), self.varshape, batch_size)
             )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.I1.value = braintools.init.param(self.I1_initializer, self.varshape, batch_size)
         self.I2.value = braintools.init.param(self.I2_initializer, self.varshape, batch_size)
@@ -2391,7 +2391,7 @@ class CubaLIF(Neuron):
         g_initializer: Callable = braintools.init.Constant(0. * u.mA),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
         self.R = braintools.init.param(R, self.varshape)
@@ -2403,11 +2403,11 @@ class CubaLIF(Neuron):
         self.V_initializer = V_initializer
         self.g_initializer = g_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
 
@@ -2495,7 +2495,7 @@ class CobaLIF(Neuron):
         g_initializer: Callable = braintools.init.Constant(0. * u.siemens),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
         self.R = braintools.init.param(R, self.varshape)
@@ -2508,11 +2508,11 @@ class CobaLIF(Neuron):
         self.V_initializer = V_initializer
         self.g_initializer = g_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.g = brainstate.HiddenState(braintools.init.param(self.g_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.g.value = braintools.init.param(self.g_initializer, self.varshape, batch_size)
 

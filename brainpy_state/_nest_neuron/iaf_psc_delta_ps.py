@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 import math
-from typing import Callable, Iterable, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Iterable, Sequence
 
 import brainstate
 import braintools
@@ -400,13 +400,13 @@ class iaf_psc_delta_ps(NESTNeuron):
         V_th: ArrayLike = -55. * u.mV,
         V_reset: ArrayLike = -70. * u.mV,
         I_e: ArrayLike = 0. * u.pA,
-        V_min: Optional[ArrayLike] = None,
+        V_min: ArrayLike | None = None,
         V_initializer: Callable = braintools.init.Constant(-70. * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         refractory_input: bool = False,
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -521,7 +521,7 @@ class iaf_psc_delta_ps(NESTNeuron):
 
     @staticmethod
     def _canonicalize_spike_events(
-        spike_events: Optional[Union[Sequence, dict, Tuple]],
+        spike_events: Sequence | dict | tuple | None,
     ) -> Sequence:
         r"""Normalize accepted spike-event container variants.
 
@@ -548,9 +548,9 @@ class iaf_psc_delta_ps(NESTNeuron):
 
     def _parse_spike_events(
         self,
-        spike_events: Optional[Union[Sequence, dict, Tuple]],
+        spike_events: Sequence | dict | tuple | None,
         shape,
-    ) -> Sequence[Tuple[float, np.ndarray]]:
+    ) -> list[tuple[float, np.ndarray]]:
         r"""Parse precise spike events into numeric offsets and broadcast weights.
 
         Parameters
@@ -565,7 +565,7 @@ class iaf_psc_delta_ps(NESTNeuron):
 
         Returns
         -------
-        out : Sequence[Tuple[float, np.ndarray]]
+        out : list[tuple[float, np.ndarray]]
             List of parsed events ``[(offset_ms, weight_np), ...]`` where
             ``offset_ms`` is ``float`` and ``weight_np`` is a ``float64``
             ``numpy.ndarray`` broadcast to ``shape`` (unit: mV).
@@ -727,7 +727,7 @@ class iaf_psc_delta_ps(NESTNeuron):
 
         return self.get_spike(V_for_spike * u.mV)
 
-    def update(self, x=0. * u.pA, spike_events: Optional[Union[Sequence, dict, Tuple]] = None):
+    def update(self, x=0. * u.pA, spike_events: Sequence | dict | tuple | None = None):
         r"""Advance one simulation step with optional precise within-step events.
 
         Parameters
@@ -861,15 +861,18 @@ class iaf_psc_delta_ps(NESTNeuron):
             refr_steps_i = int(refr_steps[idx])
 
             last_step_i = int(last_step[idx])
-            last_offset_i = float(last_offset[idx])
+            # These per-element scalars start as Python floats but are reassigned
+            # from numpy scalar / 0-d array results inside the closures below, so
+            # they genuinely hold ``float | np.ndarray`` rather than just ``float``.
+            last_offset_i: float | np.ndarray = float(last_offset[idx])
             is_refr_i = bool(is_refractory[idx])
-            refr_buf_i = float(refr_buffer[idx])
-            spike_time_i = float(last_spike_time_prev[idx])
+            refr_buf_i: float | np.ndarray = float(refr_buffer[idx])
+            spike_time_i: float | np.ndarray = float(last_spike_time_prev[idx])
 
             r_mem = tau_i / c_m_i
             did_spike = False
 
-            def _propagate(delta_t_ms: float):
+            def _propagate(delta_t_ms: float | np.ndarray):
                 nonlocal u_i
                 if delta_t_ms <= 0.0:
                     return
@@ -878,13 +881,13 @@ class iaf_psc_delta_ps(NESTNeuron):
                 # Numerically stable arrangement used in NEST.
                 u_i = -v_inf * expm1_dt + u_i * expm1_dt + u_i
 
-            def _emit_spike(offset_u_ms: float):
+            def _emit_spike(offset_u_ms: float | np.ndarray):
                 nonlocal did_spike, last_step_i, last_offset_i, is_refr_i, u_i, spike_time_i
                 v_inf = r_mem * (i_i + i_e_i)
                 ratio = (v_inf - u_i) / (v_inf - u_th_i)
                 ratio = min(1.0, max(np.finfo(np.float64).tiny, ratio))
                 dt_cross = -tau_i * math.log(ratio)
-                spike_off = offset_u_ms + dt_cross
+                spike_off: float | np.ndarray = offset_u_ms + dt_cross
                 spike_off = min(dt_ms, max(0.0, spike_off))
 
                 did_spike = True
@@ -894,7 +897,7 @@ class iaf_psc_delta_ps(NESTNeuron):
                 u_i = u_reset_i
                 spike_time_i = t_ms + dt_ms - spike_off
 
-            def _emit_instant_spike(spike_off_ms: float):
+            def _emit_instant_spike(spike_off_ms: float | np.ndarray):
                 nonlocal did_spike, last_step_i, last_offset_i, is_refr_i, u_i, spike_time_i
                 spike_off = min(dt_ms, max(0.0, spike_off_ms))
 
@@ -909,7 +912,9 @@ class iaf_psc_delta_ps(NESTNeuron):
             if (not is_refr_i) and (u_i >= u_th_i):
                 _emit_instant_spike(dt_ms * (1.0 - eps))
 
-            local_events = [(off, w[idx], False) for off, w in parsed_events]
+            local_events: list[tuple[float | np.ndarray, float | np.ndarray, bool]] = [
+                (off, w[idx], False) for off, w in parsed_events
+            ]
             if is_refr_i and (step_idx + 1 - last_step_i == refr_steps_i):
                 local_events.append((last_offset_i, 0.0, True))
             local_events.sort(key=lambda z: z[0], reverse=True)
@@ -922,7 +927,7 @@ class iaf_psc_delta_ps(NESTNeuron):
                     if u_i >= u_th_i:
                         _emit_spike(0.0)
             else:
-                t_cursor = dt_ms
+                t_cursor: float | np.ndarray = dt_ms
                 for ev_offset, ev_weight, end_of_refract in local_events:
                     if is_refr_i:
                         t_cursor = ev_offset

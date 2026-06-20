@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
 
 import brainstate
 import braintools
@@ -442,11 +442,11 @@ class pp_psc_delta(NESTNeuron):
         c_3: float = 0.25,  # 1/mV
         I_e: ArrayLike = 0.0 * u.pA,
         t_ref_remaining: float = 0.0,  # ms
-        rng_key: Optional[jax.Array] = None,
+        rng_key: jax.Array | None = None,
         V_initializer: Callable = braintools.init.Constant(0.0 * u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

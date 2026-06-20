@@ -307,5 +307,19 @@ class TestPulsepacketGeneratorVsNEST(unittest.TestCase):
             self.assertLessEqual(abs(bp_peak - nest_peak) * dt_ms, 0.8)
 
 
+class TestPulsePacketScalarHelpers(unittest.TestCase):
+    """Regression test for the ``dftype`` used-before-assignment bug.
+
+    ``_to_scalar_time_ms`` previously bound ``dftype`` only inside the
+    ``isinstance(value, u.Quantity)`` branch, so a plain-float argument fell
+    into the ``else`` branch and raised ``NameError`` at runtime.
+    """
+
+    def test_to_scalar_time_ms_accepts_plain_float(self):
+        result = pulsepacket_generator._to_scalar_time_ms(5.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 5.0)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Union, Optional, Sequence, Callable
+from collections.abc import Sequence, Callable
 
 import brainstate
 import braintools
@@ -120,11 +120,11 @@ class SpikeTime(brainstate.nn.Dynamics):
     def __init__(
         self,
         in_size: Size,
-        indices: Union[Sequence, ArrayLike],
-        times: Union[Sequence, ArrayLike],
-        weights: Union[float, Sequence, ArrayLike] = 1.0,
+        indices: Sequence | ArrayLike,
+        times: Sequence | ArrayLike,
+        weights: float | Sequence | ArrayLike = 1.0,
         time_as_step: str | Callable = 'round',
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -320,9 +320,9 @@ class PoissonSpike(brainstate.nn.Dynamics):
     def __init__(
         self,
         in_size: Size,
-        freqs: Union[ArrayLike, Callable],
+        freqs: ArrayLike | Callable,
         spk_type: DTypeLike = bool,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -421,7 +421,7 @@ class PoissonEncoder(brainstate.nn.Dynamics):
         self,
         in_size: Size,
         spk_type: DTypeLike = bool,
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
         self.spk_type = spk_type
@@ -541,11 +541,11 @@ class PoissonInput(brainstate.nn.Module):
     def __init__(
         self,
         target: brainstate.nn.Prefetch,
-        indices: Union[np.ndarray, jax.Array],
+        indices: np.ndarray | jax.Array,
         num_input: int,
         freq: u.Quantity[u.Hz],
-        weight: Union[jax.typing.ArrayLike, u.Quantity],
-        name: Optional[str] = None,
+        weight: jax.typing.ArrayLike | u.Quantity,
+        name: str | None = None,
     ):
         super().__init__(name=name)
 
@@ -572,10 +572,10 @@ class PoissonInput(brainstate.nn.Module):
 def poisson_input(
     freq: u.Quantity[u.Hz],
     num_input: int,
-    weight: Union[jax.typing.ArrayLike, u.Quantity],
+    weight: jax.typing.ArrayLike | u.Quantity,
     target: brainstate.State,
-    indices: Optional[Union[np.ndarray, jax.Array]] = None,
-    refractory: Optional[Union[jax.Array]] = None,
+    indices: np.ndarray | jax.Array | None = None,
+    refractory: jax.Array | None = None,
 ):
     r"""Generates Poisson-distributed input spikes to a target state variable.
 

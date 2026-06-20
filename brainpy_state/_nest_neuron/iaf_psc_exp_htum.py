@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -339,7 +339,7 @@ class iaf_psc_exp_htum(NESTNeuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

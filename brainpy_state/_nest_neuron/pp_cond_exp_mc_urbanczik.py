@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -523,10 +523,10 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         # Integration tolerance
         gsl_error_tol: ArrayLike = 1e-3,
         # RNG and surrogate
-        rng_key: Optional[jax.Array] = None,
+        rng_key: jax.Array | None = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

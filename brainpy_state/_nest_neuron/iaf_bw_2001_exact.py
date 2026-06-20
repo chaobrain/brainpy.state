@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable
 
 import brainstate
 import braintools
@@ -431,7 +431,7 @@ class iaf_bw_2001_exact(NESTNeuron):
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
         ref_var: bool = False,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
@@ -457,7 +457,7 @@ class iaf_bw_2001_exact(NESTNeuron):
         self.s_GABA_initializer = s_GABA_initializer
         self.ref_var = ref_var
 
-        self._nmda_port_index = {}
+        self._nmda_port_index: dict[Hashable, int] = {}
         self._updates_started = False
 
         self._validate_parameters()
@@ -662,7 +662,7 @@ class iaf_bw_2001_exact(NESTNeuron):
             refractory = braintools.init.param(braintools.init.Constant(False), self.varshape)
             self.refractory = brainstate.ShortTermState(refractory)
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset all state variables to initial values.
 
         Unlike :meth:`init_state`, this preserves NMDA port structure (number of ports
@@ -783,7 +783,7 @@ class iaf_bw_2001_exact(NESTNeuron):
             return ds_ampa, ds_gaba, nmda_mult
 
         for ev in spike_events:
-            receptor = 'AMPA'
+            receptor: str | int | None = 'AMPA'
             weight = 0.0 * u.nS
             multiplicity = 1.0
             port = None

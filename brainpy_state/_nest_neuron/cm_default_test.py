@@ -1213,5 +1213,49 @@ class TestEdgeCases(unittest.TestCase):
         self.assertTrue(0.0 <= n <= 1.0)
 
 
+class TestInvalidAccessRaises(unittest.TestCase):
+    r"""Regression tests: invalid compartment indices and uninitialized runs.
+
+    Before these guards the affected accessors dereferenced the ``None`` returned
+    by :meth:`cm_default._get_compartment` (or the unset ``_root`` / ``_dt``),
+    surfacing a cryptic ``AttributeError`` / ``TypeError`` instead of a clear,
+    actionable error. Each test asserts the clear exception is raised.
+    """
+
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+
+    def test_add_current_invalid_compartment_raises(self):
+        model = cm_default()
+        model.add_compartment(-1)
+        with self.assertRaises(ValueError):
+            model.add_current(5, 1.0)
+
+    def test_get_voltage_invalid_compartment_raises(self):
+        model = cm_default()
+        model.add_compartment(-1)
+        with self.assertRaises(ValueError):
+            model.get_voltage(5)
+
+    def test_get_na_state_invalid_compartment_raises(self):
+        model = cm_default()
+        model.add_compartment(-1)
+        with self.assertRaises(ValueError):
+            model.get_na_state(5)
+
+    def test_get_k_state_invalid_compartment_raises(self):
+        model = cm_default()
+        model.add_compartment(-1)
+        with self.assertRaises(ValueError):
+            model.get_k_state(5)
+
+    def test_step_before_pre_run_hook_raises(self):
+        model = cm_default()
+        model.add_compartment(-1)
+        # pre_run_hook() never called: no timestep configured, tree not built.
+        with self.assertRaises(RuntimeError):
+            model.step()
+
+
 if __name__ == '__main__':
     unittest.main()

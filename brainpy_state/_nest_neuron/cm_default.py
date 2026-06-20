@@ -29,7 +29,6 @@ tree-based matrix solver, matching NEST's implementation exactly.
 """
 
 import math
-from typing import Optional, Dict, List
 
 import brainstate
 import braintools
@@ -1251,11 +1250,11 @@ class _Compartment:
     same compartment.
     """
 
-    def __init__(self, comp_index: int, parent_index: int, params: Optional[Dict] = None):
+    def __init__(self, comp_index: int, parent_index: int, params: dict | None = None):
         self.comp_index = comp_index
         self.p_index = parent_index
-        self.parent: Optional['_Compartment'] = None
-        self.children: List['_Compartment'] = []
+        self.parent: '_Compartment' | None = None
+        self.children: list['_Compartment'] = []
 
         # Electrical parameters (defaults match NEST)
         self.ca = 1.0  # C_m [nF]
@@ -1286,7 +1285,7 @@ class _Compartment:
         self.k_chan = _KChannel(self.v_comp, gbar_K, e_K)
 
         # Synaptic receptors (list of (receptor, spike_buffer_index) tuples)
-        self.receptors: List = []
+        self.receptors: list = []
 
         # Pre-computed constants (set in pre_run_hook)
         self.ca__div__dt = 0.0
@@ -1306,7 +1305,7 @@ class _Compartment:
         self.n_passed = 0
 
         # External current buffer (list indexed by lag)
-        self._current_buffer: List[float] = []
+        self._current_buffer: list[float] = []
 
     def add_receptor(self, receptor):
         r"""Add a synaptic receptor to this compartment.
@@ -1356,7 +1355,7 @@ class _Compartment:
         for rec in self.receptors:
             rec.pre_run_hook(dt)
 
-    def construct_matrix_element(self, dt: float, spike_buffers: Dict[int, float]):
+    def construct_matrix_element(self, dt: float, spike_buffers: dict[int, float]):
         r"""Build Crank-Nicolson matrix row elements for this compartment.
 
         This method constructs the implicit equation for this compartment's voltage
@@ -1822,9 +1821,9 @@ class cm_default(NESTNeuron):
         in_size=1,
         V_th: float = -55.0,
         *,
-        compartments: Optional[List[Dict]] = None,
-        receptors: Optional[List[Dict]] = None,
-        name: Optional[str] = None,
+        compartments: list[dict] | None = None,
+        receptors: list[dict] | None = None,
+        name: str | None = None,
         spk_fun=None,
         spk_reset: str = 'hard',
     ):
@@ -1842,26 +1841,26 @@ class cm_default(NESTNeuron):
 
         # --- Host-loop tree structure (also the source of truth from which the
         #     State topology is built when a morphology is supplied) ---
-        self._root: Optional[_Compartment] = None
-        self._compartments: List[_Compartment] = []
-        self._compartment_indices: List[int] = []
-        self._leafs: List[_Compartment] = []
+        self._root: _Compartment | None = None
+        self._compartments: list[_Compartment] = []
+        self._compartment_indices: list[int] = []
+        self._leafs: list[_Compartment] = []
         self._size = 0
 
         # Receptor bookkeeping
         # Maps receptor global index -> receptor object
-        self._receptors: List = []
+        self._receptors: list = []
         # Spike buffers: maps receptor id -> accumulated weight for current lag
-        self._spike_buffer: Dict[int, float] = {}
+        self._spike_buffer: dict[int, float] = {}
 
         # Simulation state
-        self._dt: Optional[float] = None
-        self._spike_times: List[float] = []
+        self._dt: float | None = None
+        self._spike_times: list[float] = []
         self._t = 0.0
         self._step_count = 0
 
         # Recording
-        self._v_history: List[List[float]] = []
+        self._v_history: list[list[float]] = []
 
         # State-based execution path: enabled only when a morphology is supplied
         # at construction (the ``Simulator.create()`` path).  Bare ``cm_default()``
@@ -2247,7 +2246,7 @@ class cm_default(NESTNeuron):
                 return (getattr(self, rise).value + getattr(self, decay).value)[..., k]
         raise KeyError(f'cm_default has no recordable {name!r}')
 
-    def add_compartment(self, parent_idx: int, params: Optional[Dict] = None) -> int:
+    def add_compartment(self, parent_idx: int, params: dict | None = None) -> int:
         r"""Add a compartment to the neuron's morphological tree structure.
 
         Compartments are added incrementally to build the dendritic tree. The first
@@ -2328,7 +2327,7 @@ class cm_default(NESTNeuron):
         return comp_index
 
     def add_receptor(self, comp_idx: int, receptor_type: str,
-                     params: Optional[Dict] = None) -> int:
+                     params: dict | None = None) -> int:
         r"""Add a synaptic receptor to a specific compartment.
 
         Receptors define the postsynaptic response to presynaptic spikes. Multiple
@@ -2403,6 +2402,7 @@ class cm_default(NESTNeuron):
         if params is None:
             params = {}
 
+        rec: _AMPAReceptor | _GABAReceptor | _NMDAReceptor | _AMPA_NMDAReceptor
         if receptor_type == 'AMPA':
             rec = _AMPAReceptor(**{
                 k: v for k, v in params.items()
@@ -2641,6 +2641,8 @@ class cm_default(NESTNeuron):
           with realistic kinetics and reversal potential effects
         """
         comp = self._get_compartment(comp_idx)
+        if comp is None:
+            raise ValueError(f"Compartment {comp_idx} does not exist.")
         comp._current_buffer.append(current)
 
     def step(self) -> bool:
@@ -2720,7 +2722,18 @@ class cm_default(NESTNeuron):
         Each step() call advances simulation time by dt milliseconds (set in pre_run_hook).
         For dt=0.1 ms and num_steps=10000, the simulation covers 1000 ms (1 second) of
         biological time. The wall-clock time depends on model complexity and hardware.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`pre_run_hook` has not been called yet (no timestep configured
+            or no root compartment), so the simulation is not ready to advance.
         """
+        if self._dt is None or self._root is None:
+            raise RuntimeError(
+                "Simulation not initialized: call pre_run_hook(dt) to set the "
+                "timestep and build the compartment tree before step()."
+            )
         dt = self._dt
         v_prev = self._root.v_comp
 
@@ -2780,9 +2793,12 @@ class cm_default(NESTNeuron):
             plt.plot(v_trace_soma, label='Soma')
             plt.plot(v_trace_dend, label='Dendrite')
         """
-        return self._get_compartment(comp_idx).v_comp
+        comp = self._get_compartment(comp_idx)
+        if comp is None:
+            raise ValueError(f"Compartment {comp_idx} does not exist.")
+        return comp.v_comp
 
-    def get_voltages(self) -> List[float]:
+    def get_voltages(self) -> list[float]:
         r"""Get membrane voltages of all compartments simultaneously.
 
         Returns
@@ -2850,6 +2866,8 @@ class cm_default(NESTNeuron):
                 print(f"t={i*0.1:.1f} ms: m={m:.3f}, h={h:.3f}, I_Na ~ {m**3 * h:.3f}")
         """
         comp = self._get_compartment(comp_idx)
+        if comp is None:
+            raise ValueError(f"Compartment {comp_idx} does not exist.")
         return comp.na_chan.m_Na, comp.na_chan.h_Na
 
     def get_k_state(self, comp_idx: int):
@@ -2875,6 +2893,8 @@ class cm_default(NESTNeuron):
         for computational efficiency while preserving qualitative dynamics.
         """
         comp = self._get_compartment(comp_idx)
+        if comp is None:
+            raise ValueError(f"Compartment {comp_idx} does not exist.")
         return comp.k_chan.n_K
 
     def get_receptor_state(self, receptor_idx: int):
@@ -2951,7 +2971,7 @@ class cm_default(NESTNeuron):
 
     # ----- Internal methods -----
 
-    def _get_compartment(self, comp_idx: int) -> Optional[_Compartment]:
+    def _get_compartment(self, comp_idx: int) -> _Compartment | None:
         r"""Find compartment by index via search."""
         if comp_idx < 0 or comp_idx >= len(self._compartments):
             return None
@@ -2965,8 +2985,8 @@ class cm_default(NESTNeuron):
             if comp is not None:
                 self._compartments.append(comp)
 
-    def _find_compartment(self, comp: Optional[_Compartment],
-                          target_idx: int) -> Optional[_Compartment]:
+    def _find_compartment(self, comp: _Compartment | None,
+                          target_idx: int) -> _Compartment | None:
         r"""Recursively find compartment by index."""
         if comp is None:
             return None

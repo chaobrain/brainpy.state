@@ -12,6 +12,9 @@ pytest
 pytest-xdist  # for parallel test execution
 absl-py
 
+# type checking (see [tool.mypy] in pyproject.toml; run `mypy -p brainpy_state`)
+mypy
+
 # NEST simulator for comparison tests (not available on PyPI)
 # Install via conda: conda install -c conda-forge nest-simulator
 # NEST is only available on Linux and macOS; tests skip automatically on Windows.

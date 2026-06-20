@@ -14,9 +14,10 @@
 # ==============================================================================
 
 
-from typing import Callable, TypeVar, Union
+from typing import TypeVar
+from collections.abc import Callable
 
-T = TypeVar('T', bound=Union[Callable, type])
+T = TypeVar('T', bound=Callable | type)
 
 
 def set_module_as(module: str) -> Callable[[T], T]:

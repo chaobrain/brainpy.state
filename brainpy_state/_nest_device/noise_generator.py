@@ -16,7 +16,6 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Optional
 
 import brainstate
 import braintools
@@ -278,8 +277,8 @@ class noise_generator(NESTDevice):
         start: ArrayLike = 0. * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0. * u.ms,
-        seed: Optional[int] = None,
-        name: Optional[str] = None,
+        seed: int | None = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -299,7 +298,7 @@ class noise_generator(NESTDevice):
         self.seed = seed
         self.rng = brainstate.random.default_rng(self.seed)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Initialize RNG and internal state buffers for piecewise noise updates.
 
         Parameters

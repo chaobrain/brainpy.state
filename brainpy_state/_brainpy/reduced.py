@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -94,7 +94,7 @@ class FitzHughNagumo(Neuron):
         w_initializer: Callable = braintools.init.Constant(-0.62),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
         self.a = braintools.init.param(a, self.varshape)
@@ -105,11 +105,11 @@ class FitzHughNagumo(Neuron):
         self.V_initializer = V_initializer
         self.w_initializer = w_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.w = brainstate.HiddenState(braintools.init.param(self.w_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.w.value = braintools.init.param(self.w_initializer, self.varshape, batch_size)
 
@@ -209,7 +209,7 @@ class HindmarshRose(Neuron):
         z_initializer: Callable = braintools.init.Constant(0.),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
         self.a = braintools.init.param(a, self.varshape)
@@ -225,12 +225,12 @@ class HindmarshRose(Neuron):
         self.y_initializer = y_initializer
         self.z_initializer = z_initializer
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         self.V = brainstate.HiddenState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
         self.y = brainstate.HiddenState(braintools.init.param(self.y_initializer, self.varshape, batch_size))
         self.z = brainstate.HiddenState(braintools.init.param(self.z_initializer, self.varshape, batch_size))
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
         self.y.value = braintools.init.param(self.y_initializer, self.varshape, batch_size)
         self.z.value = braintools.init.param(self.z_initializer, self.varshape, batch_size)

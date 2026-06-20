@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -314,10 +314,10 @@ class izhikevich(NESTNeuron):
         V_min: ArrayLike = None,
         consistent_integration: bool = True,
         V_initializer: Callable = braintools.init.Constant(-65. * u.mV),
-        U_initializer: Callable = None,
+        U_initializer: Callable | None = None,
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'hard',
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 

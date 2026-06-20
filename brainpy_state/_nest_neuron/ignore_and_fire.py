@@ -192,7 +192,7 @@ class ignore_and_fire(NESTNeuron):
         in_size: Size,
         phase: ArrayLike = 1.0,
         rate: ArrayLike = 10. * u.Hz,
-        name: str = None,
+        name: str | None = None,
     ):
         r"""Initialize the ignore_and_fire neuron model.
 

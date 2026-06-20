@@ -290,8 +290,8 @@ class spike_dilutor(NESTDevice):
 
     @staticmethod
     def _to_scalar_time_ms(value: ArrayLike) -> float:
+        dftype = brainstate.environ.dftype()
         if isinstance(value, u.Quantity):
-            dftype = brainstate.environ.dftype()
             arr = np.asarray(value.to_decimal(u.ms), dtype=dftype)
         else:
             arr = np.asarray(u.math.asarray(value, dtype=dftype), dtype=dftype)
@@ -372,7 +372,7 @@ class spike_dilutor(NESTDevice):
     def _is_active(self, curr_step: int) -> bool:
         return (self._t_min_step < curr_step) and (curr_step <= self._t_max_step)
 
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Initialise the per-instance JAX PRNG key.
 
         Constructs a ``jax.random.PRNGKey`` seeded with :attr:`rng_seed`

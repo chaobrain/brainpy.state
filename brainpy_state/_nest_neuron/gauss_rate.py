@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -399,7 +399,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         rectify_output: bool = False,
         rate_initializer: Callable = braintools.init.Constant(0.0),
         noise_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(
             in_size=in_size,

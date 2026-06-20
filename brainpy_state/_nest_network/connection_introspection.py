@@ -28,7 +28,8 @@ directly, without NEST's ``min(node_id)`` subtraction).
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import brainstate
 import jax.numpy as jnp
@@ -87,8 +88,8 @@ class ProjEdges:
     is_homogeneous_weight: bool
     is_plastic: bool
     model_name: str
-    write_weight: Optional[Callable] = None
-    write_delay: Optional[Callable] = None
+    write_weight: Callable | None = None
+    write_delay: Callable | None = None
 
 
 def canonical_order(source) -> np.ndarray:
@@ -242,7 +243,8 @@ def event_proj_edges(proj) -> 'ProjEdges':
         w_mant = np.asarray(comm._data.value)
         w_unit = comm._unit
         is_homogeneous = False
-        target = ('data', comm._data)
+        # Heterogeneous, variable-length descriptor tuple; the comm mode is the tag.
+        target: tuple[Any, ...] = ('data', comm._data)
     elif proj._one_to_one:
         n = int(pre_map.shape[0])
         pre_seg = np.arange(n)

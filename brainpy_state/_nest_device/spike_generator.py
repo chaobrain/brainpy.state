@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import brainstate
 import braintools
@@ -244,7 +244,7 @@ class spike_generator(NESTDevice):
         start: ArrayLike = 0. * u.ms,
         stop: ArrayLike = None,
         origin: ArrayLike = 0. * u.ms,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 

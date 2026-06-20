@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 import jax.numpy as jnp
 
@@ -43,7 +42,7 @@ class NodeView:
     """
     __module__ = 'brainpy.state'
 
-    def __init__(self, segments: List[_Segment]):
+    def __init__(self, segments: list[_Segment]):
         self._segments = list(segments)
 
     @classmethod
@@ -52,7 +51,7 @@ class NodeView:
         return cls([_Segment(population, jnp.arange(_flat_size(population)))])
 
     @property
-    def segments(self) -> List[_Segment]:
+    def segments(self) -> list[_Segment]:
         return self._segments
 
     @property

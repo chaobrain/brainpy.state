@@ -429,10 +429,10 @@ class astrocyte_lr_1994(NESTNeuron):
         tau_IP3: float = 7142.0,  # ms
         gsl_error_tol: float = 1e-3,
         # State initializers
-        IP3_initializer: float = None,
+        IP3_initializer: float | None = None,
         Ca_initializer: float = 0.073,  # µM
         h_IP3R_initializer: float = 0.793,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name)
 

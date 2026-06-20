@@ -254,5 +254,25 @@ class TestSpikeDilutorVsNEST(unittest.TestCase):
         self.assertLess(rel_diff, 0.05)
 
 
+class TestSpikeDilutorScalarHelpers(unittest.TestCase):
+    """Regression tests for the ``dftype`` used-before-assignment bug.
+
+    ``_to_scalar_time_ms`` previously bound ``dftype`` only inside the
+    ``isinstance(value, u.Quantity)`` branch, so a plain-float (non-Quantity)
+    argument fell into the ``else`` branch and raised ``NameError`` at runtime.
+    """
+
+    def test_to_scalar_time_ms_accepts_plain_float(self):
+        result = spike_dilutor._to_scalar_time_ms(5.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 5.0)
+
+    def test_constructor_accepts_plain_float_times(self):
+        dil = spike_dilutor(start=5.0, stop=10.0, origin=1.0)
+        self.assertEqual(dil.start, 5.0)
+        self.assertEqual(dil.stop, 10.0)
+        self.assertEqual(dil.origin, 1.0)
+
+
 if __name__ == '__main__':
     unittest.main()

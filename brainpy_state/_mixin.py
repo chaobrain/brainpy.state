@@ -14,7 +14,7 @@
 # ==============================================================================
 
 
-from typing import Optional
+from typing import Any
 
 import brainstate
 
@@ -162,7 +162,8 @@ class BindCondData(brainstate.mixin.Mixin):
         ...         return 0.0
     """
     # Attribute to store temporary conductance data
-    _conductance: Optional
+    # Holds opaque conductance arrays/quantities, or None when unbound.
+    _conductance: Any
 
     def bind_cond(self, conductance):
         r"""

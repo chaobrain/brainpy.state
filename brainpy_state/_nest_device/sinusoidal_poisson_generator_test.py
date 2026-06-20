@@ -366,5 +366,24 @@ class TestSinusoidalPoissonGeneratorVsNEST(unittest.TestCase):
         self.assertAlmostEqual(mae_bp, mae_nest, delta=0.20 * max(mae_nest, 1.0))
 
 
+class TestSinusoidalPoissonScalarHelpers(unittest.TestCase):
+    """Regression tests for the ``dftype`` used-before-assignment bug.
+
+    ``_to_scalar_time_ms`` / ``_to_scalar_rate_hz`` previously bound ``dftype``
+    only inside the ``isinstance(value, u.Quantity)`` branch, so a plain-float
+    argument fell into the ``else`` branch and raised ``NameError`` at runtime.
+    """
+
+    def test_to_scalar_time_ms_accepts_plain_float(self):
+        result = sinusoidal_poisson_generator._to_scalar_time_ms(5.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 5.0)
+
+    def test_to_scalar_rate_hz_accepts_plain_float(self):
+        result = sinusoidal_poisson_generator._to_scalar_rate_hz(3.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 3.0)
+
+
 if __name__ == '__main__':
     unittest.main()

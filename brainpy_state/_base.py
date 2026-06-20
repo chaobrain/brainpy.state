@@ -14,7 +14,8 @@
 # ==============================================================================
 
 
-from typing import Any, Union, TypeVar, Callable, Optional
+from typing import Any, TypeVar, Union
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -34,7 +35,7 @@ def _input_label_start(label: str):
     return f'{label} // '
 
 
-def _input_label_repr(name: str, label: Optional[str] = None):
+def _input_label_repr(name: str, label: str | None = None):
     # unify the input label repr.
     return name if label is None else (_input_label_start(label) + str(name))
 
@@ -42,15 +43,15 @@ def _input_label_repr(name: str, label: Optional[str] = None):
 class Dynamics(brainstate.nn.Dynamics):
     __module__ = 'brainpy.state'
 
-    def __init__(self, in_size: Size, name: Optional[str] = None):
+    def __init__(self, in_size: Size, name: str | None = None):
         # initialize
         super().__init__(name=name, in_size=in_size)
 
         # current inputs
-        self._current_inputs = None
+        self._current_inputs: dict[str, Any] | None = None
 
         # delta inputs
-        self._delta_inputs = None
+        self._delta_inputs: dict[str, Any] | None = None
 
     @property
     def current_inputs(self):
@@ -97,8 +98,8 @@ class Dynamics(brainstate.nn.Dynamics):
     def add_current_input(
         self,
         key: str,
-        inp: Union[Callable, ArrayLike],
-        label: Optional[str] = None
+        inp: Callable | ArrayLike,
+        label: str | None = None
     ):
         r"""
         Add a current input function or array to the dynamics model.
@@ -147,8 +148,8 @@ class Dynamics(brainstate.nn.Dynamics):
     def add_delta_input(
         self,
         key: str,
-        inp: Union[Callable, ArrayLike],
-        label: Optional[str] = None
+        inp: Callable | ArrayLike,
+        label: str | None = None
     ):
         r"""
         Add a delta input function or array to the dynamics model.
@@ -242,7 +243,7 @@ class Dynamics(brainstate.nn.Dynamics):
         self,
         init: Any,
         *args,
-        label: Optional[str] = None,
+        label: str | None = None,
         pop: bool = True,
         **kwargs
     ):
@@ -312,7 +313,7 @@ class Dynamics(brainstate.nn.Dynamics):
         self,
         init: Any,
         *args,
-        label: Optional[str] = None,
+        label: str | None = None,
         pop: bool = True,
         **kwargs
     ):
@@ -378,6 +379,8 @@ class Dynamics(brainstate.nn.Dynamics):
                         self._delta_inputs.pop(key)
         return init
 
+    # Union (not `|`): ParamDescriber[...] is a runtime instance; `instance | type`
+    # raises TypeError when this annotation is evaluated.
     def align_pre(self, dyn: Union[ParamDescriber[T], T]) -> T:
         r"""
         Registers a dynamics module to execute after this module.
@@ -608,7 +611,7 @@ class Neuron(Dynamics):
         in_size: brainstate.typing.Size,
         spk_fun: Callable = braintools.surrogate.InvSquareGrad(),
         spk_reset: str = 'soft',
-        name: Optional[str] = None,
+        name: str | None = None,
     ):
         super().__init__(in_size, name=name)
         if spk_reset not in ('soft', 'hard'):

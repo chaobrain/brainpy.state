@@ -13,8 +13,8 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Callable, Union
-from typing import Optional
+from collections.abc import Callable
+from typing import Union
 
 import brainevent
 import brainstate
@@ -124,7 +124,7 @@ def align_post_add_bef_update(
     out_desc: ParamDescriber[BindCondData],
     post: Dynamics,
     proj_name: str,
-    label: str,
+    label: str | None,
 ):
     # synapse and output initialization
     _post_repr = get_post_repr(label, syn_desc, out_desc)
@@ -249,12 +249,14 @@ class AlignPostProj(Projection):
     def __init__(
         self,
         *modules,
-        comm: Callable,
+        comm: brainstate.nn.Module,
+        # Union (not `|`): ParamDescriber[...] is a runtime instance, and
+        # `instance | type` raises TypeError when this annotation is evaluated.
         syn: Union[ParamDescriber[AlignPost], AlignPost],
         out: Union[ParamDescriber[SynOut], SynOut],
         post: Dynamics,
-        label: Optional[str] = None,
-        delay: Optional[Union[ArrayLike, u.Quantity]] = None,
+        label: str | None = None,
+        delay: ArrayLike | u.Quantity | None = None,
     ):
         super().__init__(name=get_unique_name(self.__class__.__name__))
 
@@ -527,10 +529,10 @@ class CurrentProj(Projection):
     def __init__(
         self,
         *prefetch,
-        comm: Callable,
+        comm: brainstate.nn.Module,
         out: SynOut,
         post: Dynamics,
-        delay: Optional[Union[ArrayLike, u.Quantity]] = None,
+        delay: ArrayLike | u.Quantity | None = None,
     ):
         super().__init__(name=get_unique_name(self.__class__.__name__))
 
@@ -657,7 +659,7 @@ class align_pre_projection(Projection):
         comm: Callable,
         out: SynOut,
         post: Dynamics,
-        stp: Dynamics = None,
+        stp: Dynamics | None = None,
     ):
         super().__init__()
 
@@ -756,10 +758,12 @@ class align_post_projection(Projection):
         self,
         *spike_generator,
         comm: Callable,
+        # Union (not `|`): ParamDescriber[...] is a runtime instance, and
+        # `instance | type` raises TypeError when this annotation is evaluated.
         syn: Union[AlignPost, ParamDescriber[AlignPost]],
         out: Union[SynOut, ParamDescriber[SynOut]],
         post: Dynamics,
-        stp: Dynamics = None,
+        stp: Dynamics | None = None,
     ):
         super().__init__()
 

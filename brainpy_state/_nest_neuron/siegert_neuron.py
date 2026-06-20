@@ -17,7 +17,7 @@
 
 
 import math
-from typing import Callable
+from collections.abc import Callable
 
 import brainstate
 import braintools
@@ -329,7 +329,7 @@ class siegert_neuron(NESTNeuron):
         theta: ArrayLike = 15.0,
         V_reset: ArrayLike = 0.0,
         rate_initializer: Callable = braintools.init.Constant(0.0),
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 

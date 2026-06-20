@@ -319,5 +319,19 @@ class TestInhomogeneousPoissonGeneratorVsNEST(unittest.TestCase):
         self.assertAlmostEqual(bp_mean_3, nest_mean_3, delta=0.12 * max(nest_mean_3, 1.0))
 
 
+class TestInhomogeneousPoissonScalarHelpers(unittest.TestCase):
+    """Regression test for the ``dftype`` used-before-assignment bug.
+
+    ``_to_scalar_time_ms`` previously bound ``dftype`` only inside the
+    ``isinstance(value, u.Quantity)`` branch, so a plain-float argument fell
+    into the ``else`` branch and raised ``NameError`` at runtime.
+    """
+
+    def test_to_scalar_time_ms_accepts_plain_float(self):
+        result = inhomogeneous_poisson_generator._to_scalar_time_ms(5.0)
+        self.assertIsInstance(result, float)
+        self.assertEqual(result, 5.0)
+
+
 if __name__ == '__main__':
     unittest.main()

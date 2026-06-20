@@ -131,7 +131,7 @@ class volume_transmitter(NESTDevice):
         in_size: Size = 1,
         tau_n: ArrayLike = 200.0 * u.ms,
         deliver_interval: int = 1,
-        name: str = None,
+        name: str | None = None,
     ):
         super().__init__(in_size=in_size, name=name)
 
@@ -148,13 +148,13 @@ class volume_transmitter(NESTDevice):
         self._dopa_sources: list[tuple] = []
 
     # -- state -------------------------------------------------------------
-    def init_state(self, batch_size: int = None, **kwargs):
+    def init_state(self, batch_size: int | None = None, **kwargs):
         r"""Allocate the broadcast concentration ``n`` (shape ``(in_size,)``, init 0)."""
         self.n = brainstate.HiddenState(
             braintools.init.param(braintools.init.Constant(0.0), self.varshape, batch_size)
         )
 
-    def reset_state(self, batch_size: int = None, **kwargs):
+    def reset_state(self, batch_size: int | None = None, **kwargs):
         r"""Reset the broadcast concentration ``n`` to ``0.0``."""
         self.n.value = braintools.init.param(
             braintools.init.Constant(0.0), self.varshape, batch_size
