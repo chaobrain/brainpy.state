@@ -92,7 +92,9 @@ markers = [
 # package without enforcing whole-codebase `disallow_untyped_defs` (which would
 # bury the signal under thousands of "missing annotation" notes on JAX/array
 # scientific code). Run with `mypy -p brainpy_state`.
-python_version = "3.11"
+# NumPy 2.x ships PEP 695 `type` aliases in its stubs, which mypy only parses when
+# targeting Python >= 3.12; the package itself still supports 3.11+ at runtime.
+python_version = "3.12"
 files = ["brainpy_state"]
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -121,6 +123,9 @@ module = [
     "matplotlib.*",
     "scipy.*",
     "nest.*",
+    # `_nest_validation` imports pytest for its `@requires_nest` marker, but pytest
+    # is not installed in the minimal type-check environment.
+    "pytest.*",
 ]
 follow_imports = "skip"
 ignore_missing_imports = true
