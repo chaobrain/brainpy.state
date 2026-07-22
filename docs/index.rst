@@ -16,6 +16,16 @@ ideas — explicit **State**, **physical units**, and the distinctive
 the number of neurons while remaining fully differentiable. See
 :doc:`concepts/alignpre-alignpost` for the keystone chapter.
 
+.. admonition:: ``brainpy`` and ``brainpy.state``
+
+   ``brainpy.state`` is the **state-based modeling layer** of BrainPy — developed and
+   released as the standalone ``brainpy_state`` package and surfaced through the
+   ``brainpy.state`` namespace. It is the recommended starting point for new
+   ``State``-based, differentiable spiking-network models. The classic,
+   ``DynamicalSystem``-based ``brainpy`` API (``brainpy.dyn``, ``brainpy.math``,
+   ``brainpy.integrators``) is unchanged and fully supported — the two paradigms
+   coexist. See :doc:`project/relationship`.
+
 .. figure:: /_static/bridging-concept.png
    :alt: A bridge diagram. On the left, a blue "Brain Simulation" panel with a
          network schematic, a spike raster, and a conductance-versus-time trace;
@@ -282,5 +292,6 @@ See also the ecosystem
    :caption: Project
 
    changelog.md
+   project/relationship
    project/citing
    project/ecosystem
