@@ -41,7 +41,7 @@ dependencies = [
     "brainpy>=2.7.6",
     "brainstate>=0.5.0",
     "brainunit",
-    "brainevent>=0.0.4",
+    "brainevent>=0.2.1",
     "braintools>=0.0.9",
 ]
 dynamic = ['version']
