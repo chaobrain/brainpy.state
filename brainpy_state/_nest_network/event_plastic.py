@@ -31,6 +31,7 @@ import numpy as np
 import brainunit as u
 
 from brainpy_state._brainpy.delay import InputDelay
+from brainpy_state._nest_network.connectivity import csr_structure
 from brainpy_state._nest_network.event_proj import EventProjection
 
 __all__ = ['EventPlasticProj', 'VoltageCoupledPlasticProj', 'KernelContext', 'PlasticSynapse']
@@ -298,12 +299,9 @@ class EventPlasticProj(brainstate.nn.Module):
             pre_idx, post_idx = spec.pre_idx, spec.post_idx
         pre_np = np.asarray(pre_idx)
         post_np = np.asarray(post_idx)
-        order = np.argsort(pre_np, kind='stable')           # group edges by pre row
+        order, self._indices, self._indptr = csr_structure(pre_np, post_np, n_pre)
         self._pre_idx = jnp.asarray(pre_np[order])
         self._post_idx = jnp.asarray(post_np[order])
-        self._indices = jnp.asarray(post_np[order])
-        self._indptr = jnp.asarray(
-            np.concatenate([[0], np.cumsum(np.bincount(pre_np, minlength=n_pre))]))
         self._shape = (n_pre, n_post)
         self._E = int(pre_np.shape[0])
 

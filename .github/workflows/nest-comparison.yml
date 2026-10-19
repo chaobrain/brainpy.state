@@ -53,7 +53,9 @@ jobs:
           miniforge-version: latest
 
       - name: Install NEST simulator
-        run: conda install -y -c conda-forge nest-simulator
+        # Pinned: an unpinned install resolved NEST 3.8, whose TripartiteConnect lacks
+        # the 3.9 `third_factor_conn_spec` argument the parity tests are written against.
+        run: conda install -y -c conda-forge "nest-simulator=3.9"
 
       - name: Install dependencies
         run: |

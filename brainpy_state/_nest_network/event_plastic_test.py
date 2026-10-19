@@ -407,6 +407,19 @@ def test_vmap_over_weight_batch():
     assert out.shape == (5, 4) and np.allclose(np.asarray(out), 2.0)
 
 
+def test_csr_structure_in_brainevent_dtype():
+    # Regression: int64 edges gave an int64 indptr that brainevent >= 0.2 cast
+    # inside jit, breaking its host readback (TracerArrayConversionError).
+    proj = EventPlasticProj(
+        pre_spike=lambda: jnp.array([1., 0.]), n_pre_pop=2,
+        pre_local_idx=jnp.arange(2), post=_Sink(2), post_local_idx=jnp.arange(2), n_post_pop=2,
+        pre_idx=np.array([1, 0], dtype=np.int64), post_idx=np.array([0, 1], dtype=np.int64),
+        rule=_StaticTestRule(weight=jnp.array([1., 1.]) * u.pA))
+    assert proj._indptr.dtype == jnp.int32
+    assert proj._indices.dtype == jnp.int32
+    np.testing.assert_array_equal(np.asarray(proj._indptr), [0, 1, 2])
+
+
 def test_jit_step_runs():
     brainstate.environ.set(dt=0.1 * u.ms)
     sink = _Sink(2)
