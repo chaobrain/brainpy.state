@@ -27,6 +27,32 @@ class ConnSpec:
     n_edges: int
 
 
+def csr_indptr_dtype(n_edges: int):
+    """Return brainevent's ``indptr`` dtype for ``n_edges`` stored entries.
+
+    int32 while ``n_edges`` fits int32, otherwise int64 (mirrors brainevent's
+    ``indptr_dtype="auto"`` rule).
+    """
+    return np.int32 if n_edges <= np.iinfo(np.int32).max else np.int64
+
+
+def csr_structure(pre_idx, post_idx, n_pre: int):
+    """Sort edges by pre row and build CSR ``(order, indices, indptr)``.
+
+    ``indices`` / ``indptr`` are emitted in the dtypes brainevent stores, so a
+    ``brainevent.CSR`` rebuilt inside ``jit`` does no traced cast — brainevent
+    >= 0.2 reads ``indptr`` back to host, which fails on a traced value.
+    """
+    pre_np = np.asarray(pre_idx)
+    post_np = np.asarray(post_idx)
+    order = np.argsort(pre_np, kind='stable')           # group edges by pre row
+    indices = jnp.asarray(post_np[order], dtype=jnp.int32)
+    counts = np.bincount(pre_np.astype(np.int64), minlength=n_pre)
+    indptr = jnp.asarray(np.concatenate([[0], np.cumsum(counts)]),
+                         dtype=csr_indptr_dtype(pre_np.shape[0]))
+    return order, indices, indptr
+
+
 def sample_one_to_one(n_pre: int, n_post: int) -> ConnSpec:
     if n_pre != n_post:
         raise ValueError(

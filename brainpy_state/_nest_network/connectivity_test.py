@@ -19,6 +19,8 @@ from brainpy_state._nest_network.connectivity import (
     resolve_param,
     build_pool_map,
     sample_third_factor_pairing,
+    csr_indptr_dtype,
+    csr_structure,
 )
 
 
@@ -280,3 +282,46 @@ class TestSampleThirdFactorPairing(unittest.TestCase):
                                                   key=jax.random.key(0))
         frac = astro.shape[0] / pre.shape[0]
         self.assertAlmostEqual(frac, 0.5, delta=0.05)
+
+
+class TestCsrStructure(unittest.TestCase):
+    # brainevent >= 0.2 reads ``indptr`` back to host when a CSR is matmul'd, so a
+    # CSR built inside ``jit`` must not need a dtype cast (a traced cast breaks the
+    # readback). The structure arrays are therefore emitted in brainevent's dtype.
+
+    def test_rows_grouped_and_dtypes_match_brainevent(self):
+        pre = np.array([2, 0, 2, 1, 0], dtype=np.int64)
+        post = np.array([4, 1, 3, 0, 2], dtype=np.int64)
+        order, indices, indptr = csr_structure(pre, post, n_pre=4)
+        np.testing.assert_array_equal(pre[order], [0, 0, 1, 2, 2])
+        np.testing.assert_array_equal(np.asarray(indices), [1, 2, 0, 4, 3])
+        np.testing.assert_array_equal(np.asarray(indptr), [0, 2, 3, 5, 5])
+        self.assertEqual(indices.dtype, jnp.int32)
+        self.assertEqual(indptr.dtype, jnp.int32)
+
+    def test_empty_edge_set(self):
+        empty = np.zeros((0,), dtype=np.int64)
+        order, indices, indptr = csr_structure(empty, empty, n_pre=3)
+        self.assertEqual(order.shape, (0,))
+        self.assertEqual(indices.shape, (0,))
+        np.testing.assert_array_equal(np.asarray(indptr), [0, 0, 0, 0])
+        self.assertEqual(indptr.dtype, jnp.int32)
+
+    def test_indptr_dtype_widens_past_int32(self):
+        int32_max = int(np.iinfo(np.int32).max)
+        self.assertEqual(csr_indptr_dtype(0), np.int32)
+        self.assertEqual(csr_indptr_dtype(int32_max), np.int32)
+        self.assertEqual(csr_indptr_dtype(int32_max + 1), np.int64)
+
+    def test_csr_matmul_under_jit(self):
+        import brainevent
+        pre = np.array([0, 1, 1], dtype=np.int64)
+        post = np.array([1, 0, 1], dtype=np.int64)
+        order, indices, indptr = csr_structure(pre, post, n_pre=2)
+
+        @jax.jit
+        def f(w):
+            csr = brainevent.CSR((w, indices, indptr), shape=(2, 2))
+            return brainevent.BinaryArray(jnp.array([True, True])) @ csr
+
+        np.testing.assert_allclose(np.asarray(f(jnp.array([1., 2., 3.]))), [2., 4.])

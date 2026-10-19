@@ -14,6 +14,7 @@ from brainpy_state._base import Dynamics
 from brainpy_state._brainpy.projection import AlignPostProj
 from brainpy_state._nest_network.connectivity import (
     ConnSpec,
+    csr_structure,
     sample_one_to_one,
     sample_all_to_all,
     sample_pairwise_bernoulli,
@@ -87,12 +88,7 @@ class _SparseEventMatMul(brainstate.nn.Module):
 
     def __init__(self, pre_idx, post_idx, w_mantissa, w_unit, *, n_pre: int, n_post: int):
         super().__init__()
-        pre_np = np.asarray(pre_idx)
-        post_np = np.asarray(post_idx)
-        order = np.argsort(pre_np, kind='stable')           # group edges by pre row
-        self._indices = jnp.asarray(post_np[order])
-        self._indptr = jnp.asarray(
-            np.concatenate([[0], np.cumsum(np.bincount(pre_np, minlength=n_pre))]))
+        order, self._indices, self._indptr = csr_structure(pre_idx, post_idx, n_pre)
         self._shape = (int(n_pre), int(n_post))
         self._unit = w_unit
         self._data = brainstate.ParamState(jnp.asarray(np.asarray(w_mantissa)[order]))
