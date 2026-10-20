@@ -37,7 +37,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          # The config pins `python_version = "3.11"` (the support floor); the
+          # The config pins `python_version = "3.12"` (the support floor); the
           # interpreter version only needs to be >= that for installation.
           python-version: "3.13"
           cache: pip
