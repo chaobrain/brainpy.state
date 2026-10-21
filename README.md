@@ -13,7 +13,7 @@
 </p>
 
 
-[`brainpy.state`](https://github.com/chaobrain/brainpy.state) is **one differentiable substrate that bridges brain simulation and brain-inspired computing**. It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/), built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate).
+[`brainpy.state`](https://github.com/chaobrain/brainpy.state) is **one differentiable substrate that bridges brain simulation and brain-inspired computing**: the same neurons, synapses, plasticity rules, and projections run NEST-validated biological simulation *and* train with gradients or online learning. It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/), built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate).
 
 The same building blocks let you run biophysical spiking networks *and* train them with gradient descent — because the projections that keep simulation memory-efficient are exactly what make gradient-based and online learning memory-efficient too. That bridge was introduced in the [ICLR 2024 paper](https://openreview.net/forum?id=AU2gS9ut61) and is the keystone of the [Core Concepts](https://brainx.chaobrain.com/brainpy-state/concepts/index.html).
 
@@ -34,6 +34,11 @@ All parameters carry **physical units** via [brainunit](https://github.com/chaob
 - **Differentiable** — surrogate gradients enable backpropagation through spiking networks for gradient-based training.
 - **NEST parameter parity** — port models from NEST with minimal friction; the NEST-compatible family is numerically validated against a live NEST install within documented tolerance bands.
 - **Hardware-accelerated** — JAX backend with JIT compilation for CPU, GPU, and TPU.
+
+
+## Scope
+
+`brainpy.state` is for computational neuroscientists who want NEST models on GPU/TPU or want to train them, and for brain-inspired-computing researchers who need biologically constrained spiking networks. Out of scope: detailed multi-compartment morphology, MPI cluster-scale simulation, MUSIC/SONATA co-simulation, and e-prop (see [braintrace](https://github.com/chaobrain/braintrace)). See [Positioning and scope](https://brainx.chaobrain.com/brainpy-state/project/positioning.html).
 
 
 ## Installation
