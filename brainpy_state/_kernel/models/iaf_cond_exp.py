@@ -72,7 +72,10 @@ class iaf_cond_exp(SpikingNeuron):
     Ports: ``ex`` / ``in_`` -- ``conductance`` (nS), ``filtered=True``: the
     neuron owns the exponential kinetics and the payload is the jump of
     ``g_ex`` / ``g_in`` (non-negative weights); ``I`` -- ``current`` (pA),
-    latched. Output ``spike`` -- ``event``, ``max_multiplicity=1``.
+    latched. Output ``spike`` -- ``event``, ``max_multiplicity=1``. Extra
+    unfiltered (e.g. NMDA Mg-gated) conductance ports can be added with
+    :func:`~brainpy_state._kernel.model.with_conductance_ports`; their current
+    uses the bounded :math:`\tilde V` like the built-in ones.
 
     Examples
     --------
@@ -100,13 +103,15 @@ class iaf_cond_exp(SpikingNeuron):
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad(), when='step')
     integrator: ClassVar[Integrator] = RK(order=4, substeps=IAF_COND_EXP_SUBSTEPS)
+    accepts_conductance_ports: ClassVar[bool] = True
 
     def derivatives(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> dict:
         """NEST ``iaf_cond_exp_dynamics`` (refractory ``dV = 0`` is applied by the step)."""
         V = u.math.minimum(s.V_m, p.V_th)
         I_syn = s.g_ex * (V - p.E_ex) + s.g_in * (V - p.E_in)
         I_L = p.g_L * (V - p.E_L)
-        return {'V_m': (-I_L - I_syn + p.I_e + inp.I) / p.C_m,
+        I_g = self.conductance_port_current(inp, V, p)  # added (gated) ports, per substep
+        return {'V_m': (-I_L - I_syn + I_g + p.I_e + inp.I) / p.C_m,
                 'g_ex': -s.g_ex / p.tau_syn_ex,
                 'g_in': -s.g_in / p.tau_syn_in}
 
