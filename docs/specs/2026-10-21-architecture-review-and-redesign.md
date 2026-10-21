@@ -496,7 +496,7 @@ spec and a gate in its milestone.
 | milestone | content | exit gate |
 |---|---|---|
 | **K0 — kernel spike** | L1 contracts (ports, `NeuronModel`, `SynapseModel`, `PlasticityRule`, `EdgeSet`), `Network` graph, step schedule, source-owned delay buffers, `Runner`. Neurons chosen to exercise the risks: `iaf_psc_alpha`, LIF, `iaf_cond_exp`, **`aeif_cond_alpha`** (in-substep spikes, multi-state jump, fixed-substep integrator), **`iaf_psc_exp_ps` + `poisson_generator_ps`** (`timed_event`), and an **NMDA/MgBlock conductance** (voltage-gated port); Expon synapse; `static` + `stdp_synapse`; RNG contract. | Per-port-kind timing tests vs NEST (§7.1); Brunel vs NEST with named statistics and tolerances (rate, CV-ISI, Fano factor, pairwise correlation, with confidence intervals over seeds); COBA E/I vs Brian2; storage/batch invariance of realised connectivity; `aeif_cond_alpha` substep-convergence vs NEST; learning gates of §8.3; step time, compile time and memory ≤ today's Simulator at `order=2500` on named hardware, in float32 and float64. **Go/no-go on the design.** |
-| K1 — substrate complete | all port kinds, graded emission, gap (lag + WFR), STP, all storage strategies incl. procedural, observers, `cont`/host drive, batching. | every existing `_nest_network` behaviour test re-expressed and green |
+| K1 — substrate complete | all port kinds, graded emission, gap (lag + WFR), STP, all storage strategies incl. procedural, observers, `cont`/host drive, batching, in-substep event localisation for fixed-substep integrators. | every existing `_nest_network` behaviour test re-expressed and green |
 | K2 — model library | port neuron/synapse/plasticity/device families onto the contracts (mostly mechanical; numerics reused); goal-01 repro tests are acceptance tests; host-only models either ported to JAX or flagged. | all 131 NEST validation tests green on the new kernel |
 | K3 — front-ends + interop | NEST `Simulator` layer, `NodeView`/`SynapseCollection`, spatial; NIR export. | examples + docs migrated |
 | K4 — removal + release | delete old kernel, `Builder`, dead projections; migration guide; 1.0-alpha. | full suite + docs build + benchmarks |
@@ -523,6 +523,12 @@ with the verified repro tests as acceptance criteria.
   may need many substeps or exponential-Rosenbrock to stay within tolerance.
   Mitigation: per-model convergence study against NEST sets default substeps; parity
   tolerances for these models are re-derived and documented, not silently loosened.
+  K0 measured this for `aeif_cond_alpha` (T3, `2026-10-21-k0-t3-models.md`): fixed-substep
+  RK4 locates the threshold crossing only to within one substep (first order), giving
+  ~1 mV errors on spike steps (2.26 mV at 16, 0.87 mV at 64 substeps) while spike times
+  and off-spike traces match NEST. Mitigation planned for K1: in-substep threshold-crossing
+  localisation (root finding / interpolation within the crossing substep, then reset and
+  integration of the remainder of the substep).
 - **Performance regression** from generality (ports, schedule). Mitigation: K0 gate
   benchmarks against today's Simulator.
 - **Parity drift** from the delay-semantics change (D4). Mitigation: NEST is already

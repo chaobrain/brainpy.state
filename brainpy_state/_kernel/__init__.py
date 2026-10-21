@@ -61,6 +61,7 @@ from brainpy_state._kernel.units import (
     as_unit,
     check_unit,
     from_mantissa,
+    grid_steps,
     index_dtype,
     resolve_dtype,
     same_dim,
@@ -90,5 +91,5 @@ __all__ = [
     'Block', 'Clamp', 'Refractory', 'SpikeCarry', 'SpikeRule', 'count_ste',
     # units
     'PRECISIONS', 'UnitMismatchError', 'as_unit', 'check_unit', 'from_mantissa',
-    'index_dtype', 'resolve_dtype', 'same_dim', 'to_mantissa', 'unit_of',
+    'grid_steps', 'index_dtype', 'resolve_dtype', 'same_dim', 'to_mantissa', 'unit_of',
 ]

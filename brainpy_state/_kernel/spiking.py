@@ -26,9 +26,11 @@ through :meth:`SpikeRule.begin`, :meth:`SpikeRule.check` and
 Refractory granularity
 ----------------------
 ``granularity='step'`` (default, NEST semantics): the counter holds whole steps.
-A spike sets it to ``round(t_ref / dt) + 1`` (or 0 when that rounds to 0), it is
+With ``R = ceil(t_ref / dt)`` (NEST ``Time(ms(t_ref)).get_steps()`` rounds **up**;
+see :func:`~brainpy_state._kernel.units.grid_steps`), a spike sets it to ``R + 1``
+(or 0 when ``R == 0``), it is
 decremented once at the end of every step, so the rest of the spiking step plus
-``round(t_ref / dt)`` full steps are refractory -- identical to NEST's
+``R`` full steps are refractory -- identical to NEST's
 ``iaf_*`` (spike checked at the step end) and ``aeif_*`` (spike inside the step)
 counters. ``granularity='substep'``: the counter holds substeps of length
 ``h = dt / substeps``; a spike sets it to ``round(t_ref / h)`` and every elapsed
@@ -45,7 +47,7 @@ import jax
 import jax.numpy as jnp
 
 from brainpy_state._kernel.params import Init, Record, States
-from brainpy_state._kernel.units import to_mantissa
+from brainpy_state._kernel.units import grid_steps, to_mantissa
 
 __all__ = [
     'count_ste',
@@ -137,7 +139,7 @@ class Refractory:
         """
         t = self.duration_ms(p)
         if self.granularity == 'step':
-            n = jnp.round(t / dt_ms).astype(jnp.int32)
+            n = grid_steps(t, dt_ms).astype(jnp.int32)
             return jnp.where(n > 0, n + 1, 0)
         return jnp.round(t / (dt_ms / substeps)).astype(jnp.int32)
 

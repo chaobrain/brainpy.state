@@ -28,7 +28,12 @@ __all__ = [
     'check_unit',
     'to_mantissa',
     'from_mantissa',
+    'grid_steps',
 ]
+
+#: Distance (in steps) within which a time snaps to the nearest grid point
+#: before rounding up (absorbs float error such as ``2.0 / 0.1 = 19.999...``).
+GRID_SNAP = 1e-3
 
 #: Supported floating-point tiers.
 PRECISIONS = ('float32', 'float64')
@@ -219,3 +224,38 @@ def from_mantissa(m: Any, unit: Any = None) -> Any:
     if unit.is_unitless:
         return jnp.asarray(m)
     return u.Quantity(m, unit=unit)
+
+
+def grid_steps(t: Any, dt: Any) -> jax.Array:
+    """Number of steps of a time span, rounded **up** to the grid (NEST semantics).
+
+    NEST converts ``t_ref``, device ``start``/``stop``/``origin`` and spike times
+    with ``Time(ms(t)).get_steps()``, which rounds up to the next step. Values
+    within :data:`GRID_SNAP` steps (or a few ulp of ``t / dt`` for large times)
+    of a grid point snap to it, so float error (``2.0 / 0.1``) does not add a step.
+
+    Parameters
+    ----------
+    t, dt : array_like
+        Time and step size as mantissas in the same unit (e.g. ms); may be
+        traced. ``t = inf`` gives ``inf``.
+
+    Returns
+    -------
+    jax.Array
+        Float array of whole step counts (``ceil``-like), same dtype as ``t / dt``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import jax.numpy as jnp
+        >>> from brainpy_state._kernel.units import grid_steps
+        >>> grid_steps(jnp.array([2.0, 0.25, 0.04, 0.0]), 0.1).tolist()
+        [20.0, 3.0, 1.0, 0.0]
+    """
+    x = jnp.asarray(t) / jnp.asarray(dt)  # true division: always floating
+    r = jnp.round(x)
+    # snap window: GRID_SNAP steps, widened to a few ulp for large times in float32
+    snap = jnp.maximum(GRID_SNAP, 8 * jnp.finfo(x.dtype).eps * jnp.abs(r))
+    return jnp.where(jnp.abs(x - r) < snap, r, jnp.ceil(x))
