@@ -292,7 +292,7 @@ class TestRunner:
     def test_runner_errors(self):
         net, _ = build_brunel(4)
         plan = net.compile()
-        with pytest.raises(NotImplementedError, match='T9'):
+        with pytest.raises(TypeError, match='attach'):
             plan.runner(learner=object())
         with pytest.raises(ValueError):
             plan.runner(rng='shared')

@@ -8,7 +8,15 @@ import pytest
 
 from brainpy_state._kernel.integrators import RK, integrate
 from brainpy_state._kernel.params import Record
-from brainpy_state._kernel.spiking import Block, Clamp, Refractory, SpikeRule, count_ste
+from brainpy_state._kernel.spiking import (
+    Block,
+    Clamp,
+    Refractory,
+    SpikeRule,
+    count_ste,
+    relaxed_enabled,
+    relaxed_spikes,
+)
 from brainpy_state._kernel.units import UnitMismatchError
 
 
@@ -308,3 +316,74 @@ class TestGradients:
         f = jax.jit(jax.vmap(lambda I: _drive(rule, I, substeps=8)[1]))
         out = f(jnp.array([[8.0], [0.5]]))
         np.testing.assert_array_equal(out[:, 0, 0], [3.0, 0.0])
+
+
+# ---------------------------------------------------------------- relaxed (gradient-check) mode
+
+class TestRelaxed:
+    SIG = braintools.surrogate.Sigmoid()
+
+    def _check(self, rule, x, counter=None, detach=False):
+        s = Record(V=x, n=jnp.zeros(x.shape, jnp.int32), spike=jnp.zeros_like(x))
+        if counter is not None:
+            s = Record(**s, refractory_count=jnp.full(x.shape, counter, jnp.int32))
+        c = rule.begin(s, P, 0.1)
+        s, c = rule.check(s, P, c, detach_reset=detach)
+        return s, c, rule.end(c)
+
+    def test_context_is_scoped(self):
+        assert not relaxed_enabled()
+        with relaxed_spikes():
+            assert relaxed_enabled()
+            with relaxed_spikes(False):
+                assert not relaxed_enabled()
+            assert relaxed_enabled()
+        assert not relaxed_enabled()
+
+    def test_smooth_spike_and_soft_jump(self):
+        rule = SpikeRule(_margin, lambda s, p: s.replace(V=p.V_reset, n=s.n + 1), surrogate=self.SIG)
+        x = jnp.array([0.5, 1.0, 1.5])
+        with relaxed_spikes():
+            s, c, (spike, _) = self._check(rule, x)
+        sig = np.asarray(self.SIG.surrogate_fun(np.asarray(x) - 1.0))
+        np.testing.assert_allclose(spike, sig, rtol=1e-6)
+        np.testing.assert_allclose(c.count, sig, rtol=1e-6)
+        np.testing.assert_allclose(s.V, np.asarray(x) * (1 - sig), rtol=1e-6)  # V + spk * (0 - V)
+        np.testing.assert_array_equal(s.n, [0, 1, 1])  # integer states use the hard condition
+
+    def test_relaxed_is_smooth_and_grad_matches_fd(self):
+        rule = SpikeRule(_margin, _reset, surrogate=self.SIG)
+
+        def f(x):
+            with relaxed_spikes():
+                s, _, (spike, _) = self._check(rule, x)
+            return jnp.sum(spike * 2.0 + s.V)
+
+        x = jnp.array([0.7, 1.0, 1.3])
+        g = jax.grad(f)(x)
+        eps = 1e-3
+        fd = [(f(x.at[i].add(eps)) - f(x.at[i].add(-eps))) / (2 * eps) for i in range(3)]
+        np.testing.assert_allclose(g, fd, rtol=1e-3)
+
+    def test_detach_and_refractory(self):
+        rule = SpikeRule(_margin, _reset, refractory=Block('t_ref'), surrogate=self.SIG)
+        x = jnp.array([1.2])
+        with relaxed_spikes():
+            g = jax.grad(lambda v: jnp.sum(self._check(rule, v, counter=0, detach=True)[0].V))(x)
+            _, c, (spike, counter) = self._check(rule, x, counter=0)
+            _, c2, (spike_ref, _) = self._check(rule, x, counter=3)
+        sig = float(self.SIG.surrogate_fun(0.2))
+        np.testing.assert_allclose(g, [1.0 - sig], rtol=1e-6)  # spike weight detached
+        assert int(counter[0]) > 0  # hard condition starts the refractory period
+        assert float(spike_ref[0]) == 0.0  # refractory neurons emit nothing
+
+    def test_needs_smooth_primitive(self):
+        rule = SpikeRule(_margin, _reset, surrogate=lambda m: (m >= 0).astype(float))
+        with relaxed_spikes(), pytest.raises(TypeError, match='surrogate_fun'):
+            self._check(rule, jnp.array([1.2]))
+
+    def test_hard_rules_unaffected(self):
+        rule = SpikeRule(_margin, _reset)  # no surrogate: hard spikes even when relaxed
+        with relaxed_spikes():
+            _, c, _ = self._check(rule, jnp.array([0.5, 1.5]))
+        np.testing.assert_array_equal(c.count, [0.0, 1.0])

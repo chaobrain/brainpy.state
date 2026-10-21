@@ -39,8 +39,10 @@ inside the step.
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable, Iterator, NamedTuple
 
 import brainunit as u
 import jax
@@ -51,6 +53,8 @@ from brainpy_state._kernel.units import grid_steps, to_mantissa
 
 __all__ = [
     'count_ste',
+    'relaxed_spikes',
+    'relaxed_enabled',
     'Refractory',
     'Clamp',
     'Block',
@@ -80,6 +84,56 @@ def count_ste(count: Any, s: Any) -> Any:
         Equal to ``count`` in value; its gradient is that of ``s``.
     """
     return jax.lax.stop_gradient(count - s) + s
+
+
+_RELAXED: contextvars.ContextVar[bool] = contextvars.ContextVar('relaxed_spikes', default=False)
+
+
+@contextlib.contextmanager
+def relaxed_spikes(enabled: bool = True) -> Iterator[None]:
+    r"""Trace-time switch to the *relaxed* (smooth) spike forward pass.
+
+    Inside the context, :meth:`SpikeRule.check` emits ``surrogate.surrogate_fun(margin)``
+    (e.g. ``sigmoid(alpha * margin)`` for ``braintools.surrogate.Sigmoid``) instead of
+    the hard count, and applies the jump softly, ``s + spike * (jump(s) - s)``. The
+    whole step is then a smooth function whose exact derivative is what BPTT
+    computes, so gradients can be checked against finite differences (gate G6).
+    Refractory counters still use the hard condition. Not for simulation.
+
+    The switch is read when a function is **traced**: jitted functions traced
+    outside the context keep the hard forward pass.
+
+    Parameters
+    ----------
+    enabled : bool, default True
+        Turn the relaxed pass on (or off, inside an enclosing context).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import braintools
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel import StepContext
+        >>> from brainpy_state._kernel.models import LIF
+        >>> from brainpy_state._kernel.spiking import relaxed_spikes
+        >>> lif = LIF(1, surrogate=braintools.surrogate.Sigmoid())
+        >>> ctx = StepContext.create(0.0 * u.ms, 0.1 * u.ms)
+        >>> with relaxed_spikes():
+        ...     out = lif.update(ctx, {'delta': [1.0] * u.mV})
+        >>> round(float(out['spike'][0]), 2)  # sigmoid(4 * 0): half a spike
+        0.5
+    """
+    token = _RELAXED.set(bool(enabled))
+    try:
+        yield
+    finally:
+        _RELAXED.reset(token)
+
+
+def relaxed_enabled() -> bool:
+    """Whether :func:`relaxed_spikes` is active (read at trace time)."""
+    return _RELAXED.get()
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +441,8 @@ class SpikeRule:
         hard = hard & allowed
         dtype = carry.count.dtype
         hard_f = hard.astype(dtype)
+        if margin is not None and self.surrogate is not None and _RELAXED.get():
+            return self._check_relaxed(s, p, carry, hard, margin, allowed, detach_reset)
         if margin is not None and self.surrogate is not None:
             sg = jnp.asarray(self.surrogate(margin), dtype) * allowed.astype(dtype)
             spk = count_ste(hard_f, sg)
@@ -398,6 +454,30 @@ class SpikeRule:
         if counter is not None:
             counter = jnp.where(hard, carry.reset_to, counter)
         return s, SpikeCarry(carry.count + hard_f, carry.sur + sg, counter, carry.reset_to)
+
+    def _check_relaxed(self, s: Record, p: Record, carry: SpikeCarry, hard: Any, margin: Any,
+                       allowed: Any, detach: bool) -> tuple[Record, SpikeCarry]:
+        fun = getattr(self.surrogate, 'surrogate_fun', None)
+        if fun is None:
+            raise TypeError(f'relaxed spikes need a surrogate with surrogate_fun(x) (the smooth '
+                            f'primitive of its gradient), got {type(self.surrogate).__name__}')
+        dtype = carry.count.dtype
+        spk = jnp.asarray(fun(margin), dtype) * allowed.astype(dtype)
+        j = self.jump(s, p)
+        if not isinstance(j, Record):
+            j = s.replace(**dict(j))
+        w = jax.lax.stop_gradient(spk) if detach else spk
+        changes = {}
+        for k in s:
+            a, b = s[k], j[k]
+            if a is b:
+                continue
+            changes[k] = a + w * (b - a) if _is_float(a) else u.math.where(hard, b, a)
+        counter = carry.counter
+        if counter is not None:
+            counter = jnp.where(hard, carry.reset_to, counter)
+        return s.replace(**changes), SpikeCarry(carry.count + spk, carry.sur + spk, counter,
+                                                carry.reset_to)
 
     def _jump(self, s: Record, p: Record, hard: Any, spk: Any, detach: bool) -> Record:
         j = self.jump(s, p)

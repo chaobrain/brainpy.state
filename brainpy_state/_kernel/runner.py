@@ -93,10 +93,15 @@ class Program:
     ----------
     plan : Plan
         Compiled network.
+    etrace : bool, default False
+        Apply trainable (``ParamState``) weights through the storages' braintrace
+        primitives (:meth:`~brainpy_state._kernel.connectivity.storage.Storage.forward_etrace`)
+        so that ``braintrace.compile`` sees them (online learners, T9).
     """
 
-    def __init__(self, plan: Plan) -> None:
+    def __init__(self, plan: Plan, etrace: bool = False) -> None:
         self.plan = plan
+        self.etrace = bool(etrace)
         self.dtype = plan.dtype
         self.seed = plan.net.seed
         self.dt = plan.net.dt
@@ -165,7 +170,10 @@ class Program:
     def _forward(self, pp: ProjectionPlan, g: int, payload: jax.Array, params: dict) -> jax.Array:
         group = pp.groups[g]
         w = params['weights'][pp.name][g]
-        y = group.storage.forward(payload.astype(self.dtype), w, pp.path)
+        if self.etrace and isinstance(group.weight, brainstate.ParamState):
+            y = group.storage.forward_etrace(payload.astype(self.dtype), w)
+        else:
+            y = group.storage.forward(payload.astype(self.dtype), w, pp.path)
         return u.get_mantissa(y)
 
     def _deliver(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any) -> jax.Array:
@@ -179,7 +187,17 @@ class Program:
         return y
 
     # ---------------------------------------------------------------- step
-    def step(self, params: dict, state: dict, n: Any, trial: Any) -> tuple[dict, dict]:
+    def _ext(self, pplan: Any, acc: dict, values: dict) -> None:
+        """Add external port inputs (``{port: value}``; Quantity or mantissa in the port unit)."""
+        model = pplan.model
+        for port, v in values.items():
+            kind = model.inputs.require(port, pplan.name)
+            m = to_mantissa(v, kind.unit) if isinstance(v, u.Quantity) else jnp.asarray(v)
+            m = jnp.broadcast_to(m.astype(self.dtype), (pplan.pop.n,))
+            acc[port] = acc[port] + m if port in acc else m
+
+    def step(self, params: dict, state: dict, n: Any, trial: Any, ext: dict | None = None
+             ) -> tuple[dict, dict]:
         """One network step (pure).
 
         Parameters
@@ -192,6 +210,10 @@ class Program:
             Global step index (int32 scalar).
         trial : jax.Array
             Trial index folded into every population key (uint32 scalar).
+        ext : dict, optional
+            External inputs of this step, ``{population name: {input port: value}}``
+            (Quantity, or mantissa in the port unit; ``(n,)`` or scalar), added to the
+            projections' input of the port (learners feed data this way).
 
         Returns
         -------
@@ -201,6 +223,10 @@ class Program:
             ``{population index: {output port: mantissa}}`` of this step.
         """
         plan = self.plan
+        if ext:
+            unknown = set(ext) - {p.name for p in plan.populations}
+            if unknown:
+                raise KeyError(f'external inputs for unknown population(s) {sorted(unknown)}')
         n = jnp.asarray(n, jnp.int32)
         pops = dict(state['pops'])
         cur: dict[int, dict] = {}
@@ -232,6 +258,8 @@ class Program:
                         acc[port] = base.at[seg.local].add(ys)
                     else:
                         acc[port] = base.at[jnp.asarray(seg.local, jnp.int32)].add(ys)
+            if ext is not None and pplan.name in ext:
+                self._ext(pplan, acc, ext[pplan.name])
             inp = model.prepare_inputs({k: from_mantissa(v, model.inputs[k].unit) for k, v in acc.items()})
             key = jax.random.fold_in(population_key(self.seed, pplan.pop.uid, n), trial)
             ctx = StepContext(t=from_mantissa(n.astype(self.dtype) * self.dt_ms, u.ms), dt=self.dt,
@@ -331,6 +359,9 @@ class Runner:
     n_traces : int
         Number of times the rollout has been traced (each trace compiles once;
         repeated calls with the same duration must not add traces).
+    learner : object or None
+        Learner attached by ``plan.runner(learner=...)`` (e.g.
+        :class:`~brainpy_state._kernel.learn.bptt.BPTT`).
 
     Examples
     --------
@@ -375,6 +406,7 @@ class Runner:
         self.state = init
         self.n = 0
         self.n_traces = 0
+        self.learner = None
         self._rollout = brainstate.transform.jit(self._run, static_argnums=(4,))
         self._one_step = brainstate.transform.jit(self._step)
 
