@@ -293,3 +293,99 @@ def test_braintrace_nonzero_weight_gradients(cls, algorithm):
         mask = np.zeros((n_in, n_out), bool)
         mask[np.asarray(es.pre_index), np.asarray(es.post_index)] = True
         assert np.all(g[mask] != 0) and np.all(g[~mask] == 0)
+
+
+def _matching_edges(kind):
+    if kind == 'identity':  # one_to_one onto the same size
+        return EdgeSet.create(np.arange(6), np.arange(6), np.arange(6), np.arange(10, 16))
+    if kind == 'permutation':
+        return EdgeSet.create(np.arange(6), [3, 0, 5, 1, 4, 2], np.arange(6), np.arange(10, 16))
+    # partial, with a multapse and a target receiving two sources: 4 edges <= max(3, 5)
+    return EdgeSet.create([0, 0, 2, 1], [4, 4, 1, 1], np.arange(3), np.arange(5))
+
+
+@pytest.mark.parametrize('kind', ['identity', 'permutation', 'partial'])
+class TestGatherPath:
+    """CSR with n_edges <= max(n_pre, n_post) bypasses the sparse kernel (exact)."""
+
+    def _setup(self, kind):
+        es = _matching_edges(kind)
+        s = S.CSR(es)
+        we = jnp.linspace(-1.0, 2.0, es.n_edges)
+        x = jnp.arange(1.0, es.n_pre + 1.0)  # counts > 1
+        return es, s, we, x
+
+    def test_flags(self, kind):
+        es, s, _, _ = self._setup(kind)
+        assert s.gather and s.identity == (kind == 'identity')
+        assert (s.rows is None) == (kind == 'identity')
+        assert set(s.arrays()) == ({'indices'} if kind == 'identity' else {'indices', 'rows'})
+        assert s.nbytes() > 0
+        big = EdgeSet.create(np.repeat(np.arange(4), 3), np.tile(np.arange(3), 4),
+                             np.arange(4), np.arange(3))
+        assert not S.CSR(big).gather and S.CSR(big).rows is None
+
+    def test_forward_matches_reference(self, kind):
+        es, s, we, x = self._setup(kind)
+        w = s.weight_from_edges(we * u.pA)
+        y = s.forward(x, w)
+        assert y.unit == u.pA
+        np.testing.assert_allclose(y.mantissa, reference(x, we, es), rtol=1e-6)
+        xb = (x > 2).astype(jnp.float32)
+        np.testing.assert_allclose(s.forward(xb, w, 'binary').mantissa, reference(xb, we, es),
+                                   rtol=1e-6)
+        xs = jnp.stack([x, -x, jnp.zeros_like(x)])
+        np.testing.assert_allclose(s.forward(xs, w).mantissa, reference(xs, we, es), rtol=1e-6)
+        np.testing.assert_allclose(jax.vmap(lambda v: s.forward(v, w).mantissa)(xs),
+                                   reference(xs, we, es), rtol=1e-6)
+
+    def test_gradients_and_etrace(self, kind):
+        es, s, we, x = self._setup(kind)
+        g = jnp.arange(1.0, es.n_post + 1.0)
+        loss = lambda x, we: jnp.sum(s.forward(x, s.weight_from_edges(we)) * g)
+        ref = lambda x, we: jnp.sum(reference(x, we, es) * g)
+        for a, b in zip(jax.grad(loss, (0, 1))(x, we), jax.grad(ref, (0, 1))(x, we)):
+            np.testing.assert_allclose(a, b, rtol=1e-6)
+        with jax.enable_x64(True):
+            check_grads(lambda w: s.forward(x.astype(jnp.float64), w),
+                        (s.weight_from_edges(we.astype(jnp.float64)),), order=1, modes=['rev'])
+        w = s.weight_from_edges(we)
+        np.testing.assert_allclose(s.forward_etrace(x, w), s.forward(x, w), rtol=1e-6)
+
+
+class TestStructureBinding:
+    def test_bound_replaces_and_restores(self):
+        es = edges_with_multapses()
+        s = S.CSR(es)
+        orig = s.indices
+        with s.bound({'indices': orig + 0}) as t:
+            assert t is s and s.indices is not orig
+        assert s.indices is orig
+        with pytest.raises(KeyError, match='structure arrays'):
+            with s.bound({'indptr': s.indptr}):
+                pass  # pragma: no cover
+        d = S.Dense(es)
+        assert set(d.arrays()) == {'mask'}
+        full = S.Dense(EdgeSet.create([0, 1], [0, 0], np.arange(2), np.arange(1)))
+        assert full.arrays() == {}
+
+    @pytest.mark.parametrize('cls', STORAGES)
+    def test_jit_with_structure_as_argument(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        w = s.weight_from_edges(W_E)
+
+        @jax.jit
+        def f(x, w, arrays):
+            with s.bound(arrays):
+                return s.forward(x, w)
+
+        np.testing.assert_allclose(f(COUNTS, w, s.arrays()), reference(COUNTS, W_E, es), rtol=1e-6)
+        if cls is S.CSR:  # the braintrace template stays concrete
+            with s.bound({'indices': jnp.zeros_like(s.indices)}):
+                assert s.template(jnp.float32).indices is s._indices0
+
+    def test_host_index_dtype(self):
+        assert S._host_index(np.arange(3, dtype=np.int64)).dtype == np.int32
+        assert S._host_index(np.array([2 ** 31], np.int64)).dtype == np.int64
+        assert S._host_index(np.zeros((0,), np.int64)).dtype == np.int32

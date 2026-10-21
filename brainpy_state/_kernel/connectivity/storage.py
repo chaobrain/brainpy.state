@@ -34,7 +34,8 @@ routes through ``braintrace.matmul`` / ``braintrace.sparse_matmul`` so that
 """
 from __future__ import annotations
 
-from typing import Any, ClassVar
+import contextlib
+from typing import Any, ClassVar, Iterator, Mapping
 
 import brainevent
 import braintrace
@@ -136,6 +137,13 @@ def _check_path(path: str) -> None:
         raise ValueError(f'path must be one of {PAYLOAD_PATHS}, got {path!r}')
 
 
+def _host_index(a: Any) -> np.ndarray:
+    """Host index array in int32 when it fits (halves the memory of int64 copies)."""
+    a = np.asarray(a)
+    big = a.size and (int(a.max()) >= 2 ** 31 or int(a.min()) < -2 ** 31)
+    return a.astype(np.int64 if big else np.int32, copy=False)
+
+
 def _payload(payload: Any, n_pre: int) -> jax.Array:
     if isinstance(payload, u.Quantity):
         if not payload.unit.is_unitless:
@@ -162,6 +170,8 @@ class Storage:
     """
 
     kind: ClassVar[str] = ''
+    #: Names of the device arrays :meth:`forward` reads (see :meth:`arrays`).
+    array_names: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, edges: EdgeSet) -> None:
         if not isinstance(edges, EdgeSet):
@@ -169,11 +179,52 @@ class Storage:
         self.n_pre = edges.n_pre
         self.n_post = edges.n_post
         self.n_edges = edges.n_edges
-        self._pre = np.asarray(edges.pre_index, np.int64)
-        self._post = np.asarray(edges.post_index, np.int64)
+        self._pre = _host_index(edges.pre_index)
+        self._post = _host_index(edges.post_index)
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(n_pre={self.n_pre}, n_post={self.n_post}, n_edges={self.n_edges})'
+
+    def arrays(self) -> dict[str, jax.Array]:
+        """Device structure arrays read by :meth:`forward` (index arrays, masks).
+
+        A compiled program passes them as **arguments** (see :meth:`bound`) instead of
+        closing over them: closed-over arrays are embedded in the lowered program as
+        constants, which costs compile time and host memory proportional to the
+        number of edges.
+
+        Returns
+        -------
+        dict
+            ``{attribute name: array}`` (absent arrays omitted).
+        """
+        return {k: getattr(self, k) for k in self.array_names if getattr(self, k) is not None}
+
+    @contextlib.contextmanager
+    def bound(self, arrays: Mapping[str, Any]) -> Iterator['Storage']:
+        """Temporarily replace the structure arrays (e.g. by tracers of jit arguments).
+
+        Parameters
+        ----------
+        arrays : mapping
+            ``{attribute name: array}`` as returned by :meth:`arrays`.
+
+        Raises
+        ------
+        KeyError
+            If a name is not one of :attr:`array_names`.
+        """
+        unknown = set(arrays) - set(self.array_names)
+        if unknown:
+            raise KeyError(f'{type(self).__name__} has no structure arrays {sorted(unknown)}')
+        old = {k: getattr(self, k) for k in arrays}
+        try:
+            for k, v in arrays.items():
+                setattr(self, k, v)
+            yield self
+        finally:
+            for k, v in old.items():
+                setattr(self, k, v)
 
     def _check_edge_weight(self, w: Any) -> None:
         if tuple(np.shape(w)) != (self.n_edges,):
@@ -225,6 +276,7 @@ class Dense(Storage):
     """
 
     kind: ClassVar[str] = 'dense'
+    array_names: ClassVar[tuple[str, ...]] = ('mask',)
 
     def __init__(self, edges: EdgeSet) -> None:
         super().__init__(edges)
@@ -235,7 +287,7 @@ class Dense(Storage):
         self._mult = jnp.asarray(edges.multiplicity()) if self.n_edges else jnp.zeros((0,), jnp.int32)
         self._pre_j = jnp.asarray(self._pre, jnp.int32)
         self._post_j = jnp.asarray(self._post, jnp.int32)
-        mask_j = self.mask
+        mask_j = self.mask  # concrete: braintrace binds weight_fn as a static parameter
 
         def weight_fn(W):
             return u.math.where(mask_j, W, u.math.zeros_like(W))
@@ -286,25 +338,54 @@ class CSR(Storage):
     Edges are sorted stably by pre index; multapses are separate entries. Index
     dtypes follow :func:`csr_index_dtypes`.
 
+    Projections with at most one edge per neuron on the larger side
+    (``n_edges <= max(n_pre, n_post)``, e.g. ``one_to_one``) skip the sparse kernel:
+    :meth:`forward` gathers the sources and scatter-adds into the targets
+    (``payload * w`` when the edges are the identity map), which is exact on both
+    payload paths and costs ``O(n_edges)`` element-wise work.
+
     Attributes
     ----------
     order : numpy.ndarray
         Permutation from CSR position to :class:`EdgeSet` edge position.
     indices, indptr : jax.Array
         CSR structure.
+    rows : jax.Array or None
+        Pre index of every CSR position (only on the gather path).
+    gather : bool
+        Whether :meth:`forward` uses the gather/scatter path.
+    identity : bool
+        Whether the edges are ``i -> i`` for every ``i`` (``payload * w``).
     """
 
     kind: ClassVar[str] = 'csr'
+    # ``indptr`` stays concrete: brainevent sizes its binary-kernel workspace from it
+    # on the host (and it is only ``n_pre + 1`` long).
+    array_names: ClassVar[tuple[str, ...]] = ('indices', 'rows')
 
     def __init__(self, edges: EdgeSet) -> None:
         super().__init__(edges)
         idx_dt, ptr_dt = csr_index_dtypes(self.n_pre, self.n_post, self.n_edges)
-        self.order = np.argsort(self._pre, kind='stable')
+        self._ptr_dt = ptr_dt
+        self.order = _host_index(np.argsort(self._pre, kind='stable'))
         counts = np.bincount(self._pre, minlength=self.n_pre)
-        self.indices = jnp.asarray(self._post[self.order].astype(idx_dt))
+        cols = self._post[self.order]
+        self.indices = jnp.asarray(cols.astype(idx_dt))
         self.indptr = jnp.asarray(np.concatenate([[0], np.cumsum(counts)]).astype(ptr_dt))
-        self._order_j = jnp.asarray(self.order.astype(ptr_dt))
+        # concrete copies for the braintrace template (never replaced by :meth:`bound`)
+        self._indices0, self._indptr0 = self.indices, self.indptr
+        self.gather = 0 < self.n_edges <= max(self.n_pre, self.n_post)
+        rows = self._pre[self.order] if self.gather else None
+        ar = np.arange(self.n_edges)
+        self.identity = bool(self.gather and self.n_pre == self.n_post == self.n_edges
+                             and np.array_equal(rows, ar) and np.array_equal(cols, ar))
+        self.rows = jnp.asarray(rows.astype(idx_dt)) if self.gather and not self.identity else None
         self._templates: dict = {}
+
+    @property
+    def _order_j(self) -> jax.Array:
+        # built on demand (compile time / introspection only): keeps no resident copy
+        return jnp.asarray(self.order.astype(self._ptr_dt, copy=False))
 
     def _matrix(self, m: jax.Array) -> brainevent.CSR:
         return brainevent.CSR((m, self.indices, self.indptr), shape=(self.n_pre, self.n_post))
@@ -313,11 +394,14 @@ class CSR(Storage):
         """Cached structure-only, unitless ``brainevent.CSR`` with data of ``dtype``.
 
         braintrace binds it as a static parameter (identity hashed), so the same
-        object is reused across traces.
+        object is reused across traces. Built from the concrete structure even
+        inside :meth:`bound`.
         """
         k = np.dtype(dtype).name
         if k not in self._templates:
-            self._templates[k] = self._matrix(jnp.zeros((self.n_edges,), dtype))
+            self._templates[k] = brainevent.CSR(
+                (jnp.zeros((self.n_edges,), dtype), self._indices0, self._indptr0),
+                shape=(self.n_pre, self.n_post))
         return self._templates[k]
 
     def weight_from_edges(self, edge_weight: Any) -> Any:
@@ -339,13 +423,22 @@ class CSR(Storage):
         m, unit = _split(w)
         if m.shape != (self.n_edges,):
             raise ValueError(f'CSR weights must have shape ({self.n_edges},), got {m.shape}')
+        dt = jnp.result_type(x, m)
         if self.n_edges == 0:
-            return _wrap(jnp.zeros(x.shape[:-1] + (self.n_post,), jnp.result_type(x, m)), unit)
+            return _wrap(jnp.zeros(x.shape[:-1] + (self.n_post,), dt), unit)
+        if self.gather:
+            xm = x.astype(dt)
+            if self.identity:
+                y = xm * m
+            else:
+                y = jnp.zeros(x.shape[:-1] + (self.n_post,), dt).at[..., self.indices].add(
+                    xm[..., self.rows] * m)
+            return _wrap(y, unit)
         mat = self._matrix(m)
         if path == 'binary':
             y = brainevent.BinaryArray(x) @ mat
         else:
-            y = x.astype(jnp.result_type(x, m)) @ mat
+            y = x.astype(dt) @ mat
         return _wrap(y, unit)
 
     def forward_etrace(self, payload: Any, w: Any) -> Any:
@@ -355,8 +448,9 @@ class CSR(Storage):
         return braintrace.sparse_matmul(x, w, sparse_mat=self.template(m.dtype))
 
     def nbytes(self, itemsize: int = 4) -> int:
-        return (self.n_edges * (itemsize + self.indices.dtype.itemsize)
-                + self.indptr.size * self.indptr.dtype.itemsize)
+        n = (self.n_edges * (itemsize + self.indices.dtype.itemsize)
+             + self.indptr.size * self.indptr.dtype.itemsize)
+        return n + (0 if self.rows is None else self.rows.size * self.rows.dtype.itemsize)
 
 
 _KINDS = {'dense': Dense, 'csr': CSR}

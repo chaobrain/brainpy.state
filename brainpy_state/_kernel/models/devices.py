@@ -37,26 +37,34 @@ from brainpy_state._kernel.units import grid_steps, to_mantissa
 
 __all__ = ['poisson_generator', 'spike_generator', 'dc_generator', 'poisson_counts']
 
-#: Below this mean every unit uses Knuth's algorithm (as ``jax.random.poisson`` does).
-_KNUTH_MAX_LAM = 10.0
+#: Below this mean (for every unit) counts are drawn by CDF inversion; at or above it
+#: ``jax.random.poisson`` is used for the whole array.
+_INVERSION_MAX_LAM = 10.0
+#: CDF terms evaluated unconditionally (one fused element-wise pass); a ``while_loop``
+#: finishes the rare units whose count exceeds it.
+_INVERSION_UNROLL = 12
 
 
 def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
-    """Poisson counts, bit-identical to ``jax.random.poisson(key, lam, shape)``.
+    """Poisson counts with one uniform draw per element (CDF inversion).
 
-    ``jax.random.poisson`` evaluates both of its samplers (Knuth for ``lam < 10``,
-    transformed rejection otherwise) for every element when ``lam`` is traced, which
-    makes a per-step draw about 7x slower than with a constant ``lam``. Here a
-    ``lax.cond`` on ``all(lam < 10)`` runs only Knuth's loop -- the same algorithm
-    and key schedule as JAX's -- in the common case, and falls back to
-    ``jax.random.poisson`` otherwise, so the samples are identical in both cases.
+    For ``lam < 10`` (every element) each count is the smallest ``k`` with
+    ``u < F(k)``, ``u ~ U[0, 1)``, ``F`` the Poisson CDF accumulated in float32
+    (``p_k = p_{k-1} lam / k``). The first :data:`_INVERSION_UNROLL` terms are one
+    fused element-wise pass; a ``while_loop`` continues only while some element is
+    still searching (it stops when the next term underflows, so it always
+    terminates). This draws one random number per element instead of Knuth's
+    ``count + 1`` (``jax.random.poisson``), about 6x faster at the Brunel rate
+    (``lam = 0.88``). If any ``lam >= 10``, ``jax.random.poisson`` draws the whole
+    array. Draws are float32 regardless of ``jax_enable_x64`` (same stream in both
+    precisions).
 
     Parameters
     ----------
     key : jax.Array
         PRNG key (raw or typed).
     lam : array_like
-        Means, broadcastable to ``shape``.
+        Means, broadcastable to ``shape`` (non-negative).
     shape : tuple of int
         Output shape.
 
@@ -64,30 +72,48 @@ def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
     -------
     jax.Array
         Integer counts (JAX's default int dtype).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import jax
+        >>> from brainpy_state._kernel.models.devices import poisson_counts
+        >>> k = poisson_counts(jax.random.key(0), 0.5, (100000,))
+        >>> 0.49 < float(k.mean()) < 0.51
+        True
     """
     lam = jnp.broadcast_to(jnp.asarray(lam, jnp.float32), shape)
     dtype = jnp.zeros((), dtype=int).dtype
 
-    def knuth(key, lam):
+    def inversion(key, lam):
+        u_ = jax.random.uniform(key, shape, jnp.float32)
+        p = jnp.exp(-lam)
+        F = p
+        k = jnp.zeros(shape, dtype)
+        for i in range(1, _INVERSION_UNROLL + 1):  # Python-unrolled: one fused pass
+            k = k + (u_ >= F).astype(dtype)
+            p = p * lam / i
+            F = F + p
+
         def cond(c):
-            i, _, _, log_prod = c
-            return jnp.any(log_prod > -lam) & (i < jnp.iinfo(dtype).max)
+            _, k, p, F = c
+            return jnp.any((u_ >= F) & (p > 0))
 
         def body(c):
-            i, k, rng, log_prod = c
-            rng, sub = jax.random.split(rng)
-            k = jnp.where(log_prod > -lam, k + 1, k)
-            return i + 1, k, rng, log_prod + jnp.log(jax.random.uniform(sub, shape, jnp.float32))
+            i, k, p, F = c
+            k = k + ((u_ >= F) & (p > 0)).astype(dtype)
+            p = p * lam / i.astype(jnp.float32)
+            return i + 1, k, p, F + p
 
-        init = (jnp.zeros((), dtype), jnp.zeros(shape, dtype), key, jnp.zeros(shape, jnp.float32))
-        k = jax.lax.while_loop(cond, body, init)[1] - 1
-        return jnp.where(lam == 0, 0, k).astype(dtype)
+        i0 = jnp.asarray(_INVERSION_UNROLL + 1, dtype)
+        return jax.lax.while_loop(cond, body, (i0, k, p, F))[1]
 
     def exact(key, lam):
         return jax.random.poisson(key, lam, shape, dtype=dtype)
 
-    small = jnp.all(lam < _KNUTH_MAX_LAM)
-    return jax.lax.cond(small, knuth, exact, key, lam)
+    small = jnp.all(lam < _INVERSION_MAX_LAM)
+    return jax.lax.cond(small, inversion, exact, key, lam)
 
 _WINDOW = dict(start=Param(0.0 * u.ms), stop=Param(float('inf') * u.ms), origin=Param(0.0 * u.ms))
 
