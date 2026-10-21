@@ -1,6 +1,6 @@
 # Architecture review and kernel redesign
 
-_Date: 2026-10-21_ · Status: **direction agreed (D1, D2, D4, D5 decided 2026-10-21); K0 spec next** ·
+_Date: 2026-10-21_ · Status: **direction agreed (D1, D2, D4, D5, L1–L4 decided 2026-10-21); expert review pending; K0 spec next** ·
 Breaking changes: **allowed** (no 0.1 compatibility constraint).
 
 Supersedes §2 ("Two families, one kernel") and Phases 1–4 of
@@ -323,7 +323,7 @@ not add-ons.
 7. **Ownership.** braintrace owns online algorithms; brainpy.state owns models and
    guarantees they are etrace-compatible. braintrace currently also ships `nn.LIF`,
    `ALIF`, `Expon`, `STP`, … — which library is canonical for basic models is an
-   ecosystem decision (L3 below).
+   ecosystem decision, resolved by L3: **brainpy.state is canonical** for neuron, synapse and plasticity models; braintrace keeps algorithms and its ETP primitives, and its duplicate `nn` models are deprecated upstream.
 
 #### 8.3 Learning gates per milestone
 
@@ -382,10 +382,10 @@ Each item below is first checked against brainevent; only real gaps become propo
 | D4 | Delivery semantics | ✅ **NEST-faithful**: delay ≥ 1 step, no hidden lag (BrainPy-style timing shifts by one step vs 0.1) |
 | D5 | Rewrite strategy | ✅ **new kernel alongside**, port families, delete old kernel in one 0.2/1.0-alpha break |
 | D6 | `spec` branch | proposed: archive as tag, borrow ideas |
-| L1 | Online-learning algorithms | proposed: live in braintrace; brainpy.state guarantees etrace compatibility |
-| L2 | EventProp | proposed: K1 prototype for models with declared ODEs |
-| L3 | Canonical home of basic models (LIF/ALIF/Expon/STP exist in both braintrace.nn and brainpy.state) | open |
-| L4 | Hybrid weights (local plasticity + gradient on the same weight) | proposed: supported, declared per weight |
+| L1 | Online-learning algorithms | ✅ **live in braintrace**; brainpy.state guarantees etrace compatibility |
+| L2 | EventProp | ✅ **K1 prototype** for models with declared ODEs |
+| L3 | Canonical home of basic models (LIF/ALIF/Expon/STP exist in both braintrace.nn and brainpy.state) | ✅ **brainpy.state is canonical**; braintrace.nn duplicates to be deprecated upstream in favour of brainpy.state models |
+| L4 | Hybrid weights (local plasticity + gradient on the same weight) | ✅ **supported**, declared per weight |
 
 ### 11. Migration plan
 
