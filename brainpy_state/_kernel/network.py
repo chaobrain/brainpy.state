@@ -19,13 +19,19 @@ Populations and projections draw their uid from one
 stream (model initialisation, per-step keys, connectivity, weights, delays) is keyed
 by ``(seed, uid, ...)`` (spec §4.5), never by Python identity.
 
+Synapses and plasticity (K0 T6)
+-------------------------------
+``synapse=`` attaches a :class:`~brainpy_state._kernel.synapse.SynapseModel` (e.g.
+``Expon``) between delivery and an unfiltered ``Current`` / ``Conductance`` port;
+``plasticity=`` attaches a :class:`~brainpy_state._kernel.plasticity.PlasticityRule`
+(per-edge CSR weights, NEST lazy timing).
+
 Extension hooks (later K0 tasks)
 --------------------------------
-``synapse=`` (T6: ``Expon`` + merge pass), ``plasticity=`` (T6) and ``timed_event``
-ports (T7) are accepted by the signatures and rejected with
-:class:`NotImplementedError` naming the task that adds them. Voltage-gated
-``conductance`` ports (T8) are supported: the gate is evaluated by the receiving
-model at every substep (``with_conductance_ports``, ``models.nmda``).
+``timed_event`` ports (T7) are accepted by the signatures and rejected with
+:class:`NotImplementedError`. Voltage-gated ``conductance`` ports (T8) are supported:
+the gate is evaluated by the receiving model at every substep
+(``with_conductance_ports``, ``models.nmda``).
 """
 from __future__ import annotations
 
@@ -41,6 +47,7 @@ from brainpy_state._kernel.connectivity.rules import AllToAll, ConnRule
 from brainpy_state._kernel.connectivity.storage import STORAGE_KINDS
 from brainpy_state._kernel.model import NeuronModel
 from brainpy_state._kernel.params import Distribution
+from brainpy_state._kernel.plasticity import PlasticityRule
 from brainpy_state._kernel.ports import (
     Event,
     PortError,
@@ -50,6 +57,7 @@ from brainpy_state._kernel.ports import (
     expected_weight_unit,
 )
 from brainpy_state._kernel.rng import UidAllocator
+from brainpy_state._kernel.synapse import check_synapse_connection
 from brainpy_state._kernel.units import check_unit
 
 __all__ = [
@@ -265,6 +273,10 @@ class Projection:
         Delay-buffer placement request.
     trainable : bool
         Store weights as ``brainstate.ParamState``.
+    synapse : SynapseModel or None
+        Synapse kinetics between delivery and the port (K0 T6).
+    plasticity : PlasticityRule or None
+        Plasticity rule (K0 T6); ``static_synapse`` compiles as no rule.
     """
 
     index: int
@@ -283,6 +295,8 @@ class Projection:
     storage: str
     delay_buffer: str
     trainable: bool
+    synapse: Any = None
+    plasticity: Any = None
 
 
 class Network:
@@ -454,9 +468,14 @@ class Network:
         storage : {'auto', 'dense', 'csr'}, default 'auto'
             Edge storage (:func:`~brainpy_state._kernel.connectivity.make_storage`).
         synapse : SynapseModel, optional
-            Not implemented yet (K0 T6).
+            Synapse kinetics (e.g. ``Expon(tau)``) between delivery and an
+            **unfiltered** ``Current`` / ``Conductance`` port; event sources only;
+            weights in the port unit. A filtered port raises ``PortError`` (single
+            owner of kinetics).
         plasticity : PlasticityRule, optional
-            Not implemented yet (K0 T6).
+            Plasticity rule (``static_synapse``, ``stdp_synapse``): per-edge CSR
+            weights, scalar delay with ``delay - rule.axonal_delay >= dt``, event
+            sources, the post populations must have the rule's ``post_port``.
         source_port : str, optional
             Output port of the sources; may be omitted when they have one output.
         delay_buffer : {'auto', 'pre', 'post'}, default 'auto'
@@ -475,21 +494,26 @@ class Network:
         Raises
         ------
         NotImplementedError
-            For ``synapse``, ``plasticity`` and ``timed_event`` ports (later K0
-            tasks).
+            For ``timed_event`` ports (K0 T7), and for trainable weights on a
+            plastic projection (hybrid weights, decision L4, are K1).
         PortError
-            On unknown / ambiguous / incompatible ports or a negative weight into a
-            conductance port.
+            On unknown / ambiguous / incompatible ports, a negative weight into a
+            conductance port, or a filtering synapse onto a filtered port.
         UnitMismatchError
             On a weight or delay with the wrong dimension.
         """
         pre = self._check_view(pre, 'pre')
         post = self._check_view(post, 'post')
-        if synapse is not None:
-            raise NotImplementedError('synapse models (Expon and the merge pass) arrive in K0 T6; '
-                                      'connect to a neuron-filtered port for now')
-        if plasticity is not None:
-            raise NotImplementedError('plasticity rules (static/stdp_synapse) arrive in K0 T6')
+        if plasticity is not None and not isinstance(plasticity, PlasticityRule):
+            raise TypeError(f'plasticity must be a PlasticityRule, got {type(plasticity).__name__}')
+        plastic = plasticity is not None and not plasticity.is_static
+        if plastic:
+            if trainable:
+                raise NotImplementedError('trainable weights on a plastic projection (hybrid '
+                                          'weights, decision L4) are K1')
+            if storage == 'dense':
+                raise ValueError('plastic weights are per edge; use storage=\'csr\' or \'auto\' '
+                                 '(the dense round trip is lossy with multapses)')
         rule = AllToAll() if rule is None else rule
         if not isinstance(rule, ConnRule):
             raise TypeError(f'rule must be a ConnRule, got {type(rule).__name__}')
@@ -516,12 +540,25 @@ class Network:
             for dm, dk in zip(post_models, dst_kinds):
                 where = f'{sm.__name__ if sm else "?"}.{source_port} -> {dm.__name__}.{port}'
                 if sk is not None:
-                    check_connection(sk, dk, weight, where=where)
+                    if synapse is not None:
+                        check_synapse_connection(synapse, sk, dk, weight, where=where)
+                    else:
+                        check_connection(sk, dk, weight, where=where)
                     w_unit = expected_weight_unit(sk, dk)
                     if unit is not None and u.get_dim(unit) != u.get_dim(w_unit):
                         raise PortError(f'{where}: targets expect weights of different dimensions '
                                         f'({unit} vs {w_unit})')
                     unit = unit if unit is not None else w_unit
+        if plastic:
+            for sk in src_kinds:
+                if not isinstance(sk, Event):
+                    raise PortError(f'{type(plasticity).__name__} needs spike events from the '
+                                    f'sources; {source_port!r} is a {sk.kind!r} port')
+            for m in post_models:
+                k = m.outputs.require(plasticity.post_port, m.__name__)
+                if not isinstance(k, Event):
+                    raise PortError(f'{type(plasticity).__name__} reads post events from '
+                                    f'{m.__name__}.{plasticity.post_port}, a {k.kind!r} port')
         if src_kind is None:  # empty pre view: nothing will be delivered
             src_kind = Event()
         dst_kind = dst_kinds[0] if dst_kinds else Event()
@@ -538,7 +575,8 @@ class Network:
                           post=post, rule=rule, source_port=source_port, port=port,
                           src_kind=src_kind, dst_kind=dst_kind, weight=weight, weight_unit=unit,
                           delay=delay, storage=storage, delay_buffer=delay_buffer,
-                          trainable=bool(trainable))
+                          trainable=bool(trainable), synapse=synapse,
+                          plasticity=plasticity if plastic else None)
         self.projections.append(proj)
         return proj
 
@@ -568,7 +606,7 @@ class Network:
         self.observers.append(obs)
         return obs
 
-    def compile(self, precision: str = 'float32'):
+    def compile(self, precision: str = 'float32', merge: bool = True):
         """Validate and compile into a :class:`~brainpy_state._kernel.compiler.Plan`.
 
         Parameters
@@ -576,13 +614,16 @@ class Network:
         precision : {'float32', 'float64'}, default 'float32'
             Float tier of states, weights and buffers (``float64`` needs
             ``jax_enable_x64``).
+        merge : bool, default True
+            Run the synapse merge pass (linear synapses with equal parameters onto
+            the same port share one state).
 
         Returns
         -------
         Plan
         """
         from brainpy_state._kernel.compiler import compile_network
-        return compile_network(self, precision=precision)
+        return compile_network(self, precision=precision, merge=merge)
 
 
 def _pick_port(name: str | None, models: Sequence[type], attr: str, what: str) -> str:

@@ -18,7 +18,15 @@
 5. **schedule** -- populations are updated in insertion order, except that every
    zero-delay edge ``A -> B`` forces ``A`` before ``B`` (topological order, decision
    D4a); a zero-delay cycle is a :class:`ScheduleError`;
-6. **capabilities** -- models that are not ``jit_safe`` are rejected; the
+6. **plasticity** -- a plastic projection (K0 T6) keeps per-edge CSR weights in the
+   runner state; its scalar delay is split into axonal and dendritic steps
+   (:class:`~brainpy_state._kernel.plasticity.PlasticPlan`): the pre side is read
+   ``d_ax`` steps late, the post spikes ``d_den`` steps late (a pre-side ring on the
+   post population's spike port) and the delivery goes through a post-side arrival
+   ring ``d_den`` steps ahead;
+7. **synapse merge pass** -- synapse states are grouped per (target population,
+   port, merge key) (:func:`~brainpy_state._kernel.synapse.plan_synapse_groups`);
+8. **capabilities** -- models that are not ``jit_safe`` are rejected; the
    differentiable / braintrace summary is reported by :meth:`Plan.describe`.
 
 The plan is a ``brainstate.nn.Module``: ``plan.states(brainstate.ParamState)``
@@ -43,8 +51,10 @@ from brainpy_state._kernel.model import NeuronModel
 from brainpy_state._kernel.network import Network, Population, Projection, Segment
 from brainpy_state._kernel.observers import Observer
 from brainpy_state._kernel.params import ConstParamState, Distribution
+from brainpy_state._kernel.plasticity import PlasticPlan
 from brainpy_state._kernel.ports import Event, TimedEvent
 from brainpy_state._kernel.rng import block_key, object_key
+from brainpy_state._kernel.synapse import plan_synapse_groups
 from brainpy_state._kernel.units import resolve_dtype, to_mantissa, unit_of
 
 __all__ = [
@@ -144,6 +154,9 @@ class ProjectionPlan:
         Arrival ring (post-side placement with delays >= 1).
     weight_unit : brainunit.Unit
         Unit of the stored weights (= target unit per source unit).
+    plastic : PlasticPlan or None
+        Compiled plasticity (K0 T6); the group weight then holds the *initial*
+        weights and the current ones live in the runner state.
     """
 
     proj: Projection
@@ -154,6 +167,7 @@ class ProjectionPlan:
     groups: list
     post_ring: PostRing | None
     weight_unit: Any
+    plastic: PlasticPlan | None = None
 
     @property
     def name(self) -> str:
@@ -256,7 +270,14 @@ class Plan(brainstate.nn.Module):
     models : list of NeuronModel
         The models (registered as child modules for ``states()``).
     weights : dict of str to list of brainstate.State
-        Weight states per projection (one per edge group).
+        Weight states per projection (one per edge group); initial weights for
+        plastic projections.
+    plastic_params : dict of str to dict of brainstate.State
+        Rule parameter states per plastic projection.
+    synapses : list of SynapseGroup
+        Synapse states after the merge pass.
+    synapse_route : dict
+        ``(projection index, population index) -> index into synapses``.
 
     Examples
     --------
@@ -291,6 +312,10 @@ class Plan(brainstate.nn.Module):
         self.order: list[int] = []
         self.models: list[NeuronModel] = []
         self.weights: dict[str, list] = {}
+        self.plastic_params: dict[str, dict] = {}
+        self.synapses: list = []
+        self.synapse_route: dict = {}
+        self.merge = True
 
     # ----------------------------------------------------------------- access
     @property
@@ -320,6 +345,9 @@ class Plan(brainstate.nn.Module):
     def edges(self, key: Any) -> EdgeSet:
         """Realised edges of a projection with its **current** per-edge weights.
 
+        For a plastic projection these are the initial weights (the evolving ones
+        live in the runner state: ``Runner.edges``).
+
         Parameters
         ----------
         key : Projection, str or int
@@ -344,13 +372,15 @@ class Plan(brainstate.nn.Module):
         return es.set(weight=m if unit.is_unitless else u.Quantity(m, unit=unit))
 
     def memory(self) -> dict:
-        """Device memory (bytes, one trial) of storages and buffers."""
+        """Device memory (bytes, one trial) of storages, buffers, synapse and plastic state."""
         item = self.dtype.itemsize
         storage = sum(g.storage.nbytes(item) for p in self.projections for g in p.groups)
         pre = sum(r.nbytes() for p in self.populations for r in p.rings.values())
         post = sum(p.post_ring.nbytes() for p in self.projections if p.post_ring is not None)
-        return {'storage': storage, 'pre_rings': pre, 'post_rings': post,
-                'total': storage + pre + post}
+        syn = sum(self.populations[g.pop].pop.n * item for g in self.synapses)
+        plastic = sum(p.plastic.nbytes() for p in self.projections if p.plastic is not None)
+        return {'storage': storage, 'pre_rings': pre, 'post_rings': post, 'synapses': syn,
+                'plastic': plastic, 'total': storage + pre + post + syn + plastic}
 
     # ---------------------------------------------------------------- running
     def runner(self, batch: int | None = None, rng: str = 'independent', learner: Any = None):
@@ -430,7 +460,9 @@ class Plan(brainstate.nn.Module):
             L.append(f'  {pp.name}: {pr.pre.label}.{pr.source_port} -> {pr.post.label}.{pr.port} '
                      f'rule={type(pr.rule).__name__} edges={pp.n_edges} storage=[{st}] '
                      f'payload={pp.path} delay={d} buffer={pp.placement}-side'
-                     + (' trainable' if pr.trainable else ''))
+                     + (' trainable' if pr.trainable else '')
+                     + (f' synapse={pr.synapse.describe()}' if pr.synapse is not None else '')
+                     + (f' plasticity={pp.plastic.describe()}' if pp.plastic is not None else ''))
         L.append('Buffers (per trial):')
         for p in self.populations:
             for port, r in p.rings.items():
@@ -444,8 +476,9 @@ class Plan(brainstate.nn.Module):
         mem = self.memory()
         L.append(f'Memory: storages {_fmt_bytes(mem["storage"])}, pre-side rings '
                  f'{_fmt_bytes(mem["pre_rings"])}, post-side rings {_fmt_bytes(mem["post_rings"])}, '
-                 f'total {_fmt_bytes(mem["total"])}')
-        L.append('Merges: none (synapse merge pass arrives in T6)')
+                 f'synapse states {_fmt_bytes(mem["synapses"])}, plastic state '
+                 f'{_fmt_bytes(mem["plastic"])}, total {_fmt_bytes(mem["total"])}')
+        L.extend(self._describe_merges())
         L.append('Observers:')
         for o in self.observers:
             ob = o.observer
@@ -465,6 +498,21 @@ class Plan(brainstate.nn.Module):
         if print_:
             print(text)
         return text
+
+    def _describe_merges(self) -> list:
+        merged = [g for g in self.synapses if g.merged]
+        n_pairs = sum(len(g.members) for g in self.synapses)
+        if not self.synapses:
+            return ['Merges: none (no synapse models)']
+        L = [f'Merges: {n_pairs} synapse target(s) -> {len(self.synapses)} state(s)'
+             + ('' if self.merge else ' (merge pass disabled)')]
+        for g in merged:
+            pop = self.populations[g.pop].name
+            names = ', '.join(self.projections[j].name for j in g.members)
+            L.append(f'  {pop}.{g.port} <- [{names}] {g.synapse.describe()}: one state')
+        if not merged:
+            L.append('  none merged')
+        return L
 
     def __repr__(self) -> str:
         return (f'Plan(precision={self.precision}, populations={len(self.populations)}, '
@@ -533,6 +581,8 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any) -> Projectio
     trainable = proj.trainable
     groups = []
     post_ring = None
+    if proj.plasticity is not None and es.n_edges:
+        return _compile_plastic(net, proj, es, w_edges, layout, path, dtype)
     if es.n_edges == 0:
         placement = 'none'
     elif layout.kind in ('scalar', 'per_source'):
@@ -555,6 +605,29 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any) -> Projectio
                           groups=groups, post_ring=post_ring, weight_unit=proj.weight_unit)
 
 
+def _compile_plastic(net: Network, proj: Projection, es: EdgeSet, w_edges: Any,
+                     layout: DelayLayout, path: str, dtype: Any) -> ProjectionPlan:
+    rule = proj.plasticity
+    if layout.kind != 'scalar':
+        raise ValueError(f'{proj.name}: plastic projections need one delay for all edges in K0 '
+                         f'(got {layout.kind.replace("_", "-")} delays)')
+    d = int(layout.steps)
+    ax_ms = float(u.Quantity(rule.axonal_delay).to_decimal(u.ms))
+    d_ax = int(delay_steps(rule.axonal_delay, net.dt)) if ax_ms > 0 else 0
+    d_den = d - d_ax
+    if d_den < 1:
+        raise ValueError(f'{proj.name}: the dendritic delay (delay - axonal_delay = {d} - {d_ax} '
+                         f'steps) must be at least one step')
+    st = make_storage(es, 'csr')
+    w_csr = st.weight_from_edges(w_edges)
+    plastic = PlasticPlan(rule, st, to_mantissa(w_csr, proj.weight_unit, dtype), proj.weight_unit,
+                          d_ax, d_den, dtype)
+    group = EdgeGroup(d_den, st, np.arange(es.n_edges), _state(w_csr, False))
+    return ProjectionPlan(proj=proj, edges=es, layout=layout, placement='post', path=path,
+                          groups=[group], post_ring=PostRing(es.n_post, d_den, dtype),
+                          weight_unit=proj.weight_unit, plastic=plastic)
+
+
 def _zero_delay_pops(pp: ProjectionPlan) -> set:
     """Pre populations with at least one zero-delay edge in the projection."""
     lay = pp.layout
@@ -570,7 +643,7 @@ def _zero_delay_pops(pp: ProjectionPlan) -> set:
     return {s.pop for s in segs if np.any((pre_pos >= s.pos.start) & (pre_pos < s.pos.stop))}
 
 
-def compile_network(net: Network, precision: str = 'float32') -> Plan:
+def compile_network(net: Network, precision: str = 'float32', merge: bool = True) -> Plan:
     """Compile ``net`` (see the module docstring).
 
     Parameters
@@ -579,6 +652,8 @@ def compile_network(net: Network, precision: str = 'float32') -> Plan:
         The graph.
     precision : {'float32', 'float64'}, default 'float32'
         Float tier.
+    merge : bool, default True
+        Run the synapse merge pass.
 
     Returns
     -------
@@ -592,6 +667,7 @@ def compile_network(net: Network, precision: str = 'float32') -> Plan:
         On inconsistent weights/delays (e.g. per-edge arrays of the wrong length).
     """
     plan = Plan(net, precision)
+    plan.merge = bool(merge)
     dtype = plan.dtype
     for pop in net.populations:
         model = _instantiate(net, pop, plan.precision)
@@ -607,6 +683,8 @@ def compile_network(net: Network, precision: str = 'float32') -> Plan:
         pp = _compile_projection(net, proj, dtype)
         plan.projections.append(pp)
         plan.weights[proj.name] = [g.weight for g in pp.groups]
+        if pp.plastic is not None:
+            plan.plastic_params[proj.name] = pp.plastic.states
         if pp.placement == 'none':
             continue
         pre_pops = {s.pop for s in proj.pre.segments}
@@ -618,9 +696,24 @@ def compile_network(net: Network, precision: str = 'float32') -> Plan:
             for a in pre_pops:
                 k = (a, proj.source_port)
                 ring_len[k] = max(ring_len.get(k, 0), pp.layout.max)
+        if pp.plastic is not None:
+            reads = [(a, proj.source_port, pp.plastic.d_ax) for a in pre_pops]
+            reads += [(b, proj.plasticity.post_port, pp.plastic.d_den) for b in post_pops]
+            for a, port, k in reads:
+                if k >= 1:
+                    ring_len[(a, port)] = max(ring_len.get((a, port), 0), k)
     for (a, port), length in ring_len.items():
         pplan = plan.populations[a]
         pplan.rings[port] = PreRing(pplan.pop.n, length, dtype)
+    targets = []
+    for pp in plan.projections:
+        prj = pp.proj
+        if prj.synapse is None or pp.placement == 'none':
+            continue
+        for b in dict.fromkeys(s.pop for s in prj.post.segments):
+            targets.append((prj.index, b, prj.port, prj.synapse,
+                            f'{prj.name}@{plan.populations[b].name}'))
+    plan.synapses, plan.synapse_route = plan_synapse_groups(targets, merge=plan.merge)
     try:
         plan.order = schedule(len(net.populations), zero_edges)
     except ScheduleError as e:

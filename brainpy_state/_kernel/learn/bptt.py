@@ -73,7 +73,9 @@ def trainable_states(plan: Any) -> dict[str, brainstate.ParamState]:
     dict of str to brainstate.ParamState
         ``'pops/<population>/<parameter>'`` for neuron parameters and
         ``'weights/<projection>/<group>'`` for projection weights (one group per
-        distinct delay of a post-side projection, else group 0).
+        distinct delay of a post-side projection, else group 0), and
+        ``'plasticity/<projection>/<rule parameter>'`` for learned plasticity rule
+        parameters.
 
     Examples
     --------
@@ -98,6 +100,10 @@ def trainable_states(plan: Any) -> dict[str, brainstate.ParamState]:
         for g, grp in enumerate(pp.groups):
             if isinstance(grp.weight, brainstate.ParamState):
                 out[f'weights/{pp.name}/{g}'] = grp.weight
+    for name, states in getattr(plan, 'plastic_params', {}).items():
+        for k, st in states.items():  # learned plasticity (K0 T6, reference path)
+            if isinstance(st, brainstate.ParamState):
+                out[f'plasticity/{name}/{k}'] = st
     return out
 
 
@@ -105,16 +111,19 @@ def _substitute(params: dict, values: Mapping[str, Any]) -> dict:
     """``params`` (``Program.read_params`` pytree) with trainable entries replaced."""
     pops = dict(params['pops'])
     weights = {k: list(v) for k, v in params['weights'].items()}
+    plasticity = {k: dict(v) for k, v in params.get('plasticity', {}).items()}
     changes: dict[str, dict] = {}
     for key, v in values.items():
         kind, name, leaf = key.split('/', 2)
         if kind == 'pops':
             changes.setdefault(name, {})[leaf] = v
+        elif kind == 'plasticity':
+            plasticity[name][leaf] = v
         else:
             weights[name][int(leaf)] = v
     for name, ch in changes.items():
         pops[name] = pops[name].replace(**ch)
-    return {'pops': pops, 'weights': weights}
+    return {**params, 'pops': pops, 'weights': weights, 'plasticity': plasticity}
 
 
 # ---------------------------------------------------------------------------

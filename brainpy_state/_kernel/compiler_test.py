@@ -138,7 +138,9 @@ class TestDescribe:
                   'rec_E', 'delay=scalar 15 steps', 'buffer=pre-side'):
             assert s in text, s
         mem = plan.memory()
-        assert mem['total'] == mem['storage'] + mem['pre_rings'] + mem['post_rings']
+        assert mem['total'] == (mem['storage'] + mem['pre_rings'] + mem['post_rings']
+                                + mem['synapses'] + mem['plastic'])
+        assert 'Merges: none' in text
         assert mem['pre_rings'] == 15 * (40 + 10 + 50) * 4
 
     def test_post_side_and_zero_delay(self):
