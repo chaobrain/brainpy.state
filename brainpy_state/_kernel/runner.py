@@ -48,6 +48,8 @@ from brainpy_state._kernel.compiler import Plan, ProjectionPlan
 from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.observers import Recording, Results, window_init, window_update
 from brainpy_state._kernel.params import Record, read_states
+from brainpy_state._kernel.ports import TimedEvent
+from brainpy_state._kernel import timed as _timed
 from brainpy_state._kernel.rng import RNG_MODES, population_key
 from brainpy_state._kernel.units import check_unit, from_mantissa, to_mantissa, unit_of
 
@@ -217,7 +219,21 @@ class Program:
             y = group.storage.forward(payload.astype(self.dtype), w, pp.path)
         return u.get_mantissa(y)
 
-    def _deliver(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any) -> jax.Array:
+    def _deliver_timed(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any) -> Any:
+        g = pp.groups[0]
+        w = u.get_mantissa(g.storage.weight_to_edges(params['weights'][pp.name][0]))
+        rings, objs = {}, {}
+        for s in pp.timed.segments:
+            pplan = self.plan.populations[s.pop]
+            ring = pplan.rings.get(s.port)
+            if ring is not None:
+                objs[(s.pop, s.port)] = ring
+                rings[(s.pop, s.port)] = state['rings'][f'{pplan.name}.{s.port}']
+        return pp.timed.deliver(w, rings, objs, cur, n, self.dtype)
+
+    def _deliver(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any) -> Any:
+        if pp.placement == 'timed':
+            return self._deliver_timed(pp, params, state, cur, n)
         if pp.placement == 'pre':
             return self._forward(pp, 0, self._pre_payload(pp, state['rings'], cur, n), params)
         y = (pp.post_ring.read(state['arrivals'][pp.name], n) if pp.post_ring is not None
@@ -287,8 +303,14 @@ class Program:
                 y = delivered[j]
                 gi = plan.synapse_route.get((j, a))
                 port = pp.proj.port if gi is None else ('syn', gi)
+                kind = model.inputs[port] if gi is None else None
                 for seg in pp.proj.post.segments:
                     if seg.pop != a:
+                        continue
+                    if isinstance(kind, TimedEvent):
+                        acc[port] = _timed.accumulate(acc.get(port), y, seg, pplan.pop.n,
+                                                      self._scale[(j, a)], kind.capacity,
+                                                      self.dt_ms, self.dtype)
                         continue
                     ys = y[seg.pos]
                     f = self._scale[(j, a)]
@@ -313,11 +335,15 @@ class Program:
                 acc[g.port] = out if g.port not in acc else acc[g.port] + out
             if ext is not None and pplan.name in ext:
                 self._ext(pplan, acc, ext[pplan.name])
-            inp = model.prepare_inputs({k: from_mantissa(v, model.inputs[k].unit) for k, v in acc.items()})
+            inp = model.prepare_inputs({
+                k: (_timed.with_weight_unit(v, model.inputs[k].unit) if isinstance(model.inputs[k], TimedEvent)
+                    else from_mantissa(v, model.inputs[k].unit)) for k, v in acc.items()})
             old = pops[pplan.name]
             new, out = model.step(old, params['pops'][pplan.name], inp, ctx)
             pops[pplan.name] = Record(**{k: _like(new[k], old[k]) for k in old})
-            cur[a] = {port: to_mantissa(v, pplan.out_units[port]).astype(self.dtype)
+            cur[a] = {port: (_timed.payload_mantissa(v, self.dtype)
+                             if isinstance(model.outputs[port], TimedEvent)
+                             else to_mantissa(v, pplan.out_units[port]).astype(self.dtype))
                       for port, v in out.items()}
 
         # plasticity (reads the rings before this step's outputs are written)
@@ -533,7 +559,8 @@ class Runner:
         self.n += 1
         out = {}
         for pplan in self.plan.populations:
-            out[pplan.name] = {port: from_mantissa(v, pplan.out_units[port])
+            out[pplan.name] = {port: (_timed.payload_from_mantissa(v) if isinstance(v, dict)
+                                      else from_mantissa(v, pplan.out_units[port]))
                                for port, v in cur[pplan.pop.index].items()}
         return out
 

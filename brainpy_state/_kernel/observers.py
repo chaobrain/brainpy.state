@@ -33,7 +33,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from brainpy_state._kernel.ports import Event
+from brainpy_state._kernel.ports import Event, TimedEvent
 from brainpy_state._kernel.units import check_unit, from_mantissa
 
 __all__ = ['Observer', 'Recording', 'Results', 'window_init', 'window_update']
@@ -108,7 +108,7 @@ class Observer:
                 if r not in decl:
                     raise KeyError(f'{pop.name} ({pop.model.__name__}) has no recordable {r!r}; '
                                    f'available: {list(decl)}')
-                ev = isinstance(pop.model.outputs.get(r), Event)
+                ev = isinstance(pop.model.outputs.get(r), (Event, TimedEvent))
                 if is_event is not None and ev != is_event:
                     raise ValueError(f'{r!r} is an event output in some models of the view and a '
                                      f'state in others')
