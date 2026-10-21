@@ -8,9 +8,15 @@ The step contract (architecture doc §7 L2), for step ``n``::
                   n - d (pre-side ring), the arrival-ring slot of step n
                   (post-side), or -- for d = 0 -- the source output of this step
         update    (state, outputs) = model.step(state, params, inputs, ctx)
-    emit          outputs -> pre-side rings (slot n % L); per-edge projections clear
+    emit          plastic projections run their synapse step (pre events d_ax and
+                  post events d_den steps late, read before the rings are
+                  written) and deposit into their arrival ring d_den steps ahead;
+                  outputs -> pre-side rings (slot n % L); per-edge projections clear
                   their consumed slot and deposit into slot (n + k) % L
     observe       observers sample the new states
+
+Projections with a synapse model (K0 T6) deposit into the synapse state of their
+(possibly merged) group instead of the port; the group's output goes to the port.
 
 A :class:`Program` holds this as **pure** functions of explicit pytrees
 (``params``, ``state``); the :class:`Runner` keeps the state between calls and runs
@@ -116,6 +122,9 @@ class Program:
                 dst_unit = plan.populations[seg.pop].model.inputs[prj.port].unit
                 f = float(u.Quantity(1.0, unit=pp.weight_unit * src_unit).to_decimal(dst_unit))
                 self._scale[(prj.index, seg.pop)] = f
+        self._syn_by_pop: dict[int, list] = {}
+        for gi, g in enumerate(plan.synapses):
+            self._syn_by_pop.setdefault(g.pop, []).append(gi)
 
     # ------------------------------------------------------------- pytrees
     def init_state(self) -> dict:
@@ -125,13 +134,20 @@ class Program:
                  for port, r in p.rings.items()}
         arrivals = {pp.name: pp.post_ring.init() for pp in self.plan.projections
                     if pp.post_ring is not None}
-        return _strong({'pops': pops, 'rings': rings, 'arrivals': arrivals})
+        syn = {g.key: g.synapse.init_state(self.plan.populations[g.pop].pop.n, self.dtype)
+               for g in self.plan.synapses}
+        plastic = {pp.name: pp.plastic.init_state() for pp in self.plan.projections
+                   if pp.plastic is not None}
+        return _strong({'pops': pops, 'rings': rings, 'arrivals': arrivals, 'syn': syn,
+                        'plastic': plastic})
 
     def read_params(self) -> dict:
         """Current parameter and weight values (read from their ``State`` objects)."""
         pops = {p.name: read_states(p.model.param_states) for p in self.plan.populations}
         weights = {name: [s.value for s in states] for name, states in self.plan.weights.items()}
-        return _strong({'pops': pops, 'weights': weights})
+        plasticity = {name: {k: s.value for k, s in states.items()}
+                      for name, states in self.plan.plastic_params.items()}
+        return _strong({'pops': pops, 'weights': weights, 'plasticity': plasticity})
 
     # ------------------------------------------------------------ delivery
     def _pre_payload(self, pp: ProjectionPlan, rings: dict, cur: dict, n: Any) -> jax.Array:
@@ -161,6 +177,31 @@ class Program:
                         piece = jnp.where(jnp.asarray(zero), _take(cur[seg.pop][port], seg.local), piece)
             pieces.append(piece)
         return _concat(pieces, self.dtype)
+
+    def _delayed(self, view: Any, port: str, k: int, rings: dict, cur: dict, n: Any) -> jax.Array:
+        """Output ``port`` of ``view`` emitted ``k`` steps ago (``k = 0``: this step)."""
+        pieces = []
+        for seg in view.segments:
+            pplan = self.plan.populations[seg.pop]
+            if k == 0:
+                row = cur[seg.pop][port]
+            else:
+                row = pplan.rings[port].read(rings[f'{pplan.name}.{port}'], n, k)
+            pieces.append(_take(row, seg.local))
+        return _concat(pieces, self.dtype)
+
+    def _plastic(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any
+                 ) -> tuple[dict, jax.Array]:
+        """Synapse step of a plastic projection; returns its new state and delivery."""
+        pl = pp.plastic
+        prj = pp.proj
+        x = self._delayed(prj.pre, prj.source_port, pl.d_ax, state['rings'], cur, n)
+        q = self._delayed(prj.post, prj.plasticity.post_port, pl.d_den, state['rings'], cur, n)
+        t = n.astype(self.dtype) * self.dt_ms
+        new, w_eff = pl.step(state['plastic'][pp.name], params['plasticity'][pp.name], x, q, t,
+                             self.dt_ms)
+        y = pp.groups[0].storage.forward(x.astype(self.dtype), w_eff, pp.path)
+        return new, u.get_mantissa(y)
 
     def _now_payload(self, pp: ProjectionPlan, cur: dict) -> jax.Array:
         prj = pp.proj
@@ -229,18 +270,23 @@ class Program:
                 raise KeyError(f'external inputs for unknown population(s) {sorted(unknown)}')
         n = jnp.asarray(n, jnp.int32)
         pops = dict(state['pops'])
+        syn_state = dict(state['syn'])
         cur: dict[int, dict] = {}
         delivered: dict[int, jax.Array] = {}
         for a in plan.order:
             pplan = plan.populations[a]
             model = pplan.model
-            acc: dict[str, jax.Array] = {}
+            acc: dict[Any, jax.Array] = {}
+            key = jax.random.fold_in(population_key(self.seed, pplan.pop.uid, n), trial)
+            ctx = StepContext(t=from_mantissa(n.astype(self.dtype) * self.dt_ms, u.ms), dt=self.dt,
+                              step=n, key=key)
             for j in pplan.incoming:
                 pp = plan.projections[j]
                 if j not in delivered:
                     delivered[j] = self._deliver(pp, params, state, cur, n)
                 y = delivered[j]
-                port = pp.proj.port
+                gi = plan.synapse_route.get((j, a))
+                port = pp.proj.port if gi is None else ('syn', gi)
                 for seg in pp.proj.post.segments:
                     if seg.pop != a:
                         continue
@@ -258,17 +304,28 @@ class Program:
                         acc[port] = base.at[seg.local].add(ys)
                     else:
                         acc[port] = base.at[jnp.asarray(seg.local, jnp.int32)].add(ys)
+            for gi in self._syn_by_pop.get(a, ()):
+                g = plan.synapses[gi]
+                x = acc.pop(('syn', gi), None)
+                if x is None:  # pragma: no cover - every member delivers into its group
+                    x = jnp.zeros((pplan.pop.n,), self.dtype)
+                syn_state[g.key], out = g.synapse.step(syn_state[g.key], x, ctx)
+                acc[g.port] = out if g.port not in acc else acc[g.port] + out
             if ext is not None and pplan.name in ext:
                 self._ext(pplan, acc, ext[pplan.name])
             inp = model.prepare_inputs({k: from_mantissa(v, model.inputs[k].unit) for k, v in acc.items()})
-            key = jax.random.fold_in(population_key(self.seed, pplan.pop.uid, n), trial)
-            ctx = StepContext(t=from_mantissa(n.astype(self.dtype) * self.dt_ms, u.ms), dt=self.dt,
-                              step=n, key=key)
             old = pops[pplan.name]
             new, out = model.step(old, params['pops'][pplan.name], inp, ctx)
             pops[pplan.name] = Record(**{k: _like(new[k], old[k]) for k in old})
             cur[a] = {port: to_mantissa(v, pplan.out_units[port]).astype(self.dtype)
                       for port, v in out.items()}
+
+        # plasticity (reads the rings before this step's outputs are written)
+        plastic = dict(state['plastic'])
+        plastic_y: dict[str, jax.Array] = {}
+        for pp in plan.projections:
+            if pp.plastic is not None:
+                plastic[pp.name], plastic_y[pp.name] = self._plastic(pp, params, state, cur, n)
 
         # emit
         rings = dict(state['rings'])
@@ -281,12 +338,16 @@ class Program:
             if pp.post_ring is None:
                 continue
             buf = pp.post_ring.clear(arrivals[pp.name], n)
+            if pp.plastic is not None:
+                arrivals[pp.name] = pp.post_ring.deposit(buf, n, pp.plastic.d_den, plastic_y[pp.name])
+                continue
             payload = self._now_payload(pp, cur)
             for g, group in enumerate(pp.groups):
                 if group.delay >= 1:
                     buf = pp.post_ring.deposit(buf, n, group.delay, self._forward(pp, g, payload, params))
             arrivals[pp.name] = buf
-        return {'pops': pops, 'rings': rings, 'arrivals': arrivals}, cur
+        return {'pops': pops, 'rings': rings, 'arrivals': arrivals, 'syn': syn_state,
+                'plastic': plastic}, cur
 
     # ------------------------------------------------------------- observe
     def observe(self, oplan: Any, pops: dict) -> dict:
@@ -475,6 +536,33 @@ class Runner:
             out[pplan.name] = {port: from_mantissa(v, pplan.out_units[port])
                                for port, v in cur[pplan.pop.index].items()}
         return out
+
+    def edges(self, key: Any, trial: int = 0) -> Any:
+        """Realised edges of a projection with the weights of the **current** run state.
+
+        Plastic projections report their observable weights (the committed ones
+        under lazy timing); other projections are as :meth:`Plan.edges`.
+
+        Parameters
+        ----------
+        key : Projection, str or int
+            The projection.
+        trial : int, default 0
+            Trial of a batched run.
+
+        Returns
+        -------
+        EdgeSet
+        """
+        pp = self.plan.projection(key)
+        if pp.plastic is None or not pp.groups:
+            return self.plan.edges(key)
+        st = self.state['plastic'][pp.name]
+        if self.batch is not None:
+            st = jax.tree.map(lambda x: x[trial], st)
+        w = pp.groups[0].storage.weight_to_edges(pp.plastic.weight(st))
+        unit = pp.weight_unit
+        return pp.edges.set(weight=w if unit.is_unitless else u.Quantity(w, unit=unit))
 
     def _results(self, rec: dict, start: int, n_steps: int) -> Results:
         dt = self.program.dt_ms

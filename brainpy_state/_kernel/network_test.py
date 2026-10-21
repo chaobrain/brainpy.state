@@ -208,9 +208,9 @@ class TestConnect:
     def test_extension_hooks_raise(self, net):
         a = net.add(LIF, 2)
         kw = dict(port='delta', weight=1.0 * u.mV)
-        with pytest.raises(NotImplementedError, match='T6'):
-            net.connect(a, a, synapse=object(), **kw)
-        with pytest.raises(NotImplementedError, match='T6'):
+        with pytest.raises(TypeError, match='SynapseModel'):  # T6 hooks are live
+            net.connect(a, a, port='I', weight=1.0 * u.mA, synapse=object())
+        with pytest.raises(TypeError, match='PlasticityRule'):
             net.connect(a, a, plasticity=object(), **kw)
         t = net.add(_Timed, 1)
         with pytest.raises(NotImplementedError, match='T7'):
