@@ -398,6 +398,9 @@ class EtraceNetwork(brainstate.nn.Module):
         st0 = self.program.init_state()
         self.rings = {k: brainstate.ShortTermState(v) for k, v in st0['rings'].items()}
         self.arrivals = {k: brainstate.ShortTermState(v) for k, v in st0['arrivals'].items()}
+        # synapse-model states (K0 T6) are carried dynamics: HiddenStates for braintrace
+        self.syn = {f'{g}/{k}': brainstate.HiddenState(v) for g, d in st0['syn'].items()
+                    for k, v in d.items()}
         self.n = brainstate.ShortTermState(jnp.zeros((), jnp.int32))
 
     def example_input(self) -> Any:
@@ -422,7 +425,11 @@ class EtraceNetwork(brainstate.nn.Module):
         state = {'pops': {p.name: Record(**{k: s.value for k, s in p.model.dyn_states.items()})
                           for p in plan.populations},
                  'rings': {k: s.value for k, s in self.rings.items()},
-                 'arrivals': {k: s.value for k, s in self.arrivals.items()}}
+                 'arrivals': {k: s.value for k, s in self.arrivals.items()},
+                 'syn': {}, 'plastic': {}}
+        for k, s in self.syn.items():
+            g, name = k.rsplit('/', 1)
+            state['syn'].setdefault(g, {})[name] = s.value
         n = self.n.value
         new, _ = prog.step(prog.read_params(), state, n, jnp.uint32(self.trial), ext=ext)
         for p in plan.populations:
@@ -433,6 +440,9 @@ class EtraceNetwork(brainstate.nn.Module):
             s.value = new['rings'][k]
         for k, s in self.arrivals.items():
             s.value = new['arrivals'][k]
+        for k, s in self.syn.items():
+            g, name = k.rsplit('/', 1)
+            s.value = _keep_dependency(new['syn'][g][name], s.value)
         self.n.value = n + 1
         outs = []
         for pplan, st in self._outputs:

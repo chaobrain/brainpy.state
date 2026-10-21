@@ -327,6 +327,45 @@ class TestEndToEnd:
         r2 = plan.runner(batch=2).simulate(5.0 * u.ms)[rec]['V']
         np.testing.assert_allclose(np.asarray(r2.to_decimal(u.mV))[0], np.asarray(r1.to_decimal(u.mV)))
 
+    def test_etrace_network_and_online_learning(self):
+        """Synapse states are HiddenStates of the braintrace module (T9 integration)."""
+        import braintools
+        import warnings
+        from brainpy_state._kernel.learn import EtraceNetwork, ExternalInput, Online
+        net = Network(dt=DT * u.ms, seed=2)
+        x = net.add(ExternalInput, 3, name='x')
+        h = net.add(LIF, 4, name='h', surrogate=braintools.surrogate.Sigmoid())
+        net.connect(x, h, port='I', weight=4.0 * u.mA, synapse=Expon(2.0 * u.ms),
+                    trainable=True, name='xh')
+        net.connect(x, h, port='I', weight=2.0 * u.mA, synapse=Expon(2.0 * u.ms), name='xh2')
+        rec = net.observe(h, 'V')
+        plan = net.compile()
+        assert len(plan.synapses) == 1 and plan.synapses[0].merged
+        xs = (jax.random.uniform(jax.random.key(0), (60, 3)) < 0.3).astype(jnp.float32)
+        prog = plan.runner().program
+        params = prog.read_params()
+
+        def step(st, inp):
+            n, x_n = inp
+            st, _ = prog.step(params, st, n, jnp.zeros((), jnp.uint32), ext={'x': {'x': x_n}})
+            return st, st['pops']['h']['V'].to_decimal(u.mV)
+
+        _, V = brainstate.transform.scan(step, prog.init_state(), (jnp.arange(60, dtype=jnp.int32), xs))
+        en = EtraceNetwork(plan, inputs='x', outputs=[('h', 'V')])
+        assert len(en.syn) == 1 and isinstance(next(iter(en.syn.values())), brainstate.HiddenState)
+        out = brainstate.transform.for_loop(en.update, xs)
+        np.testing.assert_allclose(np.asarray(out), np.asarray(V), rtol=1e-5, atol=1e-6)
+        assert np.ptp(np.asarray(out)) > 0
+        online = Online('eprop', inputs='x', outputs='h')
+        plan.runner(learner=online)
+        model = online.model
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            grads = model.etrace_grad(xs, jnp.full((60, 4), 0.2),
+                                      step_fn=lambda a, y: jnp.mean((model(a) - y) ** 2))
+        g = [np.asarray(u.get_mantissa(v)) for v in grads.values()]
+        assert len(g) == 1 and np.all(np.isfinite(g[0]))
+
     def test_synapse_into_iaf_psc_alpha_current_port(self):
         net = Network(dt=DT * u.ms)
         sg = net.add(spike_generator, 1, params=dict(spike_times=[0.5] * u.ms))
