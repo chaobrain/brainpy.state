@@ -106,12 +106,17 @@ def test_g2_brunel_statistic_matches_nest(stat):
 
 
 @requires_nest
-def test_g2_runs_are_in_the_asynchronous_irregular_regime():
+def test_g2_runs_are_in_the_expected_firing_regime():
     results, _, _ = g2_results()
     by = {r.metric: r for r in results}
-    # NEST order 200: ~57 Hz, irregular firing; a broken network would fail these loudly
-    assert 30.0 < by['rate_E'].ref_mean < 90.0 and 0.3 < by['cv_isi_E'].ref_mean < 1.5
-
+    # NEST 3.9 / 3.10, order 200 (eta = 2, g = 5): ~57 Hz, regular oscillatory firing
+    # (CV-ISI ~0.08, Fano ~0.43, positive correlations). A silent, saturated or broken
+    # network would fail these loudly, on either side.
+    for r in (by['rate_E'], by['rate_I']):
+        assert 40.0 < r.ref_mean < 80.0 and 40.0 < r.ours_mean < 80.0
+    assert 0.02 < by['cv_isi_E'].ref_mean < 0.5 and 0.02 < by['cv_isi_E'].ours_mean < 0.5
+    assert 0.0 < by['fano_E'].ref_mean and 0.0 < by['fano_E'].ours_mean
+    assert 0.0 < by['corr_E'].ref_mean and 0.0 < by['corr_E'].ours_mean
 
 if __name__ == '__main__':  # pragma: no cover
     res, ours, ref = g2_results()
