@@ -266,13 +266,15 @@ class TestConductanceModelsVsNest(unittest.TestCase):
         self.assertLessEqual(float(np.max(np.abs(V - V_ref))), 1e-3)
 
     def test_aeif_dc_spiking(self):
-        """Spike times equal NEST; off the spike steps the trace meets the CAT_A bound.
+        """G5 for spiking aeif: spike times equal NEST; CAT_A off the upswing/reset steps.
 
         On the upswing / reset steps the O(h) crossing location gives errors of
         order 1 mV (see the G5 table): the full-trace CAT_A criterion is not met.
         """
-        V_ref, V, spk = self._run('aeif_cond_alpha/dc')
+        V_ref, V, spk = self._run('aeif_cond_alpha/dc')  # spike times equal (same step)
         self.assertGreater(len(spk), 3)
+        # G5 (K0 spec §6): CAT_A on every step except the upswing (either trace above
+        # V_th) and the step after (the reset)
         mask = spike_mask(V_ref, V, -50.4)
         compare_trace(V_ref[~mask], V[~mask], tol=tc.CAT_A, metric='aeif V_m off spikes').assert_()
 
