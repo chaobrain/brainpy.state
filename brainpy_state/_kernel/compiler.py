@@ -364,16 +364,29 @@ class Plan(brainstate.nn.Module):
         rng : {'independent', 'common'}, default 'independent'
             Per-trial random numbers (spec §4.5).
         learner : optional
-            Not implemented yet (K0 T9: BPTT / braintrace learners).
+            A learner with an ``attach(runner)`` method
+            (:class:`~brainpy_state._kernel.learn.bptt.BPTT`,
+            :class:`~brainpy_state._kernel.learn.etrace.Online`); it validates the
+            plan (capabilities, braintrace rules) and binds to the runner.
 
         Returns
         -------
         Runner
+
+        Raises
+        ------
+        TypeError
+            If ``learner`` has no ``attach`` method.
         """
-        if learner is not None:
-            raise NotImplementedError('learners (BPTT, braintrace) arrive in K0 T9')
+        if learner is not None and not callable(getattr(learner, 'attach', None)):
+            raise TypeError(f'learner must provide attach(runner) (BPTT, Online), '
+                            f'got {type(learner).__name__}')
         from brainpy_state._kernel.runner import Runner
-        return Runner(self, batch=batch, rng=rng)
+        run = Runner(self, batch=batch, rng=rng)
+        if learner is not None:
+            learner.attach(run)
+            run.learner = learner
+        return run
 
     # --------------------------------------------------------------- describe
     def describe(self, print_: bool = True) -> str:
@@ -447,7 +460,7 @@ class Plan(brainstate.nn.Module):
         L.append(f'  BPTT: differentiable except {[p.name for p in neurons] or "nothing"} '
                  f'(non-differentiable populations act as inputs); {trainable} ParamState(s)')
         L.append('  braintrace: storages route through braintrace primitives (forward_etrace); '
-                 'learner checks arrive in T9')
+                 'rules checked by learn.etrace (check_plan / check_etrace)')
         text = '\n'.join(L)
         if print_:
             print(text)
