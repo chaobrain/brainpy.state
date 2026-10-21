@@ -261,7 +261,7 @@ All run in CI except those marked *(NEST)* (run in the NEST workflow), *(Brian2)
 | G6 gradients | BPTT on 20-neuron LIF and `iaf_psc_alpha` nets, Dense and CSR, delay 0 and 2 steps, float64, smooth surrogate | relative error vs central finite differences ≤ 1e-4 |
 | G7 braintrace | `braintrace.compile(net, 'eprop')` and `'d_rtrl'` on a K0 LIF net, Dense and CSR | compiles; gradients non-zero for every weight; the K0 checker rejects a deliberately non-compliant model with a clear error |
 | G8 STDP *(NEST)* | `stdp_synapse` weight trajectory, pre/post pairing protocol with dendritic delay > 0 | `CAT_B` without the current drive workaround |
-| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs T0 baseline, same machine, on CPU and on one RTX 3090 | step time ≤ 1.1 × baseline; peak memory ≤ 1.1 × baseline; compile time reported |
+| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs T0 baseline, same machine, on CPU and on RTX 3090 GPU 1 | step time ≤ 1.1 × baseline; peak memory ≤ 1.1 × baseline; compile time reported |
 | G10 quality | coverage of `_kernel` | > 90 % |
 
 **Decision rule.** All gates pass → go (K1 starts). G9 fails by > 10 % or any of G1,
@@ -318,8 +318,14 @@ streams; batched trials with `common` vs `independent` RNG.
 3. **Hardware for G9**: CPU on the development machine, plus GPU on
    `wanglab3090b-01a0.chaobrain` (2 × RTX 3090 24 GB, driver 580.178, CUDA 13.0,
    Python 3.12.3, `uv`). Code lives under `~/data/brainpy-state-k0/` (a checkout of
-   the K0 branch with a `uv` venv using a CUDA 13 jaxlib); runs use one GPU
-   (`CUDA_VISIBLE_DEVICES=0`). Baseline (T0) and K0 are measured on the same host and
+   the K0 branch with a `uv` venv using a CUDA 13 jaxlib). Runs use **GPU 1 only**
+   (`CUDA_VISIBLE_DEVICES=1`), and every run first checks that GPU 1 has no compute
+   processes (`nvidia-smi -i 1 --query-compute-apps=pid --format=csv,noheader` is
+   empty) and aborts otherwise. NEST for remote parity runs comes from the conda env
+   `brainpy-state-k0` (conda-forge `nest-simulator`, via the Tsinghua mirror: direct
+   conda.anaconda.org access is reset from that host) NEST there is **3.10.0**; locally it is 3.9.0. Parity
+   results record the NEST version, and a gate counts only when it passes on the version
+   it was run against. Baseline (T0) and K0 are measured on the same host and
    GPU, in float32 and float64.
 4. **Rate neurons (S1a)**: single-unit rate neurons are not supported (see
    architecture doc §11). The `graded` port stays for NMDA emission and SIC.
