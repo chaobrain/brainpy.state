@@ -26,12 +26,11 @@ Synapses and plasticity (K0 T6)
 ``plasticity=`` attaches a :class:`~brainpy_state._kernel.plasticity.PlasticityRule`
 (per-edge CSR weights, NEST lazy timing).
 
-Extension hooks (later K0 tasks)
---------------------------------
-``timed_event`` ports (T7) are accepted by the signatures and rejected with
-:class:`NotImplementedError`. Voltage-gated ``conductance`` ports (T8) are supported:
-the gate is evaluated by the receiving model at every substep
-(``with_conductance_ports``, ``models.nmda``).
+Gated conductances and precise timing (K0 T8, T7)
+-------------------------------------------------
+Voltage-gated ``conductance`` ports (T8) are supported: the gate is evaluated by the
+receiving model at every substep (``with_conductance_ports``, ``models.nmda``).
+``timed_event`` ports (precise spike times) are supported since T7 (:mod:`.timed`).
 """
 from __future__ import annotations
 
@@ -277,6 +276,9 @@ class Projection:
         Synapse kinetics between delivery and the port (K0 T6).
     plasticity : PlasticityRule or None
         Plasticity rule (K0 T6); ``static_synapse`` compiles as no rule.
+    strict_capacity : bool
+        ``timed_event`` targets: raise when the worst-case events per target and step
+        exceed the port capacity (else count the overflow at run time).
     """
 
     index: int
@@ -297,6 +299,7 @@ class Projection:
     trainable: bool
     synapse: Any = None
     plasticity: Any = None
+    strict_capacity: bool = True
 
 
 class Network:
@@ -445,7 +448,8 @@ class Network:
                 port: str | None = None, weight: Any = None, delay: Any = None,
                 storage: str = 'auto', synapse: Any = None, plasticity: Any = None,
                 source_port: str | None = None, delay_buffer: str = 'auto',
-                trainable: bool = False, name: str | None = None) -> Projection:
+                trainable: bool = False, name: str | None = None,
+                strict_capacity: bool = True) -> Projection:
         """Connect ``pre`` to ``post`` (validated now, realised at compile).
 
         Parameters
@@ -486,6 +490,14 @@ class Network:
             Store the weights as ``brainstate.ParamState`` (learners).
         name : str, optional
             Unique name (default ``'proj<k>'``).
+        strict_capacity : bool, default True
+            For ``timed_event`` targets: raise :class:`PortError` if the events that
+            can reach one target in one step may exceed the port capacity (checked
+            here for one source, and at compile time for the realised in-degrees of
+            all projections into the port). ``False`` accepts the risk: excess
+            events are dropped **and counted** in the target's ``overflow`` state.
+            Delays of timed projections are rounded to the grid; the sub-step
+            offsets are preserved (NEST).
 
         Returns
         -------
@@ -494,11 +506,12 @@ class Network:
         Raises
         ------
         NotImplementedError
-            For ``timed_event`` ports (K0 T7), and for trainable weights on a
-            plastic projection (hybrid weights, decision L4, are K1).
+            For trainable weights on a plastic projection (hybrid weights, decision
+            L4, are K1).
         PortError
             On unknown / ambiguous / incompatible ports, a negative weight into a
-            conductance port, or a filtering synapse onto a filtered port.
+            conductance port, a filtering synapse onto a filtered port, or a
+            ``timed_event`` capacity that may overflow (``strict_capacity=True``).
         UnitMismatchError
             On a weight or delay with the wrong dimension.
         """
@@ -527,9 +540,9 @@ class Network:
         port = _pick_port(port, post_models, 'inputs', 'port')
         src_kinds = [m.outputs.require(source_port, m.__name__) for m in pre_models]
         dst_kinds = [m.inputs.require(port, m.__name__) for m in post_models]
-        for k in src_kinds + dst_kinds:
-            if isinstance(k, TimedEvent):
-                raise NotImplementedError('timed_event ports (precise spike times) arrive in K0 T7')
+        if any(isinstance(k, TimedEvent) for k in src_kinds) and storage == 'dense':
+            raise ValueError('projections from timed_event sources use CSR storage (exact per-edge '
+                             "weights for every event); use storage='auto' or 'csr'")
         if weight is None:
             weight = 1.0
         if delay is None:
@@ -543,7 +556,9 @@ class Network:
                     if synapse is not None:
                         check_synapse_connection(synapse, sk, dk, weight, where=where)
                     else:
-                        check_connection(sk, dk, weight, where=where)
+                        check_connection(sk, dk, weight, where=where,
+                                         max_events=sk.capacity if isinstance(sk, TimedEvent) else None,
+                                         strict_capacity=bool(strict_capacity))
                     w_unit = expected_weight_unit(sk, dk)
                     if unit is not None and u.get_dim(unit) != u.get_dim(w_unit):
                         raise PortError(f'{where}: targets expect weights of different dimensions '
@@ -576,7 +591,8 @@ class Network:
                           src_kind=src_kind, dst_kind=dst_kind, weight=weight, weight_unit=unit,
                           delay=delay, storage=storage, delay_buffer=delay_buffer,
                           trainable=bool(trainable), synapse=synapse,
-                          plasticity=plasticity if plastic else None)
+                          plasticity=plasticity if plastic else None,
+                          strict_capacity=bool(strict_capacity))
         self.projections.append(proj)
         return proj
 
@@ -650,6 +666,8 @@ def _merge_src_kinds(kinds: Sequence[PortKind]) -> PortKind:
         if any(m is None for m in mults):
             return Event(max_multiplicity=None)
         return Event(max_multiplicity=max(mults))
+    if isinstance(first, TimedEvent):
+        return TimedEvent(max(k.capacity for k in kinds), unit=first.unit)
     return first
 
 

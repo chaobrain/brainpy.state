@@ -213,8 +213,9 @@ class TestConnect:
         with pytest.raises(TypeError, match='PlasticityRule'):
             net.connect(a, a, plasticity=object(), **kw)
         t = net.add(_Timed, 1)
-        with pytest.raises(NotImplementedError, match='T7'):
-            net.connect(a, t, port='precise', weight=1.0 * u.mV)
+        # T7: timed_event ports are supported (grid events arrive at offset dt)
+        p = net.connect(a, t, port='precise', weight=1.0 * u.mV)
+        assert p.strict_capacity
         g = net.add(_Gated, 1)
         # T8: gated ports are supported; an event source still needs a graded
         # source (e.g. the NMDA receptor) or a synapse model in between

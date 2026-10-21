@@ -55,6 +55,7 @@ from brainpy_state._kernel.plasticity import PlasticPlan
 from brainpy_state._kernel.ports import Event, TimedEvent
 from brainpy_state._kernel.rng import block_key, object_key
 from brainpy_state._kernel.synapse import plan_synapse_groups
+from brainpy_state._kernel.timed import TimedDelivery, TimedRing, check_capacities
 from brainpy_state._kernel.units import resolve_dtype, to_mantissa, unit_of
 
 __all__ = [
@@ -144,10 +145,11 @@ class ProjectionPlan:
         Realised edges (initial per-edge weights and delays in ``EdgeSet`` order).
     layout : DelayLayout
         Classified delays.
-    placement : {'pre', 'post', 'none'}
-        Delay-buffer placement (``'none'``: no edges, nothing is delivered).
-    path : {'binary', 'float'}
-        Payload path.
+    placement : {'pre', 'post', 'timed', 'none'}
+        Delay-buffer placement (``'none'``: no edges, nothing is delivered;
+        ``'timed'``: per-edge gather from the source's :class:`TimedRing`, K0 T7).
+    path : {'binary', 'float', 'timed'}
+        Payload path (``'timed'``: precisely timed events, K0 T7).
     groups : list of EdgeGroup
         One group for pre-side placement; one per delay value for post-side.
     post_ring : PostRing or None
@@ -157,6 +159,8 @@ class ProjectionPlan:
     plastic : PlasticPlan or None
         Compiled plasticity (K0 T6); the group weight then holds the *initial*
         weights and the current ones live in the runner state.
+    timed : TimedDelivery or None
+        Delivery of a projection from a ``timed_event`` source (``placement == 'timed'``).
     """
 
     proj: Projection
@@ -168,6 +172,7 @@ class ProjectionPlan:
     post_ring: PostRing | None
     weight_unit: Any
     plastic: PlasticPlan | None = None
+    timed: TimedDelivery | None = None
 
     @property
     def name(self) -> str:
@@ -466,7 +471,8 @@ class Plan(brainstate.nn.Module):
         L.append('Buffers (per trial):')
         for p in self.populations:
             for port, r in p.rings.items():
-                L.append(f'  pre-side ring {p.name}.{port}: {r.length} x {r.n} {r.dtype.name} '
+                cap = f' x {r.capacity} (offsets, weights)' if isinstance(r, TimedRing) else ''
+                L.append(f'  pre-side ring {p.name}.{port}: {r.length} x {r.n}{cap} {r.dtype.name} '
                          f'= {_fmt_bytes(r.nbytes())}')
         for pp in self.projections:
             if pp.post_ring is not None:
@@ -583,8 +589,17 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any) -> Projectio
     post_ring = None
     if proj.plasticity is not None and es.n_edges:
         return _compile_plastic(net, proj, es, w_edges, layout, path, dtype)
+    timed = None
     if es.n_edges == 0:
         placement = 'none'
+    elif isinstance(src, TimedEvent):
+        # per-edge gather of precisely timed events (K0 T7); CSR keeps per-edge weights exact
+        placement = 'timed'
+        path = 'timed'
+        st = make_storage(es, 'csr')
+        groups.append(EdgeGroup(None, st, np.arange(es.n_edges),
+                                _state(st.weight_from_edges(w_edges), trainable)))
+        timed = TimedDelivery.build(net, proj, es, steps)
     elif layout.kind in ('scalar', 'per_source'):
         placement = 'pre'
         st = make_storage(es, proj.storage)
@@ -602,7 +617,8 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any) -> Projectio
         if layout.max >= 1:
             post_ring = PostRing(es.n_post, layout.max, dtype)
     return ProjectionPlan(proj=proj, edges=es, layout=layout, placement=placement, path=path,
-                          groups=groups, post_ring=post_ring, weight_unit=proj.weight_unit)
+                          groups=groups, post_ring=post_ring, weight_unit=proj.weight_unit,
+                          timed=timed)
 
 
 def _compile_plastic(net: Network, proj: Projection, es: EdgeSet, w_edges: Any,
@@ -679,6 +695,7 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
 
     zero_edges = set()
     ring_len: dict[tuple, int] = {}
+    timed_len: dict[tuple, int] = {}
     for proj in net.projections:
         pp = _compile_projection(net, proj, dtype)
         plan.projections.append(pp)
@@ -702,9 +719,17 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
             for a, port, k in reads:
                 if k >= 1:
                     ring_len[(a, port)] = max(ring_len.get((a, port), 0), k)
+        if pp.timed is not None:
+            for k, length in pp.timed.ring_lengths().items():
+                timed_len[k] = max(timed_len.get(k, 0), length)
     for (a, port), length in ring_len.items():
         pplan = plan.populations[a]
         pplan.rings[port] = PreRing(pplan.pop.n, length, dtype)
+    for (a, port), length in timed_len.items():
+        pplan = plan.populations[a]
+        cap = pplan.pop.model.outputs[port].capacity
+        pplan.rings[port] = TimedRing(pplan.pop.n, length, cap, dtype)
+    check_capacities(plan)
     targets = []
     for pp in plan.projections:
         prj = pp.proj
