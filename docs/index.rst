@@ -292,6 +292,7 @@ See also the ecosystem
    :caption: Project
 
    changelog.md
+   project/positioning
    project/relationship
    project/citing
    project/ecosystem
