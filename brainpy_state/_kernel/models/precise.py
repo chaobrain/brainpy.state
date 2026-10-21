@@ -122,8 +122,9 @@ def illinois_root(f: Any, h: Any, iterations: int = ROOT_ITERATIONS) -> Any:
 
     Vectorised NEST ``regula_falsi`` (``libnestutil/regula_falsi.h``): regula falsi
     that halves the function value kept at a bracket end chosen twice in a row.
-    Requires ``f(0) <= 0 <= f(h)`` element-wise; elements without a sign change
-    return a point of ``[0, h]`` (callers mask them).
+    Requires ``f(0) <= 0 <= f(h)`` element-wise; if rounding loses the sign change,
+    the bracket end nearest the root is returned (``h`` if ``f(h) <= 0``, ``0`` if
+    ``f(0) >= 0``).
 
     Parameters
     ----------
@@ -151,19 +152,20 @@ def illinois_root(f: Any, h: Any, iterations: int = ROOT_ITERATIONS) -> Any:
     """
     a = jnp.zeros_like(h)
     b = h
-    fa = f(a)
-    fb = f(b)
     side = jnp.zeros(h.shape, jnp.int32)
-    c = 0.5 * (a + b)
-    for _ in range(iterations):
+
+    def body(carry, _):
+        a, b, fa, fb, side, _c = carry
         denom = fb - fa
         ok = denom != 0
         c = jnp.where(ok, (a * fb - b * fa) / jnp.where(ok, denom, 1), 0.5 * (a + b))
         c = jnp.clip(c, jnp.minimum(a, b), jnp.maximum(a, b))
-        fc = f(c)
-        left = fa * fc > 0          # root in [c, b]: move a
-        right = (fb * fc > 0) & ~left
-        exact = ~left & ~right       # fc == 0 (or degenerate): collapse the bracket
+        # materialise f(c) once: XLA may otherwise duplicate it into several fusions
+        # whose float32 results can differ in sign right at the root
+        fc = jax.lax.optimization_barrier(f(c))
+        left = fc < 0                # bracket invariant f(a) <= 0 <= f(b): move a
+        right = fc > 0               # move b
+        exact = ~left & ~right       # fc == 0 (or nan): collapse the bracket
         fb = jnp.where(left & (side == 1), fb / 2, fb)
         fa = jnp.where(right & (side == -1), fa / 2, fa)
         a = jnp.where(left | exact, c, a)
@@ -171,6 +173,14 @@ def illinois_root(f: Any, h: Any, iterations: int = ROOT_ITERATIONS) -> Any:
         b = jnp.where(right | exact, c, b)
         fb = jnp.where(right, fc, jnp.where(exact, 0, fb))
         side = jnp.where(left, 1, jnp.where(right, -1, side))
+        return (a, b, fa, fb, side, c), None
+
+    # fixed trip count: lowered to one scan (no while_loop), the body is traced once
+    fa0, fb0 = f(a), f(b)
+    carry = (a, b, fa0, fb0, side, 0.5 * (a + b))
+    carry, _ = jax.lax.scan(body, carry, None, length=iterations)
+    # no sign change after rounding (low precision near a bracket end): take that end
+    return jnp.where(fb0 <= 0, h, jnp.where(fa0 >= 0, jnp.zeros_like(h), carry[-1]))
     return c
 
 
@@ -438,7 +448,7 @@ class poisson_generator_ps(_OffsetsStateMixin, _CapacityMixin, Device):
     Inter-spike intervals are ``dead_time + Exp(1) * (1/rate - dead_time)``; the
     first spike after activation is drawn from NEST's equilibrium initialisation.
     Events beyond the capacity are not emitted and increase ``overflow`` by 1 plus
-    the expected number of further events; the next spike is then redrawn from the
+    the expected number of further events (stochastically rounded, unbiased); the next spike is then redrawn from the
     step end (exact for ``dead_time = 0``). States: ``spike`` (count), ``spike_offsets``
     ``(n, K)``, ``next_spike`` (relative to the next step's start), ``started``,
     ``overflow``. Randomness only from ``ctx.key``.
@@ -490,7 +500,7 @@ class poisson_generator_ps(_OffsetsStateMixin, _CapacityMixin, Device):
         isi_mean = jnp.where(rate > 0, 1000.0 / jnp.where(rate > 0, rate, 1), jnp.inf)
         inv = isi_mean - dead
 
-        k_choice, k_dead, k_first, k_isi = jax.random.split(ctx.key, 4)
+        k_choice, k_dead, k_first, k_isi, k_more = jax.random.split(ctx.key, 5)
         u_choice = jax.random.uniform(k_choice, (n_units,), dtype)
         u_dead = jax.random.uniform(k_dead, (n_units,), dtype)
         e_first = jax.random.exponential(k_first, (n_units,), dtype)
@@ -508,7 +518,10 @@ class poisson_generator_ps(_OffsetsStateMixin, _CapacityMixin, Device):
         after = times > hi[:, None]
         nxt_in = jnp.take_along_axis(times, jnp.argmax(after, axis=1)[:, None], axis=1)[:, 0]
         nxt_over = hi + inv * e_isi[:, K]
-        n_more = jnp.floor(jnp.where(over, (hi - times[:, K]) / isi_mean, 0))
+        # events beyond capacity: 1 (the (K+1)-th) + the expected number in the rest of
+        # the window, stochastically rounded so that the count is unbiased
+        u_more = jax.random.uniform(k_more, (n_units,), dtype)
+        n_more = jnp.floor(jnp.where(over, (hi - times[:, K]) / isi_mean, 0) + u_more)
         nxt = jnp.where(over, nxt_over, nxt_in)
         started_new = started | active
         nxt = jnp.where(active, nxt, first)

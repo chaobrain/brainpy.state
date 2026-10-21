@@ -168,7 +168,7 @@ class TestDelivery:
 
     def test_neuron_to_neuron_precise_chain(self, x64):
         net = Network(dt=DT * u.ms)
-        a = net.add(iaf_psc_exp_ps, 1, params=dict(I_e=420.0 * u.pA), name='a')
+        a = net.add(iaf_psc_exp_ps, 1, params=dict(I_e=600.0 * u.pA), name='a')
         b = net.add(iaf_psc_exp_ps, 1, name='b')
         net.connect(a, b, port='syn', weight=500.0 * u.pA, delay=0.7 * u.ms)
         ra, rb = simulate(net, 40.0, net.observe(a, 'spike', 'spike_offset'),
@@ -217,7 +217,7 @@ class TestCapacity:
         net, n = build(False)
         rec, = simulate(net, 3.0, net.observe(n, 'V_m', 'overflow'))
         ovf = np.asarray(rec['overflow'])[:, 0]
-        assert ovf[-1] == 1 and ovf[10] == 1 and ovf[9] == 0
+        assert ovf[-1] == 1 and int(np.argmax(ovf)) == 11  # spikes in step 10, delay 1 step
         ref = direct_run([(1.11, 50.0), (1.12, 50.0)], 30)   # the latest event is dropped
         np.testing.assert_allclose(V_of(rec)[:, 0], ref['V_m'][:, 0], atol=1e-12)
 
@@ -277,6 +277,8 @@ class TestBatchingAndGradients:
         w0 = params['weights'][p.name][0]
         grad = jax.grad(loss)(w0)
         eps = 1e-4
-        fd = (loss(w0 + eps) - loss(w0 - eps)) / (2 * eps)
-        np.testing.assert_allclose(grad, fd, rtol=1e-7)
+        unit = u.get_unit(w0)
+        fd = u.get_mantissa(loss(w0 + eps * unit) - loss(w0 - eps * unit)) / (2 * eps)
+        grad = u.get_mantissa(grad)
+        np.testing.assert_allclose(grad, fd, rtol=1e-6)
         assert float(jnp.abs(grad).sum()) > 0

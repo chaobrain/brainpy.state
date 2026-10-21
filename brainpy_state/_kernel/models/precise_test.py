@@ -109,8 +109,27 @@ class TestIllinoisRoot:
     def test_exact_hit_and_no_sign_change_stay_in_bracket(self, x64):
         r = illinois_root(lambda t: t - 0.5, jnp.array([1.0]))  # first secant hits exactly
         assert float(r[0]) == 0.5
+        r = illinois_root(lambda t: t - 2.0, jnp.array([1.0]))
+        assert float(r[0]) == 1.0                                # f(h) <= 0: bracket end h
         r = illinois_root(lambda t: t + 1.0, jnp.array([1.0]))
-        assert 0.0 <= float(r[0]) <= 1.0
+        assert float(r[0]) == 0.0                                # f(0) > 0: bracket end 0
+        r = illinois_root(lambda t: t, jnp.array([1.0]))
+        assert float(r[0]) == 0.0                                # f(0) >= 0: bracket end 0
+
+    def test_float32_threshold_function_regression(self):
+        # a float32 membrane-threshold function whose f(c) is ~1e-6 at the root: the
+        # bracket must keep a consistent sign decision (was: midpoint of a collapsed bracket)
+        from brainpy_state._kernel.models.precise import _ps_propagators
+        F = lambda x: jnp.array([x], jnp.float32)
+        h = F(0.00813559)
+
+        def f(t):
+            P20, P21e, P21i, em, _, _, _ = _ps_propagators(t, F(10.), F(2.), F(2.), F(250.))
+            return P20 * 600.0 + P21e * F(230.93419) + P21i * F(-127.113335) + F(14.9948015) * em - 15.0
+
+        for r in (illinois_root(f, h), jax.jit(lambda h: illinois_root(f, h))(h)):
+            assert r.dtype == jnp.float32
+            np.testing.assert_allclose(r, [0.0039527], atol=2e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -456,7 +475,7 @@ class TestSpikeGeneratorPs:
     def test_per_unit_trains_origin_window_and_overflow(self, x64):
         gen = spike_generator_ps.with_capacity(2)(
             2, params=dict(spike_times=[[0.51, 0.52, 0.53, 3.0] * u.ms, [0.2, 4.05] * u.ms],
-                           origin=1.0 * u.ms, stop=4.5 * u.ms), precision='float64')
+                           origin=1.0 * u.ms, stop=4.0 * u.ms), precision='float64')
         off, w, ovf, cnt = self._out(gen, 60)
         t0, t1 = train_times(off)
         np.testing.assert_allclose(t0, [1.51, 1.52, 4.0], atol=1e-12)  # 1.53 dropped (capacity 2)

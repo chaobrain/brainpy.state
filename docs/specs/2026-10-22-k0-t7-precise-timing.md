@@ -54,7 +54,10 @@ next step.
 5. Spike time: at most one spike per step (refractoriness >= 1 step), so the root finder
    runs once per step, after the segment loop, only if some neuron crossed
    (`lax.cond`): Illinois regula falsi (NEST's `regula_falsi`) with a fixed 40
-   iterations, then an implicit-function correction (value unchanged, gradient
+   iterations as one `lax.scan` (body traced once; unrolling cost ~20 s of XLA compile
+   per network), bracket decisions from the sign of a single materialised `f(c)`
+   (`optimization_barrier`: duplicated float32 fusions disagreed in sign at the root),
+   then an implicit-function correction (value unchanged, gradient
    `dt*/dθ = -∂f/∂θ / f'(t*)`).
 
 Spike-time gradients: the output offset is differentiable w.r.t. parameters, weights,

@@ -35,7 +35,7 @@ SPIKE_ATOL = 1e-6  # ms
 #: three heterogeneous neurons (NEST parameter names)
 NEURONS = [
     dict(I_e=250.0),
-    dict(I_e=320.0, t_ref=0.25, tau_syn_in=5.0, V_min=-71.0),
+    dict(I_e=320.0, t_ref=0.25, tau_syn_in=5.0, V_reset=-68.0, V_min=-69.0),
     dict(I_e=150.0, tau_m=15.0, tau_syn_ex=0.5, C_m=200.0, V_reset=-65.0, V_th=-56.0),
 ]
 _UNITS = dict(I_e=u.pA, t_ref=u.ms, tau_syn_in=u.ms, tau_syn_ex=u.ms, tau_m=u.ms, V_min=u.mV,
@@ -157,8 +157,8 @@ class TestPreciseVsNest:
             ours = our_precise_input(ex, inh, 160.0, -120.0, delay, params=_ours(NEURONS))
         n_spk = _check(ref, ours, f'delay {delay}')
         assert n_spk >= 10
-        # refractory neuron 1 (t_ref 0.25 ms = 3 steps) spikes, V_min is hit
-        assert np.any(ours[2] == 1) and np.min(ours[0][:, 1]) <= -71.0 + 1e-9
+        # refractory neuron 1 (t_ref 0.25 ms = 3 steps) spikes and its V_min clamp is hit
+        assert np.any(ours[2] == 1) and abs(np.min(ours[0][:, 1]) + 69.0) < 1e-9
 
     def test_poisson_generator_ps_to_iaf_psc_exp_ps(self):
         n = 4
