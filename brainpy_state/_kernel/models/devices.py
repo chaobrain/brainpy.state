@@ -35,7 +35,59 @@ from brainpy_state._kernel.params import Init, Param, Params, Record, States
 from brainpy_state._kernel.ports import Current, Event, Ports
 from brainpy_state._kernel.units import grid_steps, to_mantissa
 
-__all__ = ['poisson_generator', 'spike_generator', 'dc_generator']
+__all__ = ['poisson_generator', 'spike_generator', 'dc_generator', 'poisson_counts']
+
+#: Below this mean every unit uses Knuth's algorithm (as ``jax.random.poisson`` does).
+_KNUTH_MAX_LAM = 10.0
+
+
+def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
+    """Poisson counts, bit-identical to ``jax.random.poisson(key, lam, shape)``.
+
+    ``jax.random.poisson`` evaluates both of its samplers (Knuth for ``lam < 10``,
+    transformed rejection otherwise) for every element when ``lam`` is traced, which
+    makes a per-step draw about 7x slower than with a constant ``lam``. Here a
+    ``lax.cond`` on ``all(lam < 10)`` runs only Knuth's loop -- the same algorithm
+    and key schedule as JAX's -- in the common case, and falls back to
+    ``jax.random.poisson`` otherwise, so the samples are identical in both cases.
+
+    Parameters
+    ----------
+    key : jax.Array
+        PRNG key (raw or typed).
+    lam : array_like
+        Means, broadcastable to ``shape``.
+    shape : tuple of int
+        Output shape.
+
+    Returns
+    -------
+    jax.Array
+        Integer counts (JAX's default int dtype).
+    """
+    lam = jnp.broadcast_to(jnp.asarray(lam, jnp.float32), shape)
+    dtype = jnp.zeros((), dtype=int).dtype
+
+    def knuth(key, lam):
+        def cond(c):
+            i, _, _, log_prod = c
+            return jnp.any(log_prod > -lam) & (i < jnp.iinfo(dtype).max)
+
+        def body(c):
+            i, k, rng, log_prod = c
+            rng, sub = jax.random.split(rng)
+            k = jnp.where(log_prod > -lam, k + 1, k)
+            return i + 1, k, rng, log_prod + jnp.log(jax.random.uniform(sub, shape, jnp.float32))
+
+        init = (jnp.zeros((), dtype), jnp.zeros(shape, dtype), key, jnp.zeros(shape, jnp.float32))
+        k = jax.lax.while_loop(cond, body, init)[1] - 1
+        return jnp.where(lam == 0, 0, k).astype(dtype)
+
+    def exact(key, lam):
+        return jax.random.poisson(key, lam, shape, dtype=dtype)
+
+    small = jnp.all(lam < _KNUTH_MAX_LAM)
+    return jax.lax.cond(small, knuth, exact, key, lam)
 
 _WINDOW = dict(start=Param(0.0 * u.ms), stop=Param(float('inf') * u.ms), origin=Param(0.0 * u.ms))
 
@@ -97,7 +149,7 @@ class poisson_generator(Device):
         t_min, t_max = device_window(p, dt)
         n = jnp.asarray(ctx.step).astype(t_min.dtype)
         lam = jnp.maximum(to_mantissa(p.rate, u.kHz) * dt, 0.0)
-        counts = jax.random.poisson(ctx.key, lam, shape=(self.n,))
+        counts = poisson_counts(ctx.key, lam, (self.n,))
         active = (t_min < n) & (n <= t_max)
         spike = jnp.where(active, counts, 0).astype(dtype)
         s = s.replace(spike=spike)

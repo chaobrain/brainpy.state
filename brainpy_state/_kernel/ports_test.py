@@ -195,6 +195,10 @@ class TestCompatibility:
         (Graded(u.mV), Graded(u.mV)),
         (Graded(u.pA), Current()),
         (Graded(u.nS), Conductance()),
+        # neuron-filtered ports receive events directly (the neuron owns the kinetics)
+        (Event(), Conductance(filtered=True)),
+        (TimedEvent(2), Conductance(filtered=True)),
+        (Event(), Current(filtered=True)),
     ])
     def test_allowed(self, src, dst):
         check_kind_compatible(src, dst)
