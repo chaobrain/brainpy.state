@@ -6,8 +6,6 @@
 * unit invariance, float32/float64, jit / vmap / for_loop, network end to end;
 * optional single-neuron comparison against Brian2.
 """
-import importlib.util
-
 import brainstate
 import braintools
 import brainunit as u
@@ -25,10 +23,9 @@ from brainpy_state._kernel.models import NMDA, aeif_cond_alpha, iaf_cond_exp, ia
 from brainpy_state._kernel.models._testing import rollout, step_inputs
 from brainpy_state._kernel.network import Network
 from brainpy_state._kernel.ports import Conductance, PortError
+from brainpy_state._kernel.validation.markers import requires_brian2
 
 DT = 0.1 * u.ms
-requires_brian2 = pytest.mark.skipif(importlib.util.find_spec('brian2') is None,
-                                     reason='brian2 not installed')
 
 # membrane parameters: no spikes (V_th far above), resting near the steep part of B(V)
 P = dict(V_th=100.0 * u.mV, V_reset=-60.0 * u.mV, g_L=16.6667 * u.nS, C_m=250.0 * u.pF,
