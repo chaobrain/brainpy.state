@@ -120,6 +120,7 @@ class aeif_cond_alpha(SpikingNeuron):
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad())
     integrator: ClassVar[Integrator] = RK(order=4, substeps=AEIF_COND_ALPHA_SUBSTEPS)
+    accepts_conductance_ports: ClassVar[bool] = True
 
     def derivatives(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> dict:
         """NEST ``aeif_cond_alpha_dynamics`` (refractory ``dV = 0`` is applied by the step)."""
@@ -128,7 +129,8 @@ class aeif_cond_alpha(SpikingNeuron):
         dT = u.math.where(pos, p.Delta_T, 1.0 * u.mV)  # double-where: no 0/0 at Delta_T = 0
         I_spike = u.math.where(pos, p.g_L * dT * u.math.exp((V - p.V_th) / dT), 0.0 * u.pA)
         I_syn = s.g_ex * (V - p.E_ex) + s.g_in * (V - p.E_in)
-        dV = (-p.g_L * (V - p.E_L) + I_spike - I_syn - s.w + p.I_e + inp.I) / p.C_m
+        I_g = self.conductance_port_current(inp, V, p)  # added (gated) ports, per substep
+        dV = (-p.g_L * (V - p.E_L) + I_spike - I_syn + I_g - s.w + p.I_e + inp.I) / p.C_m
         return {'V_m': dV,
                 'dg_ex': -s.dg_ex / p.tau_syn_ex,
                 'g_ex': s.dg_ex - s.g_ex / p.tau_syn_ex,

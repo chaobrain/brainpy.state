@@ -21,10 +21,11 @@ by ``(seed, uid, ...)`` (spec §4.5), never by Python identity.
 
 Extension hooks (later K0 tasks)
 --------------------------------
-``synapse=`` (T6: ``Expon`` + merge pass), ``plasticity=`` (T6), ``timed_event``
-ports (T7) and voltage-gated ``conductance`` ports (T8) are accepted by the
-signatures and rejected with :class:`NotImplementedError` naming the task that adds
-them.
+``synapse=`` (T6: ``Expon`` + merge pass), ``plasticity=`` (T6) and ``timed_event``
+ports (T7) are accepted by the signatures and rejected with
+:class:`NotImplementedError` naming the task that adds them. Voltage-gated
+``conductance`` ports (T8) are supported: the gate is evaluated by the receiving
+model at every substep (``with_conductance_ports``, ``models.nmda``).
 """
 from __future__ import annotations
 
@@ -41,7 +42,6 @@ from brainpy_state._kernel.connectivity.storage import STORAGE_KINDS
 from brainpy_state._kernel.model import NeuronModel
 from brainpy_state._kernel.params import Distribution
 from brainpy_state._kernel.ports import (
-    Conductance,
     Event,
     PortError,
     PortKind,
@@ -475,8 +475,8 @@ class Network:
         Raises
         ------
         NotImplementedError
-            For ``synapse``, ``plasticity``, ``timed_event`` ports and voltage-gated
-            conductance ports (later K0 tasks).
+            For ``synapse``, ``plasticity`` and ``timed_event`` ports (later K0
+            tasks).
         PortError
             On unknown / ambiguous / incompatible ports or a negative weight into a
             conductance port.
@@ -506,9 +506,6 @@ class Network:
         for k in src_kinds + dst_kinds:
             if isinstance(k, TimedEvent):
                 raise NotImplementedError('timed_event ports (precise spike times) arrive in K0 T7')
-        for k in dst_kinds:
-            if isinstance(k, Conductance) and k.gate is not None:
-                raise NotImplementedError('voltage-gated conductance ports (NMDA Mg block) arrive in K0 T8')
         if weight is None:
             weight = 1.0
         if delay is None:

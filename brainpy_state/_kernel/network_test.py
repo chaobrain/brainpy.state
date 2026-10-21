@@ -32,7 +32,7 @@ class _Timed(NeuronModel):
 
 
 class _Gated(NeuronModel):
-    """Minimal model with a voltage-gated conductance port (T8 hook)."""
+    """Minimal model with a voltage-gated conductance port (T8)."""
     states = States(V=Init(0.0 * u.mV))
     inputs = Ports(nmda=Conductance(u.nS, E_rev=0.0 * u.mV, gate=lambda V: 1.0))
     integrator: ClassVar[Integrator] = Exact()
@@ -216,7 +216,9 @@ class TestConnect:
         with pytest.raises(NotImplementedError, match='T7'):
             net.connect(a, t, port='precise', weight=1.0 * u.mV)
         g = net.add(_Gated, 1)
-        with pytest.raises(NotImplementedError, match='T8'):
+        # T8: gated ports are supported; an event source still needs a graded
+        # source (e.g. the NMDA receptor) or a synapse model in between
+        with pytest.raises(PortError, match='cannot feed'):
             net.connect(a, g, port='nmda', weight=1.0 * u.nS)
 
     def test_empty_pre_view(self, net):

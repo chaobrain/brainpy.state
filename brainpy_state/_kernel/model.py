@@ -88,6 +88,7 @@ __all__ = [
     'Device',
     'conductance_current',
     'latch_name',
+    'with_conductance_ports',
 ]
 
 _LATCHED = (Current, Graded)
@@ -139,6 +140,87 @@ def conductance_current(port: Conductance, g: Any, V: Any, p: Record) -> Any:
     if port.gate is not None:
         g = g * port.gate(V)
     return g * (E - V)
+
+
+def with_conductance_ports(model: type, name: str | None = None,
+                           params: Mapping[str, Any] | None = None,
+                           **ports: Conductance) -> type:
+    r"""Derive a model class with extra (optionally voltage-gated) conductance ports.
+
+    The generic receiving end of conductance delivery (K0 T8): the new ports are
+    unfiltered ``Conductance`` ports -- the payload is the conductance itself,
+    delivered once per step and constant over the substeps -- and the model adds
+    :math:`\sum_k g_k\,\mathrm{gate}_k(V)\,(E_k - V)` to its membrane equation through
+    :meth:`NeuronModel.conductance_port_current`, so every gate is evaluated at the
+    ``V`` of each RK substep.
+
+    Parameters
+    ----------
+    model : type
+        A ``NeuronModel`` subclass with ``accepts_conductance_ports = True``
+        (``iaf_cond_exp``, ``aeif_cond_alpha``).
+    name : str, optional
+        Name of the new class (default ``'<model>_' + '_'.join(ports)``).
+    params : mapping, optional
+        Extra parameter declarations (e.g. ``E_nmda=0 * u.mV`` referenced by a
+        port's ``E_rev``).
+    **ports : Conductance
+        New input ports; each must be unfiltered and declare ``E_rev``.
+
+    Returns
+    -------
+    type
+        Subclass of ``model`` with the extended ``inputs`` (and ``params``).
+
+    Raises
+    ------
+    TypeError
+        If ``model`` does not opt in, a port is not a ``Conductance`` or no port
+        is given.
+    PortError
+        If a port is filtered, has no ``E_rev``, names an undeclared parameter or
+        clashes with an existing port.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.gates import MgBlock
+        >>> from brainpy_state._kernel.model import with_conductance_ports
+        >>> from brainpy_state._kernel.models import iaf_cond_exp
+        >>> from brainpy_state._kernel.ports import Conductance
+        >>> Cell = with_conductance_ports(
+        ...     iaf_cond_exp, nmda=Conductance(u.nS, E_rev='E_nmda', gate=MgBlock()),
+        ...     params=dict(E_nmda=0.0 * u.mV))
+        >>> list(Cell.inputs)
+        ['ex', 'in_', 'I', 'nmda']
+    """
+    if not (isinstance(model, type) and issubclass(model, NeuronModel)):
+        raise TypeError(f'model must be a NeuronModel subclass, got {model!r}')
+    if not getattr(model, 'accepts_conductance_ports', False):
+        raise TypeError(f'{model.__name__} does not add conductance-port currents to its membrane '
+                        f'equation (accepts_conductance_ports is False)')
+    if not ports:
+        raise TypeError('give at least one conductance port (name=Conductance(...))')
+    new_params = model.params.extend(**dict(params or {}))
+    for k, kind in ports.items():
+        if not isinstance(kind, Conductance):
+            raise TypeError(f'port {k!r} must be a Conductance, got {type(kind).__name__}')
+        if kind.filtered:
+            raise PortError(f'port {k!r}: added conductance ports are unfiltered (their kinetics '
+                            f'belong to the source or a synapse model)')
+        if kind.E_rev is None:
+            raise PortError(f'port {k!r} needs E_rev (a voltage or a parameter name)')
+        if isinstance(kind.E_rev, str) and kind.E_rev not in new_params:
+            raise PortError(f'port {k!r}: E_rev parameter {kind.E_rev!r} is not declared '
+                            f'(declared: {list(new_params)}); add it with params=')
+        if k in model.inputs:
+            raise PortError(f'port {k!r} already exists on {model.__name__}')
+    attrs = {'inputs': Ports(**dict(model.inputs), **ports), 'params': new_params,
+             '__module__': model.__module__,
+             '__doc__': f'{model.__name__} with extra conductance ports {list(ports)}.'}
+    return type(name or f'{model.__name__}_{"_".join(ports)}', (model,), attrs)
 
 
 @dataclass(frozen=True)
@@ -211,6 +293,9 @@ class NeuronModel(brainstate.nn.Module):
     spiking: ClassVar[SpikeRule | None] = None
     integrator: ClassVar[Integrator] = RK(order=4, substeps=1)
     capabilities: ClassVar[Capabilities] = Capabilities()
+    #: The model adds :meth:`conductance_port_current` to its membrane equation, so
+    #: :func:`with_conductance_ports` may extend it with (gated) conductance ports.
+    accepts_conductance_ports: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -327,6 +412,34 @@ class NeuronModel(brainstate.nn.Module):
     def on_input(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> Record:
         """Event jumps applied after the step's propagation (default: none)."""
         return s
+
+    def conductance_port_current(self, inp: Record, V: Any, p: Record) -> Any:
+        r"""Summed current of the unfiltered ``conductance`` input ports.
+
+        :math:`\sum_k g_k\,\mathrm{gate}_k(V)\,(E_k - V)` over every unfiltered
+        :class:`~brainpy_state._kernel.ports.Conductance` port (filtered ports are
+        integrated by the model's own states). Call it inside ``derivatives`` with
+        the substep's ``V`` so each gate is re-evaluated at every substep.
+
+        Parameters
+        ----------
+        inp : Record
+            Port inputs of the step (conductance payloads).
+        V : brainunit.Quantity
+            Membrane potential used for the gate and the driving force.
+        p : Record
+            Parameter values (``E_rev`` given by name).
+
+        Returns
+        -------
+        brainunit.Quantity
+            Current in pA (zeros shaped like ``V`` when there is no such port).
+        """
+        total = u.Quantity(jnp.zeros_like(to_mantissa(V, u.mV)), unit=u.pA)
+        for k, kind in self.inputs.items():
+            if isinstance(kind, Conductance) and not kind.filtered:
+                total = total + conductance_current(kind, inp[k], V, p)
+        return total
 
     def output_states(self) -> dict[str, str]:
         """Output port -> state name it is read from (default: the spike output)."""
