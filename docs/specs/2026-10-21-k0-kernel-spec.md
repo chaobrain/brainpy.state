@@ -1,6 +1,6 @@
 # K0 — kernel spike: specification
 
-_Date: 2026-10-21_ · Status: **DRAFT — awaiting approval before any code** ·
+_Date: 2026-10-21_ · Status: **decisions recorded (§10); ready for T0** ·
 Parent: [`2026-10-21-architecture-review-and-redesign.md`](2026-10-21-architecture-review-and-redesign.md)
 (§7 layers, §7.1 timing, §7.2 RNG, §8 learning, §12 K0 row).
 
@@ -30,7 +30,7 @@ Probed in `/tmp/k0_probe/` and by code reading of the current tree.
 | No test differentiates through an LIF network | gradient checks are new |
 | Brunel parity tests assert only the E rate, one realisation, order 200 | K0 adds the statistics of §6 G2 to the harness |
 | NEST 3.9.0 and Brian2 2.10.1 importable (Brian2 installed 2026-10-21) | COBA gate G3 compares against Brian2; `brian2` becomes a validation extra |
-| JAX 0.12 runs on CPU only: an NVIDIA GPU may be present but no CUDA jaxlib is installed | G9 measures CPU unless a CUDA jaxlib is installed (§10 Q3) |
+| JAX 0.12 runs on CPU only: an NVIDIA GPU may be present but no CUDA jaxlib is installed | GPU benchmarks run on the remote RTX 3090 host (§10.3) |
 
 ---
 
@@ -231,7 +231,7 @@ memory, merges, and the braintrace/learner capability summary.
 
 | # | task | depends |
 |---|---|---|
-| T0 | `benchmarks/` baseline: today's Simulator, Brunel order 200 and 2500, float32/64, compile time, step time, peak memory, on this machine (CPU; no CUDA jaxlib installed) | — |
+| T0 | `benchmarks/` baseline: today's Simulator, Brunel order 200 and 2500, float32/64, compile time, step time, peak memory; CPU (development machine) and GPU (RTX 3090 host, §10.3) | — |
 | T1 | context, params, states, ports, units policy | — |
 | T2 | integrators + propagators (float32-safe) + SpikeRule | T1 |
 | T3 | models: LIF, `iaf_psc_alpha`, `iaf_cond_exp`, `aeif_cond_alpha` | T2 |
@@ -261,7 +261,7 @@ All run in CI except those marked *(NEST)* (run in the NEST workflow), *(Brian2)
 | G6 gradients | BPTT on 20-neuron LIF and `iaf_psc_alpha` nets, Dense and CSR, delay 0 and 2 steps, float64, smooth surrogate | relative error vs central finite differences ≤ 1e-4 |
 | G7 braintrace | `braintrace.compile(net, 'eprop')` and `'d_rtrl'` on a K0 LIF net, Dense and CSR | compiles; gradients non-zero for every weight; the K0 checker rejects a deliberately non-compliant model with a clear error |
 | G8 STDP *(NEST)* | `stdp_synapse` weight trajectory, pre/post pairing protocol with dendritic delay > 0 | `CAT_B` without the current drive workaround |
-| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs T0 baseline, same machine | step time ≤ 1.1 × baseline; peak memory ≤ 1.1 × baseline; compile time reported |
+| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs T0 baseline, same machine, on CPU and on one RTX 3090 | step time ≤ 1.1 × baseline; peak memory ≤ 1.1 × baseline; compile time reported |
 | G10 quality | coverage of `_kernel` | > 90 % |
 
 **Decision rule.** All gates pass → go (K1 starts). G9 fails by > 10 % or any of G1,
@@ -287,8 +287,9 @@ streams; batched trials with `common` vs `independent` RNG.
   vectorised, fixed-iteration root finder and sorted per-step event lists. Largest
   single task; bounded by keeping `poisson_generator_ps` + `spike_generator` as the
   only `timed_event` sources.
-- **No CUDA jaxlib in this environment**: G9 measures CPU. GPU numbers need a CUDA
-  jaxlib (§10 Q3).
+- **GPU runs are remote** (§10.3): the remote checkout must match the commit being
+  measured; every benchmark result records the commit, host, device and package
+  versions.
 - **brainevent gradient bug** (§1): mitigated by the payload-path rule; reported
   upstream.
 
@@ -307,12 +308,18 @@ streams; batched trials with `common` vs `independent` RNG.
 
 ---
 
-## 10. Open questions for approval
+## 10. Decisions (2026-10-21)
 
-1. **Package name/location**: `brainpy_state/_kernel/` (private until K3), benchmarks in
-   a new top-level `benchmarks/`.
-2. **Precise-timing scope**: full JAX `iaf_psc_exp_ps` + `poisson_generator_ps` in K0
-   (as the review recommended), or only the `timed_event` port with
-   `poisson_generator_ps`, deferring the receiving model to K1.
-3. **Hardware for G9**: CPU only (current environment), or install a CUDA-enabled
-   jaxlib so K0 also measures GPU.
+1. **Package location**: `brainpy_state/_kernel/` (private until K3); benchmarks in a
+   new top-level `benchmarks/`.
+2. **Precise timing**: both `iaf_psc_exp_ps` and `poisson_generator_ps` are built in
+   JAX in K0. The `timed_event` contract is one of the risks K0 must retire, and gate G1
+   needs a real receiving model to test it.
+3. **Hardware for G9**: CPU on the development machine, plus GPU on
+   `wanglab3090b-01a0.chaobrain` (2 × RTX 3090 24 GB, driver 580.178, CUDA 13.0,
+   Python 3.12.3, `uv`). Code lives under `~/data/brainpy-state-k0/` (a checkout of
+   the K0 branch with a `uv` venv using a CUDA 13 jaxlib); runs use one GPU
+   (`CUDA_VISIBLE_DEVICES=0`). Baseline (T0) and K0 are measured on the same host and
+   GPU, in float32 and float64.
+4. **Rate neurons (S1a)**: single-unit rate neurons are not supported (see
+   architecture doc §11). The `graded` port stays for NMDA emission and SIC.

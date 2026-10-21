@@ -1,6 +1,6 @@
 # Architecture review and kernel redesign
 
-_Date: 2026-10-21_ · Status: **direction agreed (D1, D2, D4/D4a, D5, I1, S1, L1–L4 decided 2026-10-21); expert review incorporated (Part III); open: S1a; K0 spec next** ·
+_Date: 2026-10-21_ · Status: **direction agreed (D1, D2, D4/D4a, D5, I1, S1, S1a, L1–L4 decided 2026-10-21); expert review incorporated (Part III); K0 spec: [`2026-10-21-k0-kernel-spec.md`](2026-10-21-k0-kernel-spec.md)** ·
 Breaking changes: **allowed** (no 0.1 compatibility constraint).
 
 Supersedes §2 ("Two families, one kernel") and Phases 1–4 of
@@ -168,7 +168,7 @@ separate runtime vs training backends.
 | `timed_event` | fixed-capacity list of `(offset, weight)` per target per step, with declared capacity and an overflow counter; sorted by offset at the receiver | integrated between events | `*_ps` models, `poisson_generator_ps` |
 | `current` | current (pA), summed | latched; acts during the next step | static PSC input, `dc_generator`, SIC |
 | `conductance` | conductance (nS) with `E_rev` and an optional voltage gate `gate(V)` evaluated inside `derivatives` at every substep | inside the ODE | `iaf_cond_*`, multisynapse ports, NMDA Mg block (replaces `SynOut` COBA/MgBlock) |
-| `graded` | continuous value with declared unit; sub-step delays may interpolate | latched | rate (Hz), NMDA emission |
+| `graded` | continuous value with declared unit; sub-step delays may interpolate | latched | NMDA emission, astrocyte SIC |
 | `gap` | symmetric pairing of two `V` ports with a per-edge conductance | explicit lag or fixed-iteration WFR | `hh_psc_alpha_gap` |
 | `modulatory` | broadcast scalar/vector (volume transmission) | read by rules and models | dopamine via `volume_transmitter` |
 
@@ -293,7 +293,7 @@ for each step n:
   the compiler topologically orders zero-delay paths and rejects zero-delay cycles.
 - Event delays are rounded to the grid (NEST) or carried as precise offsets on
   `timed_event` ports; interpolation is allowed only on `graded` ports. Continuous
-  same-step coupling (gap junctions, rate networks) is explicit-lag by default with an
+  same-step coupling (gap junctions) is explicit-lag by default with an
   optional WFR mode that runs a **fixed** iteration count (differentiable).
 - Delay-buffer placement is chosen by the compiler per projection: **pre-side** ring
   (`N_src × D_max`, shared by all projections from that source) for scalar or
@@ -461,7 +461,7 @@ spec and a gate in its milestone.
 | today | becomes |
 |---|---|
 | `w_by_rec` bridge, `receptor_k` labels, `delta_label_for_receptor`, `spike_events`, `x_filtered` | named input ports |
-| `_emission_attr` / seam (H), rate connections, SIC, diffusion dual channel | `graded` output port → projection → port |
+| `_emission_attr` / seam (H), SIC (rate connections and diffusion removed, S1/S1a) | `graded` output port → projection → port |
 | gap couplers (`G@V - D*V`) | projection from `graded` `V` port with a difference synapse; explicit lag or WFR |
 | `_relays_multiplicity`, binarised `BinaryArray` paths | `event` payload carries multiplicity |
 | `_RECORDABLE_ALIAS` + resolver functions | declared recordables |
@@ -483,7 +483,7 @@ spec and a gate in its milestone.
 | D4a | Zero delay on acyclic paths | ✅ **allowed** (topological order within a step); zero-delay cycles rejected |
 | I1 | Integrators | ✅ **fixed-substep only**; adaptive RKF45 removed; per-model substep defaults set by convergence against NEST |
 | S1 | Model scope | ✅ **point neurons only**: multi-compartment and population/mean-field models are not ported and are removed at K4 (list in §13) |
-| S1a | Single-unit rate neurons (`lin_rate`, `tanh_rate`, `rate_neuron_ipn/opn`, …) | open |
+| S1a | Single-unit rate neurons | ✅ **not supported**: `lin_rate`, `tanh_rate`, `threshold_lin_rate`, `gauss_rate`, `sigmoid_rate`, `sigmoid_rate_gg_1998`, `rate_neuron_ipn/opn`, `rate_transformer_node`, with `rate_connection_instantaneous/delayed` and `step_rate_generator` are not ported and are removed at K4 |
 | D5 | Rewrite strategy | ✅ **new kernel alongside**, port families, delete old kernel in one 0.2/1.0-alpha break |
 | D6 | `spec` branch | proposed: archive as tag, borrow ideas |
 | L1 | Online-learning algorithms | ✅ **live in braintrace**; brainpy.state guarantees etrace compatibility |
@@ -516,8 +516,8 @@ with the verified repro tests as acceptance criteria.
   under S1 (point neurons only), not ported: multi-compartment `cm_default`,
   `iaf_cond_alpha_mc`, `pp_cond_exp_mc_urbanczik` (and therefore `urbanczik_synapse`);
   population/mean-field `gif_pop_psc_exp`, `siegert_neuron` (and
-  `diffusion_connection`). Whether single-unit rate neurons (`lin_rate`, `tanh_rate`,
-  `rate_neuron_ipn/opn`, …) stay is open (S1a).
+  `diffusion_connection`). Under S1a, single-unit rate neurons are removed as well:
+  `lin_rate`, `tanh_rate`, `threshold_lin_rate`, `gauss_rate`, `sigmoid_rate`, `sigmoid_rate_gg_1998`, `rate_neuron_ipn/opn`, `rate_transformer_node`, with `rate_connection_instantaneous/delayed` and `step_rate_generator`.
 - **Parity loss from fixed substeps (I1).** Formerly-GSL models (`aeif_*`,
   `iaf_cond_*`, `hh_*`, `ht_neuron`) lose NEST's adaptive error control; stiff models
   may need many substeps or exponential-Rosenbrock to stay within tolerance.
