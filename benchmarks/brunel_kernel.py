@@ -1,16 +1,19 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Perf smoke of the K0 kernel runtime (T5) on the Brunel alpha network.
+"""K0 kernel runtime benchmark on the Brunel alpha network (T5 smoke, gate G9 in T10).
 
 Same network, protocol and record schema as ``brunel_simulator_baseline.py``
 (T0): 1000 ms windows through the jitted ``Runner.cont`` (compiled once, reused),
 warm-up until a call triggers no compilation, then 7 timed windows; the median
-ms/step is compared with the T0 baseline. Not a gate (G9 is T10's).
+ms/step is compared with the T0 baseline by `g9_compare.py` (gate G9).
 
 ::
 
     python benchmarks/brunel_kernel.py run --order 2500 --precision 32
     python benchmarks/brunel_kernel.py sweep --orders 200 2500 --precisions 32 64 \
         --out benchmarks/results/2026-10-22-T5-kernel-smoke.json
+    # merge RESULT_JSON lines captured from remote logs (gate G9)
+    python benchmarks/brunel_kernel.py collect cpu.log gpu.log \
+        --out benchmarks/results/2026-10-22-T10-kernel-g9.json
 """
 import argparse
 import json
@@ -171,15 +174,33 @@ def sweep(args):
             records.append(rec)
     print(bu.markdown_table(records))
     if args.out:
-        existing = []
-        if os.path.exists(args.out):
-            with open(args.out) as f:
-                existing = json.load(f)['records']
-        merged = bu.sort_records(bu.merge_records(existing, records))
-        with open(args.out, 'w') as f:
-            json.dump({'benchmark': BENCHMARK, 'schema_version': bu.SCHEMA_VERSION,
-                       'records': merged}, f, indent=1)
-            f.write('\n')
+        write_results(args.out, records)
+
+
+def write_results(path, records):
+    """Merge ``records`` into the results JSON at ``path`` (created if absent)."""
+    existing = []
+    if os.path.exists(path):
+        with open(path) as f:
+            existing = json.load(f)['records']
+    merged = bu.sort_records(bu.merge_records(existing, records))
+    for r in merged:
+        bu.validate_record(r)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump({'benchmark': BENCHMARK, 'schema_version': bu.SCHEMA_VERSION,
+                   'records': merged}, f, indent=1)
+        f.write('\n')
+    return merged
+
+
+def collect(args):
+    """Parse RESULT_JSON lines from (remote) log files and merge them into ``--out``."""
+    records = []
+    for p in args.logs:
+        with open(p) as f:
+            records = bu.merge_records(records, bu.parse_result_lines(f.read()))
+    print(bu.markdown_table(write_results(args.out, records)))
 
 
 def main(argv=None):
@@ -204,8 +225,11 @@ def main(argv=None):
     s.add_argument('--timeout', type=float, default=3600)
     s.add_argument('--out', default=None)
     common(s)
+    c = sub.add_parser('collect')
+    c.add_argument('logs', nargs='+')
+    c.add_argument('--out', required=True)
     args = p.parse_args(argv)
-    {'run': run_one, 'sweep': sweep}[args.cmd](args)
+    {'run': run_one, 'sweep': sweep, 'collect': collect}[args.cmd](args)
 
 
 if __name__ == '__main__':
