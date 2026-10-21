@@ -129,14 +129,46 @@ def cpu_model(cpuinfo_text=None):
     return None
 
 
-def config_key(record):
-    """Identity of a configuration: ``(device, order, precision, backend)``.
+def affinity_label(cpus, n_total):
+    """Compact label of a CPU affinity set: ``'all'`` or ranges like ``'0-7,12'``.
 
-    ``backend`` is the optional brainevent backend override (``None`` = default).
+    Parameters
+    ----------
+    cpus : iterable of int
+        CPUs the process may run on (``os.sched_getaffinity(0)``).
+    n_total : int
+        Number of CPUs of the host.
+
+    Returns
+    -------
+    str
+        ``'all'`` when ``cpus`` covers every CPU, otherwise a range list.
+    """
+    cpus = sorted(set(int(c) for c in cpus))
+    if len(cpus) >= n_total:
+        return 'all'
+    parts = []
+    start = prev = cpus[0]
+    for c in cpus[1:] + [None]:
+        if c is not None and c == prev + 1:
+            prev = c
+            continue
+        parts.append(str(start) if start == prev else f'{start}-{prev}')
+        if c is not None:
+            start = prev = c
+    return ','.join(parts)
+
+
+def config_key(record):
+    """Identity of a configuration.
+
+    ``(device, order, precision, brainevent backend, cpu affinity)``; the backend
+    override is ``None`` for brainevent's default, the affinity ``'all'`` when
+    the process was not pinned.
     """
     cfg = record['config']
     return (cfg['device'], int(cfg['order']), int(cfg['precision']),
-            cfg.get('brainevent_backend'))
+            cfg.get('brainevent_backend'), cfg.get('cpu_affinity', 'all'))
 
 
 def validate_record(record):
@@ -276,6 +308,7 @@ def sort_records(records):
     dev_rank = {'cpu': 0, 'gpu': 1}
     return sorted(records, key=lambda r: (dev_rank.get(r['config']['device'], 9),
                                           r['config'].get('brainevent_backend') or '',
+                                          r['config'].get('cpu_affinity', 'all') != 'all',
                                           int(r['config']['order']),
                                           int(r['config']['precision'])))
 
@@ -286,13 +319,14 @@ def _fmt(x, nd=3):
 
 def markdown_table(records):
     """Render records as a GitHub markdown table (one row per configuration)."""
-    cols = ('device', 'backend', 'order', 'N', 'prec', 'status', 'build s',
-            'XLA compile s', 'compile overhead s', 's / sim-s', 'ms / step',
+    cols = ('device', 'cpus', 'backend', 'order', 'N', 'prec', 'status', 'build s',
+            'compile s', 'recompile s', 's / sim-s', 'ms / step',
             'peak mem GiB', 'E rate Hz', 'load')
     rows = ['| ' + ' | '.join(cols) + ' |', '|' + '---|' * len(cols)]
     for r in sort_records(records):
         c = r['config']
-        lead = [c['device'], c.get('brainevent_backend') or 'default', str(c['order']),
+        lead = [c['device'], c.get('cpu_affinity', 'all'),
+                c.get('brainevent_backend') or 'default', str(c['order']),
                 str(5 * int(c['order'])), f"f{c['precision']}"]
         load = _fmt(r['meta'].get('loadavg_1min'), 2)
         if r['status'] != 'ok':
@@ -302,7 +336,7 @@ def markdown_table(records):
             rest = ['ok',
                     _fmt(r['build']['build_s'], 1),
                     _fmt(r['compile']['compile_s'], 2),
-                    _fmt(r['compile']['compile_wall_overhead_s'], 2),
+                    _fmt(r['compile'].get('warmup_xla_events_s'), 2),
                     _fmt(r['steady']['s_per_sim_second']['median'], 3),
                     _fmt(r['steady']['ms_per_step']['median'], 4),
                     _fmt(None if mem is None else mem / 2 ** 30, 3),

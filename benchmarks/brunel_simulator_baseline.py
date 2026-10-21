@@ -158,6 +158,14 @@ def _gpu_info():
         return None
 
 
+def _affinity():
+    try:
+        cpus = os.sched_getaffinity(0)
+    except AttributeError:  # not Linux
+        return 'all'
+    return bu.affinity_label(cpus, os.cpu_count())
+
+
 def base_meta(args):
     """Metadata known without importing JAX."""
     return {
@@ -212,7 +220,8 @@ def run_one(args):
     n_steps = int(round(window_ms / 0.1))
     config = {'device': device, 'order': args.order, 'precision': args.precision,
               'window_ms': window_ms, 'steps_per_window': n_steps,
-              'repeats': args.repeats, 'brainevent_backend': args.brainevent_backend}
+              'repeats': args.repeats, 'brainevent_backend': args.brainevent_backend,
+              'cpu_affinity': _affinity()}
 
     mem_before_build = mem_in_use()
     t0 = time.perf_counter()
@@ -244,6 +253,13 @@ def run_one(args):
         res = sim.cont(window_ms * u.ms)
         return res._rec[e_key], res._rec[i_key]
 
+    # explicit ahead-of-time compile: brainstate trace (Python) + lowering + XLA
+    n0 = len(compile_events)
+    t = time.perf_counter()
+    run_window.compile()
+    aot_compile_s = time.perf_counter() - t
+    aot_events = compile_events[n0:]
+
     def timed_call():
         n0 = len(compile_events)
         t = time.perf_counter()
@@ -254,13 +270,13 @@ def run_one(args):
         i_rate = float(np.asarray(i_spk).sum()) / N_REC / (window_ms / 1000.0)
         return wall, comp, len(compile_events) - n0, e_rate, i_rate
 
-    # warm-up: call until one call triggers no compilation (the first call
-    # compiles; a second compile may follow when initial weak-typed state
-    # values are replaced by concrete ones)
+    # warm-up: at least two calls, then until a call triggers no compilation.
+    # The AOT compile above covers the first call; the second call recompiles
+    # once the initial weak-typed state values have been replaced.
     warm = []
-    for _ in range(args.max_warmup):
+    for k in range(max(args.max_warmup, 2)):
         warm.append(timed_call())
-        if warm[-1][2] == 0:
+        if k >= 1 and warm[-1][2] == 0:
             break
     else:
         raise RuntimeError(f'still compiling after {args.max_warmup} warm-up calls')
@@ -269,11 +285,7 @@ def run_one(args):
     timed = [timed_call() for _ in range(args.repeats)]
     recompiles = sum(t[2] for t in timed)
     walls = [t[0] for t in timed]
-    steady_ref = sorted(walls)[len(walls) // 2]
     compiling_calls = [w for w in warm if w[2] > 0]
-    compile_s = sum(w[1] for w in compiling_calls)
-    compile_wall_overhead_s = sum(w[0] for w in compiling_calls) - steady_ref * len(
-        compiling_calls)
 
     public = None
     if args.public_call:
@@ -306,11 +318,12 @@ def run_one(args):
         'network': params,
         'build': {'build_s': build_s, 'init_states_s': init_s},
         'compile': {
+            'compile_s': aot_compile_s,
+            'aot_xla_events_s': sum(d for _, d in aot_events),
             'first_call_s': warm[0][0],
-            'compile_s': compile_s,
-            'compile_wall_overhead_s': compile_wall_overhead_s,
             'n_compiling_calls': len(compiling_calls),
-            'n_compile_events': sum(w[2] for w in warm),
+            'warmup_xla_events_s': sum(w[1] for w in warm),
+            'n_warmup_compile_events': sum(w[2] for w in warm),
             'warmup_walls_s': [w[0] for w in warm],
             'recompiles_during_timing': recompiles,
             'public_cont_call': public,
@@ -324,6 +337,7 @@ def run_one(args):
         'sanity': {'e_rate_hz': bu.summarize([t[3] for t in timed]),
                    'i_rate_hz': bu.summarize([t[4] for t in timed])},
     }
+    meta['loadavg_1min_end'] = os.getloadavg()[0]
     bu.validate_record(record)
     print(bu.RESULT_PREFIX + json.dumps(record), flush=True)
     return record
@@ -368,7 +382,8 @@ def sweep(args):
                 tail = '\n'.join((err or '').strip().splitlines()[-25:])
                 label = 'timeout' if rc is None else bu.classify_failure(tail, rc)
                 cfg = {'device': _device_label_from_env(), 'order': order, 'precision': prec,
-                       'brainevent_backend': args.brainevent_backend}
+                       'brainevent_backend': args.brainevent_backend,
+                       'cpu_affinity': _affinity()}
                 rec = bu.failure_record(cfg, base_meta(args), label, returncode=rc,
                                         stderr_tail=tail)
             print(bu.RESULT_PREFIX + json.dumps(rec), flush=True)
@@ -412,7 +427,7 @@ def main(argv=None):
     sub = p.add_subparsers(dest='cmd', required=True)
 
     def common(sp):
-        sp.add_argument('--repeats', type=int, default=5,
+        sp.add_argument('--repeats', type=int, default=7,
                         help='timed windows after warm-up (median reported)')
         sp.add_argument('--window-ms', type=float, default=None,
                         help=f'simulated ms per timed window (default {DEFAULT_WINDOW_MS:g})')

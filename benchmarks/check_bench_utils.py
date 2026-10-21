@@ -13,16 +13,17 @@ import pytest
 import _bench_utils as bu
 
 
-def _ok_record(device='cpu', order=200, precision=32, backend=None, median=1.0):
+def _ok_record(device='cpu', order=200, precision=32, backend=None, median=1.0,
+               affinity='all'):
     return {
         'schema_version': bu.SCHEMA_VERSION,
         'benchmark': 'brunel_simulator_baseline',
         'status': 'ok',
         'config': {'device': device, 'order': order, 'precision': precision,
-                   'brainevent_backend': backend},
+                   'brainevent_backend': backend, 'cpu_affinity': affinity},
         'meta': {'loadavg_1min': 0.5},
         'build': {'build_s': 2.0},
-        'compile': {'compile_s': 1.0, 'compile_wall_overhead_s': 1.5},
+        'compile': {'compile_s': 1.0, 'first_call_s': 1.5},
         'steady': {'s_per_sim_second': bu.summarize([median]),
                    'ms_per_step': bu.summarize([median / 10])},
         'memory': {'peak_bytes': 2 ** 30},
@@ -104,15 +105,34 @@ def test_parse_result_lines_with_prefix_noise():
     assert bu.parse_result_lines('nothing here') == []
 
 
-def test_merge_replaces_same_key_and_keeps_backend_variants():
+def test_merge_replaces_same_key_and_keeps_variants():
     a = _ok_record(median=1.0)
     b = _ok_record(precision=64)
     a2 = _ok_record(median=9.0)
     c = _ok_record(backend='cusparse')
-    merged = bu.merge_records([a, b], [a2, c])
-    assert len(merged) == 3
+    d = _ok_record(affinity='4')
+    merged = bu.merge_records([a, b], [a2, c, d])
+    assert len(merged) == 4
     assert merged[0]['steady']['s_per_sim_second']['median'] == 9.0
     assert merged[2]['config']['brainevent_backend'] == 'cusparse'
+    assert merged[3]['config']['cpu_affinity'] == '4'
+
+
+def test_config_key_defaults_affinity_to_all():
+    rec = _ok_record()
+    del rec['config']['cpu_affinity']
+    assert bu.config_key(rec)[-1] == 'all'
+
+
+@pytest.mark.parametrize('cpus, n, label', [
+    (range(28), 28, 'all'),
+    ([4], 28, '4'),
+    (range(16), 28, '0-15'),
+    ([0, 1, 2, 5, 7, 8], 28, '0-2,5,7-8'),
+    ([3, 1, 2], 28, '1-3'),
+])
+def test_affinity_label(cpus, n, label):
+    assert bu.affinity_label(cpus, n) == label
 
 
 def test_sort_and_table():
@@ -123,8 +143,8 @@ def test_sort_and_table():
             _ok_record(device='cpu', order=200, precision=64),
             _ok_record(device='cpu', order=200)]
     keys = [bu.config_key(r) for r in bu.sort_records(recs)]
-    assert keys[:3] == [('cpu', 200, 32, None), ('cpu', 200, 64, None),
-                        ('cpu', 2500, 32, None)]
+    assert keys[:3] == [('cpu', 200, 32, None, 'all'), ('cpu', 200, 64, None, 'all'),
+                        ('cpu', 2500, 32, None, 'all')]
     table = bu.markdown_table(recs).splitlines()
     assert len(table) == 2 + len(recs)
     assert all(line.count('|') == table[0].count('|') for line in table)

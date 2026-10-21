@@ -53,18 +53,20 @@ The K0 runs use the remote host of spec §10.3 via the task wrapper:
 
 ```bash
 BENCH=1 /tmp/k0/remote.sh T0 'python benchmarks/brunel_simulator_baseline.py sweep --commit <sha>'
+BENCH=1 /tmp/k0/remote.sh T0 'taskset -c 4 python benchmarks/brunel_simulator_baseline.py sweep --commit <sha>'
 BENCH=1 GPU=1 /tmp/k0/remote.sh T0 'python benchmarks/brunel_simulator_baseline.py sweep --commit <sha>'
 BENCH=1 GPU=1 /tmp/k0/remote.sh T0 'python benchmarks/brunel_simulator_baseline.py sweep --brainevent-backend cusparse --commit <sha>'
 ```
 
 `BENCH=1` aborts when the 1-minute load average is 2 or more; every record also
-stores the load average it saw at start.
+stores the load average at its start and end (the sweep's own previous
+subprocess contributes about 1 to the start value).
 
 ### Measurement protocol
 
-Each configuration (device, order, precision, brainevent backend) runs in a fresh
-Python subprocess, so the peak-memory counters start clean and no compiled
-program is shared. Inside it:
+Each configuration (device, order, precision, brainevent backend, CPU affinity)
+runs in a fresh Python subprocess, so the peak-memory counters start clean and
+no compiled program is shared. Inside it:
 
 1. **Precision.** `jax_enable_x64` and `brainstate.environ.set(precision=...)`
    are set before the package is imported.
@@ -78,16 +80,16 @@ program is shared. Inside it:
    A bare `sim.cont` re-traces and re-compiles its scan on every call (see
    "Known issues"); that cost is recorded separately as
    `compile.public_cont_call`.
-4. **Compile time.** Warm-up calls are made until a call triggers no
-   compilation (the first call compiles; a second compile follows when initial
-   weak-typed state values are replaced). Two figures are recorded:
-   `compile.compile_s`, the sum of JAX's own compile events
-   (`/jax/core/compile/*`: jaxpr tracing, lowering to MLIR, XLA backend compile)
-   over the compiling calls; and `compile.compile_wall_overhead_s`, the wall
-   time of the compiling calls minus the same number of steady windows. The
-   second also covers brainstate's Python-side tracing. `compile.first_call_s`
-   is the raw wall time of the first call.
-5. **Steady-state step time.** `--repeats` (default 5) further windows of
+4. **Compile time.** `compile.compile_s` is the wall time of an explicit
+   ahead-of-time `run_window.compile()`: brainstate's Python trace of the
+   Simulator step, lowering and XLA compilation, with no simulation. Warm-up
+   calls follow (at least two, then until a call triggers no compilation):
+   the second call recompiles once, because the initial weak-typed state
+   values have been replaced, and the JAX compile-event time of that
+   recompile is `compile.warmup_xla_events_s` ("recompile s" in the table).
+   `compile.first_call_s` and `compile.warmup_walls_s` keep the raw wall
+   times of the warm-up calls.
+5. **Steady-state step time.** `--repeats` (default 7) further windows of
    `--window-ms` (default 1000 ms = 10 000 steps) simulated time, each timed
    with `jax.block_until_ready` on the outputs. The records report median, min,
    max and all samples of the window wall time, seconds per simulated second and
@@ -109,14 +111,26 @@ A configuration that crashes, runs out of memory or times out is stored as a
 `status: "failed"` record with its return code, a short label (`OOM`,
 `killed (SIGKILL)`, `abort (SIGABRT)`, `timeout`, `error`) and the stderr tail.
 
+### CPU affinity
+
+On the K0 host (i7-14700KF: CPUs 0-15 are the 8 hyper-threaded P-cores,
+16-27 the E-cores) the unpinned CPU run is both slow and noisy: at order 2500,
+float32, 1000 ms windows spread from 11 s to 18 s inside one process. Pinned to
+one P-core (`taskset -c 4`) the same window takes 5.1 s with under 1 % spread.
+So the CPU sweep is run twice, unpinned (`cpus = all`, what a user gets by
+default) and pinned to CPU 4 (`cpus = 4`). The affinity is part of each
+record's configuration (`config.cpu_affinity`). For a ≤ 1.1× gate, compare
+against the pinned row; only it is stable enough.
+
 ### Durations
 
-At order 2500 one simulated second takes about 18 s on the CPU of the K0 host,
+At order 2500 one simulated second takes 5 to 30 s on the CPU of the K0 host,
 and at order 200 about 4 s on either device, so 1000 ms windows last seconds to
 tens of seconds: long against timer resolution and dispatch overhead, and
-short enough that the full 12-configuration run stays under an hour. Five
-timed windows plus the warm-up calls are about 8 simulated seconds per
-configuration. The min/max spread of the samples is stored to judge stability.
+short enough that the full sweep stays around an hour. Seven timed windows
+plus at least two warm-up calls and one bare `sim.cont` call make about 10
+simulated seconds per configuration. The min/max spread and all samples are
+stored to judge stability.
 
 ### Known issues found while building the baseline
 
