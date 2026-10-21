@@ -257,6 +257,27 @@ class Plan(brainstate.nn.Module):
         The models (registered as child modules for ``states()``).
     weights : dict of str to list of brainstate.State
         Weight states per projection (one per edge group).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.connectivity import fixed_indegree
+        >>> from brainpy_state._kernel.models import LIF
+        >>> from brainpy_state._kernel.network import Network
+        >>> net = Network(dt=0.1 * u.ms)
+        >>> A = net.add(LIF, 20, name='A')
+        >>> p = net.connect(A, A, fixed_indegree(5), port='delta', weight=0.1 * u.mV,
+        ...                 delay=[0.1, 0.3] * 50 * u.ms)
+        >>> plan = net.compile()
+        >>> pp = plan.projection(p)
+        >>> pp.placement, pp.layout.kind, [g.delay for g in pp.groups]
+        ('post', 'per_edge', [1, 3])
+        >>> plan.edges(p).n_edges
+        100
+        >>> 'post-side ring' in plan.describe(print_=False)
+        True
     """
 
     def __init__(self, net: Network, precision: str) -> None:

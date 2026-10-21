@@ -247,6 +247,23 @@ class Results:
         Steps simulated.
     recordings : dict of str to Recording
         One per observer.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.models import spike_generator
+        >>> from brainpy_state._kernel.network import Network
+        >>> net = Network(dt=0.1 * u.ms)
+        >>> sg = net.add(spike_generator, 1, params=dict(spike_times=[0.3, 0.8] * u.ms))
+        >>> rec = net.observe(sg, 'spike', interval=0.5 * u.ms)
+        >>> res = net.compile().runner().simulate(1.0 * u.ms)
+        >>> res[rec]['spike'].tolist()
+        [[1.0], [1.0]]
+        >>> t, gids, counts = res[rec].spike_events()
+        >>> t.to_decimal(u.ms).tolist(), gids.tolist()
+        ([0.5, 1.0], [0, 0])
     """
 
     t_start: Any

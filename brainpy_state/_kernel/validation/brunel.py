@@ -76,6 +76,18 @@ def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = '
     info : dict
         ``params`` (see :func:`brunel_params`), populations ``E``, ``I``, ``noise``,
         observers ``rec_E``, ``rec_I`` (and ``rec_V``).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.validation.brunel import build_brunel, rates
+        >>> net, info = build_brunel(20, seed=1)
+        >>> res = net.compile().runner().simulate(200.0 * u.ms)
+        >>> e_rate, i_rate = rates(res, info)
+        >>> 10.0 < e_rate < 150.0
+        True
     """
     p = brunel_params(order)
     npar = dict(C_m=p['c_mem'] * u.pF, tau_m=p['tau_mem'] * u.ms, tau_syn_ex=p['tau_syn'] * u.ms,
