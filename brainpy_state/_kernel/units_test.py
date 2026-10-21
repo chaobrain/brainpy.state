@@ -102,3 +102,22 @@ class TestUnits:
         x = jnp.array([0.5, -1.0]) * u.nS
         y = U.from_mantissa(U.to_mantissa(x, u.psiemens), u.psiemens)
         assert u.math.allclose(x, y)
+
+
+class TestGridSteps:
+    def test_rounds_up_like_nest(self):
+        t = jnp.array([2.0, 0.25, 0.15, 0.04, 0.0, 0.3, jnp.inf])
+        np.testing.assert_array_equal(U.grid_steps(t, 0.1), [20, 3, 2, 1, 0, 3, jnp.inf])
+
+    def test_float32_snap(self):
+        # 2.0 / 0.1 in float32 is not exactly 20: it must not become 21
+        x = U.grid_steps(jnp.float32(2.0), jnp.float32(0.1))
+        assert float(x) == 20.0
+        assert float(U.grid_steps(jnp.float32(0.7), jnp.float32(0.1))) == 7.0
+
+    def test_traced(self):
+        f = jax.jit(U.grid_steps)
+        assert float(f(1.05, 0.1)) == 11.0
+
+    def test_integer_inputs(self):
+        assert float(U.grid_steps(jnp.array(3), jnp.array(1))) == 3.0

@@ -70,8 +70,11 @@ def test_count_ste_forward_and_gradient():
 class TestRefractorySpecs:
     def test_step_counts_nest(self):
         p = Record(t_ref=jnp.array([2.0, 0.04, 0.0, 0.06]))
-        # round(t_ref/dt) + 1, or 0 when it rounds to 0 (NEST aeif / iaf counters)
-        np.testing.assert_array_equal(Block('t_ref').counts(p, 0.1, 4), [21, 0, 0, 2])
+        # ceil(t_ref/dt) + 1, or 0 when t_ref == 0: NEST Time(ms).get_steps() rounds
+        # up, so any t_ref > 0 is at least one step (NEST aeif / iaf counters)
+        np.testing.assert_array_equal(Block('t_ref').counts(p, 0.1, 4), [21, 2, 0, 2])
+        p = Record(t_ref=jnp.array([0.25, 0.15, 0.1, 0.3]))
+        np.testing.assert_array_equal(Block('t_ref').counts(p, 0.1, 1), [4, 3, 2, 4])
 
     def test_substep_counts(self):
         p = Record(t_ref=jnp.array([0.05, 2.0]))
@@ -211,10 +214,15 @@ class TestInStep:
         assert float(c2[0, 0]) == 8.0
 
     def test_step_granularity_nest_semantics(self):
-        # t_ref = 0.25 < dt = 1 rounds to 0 steps -> no refractoriness (NEST aeif)
-        rule = SpikeRule(_margin, _reset, refractory=Clamp('V', 't_ref'))
+        # t_ref = 0 -> no refractoriness (NEST aeif): a spike every substep
+        rule = SpikeRule(_margin, _reset, refractory=Clamp('V', 0.0 * u.ms))
         _, counts = _drive(rule, jnp.array([8.0]), substeps=8)
         assert float(counts[0, 0]) == 8.0
+        # t_ref = 0.25 < dt = 1 rounds UP to one step (NEST): spike, rest of the
+        # step + one full step clamped
+        rule = SpikeRule(_margin, _reset, refractory=Clamp('V', 't_ref'))
+        _, counts = _drive(rule, jnp.array([8.0]), substeps=8, steps=4)
+        np.testing.assert_array_equal(counts[:, 0], [1, 0, 1, 0])
         # t_ref = 2 steps: one spike, then the rest of the step + 2 full steps clamped
         rule = SpikeRule(_margin, _reset, refractory=Clamp('V', 2.0 * u.ms))
         s, counts = _drive(rule, jnp.array([8.0]), substeps=8, steps=5)
