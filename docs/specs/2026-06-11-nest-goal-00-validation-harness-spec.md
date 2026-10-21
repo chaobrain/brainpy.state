@@ -1,6 +1,6 @@
 # Spec — 00 · Shared live-NEST validation harness
 
-> Gitignored design doc (CLAUDE.md #7). Implements `nest-goal-00-validation-harness.md`.
+> Gitignored design doc (CLAUDE.md #7). Implements `2026-06-11-nest-goal-00-validation-harness.md`.
 > Branch: `nest-goal/00-validation-harness` (worktree). Authoritative context: `CONTEXT.md`,
 > `docs/nest-status/internal/numerical-validation-gap.md`, `.../index.md` P0 #1/#4.
 

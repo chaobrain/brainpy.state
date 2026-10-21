@@ -1,6 +1,6 @@
 # /goal 04 · STDP core family — approach + implementation plan
 
-> Companion to `nest-goal-04-stdp-core.md` (the goal spec). Worktree
+> Companion to `2026-06-12-nest-goal-04-stdp-core.md` (the goal spec). Worktree
 > `nest-goal/04-stdp-core` off `origin/main` (e815dbf). Approach-first: this
 > doc is the design artifact; **no code until approved.**
 

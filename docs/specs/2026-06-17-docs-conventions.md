@@ -3,7 +3,7 @@
 This is the single source of truth every docs subagent must follow. It encodes
 the **verified public API**, canonical code patterns, hard rules, and build
 facts for the `brainpy.state` documentation rebuild. The full design is in
-`docs-rebuild-spec.md` (absolute:
+`2026-06-17-docs-rebuild-spec.md` (absolute:
 `/mnt/d/codes/projects/brainpy-state/dev/superpowers/docs-rebuild-spec.md`).
 
 ---

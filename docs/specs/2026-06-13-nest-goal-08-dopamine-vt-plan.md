@@ -1,6 +1,6 @@
 # Plan — 08 · `stdp_dopamine_synapse` + `volume_transmitter`
 
-> Companion to `nest-goal-08-dopamine-vt-spec.md`. TDD throughout
+> Companion to `2026-06-13-nest-goal-08-dopamine-vt-spec.md`. TDD throughout
 > (`superpowers:test-driven-development`): red → green → refactor, smallest viable
 > step. Each numbered stage is a commit-sized unit.
 

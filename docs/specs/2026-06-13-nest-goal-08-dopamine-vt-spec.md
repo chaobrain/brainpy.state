@@ -1,6 +1,6 @@
 # Spec — 08 · `stdp_dopamine_synapse` + `volume_transmitter` (broadcast-modulator seam)
 
-> Frozen spec. Companion: `nest-goal-08-dopamine-vt-plan.md`. Authoritative NEST
+> Frozen spec. Companion: `2026-06-13-nest-goal-08-dopamine-vt-plan.md`. Authoritative NEST
 > sources: `models/stdp_dopamine_synapse.{h,cpp}`, `models/volume_transmitter.{h,cpp}`.
 > All formulas below are quoted/derived **from the C++**, not the legacy port.
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, `git mv` (history preservation), `pytest`, `brainstate`/`brainunit`/`jax`.
 
-**Spec:** `restructure-package-spec.md` (read it first).
+**Spec:** `2026-06-16-restructure-package-spec.md` (read it first).
 
 ---
 
