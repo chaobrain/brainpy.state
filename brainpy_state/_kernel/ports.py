@@ -479,8 +479,10 @@ def check_kind_compatible(src: PortKind, dst: PortKind, where: str = '') -> None
     Allowed: event -> event / timed_event; timed_event -> timed_event / event (the
     offset is dropped, as in NEST); current -> current; conductance -> conductance;
     graded -> graded / current / conductance. Event sources reach ``current`` or
-    ``conductance`` ports only through a ``SynapseModel``, whose *output* kind is
-    then checked as ``src``.
+    ``conductance`` ports through a ``SynapseModel``, whose *output* kind is then
+    checked as ``src`` -- or directly when the port is ``filtered``: the neuron owns
+    the kinetics and applies each event as a jump of the filtered state (NEST
+    ``iaf_cond_exp``: ``g_ex += w``; added in K0 T5).
 
     Parameters
     ----------
@@ -490,6 +492,8 @@ def check_kind_compatible(src: PortKind, dst: PortKind, where: str = '') -> None
         Context for the error message (e.g. ``'E -> I.ex'``).
     """
     allowed = _COMPATIBLE.get(type(src))
+    if isinstance(src, _EVENT_KINDS) and isinstance(dst, (Current, Conductance)) and dst.filtered:
+        return
     if allowed is None or not isinstance(dst, allowed):
         ok = ', '.join(k.kind for k in (allowed or ()))
         raise PortError(

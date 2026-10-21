@@ -10,12 +10,30 @@ import pytest
 from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.models import dc_generator, poisson_generator, spike_generator
 from brainpy_state._kernel.models._testing import rollout
+from brainpy_state._kernel.models.devices import poisson_counts
 
 DT = 0.1 * u.ms
 
 
 def _ctx(i, key=None):
     return StepContext.create(i * DT, DT, i, key)
+
+
+class TestPoissonCounts:
+    @pytest.mark.parametrize('lam', [0.0, 0.002, 0.5, 3.0, 9.9, 10.0, 25.0, 400.0])
+    @pytest.mark.parametrize('typed', [False, True])
+    def test_bit_identical_to_jax_poisson(self, lam, typed):
+        key = jax.random.key(7) if typed else jax.random.PRNGKey(7)
+        lam_arr = jnp.full((257,), lam, jnp.float32)
+        ref = jax.random.poisson(key, lam_arr, (257,), dtype=int)
+        got = jax.jit(poisson_counts, static_argnums=2)(key, lam_arr, (257,))
+        np.testing.assert_array_equal(np.asarray(got), np.asarray(ref))
+
+    def test_mixed_rates_take_the_exact_branch(self):
+        key = jax.random.PRNGKey(1)
+        lam = jnp.array([0.1, 50.0, 2.0], jnp.float32)
+        np.testing.assert_array_equal(np.asarray(poisson_counts(key, lam, (3,))),
+                                      np.asarray(jax.random.poisson(key, lam, (3,), dtype=int)))
 
 
 class TestPoissonGenerator:
