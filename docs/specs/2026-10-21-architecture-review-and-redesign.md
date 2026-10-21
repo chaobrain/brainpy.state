@@ -261,9 +261,7 @@ for each step n:
 - Runner: `simulate`, `cont`, `step`; host drive for closed loops; batching by `vmap`
   over the state pytree (trials, parameter sweeps); optional min-delay epoch chunking
   (NEST/Arbor model) for long runs.
-- Learning: gradient strategy chosen per run — surrogate BPTT, checkpointed BPTT,
-  online via `braintrace` (e-prop lives there), and plasticity rules — over the same
-  graph.
+- Learning: see §8 — learners are chosen per run over the same graph.
 
 #### L4 — front-ends
 
@@ -274,7 +272,91 @@ for each step n:
   `Network`. No routing logic of its own.
 - **Interop** (later): NIR import/export; SONATA import.
 
-### 8. How today's special cases map onto the design
+### 8. Learning architecture
+
+The kernel must serve local plasticity and every major learning method over **one**
+graph. Each method puts concrete requirements on the kernel; several conflict with naive
+simulation choices (e.g. binarised spikes kill gradients), so they are design inputs,
+not add-ons.
+
+#### 8.1 Requirements per method
+
+| method | needs from the kernel | today |
+|---|---|---|
+| **Surrogate BPTT** | every op in the step differentiable; spikes carried as floats with a surrogate gradient; VJPs for every edge storage (dense, CSR, procedural, conv) and for delay buffers; learnables as `ParamState` | works in the BrainPy family; NEST holders binarise with `>= 0.5` (`simulator.py:1774`) and `BinaryArray` paths, which cut gradients; event-kernel VJP coverage unverified |
+| **Checkpointed / truncated BPTT** | runner accepts `checkpointed_for_loop` (`base`), truncation windows, detach/reset points | user-assembled |
+| **EventProp** (exact gradients at spike times via an adjoint system) | dynamics as explicit ODE (`derivatives`), threshold function, reset/jump map; spike times recorded (in-step offsets); backward adjoint integration as a `custom_vjp` over the rollout; delays as time shifts | impossible: dynamics are opaque `update()` code |
+| **Online learning via `braintrace`** (e-prop, D-RTRL, ES-D-RTRL, OSTL, SnAp, UORO, ThreeFactor, …) | braintrace ≥ 0.2: learnables are `brainstate.ParamState`, dynamics live in `HiddenState`, and every weight application goes through braintrace ETP primitives (`matmul`, `sparse_matmul`, `conv`, `element_wise`, or `register_primitive`); `braintrace.compile(model, algorithm)` traces one step to find hidden↔parameter relations | NEST projections apply weights through raw dense/brainevent ops that braintrace cannot see |
+| **Local plasticity** (STDP family, STP, Clopath, Urbanczik, Vogels–Sprekeler, …) | forward-only pure rule over edge state; pre/post traces; post-state reads | exists (NEST family only) |
+| **Three-factor / reward-modulated** | eligibility traces in edge state + a broadcast modulatory signal from a device, population or host | partial (`stdp_dopamine` + volume transmitter) |
+| **Learned plasticity (meta-learning)** | gradients through rule parameters over a rollout: rule is pure and differentiable, its parameters are `ParamState` | not supported (rule params are frozen scalars) |
+| **Gradient-free** (evolution strategies; FORCE / RLS; ridge readouts) | `vmap` over parameter populations; observer outputs available to closed-form or recursive readout fits | ES exists as one example; no readout trainers |
+| **Structural plasticity** | fixed-capacity edge storage with an active mask (static shapes under JIT); a connectivity-update phase | absent |
+
+#### 8.2 Consequences for the kernel
+
+1. **State taxonomy, declared by every contract.** `ParamState` = trainable (weights,
+   neuron/synapse/rule parameters); `HiddenState` = carried dynamics (what braintrace
+   and BPTT differentiate through); `EdgeState` = per-edge values updated by local rules
+   (plastic weights, eligibility traces); `ShortTermState` = buffers, counters, RNG keys.
+   A weight declares whether it is gradient-trained, locally plastic, or both (hybrid).
+2. **Differentiable event payload.** An `event` port carries `multiplicity × spike`,
+   where `spike` holds the surrogate gradient: exact integer counts forward, surrogate
+   backward. No binarisation anywhere in the kernel; an optional in-step time offset
+   serves EventProp and precise-timing models alike.
+3. **One synaptic-op layer.** Every edge storage implements forward, a VJP for weights
+   and inputs, and a braintrace ETP-primitive registration. Projections never call raw
+   matmuls, so every learner sees every weight.
+4. **Declared dynamics enable derived learners.** From `derivatives` + `spiking` (D1) the
+   kernel builds the surrogate step (BPTT), the adjoint system (EventProp), and exposes
+   the step to braintrace's graph analysis. Models that only hand-write `step` declare
+   which learners they support.
+5. **`Learner` interface at L2 with capability negotiation.** `BPTT(loss, optimizer,
+   checkpoint=…, truncation=…)`, `EventProp(…)`, `Online(algorithm=braintrace.EProp,
+   learning_signal=…)`, `ES(…)`, `Readout('ridge' | 'force')`; local plasticity runs
+   inside the deliver phase. A learner checks model capabilities (`differentiable`,
+   `adjoint`, `etrace_compatible`, `jit_safe`) and fails with a clear message rather
+   than silently mis-training.
+6. **A learning phase in the schedule.** After *observe*, an optional *learn* phase runs
+   on-demand updates at chosen intervals: optimizer steps, weight normalisation,
+   learning-signal broadcast, trial resets.
+7. **Ownership.** braintrace owns online algorithms; brainpy.state owns models and
+   guarantees they are etrace-compatible. braintrace currently also ships `nn.LIF`,
+   `ALIF`, `Expon`, `STP`, … — which library is canonical for basic models is an
+   ecosystem decision (L3 below).
+
+#### 8.3 Learning gates per milestone
+
+- **K0:** surrogate-BPTT gradients match finite differences on a small `LIF` and
+  `iaf_psc_alpha` network through dense *and* sparse storage *and* a delay;
+  `braintrace.compile(net, EProp)` succeeds on a K0 network and an update lowers the
+  loss; `stdp_synapse` NEST parity.
+- **K1:** EventProp prototype on LIF (spike-time-loss gradient vs finite differences);
+  ThreeFactor through braintrace with a modulatory device; learned-STDP-parameter
+  meta-gradient; ES via `vmap`; ridge readout.
+- **K2:** every ported model declares its learner capabilities; a capability matrix is
+  generated into the docs.
+
+#### 8.4 Kernel needs from brainevent (verify, then propose upstream)
+
+New CUDA/Pallas kernels are **not** built in this package: where the kernel needs one,
+it is proposed and implemented in `brainevent`, with a JAX reference path here until it
+lands. brainevent 0.2.1 already provides event matmuls over `BinaryArray`
+(CSR/COO/CSC/dense/fixed-number/procedural `jitc*`), bit-packed and compact event
+formats, and fixed-shape plastic updates (`update_{csr,csc,coo,dense}_on_binary_{pre,post}`).
+Each item below is first checked against brainevent; only real gaps become proposals.
+
+| need | why | likely status |
+|---|---|---|
+| Event matmul over **count/weighted events** (skip zeros, carry multiplicity), with VJPs w.r.t. weights and inputs for every storage | differentiable event payload (§8.2-2) without binarisation | verify — current fast paths are binary |
+| Weight gradients for **procedural** (`jitc*`) connectivity parameters | BPTT / meta-learning on never-materialised connectivity | verify |
+| **Generic per-edge rule kernel** over CSR/CSC: apply a pure rule to edges touched by pre or post events, with arbitrary per-edge state (aux dict, eligibility traces) | today's built-in updates cover fixed STDP shapes only; rules like triplet, Clopath, three-factor need custom per-edge state | likely gap → propose (fused templates for common rule shapes; JAX fallback for the rest) |
+| **Per-edge delay delivery** fused with the matmul (gather from a source ring buffer by edge delay) | heterogeneous delays without one matmul per delay value | verify |
+| **Fixed-capacity masked CSR** (active-edge mask, in-place insert/remove) | structural plasticity under static JIT shapes | likely gap → propose |
+| **braintrace ETP-primitive registration** of brainevent ops | online learning must see every weight (§8.2-3) | coordinate across brainevent / braintrace |
+| Event-driven **transpose at spike times** for the EventProp adjoint | exact gradients without dense backward passes | CSC paths exist; verify fit |
+
+### 9. How today's special cases map onto the design
 
 | today | becomes |
 |---|---|
@@ -290,7 +372,7 @@ for each step n:
 | `align_pre/post_projection`, `align_*_ltp` stubs | removed |
 | host-only NumPy models | `jit_safe=False` capability → clear compile error; JAX ports tracked as model work |
 
-### 9. Decisions
+### 10. Decisions
 
 | # | decision | outcome |
 |---|---|---|
@@ -300,12 +382,16 @@ for each step n:
 | D4 | Delivery semantics | ✅ **NEST-faithful**: delay ≥ 1 step, no hidden lag (BrainPy-style timing shifts by one step vs 0.1) |
 | D5 | Rewrite strategy | ✅ **new kernel alongside**, port families, delete old kernel in one 0.2/1.0-alpha break |
 | D6 | `spec` branch | proposed: archive as tag, borrow ideas |
+| L1 | Online-learning algorithms | proposed: live in braintrace; brainpy.state guarantees etrace compatibility |
+| L2 | EventProp | proposed: K1 prototype for models with declared ODEs |
+| L3 | Canonical home of basic models (LIF/ALIF/Expon/STP exist in both braintrace.nn and brainpy.state) | open |
+| L4 | Hybrid weights (local plasticity + gradient on the same weight) | proposed: supported, declared per weight |
 
-### 10. Migration plan
+### 11. Migration plan
 
 | milestone | content | exit gate |
 |---|---|---|
-| **K0 — kernel spike** | L1 contracts (ports, `NeuronModel`, `SynapseModel`, `PlasticityRule`, `EdgeSet`), `Network` graph, step schedule, source-owned delay buffers, `Runner`. Three neurons (`iaf_psc_alpha`, LIF, `iaf_cond_exp`), Expon synapse, `static` + `stdp_synapse`. | Brunel (NEST parity, existing harness) **and** COBA E/I + surrogate-gradient test pass; step time and memory ≤ today's Simulator at `order=2500`. **Go/no-go on the design.** |
+| **K0 — kernel spike** | L1 contracts (ports, `NeuronModel`, `SynapseModel`, `PlasticityRule`, `EdgeSet`), `Network` graph, step schedule, source-owned delay buffers, `Runner`. Three neurons (`iaf_psc_alpha`, LIF, `iaf_cond_exp`), Expon synapse, `static` + `stdp_synapse`. | Brunel (NEST parity, existing harness) **and** COBA E/I pass; learning gates of §8.3 (BPTT vs finite differences, braintrace EProp, STDP parity) pass; step time and memory ≤ today's Simulator at `order=2500`. **Go/no-go on the design.** |
 | K1 — substrate complete | all port kinds, graded emission, gap (lag + WFR), STP, all storage strategies incl. procedural, observers, `cont`/host drive, batching. | every existing `_nest_network` behaviour test re-expressed and green |
 | K2 — model library | port neuron/synapse/plasticity/device families onto the contracts (mostly mechanical; numerics reused); goal-01 repro tests are acceptance tests; host-only models either ported to JAX or flagged. | all 131 NEST validation tests green on the new kernel |
 | K3 — front-ends + interop | NEST `Simulator` layer, `NodeView`/`SynapseCollection`, spatial; NIR export. | examples + docs migrated |
@@ -319,7 +405,7 @@ discretisation, σ = stationary std), `LeakyRateReadout`, `LogNormal` (`unit=`),
 receptor-type validation and the namespace env var are fixed **while porting** (K2),
 with the verified repro tests as acceptance criteria.
 
-### 11. Risks
+### 12. Risks
 
 - **Scope.** 66 NEST neuron modules + the BrainPy family must be ported. Mitigation: K0
   go/no-go gate; numerics reused verbatim; mechanical ports per family.
@@ -328,6 +414,8 @@ with the verified repro tests as acceptance criteria.
 - **Parity drift** from the delay-semantics change (D4). Mitigation: NEST is already
   delay ≥ 1 step; the harness's `align_steps` offsets shrink, and every change is
   visible in parity tests.
+- **Upstream kernel gaps** (brainevent, braintrace). Mitigation: JAX reference paths in
+  this package; kernels proposed and landed upstream (§8.4); gates measure both.
 - **brainstate churn** (0.6.0 removed the input API mid-cycle). Mitigation: the kernel
   owns ports/inputs; depend only on `State`, `Module`, transforms.
 
