@@ -13,6 +13,8 @@ runs, and no file here is named `test_*.py` / `*_test.py`).
 
 ## Brunel `Simulator` baseline (T0)
 
+Results of the K0 baseline run: [`results/README.md`](results/README.md).
+
 ### Model
 
 Brunel (2000) model A with alpha-shaped PSCs, built with the existing
