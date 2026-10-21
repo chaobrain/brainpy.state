@@ -1,0 +1,295 @@
+# Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
+import warnings
+
+import brainstate
+import braintools
+import braintrace
+import brainunit as u
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+from jax.test_util import check_grads
+
+from brainpy_state._kernel import rng
+from brainpy_state._kernel.connectivity import rules as R
+from brainpy_state._kernel.connectivity import storage as S
+from brainpy_state._kernel.connectivity.edgeset import EdgeSet
+from brainpy_state._kernel.ports import Event
+
+STORAGES = [S.Dense, S.CSR]
+
+
+def edges_with_multapses():
+    # 5 pre x 4 post; pre 1 -> post 2 three times, pre 0 -> post 0 twice; post 3 has no input
+    pre = [0, 0, 1, 1, 1, 2, 4, 3]
+    post = [0, 0, 2, 2, 2, 1, 1, 0]
+    return EdgeSet.create(pre, post, np.arange(5), np.arange(10, 14))
+
+
+def reference(x, w_edges, es):
+    """Exact per-target sum over edges, as a dense jnp computation."""
+    pre = jnp.asarray(es.pre_index)
+    post = jnp.asarray(es.post_index)
+    contrib = x[..., pre] * w_edges
+    return jnp.zeros(x.shape[:-1] + (es.n_post,), contrib.dtype).at[..., post].add(contrib)
+
+
+W_E = jnp.array([0.5, -1.0, 2.0, 0.25, 0.0, 1.5, -0.75, 3.0])
+COUNTS = jnp.array([2., 1., 3., 0., 1.])  # counts in {0, 1, 2, 3}
+GOUT = jnp.array([1.0, -2.0, 0.5, 4.0])
+
+
+class TestPolicy:
+    def test_payload_path(self):
+        assert S.payload_path(Event()) == 'binary'
+        assert S.payload_path(Event(max_multiplicity=2)) == 'float'
+        assert S.payload_path(Event(max_multiplicity=None)) == 'float'
+        assert S.payload_path(1) == 'binary'
+        assert S.payload_path(None) == 'float'
+        assert S.payload_path(np.int64(4)) == 'float'
+        for bad in (0, True, 1.0, 'one'):
+            with pytest.raises(TypeError):
+                S.payload_path(bad)
+
+    def test_csr_index_dtypes(self):
+        assert S.csr_index_dtypes(10, 10, 100) == (np.int32, np.int32)
+        assert S.csr_index_dtypes(10, 10, 2 ** 31 - 1) == (np.int32, np.int32)
+        with jax.enable_x64(False):
+            with pytest.raises(RuntimeError, match='x64'):
+                S.csr_index_dtypes(10, 10, 2 ** 31)
+        with jax.enable_x64(True):
+            assert S.csr_index_dtypes(10, 10, 2 ** 31) == (np.int32, np.int64)
+            assert S.csr_index_dtypes(2 ** 31, 10, 5) == (np.int64, np.int32)
+
+    def test_csr_structure_dtypes(self):
+        s = S.CSR(edges_with_multapses())
+        assert s.indices.dtype == jnp.int32 and s.indptr.dtype == jnp.int32
+        assert list(np.asarray(s.indptr)) == [0, 2, 5, 6, 7, 8]
+
+    def test_make_storage(self):
+        es = edges_with_multapses()
+        assert isinstance(S.make_storage(es, 'dense'), S.Dense)
+        assert isinstance(S.make_storage(es, 'csr'), S.CSR)
+        assert isinstance(S.make_storage(es), S.Dense)  # density 8/20
+        assert isinstance(S.make_storage(es, dense_threshold=0.5), S.CSR)
+        assert isinstance(S.make_storage(es, dense_max_elems=10), S.CSR)
+        assert isinstance(S.make_storage(EdgeSet.create([], [], [], [0])), S.CSR)
+        with pytest.raises(ValueError, match='kind'):
+            S.make_storage(es, 'jitc')
+        with pytest.raises(TypeError, match='EdgeSet'):
+            S.Dense('edges')
+
+    def test_nbytes_and_repr(self):
+        es = edges_with_multapses()
+        assert S.Dense(es).nbytes() == 20 * 4 + 20
+        assert S.Dense(R.all_to_all().build(np.arange(3), np.arange(3))).nbytes(8) == 9 * 8
+        assert S.CSR(es).nbytes() == 8 * (4 + 4) + 6 * 4
+        assert 'n_edges=8' in repr(S.CSR(es))
+
+
+class TestWeightLayout:
+    def test_csr_round_trip_exact(self):
+        es = edges_with_multapses()
+        s = S.CSR(es)
+        w = s.weight_from_edges(W_E * u.pA)
+        assert w.unit == u.pA and w.shape == (8,)
+        assert u.math.allclose(s.weight_to_edges(w), W_E * u.pA)
+
+    def test_dense_sums_multapses(self):
+        es = edges_with_multapses()
+        s = S.Dense(es)
+        W = s.weight_from_edges(W_E)
+        assert W.shape == (5, 4)
+        assert float(W[0, 0]) == pytest.approx(-0.5) and float(W[1, 2]) == pytest.approx(2.25)
+        back = s.weight_to_edges(W)
+        # multapse groups get an equal split, which preserves their sum
+        assert float(back[0]) == pytest.approx(-0.25) and float(back[2]) == pytest.approx(0.75)
+        es1 = R.all_to_all().build(np.arange(3), np.arange(4)).with_weight(jnp.arange(12.))
+        s1 = S.Dense(es1)
+        assert jnp.allclose(s1.weight_to_edges(s1.weight_from_edges(es1.weight)), es1.weight)
+
+    def test_shape_errors(self):
+        es = edges_with_multapses()
+        for cls in STORAGES:
+            with pytest.raises(ValueError, match='per-edge'):
+                cls(es).weight_from_edges(jnp.ones(3))
+        with pytest.raises(ValueError, match='dense weights'):
+            S.Dense(es).weight_to_edges(jnp.ones((4, 4)))
+        with pytest.raises(ValueError, match='CSR weights'):
+            S.CSR(es).weight_to_edges(jnp.ones(3))
+        with pytest.raises(ValueError, match='CSR weights'):
+            S.CSR(es).forward(COUNTS, jnp.ones(3))
+
+
+@pytest.mark.parametrize('cls', STORAGES)
+class TestForward:
+    def test_float_path_exact_counts(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        y = s.forward(COUNTS, s.weight_from_edges(W_E * u.pA))
+        assert y.unit == u.pA
+        assert jnp.allclose(y.mantissa, reference(COUNTS, W_E, es))
+
+    def test_binary_path_matches_float_for_binary(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        w = s.weight_from_edges(W_E)
+        x = (COUNTS > 0).astype(jnp.float32)
+        assert jnp.allclose(s.forward(x, w, 'binary'), reference(x, W_E, es))
+        assert jnp.allclose(s.forward(x > 0, w, 'binary'), reference(x, W_E, es))
+
+    def test_batched_and_vmap(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        w = s.weight_from_edges(W_E)
+        xb = jnp.stack([COUNTS, COUNTS[::-1], jnp.zeros(5), jnp.full(5, 3.)])
+        ref = reference(xb, W_E, es)
+        assert jnp.allclose(s.forward(xb, w), ref)
+        assert jnp.allclose(jax.vmap(lambda x: s.forward(x, w))(xb), ref)
+        xbin = (xb > 1).astype(jnp.float32)
+        rb = reference(xbin, W_E, es)
+        assert jnp.allclose(jax.vmap(lambda x: s.forward(x, w, 'binary'))(xbin), rb)
+        assert jnp.allclose(s.forward(xbin, w, 'binary'), rb)
+
+    def test_jit(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        w = s.weight_from_edges(W_E)
+        f = jax.jit(lambda x, w: s.forward(x, w))
+        assert jnp.allclose(f(COUNTS, w), reference(COUNTS, W_E, es))
+
+    def test_vjp_float_path(self, cls):
+        # gradients w.r.t. per-edge weights (through the native layout) and payload
+        es = edges_with_multapses()
+        s = cls(es)
+        loss = lambda x, we: jnp.sum(s.forward(x, s.weight_from_edges(we)) * GOUT)
+        loss_ref = lambda x, we: jnp.sum(reference(x, we, es) * GOUT)
+        gx, gw = jax.grad(loss, (0, 1))(COUNTS, W_E)
+        rx, rw = jax.grad(loss_ref, (0, 1))(COUNTS, W_E)
+        assert jnp.allclose(gx, rx) and jnp.allclose(gw, rw)
+        # d/dw_e = count[pre_e] * g[post_e]: counts > 1 must scale the gradient
+        assert float(gw[2]) == pytest.approx(float(COUNTS[1] * GOUT[2]))
+
+    def test_vjp_native_weights(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        w = s.weight_from_edges(W_E)
+        g = jax.grad(lambda w: jnp.sum(s.forward(COUNTS, w) * GOUT))(w)
+        gref = jax.grad(lambda we: jnp.sum(reference(COUNTS, we, es) * GOUT))(W_E)
+        if cls is S.CSR:
+            assert jnp.allclose(s.weight_to_edges(g), gref)
+        else:
+            # dense: gradient at every edge entry, exactly zero at pairs without an edge
+            assert jnp.allclose(g[np.asarray(es.pre_index), np.asarray(es.post_index)], gref)
+            mask = np.zeros((5, 4), bool)
+            mask[np.asarray(es.pre_index), np.asarray(es.post_index)] = True
+            assert np.all(np.asarray(g)[~mask] == 0)
+
+    def test_vjp_binary_path(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        x = jnp.array([1., 0., 1., 1., 0.])
+        loss = lambda x, we: jnp.sum(s.forward(x, s.weight_from_edges(we), 'binary') * GOUT)
+        loss_ref = lambda x, we: jnp.sum(reference(x, we, es) * GOUT)
+        gx, gw = jax.grad(loss, (0, 1))(x, W_E)
+        rx, rw = jax.grad(loss_ref, (0, 1))(x, W_E)
+        assert jnp.allclose(gx, rx) and jnp.allclose(gw, rw)
+
+    def test_vjp_under_vmap(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        xb = jnp.stack([COUNTS, jnp.array([3., 3., 0., 2., 1.])])
+        loss = lambda we: jnp.sum(jax.vmap(lambda x: s.forward(x, s.weight_from_edges(we)))(xb) * GOUT)
+        loss_ref = lambda we: jnp.sum(reference(xb, we, es) * GOUT)
+        assert jnp.allclose(jax.grad(loss)(W_E), jax.grad(loss_ref)(W_E))
+
+    def test_float64_check_grads(self, cls):
+        with jax.enable_x64(True):
+            es = edges_with_multapses()
+            s = cls(es)
+            we = jnp.asarray(np.asarray(W_E), jnp.float64)
+            x = jnp.asarray(np.asarray(COUNTS), jnp.float64)
+            f = lambda x, we: s.forward(x, s.weight_from_edges(we))
+            check_grads(f, (x, we), order=1, modes=['rev'])
+            assert f(x, we).dtype == jnp.float64
+
+    def test_empty(self, cls):
+        es = EdgeSet.create([], [], np.arange(3), np.arange(2))
+        s = cls(es)
+        w = s.weight_from_edges(jnp.zeros((0,)))
+        assert jnp.array_equal(s.forward(jnp.ones(3), w), jnp.zeros(2))
+        assert s.forward(jnp.ones((4, 3)), w).shape == (4, 2)
+        g = jax.grad(lambda x: jnp.sum(s.forward(x, w)))(jnp.ones(3))
+        assert jnp.array_equal(g, jnp.zeros(3))
+
+    def test_errors(self, cls):
+        s = cls(edges_with_multapses())
+        w = s.weight_from_edges(W_E)
+        with pytest.raises(ValueError, match='path'):
+            s.forward(COUNTS, w, 'event')
+        with pytest.raises(ValueError, match='payload'):
+            s.forward(jnp.ones(4), w)
+        with pytest.raises(ValueError, match='payload'):
+            s.forward(jnp.ones((2, 2, 5)), w)
+        with pytest.raises(TypeError, match='dimensionless'):
+            s.forward(COUNTS * u.mV, w)
+        assert jnp.allclose(s.forward(COUNTS * u.UNITLESS, w), s.forward(COUNTS, w))
+
+    def test_etrace_forward_matches(self, cls):
+        es = edges_with_multapses()
+        s = cls(es)
+        w = s.weight_from_edges(W_E * u.pA)
+        y = s.forward_etrace(COUNTS, w)
+        assert u.math.allclose(y, s.forward(COUNTS, w))
+        g = jax.grad(lambda we: jnp.sum(s.forward_etrace(COUNTS, s.weight_from_edges(we)) * GOUT))(W_E)
+        gref = jax.grad(lambda we: jnp.sum(reference(COUNTS, we, es) * GOUT))(W_E)
+        assert jnp.allclose(g, gref)
+
+
+# ---------------------------------------------------------------------------
+# braintrace: online learning sees the projection weight (output read from a HiddenState)
+# ---------------------------------------------------------------------------
+
+class _TinyNet(brainstate.nn.Module):
+    """Input -> projection (storage) -> leaky units; output read from the HiddenState."""
+
+    def __init__(self, storage, w0):
+        super().__init__()
+        self.storage = storage
+        self.w = brainstate.ParamState(w0)
+        self.f = braintools.surrogate.Sigmoid()
+
+    def init_state(self, *args, **kwargs):
+        self.V = brainstate.HiddenState(jnp.zeros((self.storage.n_post,)))
+
+    def update(self, x):
+        V = 0.9 * self.V.value + self.storage.forward_etrace(x, self.w.value)
+        self.V.value = V - jax.lax.stop_gradient(self.f(V - 1.0))
+        return self.f(self.V.value - 0.5)
+
+
+@pytest.mark.parametrize('cls', STORAGES)
+@pytest.mark.parametrize('algorithm', ['d_rtrl', 'eprop'])
+def test_braintrace_nonzero_weight_gradients(cls, algorithm):
+    n_in, n_out = 6, 5
+    es = R.fixed_indegree(3).build(np.arange(n_in), np.arange(100, 100 + n_out), rng.object_key(0, 1))
+    s = cls(es)
+    w0 = s.weight_from_edges(jnp.linspace(0.2, 0.8, es.n_edges))
+    net = _TinyNet(s, w0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        learner = braintrace.compile(net, algorithm, jnp.ones((n_in,)))
+        xs = (jax.random.uniform(jax.random.PRNGKey(0), (20, n_in)) < 0.5).astype(jnp.float32) * 2.0
+        ys = jnp.full((20, n_out), 0.3)
+        grads = learner.etrace_grad(xs, ys, step_fn=lambda x, y: jnp.mean((learner(x) - y) ** 2))
+    leaves = jax.tree.leaves(grads)
+    assert len(leaves) == 1
+    g = np.asarray(leaves[0])
+    assert g.shape == np.shape(w0)
+    if cls is S.CSR:
+        assert np.all(g != 0)  # every edge receives a gradient
+    else:
+        mask = np.zeros((n_in, n_out), bool)
+        mask[np.asarray(es.pre_index), np.asarray(es.post_index)] = True
+        assert np.all(g[mask] != 0) and np.all(g[~mask] == 0)
