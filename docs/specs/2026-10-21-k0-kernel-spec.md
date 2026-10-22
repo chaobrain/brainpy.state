@@ -24,7 +24,7 @@ Probed in `/tmp/k0_probe/` and by code reading of the current tree.
 | No per-edge-delay primitive in brainevent | K0 implements delay buffers in JAX (§4.4) |
 | brainevent indices int32 by default; `indptr_dtype=jnp.int64` keeps indptr int64 under x64 | index-dtype policy (§4.2) |
 | `jax.grad` through `while_loop` raises | fixed-substep integrators only (I1) |
-| braintrace 0.2.6: online learning works with `ParamState` weights applied via `braintrace.matmul` / `sparse_matmul(x, w, sparse_mat=CSR)`; units supported; **the step output must be read from a `HiddenState` or all gradients are silently 0**; writing a `ParamState` inside the traced update raises; weights used inside a `fori_loop` lose their eligibility trace | §4.7 braintrace compatibility rules |
+| braintrace 0.2.6: online learning works with `ParamState` weights applied via `braintrace.matmul` / `sparse_matmul(x, w, sparse_mat=CSR)`; units supported; **the step output must be read from a `HiddenState` or all gradients are silently 0**; writing a `ParamState` inside the traced update raises. *Correction (2026-10-22):* the original claim that weights used inside a `fori_loop` lose their eligibility trace was wrong (the probe never used the weight inside the loop); weights inside a static `fori_loop`/`scan` give the same gradients as the unrolled loop and BPTT; only weights inside a `while` body are unsupported ([braintrace#186](https://github.com/chaobrain/braintrace/issues/186)) | §4.7 braintrace compatibility rules |
 | `iaf_psc_exp_ps`, `poisson_generator_ps` and all propagator coefficients are host NumPy (float64 only) | the precise pair is a **new JAX implementation**; propagators get a float32-safe JAX port |
 | No benchmark harness exists; "~1.9 GB at order=2500" is text only | K0 first builds the baseline measurement for today's Simulator |
 | No test differentiates through an LIF network | gradient checks are new |
@@ -311,19 +311,24 @@ streams; batched trials with `common` vs `independent` RNG.
 
 ---
 
-## 9. Upstream items (proposals, not built here)
+## 9. Upstream items
 
-| repo | item | type |
-|---|---|---|
-| brainevent | weight gradient under `BinaryArray` uses raw `x` (CSR, dense, JITC) | bug report with repro |
-| brainevent | event-driven matmul for count-valued events with VJPs | feature proposal |
-| brainevent | differentiable `update_csr_on_binary_*`, or a generic per-edge rule kernel with arbitrary edge state | feature proposal |
-| brainevent | per-edge-delay delivery fused with the matmul | feature proposal |
-| braintrace | `fori_loop` bodies containing weights lose eligibility traces; zero gradients without warning when the output is not read from a `HiddenState` | issue (diagnostics) |
-| braintrace | deprecate `braintrace.nn` neuron/synapse duplicates in favour of brainpy.state (decision L3) | proposal |
-| braintrace | 0.2.6: `KeyError` in `braintrace.compile` when a `HiddenState` depends only on inputs (no hidden-to-hidden path), found in T2 | bug report with repro |
-| brainevent | 0.2.1: GPU float64 abort in `binary_csrmv_wat_hybrid_hetero_f64_float` (default backend; `cusparse` works), found in T0 | bug report with repro |
-| brainevent | `csr_to_csc_index` casts int64 indices to int32 with a `FutureWarning`, found in T6 | issue |
+Filed 2026-10-22 against the latest releases (brainevent 0.2.1, braintrace 0.2.6), each
+with a minimal repro re-run on CPU. Status as of filing.
+
+| repo | item | type | issue | status |
+|---|---|---|---|---|
+| brainevent | reverse-mode weight gradient under `BinaryArray` uses raw input values instead of the binarised events (CSR, dense, JITC; also negative inputs; forward-mode is correct) | bug | [brainevent#198](https://github.com/chaobrain/brainevent/issues/198) | open, not fixed on main; worked around in `_kernel/connectivity/storage.py` (binary path only for `max_multiplicity == 1`) |
+| brainevent | GPU float64 abort in `binary_csrmv_wat_hybrid_hetero_f64_float` (default backend; `cusparse` works), found in T0 | bug | [brainevent#199](https://github.com/chaobrain/brainevent/issues/199) | open; main e18f81c likely fixes the CSR kernels (unverified, no GPU); other kernels may still pick the float32 kernel |
+| brainevent | `csr_to_csc_index` int64 → int32 `FutureWarning` under x64, found in T6 | bug | [brainevent#200](https://github.com/chaobrain/brainevent/issues/200) | fixed on main (e18f81c), awaiting release |
+| brainevent | event-driven matmul for count-valued events with exact VJPs | enhancement | [brainevent#201](https://github.com/chaobrain/brainevent/issues/201) | open |
+| brainevent | differentiable `update_csr_on_binary_*`, or a generic per-edge plasticity kernel with arbitrary edge state | enhancement | [brainevent#202](https://github.com/chaobrain/brainevent/issues/202) | open |
+| brainevent | per-edge-delay delivery fused with the event-driven matmul | enhancement | [brainevent#203](https://github.com/chaobrain/brainevent/issues/203) | open |
+| braintrace | `KeyError` in `HiddenGroup.transition` when a `HiddenState` depends only on inputs (no hidden-to-hidden path), found in T2 | bug | [braintrace#184](https://github.com/chaobrain/braintrace/issues/184) | open; worked around with `new + 0 * old` in `_kernel/model.py` |
+| braintrace | silent all-zero online gradients when the output reads an ETP weight through a non-hidden intermediate | bug | [braintrace#185](https://github.com/chaobrain/braintrace/issues/185) | open; `_kernel/learn/etrace.py` checker requires outputs read from `HiddenState` |
+| braintrace | `etrace_grad` fails for a weight-free `while_loop` whose result reaches a `HiddenState` through further ops | bug | [braintrace#186](https://github.com/chaobrain/braintrace/issues/186) | open; K0 uses no `while_loop` in neuron steps |
+| braintrace | document the "no `ParamState` writes inside the online step" rule; make `NotSupportedError` actionable | documentation | [braintrace#187](https://github.com/chaobrain/braintrace/issues/187) | open (behaviour is intended) |
+| braintrace | deprecate `braintrace.nn` neuron/synapse duplicates in favour of brainpy.state (decision L3) | proposal | — | already done upstream: `braintrace.nn` forwards IF/LIF/ALIF/Expon/Alpha/DualExpon/STP/STD to `brainpy.state` with a `DeprecationWarning`; only `LeakyRateReadout` remains duplicated |
 
 **Existing-code bugs found during K0** (outside `_kernel`; not fixed in K0, to be
 filed or fixed separately):
