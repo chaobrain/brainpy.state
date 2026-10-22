@@ -134,7 +134,11 @@ class TestHHNeuron(unittest.TestCase):
         the number of threshold crossings (action potentials), not the number of
         steps spent above threshold."""
         with brainstate.environ.context(dt=0.01 * u.ms):
-            neuron = HH(1)
+            # Deterministic start at rest: the default V_initializer draws V0 from
+            # Uniform(-70, -60) mV via the unseeded global RNG, and for V0 close to
+            # -60 mV the first action potential under 10 uA arrives after the 25 ms
+            # window, so the test passed or failed depending on test ordering.
+            neuron = HH(1, V_initializer=braintools.init.Constant(-65. * u.mV))
             neuron.init_state()
 
             def step(i):

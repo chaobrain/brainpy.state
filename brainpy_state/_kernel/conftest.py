@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pathlib
 
+import jax
 import pytest
 
 from brainpy_state._kernel.validation.gates import gates_for
@@ -29,3 +30,30 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.k0_gate)
             for g in gates:
                 item.add_marker(getattr(pytest.mark, g.marker))
+
+
+# Kernel tests pin JAX's default ``jax_enable_x64=False`` behaviour (float32 dtypes,
+# no-retrace checks, module-level float32 constants). Many legacy test modules (e.g.
+# ``_nest_neuron/*_test.py``) call ``jax.config.update('jax_enable_x64', True)`` at
+# import time; under ``pytest-xdist`` every worker imports every test module during
+# collection, so that switch leaks into the whole process and the kernel tests would
+# run in x64 mode depending on what else was collected. The two hooks below restore
+# the default for kernel test modules, both while they are imported (module-level
+# constants) and while they run. Tests that need x64 still opt in locally with
+# ``jax.enable_x64(True)``, which nests inside this.
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    if isinstance(collector, pytest.Module):
+        with jax.enable_x64(False):
+            yield
+    else:
+        yield
+
+
+@pytest.fixture(autouse=True, scope='module')
+def _kernel_default_x64():
+    """Run every kernel test module under JAX's default ``jax_enable_x64=False``."""
+    with jax.enable_x64(False):
+        yield
