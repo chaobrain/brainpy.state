@@ -327,6 +327,36 @@ suite and `-m k0_gate` remotely; mypy clean.
 **Gate.** Re-measure K1a-G3 with the same protocol and metric (raw
 `peak_bytes_in_use`, ≤ 1.1 × T0); the metric is not changed.
 
+### K1a-10 — float64 binary event payload (added 2026-10-23, from the K1a-7 G3 re-measure)
+
+**Problem.** On GPU, brainevent 0.2.1 computes `BinaryArray(x) @ W` wrongly when `x`
+is a float64 vector and `W` a dense matrix, and without an error
+([brainevent#204](https://github.com/chaobrain/brainevent/issues/204)). bool and
+float32 `x` give correct results, and so does the CPU. In float64 the kernel's binary
+payload path passed float64 spikes, so GPU float64 runs with `Dense` storage were
+wrong. For example, Brunel order 200 fired at 59.7 Hz, against 57.1 Hz with CSR and
+with the old `Simulator`. The same float64 events make the default-backend CSR kernel
+abort ([brainevent#199](https://github.com/chaobrain/brainevent/issues/199)).
+
+**Contract.** On the binary payload path only, float64 event vectors are cast to
+float32 before they reach brainevent. The values are 0/1, so the cast is exact. The
+output keeps `W`'s dtype. `Dense` wraps the call in a `jax.custom_jvp` whose tangent
+in the events is `dx @ W` in `W`'s dtype, so the event gradient stays in float64.
+`CSR` uses the plain cast: its event VJP does not depend on the dtype of `x`. The
+float payload path, float32 runs and the CPU are unchanged. Dense float64 on the CPU
+is bit-identical to before.
+
+**Tests.** `storage_test.py::TestFloat64BinaryPayload` covers:
+
+- binary vs float path for Dense and CSR, 1-D and batched, float64 output dtype;
+- Dense bit-identical to the uncast call on the CPU;
+- value and weight/event gradients against the float path in float64 (1e-12);
+- `jacfwd` vs `jacrev`.
+
+The class runs on the CPU in the suite and on GPU 1 remotely. At network level on
+GPU 1, Brunel ε = 0.1 at orders 200 and 800 in float64 gives the same rate with Dense
+and with CSR, on both the default and the `cusparse` backend.
+
 ---
 
 ## 4. Dependency and wave plan
@@ -337,6 +367,7 @@ suite and `-m k0_gate` remotely; mypy clean.
 | B | K1a-2, then K1a-3 | both edit `ports.py`, `model.py` and the model files; K1a-2 after K1a-1 (same `model.py` step code) |
 | C | K1a-7 | after all others; measures the merged kernel |
 | C′ | K1a-8 | from the K1a-7 G3 escalation; separate PR merged before K1a-7, which re-measures G3 on it |
+| C″ | K1a-10, then K1a-9 | K1a-10 (float64 binary payload, brainevent#204) is a separate PR merged before K1a-9 (small-network GPU footprint); K1a-7 rebases on both and re-measures G3 |
 
 Each task: test-first (AGENTS.md #4), NumPy docstrings, > 90 % coverage of the modules
 it touches, remote test run recorded in the PR, `# upstream:` comments per
@@ -464,3 +495,6 @@ decision column ("lead: …").
 | K1a-3 | migrated: `iaf_cond_exp` / `aeif_cond_alpha` `ex=Event(unit=u.nS, into='g_ex')`, `in_=Event(unit=u.nS, into='g_in')`; `iaf_psc_alpha` `ex=Event(unit=u.pA, into='I_syn_ex')`, `in_=Event(unit=u.pA, into='I_syn_in')`; `precise._capacity_variant` keeps `into`. **Not** migrated (never used either encoding): `iaf_psc_exp_ps.syn` (one port sign-routed into `I_syn_ex` / `I_syn_in`, does not fit one `into` state), `LIF.delta` (jumps `V`, no kinetics), `NMDA.spike` (receptor population input), `with_conductance_ports` ports (plain `Conductance`) | spec migration list; the sign-routed precise port and a possible `into` for delta ports are follow-ups for K2 (lead) | 2026-10-22 |
 | K1a-3 | `Plan.describe()` / `Ports.__repr__` show the filtered state of receptor ports (`ex=event(into g_ex)`, `Ports(ex=Event(into='g_ex'), …)`) | visibility of the encoding | 2026-10-22 |
 | K1a-3 | numerics: `origin/main` @ 488f7d1 vs K1a-3 on the remote host (`/tmp/k0/k1a3/main_vs_k1a3.py`: Brunel `iaf_psc_alpha` order 40 + dc, `iaf_psc_alpha` doublets with signed weights, COBA `iaf_cond_exp` (scale 0.1) + dc, `iaf_cond_exp` from spike generators with doublets and delay 0, `aeif_cond_alpha` Poisson + recurrent, `iaf_psc_exp_ps.with_capacity(8)` + `poisson_generator_ps`, `iaf_cond_exp` + gated NMDA port + `ex` + Expon on `I`): **bit-identical in float64 and float32** (25/25 recorded arrays each, max rel 0) | spec: NEST parity unchanged; the change is declarative plus identical jump ops | 2026-10-22 |
+| K1a-10 | cast float64 binary-path events to **float32** (not bool) before brainevent; Dense through `_binary_dense` (`jax.custom_jvp`, event tangent `dx @ W` in W's dtype), CSR with a plain cast; output keeps W's dtype (tested) | brainevent#204: float64 `x` @ dense W is wrong on GPU, bool/float32 are correct. bool was rejected: `astype(bool)` has a zero cotangent, so the event (input) gradient would silently become 0 (`/tmp/k0/k1a7/grad_cast.py`). A plain float32 cast keeps the forward and the W gradient identical but rounds the Dense event gradient to float32 (rel ~4e-8); the custom_jvp restores float64 (matches the float path to 1e-12). The CSR event gradient was already identical with the cast. The same cast avoids the #199 default-backend abort | orchestrator (delegated by lead), 2026-10-23 |
+| K1a-10 | verification: GPU 1, Brunel ε = 0.1 float64, Dense vs CSR, default and `cusparse` backends: order 200 57.10 / 57.10 Hz (old `Simulator` 57.16 Hz; before the fix Dense 59.7 Hz), order 800 45.20 / 45.20 Hz (before the fix Dense 53.6 Hz) | regression evidence at network level for the #204 cast | orchestrator (delegated by lead), 2026-10-23 |
+| K1a-10 | audit of merged results for float64 + GPU + Dense: K0 G9 / T10 are CPU-only (unaffected); T0 is the old `Simulator` (unaffected); K1a-4 `gpu64cs_brunel2500` and the per-edge-delay rows use CSR / `DelayScatter` (unaffected; rates equal the CPU rows); **affected**: K1a-4 `gpu64cs_brunel400` scalar-delay rows (`auto` chose Dense: 57.68 Hz vs 52.44 Hz on CPU), whose rates are wrong; their step times are kept as measured (the binary Dense kernel's cost does not depend on the payload values) but the rate column is superseded; `gpu64cs_review0` fires 0 Hz (no events, unaffected); the K1a-7 G3 float64 order-200 kernel row measured before K1a-10 is superseded (re-measured in K1a-7) | correctness note for the K1a report | orchestrator (delegated by lead), 2026-10-23 |
