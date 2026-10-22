@@ -2,6 +2,8 @@
 
 _Date: 2026-10-21_
 
+> **Dropped 2026-10-22 (old kernel frozen, D-f).** No 0.1.x release and no old-kernel fixes until the old kernel is deleted at K4. The findings below stay as acceptance tests for the new kernel: fixed by construction in K0 (gate G4) or while porting in K2 (architecture doc §12). See the [roadmap](2026-10-21-roadmap.md) §3 and the architecture doc §11 D-f.
+
 Part of [roadmap](2026-10-21-roadmap.md) Phase 0. One worktree branch `v011/01-correctness`; may be
 split into one PR per section if it grows. **Test-first (CLAUDE.md #4).**
 

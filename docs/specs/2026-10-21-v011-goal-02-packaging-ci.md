@@ -2,6 +2,8 @@
 
 _Date: 2026-10-21_
 
+> **Reduced 2026-10-22 (old kernel frozen, D-f):** only the CI that serves the new kernel remains — a CI job running the kernel gate markers (`k0_gate`, `k1a_gate`) with the `brian2` validation extra installed, plus the NEST workflow running the kernel's `requires_nest` gate tests. It is done in K1a-7 ([K1a spec](2026-10-22-k1a-kernel-hardening-spec.md)). The rest of this file (old-kernel dependency floors, test-import rewrites, deprecated APIs in the old kernel, labeler/dependabot/publish fixes) is not scheduled.
+
 Part of [roadmap](2026-10-21-roadmap.md) Phase 0. Branch `v011/02-packaging-ci`.
 
 ## Dependencies (`pyproject.toml:39-46`, `requirements.txt`)

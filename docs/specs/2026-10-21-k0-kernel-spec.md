@@ -314,7 +314,10 @@ streams; batched trials with `common` vs `independent` RNG.
 ## 9. Upstream items
 
 Filed 2026-10-22 against the latest releases (brainevent 0.2.1, braintrace 0.2.6), each
-with a minimal repro re-run on CPU. Status as of filing.
+with a minimal repro re-run on CPU. Status as of filing. **From K1a on, the live list —
+status, our workaround with file:line, and the condition for removing it — is
+[`2026-10-22-upstream-issues-todo.md`](2026-10-22-upstream-issues-todo.md); this table
+is not updated any more.**
 
 | repo | item | type | issue | status |
 |---|---|---|---|---|
