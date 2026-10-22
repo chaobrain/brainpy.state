@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pathlib
 
+import brainstate
 import jax
 import pytest
 
@@ -54,6 +55,15 @@ def pytest_make_collect_report(collector):
 
 @pytest.fixture(autouse=True, scope='module')
 def _kernel_default_x64():
-    """Run every kernel test module under JAX's default ``jax_enable_x64=False``."""
-    with jax.enable_x64(False):
-        yield
+    """Run every kernel test module under JAX's default ``jax_enable_x64=False``.
+
+    Also restores the global ``brainstate`` precision afterwards, so a kernel test
+    that changes it cannot leak into the legacy tests (which rely on the
+    ``precision=64`` they set at import) running later on the same worker.
+    """
+    precision = brainstate.environ.get_precision()
+    try:
+        with jax.enable_x64(False):
+            yield
+    finally:
+        brainstate.environ.set(precision=precision)

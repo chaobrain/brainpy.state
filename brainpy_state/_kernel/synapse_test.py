@@ -112,18 +112,17 @@ class TestExponModel:
         rng = np.random.default_rng(0)
         x = rng.normal(size=(200, 4)) * (rng.random((200, 4)) < 0.1)
         with jax.enable_x64(True):
-            brainstate.environ.set(precision=64)
-            try:
-                with brainstate.environ.context(dt=DT * u.ms):
-                    old = OldExpon(4, tau=4.0 * u.ms)
-                    old.init_state()
+            # Scoped, not ``environ.set``: a global set/reset here leaked
+            # ``precision=32`` into the legacy tests (which set ``precision=64`` at
+            # import) that ran after this one on the same xdist worker.
+            with brainstate.environ.context(precision=64, dt=DT * u.ms):
+                old = OldExpon(4, tau=4.0 * u.ms)
+                old.init_state()
 
-                    def old_step(xi):
-                        return old.update(xi * u.mS).to_decimal(u.mS)
+                def old_step(xi):
+                    return old.update(xi * u.mS).to_decimal(u.mS)
 
-                    g_old = np.asarray(brainstate.transform.for_loop(old_step, jnp.asarray(x)))
-            finally:
-                brainstate.environ.set(precision=32)
+                g_old = np.asarray(brainstate.transform.for_loop(old_step, jnp.asarray(x)))
             syn = Expon(4.0 * u.ms)
             ctx = StepContext.create(0.0 * u.ms, DT * u.ms)
 
