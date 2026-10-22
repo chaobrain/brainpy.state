@@ -3,15 +3,22 @@ r"""Fixed-substep integrators with an in-substep event hook (decision I1).
 
 Integrators advance a pytree ``y`` of plain float arrays (mantissas) over one
 simulation step ``dt`` split into ``substeps`` equal substeps of length
-``h = dt / substeps``. The substep loop is **unrolled in Python** (no
-``while_loop``), so the step is reverse-mode differentiable, has a static cost,
-and keeps braintrace's graph analysis intact. Inputs (synaptic/port values) are
-whatever the derivative function closes over: the caller computes them **once**
-per step, outside the loop, so they are constant across substeps.
+``h = dt / substeps``. The substeps run as **one** ``lax.scan`` of static length
+``substeps - 1`` followed by the peeled last substep (architecture doc §7.3: no
+Python loop whose trip count depends on the model inside the traced step; no
+``while_loop``), so the body is traced once whatever the substep count, the step
+is reverse-mode differentiable, has a static cost, and keeps braintrace's graph
+analysis intact. Inputs (synaptic/port values) are whatever the derivative
+function closes over: the caller computes them **once** per step, outside the
+loop, so they are constant across substeps.
 
-After every substep an optional ``hook(k, t, y, aux) -> (y, aux)`` runs; the
-generated ``NeuronModel.step`` uses it to check the spike condition, apply the
-jump and the refractory clamp, and count spikes inside the step.
+After every substep an optional ``hook(k, t, y, aux, final) -> (y, aux)`` runs;
+the generated ``NeuronModel.step`` uses it to check the spike condition, apply the
+jump and the refractory clamp, and count spikes inside the step. ``final`` is a
+static Python bool, ``True`` only for the last substep, so per-step work (a spike
+check once per step) is expressed without branching on the traced index ``k``.
+Everything the hook changes is carried explicitly in ``(y, aux)``; it must not
+mutate Python objects (the body is traced once and reused for every substep).
 
 The vector field has the signature ``f(t, y, aux) -> dy/dt`` (same pytree
 structure as ``y``; ``t`` and ``h`` in one consistent time unit, ms in the
@@ -48,7 +55,7 @@ __all__ = [
 ]
 
 VectorField = Callable[[Any, Any, Any], Any]
-Hook = Callable[[int, Any, Any, Any], tuple[Any, Any]]
+Hook = Callable[[Any, Any, Any, Any, bool], tuple[Any, Any]]
 
 
 def _check_substeps(substeps: Any) -> int:
@@ -177,7 +184,7 @@ class RK(Integrator):
     order : {1, 2, 4}, default 4
         1 = forward Euler, 2 = Heun (explicit trapezoid), 4 = classic RK4.
     substeps : int, default 1
-        Number of substeps per simulation step (static; Python-unrolled).
+        Number of substeps per simulation step (static; run as a ``lax.scan``).
 
     Raises
     ------
@@ -209,9 +216,22 @@ class RK(Integrator):
                             y, k1, k2, k3, k4)
 
 
+def _like(new: Any, old: Any) -> Any:
+    """Cast every leaf of ``new`` to the dtype of the matching leaf of ``old``.
+
+    Keeps the ``scan`` carry type-stable when a substep or the hook promotes a
+    leaf (e.g. a Python-scalar ``aux`` or a jump to a parameter of another dtype).
+    """
+    return jax.tree.map(lambda a, b: jnp.asarray(a).astype(jnp.asarray(b).dtype), new, old)
+
+
 def integrate(integrator: Integrator, f: VectorField, y: Any, t0: Any, dt: Any, *,
               hook: Hook | None = None, aux: Any = None) -> tuple[Any, Any]:
-    """Advance ``y`` over one step ``[t0, t0 + dt]`` with fixed, unrolled substeps.
+    """Advance ``y`` over one step ``[t0, t0 + dt]`` with fixed substeps.
+
+    Substeps ``0 .. substeps - 2`` run as one ``lax.scan`` (traced once); the last
+    substep is peeled so that ``hook`` sees a static ``final=True`` there. With
+    ``substeps == 1`` there is no scan.
 
     Parameters
     ----------
@@ -224,12 +244,15 @@ def integrate(integrator: Integrator, f: VectorField, y: Any, t0: Any, dt: Any, 
     t0, dt : array_like
         Step start and length (same time unit as ``f`` expects); may be traced.
     hook : callable, optional
-        ``hook(k, t, y, aux) -> (y, aux)`` called after substep ``k``
-        (``0 <= k < substeps``) with ``t`` the time at the end of the substep. Used
-        for in-substep spike detection, jumps and refractory handling.
+        ``hook(k, t, y, aux, final) -> (y, aux)`` called after substep ``k``
+        (``0 <= k < substeps``; a traced int32 inside the scan, a Python int for the
+        last substep) with ``t`` the time at the end of the substep and ``final`` a
+        Python bool, ``True`` only after the last substep. Used for in-substep spike
+        detection, jumps and refractory handling. It must return ``y`` and ``aux``
+        with the input structure; leaves are cast back to the input dtypes.
     aux : Any, optional
         Carried auxiliary data (e.g. spike counts, refractory counters); passed to
-        ``f`` and threaded through ``hook``.
+        ``f`` and threaded through ``hook``. Python scalars become arrays.
 
     Returns
     -------
@@ -237,12 +260,34 @@ def integrate(integrator: Integrator, f: VectorField, y: Any, t0: Any, dt: Any, 
         State at ``t0 + dt``.
     aux : Any
         Final auxiliary data.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import jax.numpy as jnp
+        >>> from brainpy_state._kernel.integrators import RK, integrate
+        >>> f = lambda t, y, aux: {'v': -y['v']}
+        >>> y, _ = integrate(RK(4, 8), f, {'v': jnp.array(1.0)}, 0.0, 1.0)
+        >>> round(float(y['v']), 6)  # exp(-1)
+        0.367879
     """
     n = integrator.substeps
     h = dt / n
-    for k in range(n):
+    aux = jax.tree.map(jnp.asarray, aux)
+
+    def substep(k, y, aux, final):
         t = t0 + k * h
-        y = integrator.substep(f, t, y, h, aux)
+        y_new = integrator.substep(f, t, y, h, aux)
+        aux_new = aux
         if hook is not None:
-            y, aux = hook(k, t + h, y, aux)
-    return y, aux
+            y_new, aux_new = hook(k, t + h, y_new, aux, final)
+        return y_new, aux_new
+
+    if n > 1:
+        def body(carry, k):
+            y_c, aux_c = carry
+            return _like(substep(k, y_c, aux_c, False), carry), None
+
+        (y, aux), _ = jax.lax.scan(body, (y, aux), jnp.arange(n - 1, dtype=jnp.int32))
+    return substep(n - 1, y, aux, True)

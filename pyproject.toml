@@ -98,6 +98,7 @@ markers = [
     "k0_g8: K0 gate G8, STDP vs NEST",
     "k0_g9: K0 gate G9, performance (benchmarks/, not a pytest test)",
     "k0_g10: K0 gate G10, coverage of brainpy_state/_kernel (command)",
+    "k1a_compile: K1a compile-time gate (wall clock; run explicitly with -m k1a_compile on an idle host)",
 ]
 
 

@@ -29,7 +29,7 @@ Generated step (architecture doc §7.1)
    previous step (state ``latch_<port>``); this step's value is stored for the
    next one (NEST ring-buffer / ``y0`` semantics, a one-step delay).
 2. **integrate** ``derivatives`` with the model's integrator. Port inputs are
-   computed once, outside the unrolled substeps, and are constant across them;
+   computed once, outside the substep ``scan``, and are constant across them;
    ``conductance`` ports are passed as-is, so a gate ``gate(V)`` evaluated inside
    ``derivatives`` sees the substep's ``V``.
 3. after **every substep**: refractory clamp, spike condition, jump over all
@@ -100,6 +100,7 @@ def latch_name(port: str) -> str:
 
 
 def _keep_dependency(new: Any, old: Any) -> Any:
+    # upstream: braintrace#184
     # braintrace 0.2.6 fails (KeyError in the hidden-group transition) when a
     # HiddenState's new value depends only on inputs; ``+ 0 * old`` keeps the
     # hidden->hidden edge in the jaxpr without changing the value.
@@ -511,20 +512,33 @@ class NeuronModel(brainstate.nn.Module):
         inp_ode = Record(**{**inp, **latched})
         new_latches = {latch_name(k): _keep_dependency(inp[k], s[latch_name(k)]) for k in latched}
 
-        # 2. integrate the float states on mantissas
+        # 2. integrate the float states on mantissas. The substeps run as one scan
+        #    (integrators.integrate); every state the hook can change is carried
+        #    explicitly: float states in ``y``, all other states (spike output,
+        #    int/bool states, latches) as mantissas in ``x``, plus the SpikeCarry.
         names = self.float_state_names()
-        units = {k: unit_of(s[k]) for k in names}
+        units = {k: unit_of(s[k]) for k in s}
         dt_ms = to_mantissa(ctx.dt, u.ms)
         t0_ms = to_mantissa(ctx.t, u.ms)
         detach = rule.resolve_detach(ctx.detach_default(self.detach_reset)) if rule is not None else False
         carry = rule.begin(s, p, dt_ms, integ.substeps) if rule is not None else None
         clamp_var = rule.clamp_var if rule is not None else None
-        n_sub = integ.substeps
+        others = [k for k in s if k not in names]
+        quantity = {k: isinstance(s[k], u.Quantity) for k in others}
 
         def to_record(y, base):
             return base.replace(**{k: from_mantissa(y[k], units[k]) for k in names})
 
-        def f(t, y, c):
+        def pack_others(st):
+            return {k: (to_mantissa(st[k], units[k]) if quantity[k] else jnp.asarray(st[k]))
+                    for k in others}
+
+        def unpack_others(x, base):
+            return base.replace(**{k: (from_mantissa(x[k], units[k]) if quantity[k] else x[k])
+                                   for k in others})
+
+        def f(t, y, aux):
+            # non-integrated states come from the step start (K0 semantics)
             st = to_record(y, s)
             d = self.derivatives(st, p, inp_ode, ctx.replace(t=from_mantissa(t, u.ms)))
             unknown = set(d) - set(names)
@@ -539,24 +553,23 @@ class NeuronModel(brainstate.nn.Module):
                 else:
                     dy[k] = jnp.zeros_like(y[k])
             if clamp_var is not None:
-                dy[clamp_var] = jnp.where(rule.refractory_mask(c), 0, dy[clamp_var])
+                dy[clamp_var] = jnp.where(rule.refractory_mask(aux[1]), 0, dy[clamp_var])
             return dy
 
-        def hook(k, t, y, c):
-            if rule is None:
-                return y, c
-            st = to_record(y, s_holder[0])
+        def hook(k, t, y, aux, final):
+            x, c = aux
+            st = unpack_others(x, to_record(y, s))
             st = rule.clamp(st, p, c)
             c = rule.tick(c, 'substep')
-            if rule.when == 'substep' or k == n_sub - 1:
+            if final or rule.when == 'substep':
                 st, c = rule.check(st, p, c, detach_reset=detach, relaxed=ctx.relaxed)
-            s_holder[0] = st  # non-float states changed by jumps
-            return {kk: to_mantissa(st[kk], units[kk]) for kk in names}, c
+            return {kk: to_mantissa(st[kk], units[kk]) for kk in names}, (pack_others(st), c)
 
-        s_holder = [s]
         y0 = {k: to_mantissa(s[k], units[k]) for k in names}
-        y, carry = integrate(integ, f, y0, t0_ms, dt_ms, hook=hook, aux=carry)
-        s = to_record(y, s_holder[0])
+        aux0 = (pack_others(s), carry)
+        y, (x, carry) = integrate(integ, f, y0, t0_ms, dt_ms,
+                                  hook=None if rule is None else hook, aux=aux0)
+        s = unpack_others(x, to_record(y, s))
 
         # 3. close the step: spike output and refractory counter
         if rule is not None:

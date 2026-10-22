@@ -10,6 +10,7 @@ runs, and no file here is named `test_*.py` / `*_test.py`).
 | `brunel_kernel.py` | the same Brunel network built with the K0 kernel (`brainpy_state._kernel`), same protocol and result schema; the measured side of gate G9 |
 | `g9_interleaved.py` | gate G9: old `Simulator` vs kernel interleaved in fresh processes on one idle pinned core (core chosen from `/proc/stat`, runs on a busy core discarded), 1.1x rule, plus the comparison to the T0 pinned rows |
 | `check_g9_interleaved.py` | checks for `g9_interleaved.py`; run explicitly: `python -m pytest benchmarks/check_g9_interleaved.py` |
+| `k1a_compile_time.py` | K1a-1 compile-time gate: compile time (first call minus a warm call, fresh process per case) of every K0 network at default substeps (<= 5 s), and the RK-substep / timed-event-capacity tables; the same file measures the K0 tree |
 | `_bench_utils.py` | JAX-free helpers: statistics, memory parsing, result schema, merging, markdown table |
 | `check_bench_utils.py` | checks for the helpers; run explicitly: `python -m pytest benchmarks/check_bench_utils.py` |
 | `results/` | committed result files (JSON) and a summary table (`results/README.md`) |
