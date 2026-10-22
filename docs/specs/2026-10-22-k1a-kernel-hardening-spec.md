@@ -36,7 +36,7 @@ The lead decided D-a…D-g (architecture doc §11). The findings this spec acts 
 
 ## 2. Scope
 
-**In:** K1a-1 … K1a-7 below (one PR each), the CI job of v0.1.1 goal 02 that serves
+**In:** K1a-1 … K1a-8 below (one PR each; K1a-8 added from the K1a-7 G3 escalation), the CI job of v0.1.1 goal 02 that serves
 the new kernel (D-f), and the K1a report.
 
 **Out (K1b / K1-L / later):** in-substep spike localisation (`SpikeRule` contract,
@@ -299,6 +299,34 @@ NEST workflow (`.github/workflows/nest-comparison.yml`) also runs the kernel's
 and host, decisions taken, upstream status (from the TODO file), follow-ups for K1b /
 K1-L.
 
+### K1a-8 — host-resident EdgeSet (added 2026-10-22, from the K1a-7 G3 escalation)
+
+**Problem.** The first K1a-G3 measurement (pre K1a-8) failed on peak device memory
+(Brunel order 2500 float32: 0.374 GiB vs the T0 0.232 GiB, 1.61 ×). The realised
+`EdgeSet` of every projection (local indices, gids, per-edge weights and delays;
+≈ 298 MB at order 2500) stayed on the device next to the storage arrays (119 MB), and
+compilation held further device copies of the edge-order weights and of the storage
+permutation.
+
+**Contract.** After `Network.compile`, a `Plan` keeps no realised edge arrays on the
+device. Every array of an `EdgeSet` (built by `create` / `from_gids`, the rules,
+`with_weight` / `with_delay` / `set`, `Plan.edges`, `Runner.edges`, `get_connections`)
+is a host `numpy` array (Quantities carry numpy mantissas); float dtypes follow JAX's
+canonicalisation, so the values equal what a device array held before. Storages
+(`Dense`, `CSR`, `DelayScatter`) copy what the compiled program reads to the device;
+`weight_from_edges` permutes host weights on the host and copies only the result.
+`get_connections` and every introspection result are unchanged in values, dtype,
+unit and order.
+
+**Tests.** Host-residency of every `EdgeSet` field and introspection result; dtype
+canonicalisation (float64 input without x64 stored as float32); subset `set` on host
+values leaves the original unchanged; a compiled plan holds at most the storage and
+weight-state device arrays of edge length (no `EdgeSet` copy); the full `_kernel`
+suite and `-m k0_gate` remotely; mypy clean.
+
+**Gate.** Re-measure K1a-G3 with the same protocol and metric (raw
+`peak_bytes_in_use`, ≤ 1.1 × T0); the metric is not changed.
+
 ---
 
 ## 4. Dependency and wave plan
@@ -308,6 +336,7 @@ K1-L.
 | A | K1a-1, K1a-4, K1a-5, K1a-6 in parallel | K1a-1 touches `integrators.py`, `model.py`, `models/precise.py`; K1a-4 `compiler.py`, `delays.py`, `storage.py`; K1a-5 `runner.py`, `learn/`, `spiking.py`, `compiler.py` (`runner()`); K1a-6 `rng.py`, `network.py`, `runner.py`, `models/devices.py`. Overlaps (`compiler.py`, `runner.py`) are small; later PRs rebase |
 | B | K1a-2, then K1a-3 | both edit `ports.py`, `model.py` and the model files; K1a-2 after K1a-1 (same `model.py` step code) |
 | C | K1a-7 | after all others; measures the merged kernel |
+| C′ | K1a-8 | from the K1a-7 G3 escalation; separate PR merged before K1a-7, which re-measures G3 on it |
 
 Each task: test-first (AGENTS.md #4), NumPy docstrings, > 90 % coverage of the modules
 it touches, remote test run recorded in the PR, `# upstream:` comments per
@@ -371,6 +400,10 @@ decision column ("lead: …").
 | K1a-5 | lead: learner objects `BPTT(program, loss, optimizer, ...).run(state0, data)`; learn phase as `Program.rollout(..., learn=fn, every=k)`; exact signatures shown in the K1a-5 PR for lead approval before merge | lead decision | 2026-10-22 |
 | K1a-6 | lead: gid block 1024 (same constant as connectivity); unnamed objects auto-named `<model>_<k>` per class (insertion order matters only among same-class unnamed objects — documented); gate: step time ≤ 1.05 × K0 at Brunel order 2500 | lead decision | 2026-10-22 |
 | K1a-7 | lead: Potjans–Diesmann microcircuit with 5 seeds each side, 1 s after a 100 ms transient, CPU and GPU 1; AI Brunel point chosen by a short NEST-only scan requiring CV-ISI ≥ 0.5, shown to the lead before the kernel comparison runs | lead decision | 2026-10-22 |
+| K1a-8 | lead: fix the K1a-G3 memory failure now and keep the metric (raw peak device memory, ≤ 1.1 × T0); separate PR (`k1a/K1a-8-edgeset-host`) merged before K1a-7, which then re-measures G3 with the same protocol; if order 200 still fails, investigate the kernel's share (Dense vs CSR, rollout temporaries) and report before merging K1a-7 — the metric is not changed | lead decision on the K1a-7 G3 escalation | 2026-10-22 |
+| K1a-8 | host from creation (numpy everywhere in `EdgeSet`) instead of dropping and re-materialising on demand | simpler (no re-run of the rules, no cache), introspection results identical by construction, and it also removes the device copies held *during* compile, where the peak was | 2026-10-22 |
+| K1a-8 | storages permute host per-edge weights on the host (`_take`) and copy only the native layout to the device; the compiler's per-edge weights stay on the host | the device copies of the edge-order weights and of the permutation set the compile-time peak (order 2500 f32: 287.5 MB with a host `EdgeSet` alone, 144.7 MB with host permutation) | 2026-10-22 |
+| K1a-8 | on the CPU backend `numpy.asarray` of a device array is a zero-copy view, so host copies cost no extra RAM there; no explicit copy is forced | a forced copy would raise the CPU peak RSS by one weight and one delay array per projection during compile (≈ 2.4 GB on the full microcircuit) | 2026-10-22 |
 | K1a-5 | lead decision 2026-10-22 (approved in PR #112): the spike mode and the program-level `detach_reset` reach the models as **static fields of `StepContext`** (`ctx.spikes`, `ctx.relaxed`, `ctx.detach_reset`; static pytree metadata, so they are part of the jit cache key); `SpikeRule.check(..., relaxed=False)` takes the mode explicitly; `relaxed_spikes()` / `relaxed_enabled()` are removed | removes the `ContextVar` (no global state, visible in signatures); two programs with different modes never share a trace | 2026-10-22 |
 | K1a-5 | lead decision 2026-10-22 (approved in PR #112): `Program(plan, *, spikes='hard', detach_reset=None, etrace=False)` (keyword-only options), `Program.replace(**options)`, `Plan.program(...)`; `detach_reset` resolution: rule's own setting > program option > model's `detach_reset` > False | learners set `detach_reset` / `spikes` by deriving a program (architecture doc §8.2-2) instead of mutating the models (K0 BPTT wrote `m.detach_reset` on every model of the plan) | 2026-10-22 |
 | K1a-5 | `spikes='relaxed'` uses the exact float payload path for every projection (the binary event path would binarise fractional spikes); construction fails with a list of populations whose spike rule has no surrogate with `surrogate_fun`, or that are precise-timing neurons; devices and relays are allowed | K0 tests set `pp.path = 'float'` by hand, which mutated the shared plan; the spec asks for a clear error on models without a surrogate | 2026-10-22 |

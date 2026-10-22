@@ -10,6 +10,10 @@ introspection (:meth:`EdgeSet.get_connections`) and weight assignment
 Edges are stored as **local** indices into the pre and post views (what storages
 need) together with the views' **global** ids (what autapse decisions, introspection
 and the user see).
+
+All arrays of an :class:`EdgeSet` live on the **host** (numpy; K1a-8): storages copy
+what the compiled program reads to the device, so a compiled :class:`Plan` keeps no
+second, device-resident copy of the edge list (O(E) device memory per projection).
 """
 from __future__ import annotations
 
@@ -25,13 +29,32 @@ import numpy as np
 from brainpy_state._kernel.params import Distribution
 from brainpy_state._kernel.units import (
     check_unit,
-    from_mantissa,
     index_dtype,
     to_mantissa,
     unit_of,
 )
 
-__all__ = ['EdgeSet', 'Connections', 'as_gids']
+__all__ = ['EdgeSet', 'Connections', 'as_gids', 'to_host']
+
+
+def to_host(value: Any) -> Any:
+    """Host (numpy) copy of an array or Quantity; ``None`` passes through.
+
+    Parameters
+    ----------
+    value : array_like, Quantity or None
+        Device or host values.
+
+    Returns
+    -------
+    numpy.ndarray, Quantity with a numpy mantissa, or None
+        Same values, dtype and unit.
+    """
+    if value is None:
+        return None
+    if isinstance(value, u.Quantity):
+        return u.Quantity(np.asarray(value.mantissa), unit=value.unit)
+    return np.asarray(value)
 
 
 def as_gids(gids: Any, name: str = 'gids') -> np.ndarray:
@@ -113,14 +136,20 @@ class EdgeSet:
 
     Parameters
     ----------
-    pre_index, post_index : jax.Array of int, shape (E,)
+    pre_index, post_index : numpy.ndarray of int, shape (E,)
         Local indices of each edge's pre / post neuron in the views.
-    pre_gids, post_gids : jax.Array of int, shapes (n_pre,), (n_post,)
+    pre_gids, post_gids : numpy.ndarray of int, shapes (n_pre,), (n_post,)
         Global ids of the pre and post views (concatenations allowed).
-    weight : Quantity or jax.Array, shape (E,), optional
+    weight : Quantity or numpy.ndarray, shape (E,), optional
         Per-edge weights.
     delay : Quantity, shape (E,), optional
         Per-edge delays (time dimension).
+
+    Notes
+    -----
+    The validating constructors and :meth:`with_weight` / :meth:`with_delay` /
+    :meth:`set` keep every array on the host (numpy); use :func:`to_host` when
+    building one with the raw constructor from device values.
     """
 
     pre_index: Any
@@ -149,7 +178,7 @@ class EdgeSet:
         Returns
         -------
         EdgeSet
-            Arrays on device: local indices in
+            Host (numpy) arrays: local indices in
             ``index_dtype(max(n_pre, n_post))``, gids in ``index_dtype(max_gid + 1)``.
 
         Raises
@@ -174,10 +203,10 @@ class EdgeSet:
         idt = index_dtype(max(pre_gids.size, post_gids.size))
         gdt = _gid_dtype(pre_gids, post_gids)
         es = cls(
-            pre_index=jnp.asarray(pi.astype(idt)),
-            post_index=jnp.asarray(qi.astype(idt)),
-            pre_gids=jnp.asarray(pre_gids.astype(gdt)),
-            post_gids=jnp.asarray(post_gids.astype(gdt)),
+            pre_index=pi.astype(idt),
+            post_index=qi.astype(idt),
+            pre_gids=pre_gids.astype(gdt),
+            post_gids=post_gids.astype(gdt),
         )
         if weight is not None:
             es = es.with_weight(weight)
@@ -229,14 +258,14 @@ class EdgeSet:
         return self.n_edges
 
     @property
-    def pre(self) -> jax.Array:
+    def pre(self) -> np.ndarray:
         """Global id of each edge's pre neuron, shape ``(E,)``."""
-        return self.pre_gids[self.pre_index]
+        return np.asarray(self.pre_gids)[np.asarray(self.pre_index)]
 
     @property
-    def post(self) -> jax.Array:
+    def post(self) -> np.ndarray:
         """Global id of each edge's post neuron, shape ``(E,)``."""
-        return self.post_gids[self.post_index]
+        return np.asarray(self.post_gids)[np.asarray(self.post_index)]
 
     def multiplicity(self) -> np.ndarray:
         """Number of edges sharing each edge's ``(pre, post)`` pair, shape ``(E,)``.
@@ -295,9 +324,9 @@ class EdgeSet:
         """
         keep = np.ones((self.n_edges,), bool)
         if source is not None:
-            keep &= np.isin(np.asarray(self.pre), np.asarray(source).reshape(-1))
+            keep &= np.isin(self.pre, np.asarray(source).reshape(-1))
         if target is not None:
-            keep &= np.isin(np.asarray(self.post), np.asarray(target).reshape(-1))
+            keep &= np.isin(self.post, np.asarray(target).reshape(-1))
         return np.nonzero(keep)[0].astype(np.int64)
 
     def get_connections(self, source: Any = None, target: Any = None) -> Connections:
@@ -324,8 +353,8 @@ class EdgeSet:
             (3, 1)
         """
         e = self.select(source, target)
-        sel = lambda v: None if v is None else v[jnp.asarray(e)]
-        return Connections(edge=e, source=np.asarray(self.pre)[e], target=np.asarray(self.post)[e],
+        sel = lambda v: None if v is None else to_host(v)[e]
+        return Connections(edge=e, source=self.pre[e], target=self.post[e],
                            weight=sel(self.weight), delay=sel(self.delay))
 
     def set(self, *, weight: Any = None, delay: Any = None, edges: Any = None,
@@ -367,9 +396,9 @@ class EdgeSet:
                 if cur is None:
                     raise ValueError(f'cannot set {name} on a subset of edges before it is assigned')
                 unit = unit_of(cur)
-                cur_m = jnp.asarray(u.get_mantissa(cur))
-                new_m = to_mantissa(new, unit, cur_m.dtype)
-                full = from_mantissa(cur_m.at[jnp.asarray(idx)].set(new_m), unit)
+                cur_m = np.array(u.get_mantissa(cur))  # host copy (the EdgeSet is immutable)
+                cur_m[idx] = np.asarray(to_mantissa(new, unit, cur_m.dtype))
+                full = cur_m if unit.is_unitless else u.Quantity(cur_m, unit=unit)
             out = dataclasses.replace(out, **{name: full})
         return out
 
@@ -413,19 +442,25 @@ def _locate(gids: Any, view: np.ndarray, name: str) -> np.ndarray:
 
 
 def _edge_values(value: Any, n: int, key: Any, dtype: Any, name: str) -> Any:
-    """Per-edge values of length ``n`` from a scalar, array, Quantity or Distribution."""
+    """Per-edge host values of length ``n`` from a scalar, array, Quantity or Distribution.
+
+    Float dtypes follow JAX's canonicalisation (``float64`` input becomes ``float32``
+    without ``jax_enable_x64``), so the values equal what a device array would hold.
+    """
     if isinstance(value, Distribution):
         if key is None:
             raise ValueError(f'a key is required to sample the {name} distribution')
-        return value.sample(key, (n,), dtype)
+        return to_host(value.sample(key, (n,), dtype))
     unit = unit_of(value)
-    m = jnp.asarray(u.get_mantissa(value))
+    m = np.asarray(u.get_mantissa(value))
     if dtype is not None:
-        m = m.astype(dtype)
-    elif not jnp.issubdtype(m.dtype, jnp.floating):
+        m = m.astype(jax.dtypes.canonicalize_dtype(dtype))
+    elif np.issubdtype(m.dtype, np.floating):
+        m = m.astype(jax.dtypes.canonicalize_dtype(m.dtype))
+    else:
         m = m.astype(jnp.zeros((), dtype=float).dtype)
     if m.ndim == 0:
-        m = jnp.full((n,), m, m.dtype)
+        m = np.full((n,), m, m.dtype)
     elif m.shape != (n,):
         raise ValueError(f'{name} must be a scalar or have shape ({n},), got {m.shape}')
     return m if unit.is_unitless else u.Quantity(m, unit=unit)

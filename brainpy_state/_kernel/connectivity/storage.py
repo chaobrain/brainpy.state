@@ -35,7 +35,7 @@ routes through ``braintrace.matmul`` / ``braintrace.sparse_matmul`` so that
 from __future__ import annotations
 
 import contextlib
-from typing import Any, ClassVar, Iterator, Mapping
+from typing import Any, Callable, ClassVar, Iterator, Mapping
 
 import brainevent
 import braintrace
@@ -128,6 +128,27 @@ def _split(w: Any) -> tuple[jax.Array, u.Unit]:
     if isinstance(w, u.Quantity):
         return w.mantissa, w.unit
     return jnp.asarray(w), u.UNITLESS
+
+
+def _split_edges(w: Any) -> tuple[Any, u.Unit]:
+    """Like :func:`_split` but keeps host (numpy) per-edge weights on the host."""
+    if isinstance(w, u.Quantity):
+        return w.mantissa, w.unit
+    if isinstance(w, np.ndarray):
+        return w, u.UNITLESS
+    return jnp.asarray(w), u.UNITLESS
+
+
+def _take(m: Any, order: np.ndarray, order_j: Callable[[], jax.Array]) -> jax.Array:
+    """``m[order]`` as a device array.
+
+    Host weights are permuted on the host and copied once (K1a-8: no device copies
+    of the edge-order weights and of the permutation at compile time); device
+    weights are gathered on the device with ``order_j()``.
+    """
+    if isinstance(m, np.ndarray):
+        return jnp.asarray(m[order])
+    return m[order_j()]
 
 
 def _wrap(m: Any, unit: u.Unit) -> Any:
@@ -410,8 +431,8 @@ class CSR(Storage):
     def weight_from_edges(self, edge_weight: Any) -> Any:
         """Permute per-edge weights into CSR order."""
         self._check_edge_weight(edge_weight)
-        m, unit = _split(edge_weight)
-        return _wrap(m[self._order_j], unit)
+        m, unit = _split_edges(edge_weight)
+        return _wrap(_take(m, self.order, lambda: self._order_j), unit)
 
     def weight_to_edges(self, w: Any) -> Any:
         """Inverse permutation back to :class:`EdgeSet` order (exact)."""

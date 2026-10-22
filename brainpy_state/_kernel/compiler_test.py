@@ -8,7 +8,12 @@ import numpy as np
 import pytest
 
 from brainpy_state._kernel.compiler import Plan, ScheduleError, schedule
-from brainpy_state._kernel.connectivity import all_to_all, fixed_indegree, one_to_one
+from brainpy_state._kernel.connectivity import (
+    all_to_all,
+    fixed_indegree,
+    fixed_total_number,
+    one_to_one,
+)
 from brainpy_state._kernel.models import LIF, dc_generator, iaf_psc_alpha, poisson_generator, spike_generator
 from brainpy_state._kernel.network import Network
 from brainpy_state._kernel.params import Normal
@@ -95,6 +100,37 @@ class TestCompile:
                      delay=np.tile([0.1, 0.2], 10) * u.ms)
         np.testing.assert_array_equal(np.asarray(net2.compile().edges(1).weight.to_decimal(u.pA)),
                                       np.asarray(raw.to_decimal(u.pA)))
+
+    def test_plan_keeps_edges_on_host(self):
+        # K1a-8: the realised EdgeSet stays on the host; only the storage arrays and the
+        # weight state hold O(E) device memory
+        import jax
+        net = Network(dt=DT, seed=3)
+        pg = net.add(poisson_generator, 300, params=dict(rate=10.0 * u.Hz), name='pg')
+        a = net.add(iaf_psc_alpha, 200, name='A')
+        E = 12347
+        p = net.connect(pg, a, fixed_total_number(E), port='ex', storage='csr',
+                        weight=Normal(5.0 * u.pA, 1.0 * u.pA),
+                        delay=Normal(1.0 * u.ms, 0.2 * u.ms, low=0.1 * u.ms), name="p")
+        plan = net.compile()
+        es = plan.projection(p).edges
+        for f in ('pre_index', 'post_index', 'pre_gids', 'post_gids'):
+            assert not isinstance(getattr(es, f), jax.Array)
+        for v in (es.weight, es.delay):
+            assert isinstance(v.mantissa, np.ndarray) and not isinstance(v.mantissa, jax.Array)
+        # on the CPU backend ``np.asarray`` of a device array is a zero-copy view: such
+        # buffers *are* the host arrays, not a second copy
+        host = {v.mantissa.ctypes.data for v in (es.weight, es.delay)}
+        n_edge_arrays = sum(1 for x in jax.live_arrays()
+                            if x.shape == (E,) and x.unsafe_buffer_pointer() not in host)
+        # scatter positions + one weight state (no device EdgeSet copies)
+        assert n_edge_arrays <= 2, n_edge_arrays
+        # introspection reads back the same (host) values
+        got = plan.edges(p)
+        assert isinstance(got.weight.mantissa, np.ndarray)
+        np.testing.assert_array_equal(got.weight.mantissa, es.weight.mantissa)
+        c = got.get_connections(source=pg.gids[:5])
+        np.testing.assert_array_equal(c.weight.mantissa, es.weight.mantissa[c.edge])
 
     def test_errors(self):
         net, sg, pg, dc, a = _net()
