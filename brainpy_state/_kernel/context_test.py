@@ -79,3 +79,19 @@ class TestStepContext:
     def test_keys_in_vmap(self):
         ctxs = jax.vmap(lambda s: make(step=0).replace(step=s))(jnp.arange(3, dtype=jnp.int32))
         assert ctxs.step.shape == (3,)
+
+    def test_spike_options_are_static_fields(self):
+        ctx = make()
+        assert ctx.spikes == 'hard' and not ctx.relaxed and ctx.detach_reset is None
+        rel = make(spikes='relaxed', detach_reset=True)
+        assert rel.relaxed and rel.detach_reset is True
+        # static: not leaves, part of the tree structure (separate jit traces)
+        assert len(jax.tree.leaves(rel)) == len(jax.tree.leaves(ctx))
+        assert jax.tree.structure(rel) != jax.tree.structure(ctx)
+        assert jax.jit(lambda c: c.advance())(rel).spikes == 'relaxed'
+        assert rel.replace(step=jnp.int32(3)).detach_reset is True
+        assert ctx.detach_default(False) is False and rel.detach_default(False) is True
+        with pytest.raises(ValueError, match='spikes'):
+            make(spikes='soft')
+        with pytest.raises(TypeError, match='detach_reset'):
+            make(detach_reset='yes')

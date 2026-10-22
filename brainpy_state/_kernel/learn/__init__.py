@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""K0 learners: surrogate-gradient BPTT and braintrace (online learning) compatibility."""
+"""Learners over a ``Program`` (decision D-c): surrogate-gradient BPTT and braintrace."""
 from brainpy_state._kernel.learn.bptt import (
     BPTT,
     membrane_mse,

@@ -39,10 +39,8 @@ inside the step.
 """
 from __future__ import annotations
 
-import contextlib
-import contextvars
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 import brainunit as u
 import jax
@@ -53,8 +51,6 @@ from brainpy_state._kernel.units import grid_steps, to_mantissa
 
 __all__ = [
     'count_ste',
-    'relaxed_spikes',
-    'relaxed_enabled',
     'Refractory',
     'Clamp',
     'Block',
@@ -84,56 +80,6 @@ def count_ste(count: Any, s: Any) -> Any:
         Equal to ``count`` in value; its gradient is that of ``s``.
     """
     return jax.lax.stop_gradient(count - s) + s
-
-
-_RELAXED: contextvars.ContextVar[bool] = contextvars.ContextVar('relaxed_spikes', default=False)
-
-
-@contextlib.contextmanager
-def relaxed_spikes(enabled: bool = True) -> Iterator[None]:
-    r"""Trace-time switch to the *relaxed* (smooth) spike forward pass.
-
-    Inside the context, :meth:`SpikeRule.check` emits ``surrogate.surrogate_fun(margin)``
-    (e.g. ``sigmoid(alpha * margin)`` for ``braintools.surrogate.Sigmoid``) instead of
-    the hard count, and applies the jump softly, ``s + spike * (jump(s) - s)``. The
-    whole step is then a smooth function whose exact derivative is what BPTT
-    computes, so gradients can be checked against finite differences (gate G6).
-    Refractory counters still use the hard condition. Not for simulation.
-
-    The switch is read when a function is **traced**: jitted functions traced
-    outside the context keep the hard forward pass.
-
-    Parameters
-    ----------
-    enabled : bool, default True
-        Turn the relaxed pass on (or off, inside an enclosing context).
-
-    Examples
-    --------
-    .. code-block:: python
-
-        >>> import braintools
-        >>> import brainunit as u
-        >>> from brainpy_state._kernel import StepContext
-        >>> from brainpy_state._kernel.models import LIF
-        >>> from brainpy_state._kernel.spiking import relaxed_spikes
-        >>> lif = LIF(1, surrogate=braintools.surrogate.Sigmoid())
-        >>> ctx = StepContext.create(0.0 * u.ms, 0.1 * u.ms)
-        >>> with relaxed_spikes():
-        ...     out = lif.update(ctx, {'delta': [1.0] * u.mV})
-        >>> round(float(out['spike'][0]), 2)  # sigmoid(4 * 0): half a spike
-        0.5
-    """
-    token = _RELAXED.set(bool(enabled))
-    try:
-        yield
-    finally:
-        _RELAXED.reset(token)
-
-
-def relaxed_enabled() -> bool:
-    """Whether :func:`relaxed_spikes` is active (read at trace time)."""
-    return _RELAXED.get()
 
 
 # ---------------------------------------------------------------------------
@@ -410,8 +356,13 @@ class SpikeRule:
             return m, None
         return m >= 0, m
 
+    @property
+    def supports_relaxed(self) -> bool:
+        """Whether the rule has a relaxed forward pass (a surrogate with ``surrogate_fun``)."""
+        return self.surrogate is not None and callable(getattr(self.surrogate, 'surrogate_fun', None))
+
     def check(self, s: Record, p: Record, carry: SpikeCarry, *,
-              detach_reset: bool = False) -> tuple[Record, SpikeCarry]:
+              detach_reset: bool = False, relaxed: bool = False) -> tuple[Record, SpikeCarry]:
         """Test the condition once; apply the jump and refractoriness where it holds.
 
         Parameters
@@ -422,6 +373,17 @@ class SpikeRule:
             Current bookkeeping (from :meth:`begin` or a previous call).
         detach_reset : bool, default False
             Stop the gradient through the spike in the jump.
+        relaxed : bool, default False
+            Relaxed (smooth) forward pass, selected by ``Program(plan,
+            spikes='relaxed')`` through ``StepContext.relaxed``: the step emits
+            ``surrogate.surrogate_fun(margin)`` (e.g. ``sigmoid(alpha * margin)``
+            for ``braintools.surrogate.Sigmoid``) instead of the hard count and
+            applies the jump softly, ``s + spike * (jump(s) - s)``. The whole step
+            is then a smooth function whose exact derivative is what BPTT computes,
+            so gradients can be checked against finite differences (gate G6).
+            Refractory counters still use the hard condition. Not for simulation.
+            Ignored by rules without a surrogate or with a boolean condition
+            (hard spikes); ``Program`` rejects such populations in relaxed mode.
 
         Returns
         -------
@@ -441,7 +403,7 @@ class SpikeRule:
         hard = hard & allowed
         dtype = carry.count.dtype
         hard_f = hard.astype(dtype)
-        if margin is not None and self.surrogate is not None and _RELAXED.get():
+        if relaxed and margin is not None and self.surrogate is not None:
             return self._check_relaxed(s, p, carry, hard, margin, allowed, detach_reset)
         if margin is not None and self.surrogate is not None:
             sg = jnp.asarray(self.surrogate(margin), dtype) * allowed.astype(dtype)

@@ -111,7 +111,12 @@ def device_window(p: Record, dt_ms: Any) -> tuple[Any, Any]:
     return t_min, t_max
 
 
-def rule_detach(model: NeuronModel) -> bool:
-    """Effective ``detach_reset`` of ``model``'s spike rule."""
-    return model.spiking.resolve_detach(model.detach_reset)
+def rule_detach(model: NeuronModel, ctx: Any = None) -> bool:
+    """Effective ``detach_reset`` of ``model``'s spike rule.
+
+    The rule's own setting wins; else the running program's option
+    (``ctx.detach_reset``); else the model's ``detach_reset``; else False.
+    """
+    default = model.detach_reset if ctx is None else ctx.detach_default(model.detach_reset)
+    return model.spiking.resolve_detach(default)
 

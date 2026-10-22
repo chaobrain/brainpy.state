@@ -356,8 +356,7 @@ class TestEndToEnd:
         out = brainstate.transform.for_loop(en.update, xs)
         np.testing.assert_allclose(np.asarray(out), np.asarray(V), rtol=1e-5, atol=1e-6)
         assert np.ptp(np.asarray(out)) > 0
-        online = Online('eprop', inputs='x', outputs='h')
-        plan.runner(learner=online)
+        online = Online(plan.program(), 'eprop', inputs='x', outputs='h')
         model = online.model
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')

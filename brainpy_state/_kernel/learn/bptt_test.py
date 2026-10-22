@@ -7,11 +7,13 @@ G6 is checked in two regimes (see ``docs/specs/2026-10-22-k0-t9-learners.md``):
   feed-forward nets with ``detach_reset=True`` and a membrane loss -- no gradient
   flows through a spike, so the surrogate BPTT gradient *is* the exact derivative of
   the piecewise-smooth loss and must match finite differences;
-* **relaxed forward** (:func:`~brainpy_state._kernel.spiking.relaxed_spikes`:
-  spikes = the smooth surrogate primitive, soft jumps) on two-layer recurrent nets
-  with every weight and a neuron parameter trainable and ``detach_reset=False`` --
-  this exercises the spike payload VJPs through Dense / CSR storages, delay rings and
-  the reset path.
+* **relaxed forward** (``Program(plan, spikes='relaxed')``: spikes = the smooth
+  surrogate primitive, soft jumps) on two-layer recurrent nets with every weight and
+  a neuron parameter trainable and ``detach_reset=False`` -- this exercises the spike
+  payload VJPs through Dense / CSR storages, delay rings and the reset path.
+
+K1a-5 adds the same checks from a **warmed-up** ``state0`` (200 steps of a
+``Runner``), and the learner API over ``(Program, state0)``.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ from brainpy_state._kernel.learn.bptt import _cut, trainable_states
 from brainpy_state._kernel.model import Capabilities
 from brainpy_state._kernel.models import LIF, iaf_psc_alpha, poisson_generator
 from brainpy_state._kernel.network import Network
-from brainpy_state._kernel.spiking import relaxed_spikes
+from brainpy_state._kernel.runner import Program, Runner
 
 DT = 0.1 * u.ms
 SIG = braintools.surrogate.Sigmoid()
@@ -58,24 +60,33 @@ def _xs(n_steps, n_in, seed=0, p=0.3):
     return (jax.random.uniform(k, (n_steps, n_in)) < p).astype(float)
 
 
-def feedforward(model_name, storage, delay_steps, n=20, n_in=6):
+def _drive(net, model_name, target, weight_scale=0.5):
+    """A non-trainable Poisson drive (keeps a warmed-up state and the RNG streams busy)."""
+    _, port, w_in, _, _, _ = MODELS[model_name]
+    noise = net.add(poisson_generator, 4, params=dict(rate=400.0 * u.Hz), name='noise')
+    net.connect(noise, target, port=port, weight=w_in * weight_scale, name='drive')
+
+
+def feedforward(model_name, storage, delay_steps, n=20, n_in=6, drive=False):
     """ExternalInput -> 20 neurons (the G6 hard-forward net)."""
     model, port, w_in, _, params, tparam = MODELS[model_name]
-    net = Network(dt=DT)
+    net = Network(dt=DT, seed=11)
     x = net.add(ExternalInput, n_in, name='x')
     h = net.add(model, n, params=params, name='h', surrogate=SIG, trainable=(tparam,))
     w = u.Quantity(np.linspace(0.5, 1.5, n_in * n) * u.get_mantissa(w_in), unit=u.get_unit(w_in))
     net.connect(x, h, port=port, weight=w, delay=delay_steps * DT, storage=storage,
                 trainable=True, name='xh')
+    if drive:
+        _drive(net, model_name, h)
     net.observe(h, 'spike', name='rec_h')
     net.observe(h, 'V' if model is LIF else 'V_m', name='v_h')
     return net
 
 
-def recurrent(model_name, storage, delay_steps, n_in=6):
+def recurrent(model_name, storage, delay_steps, n_in=6, drive=False):
     """x -> A (10) -> B (10) plus A -> A (the G6 relaxed net, 20 neurons)."""
     model, port, w_in, w_rec, params, tparam = MODELS[model_name]
-    net = Network(dt=DT)
+    net = Network(dt=DT, seed=12)
     x = net.add(ExternalInput, n_in, name='x')
     A = net.add(model, 10, params=params, name='A', surrogate=SIG, trainable=(tparam,))
     B = net.add(model, 10, params=params, name='B', surrogate=SIG)
@@ -87,6 +98,8 @@ def recurrent(model_name, storage, delay_steps, n_in=6):
                 delay=max(delay_steps, 1) * DT, storage=storage, trainable=True, name='AA')
     net.connect(A, B, fixed_indegree(5), port=port, weight=w_rec * 2, delay=delay_steps * DT,
                 storage=storage, trainable=True, name='AB')
+    if drive:
+        _drive(net, model_name, A)
     net.observe(A, 'V' if model is LIF else 'V_m', name='v_A')
     net.observe(B, 'spike', name='s_B')
     return net
@@ -103,15 +116,15 @@ def _shift(states, direction, eps):
         s.value = u.Quantity(m, unit=u.get_unit(v)) if isinstance(v, u.Quantity) else m
 
 
-def _directional_fd(bptt, duration, xs, targets, direction, eps):
+def _directional_fd(bptt, args, kw, direction, eps):
     states = bptt.params
     base = {k: s.value for k, s in states.items()}
     _shift(states, direction, eps)
-    lp = float(bptt.loss(duration, xs=xs, targets=targets))
+    lp = float(bptt.loss(*args, **kw))
     for k, s in states.items():
         s.value = base[k]
     _shift(states, direction, -eps)
-    lm = float(bptt.loss(duration, xs=xs, targets=targets))
+    lm = float(bptt.loss(*args, **kw))
     for k, s in states.items():
         s.value = base[k]
     return (lp - lm) / (2 * eps)
@@ -136,15 +149,29 @@ def _directions(bptt, grads, seed=0):
     return out
 
 
-def _check_fd(bptt, duration, xs, targets, eps=1e-6, rtol=1e-4):
-    loss, grads = bptt.grad(duration, xs=xs, targets=targets)
+def _check_fd(bptt, state0, xs, targets, eps=1e-6, rtol=1e-4, **kw):
+    args = (state0, xs, targets)
+    loss, grads = bptt.grad(*args, **kw)
     assert np.isfinite(float(loss))
     for d in _directions(bptt, grads):
         ad = sum(float(np.sum(np.asarray(u.get_mantissa(grads[k])) * d[k])) for k in d)
-        fd = _directional_fd(bptt, duration, xs, targets, d, eps)
+        fd = _directional_fd(bptt, args, kw, d, eps)
         assert ad != 0.0
         assert abs(ad - fd) <= rtol * abs(fd), (ad, fd)
     return grads
+
+
+def _membrane_loss(name):
+    return lambda r, y: membrane_mse(r[name][list(r[name])[0]], y)
+
+
+def _relaxed_loss(model_name):
+    v_target = -62.0 if model_name == 'iaf_psc_alpha' else 0.5
+
+    def loss(r, y):
+        v = r['v_A'][list(r['v_A'])[0]]
+        return spike_count_mse(r['s_B']['spike'], y) + 0.1 * membrane_mse(v, v_target)
+    return loss
 
 
 # ---------------------------------------------------------------------------
@@ -156,17 +183,15 @@ def _check_fd(bptt, duration, xs, targets, eps=1e-6, rtol=1e-4):
 @pytest.mark.parametrize('delay_steps', [0, 2])
 def test_g6_hard_forward_vs_finite_differences(x64, model_name, storage, delay_steps):
     net = feedforward(model_name, storage, delay_steps)
-    vname = 'v_h'
     target = -60.0 if model_name == 'iaf_psc_alpha' else 0.8
-    bptt = BPTT(lambda r, y: membrane_mse(r[vname][list(r[vname])[0]], y), detach_reset=True)
     plan = net.compile(precision='float64')
     assert plan.projection('xh').groups[0].storage.kind == storage
-    plan.runner(learner=bptt)
+    bptt = BPTT(plan.program(), _membrane_loss('v_h'), detach_reset=True)
     xs = {'x': _xs(60, 6)}
-    rec = bptt.record(6.0 * u.ms, xs=xs)
+    rec = bptt.record(None, xs)
     assert rec['rec_h']['spike'].shape == (60, 20)
     assert float(np.sum(rec['rec_h']['spike'])) > 0  # the nets spike: gradients cross resets
-    _check_fd(bptt, 6.0 * u.ms, xs, target)
+    _check_fd(bptt, None, xs, target)
 
 
 @pytest.mark.parametrize('model_name', list(MODELS))
@@ -174,24 +199,117 @@ def test_g6_hard_forward_vs_finite_differences(x64, model_name, storage, delay_s
 @pytest.mark.parametrize('delay_steps', [0, 2])
 def test_g6_relaxed_vs_finite_differences(x64, model_name, storage, delay_steps):
     net = recurrent(model_name, storage, delay_steps)
-    vname = 'v_A'
-    v_target = -62.0 if model_name == 'iaf_psc_alpha' else 0.5
-
-    def loss(r, y):
-        v = r[vname][list(r[vname])[0]]
-        return spike_count_mse(r['s_B']['spike'], y) + 0.1 * membrane_mse(v, v_target)
-
-    bptt = BPTT(loss, detach_reset=False)
     plan = net.compile(precision='float64')
-    for pp in plan.projections:  # relaxed spikes are fractional: use the exact float path
-        pp.path = 'float'
-    plan.runner(learner=bptt)
+    # relaxed spikes are fractional: the relaxed program uses the exact float path itself
+    prog = plan.program(spikes='relaxed')
+    bptt = BPTT(prog, _relaxed_loss(model_name), detach_reset=False)
+    assert bptt.program.spikes == 'relaxed' and bptt.program.detach_reset is False
     assert set(bptt.params) == {f'pops/A/{MODELS[model_name][5]}', 'weights/xA/0',
                                 'weights/AA/0', 'weights/AB/0'}
-    with relaxed_spikes():
-        grads = _check_fd(bptt, 6.0 * u.ms, {'x': _xs(60, 6)}, jnp.full(10, 2.0))
+    grads = _check_fd(bptt, None, {'x': _xs(60, 6)}, jnp.full(10, 2.0))
     for k, g in grads.items():
         assert np.any(np.asarray(u.get_mantissa(g)) != 0), k
+
+
+# ---------------------------------------------------------------------------
+# K1a-5: episodes from a warmed-up state0
+# ---------------------------------------------------------------------------
+
+def _warm(plan, steps=200, batch=None, rng='independent'):
+    run = Runner(plan.program(), batch=batch, rng=rng)
+    run.simulate(steps * DT)
+    assert run.n == steps
+    return run
+
+
+@pytest.mark.parametrize('model_name', list(MODELS))
+def test_g6_hard_forward_from_warm_state(x64, model_name):
+    plan = feedforward(model_name, 'csr', 2, drive=True).compile(precision='float64')
+    run = _warm(plan)
+    target = -60.0 if model_name == 'iaf_psc_alpha' else 0.8
+    bptt = BPTT(plan.program(), _membrane_loss('v_h'), detach_reset=True)
+    xs = {'x': _xs(60, 6, seed=1)}
+    kw = dict(n0=run.n)
+    assert float(np.sum(bptt.record(run.state, xs, **kw)['rec_h']['spike'])) > 0
+    g_warm = _check_fd(bptt, run.state, xs, target, **kw)
+    _, g_cold = bptt.grad(None, xs, target)
+    assert any(not np.allclose(u.get_mantissa(g_warm[k]), u.get_mantissa(g_cold[k])) for k in g_cold)
+
+
+@pytest.mark.parametrize('model_name', list(MODELS))
+def test_g6_relaxed_from_warm_state(x64, model_name):
+    plan = recurrent(model_name, 'dense', 1, drive=True).compile(precision='float64')
+    run = _warm(plan)
+    bptt = BPTT(plan.program(), _relaxed_loss(model_name), detach_reset=False, spikes='relaxed')
+    grads = _check_fd(bptt, run.state, {'x': _xs(60, 6, seed=2)}, jnp.full(10, 2.0), n0=run.n)
+    for k, g in grads.items():
+        assert np.any(np.asarray(u.get_mantissa(g)) != 0), k
+
+
+def _noise_net(seed=4):
+    net = Network(dt=DT, seed=seed)
+    noise = net.add(poisson_generator, 10, params=dict(rate=600.0 * u.Hz), name='noise')
+    h = net.add(LIF, 6, name='h', surrogate=SIG, trainable=('tau',))
+    net.connect(noise, h, fixed_indegree(4), port='delta', weight=0.45 * u.mV, trainable=True,
+                name='w')
+    net.connect(h, h, fixed_indegree(2), port='delta', weight=0.2 * u.mV, delay=0.3 * u.ms,
+                trainable=True, name='rec')
+    net.observe(h, 'spike', 'V', name='r')
+    return net
+
+
+def test_episode_forward_equals_runner_cont(x64):
+    """The episode from a runner's state is the runner's continuation (same RNG streams)."""
+    plan = _noise_net().compile(precision='float64')
+    run = _warm(plan)
+    state0, n0 = run.state, run.n
+    bptt = BPTT(plan.program(), lambda r, y: rate_mse(r['r']['spike'], y, DT))
+    rec = bptt.record(state0, duration=8.0 * u.ms, n0=n0)
+    res = run.cont(8.0 * u.ms)
+    np.testing.assert_array_equal(rec['r']['spike'], np.asarray(res['r']['spike']))
+    np.testing.assert_allclose(rec['r']['V'], np.asarray(res['r']['V'].to_decimal(u.mV)),
+                               rtol=1e-12, atol=1e-12)
+    assert float(np.sum(rec['r']['spike'])) > 0
+    # a learner's final state continues the runner exactly
+    _, _, final = bptt._jit_grad(80, state0, jnp.int32(n0), jnp.zeros((), jnp.uint32), None, 0.0)
+    for a, b in zip(jax.tree.leaves(final), jax.tree.leaves(run.state)):
+        np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-12, atol=1e-12)
+
+
+def test_batched_runner_state(x64):
+    """``state0`` from a batched runner (trials = runner.trials) = per-trial continuation."""
+    plan = _noise_net().compile(precision='float64')
+    run = _warm(plan, steps=50, batch=2)
+    bptt = BPTT(plan.program(), lambda r, y: rate_mse(r['r']['spike'], y, DT))
+    rec = bptt.record(run.state, duration=5.0 * u.ms, n0=run.n, trials=run.trials)
+    res = run.cont(5.0 * u.ms)
+    assert rec['r']['spike'].shape == (2, 50, 6)
+    np.testing.assert_array_equal(rec['r']['spike'], np.asarray(res['r']['spike']))
+    assert not np.array_equal(rec['r']['spike'][0], rec['r']['spike'][1])  # independent trials
+    loss, grads = bptt.grad(run.state, None, 100.0 * u.Hz, duration=5.0 * u.ms, n0=run.n,
+                            trials=run.trials)
+    assert np.isfinite(float(loss)) and set(grads) == {'pops/h/tau', 'weights/w/0', 'weights/rec/0'}
+    with pytest.raises(ValueError, match='trials=runner.trials'):
+        bptt.grad(run.state, duration=5.0 * u.ms)
+    with pytest.raises(ValueError, match='leading axis'):
+        bptt.grad(run.state, duration=5.0 * u.ms, trials=jnp.arange(3))
+    with pytest.raises(ValueError, match='1-D'):
+        bptt.grad(run.state, duration=5.0 * u.ms, trials=0)
+
+
+def test_run_continues_episodes(x64):
+    plan = _noise_net().compile(precision='float64')
+    bptt = BPTT(plan.program(), lambda r, y: rate_mse(r['r']['spike'], y, DT),
+                braintools.optim.SGD(lr=1e-6))
+    ref = Runner(plan.program())
+    ref.simulate(5.0 * u.ms)
+    w0 = np.asarray(u.get_mantissa(bptt.params['weights/w/0'].value)).copy()
+    loss1, s1 = bptt.run(None, None, 100.0 * u.Hz, duration=5.0 * u.ms)
+    for a, b in zip(jax.tree.leaves(s1), jax.tree.leaves(ref.state)):  # pre-update forward
+        np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-12, atol=1e-12)
+    assert not np.array_equal(np.asarray(u.get_mantissa(bptt.params['weights/w/0'].value)), w0)
+    loss2, s2 = bptt.run(s1, None, 100.0 * u.Hz, duration=5.0 * u.ms, n0=50)
+    assert np.isfinite(float(loss2)) and float(loss2) != float(loss1)
 
 
 # ---------------------------------------------------------------------------
@@ -200,17 +318,16 @@ def test_g6_relaxed_vs_finite_differences(x64, model_name, storage, delay_steps)
 
 def _rec_bptt(storage='dense', **kw):
     net = recurrent('LIF', storage, 1)
-    bptt = BPTT(lambda r, y: spike_count_mse(r['s_B']['spike'], y)
-                + membrane_mse(r['v_A']['V'], 0.5), **kw)
-    net.compile(precision='float64').runner(learner=bptt)
-    return bptt
+    return BPTT(net.compile(precision='float64').program(),
+                lambda r, y: spike_count_mse(r['s_B']['spike'], y) + membrane_mse(r['v_A']['V'], 0.5),
+                **kw)
 
 
 def test_checkpointed_equals_plain(x64):
     xs, y = {'x': _xs(64, 6, p=0.5)}, jnp.full(10, 3.0)
-    l0, g0 = _rec_bptt().grad(6.4 * u.ms, xs=xs, targets=y)
+    l0, g0 = _rec_bptt().grad(None, xs, y)
     for base in (2, 4, 16):
-        l1, g1 = _rec_bptt(checkpoint=base).grad(6.4 * u.ms, xs=xs, targets=y)
+        l1, g1 = _rec_bptt(checkpoint=base).grad(None, xs, y)
         assert float(l1) == float(l0)
         for k in g0:
             np.testing.assert_allclose(u.get_mantissa(g1[k]), u.get_mantissa(g0[k]), rtol=1e-12,
@@ -218,11 +335,24 @@ def test_checkpointed_equals_plain(x64):
     assert any(np.any(np.asarray(u.get_mantissa(g)) != 0) for g in g0.values())
 
 
+def test_checkpointed_equals_plain_from_warm_state(x64):
+    plan = _noise_net().compile(precision='float64')
+    run = _warm(plan, steps=100)
+    loss = lambda r, y: rate_mse(r['r']['spike'], y, DT) + membrane_mse(r['r']['V'], 0.5)
+    kw = dict(duration=6.4 * u.ms, n0=run.n)
+    l0, g0 = BPTT(plan.program(), loss).grad(run.state, None, 100.0 * u.Hz, **kw)
+    l1, g1 = BPTT(plan.program(), loss, checkpoint=4).grad(run.state, None, 100.0 * u.Hz, **kw)
+    assert float(l1) == float(l0)
+    for k in g0:
+        np.testing.assert_allclose(u.get_mantissa(g1[k]), u.get_mantissa(g0[k]), rtol=1e-12,
+                                   atol=1e-14)
+
+
 def test_truncation(x64):
     xs, y = {'x': _xs(40, 6, p=0.5)}, jnp.full(10, 3.0)
-    l0, g0 = _rec_bptt(detach_reset=False).grad(4.0 * u.ms, xs=xs, targets=y)
-    l1, g1 = _rec_bptt(detach_reset=False, truncation=40).grad(4.0 * u.ms, xs=xs, targets=y)
-    l2, g2 = _rec_bptt(detach_reset=False, truncation=3).grad(4.0 * u.ms, xs=xs, targets=y)
+    l0, g0 = _rec_bptt(detach_reset=False).grad(None, xs, y)
+    l1, g1 = _rec_bptt(detach_reset=False, truncation=40).grad(None, xs, y)
+    l2, g2 = _rec_bptt(detach_reset=False, truncation=3).grad(None, xs, y)
     assert float(l0) == float(l1) == float(l2)  # forward unchanged
     for k in g0:
         np.testing.assert_allclose(u.get_mantissa(g1[k]), u.get_mantissa(g0[k]), rtol=1e-12)
@@ -236,16 +366,16 @@ def test_tiny_training_run_decreases_loss():
     out = net.add(LIF, 5, name='out', surrogate=SIG)
     net.connect(x, out, port='delta', weight=0.2 * u.mV, trainable=True, name='w')
     net.observe(out, 'spike', name='rec')
-    bptt = BPTT(lambda r, y: spike_count_mse(r['rec']['spike'], y), braintools.optim.Adam(lr=0.02))
-    net.compile().runner(learner=bptt)
+    bptt = BPTT(net.compile().program(), lambda r, y: spike_count_mse(r['rec']['spike'], y),
+                braintools.optim.Adam(lr=0.02))
     xs = {'x': _xs(100, 8, p=0.4)}
     target = jnp.array([2.0, 4.0, 6.0, 8.0, 10.0])
-    losses = np.asarray(bptt.fit(10.0 * u.ms, 40, xs=xs, targets=target))
+    losses = np.asarray(bptt.fit(None, xs, target, n_epochs=40))
     assert losses.shape == (40,)
-    final = float(bptt.loss(10.0 * u.ms, xs=xs, targets=target))
+    final = float(bptt.loss(None, xs, target))
     assert final < 0.25 * losses[0]
-    loss_step = float(bptt.step(10.0 * u.ms, xs=xs, targets=target))
-    assert loss_step == pytest.approx(final)
+    loss_step, _ = bptt.run(None, xs, target)
+    assert float(loss_step) == pytest.approx(final)
 
 
 def test_trains_neuron_parameter_with_poisson_drive():
@@ -254,62 +384,85 @@ def test_trains_neuron_parameter_with_poisson_drive():
     out = net.add(LIF, 4, name='out', surrogate=SIG, trainable=('tau',))
     net.connect(noise, out, port='delta', weight=0.5 * u.mV, name='w')
     net.observe(out, 'spike', name='rec')
-    bptt = BPTT(lambda r, y: rate_mse(r['rec']['spike'], y, DT), braintools.optim.Adam(lr=0.5))
-    net.compile().runner(learner=bptt)
+    bptt = BPTT(net.compile().program(), lambda r, y: rate_mse(r['rec']['spike'], y, DT),
+                braintools.optim.Adam(lr=0.5))
     assert list(bptt.params) == ['pops/out/tau']
-    l0, g = bptt.grad(20.0 * u.ms, targets=200.0 * u.Hz)
+    l0, g = bptt.grad(None, None, 200.0 * u.Hz, duration=20.0 * u.ms)
     assert u.get_unit(g['pops/out/tau']) == u.ms
     assert np.all(np.asarray(u.get_mantissa(g['pops/out/tau'])) != 0)
-    losses = bptt.fit(20.0 * u.ms, 10, targets=200.0 * u.Hz)
+    losses = bptt.fit(None, None, 200.0 * u.Hz, n_epochs=10, duration=20.0 * u.ms)
     assert float(losses[-1]) < float(l0)
 
 
-def test_batched_runner_matches_unbatched(x64):
+def test_batched_episode_matches_unbatched(x64):
     xs1 = {'x': _xs(30, 6, p=0.5)}
     y = jnp.full(10, 2.0)
     b1 = _rec_bptt()
-    l1, g1 = b1.grad(3.0 * u.ms, xs=xs1, targets=y)
-    net = recurrent('LIF', 'dense', 1)
-    b2 = BPTT(lambda r, t: spike_count_mse(r['s_B']['spike'], t) + membrane_mse(r['v_A']['V'], 0.5))
-    run = net.compile(precision='float64').runner(batch=2, rng='common', learner=b2)
-    assert run.learner is b2
+    l1, g1 = b1.grad(None, xs1, y)
+    b2 = _rec_bptt()
+    trials = Runner(b2.program, batch=2, rng='common').trials
     xs2 = {'x': jnp.stack([xs1['x'], xs1['x']])}
-    l2, g2 = b2.grad(3.0 * u.ms, xs=xs2, targets=y)
+    l2, g2 = b2.grad(b2.program.init_state(2), xs2, y, trials=trials)
     assert float(l2) == pytest.approx(float(l1), rel=1e-12)
     for k in g1:
         np.testing.assert_allclose(u.get_mantissa(g2[k]), u.get_mantissa(g1[k]), rtol=1e-10)
+    l3, _ = b2.grad(None, xs2, y, trials=trials)  # state0=None -> batched initial state
+    assert float(l3) == float(l2)
     with pytest.raises(ValueError, match='leading shape'):
-        b2.grad(3.0 * u.ms, xs=xs1, targets=y)
+        b2.grad(None, xs1, y, trials=trials)
 
 
-def test_detach_reset_is_set_on_models():
-    net = recurrent('LIF', 'dense', 1)
-    plan = net.compile()
-    plan.runner(learner=BPTT(lambda r, y: 0.0 * jnp.sum(r['s_B']['spike'])))
-    assert all(m.detach_reset is True for m in plan.models)
-    plan2 = recurrent('LIF', 'dense', 1).compile()
-    plan2.runner(learner=BPTT(lambda r, y: jnp.sum(r['s_B']['spike']), detach_reset=None))
-    assert all(m.detach_reset is None for m in plan2.models)
+def test_learner_options_do_not_mutate_program_or_models():
+    plan = recurrent('LIF', 'dense', 1).compile()
+    prog = plan.program()
+    b = BPTT(prog, lambda r, y: 0.0 * jnp.sum(r['s_B']['spike']))
+    assert b.program is not prog and b.program.detach_reset is True and b.plan is plan
+    assert prog.detach_reset is None and prog.spikes == 'hard'
+    assert all(m.detach_reset is None for m in plan.models)
+    b2 = BPTT(prog, lambda r, y: jnp.sum(r['s_B']['spike']), detach_reset=None)
+    assert b2.program is prog  # nothing to change
+    b3 = BPTT(prog, lambda r, y: jnp.sum(r['s_B']['spike']), detach_reset=None, spikes='relaxed')
+    assert b3.program.spikes == 'relaxed' and b3.program.detach_reset is None
+
+
+def test_detach_reset_option_changes_gradients(x64):
+    xs, y = {'x': _xs(40, 6, p=0.5)}, jnp.full(10, 3.0)
+    _, g_det = _rec_bptt(detach_reset=True).grad(None, xs, y)
+    _, g_att = _rec_bptt(detach_reset=False).grad(None, xs, y)
+    assert any(not np.allclose(u.get_mantissa(g_det[k]), u.get_mantissa(g_att[k])) for k in g_det)
 
 
 def test_quantity_inputs_and_port_mapping():
-    """``xs`` given per port as a Quantity reaches a neuron's input directly."""
+    """``data`` given per port as a Quantity reaches a neuron's input directly."""
     net = Network(dt=DT)
     h = net.add(LIF, 3, name='h', surrogate=SIG, trainable=('tau',))
     net.observe(h, 'V', name='v')
-    bptt = BPTT(lambda r, y: membrane_mse(r['v']['V'], y))
-    net.compile().runner(learner=bptt)
+    bptt = BPTT(net.compile().program(), lambda r, y: membrane_mse(r['v']['V'], y))
     xs = {'h': {'I': jnp.ones((20, 3)) * 2.0 * u.mA}}
-    l, g = bptt.grad(2.0 * u.ms, xs=xs, targets=0.0)
+    l, g = bptt.grad(None, xs, 0.0)
     assert float(l) > 0 and np.all(np.asarray(u.get_mantissa(g['pops/h/tau'])) != 0)
+    l2, _ = bptt.grad(None, xs, 0.0, duration=2.0 * u.ms)  # consistent duration accepted
+    assert float(l2) == float(l)
+    with pytest.raises(ValueError, match='duration is 10 steps'):
+        bptt.grad(None, xs, 0.0, duration=1.0 * u.ms)
     with pytest.raises(ValueError, match='input ports'):
-        bptt.grad(2.0 * u.ms, xs={'h': jnp.ones((20, 3))}, targets=0.0)
+        bptt.grad(None, {'h': jnp.ones((20, 3))}, 0.0)
     with pytest.raises(KeyError):
-        bptt.grad(2.0 * u.ms, xs={'nope': jnp.ones((20, 3))}, targets=0.0)
+        bptt.grad(None, {'nope': jnp.ones((20, 3))}, 0.0)
     with pytest.raises(TypeError, match='mapping'):
-        bptt.grad(2.0 * u.ms, xs=[1, 2], targets=0.0)
+        bptt.grad(None, [1, 2], 0.0)
     with pytest.raises(ValueError, match='leading shape'):
-        bptt.grad(2.0 * u.ms, xs={'h': {'I': jnp.ones((5, 3)) * u.mA}}, targets=0.0)
+        bptt.grad(None, {'h': {'I': jnp.ones((5,)) * u.mA}}, 0.0, trials=jnp.arange(2))
+    with pytest.raises(ValueError, match='other inputs'):
+        net2 = Network(dt=DT)
+        a = net2.add(ExternalInput, 2, name='a')
+        b = net2.add(ExternalInput, 2, name='b')
+        o = net2.add(LIF, 2, name='o', surrogate=SIG)
+        net2.connect(a, o, port='delta', weight=1.0 * u.mV, trainable=True)
+        net2.connect(b, o, port='delta', weight=1.0 * u.mV)
+        net2.observe(o, 'V', name='v')
+        BPTT(net2.compile().program(), lambda r, y: 0.0).grad(
+            None, {'a': jnp.ones((5, 2)), 'b': jnp.ones((6, 2))})
 
 
 # ---------------------------------------------------------------------------
@@ -320,17 +473,17 @@ class _NotDifferentiable(LIF):
     capabilities = Capabilities(differentiable=False)
 
 
-def test_attach_errors():
+def test_construction_errors():
     net = Network(dt=DT)
     h = net.add(LIF, 2, name='h')
     net.observe(h, 'spike', name='r')
     with pytest.raises(ValueError, match='no trainable'):
-        net.compile().runner(learner=BPTT(lambda r, y: 0.0))
+        BPTT(net.compile().program(), lambda r, y: 0.0)
 
     net = Network(dt=DT)
     net.add(LIF, 2, name='h', trainable=('tau',))
     with pytest.raises(ValueError, match='observers'):
-        net.compile().runner(learner=BPTT(lambda r, y: 0.0))
+        BPTT(net.compile().program(), lambda r, y: 0.0)
 
     net = Network(dt=DT)
     x = net.add(ExternalInput, 2, name='x')
@@ -338,42 +491,63 @@ def test_attach_errors():
     net.connect(x, h, port='delta', weight=1.0 * u.mV, trainable=True)
     net.observe(h, 'spike', name='r')
     with pytest.raises(ValueError, match='not differentiable'):
-        net.compile().runner(learner=BPTT(lambda r, y: 0.0))
+        BPTT(net.compile().program(), lambda r, y: 0.0)
 
-    b = BPTT(lambda r, y: jnp.sum(r['s_B']['spike']))
-    run = recurrent('LIF', 'dense', 1).compile().runner(learner=b)
-    with pytest.raises(RuntimeError, match='already attached'):
-        b.attach(run)
+    plan = recurrent('LIF', 'dense', 1).compile()
+    with pytest.raises(TypeError, match='Program'):
+        BPTT(plan, lambda r, y: 0.0)  # a plan is not a program
+    b = BPTT(plan.program(), lambda r, y: jnp.sum(r['s_B']['spike']))
     with pytest.raises(RuntimeError, match='optimizer'):
-        b.step(1.0 * u.ms, xs={'x': _xs(10, 6)})
+        b.run(None, {'x': _xs(10, 6)})
+    with pytest.raises(RuntimeError, match='optimizer'):
+        b.fit(None, {'x': _xs(10, 6)}, n_epochs=2)
     with pytest.raises(ValueError, match='at least one step'):
-        b.grad(0.0 * u.ms)
-    with pytest.raises(RuntimeError, match='attach'):
-        BPTT(lambda r, y: 0.0).loss(1.0 * u.ms)
+        b.grad(None, duration=0.0 * u.ms)
+    with pytest.raises(ValueError, match='data or a duration'):
+        b.grad(None)
+    with pytest.raises(ValueError, match='n0'):
+        b.grad(None, {'x': _xs(10, 6)}, n0=jnp.arange(2))
+    with pytest.raises(ValueError, match='not a state of this program'):
+        b.grad({'pops': {}}, {'x': _xs(10, 6)})
 
 
 def test_constructor_and_loss_validation():
+    prog = recurrent('LIF', 'dense', 1).compile().program()
     with pytest.raises(TypeError, match='callable'):
-        BPTT(3.0)
+        BPTT(prog, 3.0)
     with pytest.raises(ValueError, match='checkpoint'):
-        BPTT(lambda r, y: 0.0, checkpoint=1)
+        BPTT(prog, lambda r, y: 0.0, checkpoint=1)
     with pytest.raises(ValueError, match='truncation'):
-        BPTT(lambda r, y: 0.0, truncation=0)
+        BPTT(prog, lambda r, y: 0.0, truncation=0)
     with pytest.raises(ValueError, match='truncation'):
-        BPTT(lambda r, y: 0.0, truncation=True)
+        BPTT(prog, lambda r, y: 0.0, truncation=True)
     with pytest.raises(TypeError, match='detach_reset'):
-        BPTT(lambda r, y: 0.0, detach_reset='yes')
-    b = BPTT(lambda r, y: r['s_B']['spike'])  # not a scalar
-    recurrent('LIF', 'dense', 1).compile().runner(learner=b)
+        BPTT(prog, lambda r, y: 0.0, detach_reset='yes')
+    with pytest.raises(ValueError, match='spikes'):
+        BPTT(prog, lambda r, y: 0.0, spikes='soft')
+    b = BPTT(prog, lambda r, y: r['s_B']['spike'])  # not a scalar
     with pytest.raises(ValueError, match='scalar'):
-        b.loss(1.0 * u.ms, xs={'x': _xs(10, 6)})
-    b2 = BPTT(lambda r, y: jnp.sum(r['s_B']['spike']) * u.UNITLESS, braintools.optim.SGD(lr=0.1))
-    recurrent('LIF', 'dense', 1).compile().runner(learner=b2)
-    assert np.isfinite(float(b2.loss(1.0 * u.ms, xs={'x': _xs(10, 6)})))
+        b.loss(None, {'x': _xs(10, 6)})
+    b2 = BPTT(recurrent('LIF', 'dense', 1).compile().program(),
+              lambda r, y: jnp.sum(r['s_B']['spike']) * u.UNITLESS, braintools.optim.SGD(lr=0.1))
+    assert np.isfinite(float(b2.loss(None, {'x': _xs(10, 6)})))
     with pytest.raises(ValueError, match='n_epochs'):
-        b2.fit(1.0 * u.ms, 0, xs={'x': _xs(10, 6)})
+        b2.fit(None, {'x': _xs(10, 6)}, n_epochs=0)
     with pytest.raises(ValueError, match='n_epochs'):
-        b2.fit(1.0 * u.ms, None, xs={'x': _xs(10, 6)})
+        b2.fit(None, {'x': _xs(10, 6)}, n_epochs=None)
+
+
+def test_relaxed_program_needs_surrogates():
+    net = Network(dt=DT)
+    x = net.add(ExternalInput, 2, name='x')
+    h = net.add(LIF, 2, name='h', surrogate=None, trainable=('tau',))
+    net.connect(x, h, port='delta', weight=1.0 * u.mV)
+    net.observe(h, 'V', name='v')
+    plan = net.compile()
+    with pytest.raises(ValueError, match=r"spikes='relaxed'.*h \(LIF"):
+        Program(plan, spikes='relaxed')
+    with pytest.raises(ValueError, match='surrogate'):
+        BPTT(plan.program(), lambda r, y: 0.0, spikes='relaxed')
 
 
 def test_trainable_states_keys():
@@ -402,7 +576,7 @@ def test_loss_helpers():
 def test_program_ext_rejects_unknown_population():
     net = Network(dt=DT)
     net.add(LIF, 2, name='h')
-    prog = net.compile().runner().program
+    prog = net.compile().program()
     with pytest.raises(KeyError, match='unknown population'):
         prog.step(prog.read_params(), prog.init_state(), 0, jnp.uint32(0), ext={'nope': {}})
     st, cur = prog.step(prog.read_params(), prog.init_state(), 0, jnp.uint32(0),

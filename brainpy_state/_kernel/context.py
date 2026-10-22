@@ -7,7 +7,7 @@ population's RNG key for the step all arrive in a :class:`StepContext`.
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import brainunit as u
@@ -16,7 +16,18 @@ import jax.numpy as jnp
 
 from brainpy_state._kernel.units import check_unit
 
-__all__ = ['StepContext']
+__all__ = ['StepContext', 'SPIKE_MODES']
+
+#: Forward spike modes of a ``Program`` (architecture doc §8.2-2).
+SPIKE_MODES = ('hard', 'relaxed')
+
+
+def check_spike_options(spikes: Any, detach_reset: Any) -> None:
+    """Validate the ``spikes`` / ``detach_reset`` options of a program or context."""
+    if spikes not in SPIKE_MODES:
+        raise ValueError(f'spikes must be one of {SPIKE_MODES}, got {spikes!r}')
+    if detach_reset is not None and not isinstance(detach_reset, bool):
+        raise TypeError(f'detach_reset must be a bool or None, got {detach_reset!r}')
 
 
 @jax.tree_util.register_dataclass
@@ -35,6 +46,14 @@ class StepContext:
     key : jax.Array or None
         RNG key for this population and step (spec §4.5), ``None`` for
         deterministic populations.
+    spikes : {'hard', 'relaxed'}, default 'hard'
+        Forward spike mode of the running ``Program`` (static pytree field):
+        ``'hard'`` emits exact counts with a surrogate backward pass,
+        ``'relaxed'`` smooth spikes with soft jumps (``SpikeRule.check``).
+    detach_reset : bool or None, default None
+        The running ``Program``'s default ``detach_reset`` for every spike rule
+        (static field); ``None`` defers to the model's own setting. A rule's
+        explicit ``detach_reset`` always wins.
 
     Notes
     -----
@@ -47,9 +66,21 @@ class StepContext:
     dt: Any
     step: Any
     key: Any = None
+    spikes: str = field(default='hard', metadata=dict(static=True))
+    detach_reset: bool | None = field(default=None, metadata=dict(static=True))
+
+    @property
+    def relaxed(self) -> bool:
+        """Whether the relaxed (smooth) spike forward pass is selected."""
+        return self.spikes == 'relaxed'
+
+    def detach_default(self, model_default: bool | None) -> bool | None:
+        """Default ``detach_reset`` for a model: this context's, else ``model_default``."""
+        return self.detach_reset if self.detach_reset is not None else model_default
 
     @classmethod
-    def create(cls, t: Any, dt: Any, step: Any = 0, key: Any = None) -> 'StepContext':
+    def create(cls, t: Any, dt: Any, step: Any = 0, key: Any = None, spikes: str = 'hard',
+               detach_reset: bool | None = None) -> 'StepContext':
         """Validated constructor.
 
         Parameters
@@ -60,6 +91,10 @@ class StepContext:
             Step index; converted to an int32 array.
         key : jax.Array or None
             Per-population RNG key.
+        spikes : {'hard', 'relaxed'}, default 'hard'
+            Forward spike mode.
+        detach_reset : bool or None, default None
+            Program-level default ``detach_reset``.
 
         Returns
         -------
@@ -69,13 +104,16 @@ class StepContext:
         ------
         UnitMismatchError
             If ``t`` or ``dt`` is not a time.
+        ValueError
+            If ``spikes`` is not a spike mode.
         """
+        check_spike_options(spikes, detach_reset)
         check_unit(t, u.ms, 't')
         check_unit(dt, u.ms, 'dt')
         step = jnp.asarray(step, dtype=jnp.int32)
         if step.ndim != 0:
             raise ValueError(f'step must be a scalar, got shape {step.shape}')
-        return cls(t=t, dt=dt, step=step, key=key)
+        return cls(t=t, dt=dt, step=step, key=key, spikes=spikes, detach_reset=detach_reset)
 
     def replace(self, **changes: Any) -> 'StepContext':
         """Return a copy with ``changes`` applied (no validation)."""

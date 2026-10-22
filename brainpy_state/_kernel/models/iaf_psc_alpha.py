@@ -145,7 +145,8 @@ class iaf_psc_alpha(SpikingNeuron):
                       dI_syn_in=from_mantissa(dI_in_new.astype(dtype), _PA_MS),
                       **new_latch)
         # 3. threshold, reset, refractoriness
-        s, carry = rule.check(s, p, carry, detach_reset=rule_detach(self))
+        s, carry = rule.check(s, p, carry, detach_reset=rule_detach(self, ctx),
+                              relaxed=ctx.relaxed)
         spike, counter = rule.end(carry)
         s = s.replace(spike=spike.astype(dtype), refractory_count=counter)
         return s, {'spike': s.spike}
