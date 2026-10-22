@@ -54,6 +54,12 @@ jax is not a chaobrain repository: candidates are recorded here, not filed.
 |---|---|---|---|---|
 | — | — | — | — | — |
 
+## 2.1 Unattributed problems (not filed; library not identified)
+
+| summary | observed | workaround (file) | found in | next step |
+|---|---|---|---|---|
+| the Python process sometimes hangs at interpreter exit after a kernel run (threads left in futex waits; seen in `subprocess` children on the remote host CPU) | `benchmarks/k1a_compile_time.py one <case>` run from `validation/compile_gate_test.py` | `os._exit(0)` after printing `RESULT_JSON` (`benchmarks/k1a_compile_time.py`) | K1a-1 | isolate (jax / XLA CPU thread pool vs brainevent numba FFI); minimal repro, then file upstream per §3 |
+
 ## 3. Procedure (from the agent brief, K1a onwards)
 
 If a task hits a bug or missing feature in brainevent / braintrace / brainstate /

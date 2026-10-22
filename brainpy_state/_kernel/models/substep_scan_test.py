@@ -71,7 +71,7 @@ def _assert_close(a, b, precision, key):
         np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6, err_msg=key)
 
 
-#: float32 bound for the precise model (proposed in the K1a-1 PR; lead decision pending):
+#: float32 bound for the precise model (lead decision 2026-10-22, K1a spec §7):
 #: relative 1e-5 on V_m / I_syn (about 80 ulp) and 1e-4 ms on spike offsets. The scan
 #: is not bit-identical to K0 in float32 because K0's own unrolled float32 result
 #: depends on the XLA fusion context at the ulp level, and recurrent precise networks
