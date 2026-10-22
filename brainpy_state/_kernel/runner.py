@@ -379,8 +379,8 @@ class Program:
         for name, states in self.plan.weights.items():
             for st, v in zip(states, params['weights'][name]):
                 st.value = v
-        for name, states in self.plan.plastic_params.items():
-            for k, st in states.items():
+        for name, pstates in self.plan.plastic_params.items():
+            for k, st in pstates.items():
                 st.value = params['plasticity'][name][k]
 
     # ------------------------------------------------------------ delivery
@@ -428,6 +428,7 @@ class Program:
                  ) -> tuple[dict, jax.Array]:
         """Synapse step of a plastic projection; returns its new state and delivery."""
         pl = pp.plastic
+        assert pl is not None  # called for plastic projections only
         prj = pp.proj
         x = self._delayed(prj.pre, prj.source_port, pl.d_ax, state['rings'], cur, n)
         q = self._delayed(prj.post, prj.plasticity.post_port, pl.d_den, state['rings'], cur, n)
@@ -458,6 +459,7 @@ class Program:
     def _deliver_timed(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any) -> Any:
         g = pp.groups[0]
         w = u.get_mantissa(g.storage.weight_to_edges(params['weights'][pp.name][0]))
+        assert pp.timed is not None  # placement == 'timed' builds a TimedDelivery
         rings, objs = {}, {}
         for s in pp.timed.segments:
             pplan = self.plan.populations[s.pop]
@@ -519,7 +521,7 @@ class Program:
             y = delivered[j]
             gi = plan.synapse_route.get((j, a))
             port = pp.proj.port if gi is None else ('syn', gi)
-            kind = model.inputs[port] if gi is None else None
+            kind = model.inputs[pp.proj.port] if gi is None else None
             for seg in pp.proj.post.segments:
                 if seg.pop != a:
                     continue
@@ -631,14 +633,14 @@ class Program:
             acc = self._gather(a, params, state, cur, n, self._ctx(a, n, trial), delivered,
                                syn_state, ext, only=ports, arrived=arrived)
             old = state['pops'][pplan.name]
-            new = dict(pops[pplan.name])
+            latched = dict(pops[pplan.name])
             for port in ports:
                 kind = pplan.model.inputs[port]
                 k = latch_name(port)
                 v = from_mantissa(acc[port], kind.unit) if port in acc else kind.zeros(pplan.pop.n, self.dtype)
                 # upstream: braintrace#184 (keep the latch's hidden->hidden edge)
-                new[k] = _like(_keep_dependency(v, old[k]), old[k])
-            pops[pplan.name] = Record(**new)
+                latched[k] = _like(_keep_dependency(v, old[k]), old[k])
+            pops[pplan.name] = Record(**latched)
 
         # plasticity (reads the rings before this step's outputs are written)
         plastic = dict(state['plastic'])

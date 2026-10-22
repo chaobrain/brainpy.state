@@ -111,7 +111,7 @@ class PortKind:
 
     kind: ClassVar[str] = ''
     unit: u.Unit
-    into: ClassVar[str | None] = None
+    into: str | None = None
 
     #: Weights into this port must be non-negative.
     nonnegative_weights: ClassVar[bool] = False
@@ -199,7 +199,7 @@ class Event(PortKind):
         object.__setattr__(self, 'into', _check_into(into))
 
     @property
-    def nonnegative_weights(self) -> bool:
+    def nonnegative_weights(self) -> bool:  # type: ignore[override]  # frozen: never assigned
         """Weights must be non-negative: a receptor port filtering into a conductance."""
         return self.into is not None and _is_conductance_unit(self.unit)
 
@@ -238,7 +238,7 @@ class TimedEvent(PortKind):
         object.__setattr__(self, 'into', _check_into(into))
 
     @property
-    def nonnegative_weights(self) -> bool:
+    def nonnegative_weights(self) -> bool:  # type: ignore[override]  # frozen: never assigned
         """Weights must be non-negative: a receptor port filtering into a conductance."""
         return self.into is not None and _is_conductance_unit(self.unit)
 
@@ -604,7 +604,7 @@ def _prefix(where: str) -> str:
 
 
 #: source kind -> destination kinds it may connect to without a synapse model
-_COMPATIBLE: dict[type, tuple[type, ...]] = {
+_COMPATIBLE: dict[type[PortKind], tuple[type[PortKind], ...]] = {
     Event: (Event, TimedEvent),
     TimedEvent: (TimedEvent, Event),
     Current: (Current,),

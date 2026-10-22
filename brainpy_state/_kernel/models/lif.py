@@ -8,7 +8,7 @@ threshold check, soft reset by default, no refractoriness.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import Any
 
 import braintools
 import brainunit as u
@@ -103,7 +103,7 @@ class LIF(SpikingNeuron):
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_soft_reset,
                         surrogate=braintools.surrogate.ReluGrad())
-    integrator: ClassVar[Integrator] = Exact()
+    integrator: Integrator = Exact()
 
     def __init__(self, n: int, params: Mapping[str, Any] | None = None,
                  init: Mapping[str, Any] | None = None, *, spk_reset: str = 'soft',

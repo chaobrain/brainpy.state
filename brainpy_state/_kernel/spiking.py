@@ -467,7 +467,10 @@ class SpikeRule:
 
     def tick(self, carry: SpikeCarry, granularity: str) -> SpikeCarry:
         """Decrement the refractory counter if its granularity is ``granularity``."""
-        if carry.counter is None or self.refractory.granularity != granularity:
+        if carry.counter is None:
+            return carry
+        assert self.refractory is not None  # a counter exists only with a refractory spec
+        if self.refractory.granularity != granularity:
             return carry
         return carry._replace(counter=jnp.maximum(carry.counter - 1, 0))
 

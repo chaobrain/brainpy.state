@@ -144,7 +144,7 @@ class NMDA(NeuronModel):
     states = States(x=Init(0.0), s=Init(0.0), pulse=Init(0, dtype=np.int32))
     inputs = Ports(spike=Event())
     outputs = Ports(s=Graded(None))
-    integrator: ClassVar[Integrator] = Exact()
+    integrator: Integrator = Exact()
     capabilities: ClassVar[Capabilities] = Capabilities(differentiable=False, etrace=False)
 
     def output_states(self) -> dict[str, str]:

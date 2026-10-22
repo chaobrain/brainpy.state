@@ -60,6 +60,9 @@ class SpikingNeuron(NeuronModel):
         ``integrator``, ``detach_reset``, ``name``).
     """
 
+    #: Every spiking model declares a spike rule (narrows ``NeuronModel.spiking``).
+    spiking: SpikeRule
+
     def __init__(self, n: int, params: Mapping[str, Any] | None = None,
                  init: Mapping[str, Any] | None = None, *, surrogate: Any = _UNSET,
                  **kwargs: Any) -> None:
@@ -110,7 +113,7 @@ def device_window(p: Record, dt_ms: Any) -> tuple[Any, Any]:
     return t_min, t_max
 
 
-def rule_detach(model: NeuronModel, ctx: Any = None) -> bool:
+def rule_detach(model: SpikingNeuron, ctx: Any = None) -> bool:
     """Effective ``detach_reset`` of ``model``'s spike rule.
 
     The rule's own setting wins; else the running program's option

@@ -9,7 +9,7 @@ of the network through ordinary (trainable) projections, delays and storages.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import Any
 
 from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.integrators import Exact, Integrator
@@ -51,7 +51,7 @@ class ExternalInput(NeuronModel):
 
     inputs = Ports(x=Event(max_multiplicity=None))
     outputs = Ports(spike=Event(max_multiplicity=None))
-    integrator: ClassVar[Integrator] = Exact()
+    integrator: Integrator = Exact()
 
     def step(self, s: Record, p: Record, inp: Mapping[str, Any], ctx: StepContext
              ) -> tuple[Record, dict[str, Any]]:

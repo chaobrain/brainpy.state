@@ -121,7 +121,7 @@ class aeif_cond_alpha(SpikingNeuron):
     outputs = Ports(spike=Event(max_multiplicity=None))
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad())
-    integrator: ClassVar[Integrator] = RK(order=4, substeps=AEIF_COND_ALPHA_SUBSTEPS)
+    integrator: Integrator = RK(order=4, substeps=AEIF_COND_ALPHA_SUBSTEPS)
     accepts_conductance_ports: ClassVar[bool] = True
 
     def derivatives(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> dict:

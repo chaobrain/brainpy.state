@@ -195,7 +195,7 @@ class TimedDelivery:
 
     def ring_lengths(self) -> dict:
         """``{(population, port): largest delay >= 1}`` this projection reads."""
-        out = {}
+        out: dict[tuple[int, str], int] = {}
         for s in self.segments:
             if s.delays.size and s.delays.max() >= 1:
                 k = (s.pop, s.port)
@@ -212,12 +212,14 @@ class TimedDelivery:
             zero = s.delays == 0
             now = cur[s.pop][s.port] if zero.any() else None  # only delay 0 reads this step
             if zero.all():
+                assert now is not None  # non-empty segment: all() implies any()
                 o = now['offsets'][jnp.asarray(s.cols, jnp.int32)]
                 ww = now['weights'][jnp.asarray(s.cols, jnp.int32)]
             else:
                 ring = ring_objs[(s.pop, s.port)]
                 o, ww = ring.read_edges(rings[(s.pop, s.port)], step, np.where(zero, 1, s.delays), s.cols)
                 if zero.any():
+                    assert now is not None
                     z = jnp.asarray(zero)[:, None]
                     c = jnp.asarray(s.cols, jnp.int32)
                     o = jnp.where(z, now['offsets'][c], o)

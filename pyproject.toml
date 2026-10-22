@@ -133,11 +133,16 @@ module = [
     "brainstate.*",
     "brainunit.*",
     "brainevent.*",
+    # Dev/CI-only dependency of the `_kernel` eligibility-trace learner.
+    "braintrace.*",
     "braintools.*",
     "jax.*",
     "matplotlib.*",
     "scipy.*",
     "nest.*",
+    # Optional reference simulators used only by `_kernel/validation`.
+    "brian2.*",
+    "Cython.*",
     # `_nest_validation` imports pytest for its `@requires_nest` marker, but pytest
     # is not installed in the minimal type-check environment.
     "pytest.*",
