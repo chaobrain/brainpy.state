@@ -163,7 +163,8 @@ K1A_GATES: tuple = (
     Gate('K1a-G4', 'Potjans-Diesmann microcircuit at full scale vs NEST',
          'per-population rates by the G2 rule, 5 seeds each side, 1 s after 100 ms; '
          'memory / build / compile / step reported (CPU and GPU 1, float32)',
-         tests=('validation/microcircuit_test.py', 'validation/microcircuit_nest_test.py'),
+         tests=('validation/microcircuit_test.py', 'validation/microcircuit_nest_test.py',
+                'models/iaf_psc_exp_test.py', 'models/nest_parity_test.py::TestIafPscExpVsNest'),
          command='python benchmarks/k1a_microcircuit.py kernel|nest ...',
          requires='bench'),
     Gate('K1a-G5', 'G2 in the asynchronous-irregular regime vs NEST',

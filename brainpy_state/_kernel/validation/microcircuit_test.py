@@ -8,12 +8,10 @@ import numpy as np
 import pytest
 import scipy.stats
 
-from brainpy_state._kernel import StepContext
 from brainpy_state._kernel.validation.microcircuit import (
     POPULATIONS,
     TruncatedNormal,
     build_microcircuit,
-    iaf_psc_exp,
     kernel_microcircuit,
     pd14_params,
     population_rates,
@@ -76,27 +74,6 @@ class TestTruncatedNormal:
             TruncatedNormal(1.0 * u.ms, 0.0 * u.ms)
         with pytest.raises(Exception):
             TruncatedNormal(1.0 * u.ms, 1.0 * u.pA)
-
-
-class TestIafPscExp:
-    def test_event_jump_and_decay(self):
-        neu = iaf_psc_exp(1, params=dict(tau_syn_ex=2.0 * u.ms))
-        ctx = StepContext.create(0.0 * u.ms, 0.1 * u.ms)
-        neu.update(ctx, {'ex': 100.0 * u.pA})
-        assert float(neu.dyn_states['I_syn_ex'].value.to_decimal(u.pA)[0]) == pytest.approx(100.0)
-        v0 = float(neu.dyn_states['V_m'].value.to_decimal(u.mV)[0])
-        assert v0 == pytest.approx(-70.0)  # the jump acts on V from the next step on
-        neu.update(ctx, {})
-        assert float(neu.dyn_states['I_syn_ex'].value.to_decimal(u.pA)[0]) == pytest.approx(
-            100.0 * np.exp(-0.05), rel=1e-6)
-        assert float(neu.dyn_states['V_m'].value.to_decimal(u.mV)[0]) > -70.0
-
-    def test_negative_inhibitory_weight(self):
-        neu = iaf_psc_exp(2)
-        ctx = StepContext.create(0.0 * u.ms, 0.1 * u.ms)
-        neu.update(ctx, {'in_': -50.0 * u.pA})
-        neu.update(ctx, {})
-        assert np.all(neu.dyn_states['V_m'].value.to_decimal(u.mV) < -70.0)
 
 
 class TestBuild:

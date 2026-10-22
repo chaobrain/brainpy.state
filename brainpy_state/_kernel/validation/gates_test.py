@@ -55,6 +55,9 @@ def test_k1a_registry_covers_spec_gates():
     assert [g.id for g in G.gates_for('validation/k1a_g5_ai_nest_test.py::test_x')] == ['K1a-G5']
     assert [g.id for g in G.gates_for('validation/compile_gate_test.py::test_compiles')] == ['K1a-G1']
     assert G.gates_for('validation/g2_brunel_nest_test.py::t')[0].suite == 'k0_gate'
+    # the microcircuit's neuron (promoted to the model library in K1a-7) belongs to G4
+    assert [g.id for g in G.gates_for('models/nest_parity_test.py::TestIafPscExpVsNest::test_x')] == ['K1a-G4']
+    assert [g.id for g in G.gates_for('models/iaf_psc_exp_test.py::TestDynamics::t')] == ['K1a-G4']
 
 
 def test_pyproject_registers_every_marker():
