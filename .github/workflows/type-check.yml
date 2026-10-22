@@ -53,6 +53,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install mypy
           pip install -e .
+          # The private kernel (brainpy_state/_kernel) imports braintrace. It is a
+          # dev/CI-only dependency (requirements-dev.txt) until K3 decides packaging.
+          pip install "braintrace>=0.2.6"
 
       - name: Run mypy
         run: mypy -p brainpy_state
