@@ -121,15 +121,22 @@ def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
     lam = jnp.broadcast_to(jnp.asarray(lam, jnp.float32), shape)
     dtype = jnp.zeros((), dtype=int).dtype
     small = lam < _INVERSION_MAX_LAM
-    u_ = draw_blocked(key, n, lambda k, s: jax.random.uniform(k, s, jnp.float32))
-    inv = _inversion(u_, jnp.where(small, lam, 0.0), dtype)
 
-    def exact(inv):
+    def uniforms():
+        return draw_blocked(key, n, lambda k, s: jax.random.uniform(k, s, jnp.float32))
+
+    # both branches draw the same uniforms; keeping the draw inside the branches lets
+    # XLA fuse it with the inversion (as in K0) -- measurably faster on GPU
+    def all_small(lam):
+        return _inversion(uniforms(), lam, dtype)
+
+    def mixed(lam):
+        inv = _inversion(uniforms(), jnp.where(small, lam, 0.0), dtype)
         big = draw_blocked(key, n, lambda k, s, l: jax.random.poisson(
             jax.random.fold_in(k, 1), l, s, dtype=dtype), jnp.where(small, 0.0, lam))
         return jnp.where(small, inv, big)
 
-    return jax.lax.cond(jnp.all(small), lambda inv: inv, exact, inv)
+    return jax.lax.cond(jnp.all(small), all_small, mixed, lam)
 
 
 _WINDOW = dict(start=Param(0.0 * u.ms), stop=Param(float('inf') * u.ms), origin=Param(0.0 * u.ms))
