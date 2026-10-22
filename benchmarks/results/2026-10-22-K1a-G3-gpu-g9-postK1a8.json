@@ -1,0 +1,4418 @@
+{
+ "rows": [
+  {
+   "order": 2500,
+   "precision": 32,
+   "backend": "default",
+   "old": {
+    "n": 3,
+    "ms_per_step": 0.49098290940019074,
+    "peak_bytes": 248856064,
+    "compile_s": 1.1002744619909208,
+    "e_rate": 28.84
+   },
+   "new": {
+    "n": 3,
+    "ms_per_step": 0.06613951589970384,
+    "peak_bytes": 207051008,
+    "compile_s": 1.0907241745735519,
+    "e_rate": 28.739999771118164
+   },
+   "t0": {
+    "ms_per_step": 0.4907990173000144,
+    "peak_bytes": 248855808,
+    "compile_s": 1.091587400998833
+   },
+   "step_ratio_t0": 0.13475885967243947,
+   "mem_ratio_t0": 0.8320119577036353,
+   "status": "pass",
+   "step_ratio_old": 0.134708387264443,
+   "mem_ratio_old": 0.8320111018070269
+  },
+  {
+   "order": 2500,
+   "precision": 64,
+   "backend": "cusparse",
+   "old": {
+    "n": 3,
+    "ms_per_step": 0.8836334167004679,
+    "peak_bytes": 457143808,
+    "compile_s": 1.0667045509908348,
+    "e_rate": 28.9
+   },
+   "new": {
+    "n": 3,
+    "ms_per_step": 0.458416661299998,
+    "peak_bytes": 259609344,
+    "compile_s": 1.036510658429636,
+    "e_rate": 28.76
+   },
+   "t0": {
+    "ms_per_step": 0.8842989857999782,
+    "peak_bytes": 457143808,
+    "compile_s": 1.1203546680008003
+   },
+   "step_ratio_t0": 0.5183955524785464,
+   "mem_ratio_t0": 0.5678942587799417,
+   "status": "pass",
+   "step_ratio_old": 0.518786017635853,
+   "mem_ratio_old": 0.5678942587799417
+  },
+  {
+   "order": 200,
+   "precision": 32,
+   "backend": "default",
+   "old": {
+    "n": 3,
+    "ms_per_step": 0.39871460590075003,
+    "peak_bytes": 51533824,
+    "compile_s": 0.8351209549873602,
+    "e_rate": 57.14
+   },
+   "new": {
+    "n": 3,
+    "ms_per_step": 0.07006265899981372,
+    "peak_bytes": 73762304,
+    "compile_s": 1.1401293767121388,
+    "e_rate": 57.15999984741211
+   },
+   "t0": {
+    "ms_per_step": 0.3980862296997657,
+    "peak_bytes": 51531776,
+    "compile_s": 0.8126809479981603
+   },
+   "step_ratio_t0": 0.17599870021290254,
+   "mem_ratio_t0": 1.4313945632302678,
+   "status": "FAIL",
+   "step_ratio_old": 0.17572132538644458,
+   "mem_ratio_old": 1.4313376783372411
+  },
+  {
+   "order": 200,
+   "precision": 64,
+   "backend": "cusparse",
+   "old": {
+    "n": 3,
+    "ms_per_step": 0.4212113792003947,
+    "peak_bytes": 52283136,
+    "compile_s": 0.7965603100019507,
+    "e_rate": 57.16
+   },
+   "new": {
+    "n": 3,
+    "ms_per_step": 0.10733354249969125,
+    "peak_bytes": 78318848,
+    "compile_s": 1.1560138818500232,
+    "e_rate": 59.74
+   },
+   "t0": {
+    "ms_per_step": 0.42148199820003357,
+    "peak_bytes": 52283136,
+    "compile_s": 0.8359474429998954
+   },
+   "step_ratio_t0": 0.2546574775626626,
+   "mem_ratio_t0": 1.4979753318546156,
+   "status": "FAIL",
+   "step_ratio_old": 0.2548210893624183,
+   "mem_ratio_old": 1.4979753318546156
+  }
+ ],
+ "runs": [
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.0087890625,
+    "timestamp_utc": "2026-10-22T15:35:09+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.7421875
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721884,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 15625000
+   },
+   "build": {
+    "build_s": 18.114388279005652,
+    "init_states_s": 0.3998912420065608
+   },
+   "compile": {
+    "compile_s": 1.1151143799943384,
+    "aot_xla_events_s": 1.2322280406951904,
+    "first_call_s": 4.90232722600922,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.7831230163574219,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     4.90232722600922,
+     5.681543867001892,
+     4.886412634994485
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 5.486653195999679,
+     "compile_events_s": 0.668215274810791,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.896139614997082,
+     "min": 4.886182076996192,
+     "max": 4.902554232001421,
+     "n": 7,
+     "samples": [
+      4.895478439008002,
+      4.896139614997082,
+      4.897607377992244,
+      4.886741060996428,
+      4.886182076996192,
+      4.897463696004706,
+      4.902554232001421
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.896139614997082,
+     "min": 4.886182076996192,
+     "max": 4.902554232001421,
+     "n": 7,
+     "samples": [
+      4.895478439008002,
+      4.896139614997082,
+      4.897607377992244,
+      4.886741060996428,
+      4.886182076996192,
+      4.897463696004706,
+      4.902554232001421
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.48961396149970826,
+     "min": 0.4886182076996192,
+     "max": 0.49025542320014215,
+     "n": 7,
+     "samples": [
+      0.48954784390080025,
+      0.48961396149970826,
+      0.48976073779922447,
+      0.4886741060996428,
+      0.4886182076996192,
+      0.4897463696004707,
+      0.49025542320014215
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 248856320,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 151557888,
+    "host_peak_rss_bytes": 3102199808
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.84,
+     "min": 28.62,
+     "max": 28.92,
+     "n": 7,
+     "samples": [
+      28.78,
+      28.84,
+      28.84,
+      28.76,
+      28.92,
+      28.62,
+      28.86
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.8,
+     "min": 28.64,
+     "max": 28.96,
+     "n": 7,
+     "samples": [
+      28.88,
+      28.8,
+      28.7,
+      28.96,
+      28.8,
+      28.64,
+      28.76
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 0,
+    "backend": "default",
+    "load_start": 0.0087890625
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.7421875,
+    "timestamp_utc": "2026-10-22T15:36:26+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.7822265625
+   },
+   "network": {
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721884,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 4.219395735999569,
+    "plan_memory_bytes": {
+     "storage": 125200012,
+     "pre_rings": 1500000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 126700012
+    }
+   },
+   "compile": {
+    "compile_s": 1.0822540557128377,
+    "first_call_s": 1.7298006979981437,
+    "warmup_xla_events_s": 1.0547070503234863,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 0.6511477519961772,
+     "min": 0.6376391399971908,
+     "max": 0.6531113570090383,
+     "n": 7,
+     "samples": [
+      0.6376391399971908,
+      0.6523499570030253,
+      0.6518394479935523,
+      0.6490966540004592,
+      0.6376421879976988,
+      0.6531113570090383,
+      0.6511477519961772
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 0.6511477519961772,
+     "min": 0.6376391399971908,
+     "max": 0.6531113570090383,
+     "n": 7,
+     "samples": [
+      0.6376391399971908,
+      0.6523499570030253,
+      0.6518394479935523,
+      0.6490966540004592,
+      0.6376421879976988,
+      0.6531113570090383,
+      0.6511477519961772
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.06511477519961772,
+     "min": 0.06376391399971908,
+     "max": 0.06531113570090383,
+     "n": 7,
+     "samples": [
+      0.06376391399971908,
+      0.06523499570030253,
+      0.06518394479935524,
+      0.06490966540004592,
+      0.06376421879976989,
+      0.06531113570090383,
+      0.06511477519961772
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 207051008,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 140272896,
+    "host_peak_rss_bytes": 2637586432
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.739999771118164,
+     "min": 28.579999923706055,
+     "max": 29.139999389648438,
+     "n": 7,
+     "samples": [
+      28.920000076293945,
+      28.719999313354492,
+      29.139999389648438,
+      28.719999313354492,
+      29.1200008392334,
+      28.579999923706055,
+      28.739999771118164
+     ]
+    },
+    "i_rate_hz": {
+     "median": 29.0,
+     "min": 28.639999389648438,
+     "max": 29.1200008392334,
+     "n": 7,
+     "samples": [
+      28.8799991607666,
+      29.0,
+      29.079999923706055,
+      28.639999389648438,
+      29.1200008392334,
+      28.81999969482422,
+      29.100000381469727
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 0,
+    "backend": "default",
+    "load_start": 0.7421875
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.7822265625,
+    "timestamp_utc": "2026-10-22T15:36:39+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.97265625
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721884,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 15625000
+   },
+   "build": {
+    "build_s": 18.152957073994912,
+    "init_states_s": 0.41059323599620257
+   },
+   "compile": {
+    "compile_s": 1.0881737949966919,
+    "aot_xla_events_s": 1.2077507972717285,
+    "first_call_s": 8.282011244999012,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.7505967617034912,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     8.282011244999012,
+     9.549223977999645,
+     9.121881233004387
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 9.44329851999646,
+     "compile_events_s": 0.6253092288970947,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 8.800534751004307,
+     "min": 8.790131165995263,
+     "max": 9.123526950992527,
+     "n": 7,
+     "samples": [
+      8.79130893900583,
+      9.123064961997443,
+      8.792405683998368,
+      9.117345527003636,
+      8.790131165995263,
+      9.123526950992527,
+      8.800534751004307
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 8.800534751004307,
+     "min": 8.790131165995263,
+     "max": 9.123526950992527,
+     "n": 7,
+     "samples": [
+      8.79130893900583,
+      9.123064961997443,
+      8.792405683998368,
+      9.117345527003636,
+      8.790131165995263,
+      9.123526950992527,
+      8.800534751004307
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.8800534751004306,
+     "min": 0.8790131165995263,
+     "max": 0.9123526950992528,
+     "n": 7,
+     "samples": [
+      0.879130893900583,
+      0.9123064961997442,
+      0.8792405683998368,
+      0.9117345527003635,
+      0.8790131165995263,
+      0.9123526950992528,
+      0.8800534751004306
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 457143808,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 220805120,
+    "host_peak_rss_bytes": 3213565952
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.9,
+     "min": 28.58,
+     "max": 29.22,
+     "n": 7,
+     "samples": [
+      29.22,
+      29.1,
+      28.74,
+      28.94,
+      28.58,
+      28.9,
+      28.8
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.82,
+     "min": 28.58,
+     "max": 28.98,
+     "n": 7,
+     "samples": [
+      28.98,
+      28.58,
+      28.76,
+      28.86,
+      28.82,
+      28.98,
+      28.72
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 0,
+    "backend": "cusparse",
+    "load_start": 0.7822265625
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.89453125,
+    "timestamp_utc": "2026-10-22T15:38:40+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.9521484375
+   },
+   "network": {
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721884,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 4.4112766180041945,
+    "plan_memory_bytes": {
+     "storage": 187750012,
+     "pre_rings": 3000000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 190750012
+    }
+   },
+   "compile": {
+    "compile_s": 1.0323649570096416,
+    "first_call_s": 5.618040865010698,
+    "warmup_xla_events_s": 1.025254726409912,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.585050352994585,
+     "min": 4.5804046770063,
+     "max": 4.596233265008777,
+     "n": 7,
+     "samples": [
+      4.596233265008777,
+      4.5804046770063,
+      4.586410588992294,
+      4.5836644700029865,
+      4.585050352994585,
+      4.581471308003529,
+      4.5864966939989245
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.585050352994585,
+     "min": 4.5804046770063,
+     "max": 4.596233265008777,
+     "n": 7,
+     "samples": [
+      4.596233265008777,
+      4.5804046770063,
+      4.586410588992294,
+      4.5836644700029865,
+      4.585050352994585,
+      4.581471308003529,
+      4.5864966939989245
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.4585050352994586,
+     "min": 0.45804046770062995,
+     "max": 0.4596233265008777,
+     "n": 7,
+     "samples": [
+      0.4596233265008777,
+      0.45804046770062995,
+      0.4586410588992294,
+      0.4583664470002986,
+      0.4585050352994586,
+      0.4581471308003529,
+      0.45864966939989243
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 259609344,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 192951808,
+    "host_peak_rss_bytes": 2840977408
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.76,
+     "min": 28.54,
+     "max": 28.92,
+     "n": 7,
+     "samples": [
+      28.54,
+      28.92,
+      28.9,
+      28.78,
+      28.76,
+      28.6,
+      28.72
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.86,
+     "min": 28.7,
+     "max": 29.02,
+     "n": 7,
+     "samples": [
+      28.8,
+      28.7,
+      28.86,
+      28.82,
+      28.88,
+      28.9,
+      29.02
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 0,
+    "backend": "cusparse",
+    "load_start": 0.89453125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.9521484375,
+    "timestamp_utc": "2026-10-22T15:39:28+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.98095703125
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721887,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 100000
+   },
+   "build": {
+    "build_s": 3.1290179939969676,
+    "init_states_s": 0.36740562599152327
+   },
+   "compile": {
+    "compile_s": 0.8408074720064178,
+    "aot_xla_events_s": 0.953258752822876,
+    "first_call_s": 3.989345210007741,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.5525150299072266,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     3.989345210007741,
+     4.5442069720011204,
+     3.9852999839931726
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 4.6482888530008495,
+     "compile_events_s": 0.6481623649597168,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 3.9885061770037282,
+     "min": 3.984313402004773,
+     "max": 3.9898986749903997,
+     "n": 7,
+     "samples": [
+      3.984690066994517,
+      3.9892105129983975,
+      3.9894729730003746,
+      3.9881336239923257,
+      3.984313402004773,
+      3.9898986749903997,
+      3.9885061770037282
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 3.9885061770037282,
+     "min": 3.984313402004773,
+     "max": 3.9898986749903997,
+     "n": 7,
+     "samples": [
+      3.984690066994517,
+      3.9892105129983975,
+      3.9894729730003746,
+      3.9881336239923257,
+      3.984313402004773,
+      3.9898986749903997,
+      3.9885061770037282
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.3988506177003728,
+     "min": 0.39843134020047727,
+     "max": 0.39898986749904,
+     "n": 7,
+     "samples": [
+      0.3984690066994517,
+      0.39892105129983974,
+      0.3989472973000375,
+      0.39881336239923254,
+      0.39843134020047727,
+      0.39898986749904,
+      0.3988506177003728
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 51534336,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 1106944,
+    "host_peak_rss_bytes": 1969471488
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.14,
+     "min": 56.9,
+     "max": 57.38,
+     "n": 7,
+     "samples": [
+      57.26,
+      57.38,
+      57.02,
+      57.08,
+      57.38,
+      56.9,
+      57.14
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.14,
+     "min": 57.1,
+     "max": 57.52,
+     "n": 7,
+     "samples": [
+      57.52,
+      57.1,
+      57.12,
+      57.26,
+      57.14,
+      57.2,
+      57.14
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 0,
+    "backend": "default",
+    "load_start": 0.9521484375
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.98095703125,
+    "timestamp_utc": "2026-10-22T15:40:19+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.984375
+   },
+   "network": {
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721887,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 1.5148500280047301,
+    "plan_memory_bytes": {
+     "storage": 5012004,
+     "pre_rings": 120000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 5132004
+    }
+   },
+   "compile": {
+    "compile_s": 1.1113964661448597,
+    "first_call_s": 1.8075522940052906,
+    "warmup_xla_events_s": 1.0900905132293701,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 0.7003261220088461,
+     "min": 0.6889179930003593,
+     "max": 0.7025370539922733,
+     "n": 7,
+     "samples": [
+      0.7025370539922733,
+      0.689154210005654,
+      0.7010767690080684,
+      0.6895533640054055,
+      0.7003261220088461,
+      0.6889179930003593,
+      0.701525283002411
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 0.7003261220088461,
+     "min": 0.6889179930003593,
+     "max": 0.7025370539922733,
+     "n": 7,
+     "samples": [
+      0.7025370539922733,
+      0.689154210005654,
+      0.7010767690080684,
+      0.6895533640054055,
+      0.7003261220088461,
+      0.6889179930003593,
+      0.701525283002411
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.07003261220088461,
+     "min": 0.06889179930003592,
+     "max": 0.07025370539922733,
+     "n": 7,
+     "samples": [
+      0.07025370539922733,
+      0.0689154210005654,
+      0.07010767690080684,
+      0.06895533640054054,
+      0.07003261220088461,
+      0.06889179930003592,
+      0.0701525283002411
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 73762304,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 6640384,
+    "host_peak_rss_bytes": 1910616064
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.15999984741211,
+     "min": 57.060001373291016,
+     "max": 57.2599983215332,
+     "n": 7,
+     "samples": [
+      57.15999984741211,
+      57.060001373291016,
+      57.13999938964844,
+      57.2599983215332,
+      57.119998931884766,
+      57.20000076293945,
+      57.220001220703125
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.279998779296875,
+     "min": 57.08000183105469,
+     "max": 57.560001373291016,
+     "n": 7,
+     "samples": [
+      57.099998474121094,
+      57.41999816894531,
+      57.279998779296875,
+      57.099998474121094,
+      57.560001373291016,
+      57.459999084472656,
+      57.08000183105469
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 0,
+    "backend": "default",
+    "load_start": 0.98095703125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.98583984375,
+    "timestamp_utc": "2026-10-22T15:40:30+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.9501953125
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721887,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 100000
+   },
+   "build": {
+    "build_s": 3.22699073900003,
+    "init_states_s": 0.3626096459920518
+   },
+   "compile": {
+    "compile_s": 0.8110273479978787,
+    "aot_xla_events_s": 0.9251706600189209,
+    "first_call_s": 4.223381098010577,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.5217981338500977,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     4.223381098010577,
+     4.759145902993623,
+     4.20887776100426
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 4.832023283990566,
+     "compile_events_s": 0.6689345836639404,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.212113792003947,
+     "min": 4.208554013996036,
+     "max": 4.214628015004564,
+     "n": 7,
+     "samples": [
+      4.208846433000872,
+      4.212113792003947,
+      4.212829373995191,
+      4.209833330998663,
+      4.208554013996036,
+      4.214628015004564,
+      4.213871874002507
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.212113792003947,
+     "min": 4.208554013996036,
+     "max": 4.214628015004564,
+     "n": 7,
+     "samples": [
+      4.208846433000872,
+      4.212113792003947,
+      4.212829373995191,
+      4.209833330998663,
+      4.208554013996036,
+      4.214628015004564,
+      4.213871874002507
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.4212113792003947,
+     "min": 0.4208554013996036,
+     "max": 0.4214628015004564,
+     "n": 7,
+     "samples": [
+      0.4208846433000872,
+      0.4212113792003947,
+      0.42128293739951916,
+      0.4209833330998663,
+      0.4208554013996036,
+      0.4214628015004564,
+      0.4213871874002507
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 52283136,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 1720320,
+    "host_peak_rss_bytes": 1972174848
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.16,
+     "min": 57.0,
+     "max": 57.44,
+     "n": 7,
+     "samples": [
+      57.24,
+      57.44,
+      57.26,
+      57.0,
+      57.16,
+      57.1,
+      57.12
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.16,
+     "min": 57.06,
+     "max": 57.4,
+     "n": 7,
+     "samples": [
+      57.4,
+      57.16,
+      57.28,
+      57.06,
+      57.1,
+      57.12,
+      57.24
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 0,
+    "backend": "cusparse",
+    "load_start": 0.98583984375
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.9501953125,
+    "timestamp_utc": "2026-10-22T15:41:24+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 0.9619140625
+   },
+   "network": {
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721887,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 1.5270937099994626,
+    "plan_memory_bytes": {
+     "storage": 9016004,
+     "pre_rings": 240000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 9256004
+    }
+   },
+   "compile": {
+    "compile_s": 1.1560138818500232,
+    "first_call_s": 2.2297511759970803,
+    "warmup_xla_events_s": 1.1217308044433594,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 1.073693654005183,
+     "min": 1.0729469380021328,
+     "max": 1.0742615700000897,
+     "n": 7,
+     "samples": [
+      1.0736603450059192,
+      1.073693654005183,
+      1.0734363390074577,
+      1.0741881139983889,
+      1.073974099010229,
+      1.0729469380021328,
+      1.0742615700000897
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 1.073693654005183,
+     "min": 1.0729469380021328,
+     "max": 1.0742615700000897,
+     "n": 7,
+     "samples": [
+      1.0736603450059192,
+      1.073693654005183,
+      1.0734363390074577,
+      1.0741881139983889,
+      1.073974099010229,
+      1.0729469380021328,
+      1.0742615700000897
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.1073693654005183,
+     "min": 0.10729469380021328,
+     "max": 0.10742615700000896,
+     "n": 7,
+     "samples": [
+      0.10736603450059191,
+      0.1073693654005183,
+      0.10734363390074576,
+      0.10741881139983889,
+      0.10739740990102292,
+      0.10729469380021328,
+      0.10742615700000896
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 78358784,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 11236864,
+    "host_peak_rss_bytes": 1913704448
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 59.74,
+     "min": 59.6,
+     "max": 59.86,
+     "n": 7,
+     "samples": [
+      59.6,
+      59.66,
+      59.84,
+      59.8,
+      59.86,
+      59.74,
+      59.68
+     ]
+    },
+    "i_rate_hz": {
+     "median": 59.74,
+     "min": 59.46,
+     "max": 59.96,
+     "n": 7,
+     "samples": [
+      59.74,
+      59.96,
+      59.66,
+      59.46,
+      59.96,
+      59.76,
+      59.6
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 0,
+    "backend": "cusparse",
+    "load_start": 0.9501953125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 0.9619140625,
+    "timestamp_utc": "2026-10-22T15:41:38+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.04638671875
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721884,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 15625000
+   },
+   "build": {
+    "build_s": 17.967726568997023,
+    "init_states_s": 0.3811243359959917
+   },
+   "compile": {
+    "compile_s": 1.1002744619909208,
+    "aot_xla_events_s": 1.2100310325622559,
+    "first_call_s": 4.925835296991863,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.7930071353912354,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     4.925835296991863,
+     5.72294786501152,
+     4.917793866989086
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 5.487425801009522,
+     "compile_events_s": 0.6652767658233643,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.922292974995798,
+     "min": 4.917988330009393,
+     "max": 4.932943938008975,
+     "n": 7,
+     "samples": [
+      4.922292974995798,
+      4.924475216001156,
+      4.924361020006472,
+      4.918440962006571,
+      4.917988330009393,
+      4.920113505009795,
+      4.932943938008975
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.922292974995798,
+     "min": 4.917988330009393,
+     "max": 4.932943938008975,
+     "n": 7,
+     "samples": [
+      4.922292974995798,
+      4.924475216001156,
+      4.924361020006472,
+      4.918440962006571,
+      4.917988330009393,
+      4.920113505009795,
+      4.932943938008975
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.49222929749957983,
+     "min": 0.4917988330009394,
+     "max": 0.4932943938008975,
+     "n": 7,
+     "samples": [
+      0.49222929749957983,
+      0.49244752160011557,
+      0.49243610200064725,
+      0.4918440962006571,
+      0.4917988330009394,
+      0.49201135050097944,
+      0.4932943938008975
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 248856064,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 151546112,
+    "host_peak_rss_bytes": 3128750080
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.84,
+     "min": 28.62,
+     "max": 28.92,
+     "n": 7,
+     "samples": [
+      28.78,
+      28.84,
+      28.84,
+      28.76,
+      28.92,
+      28.62,
+      28.86
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.8,
+     "min": 28.64,
+     "max": 28.96,
+     "n": 7,
+     "samples": [
+      28.88,
+      28.8,
+      28.7,
+      28.96,
+      28.8,
+      28.64,
+      28.76
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 1,
+    "backend": "default",
+    "load_start": 0.9619140625
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.04248046875,
+    "timestamp_utc": "2026-10-22T15:42:55+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.03564453125
+   },
+   "network": {
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721884,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 4.243789400003152,
+    "plan_memory_bytes": {
+     "storage": 125200012,
+     "pre_rings": 1500000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 126700012
+    }
+   },
+   "compile": {
+    "compile_s": 1.0907241745735519,
+    "first_call_s": 1.7483221150032477,
+    "warmup_xla_events_s": 1.0679011344909668,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 0.6613951589970384,
+     "min": 0.6463954360078787,
+     "max": 0.6639089029922616,
+     "n": 7,
+     "samples": [
+      0.6475220870051999,
+      0.6639089029922616,
+      0.6617479800042929,
+      0.6594691880018217,
+      0.6463954360078787,
+      0.662746829999378,
+      0.6613951589970384
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 0.6613951589970384,
+     "min": 0.6463954360078787,
+     "max": 0.6639089029922616,
+     "n": 7,
+     "samples": [
+      0.6475220870051999,
+      0.6639089029922616,
+      0.6617479800042929,
+      0.6594691880018217,
+      0.6463954360078787,
+      0.662746829999378,
+      0.6613951589970384
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.06613951589970384,
+     "min": 0.06463954360078789,
+     "max": 0.06639089029922615,
+     "n": 7,
+     "samples": [
+      0.06475220870052,
+      0.06639089029922615,
+      0.06617479800042929,
+      0.06594691880018218,
+      0.06463954360078789,
+      0.0662746829999378,
+      0.06613951589970384
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 178252544,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 127813632,
+    "host_peak_rss_bytes": 2626756608
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.739999771118164,
+     "min": 28.579999923706055,
+     "max": 29.139999389648438,
+     "n": 7,
+     "samples": [
+      28.920000076293945,
+      28.719999313354492,
+      29.139999389648438,
+      28.719999313354492,
+      29.1200008392334,
+      28.579999923706055,
+      28.739999771118164
+     ]
+    },
+    "i_rate_hz": {
+     "median": 29.0,
+     "min": 28.639999389648438,
+     "max": 29.1200008392334,
+     "n": 7,
+     "samples": [
+      28.8799991607666,
+      29.0,
+      29.079999923706055,
+      28.639999389648438,
+      29.1200008392334,
+      28.81999969482422,
+      29.100000381469727
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 1,
+    "backend": "default",
+    "load_start": 1.04248046875
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.03564453125,
+    "timestamp_utc": "2026-10-22T15:43:08+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.05419921875
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721884,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 15625000
+   },
+   "build": {
+    "build_s": 18.363486813002964,
+    "init_states_s": 0.3870331170037389
+   },
+   "compile": {
+    "compile_s": 1.0635795190028148,
+    "aot_xla_events_s": 1.180757761001587,
+    "first_call_s": 8.32339619701088,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.7197384834289551,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     8.32339619701088,
+     9.547122554999078,
+     8.745833975001005
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 9.369744741998147,
+     "compile_events_s": 0.6417722702026367,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 8.83633416700468,
+     "min": 8.666428058990277,
+     "max": 9.206039049997344,
+     "n": 7,
+     "samples": [
+      8.904965287001687,
+      8.666428058990277,
+      8.825578418007353,
+      9.200307182996767,
+      8.818338149998453,
+      9.206039049997344,
+      8.83633416700468
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 8.83633416700468,
+     "min": 8.666428058990277,
+     "max": 9.206039049997344,
+     "n": 7,
+     "samples": [
+      8.904965287001687,
+      8.666428058990277,
+      8.825578418007353,
+      9.200307182996767,
+      8.818338149998453,
+      9.206039049997344,
+      8.83633416700468
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.8836334167004679,
+     "min": 0.8666428058990278,
+     "max": 0.9206039049997344,
+     "n": 7,
+     "samples": [
+      0.8904965287001687,
+      0.8666428058990278,
+      0.8825578418007353,
+      0.9200307182996766,
+      0.8818338149998454,
+      0.9206039049997344,
+      0.8836334167004679
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 457143808,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 220805120,
+    "host_peak_rss_bytes": 3214794752
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.9,
+     "min": 28.58,
+     "max": 29.22,
+     "n": 7,
+     "samples": [
+      29.22,
+      29.1,
+      28.74,
+      28.94,
+      28.58,
+      28.9,
+      28.8
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.82,
+     "min": 28.58,
+     "max": 28.98,
+     "n": 7,
+     "samples": [
+      28.98,
+      28.58,
+      28.76,
+      28.86,
+      28.82,
+      28.98,
+      28.72
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 1,
+    "backend": "cusparse",
+    "load_start": 1.03564453125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.05419921875,
+    "timestamp_utc": "2026-10-22T15:45:08+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.02197265625
+   },
+   "network": {
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721884,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 4.368093010998564,
+    "plan_memory_bytes": {
+     "storage": 187750012,
+     "pre_rings": 3000000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 190750012
+    }
+   },
+   "compile": {
+    "compile_s": 1.063883431997965,
+    "first_call_s": 5.647441435998189,
+    "warmup_xla_events_s": 1.016244888305664,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.584052744001383,
+     "min": 4.5783540310076205,
+     "max": 4.592652377003105,
+     "n": 7,
+     "samples": [
+      4.592652377003105,
+      4.5783540310076205,
+      4.584191197005566,
+      4.584052744001383,
+      4.5820029839960625,
+      4.579468223993899,
+      4.584184470993932
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.584052744001383,
+     "min": 4.5783540310076205,
+     "max": 4.592652377003105,
+     "n": 7,
+     "samples": [
+      4.592652377003105,
+      4.5783540310076205,
+      4.584191197005566,
+      4.584052744001383,
+      4.5820029839960625,
+      4.579468223993899,
+      4.584184470993932
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.4584052744001383,
+     "min": 0.45783540310076204,
+     "max": 0.4592652377003105,
+     "n": 7,
+     "samples": [
+      0.4592652377003105,
+      0.45783540310076204,
+      0.4584191197005566,
+      0.4584052744001383,
+      0.45820029839960624,
+      0.45794682239938994,
+      0.4584184470993932
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 259609344,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 192951808,
+    "host_peak_rss_bytes": 2878361600
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.76,
+     "min": 28.54,
+     "max": 28.92,
+     "n": 7,
+     "samples": [
+      28.54,
+      28.92,
+      28.9,
+      28.78,
+      28.76,
+      28.6,
+      28.72
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.86,
+     "min": 28.7,
+     "max": 29.02,
+     "n": 7,
+     "samples": [
+      28.8,
+      28.7,
+      28.86,
+      28.82,
+      28.88,
+      28.9,
+      29.02
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 1,
+    "backend": "cusparse",
+    "load_start": 1.05419921875
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.02197265625,
+    "timestamp_utc": "2026-10-22T15:45:56+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.0078125
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721887,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 100000
+   },
+   "build": {
+    "build_s": 3.1911673699942185,
+    "init_states_s": 0.3619165999989491
+   },
+   "compile": {
+    "compile_s": 0.8351209549873602,
+    "aot_xla_events_s": 0.9458634853363037,
+    "first_call_s": 3.991144050989533,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.5651950836181641,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     3.991144050989533,
+     4.555563781003002,
+     3.986260103993118
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 4.639954086000216,
+     "compile_events_s": 0.6403803825378418,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 3.9871460590075003,
+     "min": 3.984948807992623,
+     "max": 3.990324853992206,
+     "n": 7,
+     "samples": [
+      3.986848098007613,
+      3.9871460590075003,
+      3.990324853992206,
+      3.9867154840030707,
+      3.984948807992623,
+      3.9899514429998817,
+      3.988870664994465
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 3.9871460590075003,
+     "min": 3.984948807992623,
+     "max": 3.990324853992206,
+     "n": 7,
+     "samples": [
+      3.986848098007613,
+      3.9871460590075003,
+      3.990324853992206,
+      3.9867154840030707,
+      3.984948807992623,
+      3.9899514429998817,
+      3.988870664994465
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.39871460590075003,
+     "min": 0.3984948807992623,
+     "max": 0.3990324853992206,
+     "n": 7,
+     "samples": [
+      0.39868480980076126,
+      0.39871460590075003,
+      0.3990324853992206,
+      0.39867154840030705,
+      0.3984948807992623,
+      0.39899514429998817,
+      0.39888706649944655
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 51531776,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 1104384,
+    "host_peak_rss_bytes": 1934405632
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.14,
+     "min": 56.9,
+     "max": 57.38,
+     "n": 7,
+     "samples": [
+      57.26,
+      57.38,
+      57.02,
+      57.08,
+      57.38,
+      56.9,
+      57.14
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.14,
+     "min": 57.1,
+     "max": 57.52,
+     "n": 7,
+     "samples": [
+      57.52,
+      57.1,
+      57.12,
+      57.26,
+      57.14,
+      57.2,
+      57.14
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 1,
+    "backend": "default",
+    "load_start": 1.02197265625
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.0078125,
+    "timestamp_utc": "2026-10-22T15:46:47+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.080078125
+   },
+   "network": {
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721887,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 1.5084052010060987,
+    "plan_memory_bytes": {
+     "storage": 5012004,
+     "pre_rings": 120000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 5132004
+    }
+   },
+   "compile": {
+    "compile_s": 1.1630003048630897,
+    "first_call_s": 1.8590991960081737,
+    "warmup_xla_events_s": 1.1445741653442383,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 0.7006265899981372,
+     "min": 0.6882650530023966,
+     "max": 0.7022642090014415,
+     "n": 7,
+     "samples": [
+      0.7022642090014415,
+      0.6902933430101257,
+      0.7009521820000373,
+      0.6892115030059358,
+      0.7006265899981372,
+      0.6882650530023966,
+      0.7010793579975143
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 0.7006265899981372,
+     "min": 0.6882650530023966,
+     "max": 0.7022642090014415,
+     "n": 7,
+     "samples": [
+      0.7022642090014415,
+      0.6902933430101257,
+      0.7009521820000373,
+      0.6892115030059358,
+      0.7006265899981372,
+      0.6882650530023966,
+      0.7010793579975143
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.07006265899981372,
+     "min": 0.06882650530023966,
+     "max": 0.07022642090014415,
+     "n": 7,
+     "samples": [
+      0.07022642090014415,
+      0.06902933430101256,
+      0.07009521820000374,
+      0.06892115030059359,
+      0.07006265899981372,
+      0.06882650530023966,
+      0.07010793579975144
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 73762304,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 6640384,
+    "host_peak_rss_bytes": 1906835456
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.15999984741211,
+     "min": 57.060001373291016,
+     "max": 57.2599983215332,
+     "n": 7,
+     "samples": [
+      57.15999984741211,
+      57.060001373291016,
+      57.13999938964844,
+      57.2599983215332,
+      57.119998931884766,
+      57.20000076293945,
+      57.220001220703125
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.279998779296875,
+     "min": 57.08000183105469,
+     "max": 57.560001373291016,
+     "n": 7,
+     "samples": [
+      57.099998474121094,
+      57.41999816894531,
+      57.279998779296875,
+      57.099998474121094,
+      57.560001373291016,
+      57.459999084472656,
+      57.08000183105469
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 1,
+    "backend": "default",
+    "load_start": 1.0078125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.080078125,
+    "timestamp_utc": "2026-10-22T15:46:58+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.02978515625
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721887,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 100000
+   },
+   "build": {
+    "build_s": 3.1802757999976166,
+    "init_states_s": 0.3663249240053119
+   },
+   "compile": {
+    "compile_s": 0.7965603100019507,
+    "aot_xla_events_s": 0.9110782146453857,
+    "first_call_s": 4.223188663003384,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.5088355541229248,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     4.223188663003384,
+     4.7345883889938705,
+     4.221919917996274
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 4.827449053991586,
+     "compile_events_s": 0.6677112579345703,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.223894631999428,
+     "min": 4.218828417986515,
+     "max": 4.226615125997341,
+     "n": 7,
+     "samples": [
+      4.222683081010473,
+      4.224192317007692,
+      4.223894631999428,
+      4.218949560003239,
+      4.218828417986515,
+      4.226615125997341,
+      4.224140997001086
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.223894631999428,
+     "min": 4.218828417986515,
+     "max": 4.226615125997341,
+     "n": 7,
+     "samples": [
+      4.222683081010473,
+      4.224192317007692,
+      4.223894631999428,
+      4.218949560003239,
+      4.218828417986515,
+      4.226615125997341,
+      4.224140997001086
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.4223894631999428,
+     "min": 0.4218828417986515,
+     "max": 0.4226615125997341,
+     "n": 7,
+     "samples": [
+      0.42226830810104726,
+      0.4224192317007691,
+      0.4223894631999428,
+      0.42189495600032384,
+      0.4218828417986515,
+      0.4226615125997341,
+      0.4224140997001087
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 52284416,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 1718272,
+    "host_peak_rss_bytes": 1942458368
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.16,
+     "min": 57.0,
+     "max": 57.44,
+     "n": 7,
+     "samples": [
+      57.24,
+      57.44,
+      57.26,
+      57.0,
+      57.16,
+      57.1,
+      57.12
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.16,
+     "min": 57.06,
+     "max": 57.4,
+     "n": 7,
+     "samples": [
+      57.4,
+      57.16,
+      57.28,
+      57.06,
+      57.1,
+      57.12,
+      57.24
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 1,
+    "backend": "cusparse",
+    "load_start": 1.080078125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.02978515625,
+    "timestamp_utc": "2026-10-22T15:47:52+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.0224609375
+   },
+   "network": {
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721887,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 1.506213436005055,
+    "plan_memory_bytes": {
+     "storage": 9016004,
+     "pre_rings": 240000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 9256004
+    }
+   },
+   "compile": {
+    "compile_s": 1.344843342567661,
+    "first_call_s": 2.415210153994849,
+    "warmup_xla_events_s": 1.308744192123413,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 1.070374153990997,
+     "min": 1.0697040999948513,
+     "max": 1.0711443790060002,
+     "n": 7,
+     "samples": [
+      1.0707763329992304,
+      1.0701820489921374,
+      1.070374153990997,
+      1.0697040999948513,
+      1.0711443790060002,
+      1.0704179239983205,
+      1.069968741008779
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 1.070374153990997,
+     "min": 1.0697040999948513,
+     "max": 1.0711443790060002,
+     "n": 7,
+     "samples": [
+      1.0707763329992304,
+      1.0701820489921374,
+      1.070374153990997,
+      1.0697040999948513,
+      1.0711443790060002,
+      1.0704179239983205,
+      1.069968741008779
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.10703741539909971,
+     "min": 0.10697040999948512,
+     "max": 0.10711443790060002,
+     "n": 7,
+     "samples": [
+      0.10707763329992304,
+      0.10701820489921374,
+      0.10703741539909971,
+      0.10697040999948512,
+      0.10711443790060002,
+      0.10704179239983205,
+      0.10699687410087791
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 78318848,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 11196928,
+    "host_peak_rss_bytes": 1908989952
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 59.74,
+     "min": 59.6,
+     "max": 59.86,
+     "n": 7,
+     "samples": [
+      59.6,
+      59.66,
+      59.84,
+      59.8,
+      59.86,
+      59.74,
+      59.68
+     ]
+    },
+    "i_rate_hz": {
+     "median": 59.74,
+     "min": 59.46,
+     "max": 59.96,
+     "n": 7,
+     "samples": [
+      59.74,
+      59.96,
+      59.66,
+      59.46,
+      59.96,
+      59.76,
+      59.6
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 1,
+    "backend": "cusparse",
+    "load_start": 1.02978515625
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.0224609375,
+    "timestamp_utc": "2026-10-22T15:48:06+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.03564453125
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721884,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 15625000
+   },
+   "build": {
+    "build_s": 18.021923442996922,
+    "init_states_s": 0.3906707630085293
+   },
+   "compile": {
+    "compile_s": 1.0997100019885693,
+    "aot_xla_events_s": 1.2120537757873535,
+    "first_call_s": 4.9206436759995995,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.7700541019439697,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     4.9206436759995995,
+     5.687441453002975,
+     4.904251279003802
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 5.476118077989668,
+     "compile_events_s": 0.66396164894104,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.909829094001907,
+     "min": 4.904498664007406,
+     "max": 4.915439957010676,
+     "n": 7,
+     "samples": [
+      4.909829094001907,
+      4.91114143699815,
+      4.909833002995583,
+      4.905364942009328,
+      4.904498664007406,
+      4.909336983007961,
+      4.915439957010676
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.909829094001907,
+     "min": 4.904498664007406,
+     "max": 4.915439957010676,
+     "n": 7,
+     "samples": [
+      4.909829094001907,
+      4.91114143699815,
+      4.909833002995583,
+      4.905364942009328,
+      4.904498664007406,
+      4.909336983007961,
+      4.915439957010676
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.49098290940019074,
+     "min": 0.49044986640074056,
+     "max": 0.4915439957010676,
+     "n": 7,
+     "samples": [
+      0.49098290940019074,
+      0.49111414369981504,
+      0.4909833002995583,
+      0.49053649420093276,
+      0.49044986640074056,
+      0.49093369830079614,
+      0.4915439957010676
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 248856064,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 151545088,
+    "host_peak_rss_bytes": 3133960192
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.84,
+     "min": 28.62,
+     "max": 28.92,
+     "n": 7,
+     "samples": [
+      28.78,
+      28.84,
+      28.84,
+      28.76,
+      28.92,
+      28.62,
+      28.86
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.8,
+     "min": 28.64,
+     "max": 28.96,
+     "n": 7,
+     "samples": [
+      28.88,
+      28.8,
+      28.7,
+      28.96,
+      28.8,
+      28.64,
+      28.76
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 2,
+    "backend": "default",
+    "load_start": 1.0224609375
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.03564453125,
+    "timestamp_utc": "2026-10-22T15:49:23+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.02734375
+   },
+   "network": {
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721884,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 4.285643173003336,
+    "plan_memory_bytes": {
+     "storage": 125200012,
+     "pre_rings": 1500000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 126700012
+    }
+   },
+   "compile": {
+    "compile_s": 1.0944901907205349,
+    "first_call_s": 1.752913588003139,
+    "warmup_xla_events_s": 1.071375846862793,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 0.6617979200091213,
+     "min": 0.6488520069979131,
+     "max": 0.6635638019943144,
+     "n": 7,
+     "samples": [
+      0.6488520069979131,
+      0.6635638019943144,
+      0.6617979200091213,
+      0.6613129159959499,
+      0.6493609059980372,
+      0.6622082019894151,
+      0.6618680279934779
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 0.6617979200091213,
+     "min": 0.6488520069979131,
+     "max": 0.6635638019943144,
+     "n": 7,
+     "samples": [
+      0.6488520069979131,
+      0.6635638019943144,
+      0.6617979200091213,
+      0.6613129159959499,
+      0.6493609059980372,
+      0.6622082019894151,
+      0.6618680279934779
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.06617979200091212,
+     "min": 0.06488520069979131,
+     "max": 0.06635638019943144,
+     "n": 7,
+     "samples": [
+      0.06488520069979131,
+      0.06635638019943144,
+      0.06617979200091212,
+      0.06613129159959498,
+      0.06493609059980372,
+      0.0662208201989415,
+      0.06618680279934779
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 207051008,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 140272896,
+    "host_peak_rss_bytes": 2625757184
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.739999771118164,
+     "min": 28.579999923706055,
+     "max": 29.139999389648438,
+     "n": 7,
+     "samples": [
+      28.920000076293945,
+      28.719999313354492,
+      29.139999389648438,
+      28.719999313354492,
+      29.1200008392334,
+      28.579999923706055,
+      28.739999771118164
+     ]
+    },
+    "i_rate_hz": {
+     "median": 29.0,
+     "min": 28.639999389648438,
+     "max": 29.1200008392334,
+     "n": 7,
+     "samples": [
+      28.8799991607666,
+      29.0,
+      29.079999923706055,
+      28.639999389648438,
+      29.1200008392334,
+      28.81999969482422,
+      29.100000381469727
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 2,
+    "backend": "default",
+    "load_start": 1.03564453125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.02734375,
+    "timestamp_utc": "2026-10-22T15:49:36+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.0458984375
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721884,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 15625000
+   },
+   "build": {
+    "build_s": 18.148600429994985,
+    "init_states_s": 0.3899355530011235
+   },
+   "compile": {
+    "compile_s": 1.0667045509908348,
+    "aot_xla_events_s": 1.1841342449188232,
+    "first_call_s": 8.318214722006815,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.7486076354980469,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     8.318214722006815,
+     9.594708538003033,
+     9.17164386199147
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 9.484683851987938,
+     "compile_events_s": 0.6398234367370605,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 8.843407654989278,
+     "min": 8.833007915993221,
+     "max": 9.171296055996208,
+     "n": 7,
+     "samples": [
+      8.835619486009819,
+      9.170998114001122,
+      8.839207273995271,
+      9.164868025007308,
+      8.833007915993221,
+      9.171296055996208,
+      8.843407654989278
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 8.843407654989278,
+     "min": 8.833007915993221,
+     "max": 9.171296055996208,
+     "n": 7,
+     "samples": [
+      8.835619486009819,
+      9.170998114001122,
+      8.839207273995271,
+      9.164868025007308,
+      8.833007915993221,
+      9.171296055996208,
+      8.843407654989278
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.8843407654989278,
+     "min": 0.8833007915993221,
+     "max": 0.9171296055996209,
+     "n": 7,
+     "samples": [
+      0.8835619486009819,
+      0.9170998114001122,
+      0.8839207273995271,
+      0.9164868025007309,
+      0.8833007915993221,
+      0.9171296055996209,
+      0.8843407654989278
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 457143808,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 220805120,
+    "host_peak_rss_bytes": 3211235328
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.9,
+     "min": 28.58,
+     "max": 29.22,
+     "n": 7,
+     "samples": [
+      29.22,
+      29.1,
+      28.74,
+      28.94,
+      28.58,
+      28.9,
+      28.8
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.82,
+     "min": 28.58,
+     "max": 28.98,
+     "n": 7,
+     "samples": [
+      28.98,
+      28.58,
+      28.76,
+      28.86,
+      28.82,
+      28.98,
+      28.72
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 2,
+    "backend": "cusparse",
+    "load_start": 1.02734375
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 2500,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.0458984375,
+    "timestamp_utc": "2026-10-22T15:51:37+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.01806640625
+   },
+   "network": {
+    "N_E": 10000,
+    "N_I": 2500,
+    "C_E": 1000,
+    "C_I": 250,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721884,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 4.30893838701013,
+    "plan_memory_bytes": {
+     "storage": 187750012,
+     "pre_rings": 3000000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 190750012
+    }
+   },
+   "compile": {
+    "compile_s": 1.036510658429636,
+    "first_call_s": 5.6205348020012025,
+    "warmup_xla_events_s": 1.004530668258667,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.584166612999979,
+     "min": 4.578223528995295,
+     "max": 4.595721651989152,
+     "n": 7,
+     "samples": [
+      4.595721651989152,
+      4.578323180001462,
+      4.584280064009363,
+      4.582105513007264,
+      4.584166612999979,
+      4.578223528995295,
+      4.585348453998449
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.584166612999979,
+     "min": 4.578223528995295,
+     "max": 4.595721651989152,
+     "n": 7,
+     "samples": [
+      4.595721651989152,
+      4.578323180001462,
+      4.584280064009363,
+      4.582105513007264,
+      4.584166612999979,
+      4.578223528995295,
+      4.585348453998449
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.458416661299998,
+     "min": 0.4578223528995295,
+     "max": 0.45957216519891514,
+     "n": 7,
+     "samples": [
+      0.45957216519891514,
+      0.45783231800014623,
+      0.4584280064009363,
+      0.4582105513007264,
+      0.458416661299998,
+      0.4578223528995295,
+      0.45853484539984496
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 259609344,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 192951808,
+    "host_peak_rss_bytes": 2868412416
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 28.76,
+     "min": 28.54,
+     "max": 28.92,
+     "n": 7,
+     "samples": [
+      28.54,
+      28.92,
+      28.9,
+      28.78,
+      28.76,
+      28.6,
+      28.72
+     ]
+    },
+    "i_rate_hz": {
+     "median": 28.86,
+     "min": 28.7,
+     "max": 29.02,
+     "n": 7,
+     "samples": [
+      28.8,
+      28.7,
+      28.86,
+      28.82,
+      28.88,
+      28.9,
+      29.02
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 2,
+    "backend": "cusparse",
+    "load_start": 1.0458984375
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.01806640625,
+    "timestamp_utc": "2026-10-22T15:52:25+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.005859375
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721887,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 100000
+   },
+   "build": {
+    "build_s": 3.1724459789984394,
+    "init_states_s": 0.35746171699429397
+   },
+   "compile": {
+    "compile_s": 0.8241673709999304,
+    "aot_xla_events_s": 0.9340925216674805,
+    "first_call_s": 3.989730603992939,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.5795483589172363,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     3.989730603992939,
+     4.569375532999402,
+     3.9840507339977194
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 4.673271591993398,
+     "compile_events_s": 0.6672444343566895,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 3.9863279269920895,
+     "min": 3.983214873005636,
+     "max": 3.989162628990016,
+     "n": 7,
+     "samples": [
+      3.9855258259922266,
+      3.9863279269920895,
+      3.9881498530012323,
+      3.983419338997919,
+      3.983214873005636,
+      3.989162628990016,
+      3.9877775630011456
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 3.9863279269920895,
+     "min": 3.983214873005636,
+     "max": 3.989162628990016,
+     "n": 7,
+     "samples": [
+      3.9855258259922266,
+      3.9863279269920895,
+      3.9881498530012323,
+      3.983419338997919,
+      3.983214873005636,
+      3.989162628990016,
+      3.9877775630011456
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.398632792699209,
+     "min": 0.3983214873005636,
+     "max": 0.39891626289900156,
+     "n": 7,
+     "samples": [
+      0.39855258259922266,
+      0.398632792699209,
+      0.3988149853001232,
+      0.3983419338997919,
+      0.3983214873005636,
+      0.39891626289900156,
+      0.3987777563001146
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 51533824,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 1106432,
+    "host_peak_rss_bytes": 1950171136
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.14,
+     "min": 56.9,
+     "max": 57.38,
+     "n": 7,
+     "samples": [
+      57.26,
+      57.38,
+      57.02,
+      57.08,
+      57.38,
+      56.9,
+      57.14
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.14,
+     "min": 57.1,
+     "max": 57.52,
+     "n": 7,
+     "samples": [
+      57.52,
+      57.1,
+      57.12,
+      57.26,
+      57.14,
+      57.2,
+      57.14
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 2,
+    "backend": "default",
+    "load_start": 1.01806640625
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 32,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": null,
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.005859375,
+    "timestamp_utc": "2026-10-22T15:53:17+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.0048828125
+   },
+   "network": {
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721887,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 1.5069566140009556,
+    "plan_memory_bytes": {
+     "storage": 5012004,
+     "pre_rings": 120000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 5132004
+    }
+   },
+   "compile": {
+    "compile_s": 1.1401293767121388,
+    "first_call_s": 1.8411457350011915,
+    "warmup_xla_events_s": 1.1204745769500732,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 0.705492046996369,
+     "min": 0.6934416730073281,
+     "max": 0.7068726430006791,
+     "n": 7,
+     "samples": [
+      0.7068726430006791,
+      0.6934416730073281,
+      0.705492046996369,
+      0.6954658769973321,
+      0.706241782012512,
+      0.6938993810035754,
+      0.7057011050055735
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 0.705492046996369,
+     "min": 0.6934416730073281,
+     "max": 0.7068726430006791,
+     "n": 7,
+     "samples": [
+      0.7068726430006791,
+      0.6934416730073281,
+      0.705492046996369,
+      0.6954658769973321,
+      0.706241782012512,
+      0.6938993810035754,
+      0.7057011050055735
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.0705492046996369,
+     "min": 0.0693441673007328,
+     "max": 0.07068726430006791,
+     "n": 7,
+     "samples": [
+      0.07068726430006791,
+      0.0693441673007328,
+      0.0705492046996369,
+      0.06954658769973321,
+      0.07062417820125119,
+      0.06938993810035754,
+      0.07057011050055735
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 73762304,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 6640384,
+    "host_peak_rss_bytes": 1909633024
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.15999984741211,
+     "min": 57.060001373291016,
+     "max": 57.2599983215332,
+     "n": 7,
+     "samples": [
+      57.15999984741211,
+      57.060001373291016,
+      57.13999938964844,
+      57.2599983215332,
+      57.119998931884766,
+      57.20000076293945,
+      57.220001220703125
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.279998779296875,
+     "min": 57.08000183105469,
+     "max": 57.560001373291016,
+     "n": 7,
+     "samples": [
+      57.099998474121094,
+      57.41999816894531,
+      57.279998779296875,
+      57.099998474121094,
+      57.560001373291016,
+      57.459999084472656,
+      57.08000183105469
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 2,
+    "backend": "default",
+    "load_start": 1.005859375
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_simulator_baseline",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.0048828125,
+    "timestamp_utc": "2026-10-22T15:53:27+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "brainpy_state_file": "/data/chaoming/brainpy-state-k0/work/K1a-7/brainpy_state/__init__.py",
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.0
+   },
+   "network": {
+    "dt_ms": 0.1,
+    "delay_ms": 1.5,
+    "g": 5.0,
+    "eta": 2.0,
+    "epsilon": 0.1,
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex_pA": 20.68015524367846,
+    "J_in_pA": -103.4007762183923,
+    "poisson_rate_hz": 17789.007714721887,
+    "N_rec": 50,
+    "comm": "sparse",
+    "poisson_stop_ms": 104857.6,
+    "n_synapses": 100000
+   },
+   "build": {
+    "build_s": 3.1574913320073392,
+    "init_states_s": 0.367900223005563
+   },
+   "compile": {
+    "compile_s": 0.7933386049990077,
+    "aot_xla_events_s": 0.9090960025787354,
+    "first_call_s": 4.215944771989598,
+    "n_compiling_calls": 1,
+    "warmup_xla_events_s": 0.5329265594482422,
+    "n_warmup_compile_events": 3,
+    "warmup_walls_s": [
+     4.215944771989598,
+     4.764828043000307,
+     4.205332216995885
+    ],
+    "recompiles_during_timing": 0,
+    "public_cont_call": {
+     "wall_s": 4.883284829003969,
+     "compile_events_s": 0.6536521911621094,
+     "n_compile_events": 14
+    }
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 4.206206883012783,
+     "min": 4.203603556001326,
+     "max": 4.209965073998319,
+     "n": 7,
+     "samples": [
+      4.204769585005124,
+      4.206206883012783,
+      4.2065434499963885,
+      4.205798044000403,
+      4.203603556001326,
+      4.209965073998319,
+      4.2075319930008845
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 4.206206883012783,
+     "min": 4.203603556001326,
+     "max": 4.209965073998319,
+     "n": 7,
+     "samples": [
+      4.204769585005124,
+      4.206206883012783,
+      4.2065434499963885,
+      4.205798044000403,
+      4.203603556001326,
+      4.209965073998319,
+      4.2075319930008845
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.4206206883012783,
+     "min": 0.42036035560013263,
+     "max": 0.42099650739983185,
+     "n": 7,
+     "samples": [
+      0.42047695850051237,
+      0.4206206883012783,
+      0.42065434499963883,
+      0.42057980440004034,
+      0.42036035560013263,
+      0.42099650739983185,
+      0.4207531993000885
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 52283136,
+    "bytes_limit": 18972934144,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 1720320,
+    "host_peak_rss_bytes": 1960247296
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 57.16,
+     "min": 57.0,
+     "max": 57.44,
+     "n": 7,
+     "samples": [
+      57.24,
+      57.44,
+      57.26,
+      57.0,
+      57.16,
+      57.1,
+      57.12
+     ]
+    },
+    "i_rate_hz": {
+     "median": 57.16,
+     "min": 57.06,
+     "max": 57.4,
+     "n": 7,
+     "samples": [
+      57.4,
+      57.16,
+      57.28,
+      57.06,
+      57.1,
+      57.12,
+      57.24
+     ]
+    }
+   },
+   "g3": {
+    "impl": "old",
+    "round": 2,
+    "backend": "cusparse",
+    "load_start": 1.0048828125
+   }
+  },
+  {
+   "schema_version": 1,
+   "benchmark": "brunel_kernel",
+   "status": "ok",
+   "config": {
+    "device": "gpu",
+    "order": 200,
+    "precision": 64,
+    "window_ms": 1000.0,
+    "steps_per_window": 10000,
+    "repeats": 7,
+    "brainevent_backend": "cusparse",
+    "storage": "auto",
+    "cpu_affinity": "all"
+   },
+   "meta": {
+    "commit": "18ae60b",
+    "host": "ta-System-Product-Name",
+    "cpu_model": "Intel(R) Core(TM) i7-14700KF",
+    "n_cpus": 28,
+    "loadavg_1min": 1.0,
+    "timestamp_utc": "2026-10-22T15:54:21+00:00",
+    "env": {
+     "JAX_PLATFORMS": null,
+     "CUDA_VISIBLE_DEVICES": "1",
+     "XLA_PYTHON_CLIENT_PREALLOCATE": null,
+     "XLA_PYTHON_CLIENT_MEM_FRACTION": null,
+     "XLA_FLAGS": null,
+     "JAX_COMPILATION_CACHE_DIR": null
+    },
+    "versions": {
+     "python": "3.12.15",
+     "jax": "0.12.0",
+     "jaxlib": "0.12.0",
+     "brainstate": "0.6.0",
+     "brainevent": "0.2.1",
+     "brainunit": "0.6.0",
+     "braintools": "0.4.0",
+     "numpy": "2.5.4",
+     "jax-cuda13-plugin": "0.12.0",
+     "jax-cuda13-pjrt": "0.12.0"
+    },
+    "device_kind": "NVIDIA GeForce RTX 3090",
+    "device_platform": "gpu",
+    "n_devices": 1,
+    "gpu_info": "NVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB\nNVIDIA GeForce RTX 3090, 580.178.04, 24576 MiB",
+    "loadavg_1min_end": 1.0
+   },
+   "network": {
+    "N_E": 800,
+    "N_I": 200,
+    "C_E": 80,
+    "C_I": 20,
+    "J_ex": 20.68015524367846,
+    "J_in": -103.4007762183923,
+    "rate": 17789.007714721887,
+    "tau_syn": 0.5,
+    "tau_mem": 20.0,
+    "c_mem": 250.0,
+    "theta": 20.0,
+    "t_ref": 2.0,
+    "delay": 1.5
+   },
+   "build": {
+    "build_s": 1.534124943005736,
+    "plan_memory_bytes": {
+     "storage": 9016004,
+     "pre_rings": 240000,
+     "post_rings": 0,
+     "synapses": 0,
+     "plastic": 0,
+     "total": 9256004
+    }
+   },
+   "compile": {
+    "compile_s": 1.093579739723022,
+    "first_call_s": 2.166583291007555,
+    "warmup_xla_events_s": 1.06783127784729,
+    "n_compiling_calls": 1,
+    "recompiles_during_timing": 0,
+    "n_traces": 1
+   },
+   "steady": {
+    "window_wall_s": {
+     "median": 1.0733354249969125,
+     "min": 1.0715228609915357,
+     "max": 1.0739195109927095,
+     "n": 7,
+     "samples": [
+      1.0733868370007258,
+      1.0731527250027284,
+      1.0715228609915357,
+      1.071884642005898,
+      1.0733354249969125,
+      1.0739195109927095,
+      1.073822858001222
+     ]
+    },
+    "s_per_sim_second": {
+     "median": 1.0733354249969125,
+     "min": 1.0715228609915357,
+     "max": 1.0739195109927095,
+     "n": 7,
+     "samples": [
+      1.0733868370007258,
+      1.0731527250027284,
+      1.0715228609915357,
+      1.071884642005898,
+      1.0733354249969125,
+      1.0739195109927095,
+      1.073822858001222
+     ]
+    },
+    "ms_per_step": {
+     "median": 0.10733354249969125,
+     "min": 0.10715228609915357,
+     "max": 0.10739195109927095,
+     "n": 7,
+     "samples": [
+      0.10733868370007259,
+      0.10731527250027284,
+      0.10715228609915357,
+      0.1071884642005898,
+      0.10733354249969125,
+      0.10739195109927095,
+      0.10738228580012218
+     ]
+    }
+   },
+   "memory": {
+    "kind": "gpu_peak_bytes_in_use",
+    "peak_bytes": 78318848,
+    "before_build_bytes": 1792,
+    "after_build_bytes": 11196928,
+    "host_peak_rss_bytes": 1925234688
+   },
+   "sanity": {
+    "e_rate_hz": {
+     "median": 59.74,
+     "min": 59.6,
+     "max": 59.86,
+     "n": 7,
+     "samples": [
+      59.6,
+      59.66,
+      59.84,
+      59.8,
+      59.86,
+      59.74,
+      59.68
+     ]
+    },
+    "i_rate_hz": {
+     "median": 59.74,
+     "min": 59.46,
+     "max": 59.96,
+     "n": 7,
+     "samples": [
+      59.74,
+      59.96,
+      59.66,
+      59.46,
+      59.96,
+      59.76,
+      59.6
+     ]
+    }
+   },
+   "g3": {
+    "impl": "new",
+    "round": 2,
+    "backend": "cusparse",
+    "load_start": 1.0
+   }
+  }
+ ]
+}
