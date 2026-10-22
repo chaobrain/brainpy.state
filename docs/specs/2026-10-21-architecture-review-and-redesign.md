@@ -212,7 +212,7 @@ separate runtime vs training backends.
 |---|---|---|---|
 | `event` | spike multiplicity × weight per target per step; delays rounded to the grid (NEST); never interpolated. An input `event` port may **name the state it filters into** (`Event(u.nS, into='g_ex')`, D-b): that is a neuron-owned receptor port | jump after propagation (onto the named state, or onto the port's jump target) | spike output; `spike_generator`; parrot relay; receptor ports `ex`/`in` of `iaf_psc_alpha`, `iaf_cond_exp`, `aeif_cond_alpha` |
 | `timed_event` | fixed-capacity list of `(offset, weight)` per target per step, with a capacity **budget** and an overflow counter checked at run time; sorted by offset at the receiver | integrated between events | `*_ps` models, `poisson_generator_ps` |
-| `current` | current (pA), summed, unfiltered | **per port** (D-a): `latch=True` acts during the next step (NEST `CurrentEvent`); `latch=False` acts in the same step | static PSC input, `dc_generator`, SIC; `I` of NEST models (latched), `I` of BrainPy-family `LIF` (same step) |
+| `current` | current (pA), summed, unfiltered | **per port** (D-a): `latch=True` (default) acts during the next step (NEST `CurrentEvent`); `latch=False` acts in the same step | static PSC input, `dc_generator`, SIC; `I` of NEST models (latched), `I` of BrainPy-family `LIF` (same step) |
 | `conductance` | conductance (nS) with `E_rev` and an optional voltage gate `gate(V)` evaluated inside `derivatives` at every substep; unfiltered (a projection-owned `SynapseModel` supplies `g`) | inside the ODE | multisynapse ports, NMDA Mg block (replaces `SynOut` COBA/MgBlock) |
 | `graded` | continuous value with declared unit; sub-step delays may interpolate | per port, as `current` (`latch=True|False`) | NMDA emission, astrocyte SIC |
 | `gap` | symmetric pairing of two `V` ports with a per-edge conductance | explicit lag or fixed-iteration WFR | `hh_psc_alpha_gap` |
@@ -254,9 +254,8 @@ class iaf_cond_exp(NeuronModel):
     def on_input(self, s, inp, ctx): ...           # optional jump part (e.g. g += Δg)
 ```
 
-(The `into=` spelling is illustrative. The final keyword is a user-facing API choice:
-K1a-3 proposes it and the lead decides; the outcome is recorded in the K1a decisions
-log.)
+(`into=` is the keyword, lead decision 2026-10-22; `TimedEvent` receptor ports use it
+too, and the `filtered` flag is removed from every port kind.)
 
 - `step(state, inputs, ctx) -> (state, outputs)` is generated from `derivatives` +
   `on_input` + `spiking` + `integrator`; models with hand-written exact propagators
@@ -488,8 +487,10 @@ checkpoint/restore continue the same streams.
   a single-device run. (K0 draws whole populations from one key,
   `population_key(..., gid_block=0)`, `_kernel/rng.py:196-202`.) Connectivity already
   follows the per-(projection, post gid block) rule.
-- The distributed-layout spec (K1b) confirms the block size and the gid → shard map
-  before K2 model ports rely on the layout.
+- Block size 1024 gids, the same `GID_BLOCK` constant as connectivity; unnamed objects
+  are auto-named `<model>_<k>` per class, so insertion order matters only among
+  unnamed objects of the same class (lead, 2026-10-22). The distributed-layout spec
+  (K1b) fixes the gid → shard map on these blocks before K2 model ports rely on it.
 
 #### L4 — front-ends
 
@@ -646,7 +647,8 @@ not add-ons.
    on-demand updates at chosen intervals: optimizer steps, weight normalisation,
    learning-signal broadcast, trial resets. It is a real phase of the `Program`'s
    rollout, run inside the compiled loop, not host code between `cont()` calls. K0 has
-   none; K1a-5 adds it (its signature is a K1a-5 proposal decided by the lead).
+   none; K1a-5 adds it as `Program.rollout(..., learn=fn, every=k)` (lead, 2026-10-22;
+   exact signature approved in the K1a-5 PR).
 7. **Ownership.** braintrace owns online algorithms; brainpy.state owns models and
    guarantees they are etrace-compatible. braintrace currently also ships `nn.LIF`,
    `ALIF`, `Expon`, `STP`, … — which library is canonical for basic models is an
@@ -747,7 +749,7 @@ spec and a gate in its milestone.
 | S1 | Model scope | ✅ **point neurons only**: multi-compartment and population/mean-field models are not ported and are removed at K4 (list in §13) |
 | S1a | Single-unit rate neurons | ✅ **not supported**: `lin_rate`, `tanh_rate`, `threshold_lin_rate`, `gauss_rate`, `sigmoid_rate`, `sigmoid_rate_gg_1998`, `rate_neuron_ipn/opn`, `rate_transformer_node`, with `rate_connection_instantaneous/delayed` and `step_rate_generator` are not ported and are removed at K4 |
 | D5 | Rewrite strategy | ✅ **new kernel alongside**, port families, delete old kernel in one 0.2/1.0-alpha break |
-| D6 | `spec` branch | ✅ de facto (K0, 2026-10-22): **borrow ideas, not code** — K0 used none of its code; the archive tag is still to be created (open: create it now or with the K4 deletion — lead) |
+| D6 | `spec` branch | ✅ (lead, 2026-10-22): **borrow ideas, not code** — K0 used none of its code; the branch is **archived as a tag at K4** (not now) |
 | L1 | Online-learning algorithms | ✅ **live in braintrace**; brainpy.state guarantees etrace compatibility |
 | L2 | EventProp | ✅ **K1 prototype**, scoped to interpolated-threshold LIF without refractoriness, homogeneous delays |
 | L3 | Canonical home of basic models (LIF/ALIF/Expon/STP exist in both braintrace.nn and brainpy.state) | ✅ **brainpy.state is canonical**; braintrace.nn duplicates to be deprecated upstream in favour of brainpy.state models |
@@ -757,7 +759,7 @@ Post-K0 decisions (lead, 2026-10-22), from the post-K0 architecture review:
 
 | # | decision | date | outcome |
 |---|---|---|---|
-| D-a | Latch of `current`/`graded` input ports | 2026-10-22 | ✅ **per port**: `latch=True|False` declared on `Current`/`Graded`; NEST models latched (one step, NEST `CurrentEvent`), BrainPy-family models same-step. D4a rewritten to name the port kinds a zero delay covers. K1a-2 |
+| D-a | Latch of `current`/`graded` input ports | 2026-10-22 | ✅ **per port**: `latch=True|False` on `Current`/`Graded`, **default `True`** (K0 behaviour; lead, 2026-10-22); NEST models latched (one step, NEST `CurrentEvent`), BrainPy-family models same-step. D4a rewritten to name the port kinds a zero delay covers. K1a-2 |
 | D-b | Encoding of neuron-owned receptor ports | 2026-10-22 | ✅ **one encoding**: an `Event` input port that names the state it filters into; replaces `filtered=True` on `Current`/`Conductance` and the special case in `_kernel/ports.py`. K1a-3 |
 | D-c | Learner API | 2026-10-22 | ✅ **learners take `(Program, state0)`**; the `Runner` is just another client; no `plan.runner(learner=)` attach coupling (also removes BPTT's step-0-only episodes). K1a-5 |
 | D-d | Public API of the new kernel | 2026-10-22 | ✅ **`_kernel` private until K3**; no experimental export (§7.4) |
@@ -774,12 +776,12 @@ for porting. The new kernel stays private until K3 (D-d).
 | milestone | content | exit gate | status |
 |---|---|---|---|
 | **K0 — kernel spike** | L1 contracts, `Network`, compiler `Plan`, step schedule, delay buffers, `Program`/`Runner`, RNG contract; `iaf_psc_alpha`, `LIF`, `iaf_cond_exp`, `aeif_cond_alpha`, `iaf_psc_exp_ps` + `poisson_generator_ps`, NMDA/Mg-gated conductance, `Expon`, `static`/`stdp_synapse`; BPTT learner and braintrace checks ([K0 spec](2026-10-21-k0-kernel-spec.md)) | gates G1–G10 (K0 spec §6) | ✅ **done — GO** ([K0 report](2026-10-22-k0-report.md)); G9 measured on CPU only, G5/G6 under restated criteria |
-| **K1a — kernel hardening** | fix what K0 showed to be structurally weak before more is built on it ([K1a spec](2026-10-22-k1a-kernel-hardening-spec.md)): substeps and precise-model segments as `scan` (§7.3); per-port latch (D-a); one receptor-port encoding (D-b); single-op per-edge delays; learner API on `(Program, state0)` (D-c), explicit `spikes='hard'|'relaxed'`, relaxed etrace checker, learn phase; RNG layout (D-g); CI job for the gate marker and the `brian2` extra | every K0 network compiles in ≤ 5 s at default substeps; per-edge-delay Brunel ≤ 1.5 × scalar-delay step time, bounded build time; GPU G9 rerun (f32 default backend, f64 cusparse) vs the T0 rows; Potjans–Diesmann microcircuit at full scale on CPU and GPU (memory, build, compile, step; rates vs NEST 3.10); G2 rerun in the asynchronous-irregular regime; all K0 gates still green; K1a report | **next** |
+| **K1a — kernel hardening** | fix what K0 showed to be structurally weak before more is built on it ([K1a spec](2026-10-22-k1a-kernel-hardening-spec.md)): substeps and precise-model segments as `scan` (§7.3); per-port latch (D-a); one receptor-port encoding (D-b); single-op per-edge delays; learner API on `(Program, state0)` (D-c), explicit `spikes='hard'|'relaxed'`, relaxed etrace checker, learn phase; RNG layout (D-g); CI job for the gate marker and the `brian2` extra | every K0 network compiles in ≤ 5 s at default substeps; per-edge-delay Brunel ≤ 1.5 × scalar-delay step time and ≤ 2 × scalar-delay build time; blocked RNG ≤ 1.05 × K0 step time; GPU G9 rerun (f32 default backend, f64 cusparse) vs the T0 rows; Potjans–Diesmann microcircuit at full scale on CPU and GPU (memory, build, compile, step; rates vs NEST 3.10, 5 seeds each side); G2 rerun in the asynchronous-irregular regime; all K0 gates still green; K1a report | **next** |
 | **K1b — substrate completion** | graded emission; gap junctions (lag + fixed-iteration WFR); STP; procedural (and conv) storage; `pre`-aligned `SynapseModel` lowering (NMDA as `synapse=NMDA()`); in-substep spike localisation (`SpikeRule` contract, §7 L1); merge-pass veto with synapse observables; plastic weights in edge order (lifts CSR-only plasticity; per-edge delays on plastic projections); `timed_event` capacity as a statistical budget with run-time overflow (timed sources with synapse models and plasticity); recording at scale (sparse spike buffers, downsampled multimeters, online reductions); checkpoint/restore; stimulus schedules and sweeps; distributed-layout spec incl. the D-g RNG block layout | every old `_nest_network` behaviour test re-expressed on `Network` and green, or listed as removed/exempted (inventory as in K2); spiking `aeif_cond_alpha` within `CAT_A` on spike steps at default substeps | planned (after K1a) |
 | **K1-L — learning track** (parallel to K1b; depends on K1a only) | EventProp prototype (L2 scope); three-factor learning through braintrace with a modulatory device; hybrid weights through the rule (L4) and learned STDP parameters; ES via `vmap`; ridge/FORCE readouts; batched online learning; spike-time gradients through timed delivery | §8.3 K1 gates (EventProp vs FD on its scope; ThreeFactor; meta-gradient; ES; readout); OSTL exact on a feed-forward net; D-RTRL vs BPTT on one step | planned (after K1a) |
 | **K2 — model library + NEST layer** | port neuron/synapse/plasticity/device families onto the contracts (numerics reused; goal-01 repro tests as acceptance tests; host-only models ported to JAX or flagged); BrainPy-family models ported for use through `Network` (D-e; peak-detection `SpikeRule` for `HH`, `Izhikevich`, `FitzHughNagumo`, `HindmarshRose`); **NEST `Simulator` vocabulary as a thin layer over `Network`** (`NodeView`, `SynapseCollection` over `EdgeSet`, integer `receptor_type`) — moved here from K3 because the validation tests drive it | **every one of the 131 NEST validation test files is re-expressed on the new kernel and green, or listed as removed (S1/S1a) or exempted with a written reason**. Inventory first (one table, committed with the K2 spec): ~75 drive the old `Simulator` (re-expressed through the NEST layer), ~23 cover models removed under S1/S1a (removed), 8 `spatial_*` need K3 (exempted until K3). Tolerances of formerly-GSL models are **re-derived** from substep-convergence studies against NEST and documented, never silently loosened | planned |
 | **K3 — spatial, interop, public export** | spatial layers/masks/kernels on `Network` (`conv` storage); NIR export (and import); SONATA import; **public export of the kernel** with the naming/staging plan of §7.4; deprecation warnings on the BrainPy-style API (D-e); public-API freeze list; examples and docs migrated | the 8 `spatial_*` validation tests green; NIR round trip; docs build with every example on the new kernel | planned |
-| **K4 — removal + release** | delete the old kernel (`_nest_network` `Simulator`, `Builder`, dead projections) **and the BrainPy-style API** (standalone modules, AlignPost/AlignPre projections; D-e); remove S1/S1a models; archive the `spec` branch as a tag if not done earlier (D6); migration guide; 1.0-alpha | full suite + docs build + benchmarks | planned |
+| **K4 — removal + release** | delete the old kernel (`_nest_network` `Simulator`, `Builder`, dead projections) **and the BrainPy-style API** (standalone modules, AlignPost/AlignPre projections; D-e); remove S1/S1a models; archive the `spec` branch as a tag (D6); migration guide; 1.0-alpha | full suite + docs build + benchmarks | planned |
 
 Goal-01 findings map as follows: autapse ids, edge retention, multiplicity,
 `fixed_total_number` (mirror NEST: refuse `allow_multapses=False`) were fixed **by

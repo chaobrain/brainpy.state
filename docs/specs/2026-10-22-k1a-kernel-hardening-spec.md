@@ -77,8 +77,8 @@ is unchanged (NEST models keep their semantics; D-a keeps them latched).
 **Acceptance tests.**
 
 - Traces of `iaf_cond_exp` and `aeif_cond_alpha` (k ∈ {1, 2, 4, 16, 64}) and of
-  `iaf_psc_exp_ps` equal the K0 implementation (float64: max relative difference
-  ≤ 1e-12; float32: within `CAT_B`), including spike counts per step.
+  `iaf_psc_exp_ps` equal the K0 implementation ("numerically unchanged", lead decision
+  2026-10-22: float64 max relative difference ≤ 1e-12; float32 within `CAT_B`), including spike counts per step.
 - braintrace D-RTRL and e-prop gradients on the K0 `iaf_cond_exp` and `LIF` nets equal
   the K0 values (same bounds).
 - BPTT G6 tests green.
@@ -99,15 +99,17 @@ records the table; the measured numbers go into the K1a report.
 
 **Contract.**
 
-- `Current(unit, latch=...)` and `Graded(unit, latch=...)` declare whether the input
+- `Current(unit, latch=True)` and `Graded(unit, latch=True)` declare whether the input
   acts in the next step (`latch=True`, NEST `CurrentEvent`) or in the step it arrives
-  in (`latch=False`). Only latched ports get a latch state (`latch_<port>`).
+  in (`latch=False`). **`latch` defaults to `True`** (K0 behaviour; lead decision
+  2026-10-22): a port is NEST-style latched unless it opts out with `latch=False`.
+  Only latched ports get a latch state (`latch_<port>`).
 - Unlatched inputs of step `n` enter step `n`'s update: as a constant current over the
   step for RK/exp-Euler models (the same value at every substep), and through the
   propagator for exact models.
 - K0 NEST models (`iaf_psc_alpha`, `iaf_cond_exp`, `aeif_cond_alpha`,
-  `iaf_psc_exp_ps`) declare `latch=True`; the BrainPy-family `LIF` declares
-  `latch=False`. Devices feeding `current` ports are unaffected (the receiving port
+  `iaf_psc_exp_ps`) keep the default `latch=True` (may state it explicitly); the
+  BrainPy-family `LIF` **must declare `latch=False` explicitly** (a test checks it). Devices feeding `current` ports are unaffected (the receiving port
   decides).
 - Architecture doc §7 L2 (D4a as revised) is the semantic reference: a zero delay is
   same-step for `event`, `conductance` and unlatched ports; a latched port adds one
@@ -133,16 +135,16 @@ records the table; the measured numbers go into the K1a report.
 **Contract.**
 
 - A neuron-owned receptor port is an `Event` input port that **names the state it
-  filters into** (architecture doc §7 L1; the keyword spelling is proposed by this task
-  and decided by the lead). A delivered weight (unit = the named state's unit per
+  filters into** with the keyword **`into=`** (lead decision 2026-10-22), e.g.
+  `ex=Event(unit=u.nS, into='g_ex')`; `TimedEvent` receptor ports use the same keyword. A delivered weight (unit = the named state's unit per
   event) jumps that state after propagation; the neuron's `derivatives` filter it.
-- `filtered=` is removed from `Current` and `Conductance` (and the special case at
+- `filtered=` is removed **everywhere** (`Current`, `Conductance`, `Graded`,
+  `TimedEvent`; and the special case at
   `_kernel/ports.py:495-496`). Projection-owned kinetics (`synapse=Expon(...)`, …)
   connect only to unfiltered `Current`/`Conductance` ports; attaching a `SynapseModel`
   to a receptor `Event` port raises `PortError` naming the owner of the kinetics.
 - Migrate `iaf_psc_alpha` (state `i_syn_ex`/`i_syn_in` path), `iaf_cond_exp` and
-  `aeif_cond_alpha` (`g_ex`, `g_in`). The remaining `filtered` flags on `TimedEvent`
-  and `Graded` are inventoried; the task proposes their treatment to the lead.
+  `aeif_cond_alpha` (`g_ex`, `g_in`).
 
 **Acceptance tests.**
 
@@ -167,8 +169,8 @@ records the table; the measured numbers go into the K1a report.
 - The compiler chooses between the scatter and K0's per-delay grouping with a **cost
   model** (per-step cost of the scatter ∝ edges; of grouping ∝ groups × per-group
   matmul cost; plus build time), caps the number of groups, and reports the choice and
-  its memory in `plan.describe()`. The cost-model constants and the group cap come from
-  this task's measurements and are approved by the lead (Decisions table).
+  its memory in `plan.describe()`. The number of groups has a **hard ceiling recorded
+  in the plan**; the cost-model constants come from this task's measurements.
 - [brainevent#203](https://github.com/chaobrain/brainevent/issues/203) (fused
   per-edge-delay delivery) is the future fast path behind the same cost model.
 - Plastic projections keep their K0 scalar-delay restriction (K1b).
@@ -183,8 +185,8 @@ records the table; the measured numbers go into the K1a report.
 
 **Gate (per-edge delays).** Brunel with per-edge delays (2000 neurons, indegree 100,
 delays uniform up to 20 ms — the review's worst case) on the remote CPU: **step time
-≤ 1.5 × the same network with a scalar delay**, and **build time bounded** (proposed:
-≤ 2 × the scalar-delay build time; the lead confirms the bound in the Decisions table).
+≤ 1.5 × the same network with a scalar delay**, and **build time ≤ 2 × the scalar-delay build
+time** (lead decision 2026-10-22).
 Measured with `BENCH=1` or the interleaved protocol.
 
 ### K1a-5 — learner API (D-c), explicit spike mode, relaxed checker, learn phase
@@ -201,10 +203,13 @@ Measured with `BENCH=1` or the interleaved protocol.
   built from a `Program` and run episodes from any `state0` (initial, warmed-up,
   checkpointed, or a `Runner`'s current state). The `Runner` is a client of a `Program`
   like the learners; `plan.runner(learner=…)` and the `attach(runner)` coupling are
-  removed. Exact signatures are proposed by this task and decided by the lead.
+  removed. Shape (lead decision 2026-10-22): learner objects,
+  `BPTT(program, loss, optimizer, ...).run(state0, data)`; the exact signatures are
+  shown in the K1a-5 PR and approved by the lead before merge.
 - A **learn phase** in the rollout: an optional function applied inside the compiled
-  loop at a chosen interval (architecture doc §8.2-6); its signature is part of the
-  proposal.
+  loop at a chosen interval (architecture doc §8.2-6), as
+  `Program.rollout(..., learn=fn, every=k)` (lead decision 2026-10-22; exact signature
+  approved in the K1a-5 PR).
 - The etrace checker's rule 2 allows braintrace primitives inside static
   `scan`/`fori_loop` bodies and rejects them only inside `while` bodies
   ([braintrace#186](https://github.com/chaobrain/braintrace/issues/186)); rules 2–4
@@ -233,14 +238,15 @@ Measured with `BENCH=1` or the interleaved protocol.
 
 - Object keys are derived from a stable hash of the object's **name** (populations,
   projections, devices), not from its insertion index; names are unique within a
-  `Network` (duplicate → error). The default name of an unnamed object and the hash
-  function are proposed by this task and decided by the lead.
+  `Network` (duplicate → error). Unnamed objects are auto-named `<model>_<k>`, counted
+  per model class (lead decision 2026-10-22), so insertion order matters only among
+  unnamed objects of the same class — documented in the docstrings.
 - Per-step dynamics noise (Poisson generators, noise inputs, stochastic spiking) is
-  drawn **per gid block** of a fixed size: the draws for gids in block `b` come from
+  drawn **per gid block** of 1024 gids (the same `GID_BLOCK` constant as connectivity,
+  `_kernel/rng.py:61`; lead decision 2026-10-22): the draws for gids in block `b` come from
   `block_key(object_key, b)` folded with the step (and trial). Connectivity keeps its
-  per-(projection, post gid block) rule with the new object keys. The block size is a
-  lead decision (it fixes the streams) and is confirmed by the distributed-layout spec
-  (K1b).
+  per-(projection, post gid block) rule with the new object keys. The distributed-layout
+  spec (K1b) builds on this block size.
 - This changes every realised stream relative to K0 (decided by D-g); statistical gates
   are re-run, exact-equality gates are re-baselined.
 
@@ -254,8 +260,7 @@ Measured with `BENCH=1` or the interleaved protocol.
   numbers; non-aligned split points are rejected or handled (documented).
 - G4 invariances (storage, batch, RNG modes) still exact; `cont()` continues streams;
   G2/G3 statistics pass with the new streams.
-- Per-step cost: Brunel order 2500 step time ≤ 1.05 × K0 (proposed bound; lead
-  confirms).
+- **Gate:** Brunel order 2500 step time ≤ 1.05 × K0 (lead decision 2026-10-22).
 - Edge cases: population smaller than one block; size not a multiple of the block;
   renamed object (new streams, by design); name collisions; `vmap` common vs
   independent.
@@ -270,8 +275,8 @@ interleaved protocol of `benchmarks/g9_interleaved.py`):
 | K1a-G1 compile | compile time of every K0 network at default substeps (K1a-1 table), CPU | ≤ 5 s each |
 | K1a-G2 per-edge delays | K1a-4 gate | step ≤ 1.5 × scalar-delay; build within the approved bound |
 | K1a-G3 GPU G9 | Brunel order 200 and 2500 on GPU 1: float32 with the default brainevent backend, float64 with `cusparse` ([brainevent#199](https://github.com/chaobrain/brainevent/issues/199)); compared with the T0 GPU baseline rows of the old `Simulator` | step time and peak device memory ≤ 1.1 × old (the K0 G9 rule); compile time reported |
-| K1a-G4 microcircuit | Potjans–Diesmann microcircuit at full scale (77 169 neurons, ≈ 3 × 10⁸ synapses), CPU and GPU 1, float32: memory, build, compile and step time; per-population rates vs NEST 3.10 over seeds | rates by the G2 rule (\|Δmean\| ≤ max(5 % of NEST mean, 2 × combined SEM)); number of seeds proposed by the task (cost-bound) and approved by the lead; memory/build/compile/step reported |
-| K1a-G5 G2 in the AI regime | Brunel `iaf_psc_alpha` at a parameter point in the asynchronous-irregular regime (proposed by the task from Brunel 2000; NEST CV-ISI ≥ 0.5 and low synchrony), 10 seeds each side | the G2 rule on rate, CV-ISI, Fano factor and pairwise correlation |
+| K1a-G4 microcircuit | Potjans–Diesmann microcircuit at full scale (77 169 neurons, ≈ 3 × 10⁸ synapses), CPU and GPU 1, float32: memory, build, compile and step time; per-population rates vs NEST 3.10, **5 seeds each side, 1 s after a 100 ms transient** | rates by the G2 rule (\|Δmean\| ≤ max(5 % of NEST mean, 2 × combined SEM)); memory/build/compile/step reported |
+| K1a-G5 G2 in the AI regime | Brunel `iaf_psc_alpha` at a parameter point in the asynchronous-irregular regime, chosen by a short NEST-only scan requiring CV-ISI ≥ 0.5 and **shown to the lead before the kernel comparison runs**; 10 seeds each side | the G2 rule on rate, CV-ISI, Fano factor and pairwise correlation |
 | K1a-G6 regressions | all K0 gates (`-m k0_gate`) | green |
 
 **CI (the D-f remainder of v0.1.1 goal 02).** A GitHub Actions job that installs the
@@ -305,8 +310,8 @@ it touches, remote test run recorded in the PR, `# upstream:` comments per
   numbers changed and why; NEST models are checked bit-identical where their semantics
   do not change.
 - **Microcircuit cost.** Full-scale Potjans–Diesmann on NEST and the kernel, several
-  seeds, may take hours on the shared host. Mitigation: seeds and duration proposed by
-  K1a-7 within a budget, approved by the lead.
+  seeds, may take hours on the shared host. Mitigation: fixed protocol (5 seeds each side,
+  1 s after a 100 ms transient; lead decision 2026-10-22).
 - **GPU availability.** GPU 1 may become busy again. Mitigation: the remote script
   aborts on a busy GPU; K1a-G3/G4 GPU rows wait rather than run on GPU 0.
 
@@ -314,20 +319,20 @@ it touches, remote test run recorded in the PR, `# upstream:` comments per
 
 ## 6. Open questions for the lead (raised while writing this spec)
 
-Each is a contract, semantics or gate choice that D-a…D-g do not settle. The task
-named in the first column may start with the recommendation, but does not merge it
-without the lead's answer (recorded in §7).
+Each is a contract, semantics or gate choice that D-a…D-g do not settle. **All rows
+were resolved by the lead on 2026-10-22**; the answers are in §7 and in the task
+sections above.
 
-| task | question | options | recommendation |
-|---|---|---|---|
-| K1a-1 | tolerance for "numerically neutral" `scan` substeps | (a) float64 max relative difference ≤ 1e-12 vs K0, float32 within `CAT_B`; (b) bit-identical | (a): XLA may reorder floating-point ops inside a `scan` |
-| K1a-2 | default of `latch` on `Current`/`Graded` | (a) required keyword on model input ports (no default); (b) default `True` (K0 behaviour); (c) default `False` | (a): D-a says the latch is declared per port; a silent default hides a one-step semantic difference |
-| K1a-3 | keyword naming the filtered state on a receptor `Event` port; fate of `filtered` on `TimedEvent`/`Graded` | `into=` / `state=` / `filters=`; `TimedEvent` gets the same keyword or keeps a flag | `into='g_ex'`; the same keyword on `TimedEvent` receptor ports (one encoding, as D-b intends) |
-| K1a-4 | build-time bound of the per-edge-delay gate; group cap | build ≤ 2 × scalar-delay build, or an absolute bound (e.g. ≤ 3 s at 2000 × 100); cap fixed (e.g. 8) or derived from the cost model | ≤ 2 × scalar build; cap from the cost model, with a hard ceiling recorded in the plan |
-| K1a-5 | learner and learn-phase signatures | (a) `BPTT(program, loss, optimizer, …).run(state0, data)`; (b) functional `bptt(program, state0, …)`; learn phase as `Program.rollout(..., learn=fn, every=k)` | (a), with the learn phase on `rollout`; proposed in the K1a-5 PR for approval |
-| K1a-6 | gid block size for dynamics noise; default names of unnamed objects | block 1024 (= today's connectivity `GID_BLOCK`, `_kernel/rng.py:61`) or smaller; default names `<model>_<k>` counted per model class, or require names | block 1024 (one constant for connectivity and noise); default `<model>_<k>` per class (insertion order then matters only among same-class unnamed objects — documented) |
-| K1a-6 | step-time bound for blocked draws | ≤ 1.05 × K0, or report only | ≤ 1.05 × K0 at Brunel order 2500 |
-| K1a-7 | microcircuit protocol and AI-regime parameter point | seeds (e.g. 3 or 5 each side), duration (e.g. 1 s after a 100 ms transient); AI point from Brunel 2000 (e.g. `g = 5`, `η = 2` gave CV 0.083 at the NEST example's `J`, so a larger `g` / `η` is needed) | 5 seeds × 1 s for the microcircuit (cost-bound); AI point chosen by a short NEST-only scan, CV-ISI ≥ 0.5 required, approved before the kernel run |
+| task | question | options | recommendation | status |
+|---|---|---|---|---|
+| K1a-1 | tolerance for "numerically neutral" `scan` substeps | (a) float64 max relative difference ≤ 1e-12 vs K0, float32 within `CAT_B`; (b) bit-identical | (a): XLA may reorder floating-point ops inside a `scan` | resolved (§7) |
+| K1a-2 | default of `latch` on `Current`/`Graded` | (a) required keyword on model input ports (no default); (b) default `True` (K0 behaviour); (c) default `False` | (a): D-a says the latch is declared per port; a silent default hides a one-step semantic difference | resolved (§7) |
+| K1a-3 | keyword naming the filtered state on a receptor `Event` port; fate of `filtered` on `TimedEvent`/`Graded` | `into=` / `state=` / `filters=`; `TimedEvent` gets the same keyword or keeps a flag | `into='g_ex'`; the same keyword on `TimedEvent` receptor ports (one encoding, as D-b intends) | resolved (§7) |
+| K1a-4 | build-time bound of the per-edge-delay gate; group cap | build ≤ 2 × scalar-delay build, or an absolute bound (e.g. ≤ 3 s at 2000 × 100); cap fixed (e.g. 8) or derived from the cost model | ≤ 2 × scalar build; cap from the cost model, with a hard ceiling recorded in the plan | resolved (§7) |
+| K1a-5 | learner and learn-phase signatures | (a) `BPTT(program, loss, optimizer, …).run(state0, data)`; (b) functional `bptt(program, state0, …)`; learn phase as `Program.rollout(..., learn=fn, every=k)` | (a), with the learn phase on `rollout`; proposed in the K1a-5 PR for approval | resolved (§7) |
+| K1a-6 | gid block size for dynamics noise; default names of unnamed objects | block 1024 (= today's connectivity `GID_BLOCK`, `_kernel/rng.py:61`) or smaller; default names `<model>_<k>` counted per model class, or require names | block 1024 (one constant for connectivity and noise); default `<model>_<k>` per class (insertion order then matters only among same-class unnamed objects — documented) | resolved (§7) |
+| K1a-6 | step-time bound for blocked draws | ≤ 1.05 × K0, or report only | ≤ 1.05 × K0 at Brunel order 2500 | resolved (§7) |
+| K1a-7 | microcircuit protocol and AI-regime parameter point | seeds (e.g. 3 or 5 each side), duration (e.g. 1 s after a 100 ms transient); AI point from Brunel 2000 (e.g. `g = 5`, `η = 2` gave CV 0.083 at the NEST example's `J`, so a larger `g` / `η` is needed) | 5 seeds × 1 s for the microcircuit (cost-bound); AI point chosen by a short NEST-only scan, CV-ISI ≥ 0.5 required, approved before the kernel run | resolved (§7) |
 
 ## 7. Decisions
 
@@ -348,3 +353,10 @@ decision column ("lead: …").
 
 | task | decision | rationale | date |
 |---|---|---|---|
+| K1a-1 | lead: "numerically unchanged" = float64 max relative difference ≤ 1e-12 vs K0; float32 within `CAT_B` | lead decision | 2026-10-22 |
+| K1a-2 | lead: `latch` **defaults to `True`** (K0 behaviour; NEST-style one-step latch unless a port opts out with `latch=False`); the BrainPy-family `LIF` declares `latch=False` explicitly. (Differs from the spec author's recommendation of a required keyword.) | lead decision | 2026-10-22 |
+| K1a-3 | lead: keyword `into=` (e.g. `ex=Event(unit=u.nS, into='g_ex')`); the same keyword on `TimedEvent` receptor ports; the `filtered` flag is removed everywhere | lead decision | 2026-10-22 |
+| K1a-4 | lead: build time ≤ 2 × the scalar-delay build; step time ≤ 1.5 × scalar; the compiler picks scatter vs grouping by a cost model, with a hard ceiling on groups recorded in the plan | lead decision | 2026-10-22 |
+| K1a-5 | lead: learner objects `BPTT(program, loss, optimizer, ...).run(state0, data)`; learn phase as `Program.rollout(..., learn=fn, every=k)`; exact signatures shown in the K1a-5 PR for lead approval before merge | lead decision | 2026-10-22 |
+| K1a-6 | lead: gid block 1024 (same constant as connectivity); unnamed objects auto-named `<model>_<k>` per class (insertion order matters only among same-class unnamed objects — documented); gate: step time ≤ 1.05 × K0 at Brunel order 2500 | lead decision | 2026-10-22 |
+| K1a-7 | lead: Potjans–Diesmann microcircuit with 5 seeds each side, 1 s after a 100 ms transient, CPU and GPU 1; AI Brunel point chosen by a short NEST-only scan requiring CV-ISI ≥ 0.5, shown to the lead before the kernel comparison runs | lead decision | 2026-10-22 |
