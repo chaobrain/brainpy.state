@@ -92,7 +92,10 @@ gated `Conductance` ports (T8); `plan.runner(learner=...)` (T9).
    `filtered` (the receiving model owns the kinetics, e.g. `iaf_cond_exp.ex`; T3 notes).
 2. `poisson_generator` draws with `poisson_counts` (bit-identical to `jax.random.poisson`;
    a Knuth fast path under `lax.cond(all(lam < 10))`, because the traced-`lam` call
-   evaluates both of JAX's branches, about 7x slower).
+   evaluates both of JAX's branches, about 7x slower). *Superseded in T10:* the fast path
+   is now CDF inversion (one uniform per element), exact in distribution but no longer
+   bit-identical to `jax.random.poisson`, which stays the `lam >= 10` branch; see
+   [`2026-10-22-k0-t10-gates.md`](2026-10-22-k0-t10-gates.md) §3.
 3. `connect` also takes `source_port`, `delay_buffer`, `trainable` and `name`; defaults:
    `rule=AllToAll()`, `weight=1.0`, `delay=dt`.
 4. `Network` is a plain class; `Plan` is the `brainstate` module. Models are built at

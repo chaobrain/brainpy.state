@@ -73,6 +73,8 @@ cpu = ["jax[cpu]>=0.9.0"]
 cuda12 = ["jax[cuda12]>=0.9.0"]
 cuda13 = ["jax[cuda13]>=0.9.0"]
 tpu = ["jax[tpu]>=0.9.0"]
+# reference simulators for the validation / gate tests (NEST comes from conda-forge)
+validation = ["brian2>=2.10"]
 
 
 [tool.pytest.ini_options]
@@ -84,6 +86,18 @@ tpu = ["jax[tpu]>=0.9.0"]
 # local and ad-hoc runs stay serial/explicit by default.
 markers = [
     "requires_nest: live-NEST comparison test; needs the NEST simulator installed",
+    "requires_brian2: Brian2 comparison test; needs the `validation` extra (brian2)",
+    "k0_gate: K0 go/no-go gate test (registry: brainpy_state/_kernel/validation/gates.py)",
+    "k0_g1: K0 gate G1, timing per port kind vs NEST",
+    "k0_g2: K0 gate G2, Brunel statistics vs NEST",
+    "k0_g3: K0 gate G3, COBA vs Brian2",
+    "k0_g4: K0 gate G4, invariance and goal-01 repros",
+    "k0_g5: K0 gate G5, integrators vs NEST",
+    "k0_g6: K0 gate G6, BPTT gradients vs finite differences",
+    "k0_g7: K0 gate G7, braintrace compatibility",
+    "k0_g8: K0 gate G8, STDP vs NEST",
+    "k0_g9: K0 gate G9, performance (benchmarks/, not a pytest test)",
+    "k0_g10: K0 gate G10, coverage of brainpy_state/_kernel (command)",
 ]
 
 

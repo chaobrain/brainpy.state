@@ -258,11 +258,27 @@ All run in CI except those marked *(NEST)* (run in the NEST workflow), *(Brian2)
 | G3 COBA *(Brian2)* | COBA E/I (Vogels–Abbott, 4000 neurons, 1000 ms) with `iaf_cond_exp`-equivalent dynamics, 10 seeds each side, vs the Brian2 reference; plus single-neuron conductance traces from identical input spikes | traces `CAT_A`; network statistics by the G2 rule |
 | G4 invariance | realised `EdgeSet` identical for `Dense` vs `CSR`, batch 1 vs 4 (trial 0), `independent` vs `common` RNG semantics as specified; goal-01 repros (global-id autapses on slices/overlap/concatenation, zero-weight edges in `get_connections`, `set('weight')` alignment, `fixed_total_number`, `spike_generator` multiplicity end to end) | exact equality |
 | G5 integrators *(NEST)* | `aeif_cond_alpha` and `iaf_cond_exp` vs NEST at substeps {1,2,4,8,16} | `iaf_cond_exp` and subthreshold traces: error decreases at the integrator's order; default substeps chosen to meet `CAT_A` (1e-3 mV). Spiking `aeif_cond_alpha`: spike times equal NEST (same step) at the default substeps, and `V_m` within `CAT_A` on every step except where either trace is above `V_th` (the exponential upswing) and the step after (the reset). Table recorded. (Decision after T3: fixed substeps localise the threshold crossing only to first order, so the full-trace error on spike steps stays large -- measured 2.26 mV at 16 and 0.87 mV at 64 substeps; see [`2026-10-21-k0-t3-models.md`](2026-10-21-k0-t3-models.md).) |
-| G6 gradients | BPTT on 20-neuron LIF and `iaf_psc_alpha` nets, Dense and CSR, delay 0 and 2 steps, float64, smooth surrogate | relative error vs central finite differences ≤ 1e-4 |
+| G6 gradients | BPTT on 20-neuron LIF and `iaf_psc_alpha` nets, Dense and CSR, delay 0 and 2 steps, float64, smooth surrogate, in the two regimes where BPTT is the exact derivative of the simulated loss: (a) hard forward, feed-forward net, `detach_reset=True`, membrane loss; (b) recurrent nets under `relaxed_spikes()` (smooth spikes, soft jumps, non-detached reset) | relative error vs central finite differences ≤ 1e-4 |
 | G7 braintrace | `braintrace.compile(net, 'eprop')` and `'d_rtrl'` on a K0 LIF net, Dense and CSR | compiles; gradients non-zero for every weight; the K0 checker rejects a deliberately non-compliant model with a clear error |
 | G8 STDP *(NEST)* | `stdp_synapse` weight trajectory, pre/post pairing protocol with dendritic delay > 0 | `CAT_B` without the current drive workaround |
-| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs T0 baseline, same host (§10.3), on CPU and on RTX 3090 GPU 1 | step time ≤ 1.1 × baseline; peak memory ≤ 1.1 × baseline; compile time reported |
+| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs the old `Simulator`, same host (§10.3), CPU: old and new interleaved in fresh processes on one idle pinned core (decision 2026-10-22, below); GPU skipped by user decision | step time ≤ 1.1 × old; peak memory ≤ 1.1 × old; compile time reported; the original T0 pinned rows compared for reference |
 | G10 quality | coverage of `_kernel` | > 90 % |
+
+(Decision after T9, accepted by the orchestrator: with a hard forward pass and a surrogate
+backward pass the BPTT gradient is not the derivative of the simulated loss whenever a
+gradient crosses a spike, so a literal FD check fails by design (relative errors 3–500
+measured on recurrent nets); G6 is checked in regimes (a) and (b) above. See
+[`2026-10-22-k0-t9-learners.md`](2026-10-22-k0-t9-learners.md) §2.)
+
+(Decision 2026-10-22, by the user via the orchestrator, during T10: the remote host
+is shared with long-running jobs that keep the load average near 5, so the `BENCH=1`
+load < 2 condition cannot be met and GPU 1 is occupied. G9 is therefore measured on
+the CPU only, without the load gate: one physical core whose CPU and hyperthread
+sibling are < 5 % busy (from `/proc/stat`) is pinned with `taskset`, the old
+`Simulator` (T0 script) and the kernel are run alternately (old, new, ...) in fresh
+processes, at least 3 rounds per configuration, runs disturbed on that core are
+discarded and redone, and the gate compares the medians of this interleaved session.
+GPU rows are skipped. Protocol: `benchmarks/g9_interleaved.py`.)
 
 **Decision rule.** All gates pass → go (K1 starts). G9 fails by > 10 % or any of G1,
 G4, G6 fails structurally → stop and revise the architecture doc before K1.
@@ -305,6 +321,18 @@ streams; batched trials with `common` vs `independent` RNG.
 | brainevent | per-edge-delay delivery fused with the matmul | feature proposal |
 | braintrace | `fori_loop` bodies containing weights lose eligibility traces; zero gradients without warning when the output is not read from a `HiddenState` | issue (diagnostics) |
 | braintrace | deprecate `braintrace.nn` neuron/synapse duplicates in favour of brainpy.state (decision L3) | proposal |
+| braintrace | 0.2.6: `KeyError` in `braintrace.compile` when a `HiddenState` depends only on inputs (no hidden-to-hidden path), found in T2 | bug report with repro |
+| brainevent | 0.2.1: GPU float64 abort in `binary_csrmv_wat_hybrid_hetero_f64_float` (default backend; `cusparse` works), found in T0 | bug report with repro |
+| brainevent | `csr_to_csc_index` casts int64 indices to int32 with a `FutureWarning`, found in T6 | issue |
+
+**Existing-code bugs found during K0** (outside `_kernel`; not fixed in K0, to be
+filed or fixed separately):
+
+| where | bug | found in |
+|---|---|---|
+| old NumPy `alpha_propagator_p31_p32` | when `exp(-h / tau_syn)` underflows (very small `tau_syn`, e.g. `tau_syn <~ h / 700` in float64) `P31` is NaN and `P32` takes a singular fallback that is not the limit of the exact propagator | T2 |
+| old `poisson_generator` | fails with the default `stop = inf` when x64 is off (the `int64` max overflows the step comparison) | T0 |
+| `Simulator.cont` | documents "no recompile" but re-traces and re-compiles its `for_loop` on every call | T0 |
 
 ---
 

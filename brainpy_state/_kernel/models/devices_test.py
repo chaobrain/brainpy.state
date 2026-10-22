@@ -20,20 +20,64 @@ def _ctx(i, key=None):
 
 
 class TestPoissonCounts:
-    @pytest.mark.parametrize('lam', [0.0, 0.002, 0.5, 3.0, 9.9, 10.0, 25.0, 400.0])
+    @pytest.mark.parametrize('lam', [0.002, 0.5, 0.884, 3.0, 9.9])
+    def test_inversion_matches_poisson_pmf(self, lam):
+        """Chi-square goodness of fit of 200k draws against the Poisson pmf."""
+        from scipy import stats
+        n = 200_000
+        k = np.asarray(jax.jit(poisson_counts, static_argnums=2)(
+            jax.random.key(7), jnp.full((n,), lam, jnp.float32), (n,)))
+        assert k.dtype.kind == 'i' and k.min() >= 0
+        kmax = int(stats.poisson.ppf(1 - 1e-4, lam))
+        obs = np.bincount(np.minimum(k, kmax + 1), minlength=kmax + 2)
+        pmf = stats.poisson.pmf(np.arange(kmax + 1), lam)
+        exp = n * np.append(pmf, 1 - pmf.sum())
+        keep = exp >= 5  # pool sparse bins into the tail
+        o = np.append(obs[keep], obs[~keep].sum())
+        e = np.append(exp[keep], exp[~keep].sum())
+        if e[-1] < 5:
+            o, e = o[:-2].tolist() + [o[-2:].sum()], e[:-2].tolist() + [e[-2:].sum()]
+        chi2 = ((np.asarray(o) - np.asarray(e)) ** 2 / np.asarray(e)).sum()
+        assert stats.chi2.sf(chi2, len(o) - 1) > 1e-3, (lam, chi2)
+        assert abs(k.mean() - lam) < 5 * np.sqrt(lam / n)
+
+    def test_tail_beyond_the_unrolled_terms(self):
+        # lam = 9.9: P(k > 12) ~ 0.2, so the while_loop tail runs for many elements
+        k = np.asarray(poisson_counts(jax.random.key(3), jnp.full((50_000,), 9.9), (50_000,)))
+        assert k.max() > 20 and abs(k.mean() - 9.9) < 0.1 and abs(k.var() / k.mean() - 1) < 0.05
+
+    def test_zero_rate_and_heterogeneous(self):
+        lam = jnp.array([0.0, 0.0, 1e-3, 5.0] * 1000, jnp.float32)
+        k = np.asarray(poisson_counts(jax.random.PRNGKey(0), lam, (4000,))).reshape(1000, 4)
+        assert k[:, :2].sum() == 0 and k[:, 2].sum() < 10 and abs(k[:, 3].mean() - 5.0) < 0.3
+
     @pytest.mark.parametrize('typed', [False, True])
-    def test_bit_identical_to_jax_poisson(self, lam, typed):
+    def test_deterministic_and_x64_invariant(self, typed):
         key = jax.random.key(7) if typed else jax.random.PRNGKey(7)
+        lam = jnp.linspace(0.0, 9.0, 257)
+        a = np.asarray(poisson_counts(key, lam, (257,)))
+        with jax.enable_x64(True):
+            b = np.asarray(poisson_counts(key, jnp.asarray(lam, jnp.float64), (257,)))
+        np.testing.assert_array_equal(a, b)
+        np.testing.assert_array_equal(a, np.asarray(poisson_counts(key, lam, (257,))))
+
+    @pytest.mark.parametrize('lam', [10.0, 25.0, 400.0])
+    def test_large_rates_use_jax_poisson(self, lam):
+        key = jax.random.key(7)
         lam_arr = jnp.full((257,), lam, jnp.float32)
         ref = jax.random.poisson(key, lam_arr, (257,), dtype=int)
-        got = jax.jit(poisson_counts, static_argnums=2)(key, lam_arr, (257,))
-        np.testing.assert_array_equal(np.asarray(got), np.asarray(ref))
+        np.testing.assert_array_equal(np.asarray(poisson_counts(key, lam_arr, (257,))), np.asarray(ref))
 
     def test_mixed_rates_take_the_exact_branch(self):
         key = jax.random.PRNGKey(1)
         lam = jnp.array([0.1, 50.0, 2.0], jnp.float32)
         np.testing.assert_array_equal(np.asarray(poisson_counts(key, lam, (3,))),
                                       np.asarray(jax.random.poisson(key, lam, (3,), dtype=int)))
+
+    def test_vmap_and_scan(self):
+        keys = jax.random.split(jax.random.key(0), 4)
+        out = jax.vmap(lambda k: poisson_counts(k, 0.5, (100,)))(keys)
+        assert out.shape == (4, 100) and not np.array_equal(np.asarray(out[0]), np.asarray(out[1]))
 
 
 class TestPoissonGenerator:

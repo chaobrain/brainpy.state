@@ -305,6 +305,43 @@ class TestRunner:
             run.cont(-1.0 * u.ms)
         assert duration_steps(0.0 * u.ms, DT) == 0
 
+    @pytest.mark.parametrize('storage', ['csr', 'dense'])
+    def test_structure_arrays_are_arguments_not_constants(self, storage):
+        # closed-over index arrays would be embedded in the program as constants
+        # (compile time and host memory proportional to the edge count)
+        net, info = build_brunel(40, storage=storage)
+        plan = net.compile()
+        run = plan.runner()
+        names = {f'{pp.name}/0' for pp in plan.projections}
+        assert set(run._structure) == names
+        assert set(run._structure['noise_EI/0']) == {'indices'}  # one_to_one: identity gather
+        low = run._rollout.lower(run.program.read_params(), run.state, jnp.asarray(0, jnp.int32),
+                                 run._trials, 10, run._structure)
+        txt = low.as_text()
+        n_edges = plan.projection('E_EI').n_edges
+        shape = 'tensor<160x200xi1>' if storage == 'dense' else f'tensor<{n_edges}xi32>'
+        consts = [ln for ln in txt.splitlines() if 'stablehlo.constant' in ln and shape in ln]
+        assert consts == [] and shape in txt  # present as an argument only
+        res = run.simulate(20.0 * u.ms)
+        ref = plan.runner().simulate(20.0 * u.ms)
+        np.testing.assert_array_equal(np.asarray(res[info['rec_E']]['spike']),
+                                      np.asarray(ref[info['rec_E']]['spike']))
+
+    def test_one_to_one_noise_equals_general_csr_path(self):
+        # the gather fast path (identity one_to_one) is exact against the sparse kernel
+        from brainpy_state._kernel.connectivity import storage as S
+        net, info = build_brunel(10, seed=3, record_v=True)
+        plan = net.compile('float64') if jax.config.jax_enable_x64 else net.compile()
+        st = plan.projection('noise_EI').groups[0].storage
+        assert st.identity
+        a = plan.runner().simulate(30.0 * u.ms)
+        st.gather = st.identity = False
+        b = plan.runner().simulate(30.0 * u.ms)
+        np.testing.assert_allclose(np.asarray(a[info['rec_V']]['V_m'].to_decimal(u.mV)),
+                                   np.asarray(b[info['rec_V']]['V_m'].to_decimal(u.mV)),
+                                   rtol=1e-6, atol=1e-5)
+        assert isinstance(st, S.CSR)
+
     def test_brunel_rates_sane(self):
         net, info = build_brunel(200, seed=1)
         res = net.compile().runner().simulate(500.0 * u.ms)

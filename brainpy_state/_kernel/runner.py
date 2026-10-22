@@ -35,8 +35,9 @@ weights are shared by the trials.
 """
 from __future__ import annotations
 
+import contextlib
 import functools
-from typing import Any
+from typing import Any, Iterator
 
 import brainstate
 import brainunit as u
@@ -127,6 +128,32 @@ class Program:
         self._syn_by_pop: dict[int, list] = {}
         for gi, g in enumerate(plan.synapses):
             self._syn_by_pop.setdefault(g.pop, []).append(gi)
+
+    # ------------------------------------------------------------ structure
+    def structure(self) -> dict:
+        """Device structure arrays of every storage (``{'<proj>/<group>': {name: array}}``).
+
+        :class:`Runner` passes them to its compiled programs as arguments and binds
+        them with :meth:`bound`, so large index arrays are not embedded as constants.
+        """
+        out = {}
+        for pp in self.plan.projections:
+            for g, group in enumerate(pp.groups):
+                arrays = group.storage.arrays()
+                if arrays:
+                    out[f'{pp.name}/{g}'] = arrays
+        return out
+
+    @contextlib.contextmanager
+    def bound(self, structure: dict) -> Iterator[None]:
+        """Bind :meth:`structure` values (e.g. jit-argument tracers) to the storages."""
+        with contextlib.ExitStack() as stack:
+            for pp in self.plan.projections:
+                for g, group in enumerate(pp.groups):
+                    arrays = structure.get(f'{pp.name}/{g}')
+                    if arrays:
+                        stack.enter_context(group.storage.bound(arrays))
+            yield
 
     # ------------------------------------------------------------- pytrees
     def init_state(self) -> dict:
@@ -494,6 +521,7 @@ class Runner:
         self.n = 0
         self.n_traces = 0
         self.learner = None
+        self._structure = self.program.structure()
         self._rollout = brainstate.transform.jit(self._run, static_argnums=(4,))
         self._one_step = brainstate.transform.jit(self._step)
 
@@ -503,13 +531,15 @@ class Runner:
             return f
         return jax.vmap(f, in_axes=(None, 0, None, 0))
 
-    def _run(self, params, state, n0, trials, n_steps):
+    def _run(self, params, state, n0, trials, n_steps, structure):
         self.n_traces += 1
         f = functools.partial(self.program.rollout, n_steps=n_steps)
-        return self._vmap(f)(params, state, n0, trials)
+        with self.program.bound(structure):
+            return self._vmap(f)(params, state, n0, trials)
 
-    def _step(self, params, state, n, trials):
-        return self._vmap(self.program.step)(params, state, n, trials)
+    def _step(self, params, state, n, trials, structure):
+        with self.program.bound(structure):
+            return self._vmap(self.program.step)(params, state, n, trials)
 
     # -------------------------------------------------------------- public
     @property
@@ -544,7 +574,7 @@ class Runner:
             o.observer.n_samples(n_steps)
         params = self.program.read_params()
         n0 = jnp.asarray(self.n, jnp.int32)
-        state, rec = self._rollout(params, self.state, n0, self._trials, n_steps)
+        state, rec = self._rollout(params, self.state, n0, self._trials, n_steps, self._structure)
         start = self.n
         self.state = state
         self.n += n_steps
@@ -554,7 +584,7 @@ class Runner:
         """Advance one step; returns ``{population: {output port: value}}`` (no observers)."""
         params = self.program.read_params()
         n = jnp.asarray(self.n, jnp.int32)
-        state, cur = self._one_step(params, self.state, n, self._trials)
+        state, cur = self._one_step(params, self.state, n, self._trials, self._structure)
         self.state = state
         self.n += 1
         out = {}
