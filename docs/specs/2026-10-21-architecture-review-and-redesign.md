@@ -483,11 +483,22 @@ checkpoint/restore continue the same streams.
   an early population reshuffles all later streams.)
 - **Dynamics noise is drawn per gid block**: a population's per-step draws (Poisson
   generators, noise ports, stochastic spiking) are generated block by block over fixed
-  gid blocks, so a shard owning some blocks draws exactly the numbers it would draw in
-  a single-device run. (K0 draws whole populations from one key,
-  `population_key(..., gid_block=0)`, `_kernel/rng.py:196-202`.) Connectivity already
-  follows the per-(projection, post gid block) rule.
-- Block size 1024 gids, the same `GID_BLOCK` constant as connectivity; unnamed objects
+  blocks of 1024 *population-local* ids, so a shard owning some blocks draws exactly the
+  numbers it would draw in a single-device run, and a population extended beyond a
+  block keeps its neurons' numbers. Inside a plan `StepContext.key` holds the stacked
+  per-block keys, shape `(n_blocks, 2)`, `key[b] = fold_in(population_key(seed, name,
+  n, b), trial)`; models draw only through `rng.draw_blocked` (lead decision
+  2026-10-22, PR #113). (K0 drew whole populations from one key.)
+- **Connectivity is keyed by the target population's name and local id** (lead
+  decision 2026-10-22, PR #113): the per-target key is `post_keys(fold_in(proj_key,
+  name_id(target population)), local id)` (`rng.view_post_keys`, passed as
+  `ConnRule.build(..., post_keys=)`), with the same block/lane structure on local ids.
+  Global ids shift when an earlier population is added, so global-id keys could not
+  give insertion-order invariance.
+- **Initial-state, weight and delay distributions** still draw whole arrays, from
+  name-keyed streams (insertion-order invariant, not extension/shard invariant);
+  block invariance for them is deferred to the K1b distributed spec.
+- Block size 1024, the same `GID_BLOCK` constant as connectivity; unnamed objects
   are auto-named `<model>_<k>` per class, so insertion order matters only among
   unnamed objects of the same class (lead, 2026-10-22). The distributed-layout spec
   (K1b) fixes the gid → shard map on these blocks before K2 model ports rely on it.
