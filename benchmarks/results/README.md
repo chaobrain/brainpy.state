@@ -66,3 +66,36 @@ Spread of the timed windows (min to max, in s per simulated second). Unpinned CP
   window.
 - The E rate is about 57 Hz at order 200 and about 29 Hz at order 2500. It is the
   same in both precisions and on both devices.
+
+## 2026-10-22 — T10: gate G9, old `Simulator` vs K0 kernel, interleaved
+
+File: `2026-10-22-T10-g9-interleaved.json` (every run with its core checks, plus
+the comparison rows). Protocol: `benchmarks/g9_interleaved.py` (user decision
+2026-10-22: CPU only, no load gate, one idle pinned core; GPU skipped). Host
+`wanglab3090b-01a0` (i7-14700KF), commit `d8dccce`, `JAX_PLATFORMS=cpu`,
+jax 0.12.0, brainevent 0.2.1, brainstate 0.6.0, numpy 2.5.4. Core 2 (sibling 3),
+both 0.0 % busy at selection, load average 2.98-3.90 during the session (the
+user's own jobs, on other cores). Old, new, old, new ... in fresh processes, 3
+rounds per configuration, T0 measurement protocol inside each process; all 24
+runs valid on the first attempt (core share >= 0.999, sibling <= 0.01 % busy).
+Medians over the rounds; compile time reported, not gated.
+
+| order | prec | gated | old ms/step | new ms/step | ratio | old peak GiB | new peak GiB | ratio | old compile s | new compile s | result |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2500 | f32 | yes | 0.5435 | 0.2853 | 0.525 | 1.683 | 1.639 | 0.974 | 1.08 | 1.68 | pass |
+| 2500 | f64 | yes | 0.6038 | 0.4660 | 0.772 | 1.742 | 1.758 | 1.009 | 1.06 | 1.66 | pass |
+| 200 | f32 | no | 0.0770 | 0.0284 | 0.369 | 1.006 | 1.043 | 1.037 | 0.95 | 1.55 | reported |
+| 200 | f64 | no | 0.0801 | 0.0374 | 0.467 | 1.033 | 1.059 | 1.026 | 0.93 | 1.60 | reported |
+
+Reference, the new kernel against the original T0 pinned rows (core 4, quiet host):
+
+| order | prec | T0 ms/step | new ms/step | ratio | T0 peak GiB | new peak GiB | ratio | old re-measured / T0 step |
+|---|---|---|---|---|---|---|---|---|
+| 2500 | f32 | 0.5092 | 0.2853 | 0.560 | 1.684 | 1.639 | 0.973 | 1.067 |
+| 2500 | f64 | 0.5755 | 0.4660 | 0.810 | 1.754 | 1.758 | 1.002 | 1.049 |
+| 200 | f32 | 0.0720 | 0.0284 | 0.394 | 1.014 | 1.043 | 1.029 | 1.068 |
+| 200 | f64 | 0.0745 | 0.0374 | 0.502 | 1.020 | 1.059 | 1.038 | 1.075 |
+
+The re-measured old `Simulator` is 5-8 % slower than in T0 (busier host, other
+core), which is why the gate uses the interleaved comparison. GPU: skipped by user
+decision.
