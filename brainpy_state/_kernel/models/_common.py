@@ -94,6 +94,7 @@ def latch(s: Record, inp: Record, ports: tuple[str, ...]) -> tuple[dict, dict]:
         dependency workaround of ``model._keep_dependency``).
     """
     acting = {k: s[latch_name(k)] for k in ports}
+    # upstream: braintrace#184
     new = {latch_name(k): _keep_dependency(inp[k], s[latch_name(k)]) for k in ports}
     return acting, new
 

@@ -75,36 +75,163 @@ class TestConvergenceOrder:
         np.testing.assert_allclose(y['v'], np.exp(-0.3 / np.asarray(taus)), rtol=1e-14)
 
 
+def _unrolled_k0(integrator, f, y, t0, dt, *, hook=None, aux=None):
+    """The K0 (pre-K1a-1) Python-unrolled substep loop, kept as the reference."""
+    n = integrator.substeps
+    h = dt / n
+    for k in range(n):
+        t = t0 + k * h
+        y = integrator.substep(f, t, y, h, aux)
+        if hook is not None:
+            y, aux = hook(k, t + h, y, aux, k == n - 1)
+    return y, aux
+
+
 class TestHookAndAux:
     def test_hook_called_after_every_substep(self, x64):
-        calls = []
-
-        def hook(k, t, y, aux):
-            calls.append(k)
-            return y, aux + 1
+        # aux counts calls and final calls, and records the substep index of every call
+        def hook(k, t, y, aux, final):
+            n, n_final, ks = aux
+            return y, (n + 1, n_final + final, ks.at[k].set(k))
 
         f = lambda t, y, aux: {'y': jnp.zeros(())}
-        y, aux = integrate(RK(2, 4), f, {'y': jnp.array(0.0)}, 1.0, 0.4, hook=hook, aux=0)
-        assert calls == [0, 1, 2, 3] and aux == 4
+        aux0 = (0, 0, jnp.full(4, -1))
+        y, (n, n_final, ks) = integrate(RK(2, 4), f, {'y': jnp.array(0.0)}, 1.0, 0.4,
+                                        hook=hook, aux=aux0)
+        assert int(n) == 4 and int(n_final) == 1
+        np.testing.assert_array_equal(ks, [0, 1, 2, 3])
+
+    @pytest.mark.parametrize('n_sub,traces', [(1, 1), (2, 2), (64, 2)])
+    def test_body_traced_once(self, n_sub, traces):
+        # the scan body is traced once whatever the substep count, plus the peeled last
+        calls = []
+
+        def hook(k, t, y, aux, final):
+            calls.append(final)
+            return y, aux
+
+        f = lambda t, y, aux: {'y': -y['y']}
+        jax.make_jaxpr(lambda y0: integrate(RK(4, n_sub), f, {'y': y0}, 0.0, 1.0, hook=hook))(1.0)
+        assert len(calls) == traces and calls[-1] is True and not any(calls[:-1])
+
+    def test_single_substep_has_no_scan(self):
+        f = lambda t, y, a: {'y': -y['y']}
+        jaxpr = jax.make_jaxpr(lambda y0: integrate(RK(4, 1), f, {'y': y0}, 0.0, 1.0))(1.0)
+        assert 'scan' not in str(jaxpr)
+        jaxpr = jax.make_jaxpr(lambda y0: integrate(RK(4, 3), f, {'y': y0}, 0.0, 1.0))(1.0)
+        assert 'scan' in str(jaxpr) and 'while' not in str(jaxpr)
 
     def test_hook_time_and_reset(self, x64):
-        # y' = 1, reset to 0 whenever y >= 0.25 inside the step: counts 3 crossings
+        # y' = 1, reset to 0 whenever y >= 0.25 inside the step: counts 4 crossings
         f = lambda t, y, aux: {'y': jnp.ones(())}
-        times = []
 
-        def hook(k, t, y, n):
-            times.append(float(t))
+        def hook(k, t, y, aux, final):
+            n, times = aux
             hit = y['y'] >= 0.25 - 1e-12
-            return {'y': jnp.where(hit, 0.0, y['y'])}, n + hit
+            return {'y': jnp.where(hit, 0.0, y['y'])}, (n + hit, times.at[k].set(t))
 
-        y, n = integrate(RK(1, 8), f, {'y': jnp.array(0.0)}, 2.0, 1.0, hook=hook, aux=0)
+        y, (n, times) = integrate(RK(1, 8), f, {'y': jnp.array(0.0)}, 2.0, 1.0, hook=hook,
+                                  aux=(0, jnp.zeros(8)))
         assert int(n) == 4 and float(y['y']) == pytest.approx(0.0)
         np.testing.assert_allclose(times, 2.0 + np.arange(1, 9) / 8)
+
+    def test_final_only_check(self, x64):
+        # a per-step check (only when final) sees the end-of-step value only
+        f = lambda t, y, aux: {'y': jnp.ones(())}
+
+        def hook(k, t, y, n, final):
+            if not final:
+                return y, n
+            hit = y['y'] >= 0.25
+            return {'y': jnp.where(hit, 0.0, y['y'])}, n + hit
+
+        y, n = integrate(RK(1, 8), f, {'y': jnp.array(0.0)}, 0.0, 1.0, hook=hook, aux=0)
+        assert int(n) == 1 and float(y['y']) == 0.0
 
     def test_aux_reaches_vector_field(self, x64):
         f = lambda t, y, aux: {'y': aux * jnp.ones(())}
         y, _ = integrate(RK(4, 2), f, {'y': jnp.array(0.0)}, 0.0, 2.0, aux=3.0)
         assert float(y['y']) == pytest.approx(6.0)
+
+    def test_carry_dtype_stable_under_promotion(self, x64):
+        # the hook promotes y to float64 and aux to float; inside the scan the carry
+        # keeps the input dtypes (float32 y, int32 aux)
+        f = lambda t, y, aux: {'y': -y['y']}
+
+        def hook(k, t, y, aux, final):
+            return {'y': y['y'] + jnp.float64(0.0)}, aux + 0.5
+
+        y, aux = integrate(RK(4, 4), f, {'y': jnp.ones(3, jnp.float32)}, 0.0, 1.0, hook=hook,
+                           aux=jnp.int32(0))
+        np.testing.assert_allclose(y['y'], np.exp(-1.0), rtol=1e-3)
+        assert float(aux) == 0.5  # 3 truncated in-scan increments, then the peeled one
+
+
+class TestScanEqualsUnrolled:
+    """``integrate`` (scan) equals the K0 Python-unrolled loop (K1a-1 acceptance)."""
+
+    @staticmethod
+    def _problem():
+        taus = jnp.array([1.0, 2.0, 5.0, 0.3])
+
+        def f(t, y, aux):
+            return {'v': (jnp.sin(3 * t) - y['v']) / taus + 0.1 * y['w'] * y['w'],
+                    'w': -2.0 * y['w'] + aux[0] * y['v']}
+
+        def hook(k, t, y, aux, final):
+            g, n = aux
+            hit = y['v'] >= 0.2
+            v = jnp.where(hit, -0.1, y['v'])
+            return {'v': v, 'w': y['w'] + 0.05 * hit}, (g, n + hit)
+
+        y0 = {'v': jnp.array([0.0, 0.1, -0.2, 0.15]), 'w': jnp.array([0.3, 0.0, 0.1, -0.2])}
+        return f, hook, y0
+
+    @pytest.mark.parametrize('integ', [RK(1, 1), RK(2, 2), RK(4, 4), RK(4, 16), RK(4, 64),
+                                       ExpEuler(1), ExpEuler(7)])
+    @pytest.mark.parametrize('precision', ['float32', 'float64'])
+    def test_trace_and_counts(self, integ, precision):
+        f, hook, y0 = self._problem()
+        with jax.enable_x64(precision == 'float64'):
+            dt = jnp.asarray(0.37, precision)
+            y0 = jax.tree.map(lambda a: a.astype(precision), y0)
+            aux = (jnp.asarray(0.8, precision), jnp.zeros(4, jnp.int32))
+            runs = []
+            for impl in (integrate, _unrolled_k0):
+                run = jax.jit(lambda y, impl=impl: impl(integ, f, y, 0.1, dt, hook=hook, aux=aux))
+                y, outs = y0, []
+                for _ in range(20):
+                    y, (_, n) = run(y)
+                    outs.append((np.asarray(y['v']), np.asarray(y['w']), np.asarray(n)))
+                runs.append(outs)
+            rtol = 1e-12 if precision == 'float64' else 1e-6
+            for a, b in zip(*runs):
+                np.testing.assert_allclose(a[0], b[0], rtol=rtol, atol=rtol)
+                np.testing.assert_allclose(a[1], b[1], rtol=rtol, atol=rtol)
+                np.testing.assert_array_equal(a[2], b[2])
+
+    def test_gradient_equals_unrolled(self, x64):
+        f, hook, y0 = self._problem()
+
+        def loss(impl, g):
+            y, _ = impl(RK(4, 8), f, y0, 0.0, 0.3, hook=hook, aux=(g, jnp.zeros(4, jnp.int32)))
+            return jnp.sum(y['v'] ** 2 + y['w'])
+
+        a = jax.grad(lambda g: loss(integrate, g))(0.8)
+        b = jax.grad(lambda g: loss(_unrolled_k0, g))(0.8)
+        assert float(a) == pytest.approx(float(b), rel=1e-12)
+
+    def test_vmap_and_zero_size(self):
+        f, hook, y0 = self._problem()
+        aux = (jnp.asarray(0.8), jnp.zeros(4, jnp.int32))
+        batch = jax.tree.map(lambda a: jnp.stack([a, a + 0.05]), y0)
+        out = jax.vmap(lambda y: integrate(RK(4, 4), f, y, 0.0, 0.3, hook=hook, aux=aux)[0])(batch)
+        ref = jax.vmap(lambda y: _unrolled_k0(RK(4, 4), f, y, 0.0, 0.3, hook=hook, aux=aux)[0])(batch)
+        np.testing.assert_allclose(out['v'], ref['v'], rtol=1e-6)
+        empty = {'v': jnp.zeros(0), 'w': jnp.zeros(0)}
+        g = lambda t, y, a: {'v': -y['v'], 'w': y['v']}
+        y, _ = integrate(RK(4, 5), g, empty, 0.0, 0.3)
+        assert y['v'].shape == (0,)
 
 
 class TestTransforms:

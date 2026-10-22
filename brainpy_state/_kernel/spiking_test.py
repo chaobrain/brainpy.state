@@ -39,20 +39,21 @@ def _drive(rule, I, dt=1.0, substeps=8, steps=1, V0=0.0, detach=False):
     counts = []
     for _ in range(steps):  # a handful of steps only: unrolled on purpose in tests
         carry = rule.begin(s, P, dt, substeps)
-        holder = [s]
 
-        def hook(k, t, y, c):
-            st = holder[0].replace(**y)
+        def hook(k, t, y, aux, final):
+            # the full state rides in the carry (no Python side channel; K1a-1)
+            st, c = aux
+            st = st.replace(**y)
             st = rule.clamp(st, P, c)
             c = rule.tick(c, 'substep')
-            if rule.when == 'substep' or k == substeps - 1:
+            if rule.when == 'substep' or final:
                 st, c = rule.check(st, P, c, detach_reset=detach)
-            holder[0] = st
-            return {'V': st.V, 'w': st.w}, c
+            return {'V': st.V, 'w': st.w}, (st, c)
 
-        y, carry = integrate(RK(1, substeps), f, {'V': s.V, 'w': s.w}, 0.0, dt, hook=hook, aux=carry)
+        y, (st, carry) = integrate(RK(1, substeps), lambda t, y, a: f(t, y, a[1]),
+                                   {'V': s.V, 'w': s.w}, 0.0, dt, hook=hook, aux=(s, carry))
         spike, counter = rule.end(carry)
-        s = holder[0].replace(**y, spike=spike)
+        s = st.replace(**y, spike=spike)
         if counter is not None:
             s = s.replace(refractory_count=counter)
         counts.append(spike)

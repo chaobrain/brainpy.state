@@ -14,8 +14,9 @@ start**, in ``(0, dt]``. NEST describes the same event by the stamp ``n + 1`` an
 backward offset ``dt - offset``.
 
 Everything is vectorised over neurons, ``jit``/``vmap``-able and loop-free at run
-time: in-step events are Python-unrolled segments (``capacity + 2`` per step) and the
-root finder runs a fixed number of iterations. The host implementations in
+time: the ``capacity + 1`` in-step event segments run as one ``lax.scan`` (traced
+once, whatever the capacity) followed by the final segment to the step end, and the
+root finder runs a fixed number of iterations (also a ``scan``). The host implementations in
 ``_nest_neuron/iaf_psc_exp_ps.py`` and ``_nest_device/poisson_generator_ps.py`` are
 the algorithmic reference (NEST ``models/iaf_psc_exp_ps.cpp``,
 ``models/poisson_generator_ps.cpp``).
@@ -55,6 +56,10 @@ __all__ = [
 ROOT_ITERATIONS = 40
 
 _INF = float('inf')
+
+#: Driver of the in-step segment loop (``jax.lax.scan``). A module attribute so the
+#: tests can swap in a Python-unrolled loop as the K0 reference.
+_segment_scan = jax.lax.scan
 
 
 # ---------------------------------------------------------------------------
@@ -345,14 +350,22 @@ class iaf_psc_exp_ps(_CapacityMixin, NeuronModel):
             y2n = jnp.where(cross, U_reset, y2n)
             return y2n, y1e * ee, y1i * ei, refr | cross, spiked | cross, br
 
-        for i in range(off.shape[1]):
-            h = jnp.where(valid[:, i], jnp.maximum(off[:, i] - t_last, 0), 0)
+        # one scan over the ``capacity + 1`` sorted slots (traced once, §7.3), then the
+        # peeled final segment to the step end (static ``final=True``)
+        def slot(carry, ev_i):
+            y2, y1e, y1i, refr, spiked, t_last, br = carry
+            off_i, w_i, valid_i, is_ref_i = ev_i
+            h = jnp.where(valid_i, jnp.maximum(off_i - t_last, 0), 0)
             y2, y1e, y1i, refr, spiked, br = segment(h, y2, y1e, y1i, refr, spiked, t_last, br, False)
-            ev = valid[:, i] & ~is_ref[:, i]
-            refr = jnp.where(valid[:, i] & is_ref[:, i], False, refr)
-            y1e = y1e + jnp.where(ev & (w[:, i] >= 0), w[:, i], 0)
-            y1i = y1i + jnp.where(ev & (w[:, i] < 0), w[:, i], 0)
-            t_last = jnp.where(valid[:, i], off[:, i], t_last)
+            ev = valid_i & ~is_ref_i
+            refr = jnp.where(valid_i & is_ref_i, False, refr)
+            y1e = y1e + jnp.where(ev & (w_i >= 0), w_i, 0)
+            y1i = y1i + jnp.where(ev & (w_i < 0), w_i, 0)
+            t_last = jnp.where(valid_i, off_i, t_last)
+            return (y2, y1e, y1i, refr, spiked, t_last, br), None
+
+        (y2, y1e, y1i, refr, spiked, t_last, br), _ = _segment_scan(
+            slot, (y2, y1e, y1i, refr, spiked, t_last, br), (off.T, w.T, valid.T, is_ref.T))
         h = jnp.maximum(dt - t_last, 0)
         y2, y1e, y1i, refr, spiked, br = segment(h, y2, y1e, y1i, refr, spiked, t_last, br, True)
 

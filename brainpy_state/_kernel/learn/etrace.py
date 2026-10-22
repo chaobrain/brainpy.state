@@ -276,6 +276,7 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
     weights = [s for s in states if isinstance(s, brainstate.ParamState)]
 
     # rule 5: every new hidden value depends on a hidden state
+    # upstream: braintrace#184
     seed = {}
     for s in hidden_r:
         for v in state_in[id(s)]:
@@ -324,6 +325,7 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
 # ---------------------------------------------------------------------------
 
 def _keep_dependency(new: Any, old: Any) -> Any:
+    # upstream: braintrace#184 (`new + 0 * old` keeps the hidden->hidden edge)
     return new + 0 * old
 
 
