@@ -110,7 +110,8 @@ class ConnRule:
         _check_bool(self.allow_autapses, 'allow_autapses')
         _check_bool(self.allow_multapses, 'allow_multapses')
 
-    def build(self, pre_gids: Any, post_gids: Any, key: jax.Array | None = None) -> EdgeSet:
+    def build(self, pre_gids: Any, post_gids: Any, key: jax.Array | None = None, *,
+              post_keys: jax.Array | None = None) -> EdgeSet:
         """Realise the edges between two views.
 
         Parameters
@@ -119,7 +120,12 @@ class ConnRule:
             Global ids of the source and target views (concatenations allowed; no
             duplicates within a view).
         key : jax.Array, optional
-            Projection key ``rng.object_key(seed, uid)``; required by random rules.
+            Projection key ``rng.object_key(seed, name)``; required by random rules.
+        post_keys : jax.Array, optional
+            Per-post-neuron keys, shape ``(n_post, 2)``, used by the per-target
+            rules instead of ``rng.post_keys(key, post_gids)``. The compiler passes
+            ``rng.view_post_keys`` (population name + local id, D-g) so the edges do
+            not depend on global-id offsets.
 
         Returns
         -------
@@ -130,9 +136,19 @@ class ConnRule:
         post = as_gids(post_gids, 'post_gids')
         if self.random and key is None:
             raise ValueError(f'{type(self).__name__} is random and needs a key')
-        return self._build(pre, post, key)
+        if post_keys is not None:
+            post_keys = jnp.asarray(post_keys)
+            if post_keys.shape[:1] != (post.size,):
+                raise ValueError(f'post_keys must have {post.size} rows (one per post neuron), '
+                                 f'got shape {post_keys.shape}')
+        return self._build(pre, post, key, post_keys)
 
-    def _build(self, pre: np.ndarray, post: np.ndarray, key: Any) -> EdgeSet:  # pragma: no cover
+    @staticmethod
+    def _keys_of(key: Any, post: np.ndarray, pkeys: Any) -> jax.Array:
+        """Per-post-neuron keys: the ones passed to :meth:`build`, else from the gids."""
+        return post_keys(key, post) if pkeys is None else pkeys
+
+    def _build(self, pre: np.ndarray, post: np.ndarray, key: Any, pkeys: Any = None) -> EdgeSet:  # pragma: no cover
         raise NotImplementedError
 
 
@@ -143,7 +159,7 @@ class AllToAll(ConnRule):
     ``allow_multapses`` has no effect (each pair is connected once).
     """
 
-    def _build(self, pre, post, key):
+    def _build(self, pre, post, key, pkeys=None):
         n_pre, n_post = pre.size, post.size
         qi = np.repeat(np.arange(n_post, dtype=np.int64), n_pre)
         pi = np.tile(np.arange(n_pre, dtype=np.int64), n_post)
@@ -163,7 +179,7 @@ class OneToOne(ConnRule):
         At build time if the views differ in size.
     """
 
-    def _build(self, pre, post, key):
+    def _build(self, pre, post, key, pkeys=None):
         if pre.size != post.size:
             raise ValueError(f'one_to_one requires equal sizes, got n_pre={pre.size}, n_post={post.size}')
         i = np.arange(pre.size, dtype=np.int64)
@@ -207,7 +223,7 @@ class FixedIndegree(ConnRule):
         super().__post_init__()
         _check_count(self.indegree, 'indegree')
 
-    def _build(self, pre, post, key):
+    def _build(self, pre, post, key, pkeys=None):
         k = self.indegree
         n_pre, n_post = pre.size, post.size
         if k == 0 or n_post == 0:
@@ -222,7 +238,7 @@ class FixedIndegree(ConnRule):
         if not self.allow_multapses and k > n_avail.min():
             raise ValueError(f'fixed_indegree: indegree {k} exceeds the {int(n_avail.min())} available '
                              f'sources of a target with allow_multapses=False')
-        keys = post_keys(key, post)
+        keys = self._keys_of(key, post, pkeys)
         sp = jnp.asarray(selfpos, jnp.int32)
         av = jnp.asarray(n_avail, jnp.int32)
         if self.allow_multapses:
@@ -303,13 +319,13 @@ class PairwiseBernoulli(ConnRule):
             raise ValueError(f'p must be in [0, 1], got {self.p}')
         object.__setattr__(self, 'p', p)
 
-    def _build(self, pre, post, key):
+    def _build(self, pre, post, key, pkeys=None):
         n_pre, n_post = pre.size, post.size
         if self.p == 0.0 or n_pre == 0 or n_post == 0:
             return EdgeSet.create(np.zeros(0, np.int64), np.zeros(0, np.int64), pre, post)
         selfpos = (np.full(n_post, -1, np.int64) if self.allow_autapses
                    else _self_positions(pre, post))
-        keys = post_keys(key, post)
+        keys = self._keys_of(key, post, pkeys)
         sp = jnp.asarray(selfpos, jnp.int32)
         chunk = max(1, min(n_post, _BLOCK_ELEMS // n_pre))
         pis, qis = [], []
@@ -378,7 +394,7 @@ class FixedTotalNumber(ConnRule):
                 "fixed_total_number does not support allow_multapses=False (as in NEST: "
                 "\"Connect doesn't support the suppression of multapses in the FixedTotalNumber connector\")")
 
-    def _build(self, pre, post, key):
+    def _build(self, pre, post, key, pkeys=None):
         n_pre, n_post = pre.size, post.size
         n_total = self.N
         if n_total == 0:

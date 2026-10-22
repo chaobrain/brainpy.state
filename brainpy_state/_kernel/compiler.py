@@ -4,9 +4,11 @@
 ``compile_network(net, precision)``:
 
 1. **models** -- every population's model is instantiated at the plan precision with
-   its init key ``fold_in(object_key(seed, uid), INIT_STREAM)``;
-2. **edges** -- every projection's rule is built with ``object_key(seed, uid)``
-   (storage/batch independent, spec §4.5); weights and delays are drawn from their own
+   its init key ``fold_in(object_key(seed, name), INIT_STREAM)``;
+2. **edges** -- every projection's rule is built with ``object_key(seed, name)`` and
+   per-post-neuron keys from the post populations' names and local ids
+   (:func:`~brainpy_state._kernel.rng.view_post_keys`; storage/batch independent and
+   independent of unrelated objects, spec §4.5, D-g); weights and delays are drawn from their own
    sub-streams (``WEIGHT_STREAM`` / ``DELAY_STREAM``) and delays are rounded to steps
    the NEST way (:func:`~brainpy_state._kernel.delays.delay_steps`);
 3. **delays and buffers** -- each projection's delays are classified (scalar,
@@ -53,7 +55,7 @@ from brainpy_state._kernel.observers import Observer
 from brainpy_state._kernel.params import ConstParamState, Distribution
 from brainpy_state._kernel.plasticity import PlasticPlan
 from brainpy_state._kernel.ports import Event, TimedEvent
-from brainpy_state._kernel.rng import block_key, object_key
+from brainpy_state._kernel.rng import block_key, object_key, view_post_keys
 from brainpy_state._kernel.synapse import plan_synapse_groups
 from brainpy_state._kernel.timed import TimedDelivery, TimedRing, check_capacities
 from brainpy_state._kernel.units import resolve_dtype, to_mantissa, unit_of
@@ -461,7 +463,7 @@ class Plan(brainstate.nn.Module):
         L.append('Populations:')
         for p in self.populations:
             g0, n = p.pop.gid_start, p.pop.n
-            L.append(f'  {p.name}: {p.pop.model.__name__} n={n} gids=[{g0}, {g0 + n}) uid={p.pop.uid}')
+            L.append(f'  {p.name}: {p.pop.model.__name__} n={n} gids=[{g0}, {g0 + n})')
         L.append('Projections:')
         for pp in self.projections:
             pr = pp.proj
@@ -540,7 +542,7 @@ class Plan(brainstate.nn.Module):
 # ---------------------------------------------------------------------------
 
 def _instantiate(net: Network, pop: Population, precision: str) -> NeuronModel:
-    key = block_key(object_key(net.seed, pop.uid), INIT_STREAM)
+    key = block_key(object_key(net.seed, pop.name), INIT_STREAM)
     return pop.model(pop.n, pop.params or None, pop.init or None, precision=precision, key=key,
                      name=pop.name, **pop.kwargs)
 
@@ -581,8 +583,9 @@ def _sub_edges(es: EdgeSet, pos: np.ndarray) -> EdgeSet:
 
 
 def _compile_projection(net: Network, proj: Projection, dtype: Any) -> ProjectionPlan:
-    okey = object_key(net.seed, proj.uid)
-    es = proj.rule.build(proj.pre.gids, proj.post.gids, key=okey)
+    okey = object_key(net.seed, proj.name)
+    pkeys = view_post_keys(okey, proj.post.stream_parts()) if proj.rule.random else None
+    es = proj.rule.build(proj.pre.gids, proj.post.gids, key=okey, post_keys=pkeys)
     w_edges = _edge_weights(proj, es, okey, dtype)
     steps, d_edges = _edge_delays(net, proj, es, okey)
     es = EdgeSet(pre_index=es.pre_index, post_index=es.post_index, pre_gids=es.pre_gids,

@@ -14,7 +14,7 @@ from brainpy_state._kernel.connectivity import all_to_all, fixed_indegree, one_t
 from brainpy_state._kernel.models import LIF, dc_generator, iaf_psc_alpha, poisson_generator, spike_generator
 from brainpy_state._kernel.models.devices import poisson_counts
 from brainpy_state._kernel.network import Network
-from brainpy_state._kernel.rng import population_key
+from brainpy_state._kernel.rng import population_block_keys, step_block_keys
 from brainpy_state._kernel.runner import Program, Runner, duration_steps, trial_indices
 from brainpy_state._kernel.validation.brunel import build_brunel, rates
 
@@ -392,8 +392,9 @@ class TestBatchingAndRng:
         x = np.asarray(res[rec]['spike'])
         lam = jnp.full((5,), 2.0, jnp.float32)
         for n in (1, 5, 9):
-            key = jax.random.fold_in(population_key(11, 1, n), 0)
-            np.testing.assert_array_equal(x[n], poisson_counts(key, lam, (5,)))
+            # K1a-6 (D-g): keys from the population name, one per id block, trial 0
+            keys = step_block_keys(population_block_keys(11, 'pg', 5), n, 0)
+            np.testing.assert_array_equal(x[n], poisson_counts(keys, lam, (5,)))
         assert x[0].sum() == 0  # step 0 is outside the NEST activity window
 
     def test_deterministic_across_runners_and_compiles(self):
@@ -464,7 +465,7 @@ class TestObservers:
         rv = net.observe(b, 'V_m', 'refractory_count')
         res = net.compile().runner().simulate(1.0 * u.ms)
         r = res[rec]
-        assert rec in res and 'rec' not in res and len(res) == 2 and res['obs0'] is r
+        assert rec in res and 'rec' not in res and len(res) == 2 and res['Observer_0'] is r
         with pytest.raises(KeyError):
             res['nope']
         with pytest.raises(KeyError, match='not recorded'):

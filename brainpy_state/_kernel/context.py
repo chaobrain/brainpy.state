@@ -44,8 +44,11 @@ class StepContext:
     step : jax.Array
         Integer step index ``n`` (``t == n * dt`` for runs starting at 0).
     key : jax.Array or None
-        RNG key for this population and step (spec §4.5), ``None`` for
-        deterministic populations.
+        RNG keys of this population and step (spec §4.5, D-g). Inside a plan: one
+        key per block of :data:`~brainpy_state._kernel.rng.GID_BLOCK` local ids,
+        shape ``(n_blocks, 2)``; models draw per-neuron noise with
+        :func:`~brainpy_state._kernel.rng.draw_blocked`, which also accepts a
+        single key (standalone use). ``None`` for deterministic populations.
     spikes : {'hard', 'relaxed'}, default 'hard'
         Forward spike mode of the running ``Program`` (static pytree field):
         ``'hard'`` emits exact counts with a surrogate backward pass,
@@ -90,7 +93,7 @@ class StepContext:
         step : int or jax.Array, default 0
             Step index; converted to an int32 array.
         key : jax.Array or None
-            Per-population RNG key.
+            Per-population RNG key(s) (see the class parameters).
         spikes : {'hard', 'relaxed'}, default 'hard'
             Forward spike mode.
         detach_reset : bool or None, default None

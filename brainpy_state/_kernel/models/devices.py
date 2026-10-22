@@ -32,41 +32,72 @@ from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.model import Device
 from brainpy_state._kernel.models._common import device_window
 from brainpy_state._kernel.params import Init, Param, Params, Record, States
+from brainpy_state._kernel.rng import draw_blocked
 from brainpy_state._kernel.ports import Current, Event, Ports
 from brainpy_state._kernel.units import grid_steps, to_mantissa
 
 __all__ = ['poisson_generator', 'spike_generator', 'dc_generator', 'poisson_counts']
 
-#: Below this mean (for every unit) counts are drawn by CDF inversion; at or above it
-#: ``jax.random.poisson`` is used for the whole array.
+#: Below this mean a unit's count is drawn by CDF inversion; at or above it by
+#: ``jax.random.poisson`` (computed only when some unit needs it).
 _INVERSION_MAX_LAM = 10.0
 #: CDF terms evaluated unconditionally (one fused element-wise pass); a ``while_loop``
 #: finishes the rare units whose count exceeds it.
 _INVERSION_UNROLL = 12
 
 
-def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
-    """Poisson counts with one uniform draw per element (CDF inversion).
+def _inversion(u_: jax.Array, lam: jax.Array, dtype: Any) -> jax.Array:
+    """Smallest ``k`` with ``u < F(k)`` per element (element-wise in ``u``, ``lam``)."""
+    p = jnp.exp(-lam)
+    F = p
+    k = jnp.zeros(u_.shape, dtype)
+    for i in range(1, _INVERSION_UNROLL + 1):  # Python-unrolled: one fused pass
+        k = k + (u_ >= F).astype(dtype)
+        p = p * lam / i
+        F = F + p
 
-    For ``lam < 10`` (every element) each count is the smallest ``k`` with
-    ``u < F(k)``, ``u ~ U[0, 1)``, ``F`` the Poisson CDF accumulated in float32
-    (``p_k = p_{k-1} lam / k``). The first :data:`_INVERSION_UNROLL` terms are one
-    fused element-wise pass; a ``while_loop`` continues only while some element is
-    still searching (it stops when the next term underflows, so it always
-    terminates). This draws one random number per element instead of Knuth's
-    ``count + 1`` (``jax.random.poisson``), about 6x faster at the Brunel rate
-    (``lam = 0.88``). If any ``lam >= 10``, ``jax.random.poisson`` draws the whole
-    array. Draws are float32 regardless of ``jax_enable_x64`` (same stream in both
-    precisions).
+    def cond(c):
+        _, k, p, F = c
+        return jnp.any((u_ >= F) & (p > 0))
+
+    def body(c):
+        i, k, p, F = c
+        k = k + ((u_ >= F) & (p > 0)).astype(dtype)
+        p = p * lam / i.astype(jnp.float32)
+        return i + 1, k, p, F + p
+
+    i0 = jnp.asarray(_INVERSION_UNROLL + 1, dtype)
+    return jax.lax.while_loop(cond, body, (i0, k, p, F))[1]
+
+
+def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
+    """Poisson counts per unit, drawn per id block (CDF inversion for ``lam < 10``).
+
+    Randomness is laid out per block of :data:`~brainpy_state._kernel.rng.GID_BLOCK`
+    units (:func:`~brainpy_state._kernel.rng.draw_blocked`, D-g): unit ``i``'s count
+    depends only on the key of its block, its lane and its own ``lam`` -- not on the
+    population size or the other units' rates.
+
+    A unit with ``lam < 10`` gets the smallest ``k`` with ``u < F(k)``, ``u ~ U[0,
+    1)`` (one uniform per unit), ``F`` the Poisson CDF accumulated in float32 (``p_k
+    = p_{k-1} lam / k``). The first :data:`_INVERSION_UNROLL` terms are one fused
+    element-wise pass; a ``while_loop`` continues only while some unit is still
+    searching (it stops when the next term underflows, so it always terminates).
+    This draws one random number per unit instead of Knuth's ``count + 1``
+    (``jax.random.poisson``), about 6x faster at the Brunel rate (``lam = 0.88``).
+    A unit with ``lam >= 10`` gets ``jax.random.poisson`` from its block key folded
+    with 1 (evaluated only if some unit needs it). Draws are float32 regardless of
+    ``jax_enable_x64`` (same stream in both precisions).
 
     Parameters
     ----------
     key : jax.Array
-        PRNG key (raw or typed).
+        Stacked block keys (``StepContext.key`` in a plan) or one key (standalone
+        use; block ``b`` then uses ``fold_in(key, b)``).
     lam : array_like
         Means, broadcastable to ``shape`` (non-negative).
     shape : tuple of int
-        Output shape.
+        Output shape ``(n,)`` (one-dimensional).
 
     Returns
     -------
@@ -83,37 +114,30 @@ def poisson_counts(key: jax.Array, lam: Any, shape: tuple) -> jax.Array:
         >>> 0.49 < float(k.mean()) < 0.51
         True
     """
+    shape = tuple(int(x) for x in shape)
+    if len(shape) != 1:
+        raise ValueError(f'poisson_counts draws one count per unit; shape must be (n,), got {shape}')
+    n = shape[0]
     lam = jnp.broadcast_to(jnp.asarray(lam, jnp.float32), shape)
     dtype = jnp.zeros((), dtype=int).dtype
+    small = lam < _INVERSION_MAX_LAM
 
-    def inversion(key, lam):
-        u_ = jax.random.uniform(key, shape, jnp.float32)
-        p = jnp.exp(-lam)
-        F = p
-        k = jnp.zeros(shape, dtype)
-        for i in range(1, _INVERSION_UNROLL + 1):  # Python-unrolled: one fused pass
-            k = k + (u_ >= F).astype(dtype)
-            p = p * lam / i
-            F = F + p
+    def uniforms():
+        return draw_blocked(key, n, lambda k, s: jax.random.uniform(k, s, jnp.float32))
 
-        def cond(c):
-            _, k, p, F = c
-            return jnp.any((u_ >= F) & (p > 0))
+    # both branches draw the same uniforms; keeping the draw inside the branches lets
+    # XLA fuse it with the inversion (as in K0) -- measurably faster on GPU
+    def all_small(lam):
+        return _inversion(uniforms(), lam, dtype)
 
-        def body(c):
-            i, k, p, F = c
-            k = k + ((u_ >= F) & (p > 0)).astype(dtype)
-            p = p * lam / i.astype(jnp.float32)
-            return i + 1, k, p, F + p
+    def mixed(lam):
+        inv = _inversion(uniforms(), jnp.where(small, lam, 0.0), dtype)
+        big = draw_blocked(key, n, lambda k, s, l: jax.random.poisson(
+            jax.random.fold_in(k, 1), l, s, dtype=dtype), jnp.where(small, 0.0, lam))
+        return jnp.where(small, inv, big)
 
-        i0 = jnp.asarray(_INVERSION_UNROLL + 1, dtype)
-        return jax.lax.while_loop(cond, body, (i0, k, p, F))[1]
+    return jax.lax.cond(jnp.all(small), all_small, mixed, lam)
 
-    def exact(key, lam):
-        return jax.random.poisson(key, lam, shape, dtype=dtype)
-
-    small = jnp.all(lam < _INVERSION_MAX_LAM)
-    return jax.lax.cond(small, inversion, exact, key, lam)
 
 _WINDOW = dict(start=Param(0.0 * u.ms), stop=Param(float('inf') * u.ms), origin=Param(0.0 * u.ms))
 
@@ -140,7 +164,9 @@ class poisson_generator(Device):
     -----
     Output ``spike`` -- ``event`` with ``max_multiplicity=None`` (counts > 1
     possible at high rates). Randomness comes only from ``ctx.key`` (required),
-    so the stream is a function of ``(seed, uid, step)`` per the RNG contract.
+    drawn per id block (:func:`poisson_counts`), so unit ``i``'s stream is a
+    function of ``(seed, name, i // GID_BLOCK, i % GID_BLOCK, step, trial)`` per the
+    RNG contract (D-g).
     Emits at step ``n`` iff ``t_min < n <= t_max``.
 
     Examples

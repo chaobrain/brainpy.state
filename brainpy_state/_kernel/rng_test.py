@@ -129,22 +129,110 @@ class TestTrialKeys:
             rng.trial_keys(rng.root_key(0), 2, 'shared')
 
 
-class TestUidAllocator:
-    def test_sequence(self):
-        a = rng.UidAllocator()
-        assert [a.next() for _ in range(3)] == [0, 1, 2]
-        assert a.count == 3
+class TestNameKeys:
+    def test_name_id_is_stable_blake2b(self):
+        import hashlib
+        d = hashlib.blake2b(b'E', digest_size=8).digest()
+        assert rng.name_id('E') == (int.from_bytes(d[:4], 'big'), int.from_bytes(d[4:], 'big'))
+        assert rng.name_id('E') != rng.name_id('I')
+        assert all(0 <= w < 2 ** 32 for w in rng.name_id('\u00e9\u4e2d'))
 
-    def test_start(self):
-        a = rng.UidAllocator(10)
-        assert a.next() == 10 and a.count == 1
+    @pytest.mark.parametrize('bad', ['', None, 3])
+    def test_name_id_rejects(self, bad):
+        with pytest.raises(TypeError):
+            rng.name_id(bad)
 
-    def test_deterministic_across_instances(self):
-        a, b = rng.UidAllocator(), rng.UidAllocator()
-        assert [a.next() for _ in range(5)] == [b.next() for _ in range(5)]
+    def test_object_key_from_name(self):
+        hi, lo = rng.name_id('pop')
+        assert same(rng.object_key(5, 'pop'), fold(fold(jax.random.PRNGKey(5), hi), lo))
+        assert not same(rng.object_key(5, 'pop'), rng.object_key(5, 'pop2'))
+        assert not same(rng.object_key(5, 'pop'), rng.object_key(6, 'pop'))
+        # derive_key / population_key / connectivity_key accept names
+        assert same(rng.derive_key(1, 'a', 2, 3),
+                    rng.step_key(rng.block_key(rng.object_key(1, 'a'), 2), 3))
+        assert same(rng.population_key(1, 'a', 3, 2), rng.derive_key(1, 'a', 2, 3))
+        assert same(rng.connectivity_key(1, 'a', 2), rng.derive_key(1, 'a', 2, rng.CONNECT_STEP))
 
-    def test_exhausted(self):
-        a = rng.UidAllocator(2 ** 32 - 1)
-        assert a.next() == 2 ** 32 - 1
-        with pytest.raises(OverflowError):
-            a.next()
+
+class TestViewPostKeys:
+    def test_local_ids_and_population_name(self):
+        ok = rng.object_key(0, 'proj')
+        parts = [('E', np.array([0, 1, 1500])), ('I', np.array([0, 7]))]
+        ks = rng.view_post_keys(ok, parts)
+        assert ks.shape == (5, 2)
+        for (name, local), sl in zip(parts, [slice(0, 3), slice(3, 5)]):
+            hi, lo = rng.name_id(name)
+            assert same(ks[sl], rng.post_keys(fold(fold(ok, hi), lo), local))
+        # same local id in different populations -> different keys
+        assert not same(ks[0], ks[3])
+
+    def test_view_order_and_empty(self):
+        ok = rng.object_key(0, 'p')
+        a = rng.view_post_keys(ok, [('E', np.array([3, 4]))])
+        b = rng.view_post_keys(ok, [('I', np.array([0])), ('E', np.array([4, 3]))])
+        assert same(a[0], b[2]) and same(a[1], b[1])
+        assert rng.view_post_keys(ok, []).shape == (0, 2)
+
+
+class TestBlockedDraws:
+    B = rng.GID_BLOCK
+    uni = staticmethod(lambda k, s: jax.random.uniform(k, s))
+
+    @pytest.mark.parametrize('n, nb', [(0, 0), (1, 1), (1024, 1), (1025, 2), (5000, 5)])
+    def test_n_blocks(self, n, nb):
+        assert rng.n_blocks(n) == nb
+        assert rng.population_block_keys(0, 'x', n).shape == (nb, 2)
+
+    def test_block_and_step_keys_formula(self):
+        bk = rng.population_block_keys(3, 'E', 2100)
+        ks = jax.jit(rng.step_block_keys)(bk, jnp.int32(9), jnp.uint32(2))
+        for b in range(3):
+            assert same(bk[b], rng.block_key(rng.object_key(3, 'E'), b))
+            assert same(ks[b], fold(rng.population_key(3, 'E', 9, b), 2))
+        assert same(rng.step_block_keys(bk, 9)[1], fold(rng.population_key(3, 'E', 9, 1), 0))
+
+    def test_extension_invariance(self):
+        # a neuron's draw does not depend on the population size
+        big = rng.step_block_keys(rng.population_block_keys(0, 'P', 3 * self.B + 5), 4)
+        small = rng.step_block_keys(rng.population_block_keys(0, 'P', 700), 4)
+        a = rng.draw_blocked(big, 3 * self.B + 5, self.uni)
+        b = rng.draw_blocked(small, 700, self.uni)
+        assert same(a[:700], b)
+
+    def test_shard_invariance_block_aligned(self):
+        # drawing as one array == drawing block-aligned pieces with their own keys
+        n = 3 * self.B + 17
+        ks = rng.step_block_keys(rng.population_block_keys(1, 'P', n), 0)
+        whole = rng.draw_blocked(ks, n, self.uni)
+        pieces = [rng.draw_blocked(ks[0:1], self.B, self.uni),
+                  rng.draw_blocked(ks[1:3], 2 * self.B, self.uni),
+                  rng.draw_blocked(ks[3:4], 17, self.uni)]
+        assert same(whole, jnp.concatenate(pieces))
+
+    def test_lane_args_and_tail(self):
+        n = self.B + 3
+        ks = rng.step_block_keys(rng.population_block_keys(0, 'P', n), 0)
+        lam = jnp.arange(n, dtype=jnp.float32)
+        out = rng.draw_blocked(ks, n, lambda k, s, l: l + 0 * jax.random.uniform(k, s), lam)
+        assert same(out, lam)
+        two = rng.draw_blocked(ks, n, lambda k, s: jax.random.normal(k, s), tail=(2,))
+        assert two.shape == (n, 2)
+
+    @pytest.mark.parametrize('typed', [False, True])
+    def test_single_key(self, typed):
+        k = jax.random.key(4) if typed else jax.random.PRNGKey(4)
+        out = rng.draw_blocked(k, self.B + 1, self.uni)
+        ks = jax.vmap(lambda b: fold(k, b))(jnp.arange(2, dtype=jnp.uint32))
+        assert same(out, rng.draw_blocked(ks, self.B + 1, self.uni))
+        assert rng.draw_blocked(k, 0, self.uni).shape == (0,)
+
+    def test_wrong_number_of_block_keys(self):
+        ks = rng.population_block_keys(0, 'P', 10)
+        with pytest.raises(ValueError, match='block keys'):
+            rng.draw_blocked(ks, 2000, self.uni)
+
+    def test_vmap_trials(self):
+        bk = rng.population_block_keys(0, 'P', 50)
+        f = lambda t: rng.draw_blocked(rng.step_block_keys(bk, 3, t), 50, self.uni)
+        out = jax.vmap(f)(jnp.arange(3, dtype=jnp.uint32))
+        assert same(out[0], f(0)) and not same(out[1], out[0])

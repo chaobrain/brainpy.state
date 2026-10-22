@@ -260,3 +260,30 @@ def test_aliases():
     assert R.fixed_total_number(3).N == 3
     assert R.pairwise_bernoulli(0.25).p == 0.25
     assert isinstance(R.all_to_all().build(POP, POP), EdgeSet)
+
+
+class TestPostKeysArgument:
+    """K1a-6: the compiler passes per-post-neuron keys (population name + local id)."""
+
+    @pytest.mark.parametrize('rule', [R.fixed_indegree(3), R.pairwise_bernoulli(0.3)],
+                             ids=['indegree', 'bernoulli'])
+    def test_explicit_keys_equal_default_derivation(self, rule):
+        pre, post = np.arange(20), np.arange(20, 50)
+        a = rule.build(pre, post, KEY)
+        b = rule.build(pre, post, KEY, post_keys=rng.post_keys(KEY, post))
+        assert a.same_edges(b)
+
+    @pytest.mark.parametrize('rule', [R.fixed_indegree(3), R.pairwise_bernoulli(0.3)],
+                             ids=['indegree', 'bernoulli'])
+    def test_keys_decide_the_edges_not_the_gids(self, rule):
+        # shifting the post gids with the same per-neuron keys gives the same edges
+        pk = rng.view_post_keys(KEY, [('P', np.arange(30))])
+        a = rule.build(np.arange(20), np.arange(20, 50), KEY, post_keys=pk)
+        b = rule.build(np.arange(20), np.arange(120, 150), KEY, post_keys=pk)
+        np.testing.assert_array_equal(np.asarray(a.pre_index), np.asarray(b.pre_index))
+        np.testing.assert_array_equal(np.asarray(a.post_index), np.asarray(b.post_index))
+
+    def test_wrong_number_of_keys(self):
+        with pytest.raises(ValueError, match='post_keys'):
+            R.fixed_indegree(2).build(np.arange(5), np.arange(5, 9), KEY,
+                                      post_keys=rng.post_keys(KEY, np.arange(3)))

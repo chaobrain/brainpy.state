@@ -70,8 +70,7 @@ class TestNetwork:
         z = net.add(LIF, 0, name='Z')  # zero-size population
         b = net.add(iaf_psc_alpha, 2, name='B')
         assert a.gids.tolist() == [0, 1, 2] and len(z) == 0 and b.gids.tolist() == [3, 4]
-        assert [p.name for p in net.populations] == ['LIF0', 'Z', 'B']
-        assert [p.uid for p in net.populations] == [0, 1, 2]
+        assert [p.name for p in net.populations] == ['LIF_0', 'Z', 'B']
         assert net.n_neurons == 5 and repr(b) == 'PopulationView(B, n=2)'
         assert b.populations[0].name == 'B' and z.segments == []
 
@@ -137,7 +136,7 @@ class TestConnect:
         sg = net.add(spike_generator, 2)
         n = net.add(LIF, 2)
         p = net.connect(sg, n, one_to_one(), port='delta', weight=1.0 * u.mV)
-        assert p.source_port == 'spike' and p.port == 'delta' and p.uid == 2
+        assert p.source_port == 'spike' and p.port == 'delta' and p.name == 'OneToOne_0'
         assert p.delay == DT and p.storage == 'auto' and not p.trainable
         assert isinstance(p.src_kind, Event) and p.src_kind.max_multiplicity is None
         q = net.connect(n, n, port='delta', weight=0.5 * u.mV, delay=0.0 * u.ms, name='rec')
@@ -243,7 +242,7 @@ class TestObserve:
         a = net.add(iaf_psc_alpha, 3)
         sg = net.add(spike_generator, 1)
         o = net.observe(a[:2] + sg, 'spike', interval=1.0 * u.ms)
-        assert o.interval == 10 and o.events == ('spike',) and o.size == 3 and o.name == 'obs0'
+        assert o.interval == 10 and o.events == ('spike',) and o.size == 3 and o.name == 'Observer_0'
         assert o.n_samples(20) == 2
         with pytest.raises(ValueError, match='multiple'):
             o.n_samples(15)
