@@ -209,3 +209,38 @@ On the GPU, CSR is at most 1.06 × Dense in every cell. That is within noise at
 N = 250, and CSR is 0.22–0.89 × Dense from N = 1000. CSR peak memory is lower in
 every cell, so `auto` picks CSR on GPU. On the CPU, CSR is 1.08–1.35 × slower up to
 N = 1000, so `auto` keeps Dense from density 0.1.
+
+## 2026-10-22/23 — K1a-7: the K1a gates (GPU G9, per-edge delays, microcircuit, AI regime)
+
+Full protocol and discussion: [K1a report](../../docs/specs/2026-10-22-k1a-report.md).
+Remote host, GPU 1 only, `BENCH=1`.
+
+| file | content |
+|---|---|
+| `2026-10-23-K1a-G3-gpu-g9-postK1a9.json` | **K1a-G3 (gated)**: `benchmarks/k1a_gpu_g9.py run --rounds 3`, Brunel alpha orders 200 / 2500, f32 default backend and f64 `cusparse`; old `Simulator` and kernel alternating in fresh processes; tree `d6eb7d0` (after K1a-8, K1a-9, K1a-10) |
+| `2026-10-23-K1a-G3-equal-redzone-diag.json` | diagnostic (not gated): order 200, old `Simulator` with the kernel's 64 KiB redzone (`XLA_FLAGS`) next to the kernel |
+| `2026-10-22-K1a-G3-gpu-g9-postK1a8.json` | history: G3 after K1a-8 (order 200 memory fail). Its f64 order-200 kernel row is superseded: wrong values from brainevent#204 |
+| `2026-10-22-K1a-G3-gpu-g9.json` | history: G3 before K1a-8 (every memory row failed) |
+| `2026-10-22-K1a-G2-delays.json` | K1a-G2: `k1a4_delays.py sweep --net review`, CPU pinned, GPU 1 f32 / f64 `cusparse` |
+| `2026-10-22-K1a-G4-microcircuit.json` | K1a-G4: Potjans–Diesmann full scale, kernel CPU and GPU 1 vs NEST 3.10, 5 seeds each |
+| `2026-10-22-K1a-G5-ai-scan-*.json` | K1a-G5: NEST-only AI-regime scan (orders 200, 1000, 2500); the gate itself is the test `validation/k1a_g5_ai_nest_test.py` |
+
+**K1a-G3** (gate: step and peak device memory ≤ 1.1 × the T0 old-`Simulator` row):
+
+| order | prec | old ms/step | new ms/step | step ratio | old peak MiB | new peak MiB | memory ratio | result |
+|---|---|---|---|---|---|---|---|---|
+| 2500 | f32 | 0.4918 | 0.0657 | 0.134 | 237.3 | 144.6 | 0.609 | pass |
+| 2500 | f64 | 0.8817 | 0.4580 | 0.518 | 436.0 | 241.2 | 0.553 | pass |
+| 200 | f32 | 0.3999 | 0.0606 | 0.152 | 49.2 | 6.2 | 0.126 | pass |
+| 200 | f64 | 0.4211 | 0.0997 | 0.236 | 49.9 | 11.1 | 0.222 | pass |
+
+Diagnostic: with the old `Simulator` also at a 64 KiB redzone, order 200 is
+5.45 vs 6.19 MiB in f32 (1.14 ×) and 10.35 vs 11.03 MiB in f64 (1.07 ×). The
+orchestrator accepted the defined raw-peak metric; the remaining ≈ 0.7 MiB is a K1b
+item.
+
+**K1a-G2** (spec network, per-edge / scalar delay): step 0.86–0.95 ×, build 1.10–1.23 ×
+on CPU and GPU, f32 and f64. **K1a-G4**: 8 / 8 populations within the G2 rule on CPU
+and GPU. The kernel on GPU 1 runs at 1.86 ms/step, against 2.46 ms/step for NEST with
+16 threads. The device peak is 7.26 GiB before K1a-8 and 2.67 GiB after it.
+**K1a-G5**: 5 / 5 statistics at order 2500, `g = 16`, `η = 4`, 10 seeds each.
