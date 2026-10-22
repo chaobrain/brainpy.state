@@ -1,9 +1,11 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-r"""Surrogate-gradient backpropagation through time over a compiled plan (K0 spec §4.7).
+r"""Surrogate-gradient BPTT over a :class:`Program` (K0 spec §4.7, K1a-5).
 
-:class:`BPTT` differentiates a loss of an episode -- a rollout of the plan's pure
-:class:`~brainpy_state._kernel.runner.Program` from the runner's initial state at
-step 0 -- with respect to every trainable parameter of the plan:
+:class:`BPTT` is built from a :class:`~brainpy_state._kernel.runner.Program` (decision
+D-c) and differentiates a loss of an episode -- a rollout of the program from an
+explicit ``state0`` at global step ``n0`` (the initial state, a checkpoint, or a
+runner's state after a warm-up) -- with respect to every trainable parameter of the
+plan:
 
 * weights of projections connected with ``trainable=True`` (one ``ParamState``
   per edge group, in the storage's native layout), and
@@ -14,16 +16,17 @@ The rollout is one ``brainstate.transform.scan`` (or
 ``brainstate.transform.jit``; the step carry is the explicit state pytree, hence
 ``scan`` rather than ``for_loop`` (AGENTS.md #10). ``truncation=K`` stops the
 gradient of the carried state every ``K`` steps (truncated BPTT; the forward pass is
-unchanged). ``detach_reset`` is the learner-side default of every spike rule's
-``detach_reset`` (architecture doc §8.2-2).
+unchanged). ``detach_reset`` and ``spikes`` are the learner's program options
+(architecture doc §8.2-2): the learner runs ``program.replace(detach_reset=...,
+spikes=...)``, so the caller's program is never mutated.
 
 The loss sees **every step** of every observer: ``loss(recordings, targets)`` with
 ``recordings[observer name][recordable]`` of shape ``(T, n)`` (``(batch, T, n)``
-for a batched runner), mantissas in the observer's units; observer intervals do not
+for a batched episode), mantissas in the observer's units; observer intervals do not
 apply here. :func:`spike_count_mse`, :func:`rate_mse` and :func:`membrane_mse` are
 small readouts for the gates.
 
-Per-step data enters through ``xs``: ``{population: {port: (T, n) values}}`` (or
+Per-step data enters through ``data``: ``{population: {port: (T, n) values}}`` (or
 ``{population: (T, n)}`` for single-input populations such as
 :class:`~brainpy_state._kernel.learn.inputs.ExternalInput`), added to the port's
 input at every step (``Program.step(..., ext=...)``).
@@ -43,8 +46,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from brainpy_state._kernel.runner import duration_steps
-from brainpy_state._kernel.spiking import relaxed_enabled, relaxed_spikes
+from brainpy_state._kernel.runner import Program, duration_steps
 from brainpy_state._kernel.units import from_mantissa, unit_of
 
 __all__ = [
@@ -228,33 +230,53 @@ def _check_int(name: str, v: Any, low: int) -> int | None:
 
 
 class BPTT:
-    """Surrogate-gradient BPTT learner (see the module docstring).
+    """Surrogate-gradient BPTT learner over a :class:`Program` (see the module docstring).
+
+    Built from a program (decision D-c); every episode starts from an explicit
+    ``state0`` at global step ``n0`` -- the initial state, a checkpoint, or the
+    state a :class:`~brainpy_state._kernel.runner.Runner` reached after a warm-up
+    (``runner.state``, ``runner.n``, ``runner.trials``). The episode's forward pass
+    is the runner's step contract, so it equals ``runner.cont()`` from the same
+    state.
 
     Parameters
     ----------
+    program : Program
+        The program to differentiate (``plan.program()``).
     loss : callable
         ``loss(recordings, targets) -> scalar``; ``recordings`` maps observer names
         to ``{recordable: (T, n) mantissas}`` (leading trial axis when batched).
     optimizer : braintools.optim.Optimizer, optional
-        Needed by :meth:`step` / :meth:`fit`; registered on the trainable
-        parameters at :meth:`attach`.
+        Needed by :meth:`run` / :meth:`fit`; registered on the trainable
+        parameters here.
     checkpoint : int, optional
         Use ``brainstate.transform.checkpointed_scan`` with this ``base`` (>= 2):
         activations are rematerialised on the backward pass (same gradients, less
         memory).
     truncation : int, optional
         Truncated BPTT: the gradient through the carried state is cut at every
-        multiple of ``truncation`` steps.
+        multiple of ``truncation`` steps after the episode start.
     detach_reset : bool or None, default True
-        Default ``detach_reset`` of every population's spike rule (a rule's own
-        explicit setting wins); ``None`` leaves the models unchanged.
+        The learner's ``detach_reset`` program option (a spike rule's own explicit
+        setting wins); ``None`` keeps the program's option.
+    spikes : {'hard', 'relaxed'} or None, default None
+        The learner's spike-mode program option; ``None`` keeps the program's.
 
     Attributes
     ----------
-    runner : Runner or None
-        The runner the learner is attached to.
+    program : Program
+        The program the episodes run (``program`` with the learner's options).
     params : dict of str to brainstate.ParamState
         Trainable parameters (:func:`trainable_states`).
+
+    Raises
+    ------
+    TypeError
+        If ``program`` is not a Program or ``loss`` is not callable.
+    ValueError
+        If the plan has no trainable parameter or no observer, or a trainable
+        parameter belongs to (or a trainable projection targets) a population whose
+        model is not differentiable.
 
     Examples
     --------
@@ -271,45 +293,35 @@ class BPTT:
         >>> out = net.add(LIF, 3, name='out', surrogate=braintools.surrogate.Sigmoid())
         >>> _ = net.connect(x, out, port='delta', weight=0.6 * u.mV, trainable=True, name='w')
         >>> rec = net.observe(out, 'spike', name='rec')
-        >>> bptt = BPTT(lambda r, y: spike_count_mse(r['rec']['spike'], y),
+        >>> prog = net.compile().program()
+        >>> bptt = BPTT(prog, lambda r, y: spike_count_mse(r['rec']['spike'], y),
         ...             braintools.optim.Adam(lr=0.05))
-        >>> run = net.compile().runner(learner=bptt)
-        >>> xs = {'x': jnp.ones((20, 2))}
-        >>> loss, grads = bptt.grad(2.0 * u.ms, xs=xs, targets=jnp.full(3, 5.0))
+        >>> data = {'x': jnp.ones((20, 2))}
+        >>> loss, grads = bptt.grad(prog.init_state(), data, jnp.full(3, 5.0))
         >>> sorted(grads), grads['weights/w/0'].shape
         (['weights/w/0'], (2, 3))
+        >>> loss, state = bptt.run(prog.init_state(), data, jnp.full(3, 5.0))
+        >>> loss, state = bptt.run(state, data, jnp.full(3, 5.0), n0=20)  # continue
     """
 
-    def __init__(self, loss: Callable, optimizer: Any = None, checkpoint: int | None = None,
-                 truncation: int | None = None, detach_reset: bool | None = True) -> None:
+    def __init__(self, program: Any, loss: Callable, optimizer: Any = None, *,
+                 checkpoint: int | None = None, truncation: int | None = None,
+                 detach_reset: bool | None = True, spikes: str | None = None) -> None:
+        if not isinstance(program, Program):
+            raise TypeError(f'BPTT needs a Program (plan.program()), got {type(program).__name__}')
         if not callable(loss):
             raise TypeError(f'loss must be callable (recordings, targets) -> scalar, got {loss!r}')
-        if detach_reset is not None and not isinstance(detach_reset, bool):
-            raise TypeError(f'detach_reset must be a bool or None, got {detach_reset!r}')
+        options = {}
+        if detach_reset is not None:
+            options['detach_reset'] = detach_reset
+        if spikes is not None:
+            options['spikes'] = spikes
+        self.program = program.replace(**options)
         self.loss_fn = loss
         self.optimizer = optimizer
         self.checkpoint = _check_int('checkpoint', checkpoint, 2)
         self.truncation = _check_int('truncation', truncation, 1)
-        self.detach_reset = detach_reset
-        self.runner = None
-        self.params: dict[str, brainstate.ParamState] = {}
-
-    # ---------------------------------------------------------------- binding
-    def attach(self, runner: Any) -> None:
-        """Bind to a runner (called by ``plan.runner(learner=...)``).
-
-        Raises
-        ------
-        RuntimeError
-            If already attached.
-        ValueError
-            If the plan has no trainable parameter or no observer, or a trainable
-            parameter belongs to (or a trainable projection targets) a population
-            whose model is not differentiable.
-        """
-        if self.runner is not None:
-            raise RuntimeError('this BPTT learner is already attached to a runner')
-        plan = runner.plan
+        plan = self.program.plan
         params = trainable_states(plan)
         if not params:
             raise ValueError('BPTT: the plan has no trainable parameter; use '
@@ -324,58 +336,106 @@ class BPTT:
                 raise ValueError(f'BPTT: population {p.name!r} ({p.pop.model.__name__}) is not '
                                  f'differentiable but has trainable parameters or trainable '
                                  f'incoming weights')
-        if self.detach_reset is not None:
-            for m in plan.models:
-                m.detach_reset = self.detach_reset
-        self.runner = runner
-        self.params = params
+        self.params: dict[str, brainstate.ParamState] = params
         self._units = {k: unit_of(s.value) for k, s in params.items()}
         if self.optimizer is not None:
             self.optimizer.register_trainable_weights(params)
-        self._jit_record = brainstate.transform.jit(self._record, static_argnums=(0, 1))
-        self._jit_loss = brainstate.transform.jit(self._loss_only, static_argnums=(0, 1))
-        self._jit_grad = brainstate.transform.jit(self._value_and_grad, static_argnums=(0, 1))
-        self._jit_step = brainstate.transform.jit(self._train_step, static_argnums=(0, 1))
-        self._jit_fit = brainstate.transform.jit(self._fit, static_argnums=(0, 1, 2))
+        self._jit_record = brainstate.transform.jit(self._record, static_argnums=(0,))
+        self._jit_loss = brainstate.transform.jit(self._loss_only, static_argnums=(0,))
+        self._jit_grad = brainstate.transform.jit(self._value_and_grad, static_argnums=(0,))
+        self._jit_run = brainstate.transform.jit(self._train_step, static_argnums=(0,))
+        self._jit_fit = brainstate.transform.jit(self._fit, static_argnums=(0, 1))
 
-    def _require(self, optimizer: bool = False) -> None:
-        if self.runner is None:
-            raise RuntimeError('attach the learner first: plan.runner(learner=bptt)')
-        if optimizer and self.optimizer is None:
+    @property
+    def plan(self) -> Any:
+        """The compiled network of :attr:`program`."""
+        return self.program.plan
+
+    def _require_optimizer(self) -> None:
+        if self.optimizer is None:
             raise RuntimeError('BPTT was created without an optimizer')
 
     # ------------------------------------------------------------- inputs
-    def _normalize_xs(self, xs: Any, n_steps: int) -> Any:
+    def _normalize_xs(self, xs: Any, batch: int | None) -> tuple[Any, int | None]:
+        """Validated ``{population: {port: values}}`` and the number of steps it implies."""
         if xs is None:
-            return None
+            return None, None
         if not isinstance(xs, Mapping):
-            raise TypeError(f'xs must be a mapping {{population: {{port: values}}}}, got '
+            raise TypeError(f'data must be a mapping {{population: {{port: values}}}}, got '
                             f'{type(xs).__name__}')
-        plan = self.runner.plan
-        batch = self.runner.batch
-        out = {}
+        plan = self.plan
+        lead = 2 if batch is not None else 1
+        out, n_steps = {}, None
         for name, v in xs.items():
             pplan = plan.population(name)
             if not isinstance(v, Mapping):
                 ports = list(pplan.model.inputs)
                 if len(ports) != 1:
-                    raise ValueError(f'xs[{name!r}]: population has input ports {ports}; '
+                    raise ValueError(f'data[{name!r}]: population has input ports {ports}; '
                                      f'give {{port: values}}')
                 v = {ports[0]: v}
             for port, a in v.items():
                 pplan.model.inputs.require(port, name)
                 shape = np.shape(u.get_mantissa(a))
-                lead = 2 if batch is not None else 1
-                want = (batch, n_steps) if batch is not None else (n_steps,)
-                if len(shape) < lead or tuple(shape[:lead]) != want:
-                    raise ValueError(f'xs[{name!r}][{port!r}] must have leading shape {want} '
-                                     f'(trials, steps) / (steps,), got {shape}')
+                if len(shape) < lead or (batch is not None and shape[0] != batch):
+                    want = '(trials, steps, ...)' if batch is not None else '(steps, ...)'
+                    raise ValueError(f'data[{name!r}][{port!r}] must have leading shape {want} '
+                                     f'(trials = {batch}), got {shape}')
+                t = shape[lead - 1]
+                if n_steps is not None and t != n_steps:
+                    raise ValueError(f'data[{name!r}][{port!r}] has {t} steps, other inputs '
+                                     f'{n_steps}')
+                n_steps = t
             out[name] = dict(v)
-        return out
+        return out, n_steps
+
+    def _prepare(self, state0: Any, data: Any, duration: Any, n0: Any, trials: Any) -> tuple:
+        if trials is not None:
+            trials = jnp.asarray(trials, jnp.uint32)
+            if trials.ndim != 1 or trials.shape[0] < 1:
+                raise ValueError(f'trials must be a non-empty 1-D array of trial indices '
+                                 f'(Runner.trials of a batched runner), got shape {trials.shape}')
+            batch = int(trials.shape[0])
+        else:
+            batch = None
+        xs, t_data = self._normalize_xs(data, batch)
+        if duration is not None:
+            n_steps = duration_steps(duration, self.program.dt)
+            if t_data is not None and t_data != n_steps:
+                raise ValueError(f'duration is {n_steps} steps but data has {t_data}')
+        elif t_data is not None:
+            n_steps = t_data
+        else:
+            raise ValueError('give per-step data or a duration')
+        if n_steps < 1:
+            raise ValueError('BPTT needs an episode of at least one step')
+        if state0 is None:
+            state0 = self.program.init_state(batch)
+        else:
+            self._check_state(state0, batch)
+        n0 = jnp.asarray(n0, jnp.int32)
+        if n0.ndim != 0:
+            raise ValueError(f'n0 must be a scalar step index, got shape {n0.shape}')
+        if trials is None:
+            trials = jnp.zeros((), jnp.uint32)
+        return n_steps, state0, n0, trials, xs
+
+    def _check_state(self, state0: Any, batch: int | None) -> None:
+        ref = jax.eval_shape(self.program.init_state)
+        if jax.tree.structure(state0) != jax.tree.structure(ref):
+            raise ValueError('state0 is not a state of this program (Program.init_state, '
+                             'Runner.state, or a state returned by a learner)')
+        for a, r in zip(jax.tree.leaves(state0), jax.tree.leaves(ref)):
+            want = r.shape if batch is None else (batch,) + r.shape
+            if np.shape(a) != want:
+                hint = ('pass trials=runner.trials for a batched state' if batch is None
+                        else 'the leading axis must match trials')
+                raise ValueError(f'state0 leaf has shape {np.shape(a)}, expected {want} ({hint})')
 
     # ------------------------------------------------------------- rollout
-    def _episode(self, params: dict, state: dict, trial: Any, xs: Any, n_steps: int) -> dict:
-        prog = self.runner.program
+    def _episode(self, params: dict, state: dict, n0: Any, trial: Any, xs: Any,
+                 n_steps: int) -> tuple[dict, dict]:
+        prog = self.program
         observers = prog.plan.observers
         K = self.truncation
 
@@ -383,106 +443,119 @@ class BPTT:
             i, x = inp
             if K is not None:
                 st = _cut(st, (i > 0) & (i % K == 0))
-            st, _ = prog.step(params, st, i, trial, ext=x)
+            st, _ = prog.step(params, st, n0 + i, trial, ext=x)
             return st, {o.name: prog.observe(o, st['pops']) for o in observers}
 
         scan_xs = (jnp.arange(n_steps, dtype=jnp.int32), xs)
         if self.checkpoint is None:
-            _, ys = brainstate.transform.scan(body, state, scan_xs)
-        else:
-            _, ys = brainstate.transform.checkpointed_scan(body, state, scan_xs, base=self.checkpoint)
-        return ys
+            return brainstate.transform.scan(body, state, scan_xs)
+        return brainstate.transform.checkpointed_scan(body, state, scan_xs, base=self.checkpoint)
 
-    def _recordings(self, params: dict, n_steps: int, xs: Any) -> dict:
-        run = self.runner
-        f = lambda st, tr, x: self._episode(params, st, tr, x, n_steps)
-        if run.batch is not None:
-            return jax.vmap(f, in_axes=(0, 0, None if xs is None else 0))(run._init, run._trials, xs)
-        return f(run._init, run._trials, xs)
+    def _rollout(self, params: dict, state0: Any, n0: Any, trials: Any, xs: Any,
+                 n_steps: int) -> tuple[dict, dict]:
+        f = lambda st, tr, x: self._episode(params, st, n0, tr, x, n_steps)
+        if trials.ndim == 1:
+            return jax.vmap(f, in_axes=(0, 0, None if xs is None else 0))(state0, trials, xs)
+        return f(state0, trials, xs)
 
-    def _record(self, n_steps: int, relaxed: bool, xs: Any) -> dict:
-        with relaxed_spikes(relaxed):
-            return self._recordings(self.runner.program.read_params(), n_steps, xs)
+    def _record(self, n_steps: int, state0: Any, n0: Any, trials: Any, xs: Any) -> dict:
+        return self._rollout(self.program.read_params(), state0, n0, trials, xs, n_steps)[1]
 
-    def _objective(self, train: dict, base: dict, n_steps: int, xs: Any, targets: Any) -> jax.Array:
+    def _objective(self, train: dict, base: dict, n_steps: int, state0: Any, n0: Any, trials: Any,
+                   xs: Any, targets: Any) -> tuple[jax.Array, dict]:
         values = {k: from_mantissa(m, self._units[k]) for k, m in train.items()}
-        recs = self._recordings(_substitute(base, values), n_steps, xs)
+        final, recs = self._rollout(_substitute(base, values), state0, n0, trials, xs, n_steps)
         out = self.loss_fn(recs, targets)
         if isinstance(out, u.Quantity):
             out = out.to_decimal(u.UNITLESS) if out.is_unitless else out.mantissa
         out = jnp.asarray(out)
         if out.shape != ():
             raise ValueError(f'loss must return a scalar, got shape {out.shape}')
-        return out
+        return out, final
 
     def _train_values(self) -> dict:
         return {k: u.get_mantissa(s.value) for k, s in self.params.items()}
 
-    def _loss_only(self, n_steps: int, relaxed: bool, xs: Any, targets: Any) -> jax.Array:
-        with relaxed_spikes(relaxed):
-            base = self.runner.program.read_params()
-            return self._objective(self._train_values(), base, n_steps, xs, targets)
+    def _loss_only(self, n_steps: int, state0: Any, n0: Any, trials: Any, xs: Any,
+                   targets: Any) -> jax.Array:
+        base = self.program.read_params()
+        return self._objective(self._train_values(), base, n_steps, state0, n0, trials, xs,
+                               targets)[0]
 
-    def _value_and_grad(self, n_steps: int, relaxed: bool, xs: Any, targets: Any) -> tuple:
-        with relaxed_spikes(relaxed):
-            base = self.runner.program.read_params()
-            loss, g = jax.value_and_grad(self._objective)(self._train_values(), base, n_steps, xs,
-                                                          targets)
-        return loss, {k: from_mantissa(v, self._units[k]) for k, v in g.items()}
+    def _value_and_grad(self, n_steps: int, state0: Any, n0: Any, trials: Any, xs: Any,
+                        targets: Any) -> tuple:
+        base = self.program.read_params()
+        (loss, final), g = jax.value_and_grad(self._objective, has_aux=True)(
+            self._train_values(), base, n_steps, state0, n0, trials, xs, targets)
+        return loss, {k: from_mantissa(v, self._units[k]) for k, v in g.items()}, final
 
-    def _train_step(self, n_steps: int, relaxed: bool, xs: Any, targets: Any) -> jax.Array:
-        loss, grads = self._value_and_grad(n_steps, relaxed, xs, targets)
+    def _train_step(self, n_steps: int, state0: Any, n0: Any, trials: Any, xs: Any,
+                    targets: Any) -> tuple:
+        loss, grads, final = self._value_and_grad(n_steps, state0, n0, trials, xs, targets)
         self.optimizer.update(grads)
-        return loss
+        return loss, final
 
-    def _fit(self, n_steps: int, relaxed: bool, n_epochs: int, xs: Any, targets: Any) -> jax.Array:
+    def _fit(self, n_steps: int, n_epochs: int, state0: Any, n0: Any, trials: Any, xs: Any,
+             targets: Any) -> jax.Array:
         return brainstate.transform.for_loop(
-            lambda i: self._train_step(n_steps, relaxed, xs, targets),
+            lambda i: self._train_step(n_steps, state0, n0, trials, xs, targets)[0],
             jnp.arange(n_epochs))
 
     # -------------------------------------------------------------- public
-    def _prepare(self, duration: Any, xs: Any) -> tuple[int, Any]:
-        n_steps = duration_steps(duration, self.runner.program.dt)
-        if n_steps < 1:
-            raise ValueError('BPTT needs a duration of at least one step')
-        return n_steps, self._normalize_xs(xs, n_steps)
-
-    def record(self, duration: Any, xs: Any = None) -> dict:
+    def record(self, state0: Any = None, data: Any = None, *, duration: Any = None, n0: Any = 0,
+               trials: Any = None) -> dict:
         """Recordings of one episode exactly as the loss sees them (forward only).
+
+        Parameters
+        ----------
+        state0, data, duration, n0, trials
+            See :meth:`grad`.
 
         Returns
         -------
         dict
-            ``{observer: {recordable: (T, n)}}`` mantissas (leading trial axis when
-            batched).
+            ``{observer: {recordable: (T, n)}}`` mantissas of every step (leading
+            trial axis when batched); observer intervals do not apply.
         """
-        self._require()
-        n_steps, xs = self._prepare(duration, xs)
-        return self._jit_record(n_steps, relaxed_enabled(), xs)
+        n_steps, state0, n0, trials, xs = self._prepare(state0, data, duration, n0, trials)
+        return self._jit_record(n_steps, state0, n0, trials, xs)
 
-    def loss(self, duration: Any, xs: Any = None, targets: Any = None) -> jax.Array:
-        """Loss of one episode of ``duration`` (forward only, jitted).
-
-        Parameters
-        ----------
-        duration : Quantity
-            Episode length (whole multiple of ``dt``).
-        xs : mapping, optional
-            Per-step external inputs (see the module docstring).
-        targets : pytree, optional
-            Passed to the loss function.
+    def loss(self, state0: Any = None, data: Any = None, targets: Any = None, *,
+             duration: Any = None, n0: Any = 0, trials: Any = None) -> jax.Array:
+        """Loss of one episode (forward only, jitted); arguments as :meth:`grad`.
 
         Returns
         -------
         jax.Array
             Scalar loss.
         """
-        self._require()
-        n_steps, xs = self._prepare(duration, xs)
-        return self._jit_loss(n_steps, relaxed_enabled(), xs, targets)
+        n_steps, state0, n0, trials, xs = self._prepare(state0, data, duration, n0, trials)
+        return self._jit_loss(n_steps, state0, n0, trials, xs, targets)
 
-    def grad(self, duration: Any, xs: Any = None, targets: Any = None) -> tuple[jax.Array, dict]:
-        """Loss and gradients of one episode (see :meth:`loss` for the arguments).
+    def grad(self, state0: Any = None, data: Any = None, targets: Any = None, *,
+             duration: Any = None, n0: Any = 0, trials: Any = None) -> tuple[jax.Array, dict]:
+        """Loss and gradients of one episode from ``state0``.
+
+        Parameters
+        ----------
+        state0 : dict, optional
+            State pytree the episode starts from (``program.init_state()``,
+            ``runner.state``, or the state :meth:`run` returned); ``None`` for the
+            program's initial state.
+        data : mapping, optional
+            Per-step external inputs ``{population: {port: (T, n)}}`` (or
+            ``{population: (T, n)}`` for single-input populations; leading trial
+            axis when batched). The episode length ``T`` comes from the data.
+        targets : pytree, optional
+            Passed to the loss function.
+        duration : Quantity, optional
+            Episode length (whole multiple of ``dt``); required without ``data``.
+        n0 : int, default 0
+            Global step index of the episode's first step (time ``n0 * dt``; RNG
+            streams), e.g. ``runner.n``.
+        trials : array_like, optional
+            Trial indices of a batched ``state0`` (``runner.trials``); ``None`` for
+            an unbatched episode (trial 0).
 
         Returns
         -------
@@ -492,27 +565,43 @@ class BPTT:
             ``d loss / d mantissa`` per trainable parameter (keys of :attr:`params`),
             in the parameter's unit.
         """
-        self._require()
-        n_steps, xs = self._prepare(duration, xs)
-        return self._jit_grad(n_steps, relaxed_enabled(), xs, targets)
+        n_steps, state0, n0, trials, xs = self._prepare(state0, data, duration, n0, trials)
+        loss, grads, _ = self._jit_grad(n_steps, state0, n0, trials, xs, targets)
+        return loss, grads
 
-    def step(self, duration: Any, xs: Any = None, targets: Any = None) -> jax.Array:
-        """One optimizer step on one episode; returns the loss before the update."""
-        self._require(optimizer=True)
-        n_steps, xs = self._prepare(duration, xs)
-        return self._jit_step(n_steps, relaxed_enabled(), xs, targets)
+    def run(self, state0: Any = None, data: Any = None, targets: Any = None, *,
+            duration: Any = None, n0: Any = 0, trials: Any = None) -> tuple[jax.Array, dict]:
+        """One training episode: gradients from ``state0`` and one optimizer step.
 
-    def fit(self, duration: Any, n_epochs: int, xs: Any = None, targets: Any = None) -> jax.Array:
-        """``n_epochs`` optimizer steps in one compiled ``for_loop``.
+        Arguments as :meth:`grad`.
+
+        Returns
+        -------
+        loss : jax.Array
+            Loss of the episode (before the update).
+        state : dict
+            The episode's final state (computed with the parameters before the
+            update); the next episode of a continuing / truncated run starts here
+            at ``n0 + T``.
+        """
+        self._require_optimizer()
+        n_steps, state0, n0, trials, xs = self._prepare(state0, data, duration, n0, trials)
+        return self._jit_run(n_steps, state0, n0, trials, xs, targets)
+
+    def fit(self, state0: Any = None, data: Any = None, targets: Any = None, *, n_epochs: int,
+            duration: Any = None, n0: Any = 0, trials: Any = None) -> jax.Array:
+        """``n_epochs`` optimizer steps on the same episode, in one compiled ``for_loop``.
+
+        Arguments as :meth:`grad`; every epoch starts from ``state0``.
 
         Returns
         -------
         jax.Array, shape (n_epochs,)
             Loss of every epoch (before its update).
         """
-        self._require(optimizer=True)
+        self._require_optimizer()
         n_epochs = _check_int('n_epochs', n_epochs, 1)
         if n_epochs is None:
             raise ValueError('n_epochs must be an int >= 1')
-        n_steps, xs = self._prepare(duration, xs)
-        return self._jit_fit(n_steps, relaxed_enabled(), n_epochs, xs, targets)
+        n_steps, state0, n0, trials, xs = self._prepare(state0, data, duration, n0, trials)
+        return self._jit_fit(n_steps, n_epochs, state0, n0, trials, xs, targets)

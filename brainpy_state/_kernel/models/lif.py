@@ -128,7 +128,8 @@ class LIF(SpikingNeuron):
         s = s.replace(V=from_mantissa(V.astype(dtype), u.mV), **new_latch)
         rule = self.spiking
         carry = rule.begin(s, p, dt)
-        s, carry = rule.check(s, p, carry, detach_reset=rule_detach(self))
+        s, carry = rule.check(s, p, carry, detach_reset=rule_detach(self, ctx),
+                              relaxed=ctx.relaxed)
         spike, _ = rule.end(carry)
         s = s.replace(spike=spike.astype(dtype))
         return s, {'spike': s.spike}

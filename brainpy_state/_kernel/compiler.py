@@ -388,8 +388,35 @@ class Plan(brainstate.nn.Module):
                 'plastic': plastic, 'total': storage + pre + post + syn + plastic}
 
     # ---------------------------------------------------------------- running
-    def runner(self, batch: int | None = None, rng: str = 'independent', learner: Any = None):
-        """Create a :class:`~brainpy_state._kernel.runner.Runner`.
+    def program(self, *, spikes: str = 'hard', detach_reset: bool | None = None,
+                etrace: bool = False):
+        """Create a :class:`~brainpy_state._kernel.runner.Program` (the L2 contract).
+
+        Runners and learners are clients of a program (decision D-c):
+        ``Runner(program)``, ``BPTT(program, loss, ...)``, ``Online(program, ...)``.
+
+        Parameters
+        ----------
+        spikes : {'hard', 'relaxed'}, default 'hard'
+            Forward spike mode.
+        detach_reset : bool or None, default None
+            Program-level default ``detach_reset`` of every spike rule.
+        etrace : bool, default False
+            Apply trainable weights through braintrace primitives.
+
+        Returns
+        -------
+        Program
+        """
+        from brainpy_state._kernel.runner import Program
+        return Program(self, spikes=spikes, detach_reset=detach_reset, etrace=etrace)
+
+    def runner(self, batch: int | None = None, rng: str = 'independent'):
+        """Create a :class:`~brainpy_state._kernel.runner.Runner` of ``Program(plan)``.
+
+        Learners are not attached to runners (decision D-c): they are built from a
+        program and start from any state, e.g. a runner's ``state`` / ``n`` /
+        ``trials`` after a warm-up.
 
         Parameters
         ----------
@@ -398,30 +425,13 @@ class Plan(brainstate.nn.Module):
             identical to trial 0 of any batch).
         rng : {'independent', 'common'}, default 'independent'
             Per-trial random numbers (spec §4.5).
-        learner : optional
-            A learner with an ``attach(runner)`` method
-            (:class:`~brainpy_state._kernel.learn.bptt.BPTT`,
-            :class:`~brainpy_state._kernel.learn.etrace.Online`); it validates the
-            plan (capabilities, braintrace rules) and binds to the runner.
 
         Returns
         -------
         Runner
-
-        Raises
-        ------
-        TypeError
-            If ``learner`` has no ``attach`` method.
         """
-        if learner is not None and not callable(getattr(learner, 'attach', None)):
-            raise TypeError(f'learner must provide attach(runner) (BPTT, Online), '
-                            f'got {type(learner).__name__}')
         from brainpy_state._kernel.runner import Runner
-        run = Runner(self, batch=batch, rng=rng)
-        if learner is not None:
-            learner.attach(run)
-            run.learner = learner
-        return run
+        return Runner(self, batch=batch, rng=rng)
 
     # --------------------------------------------------------------- describe
     def describe(self, print_: bool = True) -> str:

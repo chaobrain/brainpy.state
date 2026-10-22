@@ -12,8 +12,11 @@ in several situations (spec §1), so the rules are checked before
    storages' ``forward_etrace``). A trainable ``ParamState`` that braintrace does not
    relate to a hidden state (raw matmul, neuron parameter used element-wise) would
    get a zero gradient.
-2. **Port inputs are computed outside substep loops**: an ETP primitive inside a
-   ``scan`` / ``while`` body loses its eligibility trace.
+2. **No braintrace primitive inside a ``while`` body**: braintrace 0.2.6 has no
+   fixed per-iteration Jacobian for a data-dependent trip count and raises
+   ``NotImplementedError``. Static ``scan`` / ``fori_loop`` bodies are fine
+   (braintrace unrolls them; gradients equal the Python-unrolled loop), so port
+   inputs may be applied per substep in a scanned integrator.
 3. **Outputs are read from ``HiddenState`` values**: an output depending on a
    weight through a value that is not a new hidden-state value gives zero gradients.
 4. **No ``ParamState`` writes inside the traced step**: weights are constant within
@@ -27,7 +30,8 @@ in several situations (spec §1), so the rules are checked before
 trainable neuron parameters) at network-construction time; :func:`check_etrace`
 traces one step of a module and applies all rules. :class:`EtraceNetwork` is the
 stateful one-step module of a plan that braintrace compiles, and :class:`Online`
-is the learner wiring both into ``plan.runner(learner=...)``.
+is the learner built from a ``Program`` (decision D-c) that runs online-learning
+episodes from any state.
 """
 from __future__ import annotations
 
@@ -53,7 +57,9 @@ __all__ = [
     'Online',
 ]
 
-_LOOP_PRIMITIVES = ('scan', 'while')
+# upstream: braintrace#186 -- braintrace 0.2.6 handles ETP primitives in static scan
+# bodies but not in while bodies; rule 2 rejects only the latter.
+_LOOP_PRIMITIVES = ('while',)
 
 
 class EtraceError(ValueError):
@@ -143,7 +149,7 @@ def _sub_jaxprs(eqn: Any) -> list:
 
 
 def _etp_in_loops(jaxpr: Any, in_loop: bool = False) -> list:
-    """Names of ETP primitives found inside loop bodies (recursively)."""
+    """Names of ETP primitives found inside ``while`` bodies (recursively)."""
     found = []
     for eqn in jaxpr.eqns:
         if isinstance(eqn.primitive, braintrace.ETPPrimitive) and in_loop:
@@ -230,18 +236,22 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
     writes = list(sf.get_write_states(*example_inputs))
 
     # rule 4: no ParamState writes
+    # upstream: braintrace#187 -- intended behaviour; shorten this message to a pointer
+    # once braintrace documents the rule and makes NotSupportedError actionable.
     bad = [name(s) for s in writes if isinstance(s, brainstate.ParamState)]
     if bad:
         raise EtraceError(f'ParamState(s) {bad} are written inside the step: online learning '
                           f'needs weights that are constant within a step (local plasticity + '
                           f'online learning is not supported, decision L4)')
 
-    # rule 2: ETP primitives inside loops
+    # rule 2: no ETP primitives inside while bodies (static scan / fori_loop are fine)
+    # upstream: braintrace#186
     looped = _etp_in_loops(jaxpr)
     if looped:
         raise EtraceError(f'braintrace primitives {sorted(set(looped))} are called inside a '
-                          f'scan/while/fori_loop body: their eligibility traces are lost. Compute '
-                          f'synaptic port inputs once per step, outside substep loops')
+                          f'while_loop body: braintrace cannot build eligibility traces for a '
+                          f'data-dependent trip count. Use a static scan / fori_loop (fixed '
+                          f'number of iterations), or apply the weights outside the loop')
 
     # map states <-> jaxpr variables
     n_args = len(jax.tree.leaves(example_inputs))
@@ -282,6 +292,7 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
                           f'ShortTermState')
 
     # rule 3: outputs depend on weights only through new hidden values
+    # upstream: braintrace#185 -- braintrace silently returns zero gradients otherwise
     taint_seed = {v: 1 for s in weights for v in state_in[id(s)]}
     clean = {v: 0 for s in hidden_w for v in state_out[id(s)] if _is_var(v)}
     taint = _flow(jaxpr, taint_seed, reset=clean)
@@ -339,8 +350,9 @@ class EtraceNetwork(brainstate.nn.Module):
 
     Parameters
     ----------
-    plan : Plan
-        Compiled network (checked with :func:`check_plan`).
+    plan : Plan or Program
+        Compiled network (checked with :func:`check_plan`), or a program whose
+        ``spikes`` / ``detach_reset`` options are kept (``etrace=True`` is set).
     inputs : str, tuple or list, optional
         Where ``x`` enters: a population name (its single input port), a
         ``(population, port)`` tuple, or a list of those. One input: ``x`` is an
@@ -361,9 +373,11 @@ class EtraceNetwork(brainstate.nn.Module):
 
     def __init__(self, plan: Any, inputs: Any = None, outputs: Any = None, trial: int = 0) -> None:
         super().__init__()
+        program = plan if isinstance(plan, Program) else Program(plan)
+        plan = program.plan
         check_plan(plan)
         self.plan = plan
-        self.program = Program(plan, etrace=True)
+        self.program = program.replace(etrace=True)
         self.trial = int(trial)
         self._inputs = []
         for pplan, port in _names(plan, inputs):
@@ -410,6 +424,52 @@ class EtraceNetwork(brainstate.nn.Module):
             return None
         return xs[0] if len(xs) == 1 else xs
 
+    def read(self) -> dict:
+        """Current network state as a program state pytree (``Program.init_state`` layout)."""
+        state = {'pops': {p.name: Record(**{k: s.value for k, s in p.model.dyn_states.items()})
+                          for p in self.plan.populations},
+                 'rings': {k: s.value for k, s in self.rings.items()},
+                 'arrivals': {k: s.value for k, s in self.arrivals.items()},
+                 'syn': {}, 'plastic': {}}
+        for k, s in self.syn.items():
+            g, name = k.rsplit('/', 1)
+            state['syn'].setdefault(g, {})[name] = s.value
+        return state
+
+    def load(self, state: dict, n: Any = 0) -> None:
+        """Set the network state from a program state pytree (unbatched) and the step index.
+
+        Parameters
+        ----------
+        state : dict
+            ``Program.init_state()`` layout, e.g. a runner's ``state``.
+        n : int, default 0
+            Global index of the next step.
+
+        Raises
+        ------
+        ValueError
+            If ``state`` is not an unbatched state of this network's program.
+        """
+        ref = self.read()
+        if jax.tree.structure(state) != jax.tree.structure(ref):
+            raise ValueError('state is not a state of this program (Program.init_state layout)')
+        for a, r in zip(jax.tree.leaves(state), jax.tree.leaves(ref)):
+            if jnp.shape(a) != jnp.shape(r):
+                raise ValueError(f'state leaf has shape {jnp.shape(a)}, expected {jnp.shape(r)} '
+                                 f'(online learning runs unbatched states)')
+        for p in self.plan.populations:
+            for k, s in p.model.dyn_states.items():
+                s.value = state['pops'][p.name][k]
+        for k, s in self.rings.items():
+            s.value = state['rings'][k]
+        for k, s in self.arrivals.items():
+            s.value = state['arrivals'][k]
+        for k, s in self.syn.items():
+            g, name = k.rsplit('/', 1)
+            s.value = state['syn'][g][name]
+        self.n.value = jnp.asarray(n, jnp.int32)
+
     def update(self, x: Any = None) -> jax.Array:
         """One network step; returns the concatenated output mantissas."""
         ext = None
@@ -422,14 +482,7 @@ class EtraceNetwork(brainstate.nn.Module):
                 ext.setdefault(pplan.name, {})[port] = v
         plan = self.plan
         prog = self.program
-        state = {'pops': {p.name: Record(**{k: s.value for k, s in p.model.dyn_states.items()})
-                          for p in plan.populations},
-                 'rings': {k: s.value for k, s in self.rings.items()},
-                 'arrivals': {k: s.value for k, s in self.arrivals.items()},
-                 'syn': {}, 'plastic': {}}
-        for k, s in self.syn.items():
-            g, name = k.rsplit('/', 1)
-            state['syn'].setdefault(g, {})[name] = s.value
+        state = self.read()
         n = self.n.value
         new, _ = prog.step(prog.read_params(), state, n, jnp.uint32(self.trial), ext=ext)
         for p in plan.populations:
@@ -456,22 +509,35 @@ class EtraceNetwork(brainstate.nn.Module):
 # ---------------------------------------------------------------------------
 
 class Online:
-    """braintrace online learner of a plan (``plan.runner(learner=Online(...))``).
+    """braintrace online learner over a :class:`Program` (decision D-c).
 
-    At :meth:`attach` (runner time) builds an :class:`EtraceNetwork`, runs
-    :func:`check_etrace` and compiles it with ``braintrace.compile``.
+    Builds an :class:`EtraceNetwork` of the program (with ``etrace=True``), runs
+    :func:`check_etrace` and compiles it with ``braintrace.compile``. Episodes start
+    from an explicit ``state0`` (unbatched) at global step ``n0``: the network's
+    states are loaded from it and the eligibility traces are reset.
 
     Parameters
     ----------
+    program : Program
+        The program to learn (``plan.program()``); its ``spikes`` / ``detach_reset``
+        options are kept.
     algorithm : str or braintrace algorithm, default 'eprop'
         Passed to ``braintrace.compile`` (``'eprop'``, ``'d_rtrl'``, ...).
     inputs, outputs
         See :class:`EtraceNetwork`.
+    loss : callable, optional
+        Per-step loss ``loss(outputs, target) -> scalar`` (``outputs``: the
+        network's concatenated output mantissas of the step); needed by
+        :meth:`grad` / :meth:`run`.
+    optimizer : braintools.optim.Optimizer, optional
+        Needed by :meth:`run`; registered on the trainable weights here.
     **options
         Extra ``braintrace.compile`` options.
 
     Attributes
     ----------
+    program : Program
+        The program the network runs (``etrace=True``).
     network : EtraceNetwork
         The one-step module.
     model : braintrace.ETraceAlgorithm
@@ -479,37 +545,129 @@ class Online:
         ``model.etrace_grad(xs, ys, step_fn=...)`` computes gradients).
     report : EtraceReport
         Result of :func:`check_etrace`.
+    params : dict of str to brainstate.ParamState
+        Trainable weights (``'weights/<projection>/<group>'``).
+
+    Raises
+    ------
+    TypeError
+        If ``program`` is not a Program.
+    EtraceError
+        If a braintrace rule is violated (including: no trainable weight).
     """
 
-    def __init__(self, algorithm: Any = 'eprop', inputs: Any = None, outputs: Any = None,
+    def __init__(self, program: Any, algorithm: Any = 'eprop', *, inputs: Any = None,
+                 outputs: Any = None, loss: Any = None, optimizer: Any = None,
                  **options: Any) -> None:
+        if not isinstance(program, Program):
+            raise TypeError(f'Online needs a Program (plan.program()), got '
+                            f'{type(program).__name__}')
+        if loss is not None and not callable(loss):
+            raise TypeError(f'loss must be callable (outputs, target) -> scalar, got {loss!r}')
         self.algorithm = algorithm
-        self.inputs = inputs
-        self.outputs = outputs
+        self.loss_fn = loss
+        self.optimizer = optimizer
         self.options = options
-        self.runner = None
-        self.network = None
-        self.model = None
-        self.report = None
-
-    def attach(self, runner: Any) -> None:
-        """Check and compile the plan of ``runner`` for online learning.
-
-        Raises
-        ------
-        NotImplementedError
-            For a batched runner (K1).
-        EtraceError
-            If a braintrace rule is violated.
-        """
-        if self.runner is not None:
-            raise RuntimeError('this Online learner is already attached to a runner')
-        if runner.batch is not None:
-            raise NotImplementedError('batched online learning is a K1 item')
-        net = EtraceNetwork(runner.plan, self.inputs, self.outputs)
+        net = EtraceNetwork(program, inputs, outputs)
+        self.program = net.program
         x0 = net.example_input()
         args = () if x0 is None else (x0,)
         self.report = check_etrace(net, *args)
-        self.model = braintrace.compile(net, self.algorithm, *args, **self.options)
+        self.model = braintrace.compile(net, algorithm, *args, **options)
         self.network = net
-        self.runner = runner
+        self.params = {f'weights/{pp.name}/{g}': grp.weight
+                       for pp in self.program.plan.projections for g, grp in enumerate(pp.groups)
+                       if isinstance(grp.weight, brainstate.ParamState)}
+        if optimizer is not None:
+            optimizer.register_trainable_weights(self.params)
+        self._jit_grad = brainstate.transform.jit(self._grad)
+        self._jit_run = brainstate.transform.jit(self._run)
+
+    @property
+    def plan(self) -> Any:
+        """The compiled network of :attr:`program`."""
+        return self.program.plan
+
+    def load(self, state0: Any = None, n0: Any = 0) -> None:
+        """Start an episode: load ``state0`` at step ``n0`` and reset the traces.
+
+        Parameters
+        ----------
+        state0 : dict, optional
+            Unbatched state pytree of the program (``program.init_state()``, a
+            runner's ``state``, or the state :meth:`run` returned); ``None`` for
+            the initial state.
+        n0 : int, default 0
+            Global index of the next step.
+        """
+        self.network.load(self.program.init_state() if state0 is None else state0, n0)
+        reset = getattr(self.model, 'reset_state', None)
+        if callable(reset):
+            reset()
+
+    def state(self) -> tuple[dict, jax.Array]:
+        """Current ``(state, n)`` of the network (a program state pytree, next step)."""
+        return self.network.read(), self.network.n.value
+
+    def _sequence_loss(self, xs: Any, ys: Any) -> tuple:
+        if self.loss_fn is None:
+            raise RuntimeError('Online was created without a loss')
+        loss_fn, model = self.loss_fn, self.model
+        grads, loss = model.etrace_grad(
+            xs, ys, step_fn=lambda x, y: jnp.asarray(loss_fn(model(x), y)),
+            weights=self.params, return_value=True, loss_output='scalar')
+        return loss, grads
+
+    def _grad(self, xs: Any, ys: Any) -> tuple:
+        loss, grads = self._sequence_loss(xs, ys)
+        return loss, grads, self.network.read()
+
+    def _run(self, xs: Any, ys: Any) -> tuple:
+        loss, grads, state = self._grad(xs, ys)
+        self.optimizer.update(grads)
+        return loss, state
+
+    def grad(self, state0: Any, data: Any, targets: Any, *, n0: Any = 0) -> tuple[jax.Array, dict]:
+        """Online (eligibility-trace) gradients of one episode from ``state0``.
+
+        Parameters
+        ----------
+        state0 : dict or None
+            See :meth:`load`.
+        data : array or tuple of arrays
+            Per-step inputs, ``(T, n_in)`` (a tuple for several inputs, in the
+            order of ``inputs``).
+        targets : array
+            Per-step targets ``(T, ...)`` passed to the loss with the step's
+            outputs.
+        n0 : int, default 0
+            Global index of the episode's first step.
+
+        Returns
+        -------
+        loss : jax.Array
+            Mean per-step loss.
+        grads : dict of str to Quantity
+            Accumulated online gradients per trainable weight (keys of
+            :attr:`params`).
+        """
+        self.load(state0, n0)
+        loss, grads, _ = self._jit_grad(data, targets)
+        return loss, grads
+
+    def run(self, state0: Any, data: Any, targets: Any, *, n0: Any = 0) -> tuple[jax.Array, dict]:
+        """One online-learning episode: gradients from ``state0`` and one optimizer step.
+
+        Arguments as :meth:`grad`.
+
+        Returns
+        -------
+        loss : jax.Array
+            Mean per-step loss (before the update).
+        state : dict
+            The episode's final state (the next episode starts here at ``n0 + T``).
+        """
+        if self.optimizer is None:
+            raise RuntimeError('Online was created without an optimizer')
+        self.load(state0, n0)
+        return self._jit_run(data, targets)

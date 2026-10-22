@@ -100,7 +100,7 @@ GATES: tuple = (
                 'integrators_test.py::TestConvergenceOrder'), requires='nest'),
     Gate('G6', 'BPTT gradients vs central finite differences',
          'relative error <= 1e-4 where BPTT is exact (hard-forward feed-forward with '
-         'detached reset and membrane loss; relaxed_spikes() recurrent)',
+         "detached reset and membrane loss; Program(spikes='relaxed') recurrent)",
          tests=('learn/bptt_test.py::test_g6_',)),
     Gate('G7', 'braintrace compatibility',
          'eprop / d_rtrl compile, non-zero gradient for every weight; checker rejects '

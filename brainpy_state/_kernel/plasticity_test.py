@@ -521,7 +521,7 @@ class TestLearners:
         sg = net.add(spike_generator, 2, params=dict(spike_times=[1.0] * u.ms))
         net.connect(sg, net.add(LIF, 2), port='delta', weight=0.5 * u.mV, trainable=True)
         with pytest.raises(EtraceError, match='plasticity'):
-            net.compile().runner(learner=Online('eprop'))
+            Online(net.compile().program(), 'eprop')
 
     def test_static_synapse_is_not_rejected_by_the_online_check(self):
         from brainpy_state._kernel.learn.etrace import check_plan
@@ -537,11 +537,10 @@ class TestLearners:
         from brainpy_state._kernel.learn.bptt import trainable_states
         net, proj = random_net(rule_of(trainable=('lambda_',)), n_pre=4, n_post=3, T=60.0,
                                observe=True)
-        bptt = BPTT(lambda r, y: jnp.mean(r['rec']['V']))
         plan = net.compile()
         assert sorted(trainable_states(plan)) == ['plasticity/stdp/lambda_']
-        plan.runner(learner=bptt)
-        loss, grads = bptt.grad(60.0 * u.ms)
+        bptt = BPTT(plan.program(), lambda r, y: jnp.mean(r['rec']['V']))
+        loss, grads = bptt.grad(duration=60.0 * u.ms)
         assert set(grads) == {'plasticity/stdp/lambda_'}
         assert np.isfinite(float(grads['plasticity/stdp/lambda_']))
         assert float(grads['plasticity/stdp/lambda_']) != 0.0

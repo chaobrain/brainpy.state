@@ -15,7 +15,7 @@ from brainpy_state._kernel.models import LIF, dc_generator, iaf_psc_alpha, poiss
 from brainpy_state._kernel.models.devices import poisson_counts
 from brainpy_state._kernel.network import Network
 from brainpy_state._kernel.rng import population_key
-from brainpy_state._kernel.runner import duration_steps
+from brainpy_state._kernel.runner import Program, Runner, duration_steps, trial_indices
 from brainpy_state._kernel.validation.brunel import build_brunel, rates
 
 DT = 0.1 * u.ms
@@ -292,8 +292,10 @@ class TestRunner:
     def test_runner_errors(self):
         net, _ = build_brunel(4)
         plan = net.compile()
-        with pytest.raises(TypeError, match='attach'):
-            plan.runner(learner=object())
+        with pytest.raises(TypeError):
+            plan.runner(learner=object())  # learners are no longer attached (D-c)
+        with pytest.raises(TypeError, match='Program or a Plan'):
+            Runner(object())
         with pytest.raises(ValueError):
             plan.runner(rng='shared')
         with pytest.raises(ValueError):
@@ -498,3 +500,206 @@ def test_weights_are_differentiable_through_the_program():
 
     g = jax.grad(loss)(params['weights'][p.name][0].mantissa)
     assert np.all(np.asarray(g) > 0)
+
+
+# --------------------------------------------------------------------------- K1a-5
+
+def _readout_net(storage='dense'):
+    """Poisson drive -> h (LIF, fixed) -> o (LIF) through a trainable readout ``ro``."""
+    import braintools
+    net = Network(dt=DT, seed=21)
+    noise = net.add(poisson_generator, 12, params=dict(rate=900.0 * u.Hz), name='noise')
+    h = net.add(LIF, 8, name='h', surrogate=braintools.surrogate.Sigmoid())
+    o = net.add(LIF, 3, name='o', surrogate=braintools.surrogate.Sigmoid())
+    net.connect(noise, h, fixed_indegree(4), port='delta', weight=0.5 * u.mV, name='nh')
+    net.connect(h, o, all_to_all(), port='delta', weight=0.1 * u.mV, storage=storage,
+                trainable=True, name='ro')
+    rec = net.observe(o, 'V', 'spike', name='r')
+    return net, rec
+
+
+_TARGET = 0.6  # mV
+
+
+def _delta_rule(params, state, n):
+    """Readout delta rule: w += lr * outer(h spikes, target - o.V) (pure)."""
+    h_spk = state['pops']['h']['spike']
+    err = _TARGET - state['pops']['o']['V'].to_decimal(u.mV)
+    w = params['weights']['ro'][0]
+    w = w + 0.01 * jnp.outer(h_spk, err) * u.mV
+    return {**params, 'weights': {**params['weights'], 'ro': [w]}}, state
+
+
+class TestProgram:
+    def test_hard_and_relaxed_programs_coexist(self):
+        import braintools
+        net = Network(dt=DT)
+        net.add(LIF, 2, name='h', surrogate=braintools.surrogate.Sigmoid())
+        plan = net.compile()
+        hard, relaxed = Program(plan), plan.program(spikes='relaxed')
+        st = hard.init_state()
+        ext = {'h': {'delta': 1.0 * u.mV}}  # exactly at threshold
+        f_hard = jax.jit(lambda p, s: hard.step(p, s, 0, jnp.uint32(0), ext)[1][0]['spike'])
+        f_rel = jax.jit(lambda p, s: relaxed.step(p, s, 0, jnp.uint32(0), ext)[1][0]['spike'])
+        p = hard.read_params()
+        assert np.asarray(f_hard(p, st)).tolist() == [1.0, 1.0]
+        np.testing.assert_allclose(np.asarray(f_rel(p, st)), [0.5, 0.5], rtol=1e-6)
+        assert np.asarray(f_hard(p, st)).tolist() == [1.0, 1.0]  # no mode leaks back
+        ra, rb = Runner(hard), Runner(relaxed)
+        assert ra.program is hard and rb.program.spikes == 'relaxed' and rb.plan is plan
+        ra.step(), rb.step()
+        assert 'Program(spikes=' in repr(relaxed)
+
+    def test_relaxed_rejects_models_without_smooth_spikes(self):
+        from brainpy_state._kernel.models.precise import iaf_psc_exp_ps
+        net = Network(dt=DT)
+        net.add(LIF, 2, name='hard_lif', surrogate=None)
+        with pytest.raises(ValueError, match='hard_lif'):
+            net.compile().program(spikes='relaxed')
+        net = Network(dt=DT)
+        net.add(iaf_psc_exp_ps, 2, name='ps')
+        with pytest.raises(ValueError, match='precise spike times'):
+            net.compile().program(spikes='relaxed')
+        net = Network(dt=DT)
+        net.add(poisson_generator, 2, params=dict(rate=10.0 * u.Hz))  # devices are fine
+        assert net.compile().program(spikes='relaxed').spikes == 'relaxed'
+        with pytest.raises(ValueError, match='spikes'):
+            net.compile().program(spikes='soft')
+        with pytest.raises(TypeError, match='detach_reset'):
+            net.compile().program(detach_reset=1)
+
+    def test_replace_and_init_state(self):
+        net, _ = _readout_net()
+        plan = net.compile()
+        prog = plan.program()
+        assert prog.replace() is prog and prog.replace(spikes='hard') is prog
+        rel = prog.replace(spikes='relaxed', detach_reset=True)
+        assert rel.spikes == 'relaxed' and rel.detach_reset is True and rel.plan is plan
+        assert rel.init_state() is prog.init_state()  # shared captured initial state
+        with pytest.raises(TypeError, match='unknown Program options'):
+            prog.replace(batch=2)
+        b = prog.init_state(3)
+        for x, y in zip(jax.tree.leaves(b), jax.tree.leaves(prog.init_state())):
+            assert x.shape == (3,) + y.shape
+        with pytest.raises(ValueError, match='batch'):
+            prog.init_state(0)
+
+    def test_init_state_ignores_later_model_writes(self):
+        net, _ = _readout_net()
+        plan = net.compile()
+        prog = plan.program()
+        v0 = np.asarray(prog.init_state()['pops']['h']['V'].to_decimal(u.mV)).copy()
+        plan.populations[1].model.dyn_states['V'].value = 5.0 * u.mV * jnp.ones(8)
+        np.testing.assert_array_equal(np.asarray(prog.init_state()['pops']['h']['V'].to_decimal(u.mV)), v0)
+
+    def test_write_params_roundtrip(self):
+        net, _ = _readout_net()
+        prog = net.compile().program()
+        p = prog.read_params()
+        w = p['weights']['ro'][0] * 2.0
+        prog.write_params({**p, 'weights': {**p['weights'], 'ro': [w]}})
+        np.testing.assert_allclose(np.asarray(prog.read_params()['weights']['ro'][0].to_decimal(u.mV)),
+                                   np.asarray(w.to_decimal(u.mV)))
+
+    def test_trial_indices(self):
+        assert trial_indices(None).shape == ()
+        assert trial_indices(3).tolist() == [0, 1, 2]
+        assert trial_indices(2, 'common').tolist() == [0, 0]
+        with pytest.raises(ValueError, match='rng'):
+            trial_indices(2, 'shared')
+        with pytest.raises(ValueError, match='batch'):
+            trial_indices(True)
+
+
+class TestLearnPhase:
+    @pytest.mark.parametrize('every', [1, 4])
+    def test_learn_every_k_equals_updates_between_cont_calls(self, every):
+        with jax.enable_x64(True):
+            net, rec = _readout_net()
+            plan_a = net.compile(precision='float64')
+            net_b, _ = _readout_net()
+            plan_b = net_b.compile(precision='float64')
+            a, b = plan_a.runner(), plan_b.runner()
+            # compiled: 3 + 9 steps, learn after global steps 4, 8, 12 (every=4)
+            res1 = a.cont(0.3 * u.ms, learn=_delta_rule, every=every)
+            res2 = a.cont(0.9 * u.ms, learn=_delta_rule, every=every)
+            # reference: host-side updates between cont() calls of `every` steps
+            prog_b = b.program
+            V = []
+            # (host loop over update windows: the reference the compiled learn phase must match)
+            for _ in range(12 // every):
+                r = b.cont(every * DT)
+                V.append(np.asarray(r[rec]['V'].to_decimal(u.mV)))
+                p, _ = _delta_rule(prog_b.read_params(), b.state, b.n)
+                prog_b.write_params(p)
+            V_a = np.concatenate([np.asarray(res1[rec]['V'].to_decimal(u.mV)),
+                                  np.asarray(res2[rec]['V'].to_decimal(u.mV))])
+            np.testing.assert_allclose(V_a, np.concatenate(V), rtol=1e-12, atol=1e-12)
+            wa = np.asarray(plan_a.projection('ro').groups[0].weight.value.to_decimal(u.mV))
+            wb = np.asarray(plan_b.projection('ro').groups[0].weight.value.to_decimal(u.mV))
+            np.testing.assert_allclose(wa, wb, rtol=1e-12)
+            assert not np.allclose(wa, 0.1)  # the readout learned
+            assert a.n == 12 and a.n_traces == 2
+
+    def test_rollout_returns_params_only_with_learn(self):
+        net, rec = _readout_net()
+        prog = net.compile().program()
+        p, s = prog.read_params(), prog.init_state()
+        out = prog.rollout(p, s, 0, jnp.uint32(0), 5)
+        assert len(out) == 2
+        st, recs, p2 = prog.rollout(p, s, 0, jnp.uint32(0), 5, learn=_delta_rule, every=2)
+        assert jax.tree.structure(p2) == jax.tree.structure(p)
+        assert not np.allclose(np.asarray(u.get_mantissa(p2['weights']['ro'][0])),
+                               np.asarray(u.get_mantissa(p['weights']['ro'][0])))
+
+    def test_learn_can_reset_state(self):
+        """A trial reset in the learn phase (state change), every 5 steps."""
+        net, rec = _readout_net()
+        prog = net.compile().program()
+        init = prog.init_state()
+
+        def reset(params, state, n):
+            return params, {**state, 'pops': init['pops']}
+
+        st, recs, _ = prog.rollout(prog.read_params(), init, 0, jnp.uint32(0), 10, learn=reset,
+                                   every=5)
+        for x, y in zip(jax.tree.leaves(st['pops']), jax.tree.leaves(init['pops'])):
+            np.testing.assert_array_equal(np.asarray(x), np.asarray(y))
+
+    def test_learn_with_a_stateful_optimizer(self):
+        """An optimizer step every k steps: braintools optimizer states are carried by the scan."""
+        import braintools
+        net, rec = _readout_net()
+        plan = net.compile()
+        prog = plan.program()
+        ro = plan.projection('ro').groups[0].weight
+        opt = braintools.optim.Adam(lr=1e-3)
+        opt.register_trainable_weights({'ro': ro})
+
+        def learn(params, state, n):
+            h_spk = state['pops']['h']['spike']
+            err = _TARGET - state['pops']['o']['V'].to_decimal(u.mV)
+            opt.update({'ro': -jnp.outer(h_spk, err) * u.mV})
+            return prog.read_params(), state
+
+        run = Runner(prog)
+        w0 = np.asarray(ro.value.to_decimal(u.mV)).copy()
+        run.cont(2.0 * u.ms, learn=learn, every=5)
+        w1 = np.asarray(ro.value.to_decimal(u.mV))
+        assert not np.allclose(w1, w0) and np.all(np.isfinite(w1))
+
+    def test_learn_errors(self):
+        net, rec = _readout_net()
+        plan = net.compile()
+        prog = plan.program()
+        p, s = prog.read_params(), prog.init_state()
+        with pytest.raises(TypeError, match='callable'):
+            prog.rollout(p, s, 0, jnp.uint32(0), 3, learn=3)
+        with pytest.raises(ValueError, match='every'):
+            prog.rollout(p, s, 0, jnp.uint32(0), 3, learn=_delta_rule, every=0)
+        with pytest.raises(ValueError, match='every'):
+            prog.rollout(p, s, 0, jnp.uint32(0), 3, learn=_delta_rule, every=True)
+        with pytest.raises(TypeError, match='structure'):
+            prog.rollout(p, s, 0, jnp.uint32(0), 3, learn=lambda a, b, n: ({}, b))
+        with pytest.raises(NotImplementedError, match='batched'):
+            plan.runner(batch=2).cont(1.0 * u.ms, learn=_delta_rule)

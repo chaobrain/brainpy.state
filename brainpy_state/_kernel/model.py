@@ -268,7 +268,8 @@ class NeuronModel(brainstate.nn.Module):
     integrator : Integrator, optional
         Override of the class integrator (e.g. more substeps).
     detach_reset : bool, optional
-        Default for the spike rule's ``detach_reset`` (set by learners).
+        Default for the spike rule's ``detach_reset``; a running ``Program``'s
+        ``detach_reset`` option (``StepContext.detach_reset``) takes precedence.
     name : str, optional
         Module name.
 
@@ -515,7 +516,7 @@ class NeuronModel(brainstate.nn.Module):
         units = {k: unit_of(s[k]) for k in names}
         dt_ms = to_mantissa(ctx.dt, u.ms)
         t0_ms = to_mantissa(ctx.t, u.ms)
-        detach = rule.resolve_detach(self.detach_reset) if rule is not None else False
+        detach = rule.resolve_detach(ctx.detach_default(self.detach_reset)) if rule is not None else False
         carry = rule.begin(s, p, dt_ms, integ.substeps) if rule is not None else None
         clamp_var = rule.clamp_var if rule is not None else None
         n_sub = integ.substeps
@@ -548,7 +549,7 @@ class NeuronModel(brainstate.nn.Module):
             st = rule.clamp(st, p, c)
             c = rule.tick(c, 'substep')
             if rule.when == 'substep' or k == n_sub - 1:
-                st, c = rule.check(st, p, c, detach_reset=detach)
+                st, c = rule.check(st, p, c, detach_reset=detach, relaxed=ctx.relaxed)
             s_holder[0] = st  # non-float states changed by jumps
             return {kk: to_mantissa(st[kk], units[kk]) for kk in names}, c
 
