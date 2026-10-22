@@ -27,6 +27,7 @@ Versions at filing: brainevent 0.2.1, braintrace 0.2.6 (latest releases on
 | braintrace | [#185](https://github.com/chaobrain/braintrace/issues/185) | silent all-zero online gradients when the output reads an ETP weight through a non-hidden intermediate value | bug | open | checker rule 3 (outputs must be read from new `HiddenState` values): `_kernel/learn/etrace.py:294-305` (`# upstream:` comment added in K1a-5) | when released ≥ the fixing version, keep rule 3 only if braintrace still returns zeros (then as a warning) |
 | braintrace | [#186](https://github.com/chaobrain/braintrace/issues/186) | `etrace_grad` fails for a weight-free `while_loop` whose result reaches a `HiddenState` through further ops | bug | open | no `while_loop` in neuron steps (§7.3 rule 3); checker rule 2 rejects ETP primitives in `while` bodies only (K1a-5 relaxed it from any `scan`/`while` body; static `scan`/`fori_loop` bodies give the Python-unrolled gradients, `learn/etrace_test.py::test_checker_accepts_braintrace_weight_in_static_loops`): `_kernel/learn/etrace.py:60-62` (`_LOOP_PRIMITIVES`), `:247-254`. Note: an ETP weight inside a `while` body raises braintrace's own `NotImplementedError` ("Weight state used inside a while loop", by design: no fixed per-iteration Jacobian); #186 is the weight-free case | when released ≥ the fixing version, allow weight-free `while` loops in neuron steps (§7.3 rule 3); keep rule 2 for ETP weights inside `while` bodies unless braintrace supports them |
 | braintrace | [#187](https://github.com/chaobrain/braintrace/issues/187) | document the "no `ParamState` writes inside the online step" rule; make `NotSupportedError` actionable | documentation | open (behaviour intended) | checker rule 4 with an actionable message: `_kernel/learn/etrace.py:238-245` (`# upstream:` comment added in K1a-5) | keep rule 4 (intended behaviour); shorten our message to a pointer once upstream documents it |
+| brainevent | [#203](https://github.com/chaobrain/brainevent/issues/203) (update, K1a-4) | measured motivation for the fused per-edge-delay kernel: the JAX scatter of K1a-4 meets the K1a gate on the spec network (2000 × 100, delays ≤ 20 ms: 0.87-0.96 × the scalar-delay step, CPU and GPU) but not at Brunel order 2500 with delays ≤ 20 ms: CPU 1.39-1.55 × (10-20 MB ring, cache-bound random writes), GPU f32 1.63-1.84 × (~10 small kernels + one `lax.cond` sync per projection vs one CSR kernel); numbers commented on the issue | enhancement | open; known gap accepted by the lead (2026-10-22) | `DelayScatter` (`_kernel/delay_scatter.py`, `# upstream: brainevent#203` at `_scatter`), results `benchmarks/results/2026-10-22-K1a-4-delays.json` | when released, put the fused kernel behind `DelayScatter.deposit` / the cost model and re-run `benchmarks/k1a4_delays.py` at order 2500 (target ≤ 1.5 × on CPU and GPU) |
 
 ### 1.1 Code comments to add (K1a)
 
@@ -35,11 +36,11 @@ This docs PR adds no code. The K1a task that next touches each location adds a
 
 | comment | location | task |
 |---|---|---|
-| `# upstream: brainevent#198` | `_kernel/connectivity/storage.py` `payload_path` | K1a-4 |
-| `# upstream: brainevent#201` | `_kernel/connectivity/storage.py` float-path matmuls (Dense and CSR `forward`) | K1a-4 |
-| `# upstream: brainevent#203` | `_kernel/compiler.py` per-delay grouping (or its K1a-4 replacement) | K1a-4 |
-| `# upstream: brainevent#200` | `_kernel/plasticity.py` `csr_to_csc_index` call | K1a-4 |
-| `# upstream: brainevent#202` | `_kernel/plasticity.py` `_resolve_path` | K1a-4 |
+| `# upstream: brainevent#198` | `_kernel/connectivity/storage.py` `payload_path` | K1a-4 (done) |
+| `# upstream: brainevent#201` | `_kernel/connectivity/storage.py` float-path matmuls (Dense and CSR `forward`) | K1a-4 (done) |
+| `# upstream: brainevent#203` | `_kernel/compiler.py` per-delay grouping (or its K1a-4 replacement) | K1a-4 (done: `_kernel/delay_scatter.py` `_scatter`) |
+| `# upstream: brainevent#200` | `_kernel/plasticity.py` `csr_to_csc_index` call | K1a-4 (done) |
+| `# upstream: brainevent#202` | `_kernel/plasticity.py` `_resolve_path` | K1a-4 (done) |
 | `# upstream: brainevent#199` | `benchmarks/brunel_kernel.py` backend flag | K1a-7 |
 | `# upstream: braintrace#184` | `_kernel/model.py` `_keep_dependency`, `_kernel/learn/etrace.py` `_keep_dependency` and rule 5 | K1a-1 (done: `model.py:103`, `models/_common.py:97`, `learn/etrace.py:279,328`) |
 | `# upstream: braintrace#185` | `_kernel/learn/etrace.py` rule 3 | K1a-5 |

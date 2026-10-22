@@ -82,7 +82,9 @@ class TestCompile:
                                    np.asarray(w.to_decimal(u.pA)), rtol=1e-6)
         # post-side groups scatter back into the canonical edge order
         eq = plan.edges(q)
-        assert plan.projection(q).placement == 'post' and len(plan.projection(q).groups) == 2
+        # two distinct delays -> the cost model picks the single scatter group (K1a-4)
+        assert plan.projection(q).placement == 'post' and len(plan.projection(q).groups) == 1
+        assert plan.projection(q).delivery == 'scatter'
         raw = plan.projection(q).edges.weight
         np.testing.assert_allclose(np.asarray(eq.weight.to_decimal(u.pA)),
                                    np.asarray(raw.to_decimal(u.pA)), rtol=1e-6)
@@ -152,5 +154,7 @@ class TestDescribe:
         text = net.compile().describe(print_=False)
         assert 'post-side ring mix: 3 x 3 float32' in text
         assert 'zero-delay projections (same-step delivery): mix' in text
-        assert 'per-edge 0..3 steps' in text and 'dense@d=0, dense@d=1, dense@d=3' in text
-        assert 'trainable' in text and '3 ParamState' in text  # one weight state per delay group
+        assert 'per-edge 0..3 steps' in text and 'dense@d=0, scatter[events]@d=1..3' in text
+        # zero-delay group + one scatter group, one weight state each
+        assert 'trainable' in text and '2 ParamState' in text
+        assert 'mix: 2 distinct delay(s) >= 1 -> scatter (events)' in text

@@ -50,7 +50,7 @@ def brunel_params(order: int, g: float = 5.0, eta: float = 2.0, epsilon: float =
 
 def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = 'auto',
                  n_rec: int = 50, record_v: bool = False,
-                 delay_buffer: str = 'auto') -> tuple[Network, dict]:
+                 delay_buffer: str = 'auto', delay: Any = None) -> tuple[Network, dict]:
     """Build the network.
 
     Parameters
@@ -69,6 +69,9 @@ def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = '
         Also record ``V_m`` of the recorded E neurons.
     delay_buffer : {'auto', 'pre', 'post'}, default 'auto'
         Delay-buffer placement of every projection.
+    delay : Quantity or Distribution, optional
+        Delay of the recurrent projections (default 1.5 ms; e.g. a per-edge
+        ``Uniform`` for the K1a-4 benchmark). The Poisson input keeps 1.5 ms.
 
     Returns
     -------
@@ -101,6 +104,8 @@ def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = '
     d = p['delay'] * u.ms
     kw = dict(delay=d, delay_buffer=delay_buffer)
     net.connect(noise, E + I, one_to_one(), port='ex', weight=p['J_ex'] * u.pA, name='noise_EI', **kw)
+    if delay is not None:
+        kw = dict(kw, delay=delay)
     net.connect(E, E + I, fixed_indegree(p['C_E']), port='ex', weight=p['J_ex'] * u.pA,
                 storage=storage, name='E_EI', **kw)
     net.connect(I, E + I, fixed_indegree(p['C_I']), port='in_', weight=p['J_in'] * u.pA,

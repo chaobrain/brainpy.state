@@ -13,7 +13,11 @@
    the NEST way (:func:`~brainpy_state._kernel.delays.delay_steps`);
 3. **delays and buffers** -- each projection's delays are classified (scalar,
    per-source, per-edge) and placed in a pre-side ring (shared per source port) or a
-   post-side arrival ring with the edges grouped by delay (:mod:`.delays`);
+   post-side arrival ring (:mod:`.delays`). Per-edge delays ``>= 1`` are delivered
+   either by **one scatter** into the ring (:class:`~brainpy_state._kernel.delay_scatter.DelayScatter`)
+   or, K0-style, by one storage per distinct delay value; :class:`DelayCostModel`
+   chooses per projection, with a hard ceiling on the number of groups
+   (:attr:`Plan.max_delay_groups`, K1a-4). Zero-delay edges keep their own group;
 4. **storage and payload path** -- one :func:`make_storage` per edge group; the
    payload path is ``'binary'`` only for sources with ``max_multiplicity == 1``
    (:func:`payload_path`);
@@ -44,6 +48,7 @@ returns every trainable parameter and weight, which is what learners (T9) optimi
 from __future__ import annotations
 
 import heapq
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -55,6 +60,7 @@ import numpy as np
 
 from brainpy_state._kernel.connectivity.edgeset import EdgeSet
 from brainpy_state._kernel.connectivity.storage import Storage, make_storage, payload_path
+from brainpy_state._kernel.delay_scatter import DelayScatter
 from brainpy_state._kernel.delays import DelayLayout, PostRing, PreRing, classify_delays, delay_steps
 from brainpy_state._kernel.model import NeuronModel
 from brainpy_state._kernel.network import Network, Population, Projection, Segment
@@ -74,6 +80,9 @@ __all__ = [
     'ScheduleError',
     'PopulationPlan',
     'EdgeGroup',
+    'DelayCostModel',
+    'DELAY_COST_MODELS',
+    'delay_cost_model',
     'ProjectionPlan',
     'ObserverPlan',
     'Plan',
@@ -132,7 +141,9 @@ class EdgeGroup:
     Attributes
     ----------
     delay : int or None
-        Delay in steps; ``None`` for a per-source pre-side group.
+        Delay in steps; ``None`` for a per-source pre-side group and for the scatter
+        group of per-edge delays (its storage is a
+        :class:`~brainpy_state._kernel.delay_scatter.DelayScatter`).
     storage : Storage
         Edge storage of the group.
     edges : numpy.ndarray
@@ -145,6 +156,140 @@ class EdgeGroup:
     storage: Storage
     edges: np.ndarray
     weight: Any
+
+
+@dataclass(frozen=True)
+class DelayCostModel:
+    """Cost model of per-edge-delay delivery: one scatter vs one storage per delay (K1a-4).
+
+    For a projection with ``E`` edges of delay ``>= 1`` spread over ``G`` distinct
+    delay values, the estimated per-step costs (microseconds) are::
+
+        grouped  G * group_step_us   + a * E * group_edge_ns   / 1000
+        scatter  scatter_step_us     + a * E * scatter_edge_ns / 1000   ('events')
+                 scatter_step_us     +     E * dense_edge_ns   / 1000   ('dense')
+
+    with ``a = activity`` the assumed fraction of sources with an event per step
+    (only active sources cost work in an event-driven delivery; value sources count
+    every edge), and the build costs (seconds, compile time of the step included)
+    ``G * group_build_s`` and ``scatter_build_s``. Grouping is chosen only if
+    ``G <= max_groups`` (the **hard ceiling**, recorded in
+    :attr:`Plan.max_delay_groups`) and its step estimate is not larger than the
+    scatter's. Value (non-event) sources use the ``'dense'`` scatter strategy; event
+    sources use ``'events'`` unless the projection has at most ``dense_max_edges``
+    edges (accelerators, where a dense scatter is one kernel launch).
+
+    The constants were measured on the K1a-4 remote host
+    (``benchmarks/k1a4_delays.py``): one CPU and one accelerator model, selected by
+    ``jax.default_backend()`` at compile time (:func:`delay_cost_model`).
+
+    Attributes
+    ----------
+    max_groups : int
+        Hard ceiling on the number of delay groups.
+    activity : float
+        Assumed fraction of active sources per step.
+    group_step_us, group_edge_ns, group_build_s : float
+        Fixed per-group step cost, per active edge cost, per-group build cost.
+    scatter_step_us, scatter_edge_ns, dense_edge_ns, scatter_build_s : float
+        Fixed scatter step cost, per active edge (``'events'``) and per edge
+        (``'dense'``) costs, build cost.
+    chunk : int
+        Segments per loop iteration of the ``'events'`` strategy.
+    capacity_factor : float
+        Loop-free capacity of the ``'events'`` strategy as a multiple of the expected
+        active sources, ``capacity = max(capacity_min, ceil(capacity_factor * activity
+        * n_pre))`` rounded up to a multiple of 8 (:meth:`capacity`); ``0`` disables
+        it (every active segment goes through the loop).
+    capacity_min : int
+        Smallest loop-free capacity.
+    dense_max_edges : int
+        Largest event projection delivered with the ``'dense'`` strategy.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from brainpy_state._kernel.compiler import DelayCostModel
+        >>> m = DelayCostModel()
+        >>> m.choose(n_edges=200_000, n_groups=1, event=True)[0]
+        'grouped'
+        >>> m.choose(n_edges=200_000, n_groups=200, event=True)[0]
+        'scatter'
+    """
+
+    max_groups: int = 8
+    activity: float = 0.003
+    group_step_us: float = 6.0
+    group_edge_ns: float = 1.5
+    group_build_s: float = 0.05
+    scatter_step_us: float = 8.0
+    scatter_edge_ns: float = 3.0
+    dense_edge_ns: float = 2.0
+    scatter_build_s: float = 0.05
+    chunk: int = 1
+    capacity_factor: float = 0.0
+    capacity_min: int = 0
+    dense_max_edges: int = 0
+
+    def capacity(self, n_pre: int) -> int:
+        """Active segments delivered without a loop (``0``: no loop-free chunk)."""
+        if self.capacity_factor <= 0:
+            return 0
+        k = max(self.capacity_min, math.ceil(self.capacity_factor * self.activity * n_pre))
+        return -(-k // 8) * 8
+
+    def strategy(self, n_edges: int, event: bool) -> str:
+        """Scatter strategy: ``'events'`` or ``'dense'``."""
+        return 'events' if event and n_edges > self.dense_max_edges else 'dense'
+
+    def estimate(self, n_edges: int, n_groups: int, event: bool) -> dict:
+        """Per-step (us) and build (s) estimates of both deliveries.
+
+        Parameters
+        ----------
+        n_edges : int
+            Edges with a delay ``>= 1``.
+        n_groups : int
+            Distinct delay values ``>= 1``.
+        event : bool
+            Whether the source emits events.
+
+        Returns
+        -------
+        dict
+            ``grouped_step_us``, ``scatter_step_us``, ``grouped_build_s``,
+            ``scatter_build_s``, ``strategy``.
+        """
+        active = self.activity * n_edges if event else float(n_edges)
+        strat = self.strategy(n_edges, event)
+        per_edge = active * self.scatter_edge_ns if strat == 'events' else n_edges * self.dense_edge_ns
+        return {'grouped_step_us': n_groups * self.group_step_us + active * self.group_edge_ns / 1e3,
+                'scatter_step_us': self.scatter_step_us + per_edge / 1e3,
+                'grouped_build_s': n_groups * self.group_build_s,
+                'scatter_build_s': self.scatter_build_s,
+                'strategy': strat}
+
+    def choose(self, n_edges: int, n_groups: int, event: bool) -> tuple[str, dict]:
+        """``('grouped' | 'scatter', estimates)`` for one projection (see the class docstring)."""
+        est = self.estimate(n_edges, n_groups, event)
+        ok = n_groups <= self.max_groups and est['grouped_step_us'] <= est['scatter_step_us']
+        return ('grouped' if ok else 'scatter'), est
+
+
+#: Cost models per JAX backend (``'cpu'`` is the fallback); see :class:`DelayCostModel`.
+DELAY_COST_MODELS = {
+    'cpu': DelayCostModel(),
+    'gpu': DelayCostModel(group_step_us=40.0, group_edge_ns=0.5, scatter_step_us=30.0,
+                          scatter_edge_ns=1.5, dense_edge_ns=0.05, chunk=64,
+                          capacity_factor=4.0, capacity_min=32, dense_max_edges=1 << 20),
+}
+
+
+def delay_cost_model(backend: str | None = None) -> DelayCostModel:
+    """The :class:`DelayCostModel` of ``backend`` (default: ``jax.default_backend()``)."""
+    b = backend or jax.default_backend()
+    return DELAY_COST_MODELS.get(b, DELAY_COST_MODELS['cpu'])
 
 
 @dataclass
@@ -165,7 +310,11 @@ class ProjectionPlan:
     path : {'binary', 'float', 'timed'}
         Payload path (``'timed'``: precisely timed events, K0 T7).
     groups : list of EdgeGroup
-        One group for pre-side placement; one per delay value for post-side.
+        One group for pre-side placement. Post-side: a zero-delay group (if any
+        edge has delay 0) plus, for ``delivery == 'grouped'``, one group per delay
+        value ``>= 1`` or, for ``delivery == 'scatter'``, one
+        :class:`~brainpy_state._kernel.delay_scatter.DelayScatter` group holding
+        every edge with a delay ``>= 1``.
     post_ring : PostRing or None
         Arrival ring (post-side placement with delays >= 1).
     weight_unit : brainunit.Unit
@@ -175,6 +324,13 @@ class ProjectionPlan:
         weights and the current ones live in the runner state.
     timed : TimedDelivery or None
         Delivery of a projection from a ``timed_event`` source (``placement == 'timed'``).
+    delivery : {'grouped', 'scatter', ''}
+        Post-side delivery of the delays ``>= 1`` chosen by the
+        :class:`DelayCostModel` (``''`` for the other placements and for plastic
+        projections).
+    delivery_cost : dict or None
+        The cost model's estimates (:meth:`DelayCostModel.estimate`) plus
+        ``n_groups`` (distinct delays ``>= 1``).
     """
 
     proj: Projection
@@ -187,6 +343,8 @@ class ProjectionPlan:
     weight_unit: Any
     plastic: PlasticPlan | None = None
     timed: TimedDelivery | None = None
+    delivery: str = ''
+    delivery_cost: dict | None = None
 
     @property
     def name(self) -> str:
@@ -320,6 +478,13 @@ def _state(value: Any, trainable: bool) -> brainstate.State:
     return brainstate.ParamState(value) if trainable else ConstParamState(value)
 
 
+def _describe_group(g: EdgeGroup, pp: Any) -> str:
+    if isinstance(g.storage, DelayScatter):
+        lo = int(np.asarray(pp.layout.steps)[g.edges].min())
+        return f'scatter[{g.storage.strategy}]@d={lo}..{pp.layout.max}'
+    return g.storage.kind + (f'@d={g.delay}' if pp.placement == 'post' else '')
+
+
 def _fmt_bytes(n: int) -> str:
     for unit in ('B', 'KiB', 'MiB', 'GiB'):
         if n < 1024 or unit == 'GiB':
@@ -363,6 +528,10 @@ class Plan(brainstate.nn.Module):
         Synapse states after the merge pass.
     synapse_route : dict
         ``(projection index, population index) -> index into synapses``.
+    max_delay_groups : int
+        Hard ceiling on the number of delay groups of a per-edge-delay projection
+        (:class:`DelayCostModel`); projections with more distinct delays are
+        delivered by one scatter.
 
     Examples
     --------
@@ -378,8 +547,8 @@ class Plan(brainstate.nn.Module):
         ...                 delay=[0.1, 0.3] * 50 * u.ms)
         >>> plan = net.compile()
         >>> pp = plan.projection(p)
-        >>> pp.placement, pp.layout.kind, [g.delay for g in pp.groups]
-        ('post', 'per_edge', [1, 3])
+        >>> pp.placement, pp.layout.kind, pp.delivery, [g.delay for g in pp.groups]
+        ('post', 'per_edge', 'scatter', [None])
         >>> plan.edges(p).n_edges
         100
         >>> 'post-side ring' in plan.describe(print_=False)
@@ -402,6 +571,7 @@ class Plan(brainstate.nn.Module):
         self.synapses: list = []
         self.synapse_route: dict = {}
         self.merge = True
+        self.max_delay_groups = delay_cost_model().max_groups
 
     # ----------------------------------------------------------------- access
     @property
@@ -556,11 +726,11 @@ class Plan(brainstate.nn.Module):
                 d = f'scalar {lay.min} steps'
             else:
                 d = f'{lay.kind.replace("_", "-")} {lay.min}..{lay.max} steps'
-            st = ', '.join(f'{g.storage.kind}' + (f'@d={g.delay}' if pp.placement == 'post' else '')
-                           for g in pp.groups) or 'none'
+            st = ', '.join(_describe_group(g, pp) for g in pp.groups) or 'none'
             L.append(f'  {pp.name}: {pr.pre.label}.{pr.source_port} -> {pr.post.label}.{pr.port} '
                      f'rule={type(pr.rule).__name__} edges={pp.n_edges} storage=[{st}] '
                      f'payload={pp.path} delay={d} buffer={pp.placement}-side'
+                     + (f' delivery={pp.delivery}' if pp.delivery else '')
                      + (' trainable' if pr.trainable else '')
                      + (f' synapse={pr.synapse.describe()}' if pr.synapse is not None else '')
                      + (f' plasticity={pp.plastic.describe()}' if pp.plastic is not None else ''))
@@ -575,6 +745,19 @@ class Plan(brainstate.nn.Module):
                 r = pp.post_ring
                 L.append(f'  post-side ring {pp.name}: {r.length} x {r.n} {r.dtype.name} '
                          f'= {_fmt_bytes(r.nbytes())}')
+        per_edge = [pp for pp in self.projections if pp.delivery_cost is not None]
+        if per_edge:
+            L.append(f'Per-edge delays (cost model; hard ceiling {self.max_delay_groups} delay groups):')
+        item = self.dtype.itemsize
+        for pp in per_edge:
+            c = pp.delivery_cost
+            mem_st = sum(g.storage.nbytes(item) for g in pp.groups)
+            L.append(f'  {pp.name}: {c["n_groups"]} distinct delay(s) >= 1 -> {pp.delivery}'
+                     + (f' ({c["strategy"]}' + (f', loop-free capacity {c["capacity"]}'
+                                               if c.get('capacity') else '') + ')'
+                        if pp.delivery == 'scatter' else '')
+                     + f'; est. step grouped {c["grouped_step_us"]:.1f} us vs scatter '
+                       f'{c["scatter_step_us"]:.1f} us; storage {_fmt_bytes(mem_st)}')
         mem = self.memory()
         L.append(f'Memory: storages {_fmt_bytes(mem["storage"])}, pre-side rings '
                  f'{_fmt_bytes(mem["pre_rings"])}, post-side rings {_fmt_bytes(mem["post_rings"])}, '
@@ -666,7 +849,8 @@ def _sub_edges(es: EdgeSet, pos: np.ndarray) -> EdgeSet:
                    pre_gids=es.pre_gids, post_gids=es.post_gids)
 
 
-def _compile_projection(net: Network, proj: Projection, dtype: Any) -> ProjectionPlan:
+def _compile_projection(net: Network, proj: Projection, dtype: Any,
+                        cost_model: DelayCostModel | None = None) -> ProjectionPlan:
     okey = object_key(net.seed, proj.name)
     pkeys = view_post_keys(okey, proj.post.stream_parts()) if proj.rule.random else None
     es = proj.rule.build(proj.pre.gids, proj.post.gids, key=okey, post_keys=pkeys)
@@ -687,6 +871,7 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any) -> Projectio
     if proj.plasticity is not None and es.n_edges:
         return _compile_plastic(net, proj, es, w_edges, layout, path, dtype)
     timed = None
+    delivery, cost = '', None
     if es.n_edges == 0:
         placement = 'none'
     elif isinstance(src, TimedEvent):
@@ -705,17 +890,33 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any) -> Projectio
                                 _state(st.weight_from_edges(w_edges), trainable)))
     else:
         placement = 'post'
-        for k in layout.values:
-            pos = np.nonzero(steps == k)[0]
-            sub = _sub_edges(es, pos)
-            st = make_storage(sub, proj.storage)
+        values = [int(k) for k in layout.values]
+        delayed = [k for k in values if k >= 1]
+        model = cost_model or delay_cost_model()
+        event = isinstance(src, Event)
+        n_delayed = int(np.count_nonzero(steps >= 1))
+        delivery, cost = model.choose(n_delayed, len(delayed), event)
+        cost = {**cost, 'n_groups': len(delayed)}
+        if 0 in values or delivery == 'grouped':
+            for k in values if delivery == 'grouped' else [0]:
+                pos = np.nonzero(steps == k)[0]
+                sub = _sub_edges(es, pos)
+                st = make_storage(sub, proj.storage)
+                wk = w_edges[jnp.asarray(pos)]
+                groups.append(EdgeGroup(k, st, pos, _state(st.weight_from_edges(wk), trainable)))
+        if delayed and delivery == 'scatter':
+            pos = np.nonzero(steps >= 1)[0]
+            st = DelayScatter(_sub_edges(es, pos), steps[pos], layout.max,
+                              strategy=cost['strategy'], chunk=model.chunk,
+                              capacity=model.capacity(es.n_pre))
+            cost['capacity'] = st.capacity
             wk = w_edges[jnp.asarray(pos)]
-            groups.append(EdgeGroup(int(k), st, pos, _state(st.weight_from_edges(wk), trainable)))
+            groups.append(EdgeGroup(None, st, pos, _state(st.weight_from_edges(wk), trainable)))
         if layout.max >= 1:
             post_ring = PostRing(es.n_post, layout.max, dtype)
     return ProjectionPlan(proj=proj, edges=es, layout=layout, placement=placement, path=path,
                           groups=groups, post_ring=post_ring, weight_unit=proj.weight_unit,
-                          timed=timed)
+                          timed=timed, delivery=delivery, delivery_cost=cost)
 
 
 def _compile_plastic(net: Network, proj: Projection, es: EdgeSet, w_edges: Any,
@@ -781,6 +982,8 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
     """
     plan = Plan(net, precision)
     plan.merge = bool(merge)
+    cost_model = delay_cost_model()
+    plan.max_delay_groups = cost_model.max_groups
     dtype = plan.dtype
     for pop in net.populations:
         model = _instantiate(net, pop, plan.precision)
@@ -795,7 +998,7 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
     ring_len: dict[tuple, int] = {}
     timed_len: dict[tuple, int] = {}
     for proj in net.projections:
-        pp = _compile_projection(net, proj, dtype)
+        pp = _compile_projection(net, proj, dtype, cost_model)
         plan.projections.append(pp)
         plan.weights[proj.name] = [g.weight for g in pp.groups]
         if pp.plastic is not None:

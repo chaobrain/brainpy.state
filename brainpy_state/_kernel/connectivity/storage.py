@@ -66,6 +66,8 @@ PAYLOAD_PATHS = ('binary', 'float')
 STORAGE_KINDS = ('dense', 'csr', 'auto')
 
 
+# upstream: brainevent#198 -- BinaryArray's weight VJP uses the raw input values; the
+# 'binary' path is therefore limited to sources with at most one spike per step.
 def payload_path(source: Any) -> str:
     """Payload path for a source: ``'binary'`` iff it emits at most one spike per step.
 
@@ -319,7 +321,7 @@ class Dense(Storage):
         W = self._masked(m)
         if path == 'binary':
             y = brainevent.BinaryArray(x) @ W
-        else:
+        else:  # upstream: brainevent#201 -- no event-driven matmul for count payloads
             y = jnp.matmul(x.astype(jnp.result_type(x, W)), W)
         return _wrap(y, unit)
 
@@ -437,7 +439,7 @@ class CSR(Storage):
         mat = self._matrix(m)
         if path == 'binary':
             y = brainevent.BinaryArray(x) @ mat
-        else:
+        else:  # upstream: brainevent#201 -- no event-driven matmul for count payloads
             y = x.astype(dt) @ mat
         return _wrap(y, unit)
 
