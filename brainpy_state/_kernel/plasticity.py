@@ -440,12 +440,15 @@ class PlasticPlan:
         self.post_e = jnp.asarray(np.asarray(storage.indices).astype(np.int32))
         self.path = self._resolve_path(p, w0_np)
         if self.path == 'fast':
+            # upstream: brainevent#200 -- int64 -> int32 scatter FutureWarning under x64
             ptr, ind, perm = brainevent.csr_to_csc_index(storage.indptr, storage.indices,
                                                          shape=(self.n_pre, self.n_post))
             self.csc = (jnp.asarray(ind), jnp.asarray(ptr), jnp.asarray(perm))
         else:
             self.csc = None
 
+    # upstream: brainevent#202 -- the fast update kernels are forward-only, so
+    # differentiable runs fall back to the generic path chosen here.
     def _resolve_path(self, p: dict, w0: np.ndarray) -> str:
         rule = self.rule
         has_fast = rule.fast_form(p) is not None

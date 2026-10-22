@@ -99,3 +99,42 @@ Reference, the new kernel against the original T0 pinned rows (core 4, quiet hos
 The re-measured old `Simulator` is 5-8 % slower than in T0 (busier host, other
 core), which is why the gate uses the interleaved comparison. GPU: skipped by user
 decision.
+
+## 2026-10-22 — K1a-4: per-edge delays (one scatter) vs a scalar delay
+
+File: [`2026-10-22-K1a-4-delays.json`](2026-10-22-K1a-4-delays.json) (all runs and
+metadata). Script: `benchmarks/k1a4_delays.py sweep` (3 rounds, 5 for `cpu5`). CPU:
+every run in a fresh process pinned to one idle core, delay settings interleaved
+round by round; GPU 1 unpinned. Ratios are per-edge / scalar delay (1.5 ms) of the
+same network and precision; gate: step ≤ 1.5, build ≤ 2. Delays `Uniform(0.1 ms, D)`;
+every per-edge projection was delivered by the scatter (cost model `auto`).
+`review`: 2000 `iaf_psc_alpha`, Poisson drive, recurrent `fixed_indegree(100)`
+(`/tmp/k0/review/delays_exp.py`; silent recurrent network). `brunel`: model A at
+order 400 (2000 neurons) and 2500 (12 500 neurons). GPU float64 uses brainevent's
+`cusparse` backend (the default backend aborts, brainevent#199).
+
+| device | net | prec | scalar ms/step | D = 2 ms step / build | D = 5 ms | D = 20 ms |
+|---|---|---|---|---|---|---|
+| cpu | review 2000 | f32 | 0.0292 | 0.93 / 1.09 | 0.95 / 1.09 | 0.96 / 1.09 |
+| cpu | review 2000 | f64 | 0.0414 | 0.87 / 1.17 | 0.87 / 1.18 | 0.89 / 1.18 |
+| cpu | brunel 400 | f32 | 0.0443 | 0.78 / 1.01 | 0.80 / 1.02 | 0.86 / 1.01 |
+| cpu | brunel 400 | f64 | 0.0717 | 0.72 / 1.10 | 0.73 / 1.13 | 0.80 / 1.09 |
+| cpu | brunel 2500 (cpu5) | f32 | 0.2708 | 1.17 / 1.46 | 1.24 / 1.52 | 1.39 / 1.57 |
+| cpu | brunel 2500 (cpu5) | f64 | 0.3964 | 1.13 / 1.46 | 1.20 / 1.52 | **1.55** / 1.58 |
+| cpu | brunel 2500 (cpu4) | f32 | 0.2459 | 1.24 / 1.43 | 1.29 / 1.49 | **1.52** / 1.55 |
+| cpu | brunel 2500 (cpu4) | f64 | 0.3959 | 1.13 / 1.46 | 1.19 / 1.52 | **1.54** / 1.58 |
+| gpu | review 2000 | f32 | 0.0486 | 0.89 / 1.13 | 0.89 / 1.15 | 0.89 / 1.15 |
+| gpu | review 2000 | f64 | 0.0737 | 0.88 / 1.26 | 0.90 / 1.23 | 0.94 / 1.28 |
+| gpu | brunel 400 | f32 | 0.1026 | 0.57 / 1.08 | 0.58 / 1.07 | 0.61 / 1.07 |
+| gpu | brunel 400 | f64 | 0.1780 | 0.53 / 1.16 | 0.53 / 1.17 | 0.62 / 1.14 |
+| gpu | brunel 2500 | f32 | 0.0710 | **1.63** / 1.43 | **1.72** / 1.49 | **1.84** / 1.55 |
+| gpu | brunel 2500 | f64 | 0.4179 | 0.40 / 1.44 | 0.41 / 1.52 | 0.42 / 1.57 |
+
+The gate network of the spec (review, 2000 × 100, up to 20 ms) passes on CPU and
+GPU in both precisions. At order 2500 with delays up to 20 ms the ring is
+200 × 12 500 (10 MB in f32, 20 MB in f64) and the random per-edge writes leave the
+cache: CPU step 1.39-1.55 × (round to round). On the GPU at order 2500 the scalar
+path is one brainevent CSR kernel per projection while the JAX scatter is about ten
+small kernels plus a `lax.cond` (device-to-host predicate sync): 1.6-1.8 ×; the
+fused kernel of brainevent#203 is the fix. An earlier sweep (`cpu3`, before the
+GPU capacity change, same CPU code path) measured 1.39 / 1.40 at order 2500, 20 ms.

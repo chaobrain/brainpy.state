@@ -313,11 +313,27 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
         raise EtraceError(f'trainable weights not applied through a braintrace primitive '
                           f'(or not reaching a HiddenState): {missing}; they would get zero '
                           f'online gradients. Route them through braintrace.matmul / '
-                          f'sparse_matmul (Storage.forward_etrace)')
+                          f'sparse_matmul (Storage.forward_etrace)' + _per_edge_hint(model))
     rel = [(r.primitive.name, name(next(iter(r.trainable_param_states.values()))),
             ['.'.join(map(str, h)) for h in r.connected_hidden_paths]) for r in relations]
     return EtraceReport(weights=[name(s) for s in weights], hidden=[name(s) for s in hidden_w],
                         relations=rel)
+
+
+def _per_edge_hint(model: Any) -> str:
+    """Explain rule-1 failures caused by per-edge delays (K1a-4), if any."""
+    plan = getattr(model, 'plan', None)
+    if plan is None:
+        return ''
+    names = [pp.name for pp in plan.projections
+             if pp.proj.trainable and pp.placement == 'post' and pp.plastic is None
+             and any(g.delay != 0 for g in pp.groups)]
+    if not names:
+        return ''
+    return (f'. Projections {names} have per-edge delays >= 1: their weights reach the target '
+            f'through the post-side arrival ring (one scatter or one storage per delay, a '
+            f'ShortTermState), which braintrace cannot trace into a hidden state. Give them one '
+            f'delay per projection or per source, make them non-trainable, or use BPTT')
 
 
 # ---------------------------------------------------------------------------

@@ -58,6 +58,7 @@ import numpy as np
 
 from brainpy_state._kernel.compiler import Plan, ProjectionPlan
 from brainpy_state._kernel.context import StepContext, check_spike_options
+from brainpy_state._kernel.delay_scatter import DelayScatter
 from brainpy_state._kernel.model import Device, _keep_dependency, latch_name
 from brainpy_state._kernel.observers import Recording, Results, window_init, window_update
 from brainpy_state._kernel.params import Record, read_states
@@ -466,13 +467,18 @@ class Program:
                 rings[(s.pop, s.port)] = state['rings'][f'{pplan.name}.{s.port}']
         return pp.timed.deliver(w, rings, objs, cur, n, self.dtype)
 
-    def _deliver(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any) -> Any:
+    def _deliver(self, pp: ProjectionPlan, params: dict, state: dict, cur: dict, n: Any,
+                 arrived: Any = None) -> Any:
         if pp.placement == 'timed':
             return self._deliver_timed(pp, params, state, cur, n)
         if pp.placement == 'pre':
             return self._forward(pp, 0, self._pre_payload(pp, state['rings'], cur, n), params)
-        y = (pp.post_ring.read(state['arrivals'][pp.name], n) if pp.post_ring is not None
-             else jnp.zeros((pp.edges.n_post,), self.dtype))
+        if arrived is not None:  # the arrival-ring slot of this step (PostRing.take)
+            y = arrived
+        elif pp.post_ring is not None:
+            y = pp.post_ring.read(state['arrivals'][pp.name], n)
+        else:
+            y = jnp.zeros((pp.edges.n_post,), self.dtype)
         for g, group in enumerate(pp.groups):
             if group.delay == 0:
                 y = y + self._forward(pp, g, self._now_payload(pp, cur), params)
@@ -486,12 +492,14 @@ class Program:
 
     def _gather(self, a: int, params: dict, state: dict, cur: dict, n: Any, ctx: StepContext,
                 delivered: dict, syn_state: dict, ext: dict | None,
-                skip: frozenset = frozenset(), only: frozenset | None = None) -> dict:
+                skip: frozenset = frozenset(), only: frozenset | None = None,
+                arrived: dict | None = None) -> dict:
         """Input mantissas of population ``a``: deliveries, synapse groups, external input.
 
         ``skip`` / ``only`` select input ports (deferred latched ports are gathered
         separately at the end of the step). ``delivered`` caches each projection's
-        delivery; ``syn_state`` is updated in place.
+        delivery; ``syn_state`` is updated in place. ``arrived`` holds the arrival-ring
+        slot of this step per projection (read by :meth:`PostRing.take`).
         """
         plan = self.plan
         pplan = plan.populations[a]
@@ -506,7 +514,8 @@ class Program:
             if not wanted(pp.proj.port):
                 continue
             if j not in delivered:
-                delivered[j] = self._deliver(pp, params, state, cur, n)
+                delivered[j] = self._deliver(pp, params, state, cur, n,
+                                             None if arrived is None else arrived.get(pp.name))
             y = delivered[j]
             gi = plan.synapse_route.get((j, a))
             port = pp.proj.port if gi is None else ('syn', gi)
@@ -592,11 +601,17 @@ class Program:
         syn_state = dict(state['syn'])
         cur: dict[int, dict] = {}
         delivered: dict[int, jax.Array] = {}
+        # arrival rings: read this step's slot and clear it in place (PostRing.take)
+        arrived, arrivals = {}, dict(state['arrivals'])
+        for pp in plan.projections:
+            if pp.post_ring is not None:
+                arrived[pp.name], arrivals[pp.name] = pp.post_ring.take(arrivals[pp.name], n)
         for a in plan.order:
             pplan = plan.populations[a]
             model = pplan.model
             ctx = self._ctx(a, n, trial)
             acc = self._gather(a, params, state, cur, n, ctx, delivered, syn_state, ext,
+                               arrived=arrived,
                                skip=plan.deferred.get(a, frozenset()))
             inp = model.prepare_inputs({
                 k: (_timed.with_weight_unit(v, model.inputs[k].unit) if isinstance(model.inputs[k], TimedEvent)
@@ -614,7 +629,7 @@ class Program:
         for a, ports in plan.deferred.items():
             pplan = plan.populations[a]
             acc = self._gather(a, params, state, cur, n, self._ctx(a, n, trial), delivered,
-                               syn_state, ext, only=ports)
+                               syn_state, ext, only=ports, arrived=arrived)
             old = state['pops'][pplan.name]
             new = dict(pops[pplan.name])
             for port in ports:
@@ -638,17 +653,19 @@ class Program:
             for port, ring in pplan.rings.items():
                 k = f'{pplan.name}.{port}'
                 rings[k] = ring.write(rings[k], n, cur[pplan.pop.index][port])
-        arrivals = dict(state['arrivals'])
         for pp in plan.projections:
             if pp.post_ring is None:
                 continue
-            buf = pp.post_ring.clear(arrivals[pp.name], n)
+            buf = arrivals[pp.name]  # slot n % L already cleared
             if pp.plastic is not None:
                 arrivals[pp.name] = pp.post_ring.deposit(buf, n, pp.plastic.d_den, plastic_y[pp.name])
                 continue
             payload = self._now_payload(pp, cur)
             for g, group in enumerate(pp.groups):
-                if group.delay >= 1:
+                if isinstance(group.storage, DelayScatter):  # one scatter for all delays (K1a-4)
+                    buf = group.storage.deposit(buf, n, payload.astype(self.dtype),
+                                                params['weights'][pp.name][g])
+                elif group.delay >= 1:
                     buf = pp.post_ring.deposit(buf, n, group.delay, self._forward(pp, g, payload, params))
             arrivals[pp.name] = buf
         return {'pops': pops, 'rings': rings, 'arrivals': arrivals, 'syn': syn_state,

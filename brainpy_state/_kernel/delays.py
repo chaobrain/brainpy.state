@@ -288,6 +288,18 @@ class PostRing:
         """Input arriving at ``step``, shape ``(n,)``."""
         return jax.lax.dynamic_index_in_dim(buf, _index(step, self.length), axis=0, keepdims=False)
 
+    def take(self, buf: jax.Array, step: Any) -> tuple[jax.Array, jax.Array]:
+        """Read the input arriving at ``step`` and clear its slot: ``(row, new buffer)``.
+
+        Equivalent to ``(read(buf, step), clear(buf, step))``, but an
+        ``optimization_barrier`` orders the read before the in-place clear: without it
+        XLA copies the whole ``(L, n)`` buffer every step inside a ``scan`` (K1a-4
+        measurement: 0.06 ms/step for a 200 x 2000 float32 ring on one CPU core).
+        """
+        row = self.read(buf, step)
+        row, buf = jax.lax.optimization_barrier((row, buf))
+        return row, self.clear(buf, step)
+
     def clear(self, buf: jax.Array, step: Any) -> jax.Array:
         """Zero slot ``step % L`` (consumed during ``step``)."""
         z = jnp.zeros((1, self.n), self.dtype)

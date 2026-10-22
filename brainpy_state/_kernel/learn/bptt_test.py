@@ -554,12 +554,12 @@ def test_trainable_states_keys():
     net = recurrent('LIF', 'csr', 2)
     keys = sorted(trainable_states(net.compile()))
     assert keys == ['pops/A/tau', 'weights/AA/0', 'weights/AB/0', 'weights/xA/0']
-    # per-edge delays -> one group (and one ParamState) per delay value
+    # per-edge delays >= 1 -> one scatter group, hence one ParamState (K1a-4)
     net = Network(dt=DT)
     a = net.add(LIF, 4, name='a')
     net.connect(a, a, fixed_indegree(2), port='delta', weight=0.1 * u.mV, trainable=True, name='p',
                 delay=jnp.array([0.1, 0.2] * 4) * u.ms)
-    assert sorted(trainable_states(net.compile())) == ['weights/p/0', 'weights/p/1']
+    assert sorted(trainable_states(net.compile())) == ['weights/p/0']
 
 
 def test_loss_helpers():

@@ -11,6 +11,7 @@ runs, and no file here is named `test_*.py` / `*_test.py`).
 | `g9_interleaved.py` | gate G9: old `Simulator` vs kernel interleaved in fresh processes on one idle pinned core (core chosen from `/proc/stat`, runs on a busy core discarded), 1.1x rule, plus the comparison to the T0 pinned rows |
 | `check_g9_interleaved.py` | checks for `g9_interleaved.py`; run explicitly: `python -m pytest benchmarks/check_g9_interleaved.py` |
 | `k1a_compile_time.py` | K1a-1 compile-time gate: compile time (first call minus a warm call, fresh process per case) of every K0 network at default substeps (<= 5 s), and the RK-substep / timed-event-capacity tables; the same file measures the K0 tree |
+| `k1a4_delays.py` | gate K1a-G2: per-edge vs scalar delays (review network 2000 x 100 and Brunel `--order`), delays uniform up to 2/5/20 ms; `run` one case, `sweep` fresh processes on an idle pinned core (`--no-pin` on GPU), `table` the ratios to the scalar build and step time; `--delivery auto/grouped/scatter` forces the compiler's choice |
 | `_bench_utils.py` | JAX-free helpers: statistics, memory parsing, result schema, merging, markdown table |
 | `check_bench_utils.py` | checks for the helpers; run explicitly: `python -m pytest benchmarks/check_bench_utils.py` |
 | `results/` | committed result files (JSON) and a summary table (`results/README.md`) |

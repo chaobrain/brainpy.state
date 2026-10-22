@@ -153,7 +153,9 @@ class TestDelayBuffers:
         plan = net.compile()
         pp = plan.projection(p)
         assert pp.placement == 'post' and pp.layout.kind == 'per_edge'
-        assert [g.delay for g in pp.groups] == [0, 1, 5, 15] and pp.post_ring.length == 15
+        # zero-delay group + one scatter group for delays 1, 5, 15 (K1a-4)
+        assert [g.delay for g in pp.groups] == [0, None] and pp.post_ring.length == 15
+        assert pp.delivery == 'scatter'
         res = plan.runner().simulate(4.0 * u.ms)
         assert [spike_steps(res, rec, k) for k in range(4)] == [[10], [14], [9], [24]]
 
