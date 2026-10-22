@@ -57,6 +57,8 @@ __all__ = [
     'Dense',
     'CSR',
     'make_storage',
+    'AUTO_DENSE_THRESHOLDS',
+    'auto_dense_threshold',
 ]
 
 #: Payload paths of :meth:`Storage.forward`.
@@ -64,6 +66,33 @@ PAYLOAD_PATHS = ('binary', 'float')
 
 #: Storage kinds accepted by :func:`make_storage`.
 STORAGE_KINDS = ('dense', 'csr', 'auto')
+
+#: Pair density from which ``make_storage(kind='auto')`` picks :class:`Dense`, per JAX
+#: backend (``'cpu'`` is the fallback for other backends). Measured in K1a-9 with
+#: ``benchmarks/k1a9_storage.py`` (Brunel A, orders 50-800, densities 0.1-1.0, float32
+#: and float64). GPU: CSR step time is <= 1.06 x Dense in every cell (within noise for
+#: N = 250, 0.22-0.89 x from N = 1000), and CSR peak memory is lower in every cell, so
+#: ``'auto'`` never picks Dense there. CPU: Dense is 1.08-1.35 x faster for small
+#: networks, so the K0 rule (density >= 0.1) is kept.
+AUTO_DENSE_THRESHOLDS = {'cpu': 0.1, 'gpu': float('inf')}
+
+
+def auto_dense_threshold(backend: str | None = None) -> float:
+    """Density from which ``'auto'`` picks Dense on ``backend``.
+
+    Parameters
+    ----------
+    backend : str, optional
+        JAX backend name; default ``jax.default_backend()``. Backends without an entry
+        in :data:`AUTO_DENSE_THRESHOLDS` use the ``'cpu'`` value.
+
+    Returns
+    -------
+    float
+        The threshold; ``inf`` means ``'auto'`` always picks CSR.
+    """
+    b = backend or jax.default_backend()
+    return AUTO_DENSE_THRESHOLDS.get(b, AUTO_DENSE_THRESHOLDS['cpu'])
 
 
 # upstream: brainevent#198 -- BinaryArray's weight VJP uses the raw input values; the
@@ -513,8 +542,8 @@ class CSR(Storage):
 _KINDS = {'dense': Dense, 'csr': CSR}
 
 
-def make_storage(edges: EdgeSet, kind: str = 'auto', dense_threshold: float = 0.1,
-                 dense_max_elems: int = 1 << 24) -> Storage:
+def make_storage(edges: EdgeSet, kind: str = 'auto', dense_threshold: float | None = None,
+                 dense_max_elems: int = 1 << 24, backend: str | None = None) -> Storage:
     """Build the storage of a projection.
 
     Parameters
@@ -525,10 +554,15 @@ def make_storage(edges: EdgeSet, kind: str = 'auto', dense_threshold: float = 0.
         ``'auto'`` picks Dense when the pair density ``n_edges / (n_pre * n_post)``
         is at least ``dense_threshold`` and the matrix has at most
         ``dense_max_elems`` entries, else CSR.
-    dense_threshold : float, default 0.1
-        Density from which ``'auto'`` prefers Dense.
+    dense_threshold : float, optional
+        Density from which ``'auto'`` prefers Dense. Default: the measured value of
+        ``backend`` (:func:`auto_dense_threshold`): 0.1 on CPU; on GPU ``inf``
+        (``'auto'`` always picks CSR, which is as fast or faster and smaller there).
     dense_max_elems : int, default 2**24
         Largest dense matrix ``'auto'`` will allocate.
+    backend : str, optional
+        JAX backend the default threshold is taken for; default
+        ``jax.default_backend()`` at the call (compile time).
 
     Returns
     -------
@@ -537,7 +571,8 @@ def make_storage(edges: EdgeSet, kind: str = 'auto', dense_threshold: float = 0.
     if kind not in STORAGE_KINDS:
         raise ValueError(f'kind must be one of {STORAGE_KINDS}, got {kind!r}')
     if kind == 'auto':
+        thr = auto_dense_threshold(backend) if dense_threshold is None else dense_threshold
         n = edges.n_pre * edges.n_post
-        dense = n > 0 and n <= dense_max_elems and edges.n_edges >= dense_threshold * n
+        dense = n > 0 and n <= dense_max_elems and edges.n_edges >= thr * n
         kind = 'dense' if dense else 'csr'
     return _KINDS[kind](edges)

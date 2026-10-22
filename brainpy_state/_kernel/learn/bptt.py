@@ -48,6 +48,7 @@ import numpy as np
 
 from brainpy_state._kernel.runner import Program, duration_steps
 from brainpy_state._kernel.units import from_mantissa, unit_of
+from brainpy_state._kernel.xla import kernel_jit
 
 __all__ = [
     'BPTT',
@@ -340,11 +341,11 @@ class BPTT:
         self._units = {k: unit_of(s.value) for k, s in params.items()}
         if self.optimizer is not None:
             self.optimizer.register_trainable_weights(params)
-        self._jit_record = brainstate.transform.jit(self._record, static_argnums=(0,))
-        self._jit_loss = brainstate.transform.jit(self._loss_only, static_argnums=(0,))
-        self._jit_grad = brainstate.transform.jit(self._value_and_grad, static_argnums=(0,))
-        self._jit_run = brainstate.transform.jit(self._train_step, static_argnums=(0,))
-        self._jit_fit = brainstate.transform.jit(self._fit, static_argnums=(0, 1))
+        self._jit_record = kernel_jit(self._record, static_argnums=(0,))
+        self._jit_loss = kernel_jit(self._loss_only, static_argnums=(0,))
+        self._jit_grad = kernel_jit(self._value_and_grad, static_argnums=(0,))
+        self._jit_run = kernel_jit(self._train_step, static_argnums=(0,))
+        self._jit_fit = kernel_jit(self._fit, static_argnums=(0, 1))
 
     @property
     def plan(self) -> Any:

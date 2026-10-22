@@ -47,6 +47,7 @@ import jax.numpy as jnp
 from brainpy_state._kernel.params import Record
 from brainpy_state._kernel.runner import Program
 from brainpy_state._kernel.units import to_mantissa, unit_of
+from brainpy_state._kernel.xla import kernel_jit
 
 __all__ = [
     'EtraceError',
@@ -598,8 +599,8 @@ class Online:
                        if isinstance(grp.weight, brainstate.ParamState)}
         if optimizer is not None:
             optimizer.register_trainable_weights(self.params)
-        self._jit_grad = brainstate.transform.jit(self._grad)
-        self._jit_run = brainstate.transform.jit(self._run)
+        self._jit_grad = kernel_jit(self._grad)
+        self._jit_run = kernel_jit(self._run)
 
     @property
     def plan(self) -> Any:
