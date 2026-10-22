@@ -160,6 +160,36 @@ def _check_path(path: str) -> None:
         raise ValueError(f'path must be one of {PAYLOAD_PATHS}, got {path!r}')
 
 
+# upstream: brainevent#204 (and #199) -- on GPU, brainevent 0.2.1 misreads a float64
+# event vector: the dense ``BinaryArray @ W`` kernels return wrong values without an
+# error (#204) and the default-backend CSR kernels abort (#199). Event payloads on the
+# binary path are spike indicators in {0, 1} (``max_multiplicity == 1``), so passing
+# them as float32 is exact; float32 / bool / float16 payloads are passed unchanged.
+def _events(x: jax.Array) -> jax.Array:
+    """The binary-path payload in a dtype brainevent reads correctly (float64 -> float32)."""
+    return x.astype(jnp.float32) if x.dtype == jnp.float64 else x
+
+
+@jax.custom_jvp
+def _binary_dense(x: jax.Array, W: jax.Array) -> jax.Array:
+    """``BinaryArray(x) @ W`` with the payload passed through :func:`_events`.
+
+    The output keeps ``W``'s dtype. The JVP is written out (``dx @ W`` plus the
+    event-driven ``x @ dW``) so the payload tangent and cotangent stay in ``x``'s dtype:
+    brainevent's own rule would evaluate them in the float32 of the cast payload.
+    """
+    return brainevent.BinaryArray(_events(x)) @ W
+
+
+@_binary_dense.defjvp
+def _binary_dense_jvp(primals: tuple, tangents: tuple) -> tuple:
+    x, W = primals
+    dx, dW = tangents
+    y = _binary_dense(x, W)
+    dy = jnp.matmul(dx.astype(y.dtype), W) + brainevent.BinaryArray(_events(x)) @ dW
+    return y, dy
+
+
 def _host_index(a: Any) -> np.ndarray:
     """Host index array in int32 when it fits (halves the memory of int64 copies)."""
     a = np.asarray(a)
@@ -341,7 +371,8 @@ class Dense(Storage):
         m, unit = _split(w)
         W = self._masked(m)
         if path == 'binary':
-            y = brainevent.BinaryArray(x) @ W
+            # upstream: brainevent#204 -- float64 payloads are cast in `_binary_dense`
+            y = _binary_dense(x, W) if x.dtype == jnp.float64 else brainevent.BinaryArray(x) @ W
         else:  # upstream: brainevent#201 -- no event-driven matmul for count payloads
             y = jnp.matmul(x.astype(jnp.result_type(x, W)), W)
         return _wrap(y, unit)
@@ -460,7 +491,9 @@ class CSR(Storage):
             return _wrap(y, unit)
         mat = self._matrix(m)
         if path == 'binary':
-            y = brainevent.BinaryArray(x) @ mat
+            # upstream: brainevent#204 / #199 -- float64 payloads are passed as float32
+            # (exact for spikes; brainevent's CSR VJPs stay in the data dtype)
+            y = brainevent.BinaryArray(_events(x)) @ mat
         else:  # upstream: brainevent#201 -- no event-driven matmul for count payloads
             y = x.astype(dt) @ mat
         return _wrap(y, unit)

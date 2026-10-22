@@ -138,3 +138,10 @@ path is one brainevent CSR kernel per projection while the JAX scatter is about 
 small kernels plus a `lax.cond` (device-to-host predicate sync): 1.6-1.8 ×; the
 fused kernel of brainevent#203 is the fix. An earlier sweep (`cpu3`, before the
 GPU capacity change, same CPU code path) measured 1.39 / 1.40 at order 2500, 20 ms.
+
+**Correction (K1a-10, 2026-10-23).** The GPU f64 brunel 400 scalar-delay runs used
+`Dense` storage (`auto`). brainevent#204 made them compute wrong values: 57.68 Hz on
+GPU against 52.44 Hz on CPU. Their rate column is wrong. Their step times are kept,
+because the binary Dense kernel's cost does not depend on the event values. Every
+other row here uses CSR or the scatter, or runs on the CPU, and is unaffected. K1a-10
+casts f64 binary events to f32, which fixes this.
