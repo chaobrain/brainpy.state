@@ -12,12 +12,19 @@ Global ids
 concatenate (``E + I``) -- a concatenation is one view, sampled as one population by
 connectivity rules (fixes doubled in-degrees). A view never lists a gid twice.
 
-Uids
-----
-Populations and projections draw their uid from one
-:class:`~brainpy_state._kernel.rng.UidAllocator` in insertion order; every random
-stream (model initialisation, per-step keys, connectivity, weights, delays) is keyed
-by ``(seed, uid, ...)`` (spec §4.5), never by Python identity.
+Names and random streams
+------------------------
+Every population, projection and observer has a unique name (duplicates raise).
+Every random stream (model initialisation, per-step noise, connectivity, weights,
+delays) is keyed by ``(seed, name, ...)`` -- a stable hash of the name
+(:func:`~brainpy_state._kernel.rng.object_key`, D-g), never the insertion index or
+Python identity -- so adding, removing or reordering an unrelated object leaves the
+other objects' streams unchanged. Unnamed objects are auto-named ``<model>_<k>``,
+``k`` counting the unnamed objects of that class (populations: the model class,
+e.g. ``iaf_psc_alpha_0``; projections: the connectivity rule class, e.g.
+``FixedIndegree_0``; observers: ``Observer_0``), so insertion order matters only
+among *unnamed objects of the same class*; name objects to make their streams
+independent of it. Renaming an object gives it new streams.
 
 Synapses and plasticity (K0 T6)
 -------------------------------
@@ -55,7 +62,7 @@ from brainpy_state._kernel.ports import (
     check_connection,
     expected_weight_unit,
 )
-from brainpy_state._kernel.rng import UidAllocator
+from brainpy_state._kernel.rng import name_id
 from brainpy_state._kernel.synapse import check_synapse_connection
 from brainpy_state._kernel.units import check_unit
 
@@ -80,10 +87,8 @@ class Population:
     ----------
     index : int
         Position in ``net.populations``.
-    uid : int
-        Insertion index (RNG contract).
     name : str
-        Unique name.
+        Unique name; keys every random stream of the population (RNG contract).
     model : type
         :class:`~brainpy_state._kernel.model.NeuronModel` subclass.
     n : int
@@ -98,7 +103,6 @@ class Population:
     """
 
     index: int
-    uid: int
     name: str
     model: type
     n: int
@@ -225,6 +229,14 @@ class PopulationView:
             self._segments = self.net._segments(self.gids)
         return self._segments
 
+    def stream_parts(self) -> list[tuple[str, np.ndarray]]:
+        """``(population name, local ids)`` per segment, in view order.
+
+        The RNG identity of the view's neurons (:func:`~brainpy_state._kernel.rng.view_post_keys`):
+        independent of global-id offsets, hence of unrelated populations.
+        """
+        return [(self.net.populations[s.pop].name, s.local_array()) for s in self.segments]
+
     @property
     def populations(self) -> list[Population]:
         """Distinct populations touched by the view, in first-appearance order."""
@@ -247,10 +259,10 @@ class Projection:
 
     Attributes
     ----------
-    index, uid : int
-        Position in ``net.projections`` and insertion index (RNG contract).
+    index : int
+        Position in ``net.projections``.
     name : str
-        Unique name.
+        Unique name; keys the projection's connectivity, weight and delay streams.
     pre, post : PopulationView
         Source and target views.
     rule : ConnRule
@@ -282,7 +294,6 @@ class Projection:
     """
 
     index: int
-    uid: int
     name: str
     pre: PopulationView
     post: PopulationView
@@ -340,11 +351,12 @@ class Network:
             raise ValueError(f'seed must be an int in [0, 2**32), got {seed!r}')
         self.dt = dt
         self.seed = int(seed)
-        self.uids = UidAllocator()
         self.populations: list[Population] = []
         self.projections: list[Projection] = []
         self.observers: list = []
         self._names: set[str] = set()
+        self._name_ids: dict[tuple[int, int], str] = {}
+        self._auto: dict[str, int] = {}
 
     # ---------------------------------------------------------------- helpers
     @property
@@ -355,17 +367,24 @@ class Network:
         last = self.populations[-1]
         return last.gid_start + last.n
 
-    def _unique(self, name: str | None, prefix: str) -> str:
+    def _unique(self, name: str | None, cls: str) -> str:
+        """Validate ``name`` or auto-name ``<cls>_<k>`` (``k`` counts unnamed ``cls`` objects)."""
         if name is None:
-            k = 0
-            while f'{prefix}{k}' in self._names:
+            k = self._auto.get(cls, 0)
+            while f'{cls}_{k}' in self._names:  # skip names taken explicitly
                 k += 1
-            name = f'{prefix}{k}'
+            self._auto[cls] = k + 1
+            name = f'{cls}_{k}'
         if not isinstance(name, str) or not name:
             raise TypeError(f'name must be a non-empty str, got {name!r}')
         if name in self._names:
             raise ValueError(f'name {name!r} is already used in this network')
+        nid = name_id(name)
+        if nid in self._name_ids:  # pragma: no cover - 64-bit hash collision
+            raise ValueError(f'names {name!r} and {self._name_ids[nid]!r} hash to the same RNG '
+                             f'stream id; rename one of them')
         self._names.add(name)
+        self._name_ids[nid] = name
         return name
 
     def _segments(self, gids: np.ndarray) -> list[Segment]:
@@ -409,7 +428,10 @@ class Network:
         params, init : mapping, optional
             Parameter / initial-value overrides (see ``NeuronModel``).
         name : str, optional
-            Unique name (default ``'<model><k>'``).
+            Unique name; keys the population's random streams (default
+            ``'<model>_<k>'``, ``k`` counting unnamed populations of ``model``, so
+            the streams of unnamed populations depend on their order within the
+            class -- see the module notes).
         **kwargs
             Extra constructor arguments (``integrator``, ``surrogate``,
             ``trainable``, ``detach_reset``, model-specific options).
@@ -438,7 +460,7 @@ class Network:
         if not cap.jit_safe:
             raise TypeError(f'{model.__name__} is not jit-safe and cannot run in a compiled plan')
         name = self._unique(name, model.__name__)
-        pop = Population(index=len(self.populations), uid=self.uids.next(), name=name, model=model,
+        pop = Population(index=len(self.populations), name=name, model=model,
                          n=int(n), gid_start=self.n_neurons, params=dict(params or {}),
                          init=dict(init or {}), kwargs=dict(kwargs))
         self.populations.append(pop)
@@ -489,7 +511,9 @@ class Network:
         trainable : bool, default False
             Store the weights as ``brainstate.ParamState`` (learners).
         name : str, optional
-            Unique name (default ``'proj<k>'``).
+            Unique name; keys the connectivity, weight and delay streams (default
+            ``'<Rule>_<k>'``, e.g. ``'FixedIndegree_0'``, ``k`` counting unnamed
+            projections with that rule class).
         strict_capacity : bool, default True
             For ``timed_event`` targets: raise :class:`PortError` if the events that
             can reach one target in one step may exceed the port capacity (checked
@@ -585,8 +609,8 @@ class Network:
         if u.get_dim(unit) == u.get_dim(u.UNITLESS):
             unit = u.UNITLESS  # value -> value ports: the runner converts src -> dst units
         _check_delay_spec(delay)
-        name = self._unique(name, 'proj')
-        proj = Projection(index=len(self.projections), uid=self.uids.next(), name=name, pre=pre,
+        name = self._unique(name, type(rule).__name__)
+        proj = Projection(index=len(self.projections), name=name, pre=pre,
                           post=post, rule=rule, source_port=source_port, port=port,
                           src_kind=src_kind, dst_kind=dst_kind, weight=weight, weight_unit=unit,
                           delay=delay, storage=storage, delay_buffer=delay_buffer,
@@ -610,7 +634,7 @@ class Network:
         interval : Quantity, optional
             Sampling interval, a whole multiple of ``dt`` (default ``dt``).
         name : str, optional
-            Unique name (default ``'obs<k>'``).
+            Unique name (default ``'Observer_<k>'``).
 
         Returns
         -------
@@ -618,7 +642,7 @@ class Network:
         """
         from brainpy_state._kernel.observers import Observer
         view = self._check_view(view, 'view')
-        obs = Observer.create(self, view, recordables, interval, self._unique(name, 'obs'))
+        obs = Observer.create(self, view, recordables, interval, self._unique(name, 'Observer'))
         self.observers.append(obs)
         return obs
 

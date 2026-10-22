@@ -33,10 +33,13 @@ function. The step index and the parameter values are traced arguments and the
 number of steps is the only static one, so repeated ``cont()`` calls of the same
 duration (and parameter changes) reuse the compiled program.
 
-RNG (spec §4.5): population ``uid`` receives ``fold_in(population_key(seed, uid, n),
-b)`` at step ``n`` of trial ``b`` (``b = 0`` for an unbatched run and for every trial
-under ``rng='common'``), i.e. ``trial_keys(population_key(...), batch, mode)[b]``.
-Streams depend only on the global step, so ``cont()`` continues them.
+RNG (spec §4.5, D-g): population ``name`` receives in ``StepContext.key`` one key per
+block of :data:`~brainpy_state._kernel.rng.GID_BLOCK` local ids, ``key[k] =
+fold_in(population_key(seed, name, n, k), b)`` at step ``n`` of trial ``b`` (``b = 0``
+for an unbatched run and for every trial under ``rng='common'``; see
+:func:`~brainpy_state._kernel.rng.step_block_keys`); models draw through
+:func:`~brainpy_state._kernel.rng.draw_blocked`. Streams depend only on the global
+step, so ``cont()`` continues them.
 
 Batching runs ``jax.vmap`` over the state pytree and the trial index; parameters and
 weights are shared by the trials.
@@ -60,7 +63,7 @@ from brainpy_state._kernel.observers import Recording, Results, window_init, win
 from brainpy_state._kernel.params import Record, read_states
 from brainpy_state._kernel.ports import TimedEvent
 from brainpy_state._kernel import timed as _timed
-from brainpy_state._kernel.rng import RNG_MODES, population_key
+from brainpy_state._kernel.rng import RNG_MODES, population_block_keys, step_block_keys
 from brainpy_state._kernel.units import check_unit, from_mantissa, to_mantissa, unit_of
 
 __all__ = ['Program', 'Runner', 'duration_steps', 'trial_indices']
@@ -244,6 +247,9 @@ class Program:
                 dst_unit = plan.populations[seg.pop].model.inputs[prj.port].unit
                 f = float(u.Quantity(1.0, unit=pp.weight_unit * src_unit).to_decimal(dst_unit))
                 self._scale[(prj.index, seg.pop)] = f
+        # per-block keys of every population (D-g); folded with the step and trial each step
+        self._blk_keys = [population_block_keys(self.seed, p.pop.name, p.pop.n)
+                          for p in plan.populations]
         self._syn_by_pop: dict[int, list] = {}
         for gi, g in enumerate(plan.synapses):
             self._syn_by_pop.setdefault(g.pop, []).append(gi)
@@ -522,7 +528,7 @@ class Program:
             pplan = plan.populations[a]
             model = pplan.model
             acc: dict[Any, jax.Array] = {}
-            key = jax.random.fold_in(population_key(self.seed, pplan.pop.uid, n), trial)
+            key = step_block_keys(self._blk_keys[a], n, trial)
             ctx = StepContext(t=from_mantissa(n.astype(self.dtype) * self.dt_ms, u.ms), dt=self.dt,
                               step=n, key=key, spikes=self.spikes, detach_reset=self.detach_reset)
             for j in pplan.incoming:

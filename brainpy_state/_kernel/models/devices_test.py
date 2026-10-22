@@ -11,6 +11,7 @@ from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.models import dc_generator, poisson_generator, spike_generator
 from brainpy_state._kernel.models._testing import rollout
 from brainpy_state._kernel.models.devices import poisson_counts
+from brainpy_state._kernel.rng import GID_BLOCK, draw_blocked, population_block_keys, step_block_keys
 
 DT = 0.1 * u.ms
 
@@ -61,18 +62,43 @@ class TestPoissonCounts:
         np.testing.assert_array_equal(a, b)
         np.testing.assert_array_equal(a, np.asarray(poisson_counts(key, lam, (257,))))
 
+    @staticmethod
+    def _exact_ref(key, lam, n):
+        # K1a-6: the exact branch draws per id block from fold_in(block key, 1)
+        return draw_blocked(key, n, lambda k, s, l: jax.random.poisson(
+            jax.random.fold_in(k, 1), l, s, dtype=int), lam)
+
     @pytest.mark.parametrize('lam', [10.0, 25.0, 400.0])
     def test_large_rates_use_jax_poisson(self, lam):
         key = jax.random.key(7)
         lam_arr = jnp.full((257,), lam, jnp.float32)
-        ref = jax.random.poisson(key, lam_arr, (257,), dtype=int)
-        np.testing.assert_array_equal(np.asarray(poisson_counts(key, lam_arr, (257,))), np.asarray(ref))
+        np.testing.assert_array_equal(np.asarray(poisson_counts(key, lam_arr, (257,))),
+                                      np.asarray(self._exact_ref(key, lam_arr, 257)))
 
-    def test_mixed_rates_take_the_exact_branch(self):
+    def test_mixed_rates_choose_per_unit(self):
+        # per-unit choice (K1a-6): small-lam units keep their inversion draw, large-lam
+        # units take the exact branch; neither depends on the other units' rates
         key = jax.random.PRNGKey(1)
         lam = jnp.array([0.1, 50.0, 2.0], jnp.float32)
-        np.testing.assert_array_equal(np.asarray(poisson_counts(key, lam, (3,))),
-                                      np.asarray(jax.random.poisson(key, lam, (3,), dtype=int)))
+        out = np.asarray(poisson_counts(key, lam, (3,)))
+        small = np.asarray(poisson_counts(key, jnp.array([0.1, 0.0, 2.0]), (3,)))
+        assert out[0] == small[0] and out[2] == small[2]
+        assert out[1] == np.asarray(self._exact_ref(key, lam, 3))[1]
+
+    def test_block_layout_invariance(self):
+        # a unit's count depends on its block key, lane and own rate only (D-g)
+        n = 3 * GID_BLOCK + 10
+        keys = step_block_keys(population_block_keys(0, 'pg', n), 5)
+        lam = jnp.full((n,), 0.9, jnp.float32)
+        whole = np.asarray(poisson_counts(keys, lam, (n,)))
+        part = np.asarray(poisson_counts(keys[:2], lam[:1500], (1500,)))
+        np.testing.assert_array_equal(whole[:1500], part)
+        hetero = np.asarray(poisson_counts(keys, lam.at[2000:].set(30.0), (n,)))
+        np.testing.assert_array_equal(whole[:2000], hetero[:2000])
+
+    def test_shape_must_be_1d(self):
+        with pytest.raises(ValueError, match='shape'):
+            poisson_counts(jax.random.key(0), 0.5, (2, 3))
 
     def test_vmap_and_scan(self):
         keys = jax.random.split(jax.random.key(0), 4)

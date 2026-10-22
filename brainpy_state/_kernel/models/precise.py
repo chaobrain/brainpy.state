@@ -40,6 +40,7 @@ from brainpy_state._kernel.models.devices import _spike_table
 from brainpy_state._kernel.params import Init, Param, Params, Record, States
 from brainpy_state._kernel.ports import Current, Ports, TimedEvent, TimedEventPayload
 from brainpy_state._kernel.propagators import propagator_exp
+from brainpy_state._kernel.rng import draw_blocked
 from brainpy_state._kernel.units import from_mantissa, grid_steps, to_mantissa
 
 __all__ = [
@@ -451,7 +452,8 @@ class poisson_generator_ps(_OffsetsStateMixin, _CapacityMixin, Device):
     the expected number of further events (stochastically rounded, unbiased); the next spike is then redrawn from the
     step end (exact for ``dead_time = 0``). States: ``spike`` (count), ``spike_offsets``
     ``(n, K)``, ``next_spike`` (relative to the next step's start), ``started``,
-    ``overflow``. Randomness only from ``ctx.key``.
+    ``overflow``. Randomness only from ``ctx.key``, drawn per id block
+    (:func:`~brainpy_state._kernel.rng.draw_blocked`, D-g).
 
     Examples
     --------
@@ -500,11 +502,15 @@ class poisson_generator_ps(_OffsetsStateMixin, _CapacityMixin, Device):
         isi_mean = jnp.where(rate > 0, 1000.0 / jnp.where(rate > 0, rate, 1), jnp.inf)
         inv = isi_mean - dead
 
-        k_choice, k_dead, k_first, k_isi, k_more = jax.random.split(ctx.key, 5)
-        u_choice = jax.random.uniform(k_choice, (n_units,), dtype)
-        u_dead = jax.random.uniform(k_dead, (n_units,), dtype)
-        e_first = jax.random.exponential(k_first, (n_units,), dtype)
-        e_isi = jax.random.exponential(k_isi, (n_units, K + 1), dtype)
+        # per id block (D-g): sub-stream j of block b uses fold_in(block key, j)
+        def sub(j, draw, tail=()):
+            return draw_blocked(ctx.key, n_units,
+                                lambda k, sh: draw(jax.random.fold_in(k, j), sh, dtype), tail=tail)
+
+        u_choice = sub(0, jax.random.uniform)
+        u_dead = sub(1, jax.random.uniform)
+        e_first = sub(2, jax.random.exponential)
+        e_isi = sub(3, jax.random.exponential, (K + 1,))
 
         in_dead = (dead > 0) & (u_choice < dead * rate / 1000.0)
         init_off = jnp.where(in_dead, u_dead * dead, inv * e_first + dead)
@@ -520,7 +526,7 @@ class poisson_generator_ps(_OffsetsStateMixin, _CapacityMixin, Device):
         nxt_over = hi + inv * e_isi[:, K]
         # events beyond capacity: 1 (the (K+1)-th) + the expected number in the rest of
         # the window, stochastically rounded so that the count is unbiased
-        u_more = jax.random.uniform(k_more, (n_units,), dtype)
+        u_more = sub(4, jax.random.uniform)
         n_more = jnp.floor(jnp.where(over, (hi - times[:, K]) / isi_mean, 0) + u_more)
         nxt = jnp.where(over, nxt_over, nxt_in)
         started_new = started | active
