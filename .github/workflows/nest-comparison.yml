@@ -73,4 +73,12 @@ jobs:
         # stalling a worker; the thread method is used (no SIGALRM dependency).
         env:
           OMP_NUM_THREADS: "1"
-        run: pytest brainpy_state/ -m requires_nest -n auto --timeout=900 --timeout-method=thread
+        run: pytest brainpy_state/ -m "requires_nest and not (k0_gate or k1a_gate)" -n auto --timeout=900 --timeout-method=thread
+
+      - name: Run the kernel's live-NEST gate tests (K0 + K1a)
+        # The NEST-marked gate tests of brainpy_state/_kernel (registry:
+        # brainpy_state/_kernel/validation/gates.py). Some are multi-seed network
+        # comparisons (K1a-G5: 10 + 10 Brunel order-2500 runs), hence the longer timeout.
+        env:
+          OMP_NUM_THREADS: "1"
+        run: pytest brainpy_state/_kernel -m "requires_nest and (k0_gate or k1a_gate)" -n auto --timeout=3600 --timeout-method=thread

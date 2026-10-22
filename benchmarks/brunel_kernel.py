@@ -49,7 +49,7 @@ def run_one(args):
     import brainevent
     from brainpy_state._kernel.validation.brunel import build_brunel, rates
 
-    if args.brainevent_backend:
+    if args.brainevent_backend:  # upstream: brainevent#199 (GPU float64 needs 'cusparse')
         brainevent.config.set_backend('gpu', args.brainevent_backend)
     dev = jax.devices()[0]
     device = 'gpu' if dev.platform in ('gpu', 'cuda', 'rocm') else dev.platform

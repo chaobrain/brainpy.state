@@ -27,9 +27,14 @@ def _resolve(prefix):
     assert found, prefix
 
 
-@pytest.mark.parametrize('gate', G.GATES, ids=lambda g: g.id)
+@pytest.mark.parametrize('gate', G.ALL_GATES, ids=lambda g: g.id)
 def test_every_prefix_resolves(gate):
-    assert gate.id.startswith('G') and gate.criterion and gate.marker == 'k0_' + gate.id.lower()
+    if gate.id.startswith('K1a-'):
+        assert gate.marker == 'k1a_' + gate.id[4:].lower() and gate.suite == 'k1a_gate'
+    else:
+        assert gate.id.startswith('G') and gate.marker == 'k0_' + gate.id.lower()
+        assert gate.suite == 'k0_gate'
+    assert gate.criterion
     assert gate.tests or gate.command
     for p in gate.tests:
         _resolve(p)
@@ -37,10 +42,30 @@ def test_every_prefix_resolves(gate):
 
 def test_registry_covers_spec_gates():
     assert [g.id for g in G.GATES] == [f'G{k}' for k in range(1, 11)]
-    assert G.marker_names()[:2] == ['k0_gate', 'k0_g1'] and len(G.marker_names()) == 11
+    names = G.marker_names()
+    assert names[:2] == ['k0_gate', 'k0_g1'] and len(names) == 11 + 7
+    assert names[11:13] == ['k1a_gate', 'k1a_g1'] and names[-1] == 'k1a_g6'
     assert [g.id for g in G.gates_for('validation/stdp_nest_test.py::TestStdpVsNest::test_x')] == ['G8']
     both = G.gates_for('models/nest_parity_test.py::TestIafPscAlphaVsNest::test_psp_traces')
     assert [g.id for g in both] == ['G1']
+
+
+def test_k1a_registry_covers_spec_gates():
+    assert [g.id for g in G.K1A_GATES] == [f'K1a-G{k}' for k in range(1, 7)]
+    assert [g.id for g in G.gates_for('validation/k1a_g5_ai_nest_test.py::test_x')] == ['K1a-G5']
+    assert [g.id for g in G.gates_for('validation/compile_gate_test.py::test_compiles')] == ['K1a-G1']
+    assert G.gates_for('validation/g2_brunel_nest_test.py::t')[0].suite == 'k0_gate'
+    # the microcircuit's neuron (promoted to the model library in K1a-7) belongs to G4
+    assert [g.id for g in G.gates_for('models/nest_parity_test.py::TestIafPscExpVsNest::test_x')] == ['K1a-G4']
+    assert [g.id for g in G.gates_for('models/iaf_psc_exp_test.py::TestDynamics::t')] == ['K1a-G4']
+
+
+def test_pyproject_registers_every_marker():
+    import tomllib
+    root = KERNEL.parent.parent
+    cfg = tomllib.loads((root / 'pyproject.toml').read_text())
+    registered = {m.split(':', 1)[0] for m in cfg['tool']['pytest']['ini_options']['markers']}
+    assert set(G.marker_names()) <= registered
 
 
 def test_markers_attached(request):

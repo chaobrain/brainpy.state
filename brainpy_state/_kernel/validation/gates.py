@@ -1,5 +1,6 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Registry of the K0 go/no-go gates (spec ``2026-10-21-k0-kernel-spec.md`` §6).
+"""Registry of the K0 go/no-go gates (spec ``2026-10-21-k0-kernel-spec.md`` §6) and
+of the K1a gates (spec ``2026-10-22-k1a-kernel-hardening-spec.md`` §K1a-7).
 
 Each :class:`Gate` lists the test node-id prefixes (relative to
 ``brainpy_state/_kernel/``) that implement it. ``brainpy_state/_kernel/conftest.py``
@@ -13,23 +14,31 @@ selected where they live instead of being duplicated::
 Gates without a pytest implementation carry a ``command`` instead (G9 performance on
 the remote host, G10 coverage). Gates marked ``requires`` need live NEST or Brian2
 (skipped otherwise).
+
+The K1a gates (:data:`K1A_GATES`, ids ``K1a-G1`` ... ``K1a-G6``) work the same way with
+the ``k1a_gate`` marker and the per-gate markers ``k1a_g1`` ... ``k1a_g6``::
+
+    pytest -m "k0_gate or k1a_gate" brainpy_state/_kernel   # the CI gate job
+
+Their benchmark parts (compile time, step time, memory, the full-scale microcircuit)
+are commands run on the remote host; the pytest parts are correctness checks.
 """
 from __future__ import annotations
 
 import dataclasses
 from typing import Optional
 
-__all__ = ['Gate', 'GATES', 'gates_for', 'marker_names']
+__all__ = ['Gate', 'GATES', 'K1A_GATES', 'ALL_GATES', 'gates_for', 'marker_names']
 
 
 @dataclasses.dataclass(frozen=True)
 class Gate:
-    """One gate of spec §6.
+    """One gate of the K0 spec §6 or the K1a spec §K1a-7.
 
     Attributes
     ----------
     id : str
-        ``'G1'`` ... ``'G10'``.
+        ``'G1'`` ... ``'G10'`` (K0) or ``'K1a-G1'`` ... ``'K1a-G6'`` (K1a).
     title : str
         Short name.
     criterion : str
@@ -51,8 +60,15 @@ class Gate:
 
     @property
     def marker(self) -> str:
-        """Per-gate pytest marker name (``k0_g1`` ...)."""
+        """Per-gate pytest marker name (``k0_g1`` ..., ``k1a_g1`` ...)."""
+        if self.id.startswith('K1a-'):
+            return 'k1a_' + self.id[4:].lower()
         return 'k0_' + self.id.lower()
+
+    @property
+    def suite(self) -> str:
+        """Suite marker (``k0_gate`` or ``k1a_gate``)."""
+        return 'k1a_gate' if self.id.startswith('K1a-') else 'k0_gate'
 
 
 GATES: tuple = (
@@ -125,6 +141,43 @@ GATES: tuple = (
 )
 
 
+K1A_GATES: tuple = (
+    Gate('K1a-G1', 'compile time of every K0 network at default substeps (CPU)',
+         '<= 5 s each (first simulate minus a warm cont, fresh process)',
+         tests=('validation/compile_gate_test.py',),
+         command="BENCH=1 /tmp/k0/remote.sh K1a-7 'python -m pytest -m k1a_compile "
+                 "brainpy_state/_kernel/validation/compile_gate_test.py'; "
+                 "python benchmarks/k1a_compile_time.py all",
+         requires='bench'),
+    Gate('K1a-G2', 'single-op per-edge delays (K1a-4 gate)',
+         'step <= 1.5 x and build <= 2 x the scalar-delay network (2000 neurons, '
+         'indegree 100, delays up to 2 / 5 / 20 ms; CPU and GPU, f32 and f64)',
+         tests=('delay_scatter_test.py', 'delay_scatter_network_test.py'),
+         command='python benchmarks/k1a4_delays.py sweep --net review',
+         requires='bench'),
+    Gate('K1a-G3', 'G9 on GPU 1 (Brunel order 200 and 2500)',
+         'step time and peak device memory <= 1.1 x the old Simulator (f32 default '
+         'brainevent backend, f64 cusparse); compile time reported',
+         command="GPU=1 /tmp/k0/remote.sh K1a-7 'python benchmarks/k1a_gpu_g9.py run ...'",
+         requires='bench'),
+    Gate('K1a-G4', 'Potjans-Diesmann microcircuit at full scale vs NEST',
+         'per-population rates by the G2 rule, 5 seeds each side, 1 s after 100 ms; '
+         'memory / build / compile / step reported (CPU and GPU 1, float32)',
+         tests=('validation/microcircuit_test.py', 'validation/microcircuit_nest_test.py',
+                'models/iaf_psc_exp_test.py', 'models/nest_parity_test.py::TestIafPscExpVsNest'),
+         command='python benchmarks/k1a_microcircuit.py kernel|nest ...',
+         requires='bench'),
+    Gate('K1a-G5', 'G2 in the asynchronous-irregular regime vs NEST',
+         'G2 rule on rate, CV-ISI, Fano factor and correlation; Brunel order 2500, g = 16, '
+         'eta = 4 (lead choice from the NEST-only scan), 10 seeds each side',
+         tests=('validation/k1a_g5_ai_nest_test.py',), requires='nest'),
+    Gate('K1a-G6', 'regressions: every K0 gate', 'green',
+         command='python -m pytest -n 8 -m k0_gate brainpy_state/_kernel'),
+)
+
+ALL_GATES: tuple = GATES + K1A_GATES
+
+
 def gates_for(rel_nodeid: str) -> list:
     """Gates whose test prefixes match a node id relative to ``brainpy_state/_kernel/``.
 
@@ -138,9 +191,10 @@ def gates_for(rel_nodeid: str) -> list:
         >>> gates_for('units_test.py::test_x')
         []
     """
-    return [g for g in GATES if any(rel_nodeid.startswith(p) for p in g.tests)]
+    return [g for g in ALL_GATES if any(rel_nodeid.startswith(p) for p in g.tests)]
 
 
 def marker_names() -> list:
-    """``['k0_gate', 'k0_g1', ...]`` for marker registration."""
-    return ['k0_gate'] + [g.marker for g in GATES]
+    """``['k0_gate', 'k0_g1', ..., 'k1a_gate', 'k1a_g1', ...]`` for marker registration."""
+    return (['k0_gate'] + [g.marker for g in GATES]
+            + ['k1a_gate'] + [g.marker for g in K1A_GATES])
