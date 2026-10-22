@@ -58,7 +58,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from brainpy_state._kernel.connectivity.edgeset import EdgeSet
+from brainpy_state._kernel.connectivity.edgeset import EdgeSet, to_host
 from brainpy_state._kernel.connectivity.storage import Storage, make_storage, payload_path
 from brainpy_state._kernel.delay_scatter import DelayScatter
 from brainpy_state._kernel.delays import DelayLayout, PostRing, PreRing, classify_delays, delay_steps
@@ -71,7 +71,7 @@ from brainpy_state._kernel.ports import Event, TimedEvent, is_latched, is_recept
 from brainpy_state._kernel.rng import block_key, object_key, view_post_keys
 from brainpy_state._kernel.synapse import plan_synapse_groups
 from brainpy_state._kernel.timed import TimedDelivery, TimedRing, check_capacities
-from brainpy_state._kernel.units import resolve_dtype, to_mantissa, unit_of
+from brainpy_state._kernel.units import check_unit, resolve_dtype, to_mantissa, unit_of
 
 __all__ = [
     'INIT_STREAM',
@@ -627,10 +627,10 @@ class Plan(brainstate.nn.Module):
             return es
         m, unit = None, pp.weight_unit
         for g in pp.groups:
-            w = to_mantissa(g.storage.weight_to_edges(g.weight.value), unit)
+            w = np.asarray(to_mantissa(g.storage.weight_to_edges(g.weight.value), unit))
             if m is None:
-                m = jnp.zeros((es.n_edges,), w.dtype)
-            m = m.at[jnp.asarray(g.edges)].set(w)
+                m = np.zeros((es.n_edges,), w.dtype)
+            m[g.edges] = w
         return es.set(weight=m if unit.is_unitless else u.Quantity(m, unit=unit))
 
     def memory(self) -> dict:
@@ -828,7 +828,14 @@ def _edge_weights(proj: Projection, es: EdgeSet, okey: Any, dtype: Any) -> Any:
         es = es.with_weight(w, key=k if isinstance(w, Distribution) else None, dtype=dtype)
     except ValueError as e:
         raise ValueError(f'{proj.name}: {e} (the rule realised {es.n_edges} edges)') from None
-    m = to_mantissa(es.weight, proj.weight_unit, dtype)
+    # host values (K1a-8): storages permute them on the host and copy only their layout
+    unit, w = proj.weight_unit, es.weight
+    check_unit(w, unit)
+    if isinstance(w, u.Quantity):
+        m = np.asarray(w.to_decimal(unit))
+    else:  # dimensionless; a scaled dimensionless unit (e.g. percent) scales it
+        m = np.asarray(w if unit.is_unitless else u.Quantity(w).to_decimal(unit))
+    m = m.astype(jax.dtypes.canonicalize_dtype(dtype if dtype is not None else m.dtype), copy=False)
     return m if proj.weight_unit.is_unitless else u.Quantity(m, unit=proj.weight_unit)
 
 
@@ -851,8 +858,7 @@ def _edge_delays(net: Network, proj: Projection, es: EdgeSet, okey: Any) -> tupl
 def _sub_edges(es: EdgeSet, pos: np.ndarray) -> EdgeSet:
     if pos.size == es.n_edges:
         return es
-    p = jnp.asarray(pos)
-    return EdgeSet(pre_index=es.pre_index[p], post_index=es.post_index[p],
+    return EdgeSet(pre_index=es.pre_index[pos], post_index=es.post_index[pos],
                    pre_gids=es.pre_gids, post_gids=es.post_gids)
 
 
@@ -863,8 +869,9 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any,
     es = proj.rule.build(proj.pre.gids, proj.post.gids, key=okey, post_keys=pkeys)
     w_edges = _edge_weights(proj, es, okey, dtype)
     steps, d_edges = _edge_delays(net, proj, es, okey)
+    # the plan's EdgeSet stays on the host (K1a-8): storages hold the device copies
     es = EdgeSet(pre_index=es.pre_index, post_index=es.post_index, pre_gids=es.pre_gids,
-                 post_gids=es.post_gids, weight=w_edges, delay=d_edges)
+                 post_gids=es.post_gids, weight=to_host(w_edges), delay=to_host(d_edges))
     force = {'auto': None, 'pre': None, 'post': 'per_edge'}[proj.delay_buffer]
     layout = classify_delays(steps, np.asarray(es.pre_index), es.n_pre, force=force)
     if proj.delay_buffer == 'pre' and layout.kind == 'per_edge':
@@ -909,7 +916,7 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any,
                 pos = np.nonzero(steps == k)[0]
                 sub = _sub_edges(es, pos)
                 st = make_storage(sub, proj.storage)
-                wk = w_edges[jnp.asarray(pos)]
+                wk = w_edges[pos]
                 groups.append(EdgeGroup(k, st, pos, _state(st.weight_from_edges(wk), trainable)))
         if delayed and delivery == 'scatter':
             pos = np.nonzero(steps >= 1)[0]
@@ -917,7 +924,7 @@ def _compile_projection(net: Network, proj: Projection, dtype: Any,
                               strategy=cost['strategy'], chunk=model.chunk,
                               capacity=model.capacity(es.n_pre))
             cost['capacity'] = st.capacity
-            wk = w_edges[jnp.asarray(pos)]
+            wk = w_edges[pos]
             groups.append(EdgeGroup(None, st, pos, _state(st.weight_from_edges(wk), trainable)))
         if layout.max >= 1:
             post_ring = PostRing(es.n_post, layout.max, dtype)

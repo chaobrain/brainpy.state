@@ -39,7 +39,10 @@ class TestCreate:
         assert list(np.asarray(es.pre)) == [10, 11, 11, 12]
         assert list(np.asarray(es.post)) == [20, 20, 20, 21]
         assert es.pre_index.dtype == jnp.int32 and es.pre_gids.dtype == jnp.int32
-        assert isinstance(es.pre_index, jax.Array)
+        # K1a-8: every array of an EdgeSet lives on the host
+        for f in ('pre_index', 'post_index', 'pre_gids', 'post_gids'):
+            assert isinstance(getattr(es, f), np.ndarray) and not isinstance(getattr(es, f), jax.Array)
+        assert isinstance(es.pre, np.ndarray) and isinstance(es.post, np.ndarray)
         assert 'n_edges=4' in repr(es)
 
     def test_multiplicity(self):
@@ -115,6 +118,47 @@ class TestValues:
         assert small().with_delay(1. * u.ms).set(delay=2. * u.ms).delay.unit == u.ms
         with pytest.raises(UnitMismatchError):
             small().with_delay(1. * u.ms).set(delay=2. * u.pA)
+
+
+class TestHostResident:
+    """K1a-8: values and introspection results are host (numpy) arrays."""
+
+    @staticmethod
+    def _host(v):
+        return isinstance(u.get_mantissa(v), np.ndarray) and not isinstance(u.get_mantissa(v), jax.Array)
+
+    def test_values_on_host(self):
+        assert self._host(small().with_weight(0.5 * u.nS).weight)
+        assert self._host(small().with_weight(jnp.arange(4.)).weight)
+        es = small().with_weight(Normal(1. * u.pA, 0.1 * u.pA), key=jax.random.PRNGKey(0))
+        assert self._host(es.weight)
+        es = es.with_delay(Uniform(1. * u.ms, 2. * u.ms), key=jax.random.PRNGKey(1))
+        assert self._host(es.delay)
+        c = es.get_connections(source=[11])
+        assert self._host(c.weight) and self._host(c.delay)
+        assert self._host(es.set(weight=3. * u.pA, edges=[1]).weight)
+
+    def test_dtype_follows_jax_canonicalisation(self):
+        # float64 input is stored as what a device array would hold (float32 without x64)
+        es = small().with_weight(np.arange(4, dtype=np.float64))
+        assert es.weight.dtype == jnp.asarray(np.zeros(1)).dtype
+        es = small().with_weight(np.arange(4), dtype=np.float64)
+        assert es.weight.dtype == jnp.asarray(np.zeros(1)).dtype
+        assert es.with_weight(np.float16(1.)).weight.dtype == np.float16
+
+    def test_set_subset_unitless_keeps_original(self):
+        es = small().with_weight(np.zeros(4, np.float32))
+        es2 = es.set(weight=np.array([1., 2.]), edges=[0, 3])
+        np.testing.assert_array_equal(es2.weight, [1., 0., 0., 2.])
+        np.testing.assert_array_equal(es.weight, np.zeros(4))
+        assert es2.weight.dtype == np.float32
+
+    def test_to_host(self):
+        from brainpy_state._kernel.connectivity.edgeset import to_host
+        assert to_host(None) is None
+        q = to_host(jnp.arange(3.) * u.pA)
+        assert self._host(q) and q.unit == u.pA
+        assert isinstance(to_host(jnp.arange(3)), np.ndarray)
 
 
 class TestGetConnections:

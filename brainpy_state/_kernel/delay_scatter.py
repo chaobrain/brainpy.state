@@ -57,7 +57,14 @@ import jax.numpy as jnp
 import numpy as np
 
 from brainpy_state._kernel.connectivity.edgeset import EdgeSet
-from brainpy_state._kernel.connectivity.storage import Storage, _host_index, _split, _wrap
+from brainpy_state._kernel.connectivity.storage import (
+    Storage,
+    _host_index,
+    _split,
+    _split_edges,
+    _take,
+    _wrap,
+)
 from brainpy_state._kernel.units import index_dtype
 
 __all__ = ['SCATTER_STRATEGIES', 'DelayScatter', 'segment_length']
@@ -212,8 +219,8 @@ class DelayScatter(Storage):
     def weight_from_edges(self, edge_weight: Any) -> Any:
         """Permute per-edge weights (``EdgeSet`` order) into storage (row) order."""
         self._check_edge_weight(edge_weight)
-        m, unit = _split(edge_weight)
-        return _wrap(m[self._order_j], unit)
+        m, unit = _split_edges(edge_weight)
+        return _wrap(_take(m, self.order, lambda: self._order_j), unit)
 
     def weight_to_edges(self, w: Any) -> Any:
         """Inverse permutation back to ``EdgeSet`` order (exact)."""
