@@ -26,6 +26,22 @@ port decides when a value acts. On output ports (devices, synapse outputs) it ha
 no effect. A zero delay into an unlatched port is same-step (topological order); a
 latched port adds one step by its port semantics (architecture doc §7 L2, D4a).
 
+Receptor ports (decision D-b)
+-----------------------------
+Synaptic kinetics have exactly one owner per port, with one encoding per owner:
+
+* **neuron-owned**: an :class:`Event` (or :class:`TimedEvent`) input port that
+  names the state it filters into, ``ex=Event(unit=u.nS, into='g_ex')``. The
+  weight is measured in that state's unit; the neuron applies each delivered
+  weight as the jump of its own kinetics after the propagation (the default
+  ``NeuronModel.on_input`` adds it to the named state) and its ``derivatives``
+  filter it. Projections into such a port carry no ``SynapseModel``.
+* **projection-owned**: a ``SynapseModel`` on the projection (``Expon``, ...)
+  deposits into a plain :class:`Current` or :class:`Conductance` port.
+
+``into`` is a property of an input port; on output ports it has no effect (as
+``latch``).
+
 ``gap`` and ``modulatory`` kinds are K1 and not declared here.
 """
 from __future__ import annotations
@@ -59,6 +75,7 @@ __all__ = [
     'Ports',
     'TimedEventPayload',
     'is_latched',
+    'is_receptor',
     'check_kind_compatible',
     'expected_weight_unit',
     'check_weight_unit',
@@ -87,15 +104,14 @@ class PortKind:
     unit : brainunit.Unit
         Unit of the payload deposited into the port (dimensionless ``UNITLESS``
         when not declared).
-    filtered : bool
-        The owning neuron filters the synaptic kinetics of this port itself
-        (e.g. ``g_ex`` in ``iaf_cond_exp``); a filtering ``SynapseModel`` must then
-        not be connected to it (single owner of kinetics).
+    into : str or None
+        On a receptor port (:class:`Event` / :class:`TimedEvent` with ``into=``):
+        the state the neuron filters the input into; ``None`` for every other port.
     """
 
     kind: ClassVar[str] = ''
     unit: u.Unit
-    filtered: bool
+    into: ClassVar[str | None] = None
 
     #: Weights into this port must be non-negative.
     nonnegative_weights: ClassVar[bool] = False
@@ -119,8 +135,16 @@ def _check_flag(value: Any, name: str) -> bool:
     return bool(value)
 
 
-def _check_filtered(filtered: Any) -> bool:
-    return _check_flag(filtered, 'filtered')
+def _check_into(into: Any) -> str | None:
+    if into is None:
+        return None
+    if not isinstance(into, str) or not into.isidentifier():
+        raise PortError(f'into must be a state name (an identifier) or None, got {into!r}')
+    return into
+
+
+def _is_conductance_unit(unit: u.Unit) -> bool:
+    return u.get_dim(unit) == u.get_dim(u.nS)
 
 
 @dataclass(frozen=True, init=False)
@@ -137,17 +161,34 @@ class Event(PortKind):
     unit : brainunit.Unit, optional
         On an input port, the unit of the synaptic weight (e.g. ``u.pA`` for a PSC
         jump); ``None`` means dimensionless. Ignored on output ports.
-    filtered : bool, default False
-        See :class:`PortKind`.
+    into : str, optional
+        On an input port: the name of the state the neuron filters this input
+        into, making it a neuron-owned **receptor port** (decision D-b). The
+        state must be declared by the model with the dimension of ``unit``
+        (checked at class creation). Projections into a receptor port carry no
+        ``SynapseModel``; a receptor port with a conductance unit takes
+        non-negative weights only. Ignored on output ports.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.ports import Event, is_receptor
+        >>> ex = Event(unit=u.nS, into='g_ex')
+        >>> ex.into, is_receptor(ex), ex.nonnegative_weights
+        ('g_ex', True, True)
+        >>> is_receptor(Event(unit=u.mV))
+        False
     """
 
     kind: ClassVar[str] = 'event'
     max_multiplicity: int | None
     unit: u.Unit
-    filtered: bool
+    into: str | None
 
-    def __init__(self, max_multiplicity: int | None = 1, unit: Any = None,
-                 filtered: bool = False) -> None:
+    def __init__(self, max_multiplicity: int | None = 1, unit: Any = None, *,
+                 into: str | None = None) -> None:
         if max_multiplicity is not None:
             if isinstance(max_multiplicity, bool) or int(max_multiplicity) != max_multiplicity \
                     or max_multiplicity < 1:
@@ -155,7 +196,12 @@ class Event(PortKind):
             max_multiplicity = int(max_multiplicity)
         object.__setattr__(self, 'max_multiplicity', max_multiplicity)
         object.__setattr__(self, 'unit', as_unit(unit))
-        object.__setattr__(self, 'filtered', _check_filtered(filtered))
+        object.__setattr__(self, 'into', _check_into(into))
+
+    @property
+    def nonnegative_weights(self) -> bool:
+        """Weights must be non-negative: a receptor port filtering into a conductance."""
+        return self.into is not None and _is_conductance_unit(self.unit)
 
     @property
     def binary(self) -> bool:
@@ -174,21 +220,27 @@ class TimedEvent(PortKind):
         counted in :attr:`TimedEventPayload.overflow`, never dropped silently.
     unit : brainunit.Unit, optional
         Weight unit on input ports; ``None`` means dimensionless.
-    filtered : bool, default False
-        See :class:`PortKind`.
+    into : str, optional
+        As for :class:`Event`: on an input port, the state the neuron filters the
+        timed events into (a neuron-owned receptor port, decision D-b).
     """
 
     kind: ClassVar[str] = 'timed_event'
     capacity: int
     unit: u.Unit
-    filtered: bool
+    into: str | None
 
-    def __init__(self, capacity: int, unit: Any = None, filtered: bool = False) -> None:
+    def __init__(self, capacity: int, unit: Any = None, *, into: str | None = None) -> None:
         if isinstance(capacity, bool) or int(capacity) != capacity or capacity < 1:
             raise PortError(f'capacity must be an int >= 1, got {capacity!r}')
         object.__setattr__(self, 'capacity', int(capacity))
         object.__setattr__(self, 'unit', as_unit(unit))
-        object.__setattr__(self, 'filtered', _check_filtered(filtered))
+        object.__setattr__(self, 'into', _check_into(into))
+
+    @property
+    def nonnegative_weights(self) -> bool:
+        """Weights must be non-negative: a receptor port filtering into a conductance."""
+        return self.into is not None and _is_conductance_unit(self.unit)
 
     def zeros(self, n: int, dtype: Any = np.float32) -> 'TimedEventPayload':
         """Empty :class:`TimedEventPayload` of shape ``(n, capacity)``."""
@@ -203,8 +255,6 @@ class Current(PortKind):
     ----------
     unit : brainunit.Unit, default ``u.pA``
         Payload unit; must be a current.
-    filtered : bool, default False
-        See :class:`PortKind`.
     latch : bool, default True
         On an input port: ``True`` -- the value delivered in step ``n`` acts during
         step ``n + 1`` (NEST ``CurrentEvent`` / ring-buffer semantics; the model
@@ -226,14 +276,12 @@ class Current(PortKind):
 
     kind: ClassVar[str] = 'current'
     unit: u.Unit
-    filtered: bool
     latch: bool
 
-    def __init__(self, unit: Any = u.pA, filtered: bool = False, *, latch: bool = True) -> None:
+    def __init__(self, unit: Any = u.pA, *, latch: bool = True) -> None:
         unit = as_unit(unit)
         check_unit(unit, u.pA, 'Current unit')
         object.__setattr__(self, 'unit', unit)
-        object.__setattr__(self, 'filtered', _check_filtered(filtered))
         object.__setattr__(self, 'latch', _check_flag(latch, 'latch'))
 
 
@@ -251,12 +299,14 @@ class Conductance(PortKind):
     gate : callable, optional
         ``gate(V) -> dimensionless`` evaluated inside ``derivatives`` at every
         substep (e.g. the NMDA Mg block).
-    filtered : bool, default False
-        See :class:`PortKind`.
 
     Notes
     -----
     Conductance weights must be non-negative (inhibition comes from ``E_rev``).
+    The payload is the conductance itself: the kinetics belong to the source or
+    to a projection's ``SynapseModel``. A neuron that filters its own
+    conductance declares a receptor port instead,
+    ``Event(unit=u.nS, into='g_ex')`` (decision D-b).
     """
 
     kind: ClassVar[str] = 'conductance'
@@ -264,10 +314,9 @@ class Conductance(PortKind):
     unit: u.Unit
     E_rev: Any
     gate: Callable[[Any], Any] | None
-    filtered: bool
 
     def __init__(self, unit: Any = u.nS, E_rev: Any = None,
-                 gate: Callable[[Any], Any] | None = None, filtered: bool = False) -> None:
+                 gate: Callable[[Any], Any] | None = None) -> None:
         unit = as_unit(unit)
         check_unit(unit, u.nS, 'Conductance unit')
         if E_rev is not None and not isinstance(E_rev, str):
@@ -277,7 +326,6 @@ class Conductance(PortKind):
         object.__setattr__(self, 'unit', unit)
         object.__setattr__(self, 'E_rev', E_rev)
         object.__setattr__(self, 'gate', gate)
-        object.__setattr__(self, 'filtered', _check_filtered(filtered))
 
 
 @dataclass(frozen=True, init=False)
@@ -288,8 +336,6 @@ class Graded(PortKind):
     ----------
     unit : brainunit.Unit or None
         Payload unit (``None`` = dimensionless).
-    filtered : bool, default False
-        See :class:`PortKind`.
     latch : bool, default True
         As for :class:`Current`: on an input port, ``True`` acts during the next
         step, ``False`` in the step the value arrives in. Ignored on output ports.
@@ -297,12 +343,10 @@ class Graded(PortKind):
 
     kind: ClassVar[str] = 'graded'
     unit: u.Unit
-    filtered: bool
     latch: bool
 
-    def __init__(self, unit: Any, filtered: bool = False, *, latch: bool = True) -> None:
+    def __init__(self, unit: Any, *, latch: bool = True) -> None:
         object.__setattr__(self, 'unit', as_unit(unit))
-        object.__setattr__(self, 'filtered', _check_filtered(filtered))
         object.__setattr__(self, 'latch', _check_flag(latch, 'latch'))
 
 
@@ -330,6 +374,32 @@ def is_latched(kind: PortKind) -> bool:
         (True, False, False)
     """
     return isinstance(kind, (Current, Graded)) and kind.latch
+
+
+def is_receptor(kind: PortKind) -> bool:
+    """Whether input port ``kind`` is a neuron-owned receptor port (decision D-b).
+
+    Parameters
+    ----------
+    kind : PortKind
+        Input port kind.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`Event` / :class:`TimedEvent` ports declared with
+        ``into=<state>``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.ports import Conductance, Event, is_receptor
+        >>> is_receptor(Event(unit=u.nS, into='g_ex')), is_receptor(Conductance(u.nS))
+        (True, False)
+    """
+    return isinstance(kind, (Event, TimedEvent)) and kind.into is not None
 
 
 _EVENT_KINDS = (Event, TimedEvent)
@@ -365,9 +435,14 @@ class Ports(Mapping):
         return len(self._ports)
 
     def __repr__(self) -> str:
-        inner = ', '.join(f'{k}={type(v).__name__}' + ('' if not isinstance(v, (Current, Graded))
-                                                        else f'(latch={v.latch})')
-                          for k, v in self._ports.items())
+        def tag(v: PortKind) -> str:
+            if isinstance(v, (Current, Graded)):
+                return f'(latch={v.latch})'
+            if is_receptor(v):
+                return f'(into={v.into!r})'
+            return ''
+
+        inner = ', '.join(f'{k}={type(v).__name__}{tag(v)}' for k, v in self._ports.items())
         return f'Ports({inner})'
 
     def require(self, name: str, where: str = '') -> PortKind:
@@ -544,10 +619,9 @@ def check_kind_compatible(src: PortKind, dst: PortKind, where: str = '') -> None
     Allowed: event -> event / timed_event; timed_event -> timed_event / event (the
     offset is dropped, as in NEST); current -> current; conductance -> conductance;
     graded -> graded / current / conductance. Event sources reach ``current`` or
-    ``conductance`` ports through a ``SynapseModel``, whose *output* kind is then
-    checked as ``src`` -- or directly when the port is ``filtered``: the neuron owns
-    the kinetics and applies each event as a jump of the filtered state (NEST
-    ``iaf_cond_exp``: ``g_ex += w``; added in K0 T5).
+    ``conductance`` ports only through a ``SynapseModel``, whose *output* kind is
+    then checked as ``src``; a neuron that owns the kinetics declares a receptor
+    ``event`` port instead (``Event(unit=u.nS, into='g_ex')``, decision D-b).
 
     Parameters
     ----------
@@ -557,8 +631,6 @@ def check_kind_compatible(src: PortKind, dst: PortKind, where: str = '') -> None
         Context for the error message (e.g. ``'E -> I.ex'``).
     """
     allowed = _COMPATIBLE.get(type(src))
-    if isinstance(src, _EVENT_KINDS) and isinstance(dst, (Current, Conductance)) and dst.filtered:
-        return
     if allowed is None or not isinstance(dst, allowed):
         ok = ', '.join(k.kind for k in (allowed or ()))
         raise PortError(
@@ -665,21 +737,24 @@ def check_capacity(dst: PortKind, max_events: int, strict: bool = True, where: s
 
 
 def check_single_owner(dst: PortKind, synapse_filters: bool, where: str = '') -> None:
-    """Raise :class:`PortError` if a filtering synapse targets a neuron-filtered port.
+    """Raise :class:`PortError` if a synapse model targets a neuron-owned receptor port.
 
     Parameters
     ----------
     dst : PortKind
         Input port kind.
     synapse_filters : bool
-        Whether the projection's ``SynapseModel`` has its own kinetics.
+        Whether the projection carries a ``SynapseModel`` (kinetics of its own).
     where : str
-        Context for the error message.
+        Context for the error message (``'<source> -> <Model>.<port>'`` names the
+        neuron model that owns the kinetics).
     """
-    if synapse_filters and dst.filtered:
+    if synapse_filters and is_receptor(dst):
         raise PortError(
-            f'{_prefix(where)}the target port already filters its synaptic kinetics; '
-            f'connecting a filtering synapse model would apply them twice'
+            f'{_prefix(where)}the target is a neuron-owned receptor port: the neuron model '
+            f'owns its kinetics (it filters the input into state {dst.into!r}), so a '
+            f'projection into it carries no SynapseModel (decision D-b); connect without '
+            f'synapse=, or target a plain Current/Conductance port for projection-owned kinetics'
         )
 
 

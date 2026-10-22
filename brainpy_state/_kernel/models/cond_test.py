@@ -18,6 +18,7 @@ from brainpy_state._kernel.models import (
     iaf_cond_exp,
 )
 from brainpy_state._kernel.models._testing import rollout, step_inputs
+from brainpy_state._kernel.ports import Event
 
 DT = 0.1 * u.ms
 
@@ -45,7 +46,12 @@ class TestIafCondExp:
     def test_declaration(self):
         assert iaf_cond_exp.integrator == RK(4, IAF_COND_EXP_SUBSTEPS)
         assert iaf_cond_exp.spiking.when == 'step'
-        assert iaf_cond_exp.inputs['ex'].filtered and iaf_cond_exp.outputs['spike'].binary
+        assert iaf_cond_exp.inputs['ex'] == Event(unit=u.nS, into='g_ex')  # receptor port (D-b)
+        assert iaf_cond_exp.inputs['in_'] == Event(unit=u.nS, into='g_in')
+        assert iaf_cond_exp.outputs['spike'].binary
+        assert aeif_cond_alpha.inputs['ex'] == Event(unit=u.nS, into='g_ex')
+        assert aeif_cond_alpha.inputs['in_'] == Event(unit=u.nS, into='g_in')
+        assert 'on_input' not in iaf_cond_exp.__dict__  # the default receptor jump
         assert list(iaf_cond_exp.all_state_decl()) == ['V_m', 'g_ex', 'g_in', 'latch_I', 'spike',
                                                        'refractory_count']
 

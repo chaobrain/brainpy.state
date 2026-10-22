@@ -29,7 +29,7 @@ independent of it. Renaming an object gives it new streams.
 Synapses and plasticity (K0 T6)
 -------------------------------
 ``synapse=`` attaches a :class:`~brainpy_state._kernel.synapse.SynapseModel` (e.g.
-``Expon``) between delivery and an unfiltered ``Current`` / ``Conductance`` port;
+``Expon``) between delivery and a plain ``Current`` / ``Conductance`` port;
 ``plasticity=`` attaches a :class:`~brainpy_state._kernel.plasticity.PlasticityRule`
 (per-edge CSR weights, NEST lazy timing).
 
@@ -495,8 +495,9 @@ class Network:
             Edge storage (:func:`~brainpy_state._kernel.connectivity.make_storage`).
         synapse : SynapseModel, optional
             Synapse kinetics (e.g. ``Expon(tau)``) between delivery and an
-            **unfiltered** ``Current`` / ``Conductance`` port; event sources only;
-            weights in the port unit. A filtered port raises ``PortError`` (single
+            plain ``Current`` / ``Conductance`` port; event sources only;
+            weights in the port unit. A neuron-owned receptor port
+            (``Event(..., into=...)``, decision D-b) raises ``PortError`` (single
             owner of kinetics).
         plasticity : PlasticityRule, optional
             Plasticity rule (``static_synapse``, ``stdp_synapse``): per-edge CSR
@@ -534,7 +535,8 @@ class Network:
             L4, are K1).
         PortError
             On unknown / ambiguous / incompatible ports, a negative weight into a
-            conductance port, a filtering synapse onto a filtered port, or a
+            conductance or conductance receptor port, a synapse model onto a
+            receptor port, or a
             ``timed_event`` capacity that may overflow (``strict_capacity=True``).
         UnitMismatchError
             On a weight or delay with the wrong dimension.

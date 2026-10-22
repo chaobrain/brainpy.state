@@ -210,7 +210,7 @@ separate runtime vs training backends.
 
 | kind | payload | application point (see §7.1) | examples |
 |---|---|---|---|
-| `event` | spike multiplicity × weight per target per step; delays rounded to the grid (NEST); never interpolated. An input `event` port may **name the state it filters into** (`Event(u.nS, into='g_ex')`, D-b): that is a neuron-owned receptor port | jump after propagation (onto the named state, or onto the port's jump target) | spike output; `spike_generator`; parrot relay; receptor ports `ex`/`in` of `iaf_psc_alpha`, `iaf_cond_exp`, `aeif_cond_alpha` |
+| `event` | spike multiplicity × weight per target per step; delays rounded to the grid (NEST); never interpolated. An input `event` port may **name the state it filters into** (`Event(unit=u.nS, into='g_ex')`, D-b): that is a neuron-owned receptor port | jump after propagation (onto the named state, or onto the port's jump target) | spike output; `spike_generator`; parrot relay; receptor ports `ex`/`in` of `iaf_psc_alpha`, `iaf_cond_exp`, `aeif_cond_alpha` |
 | `timed_event` | fixed-capacity list of `(offset, weight)` per target per step, with a capacity **budget** and an overflow counter checked at run time; sorted by offset at the receiver | integrated between events | `*_ps` models, `poisson_generator_ps` |
 | `current` | current (pA), summed, unfiltered | **per port** (D-a): `latch=True` (default) acts during the next step (NEST `CurrentEvent`); `latch=False` acts in the same step | static PSC input, `dc_generator`, SIC; `I` of NEST models (latched), `I` of BrainPy-family `LIF` (same step) |
 | `conductance` | conductance (nS) with `E_rev` and an optional voltage gate `gate(V)` evaluated inside `derivatives` at every substep; unfiltered (a projection-owned `SynapseModel` supplies `g`) | inside the ODE | multisynapse ports, NMDA Mg block (replaces `SynOut` COBA/MgBlock) |
@@ -224,7 +224,7 @@ Synaptic kinetics have exactly one owner per port, and there is **one encoding**
 each owner (D-b, 2026-10-22):
 
 - **neuron-owned** (NEST style): an `Event` input port that names the state it filters
-  into (`ex=Event(u.nS, into='g_ex')`); a delivered weight jumps that state, and the
+  into (`ex=Event(unit=u.nS, into='g_ex')`); a delivered weight jumps that state, and the
   neuron's own `derivatives` filter it. Incoming projections carry no `SynapseModel`.
 - **projection-owned**: a `SynapseModel` on the projection (Expon, Alpha, NMDA, …)
   deposits into an unfiltered `Current` or `Conductance` port.
@@ -241,8 +241,8 @@ negative).
 class iaf_cond_exp(NeuronModel):
     params  = Params(C_m=250*u.pF, g_L=16.6*u.nS, E_ex=0*u.mV, ..., t_ref=2*u.ms)
     states  = States(V_m=Init(-70*u.mV), g_ex=Init(0*u.nS), g_in=Init(0*u.nS))
-    inputs  = Ports(ex=Event(u.nS, into='g_ex'),      # neuron-owned receptor ports (D-b)
-                    in_=Event(u.nS, into='g_in'),
+    inputs  = Ports(ex=Event(unit=u.nS, into='g_ex'),      # neuron-owned receptor ports (D-b)
+                    in_=Event(unit=u.nS, into='g_in'),
                     I=Current(u.pA, latch=True))      # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=lambda s, p: s.V_m >= p.V_th,
@@ -250,12 +250,18 @@ class iaf_cond_exp(NeuronModel):
                         refractory=Clamp('V_m', 't_ref'))
     integrator = RK(order=4, substeps=2)   # fixed substeps; 'exact' only for linear models
 
-    def derivatives(self, s, inp, ctx): ...        # continuous part (g_ex, g_in decay here)
-    def on_input(self, s, inp, ctx): ...           # optional jump part (e.g. g += Δg)
+    def derivatives(self, s, p, inp, ctx): ...     # continuous part (g_ex, g_in decay here)
+    def on_input(self, s, p, inp, ctx): ...        # optional jump part (default: g += Δg per receptor port)
 ```
 
 (`into=` is the keyword, lead decision 2026-10-22; `TimedEvent` receptor ports use it
-too, and the `filtered` flag is removed from every port kind.)
+too, and the `filtered` flag is removed from every port kind. K1a-3: this example,
+with the elided parameters filled in, is the test
+`_kernel/receptor_ports_test.py::TestArchitectureExample`; `Event`'s first
+positional argument is `max_multiplicity`, so the unit is passed as `unit=`. The
+named state carries the weight's unit; the default `on_input` adds the weight to it,
+and models with alpha kernels (`iaf_psc_alpha`, `aeif_cond_alpha`) apply the jump
+to the kernel's derivative state instead.)
 
 - `step(state, inputs, ctx) -> (state, outputs)` is generated from `derivatives` +
   `on_input` + `spiking` + `integrator`; models with hand-written exact propagators

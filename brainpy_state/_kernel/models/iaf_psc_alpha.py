@@ -72,8 +72,11 @@ class iaf_psc_alpha(SpikingNeuron):
 
     Notes
     -----
-    Ports: ``ex`` / ``in_`` -- ``event`` with weights in pA, each filtered by its
-    own alpha kernel (``tau_syn_ex`` / ``tau_syn_in``); the weight sign is kept
+    Ports: ``ex`` / ``in_`` -- receptor ``event`` ports (decision D-b),
+    ``Event(unit=u.pA, into='I_syn_ex')`` / ``into='I_syn_in'``, weights in pA
+    (the peak of the PSC), each filtered by its own alpha kernel
+    (``tau_syn_ex`` / ``tau_syn_in``; the jump enters ``dI_syn_*``); the weight
+    sign is kept
     (NEST convention: inhibitory weights are negative; the NEST front-end routes
     ``w > 0`` to ``ex`` and ``w < 0`` to ``in_``). ``I`` -- ``current`` in pA,
     latched. Output ``spike`` -- ``event``, ``max_multiplicity=1``.
@@ -100,7 +103,8 @@ class iaf_psc_alpha(SpikingNeuron):
     states = States(V_m=Init(lambda p: p.E_L), I_syn_ex=Init(0.0 * u.pA),
                     dI_syn_ex=Init(0.0 * _PA_MS), I_syn_in=Init(0.0 * u.pA),
                     dI_syn_in=Init(0.0 * _PA_MS))
-    inputs = Ports(ex=Event(unit=u.pA), in_=Event(unit=u.pA),
+    inputs = Ports(ex=Event(unit=u.pA, into='I_syn_ex'),  # neuron-owned receptor ports (D-b)
+                   in_=Event(unit=u.pA, into='I_syn_in'),
                    I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),

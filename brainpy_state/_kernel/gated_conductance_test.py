@@ -22,7 +22,7 @@ from brainpy_state._kernel.model import with_conductance_ports
 from brainpy_state._kernel.models import NMDA, aeif_cond_alpha, iaf_cond_exp, iaf_psc_alpha, spike_generator
 from brainpy_state._kernel.models._testing import rollout, step_inputs
 from brainpy_state._kernel.network import Network
-from brainpy_state._kernel.ports import Conductance, PortError
+from brainpy_state._kernel.ports import Conductance, Event, PortError
 from brainpy_state._kernel.validation.markers import requires_brian2
 
 DT = 0.1 * u.ms
@@ -100,7 +100,7 @@ class TestWithConductancePorts:
         assert list(Cell.inputs) == ['ex', 'in_', 'I', 'nmda']
         assert 'E_nmda' in Cell.params and issubclass(Cell, iaf_cond_exp)
         assert Cell.__name__ == 'iaf_cond_exp_nmda'
-        assert Cell.inputs['nmda'].gate == MgBlock() and not Cell.inputs['nmda'].filtered
+        assert Cell.inputs['nmda'].gate == MgBlock() and Cell.inputs['nmda'].into is None
         named = with_conductance_ports(aeif_cond_alpha, name='AdExNMDA',
                                        nmda=Conductance(u.nS, E_rev=0.0 * u.mV, gate=MgBlock()))
         assert named.__name__ == 'AdExNMDA'
@@ -114,8 +114,8 @@ class TestWithConductancePorts:
             with_conductance_ports(iaf_cond_exp)
         with pytest.raises(TypeError, match='must be a Conductance'):
             with_conductance_ports(iaf_cond_exp, nmda=object())
-        with pytest.raises(PortError, match='unfiltered'):
-            with_conductance_ports(iaf_cond_exp, nmda=Conductance(E_rev=0.0 * u.mV, filtered=True))
+        with pytest.raises(TypeError, match='must be a Conductance'):
+            with_conductance_ports(iaf_cond_exp, nmda=Event(unit=u.nS, into='g_ex'))
         with pytest.raises(PortError, match='needs E_rev'):
             with_conductance_ports(iaf_cond_exp, nmda=Conductance())
         with pytest.raises(PortError, match='not declared'):

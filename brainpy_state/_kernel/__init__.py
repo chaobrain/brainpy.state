@@ -48,6 +48,7 @@ from brainpy_state._kernel.ports import (
     check_weight_unit,
     expected_weight_unit,
     is_latched,
+    is_receptor,
 )
 from brainpy_state._kernel.propagators import (
     alpha_propagator_p31_p32,
@@ -82,7 +83,7 @@ __all__ = [
     'Conductance', 'Current', 'Event', 'Graded', 'PortError', 'PortKind', 'Ports',
     'TimedEvent', 'TimedEventPayload', 'check_capacity', 'check_connection',
     'check_kind_compatible', 'check_single_owner', 'check_weight_sign', 'check_weight_unit',
-    'expected_weight_unit', 'is_latched',
+    'expected_weight_unit', 'is_latched', 'is_receptor',
     # integrators
     'Exact', 'ExpEuler', 'Integrator', 'RK', 'integrate',
     # model

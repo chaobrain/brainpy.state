@@ -27,6 +27,7 @@ from brainpy_state._kernel import (
     check_weight_sign,
     check_weight_unit,
     expected_weight_unit,
+    is_receptor,
 )
 
 
@@ -36,7 +37,7 @@ class TestKinds:
     def test_event(self):
         e = Event()
         assert e.kind == 'event' and e.max_multiplicity == 1 and e.binary
-        assert e.unit == u.UNITLESS and not e.filtered
+        assert e.unit == u.UNITLESS and e.into is None and not e.nonnegative_weights
         assert not Event(None).binary and Event(None).max_multiplicity is None
         assert Event(3).max_multiplicity == 3
         assert Event(unit=u.pA).unit == u.pA
@@ -84,8 +85,46 @@ class TestKinds:
             Conductance(E_rev=0 * u.nS)
         with pytest.raises(TypeError, match='gate'):
             Conductance(gate=3)
-        with pytest.raises(TypeError, match='filtered'):
-            Conductance(filtered='yes')
+        assert c.into is None
+
+    def test_filtered_flag_removed_everywhere(self):
+        # D-b: one receptor encoding (Event/TimedEvent ``into=``); no ``filtered`` flag left
+        for make in (lambda: Event(filtered=True), lambda: TimedEvent(2, filtered=True),
+                     lambda: Current(filtered=True), lambda: Conductance(filtered=True),
+                     lambda: Graded(u.pA, filtered=True)):
+            with pytest.raises(TypeError):
+                make()
+        for kind in (Event(), TimedEvent(2), Current(), Conductance(), Graded(None)):
+            assert not hasattr(kind, 'filtered')
+        with pytest.raises(TypeError):
+            Current(u.pA, False)  # the positional ``filtered`` slot is gone (latch is keyword-only)
+
+    def test_receptor_event(self):
+        ex = Event(unit=u.nS, into='g_ex')
+        assert ex.into == 'g_ex' and is_receptor(ex) and ex.nonnegative_weights
+        assert ex != Event(unit=u.nS) and ex == Event(unit=u.nS, into='g_ex')
+        assert hash(ex) == hash(Event(unit=u.nS, into='g_ex'))
+        psc = Event(unit=u.pA, into='I_syn_ex')
+        assert is_receptor(psc) and not psc.nonnegative_weights  # signed PSC weights
+        assert not Event(unit=u.nS).nonnegative_weights  # not a receptor: no sign rule
+        assert not is_receptor(Event(unit=u.pA))
+        for bad in ('', '1g', 'g ex', 3, b'g'):
+            with pytest.raises(PortError, match='into'):
+                Event(unit=u.nS, into=bad)
+        with pytest.raises(TypeError):
+            Event(1, u.nS, 'g_ex')  # into is keyword-only
+
+    def test_receptor_timed_event(self):
+        t = TimedEvent(4, unit=u.nS, into='g_ex')
+        assert t.into == 'g_ex' and is_receptor(t) and t.nonnegative_weights
+        assert not is_receptor(TimedEvent(4, unit=u.pA))
+        assert not TimedEvent(4, unit=u.pA, into='I_syn').nonnegative_weights
+        with pytest.raises(PortError, match='into'):
+            TimedEvent(4, unit=u.nS, into='not a name')
+
+    def test_value_kinds_are_never_receptors(self):
+        for kind in (Current(), Conductance(), Graded(u.nS)):
+            assert not is_receptor(kind) and kind.into is None
 
     def test_graded(self):
         g = Graded(u.mV)
@@ -99,6 +138,8 @@ class TestPorts:
         assert list(p) == ['ex', 'I'] and len(p) == 2
         assert p.require('ex') is p['ex']
         assert 'ex=Conductance' in repr(p)
+        r = repr(Ports(ex=Event(unit=u.nS, into='g_ex'), I=Current(), d=Event()))
+        assert r == "Ports(ex=Event(into='g_ex'), I=Current(latch=True), d=Event)"
         with pytest.raises(PortError, match=r"E->I: port 'in' does not exist; available: \['ex', 'I'\]"):
             p.require('in', where='E->I')
 
@@ -195,10 +236,10 @@ class TestCompatibility:
         (Graded(u.mV), Graded(u.mV)),
         (Graded(u.pA), Current()),
         (Graded(u.nS), Conductance()),
-        # neuron-filtered ports receive events directly (the neuron owns the kinetics)
-        (Event(), Conductance(filtered=True)),
-        (TimedEvent(2), Conductance(filtered=True)),
-        (Event(), Current(filtered=True)),
+        # neuron-owned receptor ports receive events directly (the neuron owns the kinetics)
+        (Event(), Event(unit=u.nS, into='g_ex')),
+        (TimedEvent(2), Event(unit=u.nS, into='g_ex')),
+        (Event(), TimedEvent(2, unit=u.pA, into='I_syn')),
     ])
     def test_allowed(self, src, dst):
         check_kind_compatible(src, dst)
@@ -206,6 +247,11 @@ class TestCompatibility:
     @pytest.mark.parametrize('src,dst', [
         (Event(), Current()),
         (Event(), Conductance()),
+        # the K0 special case (events straight into a filtered value port) is gone (D-b)
+        (TimedEvent(2), Conductance()),
+        (TimedEvent(2), Current()),
+        (Current(), Event(unit=u.pA, into='I_syn')),
+        (Graded(u.nS), Event(unit=u.nS, into='g_ex')),
         (Event(), Graded(None)),
         (Current(), Event()),
         (Conductance(), Current()),
@@ -247,6 +293,19 @@ class TestWeightSign:
         with pytest.raises(PortError, match='non-negative'):
             check_weight_sign(jnp.array([1.0, -0.1]) * u.nS, Conductance(), where='E->I')
 
+    def test_conductance_receptor_values(self):
+        ex = Event(unit=u.nS, into='g_ex')
+        check_weight_sign(jnp.array([0.0, 1.0]) * u.nS, ex)
+        with pytest.raises(PortError, match='event weights must be non-negative'):
+            check_weight_sign(jnp.array([1.0, -0.1]) * u.nS, ex, where='E->I.ex')
+        with pytest.raises(PortError, match='clip it with low=0'):
+            check_weight_sign(Normal(1 * u.nS, 0.1 * u.nS), ex)
+        check_weight_sign(Normal(1 * u.nS, 0.1 * u.nS, low=0 * u.nS), ex)
+        with pytest.raises(PortError, match='non-negative'):
+            check_weight_sign(-1 * u.nS, TimedEvent(2, unit=u.nS, into='g'))
+        # a current receptor keeps signed weights (NEST: inhibitory PSC weights < 0)
+        check_weight_sign(Normal(0 * u.pA, 1 * u.pA), Event(unit=u.pA, into='I_syn_ex'))
+
     def test_conductance_distributions(self):
         check_weight_sign(Uniform(0 * u.nS, 1 * u.nS), Conductance())
         check_weight_sign(LogNormal(0.0, 1.0, unit=u.nS), Conductance())
@@ -273,10 +332,15 @@ class TestCapacityAndOwner:
         assert check_capacity(TimedEvent(4), 5, strict=False) is False
 
     def test_single_owner(self):
-        check_single_owner(Conductance(filtered=True), synapse_filters=False)
+        ex = Event(unit=u.nS, into='g_ex')
+        check_single_owner(ex, synapse_filters=False)
         check_single_owner(Conductance(), synapse_filters=True)
-        with pytest.raises(PortError, match='twice'):
-            check_single_owner(Conductance(filtered=True), synapse_filters=True)
+        check_single_owner(Current(), synapse_filters=True)
+        check_single_owner(Event(unit=u.nS), synapse_filters=True)  # not a receptor
+        with pytest.raises(PortError, match=r"P -> iaf_cond_exp\.ex: .*neuron-owned receptor.*'g_ex'"):
+            check_single_owner(ex, synapse_filters=True, where='P -> iaf_cond_exp.ex')
+        with pytest.raises(PortError, match='receptor'):
+            check_single_owner(TimedEvent(2, unit=u.pA, into='I'), synapse_filters=True)
 
 
 class TestCheckConnection:
@@ -288,8 +352,8 @@ class TestCheckConnection:
     def test_each_check_fires(self):
         with pytest.raises(PortError, match='cannot feed'):
             check_connection(Event(), Current())
-        with pytest.raises(PortError, match='twice'):
-            check_connection(Conductance(), Conductance(filtered=True), synapse_filters=True)
+        with pytest.raises(PortError, match='receptor'):
+            check_connection(Event(), Event(unit=u.nS, into='g'), synapse_filters=True)
         with pytest.raises(UnitMismatchError):
             check_connection(Event(), Event(unit=u.pA), 1 * u.nS)
         with pytest.raises(PortError, match='non-negative'):
