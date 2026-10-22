@@ -293,7 +293,7 @@ class TestDescribe:
         net.add(dc_generator, 1, name='D')
         text = net.compile().describe(print_=False)
         assert 'L: LIF n=1 gids=[0, 1) inputs: I=current(same-step) delta=event' in text
-        assert 'inputs: ex=event in_=event I=current(latch)' in text
+        assert 'inputs: ex=event(into I_syn_ex) in_=event(into I_syn_in) I=current(latch)' in text
         line = [l for l in text.splitlines() if l.startswith('  D: dc_generator')][0]
         assert 'inputs' not in line  # devices have no inputs
         assert 'deferred latched ports' not in text

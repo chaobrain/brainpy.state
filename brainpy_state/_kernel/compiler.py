@@ -67,7 +67,7 @@ from brainpy_state._kernel.network import Network, Population, Projection, Segme
 from brainpy_state._kernel.observers import Observer
 from brainpy_state._kernel.params import ConstParamState, Distribution
 from brainpy_state._kernel.plasticity import PlasticPlan
-from brainpy_state._kernel.ports import Event, TimedEvent, is_latched
+from brainpy_state._kernel.ports import Event, TimedEvent, is_latched, is_receptor
 from brainpy_state._kernel.rng import block_key, object_key, view_post_keys
 from brainpy_state._kernel.synapse import plan_synapse_groups
 from brainpy_state._kernel.timed import TimedDelivery, TimedRing, check_capacities
@@ -462,7 +462,11 @@ def schedule_ports(n_pops: int, same_step: set, latched: set) -> tuple[list, dic
 
 
 def _describe_inputs(inputs: Any) -> str:
-    """`` inputs: I=current(latch) delta=event`` (latch shown per current/graded port, D-a)."""
+    """`` inputs: ex=event(into g_ex) I=current(latch) delta=event``.
+
+    The latch is shown per current/graded port (D-a), the filtered state per
+    receptor port (D-b).
+    """
     if not len(inputs):
         return ''
     parts = []
@@ -470,6 +474,8 @@ def _describe_inputs(inputs: Any) -> str:
         tag = kind.kind or type(kind).__name__
         if hasattr(kind, 'latch'):
             tag += '(latch)' if kind.latch else '(same-step)'
+        elif is_receptor(kind):
+            tag += f'(into {kind.into})'
         parts.append(f'{k}={tag}')
     return ' inputs: ' + ' '.join(parts)
 

@@ -142,9 +142,19 @@ class TestConnectChecks:
         net = Network(dt=DT * u.ms)
         sg = net.add(spike_generator, 1)
         c = net.add(iaf_cond_exp, 2)
-        with pytest.raises(PortError, match='already filters'):
+        with pytest.raises(PortError, match=r'spike_generator\.spike -> iaf_cond_exp\.ex: the target '
+                                            r"is a neuron-owned receptor port.*'g_ex'"):
             net.connect(sg, c, port='ex', weight=1.0 * u.nS, synapse=Expon(2.0 * u.ms))
-        # without a synapse the filtered port takes events directly (neuron owns kinetics)
+        # any synapse model, even one without kinetics of its own
+        class _NoKinetics(Expon):
+            filters = False
+
+        with pytest.raises(PortError, match='receptor'):
+            net.connect(sg, c, port='ex', weight=1.0 * u.nS, synapse=_NoKinetics(2.0 * u.ms))
+        with pytest.raises(PortError, match='receptor'):
+            check_synapse_connection(Expon(2.0 * u.ms), Event(), Event(unit=u.nS, into='g_ex'),
+                                     1.0 * u.nS)
+        # without a synapse the receptor port takes events directly (neuron owns kinetics)
         net.connect(sg, c, port='ex', weight=1.0 * u.nS)
 
     def test_event_into_unfiltered_current_needs_synapse(self):

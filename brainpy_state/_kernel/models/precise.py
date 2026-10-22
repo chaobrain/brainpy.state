@@ -100,7 +100,7 @@ def _capacity_variant(base: type, capacity: int) -> type:
     attr, port = base._timed_port
     ports = dict(getattr(base, attr))
     old = ports[port]
-    ports[port] = TimedEvent(capacity, unit=old.unit, filtered=old.filtered)
+    ports[port] = TimedEvent(capacity, unit=old.unit, into=old.into)
     if base.capacity() == capacity:
         return base
     return type(base.__name__, (base,), {attr: Ports(**ports), '__module__': base.__module__,

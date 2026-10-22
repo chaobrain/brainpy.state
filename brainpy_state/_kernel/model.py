@@ -23,6 +23,13 @@ A model *declares* (class attributes, K0 spec §4.3):
 and implements ``derivatives(s, p, inp, ctx) -> dict`` (continuous part) and
 optionally ``on_input(s, p, inp, ctx) -> s`` (event jumps).
 
+Receptor ports (decision D-b): an input ``Event(unit=..., into='g_ex')`` names
+the declared state the neuron filters it into. The state must exist and have the
+port unit's dimension (checked at class creation). The default ``on_input`` adds
+each receptor port's payload to its state (``g_ex += w``); models whose kinetics
+take the weight differently (alpha kernels: ``dg_ex += e / tau * w``) override
+``on_input`` (or ``step``).
+
 Generated step (architecture doc §7.1)
 --------------------------------------
 1. **latch** (per port, decision D-a): ``current`` / ``graded`` ports declared
@@ -39,7 +46,8 @@ Generated step (architecture doc §7.1)
    ``derivatives`` sees the substep's ``V``.
 3. after **every substep**: refractory clamp, spike condition, jump over all
    states, refractory counter, spike **count** (:mod:`.spiking`).
-4. **event** jumps (``on_input``) after the continuous propagation.
+4. **event** jumps (``on_input``; by default the receptor-port jumps) after the
+   continuous propagation.
 5. outputs are read from the **new** state values (the spike output is a float
    ``HiddenState``), which braintrace requires.
 
@@ -71,10 +79,12 @@ from brainpy_state._kernel.params import (
 )
 from brainpy_state._kernel.ports import (
     Conductance,
+    Event,
     PortError,
     Ports,
     TimedEvent,
     is_latched,
+    is_receptor,
 )
 from brainpy_state._kernel.spiking import SpikeRule
 from brainpy_state._kernel.units import (
@@ -185,7 +195,7 @@ def with_conductance_ports(model: type, name: str | None = None,
     r"""Derive a model class with extra (optionally voltage-gated) conductance ports.
 
     The generic receiving end of conductance delivery (K0 T8): the new ports are
-    unfiltered ``Conductance`` ports -- the payload is the conductance itself,
+    ``Conductance`` ports -- the payload is the conductance itself,
     delivered once per step and constant over the substeps -- and the model adds
     :math:`\sum_k g_k\,\mathrm{gate}_k(V)\,(E_k - V)` to its membrane equation through
     :meth:`NeuronModel.conductance_port_current`, so every gate is evaluated at the
@@ -202,7 +212,7 @@ def with_conductance_ports(model: type, name: str | None = None,
         Extra parameter declarations (e.g. ``E_nmda=0 * u.mV`` referenced by a
         port's ``E_rev``).
     **ports : Conductance
-        New input ports; each must be unfiltered and declare ``E_rev``.
+        New input ports; each must declare ``E_rev``.
 
     Returns
     -------
@@ -215,7 +225,7 @@ def with_conductance_ports(model: type, name: str | None = None,
         If ``model`` does not opt in, a port is not a ``Conductance`` or no port
         is given.
     PortError
-        If a port is filtered, has no ``E_rev``, names an undeclared parameter or
+        If a port has no ``E_rev``, names an undeclared parameter or
         clashes with an existing port.
 
     Examples
@@ -244,9 +254,6 @@ def with_conductance_ports(model: type, name: str | None = None,
     for k, kind in ports.items():
         if not isinstance(kind, Conductance):
             raise TypeError(f'port {k!r} must be a Conductance, got {type(kind).__name__}')
-        if kind.filtered:
-            raise PortError(f'port {k!r}: added conductance ports are unfiltered (their kinetics '
-                            f'belong to the source or a synapse model)')
         if kind.E_rev is None:
             raise PortError(f'port {k!r} needs E_rev (a voltage or a parameter name)')
         if isinstance(kind.E_rev, str) and kind.E_rev not in new_params:
@@ -370,10 +377,29 @@ class NeuronModel(brainstate.nn.Module):
                 raise TypeError(f'{name}: states {sorted(extra)} clash with the spike rule')
             if rule.clamp_var is not None and rule.clamp_var not in cls.state_decl:
                 raise TypeError(f'{name}: Clamp var {rule.clamp_var!r} is not a declared state')
+        cls._validate_receptors()
         latches = {latch_name(k) for k in latched_ports(cls.inputs)}
         clash = latches & set(cls.state_decl)
         if clash:
             raise TypeError(f'{name}: states {sorted(clash)} clash with input latches')
+
+    @classmethod
+    def _validate_receptors(cls) -> None:
+        """Receptor ports (``into=``) must name a declared float state of the port's dimension."""
+        for k, kind in cls.inputs.items():
+            if not is_receptor(kind):
+                continue
+            where = f'{cls.__name__}.inputs[{k!r}]'
+            if kind.into not in cls.state_decl:
+                raise PortError(f'{where}: receptor port filters into {kind.into!r}, which is not a '
+                                f'declared state (declared: {list(cls.state_decl)})')
+            init = cls.state_decl[kind.into]
+            if init.dtype is not None and not jnp.issubdtype(init.dtype, jnp.floating):
+                raise PortError(f'{where}: receptor state {kind.into!r} must be a float state, '
+                                f'not {init.dtype}')
+            if init.unit is not None and u.get_dim(init.unit) != u.get_dim(kind.unit):
+                raise PortError(f'{where}: weight unit {kind.unit} does not match the dimension '
+                                f'of receptor state {kind.into!r} ({init.unit})')
 
     # ---------------------------------------------------------------- construction
 
@@ -448,15 +474,40 @@ class NeuronModel(brainstate.nn.Module):
         raise NotImplementedError(f'{type(self).__name__} must implement derivatives()')
 
     def on_input(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> Record:
-        """Event jumps applied after the step's propagation (default: none)."""
-        return s
+        """Event jumps applied after the step's propagation.
+
+        The default applies the receptor-port jumps (decision D-b): every
+        ``Event(..., into=<state>)`` input adds its payload to ``<state>``
+        (several ports into one state add up, in port order). Models without
+        receptor ports are left unchanged. ``TimedEvent`` receptor payloads are
+        not handled here: a model with one integrates them in its own ``step``.
+
+        Parameters
+        ----------
+        s, p : Record
+            State values after the propagation, and parameter values.
+        inp : Record
+            Port payloads of the step.
+        ctx : StepContext
+            Step context.
+
+        Returns
+        -------
+        Record
+            The jumped states.
+        """
+        changes: dict[str, Any] = {}
+        for k, kind in self.inputs.items():
+            if isinstance(kind, Event) and kind.into is not None:
+                changes[kind.into] = changes.get(kind.into, s[kind.into]) + inp[k]
+        return s.replace(**changes) if changes else s
 
     def conductance_port_current(self, inp: Record, V: Any, p: Record) -> Any:
-        r"""Summed current of the unfiltered ``conductance`` input ports.
+        r"""Summed current of the ``conductance`` input ports.
 
-        :math:`\sum_k g_k\,\mathrm{gate}_k(V)\,(E_k - V)` over every unfiltered
-        :class:`~brainpy_state._kernel.ports.Conductance` port (filtered ports are
-        integrated by the model's own states). Call it inside ``derivatives`` with
+        :math:`\sum_k g_k\,\mathrm{gate}_k(V)\,(E_k - V)` over every
+        :class:`~brainpy_state._kernel.ports.Conductance` port (receptor ports,
+        ``Event(..., into=...)``, are integrated by the model's own states). Call it inside ``derivatives`` with
         the substep's ``V`` so each gate is re-evaluated at every substep.
 
         Parameters
@@ -475,7 +526,7 @@ class NeuronModel(brainstate.nn.Module):
         """
         total = u.Quantity(jnp.zeros_like(to_mantissa(V, u.mV)), unit=u.pA)
         for k, kind in self.inputs.items():
-            if isinstance(kind, Conductance) and not kind.filtered:
+            if isinstance(kind, Conductance):
                 total = total + conductance_current(kind, inp[k], V, p)
         return total
 

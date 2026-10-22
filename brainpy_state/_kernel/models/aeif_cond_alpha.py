@@ -20,7 +20,7 @@ from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.integrators import RK, Integrator
 from brainpy_state._kernel.models._common import SpikingNeuron
 from brainpy_state._kernel.params import Init, Params, Record, States
-from brainpy_state._kernel.ports import Conductance, Current, Event, Ports
+from brainpy_state._kernel.ports import Current, Event, Ports
 from brainpy_state._kernel.spiking import Clamp, SpikeRule
 
 __all__ = ['aeif_cond_alpha', 'AEIF_COND_ALPHA_SUBSTEPS']
@@ -86,8 +86,10 @@ class aeif_cond_alpha(SpikingNeuron):
 
     Notes
     -----
-    Ports: ``ex`` / ``in_`` -- ``conductance`` (nS), ``filtered=True`` (payload
-    = weight, scaled by ``e / tau_syn`` into ``dg``); ``I`` -- ``current`` (pA),
+    Ports: ``ex`` / ``in_`` -- receptor ``event`` ports (decision D-b),
+    ``Event(unit=u.nS, into='g_ex')`` / ``into='g_in'``: the neuron owns the
+    alpha kinetics; a delivered weight (nS, non-negative, the peak of ``g``) is
+    scaled by ``e / tau_syn`` into ``dg`` (``on_input``); ``I`` -- ``current`` (pA),
     latched. Output ``spike`` -- ``event`` with ``max_multiplicity=None``
     (several spikes per step are possible), so projections use the exact count
     payload path.
@@ -113,8 +115,8 @@ class aeif_cond_alpha(SpikingNeuron):
                     I_e=0.0 * u.pA)
     states = States(V_m=Init(lambda p: p.E_L), dg_ex=Init(0.0 * _NS_MS), g_ex=Init(0.0 * u.nS),
                     dg_in=Init(0.0 * _NS_MS), g_in=Init(0.0 * u.nS), w=Init(0.0 * u.pA))
-    inputs = Ports(ex=Conductance(u.nS, E_rev='E_ex', filtered=True),
-                   in_=Conductance(u.nS, E_rev='E_in', filtered=True),
+    inputs = Ports(ex=Event(unit=u.nS, into='g_ex'),  # neuron-owned receptor ports (D-b)
+                   in_=Event(unit=u.nS, into='g_in'),
                    I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event(max_multiplicity=None))
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),

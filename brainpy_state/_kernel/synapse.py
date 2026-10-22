@@ -4,7 +4,7 @@
 A :class:`SynapseModel` is attached to a projection with
 ``net.connect(..., synapse=Expon(tau=5 * u.ms))``. Each step the projection's
 delivered event amplitudes (``sum_e weight_e * count_e``, in the port unit) enter the
-synapse state, and the synapse output is deposited into an **unfiltered**
+synapse state, and the synapse output is deposited into a plain
 ``Current`` / ``Conductance`` input port of the target. The neuron then treats it
 like any value input (a latched ``Current`` port -- ``latch=True``, NEST models --
 stores it for the next step, an unlatched one uses it in the same step, a
@@ -12,10 +12,11 @@ stores it for the next step, an unlatched one uses it in the same step, a
 
 Single owner of kinetics
 ------------------------
-A port declared ``filtered=True`` already filters its synaptic kinetics inside the
-neuron (NEST style, e.g. ``iaf_cond_exp.ex``); attaching a filtering synapse to it is
-a :class:`~brainpy_state._kernel.ports.PortError` (the kinetics would be applied
-twice).
+A neuron-owned receptor port, ``Event(unit=u.nS, into='g_ex')`` (decision D-b),
+already filters its synaptic kinetics inside the neuron (NEST style, e.g.
+``iaf_cond_exp.ex``); attaching any synapse model to it is a
+:class:`~brainpy_state._kernel.ports.PortError` naming the neuron model that owns
+the kinetics (they would be applied twice).
 
 Merge pass
 ----------
@@ -75,8 +76,9 @@ class SynapseModel:
         Whether the kinetics are linear in the input (only linear synapses with
         equal parameters may be merged).
     filters : bool
-        Whether the synapse has its own kinetics (single-owner check against
-        :attr:`PortKind.filtered <brainpy_state._kernel.ports.PortKind>`).
+        Whether the synapse has its own kinetics. Any synapse model is rejected
+        on a neuron-owned receptor port
+        (:func:`~brainpy_state._kernel.ports.is_receptor`).
     targets : tuple of type
         Port kinds the synapse output may be deposited into.
     """
@@ -215,8 +217,8 @@ def check_synapse_connection(synapse: Any, src: PortKind, dst: PortKind, weight:
                              where: str = '') -> None:
     """Connect-time checks of a projection with a synapse model.
 
-    The synapse must receive events (K0) and deposit into an unfiltered port of a kind
-    it supports; the weight carries the port unit and respects its sign rule.
+    The synapse must receive events (K0) and deposit into a plain ``Current`` /
+    ``Conductance`` port of a kind it supports (never a neuron-owned receptor port); the weight carries the port unit and respects its sign rule.
 
     Parameters
     ----------
@@ -236,7 +238,8 @@ def check_synapse_connection(synapse: Any, src: PortKind, dst: PortKind, weight:
     TypeError
         If ``synapse`` is not a :class:`SynapseModel`.
     PortError
-        On a non-event source, an unsupported or filtered target port.
+        On a non-event source, a receptor target port (``into=``, the neuron owns
+        the kinetics) or an unsupported target port.
     """
     pre = f'{where}: ' if where else ''
     if not isinstance(synapse, SynapseModel):
@@ -246,7 +249,7 @@ def check_synapse_connection(synapse: Any, src: PortKind, dst: PortKind, weight:
     if not isinstance(src, Event):
         raise PortError(f'{pre}{type(synapse).__name__} receives spike events; the source port is '
                         f'a {src.kind!r} port')
-    check_single_owner(dst, synapse.filters, where)
+    check_single_owner(dst, True, where)  # any synapse model: the neuron owns the kinetics
     if not isinstance(dst, synapse.targets):
         raise PortError(f'{pre}{type(synapse).__name__} cannot feed a {dst.kind!r} port '
                         f'(allowed: {[k.kind for k in synapse.targets]})')

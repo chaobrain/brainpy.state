@@ -17,7 +17,7 @@ from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.integrators import RK, Integrator
 from brainpy_state._kernel.models._common import SpikingNeuron
 from brainpy_state._kernel.params import Init, Params, Record, States
-from brainpy_state._kernel.ports import Conductance, Current, Event, Ports
+from brainpy_state._kernel.ports import Current, Event, Ports
 from brainpy_state._kernel.spiking import Clamp, SpikeRule
 
 __all__ = ['iaf_cond_exp', 'IAF_COND_EXP_SUBSTEPS']
@@ -47,8 +47,9 @@ class iaf_cond_exp(SpikingNeuron):
     with :math:`\tilde V = \min(V, V_{th})` (NEST bounds ``V`` inside the vector
     field). One step: integrate with ``RK(4, substeps)`` (``dV/dt = 0`` while
     refractory) using the current latched at the previous step; the threshold is
-    checked once at the end of the step (``when='step'``, NEST); ``event``
-    conductance jumps ``g_X += w`` are applied after the propagation.
+    checked once at the end of the step (``when='step'``, NEST); the receptor
+    jumps ``g_X += w`` are applied after the propagation (the default
+    ``on_input``).
 
     Parameters
     ----------
@@ -69,11 +70,12 @@ class iaf_cond_exp(SpikingNeuron):
 
     Notes
     -----
-    Ports: ``ex`` / ``in_`` -- ``conductance`` (nS), ``filtered=True``: the
-    neuron owns the exponential kinetics and the payload is the jump of
-    ``g_ex`` / ``g_in`` (non-negative weights); ``I`` -- ``current`` (pA),
-    latched. Output ``spike`` -- ``event``, ``max_multiplicity=1``. Extra
-    unfiltered (e.g. NMDA Mg-gated) conductance ports can be added with
+    Ports: ``ex`` / ``in_`` -- receptor ``event`` ports (decision D-b),
+    ``Event(unit=u.nS, into='g_ex')`` / ``into='g_in'``: the neuron owns the
+    exponential kinetics, a delivered weight (nS, non-negative) jumps ``g_ex`` /
+    ``g_in``, and projections into them carry no synapse model; ``I`` --
+    ``current`` (pA), latched. Output ``spike`` -- ``event``, ``max_multiplicity=1``. Extra
+    (e.g. NMDA Mg-gated) ``Conductance`` ports can be added with
     :func:`~brainpy_state._kernel.model.with_conductance_ports`; their current
     uses the bounded :math:`\tilde V` like the built-in ones.
 
@@ -96,8 +98,8 @@ class iaf_cond_exp(SpikingNeuron):
                     E_L=-70.0 * u.mV, tau_syn_ex=0.2 * u.ms, tau_syn_in=2.0 * u.ms,
                     I_e=0.0 * u.pA)
     states = States(V_m=Init(lambda p: p.E_L), g_ex=Init(0.0 * u.nS), g_in=Init(0.0 * u.nS))
-    inputs = Ports(ex=Conductance(u.nS, E_rev='E_ex', filtered=True),
-                   in_=Conductance(u.nS, E_rev='E_in', filtered=True),
+    inputs = Ports(ex=Event(unit=u.nS, into='g_ex'),  # neuron-owned receptor ports (D-b)
+                   in_=Event(unit=u.nS, into='g_in'),
                    I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
@@ -115,6 +117,5 @@ class iaf_cond_exp(SpikingNeuron):
                 'g_ex': -s.g_ex / p.tau_syn_ex,
                 'g_in': -s.g_in / p.tau_syn_in}
 
-    def on_input(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> Record:
-        """Conductance jumps after the propagation (NEST ``spike_exc_`` / ``spike_inh_``)."""
-        return s.replace(g_ex=s.g_ex + inp.ex, g_in=s.g_in + inp['in_'])
+    # on_input: the default receptor jumps g_ex += w_ex, g_in += w_in after the
+    # propagation (NEST spike_exc_ / spike_inh_, decision D-b)
