@@ -38,7 +38,14 @@ All parameters carry **physical units** via [brainunit](https://github.com/chaob
 
 ## Scope
 
-`brainpy.state` is for computational neuroscientists who want NEST models on GPU/TPU or want to train them, and for brain-inspired-computing researchers who need biologically constrained spiking networks. Out of scope: detailed multi-compartment morphology, MPI cluster-scale simulation, MUSIC/SONATA co-simulation, and e-prop (see [braintrace](https://github.com/chaobrain/braintrace)). See [Positioning and scope](https://brainx.chaobrain.com/brainpy-state/project/positioning.html).
+`brainpy.state` is for computational neuroscientists who want NEST models on GPU/TPU or want to train them, and for brain-inspired-computing researchers who need biologically constrained spiking networks.
+
+- **Model scope:** point neurons only (no multi-compartment or population/mean-field models) and no single-unit rate neurons.
+- **Out of scope:** detailed multi-compartment morphology, MPI cluster-scale simulation (single-host multi-device is in scope), MUSIC/SONATA co-simulation (SONATA import is in scope), and e-prop (see [braintrace](https://github.com/chaobrain/braintrace)).
+
+**Kernel redesign in progress.** The package is moving onto a new kernel: one `Network` graph (populations, projections, devices, observers) over models with written contracts (declared ports, states, parameters and spike rules), so the graph a simulation runs is the graph a learner trains ([architecture spec](docs/specs/2026-10-21-architecture-review-and-redesign.md), [roadmap](docs/specs/2026-10-21-roadmap.md)). The first milestone has passed its go/no-go gates; the new kernel is still private. Meanwhile the current 0.1 API shown below is frozen (it keeps working; no new features or fixes). The NEST-style `Simulator` will become a thin layer over `Network`, and the **BrainPy-style API** (standalone neuron modules and the AlignPre/AlignPost projections) **will be deprecated** once the new kernel is public. CPU performance of the new kernel has been measured on one benchmark; GPU performance has not been measured yet.
+
+See [Positioning and scope](https://brainx.chaobrain.com/brainpy-state/project/positioning.html).
 
 
 ## Installation
