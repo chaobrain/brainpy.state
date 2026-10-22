@@ -58,7 +58,7 @@ import numpy as np
 
 from brainpy_state._kernel.compiler import Plan, ProjectionPlan
 from brainpy_state._kernel.context import StepContext, check_spike_options
-from brainpy_state._kernel.model import Device
+from brainpy_state._kernel.model import Device, _keep_dependency, latch_name
 from brainpy_state._kernel.observers import Recording, Results, window_init, window_update
 from brainpy_state._kernel.params import Record, read_states
 from brainpy_state._kernel.ports import TimedEvent
@@ -479,6 +479,74 @@ class Program:
         return y
 
     # ---------------------------------------------------------------- step
+    def _ctx(self, a: int, n: Any, trial: Any) -> StepContext:
+        key = step_block_keys(self._blk_keys[a], n, trial)
+        return StepContext(t=from_mantissa(n.astype(self.dtype) * self.dt_ms, u.ms), dt=self.dt,
+                           step=n, key=key, spikes=self.spikes, detach_reset=self.detach_reset)
+
+    def _gather(self, a: int, params: dict, state: dict, cur: dict, n: Any, ctx: StepContext,
+                delivered: dict, syn_state: dict, ext: dict | None,
+                skip: frozenset = frozenset(), only: frozenset | None = None) -> dict:
+        """Input mantissas of population ``a``: deliveries, synapse groups, external input.
+
+        ``skip`` / ``only`` select input ports (deferred latched ports are gathered
+        separately at the end of the step). ``delivered`` caches each projection's
+        delivery; ``syn_state`` is updated in place.
+        """
+        plan = self.plan
+        pplan = plan.populations[a]
+        model = pplan.model
+
+        def wanted(port: str) -> bool:
+            return port not in skip and (only is None or port in only)
+
+        acc: dict[Any, jax.Array] = {}
+        for j in pplan.incoming:
+            pp = plan.projections[j]
+            if not wanted(pp.proj.port):
+                continue
+            if j not in delivered:
+                delivered[j] = self._deliver(pp, params, state, cur, n)
+            y = delivered[j]
+            gi = plan.synapse_route.get((j, a))
+            port = pp.proj.port if gi is None else ('syn', gi)
+            kind = model.inputs[port] if gi is None else None
+            for seg in pp.proj.post.segments:
+                if seg.pop != a:
+                    continue
+                if isinstance(kind, TimedEvent):
+                    acc[port] = _timed.accumulate(acc.get(port), y, seg, pplan.pop.n,
+                                                  self._scale[(j, a)], kind.capacity,
+                                                  self.dt_ms, self.dtype)
+                    continue
+                ys = y[seg.pos]
+                f = self._scale[(j, a)]
+                if f != 1.0:
+                    ys = ys * f
+                if port not in acc and seg.full and seg.local == slice(0, pplan.pop.n):
+                    acc[port] = ys
+                    continue
+                base = acc.get(port)
+                if base is None:
+                    base = jnp.zeros((pplan.pop.n,), self.dtype)
+                if seg.full:
+                    acc[port] = base.at[seg.local].add(ys)
+                else:
+                    acc[port] = base.at[jnp.asarray(seg.local, jnp.int32)].add(ys)
+        for gi in self._syn_by_pop.get(a, ()):
+            g = plan.synapses[gi]
+            if not wanted(g.port):
+                continue
+            x = acc.pop(('syn', gi), None)
+            if x is None:  # pragma: no cover - every member delivers into its group
+                x = jnp.zeros((pplan.pop.n,), self.dtype)
+            syn_state[g.key], out = g.synapse.step(syn_state[g.key], x, ctx)
+            acc[g.port] = out if g.port not in acc else acc[g.port] + out
+        if ext is not None and pplan.name in ext:
+            values = {k: v for k, v in ext[pplan.name].items() if wanted(k)}
+            self._ext(pplan, acc, values)
+        return acc
+
     def _ext(self, pplan: Any, acc: dict, values: dict) -> None:
         """Add external port inputs (``{port: value}``; Quantity or mantissa in the port unit)."""
         model = pplan.model
@@ -527,49 +595,9 @@ class Program:
         for a in plan.order:
             pplan = plan.populations[a]
             model = pplan.model
-            acc: dict[Any, jax.Array] = {}
-            key = step_block_keys(self._blk_keys[a], n, trial)
-            ctx = StepContext(t=from_mantissa(n.astype(self.dtype) * self.dt_ms, u.ms), dt=self.dt,
-                              step=n, key=key, spikes=self.spikes, detach_reset=self.detach_reset)
-            for j in pplan.incoming:
-                pp = plan.projections[j]
-                if j not in delivered:
-                    delivered[j] = self._deliver(pp, params, state, cur, n)
-                y = delivered[j]
-                gi = plan.synapse_route.get((j, a))
-                port = pp.proj.port if gi is None else ('syn', gi)
-                kind = model.inputs[port] if gi is None else None
-                for seg in pp.proj.post.segments:
-                    if seg.pop != a:
-                        continue
-                    if isinstance(kind, TimedEvent):
-                        acc[port] = _timed.accumulate(acc.get(port), y, seg, pplan.pop.n,
-                                                      self._scale[(j, a)], kind.capacity,
-                                                      self.dt_ms, self.dtype)
-                        continue
-                    ys = y[seg.pos]
-                    f = self._scale[(j, a)]
-                    if f != 1.0:
-                        ys = ys * f
-                    if port not in acc and seg.full and seg.local == slice(0, pplan.pop.n):
-                        acc[port] = ys
-                        continue
-                    base = acc.get(port)
-                    if base is None:
-                        base = jnp.zeros((pplan.pop.n,), self.dtype)
-                    if seg.full:
-                        acc[port] = base.at[seg.local].add(ys)
-                    else:
-                        acc[port] = base.at[jnp.asarray(seg.local, jnp.int32)].add(ys)
-            for gi in self._syn_by_pop.get(a, ()):
-                g = plan.synapses[gi]
-                x = acc.pop(('syn', gi), None)
-                if x is None:  # pragma: no cover - every member delivers into its group
-                    x = jnp.zeros((pplan.pop.n,), self.dtype)
-                syn_state[g.key], out = g.synapse.step(syn_state[g.key], x, ctx)
-                acc[g.port] = out if g.port not in acc else acc[g.port] + out
-            if ext is not None and pplan.name in ext:
-                self._ext(pplan, acc, ext[pplan.name])
+            ctx = self._ctx(a, n, trial)
+            acc = self._gather(a, params, state, cur, n, ctx, delivered, syn_state, ext,
+                               skip=plan.deferred.get(a, frozenset()))
             inp = model.prepare_inputs({
                 k: (_timed.with_weight_unit(v, model.inputs[k].unit) if isinstance(model.inputs[k], TimedEvent)
                     else from_mantissa(v, model.inputs[k].unit)) for k, v in acc.items()})
@@ -580,6 +608,22 @@ class Program:
                              if isinstance(model.outputs[port], TimedEvent)
                              else to_mantissa(v, pplan.out_units[port]).astype(self.dtype))
                       for port, v in out.items()}
+
+        # deferred latched ports (zero-delay cycles through latched ports, D-a): their
+        # inputs only fill the latch, so they are gathered once every source updated
+        for a, ports in plan.deferred.items():
+            pplan = plan.populations[a]
+            acc = self._gather(a, params, state, cur, n, self._ctx(a, n, trial), delivered,
+                               syn_state, ext, only=ports)
+            old = state['pops'][pplan.name]
+            new = dict(pops[pplan.name])
+            for port in ports:
+                kind = pplan.model.inputs[port]
+                k = latch_name(port)
+                v = from_mantissa(acc[port], kind.unit) if port in acc else kind.zeros(pplan.pop.n, self.dtype)
+                # upstream: braintrace#184 (keep the latch's hidden->hidden edge)
+                new[k] = _like(_keep_dependency(v, old[k]), old[k])
+            pops[pplan.name] = Record(**new)
 
         # plasticity (reads the rings before this step's outputs are written)
         plastic = dict(state['plastic'])

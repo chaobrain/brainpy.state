@@ -289,12 +289,12 @@ class TestEndToEnd:
         n = np.arange(400)
         a_, b_ = np.exp(-DT / tau_m), np.exp(-DT / tau_s)
         np.testing.assert_allclose(g, np.where(n >= k0, w * b_ ** (n - k0), 0.0), rtol=1e-12, atol=1e-15)
-        N = np.maximum(n - k0, 0)
-        # the Current port is latched: g of step m acts during step m + 1 (R = 1 ohm, mA -> mV)
+        # LIF.I is latch=False (D-a): g of step m acts during step m (R = 1 ohm, mA -> mV)
+        N = np.where(n >= k0, n - k0 + 1, 0)
         V_ref = (1 - a_) * w * (a_ ** N - b_ ** N) / (a_ - b_)
         np.testing.assert_allclose(V, V_ref, rtol=1e-11, atol=1e-13)
         # and close to the continuous-time PSP (O(dt) discretisation)
-        t = (n - k0) * DT
+        t = N * DT  # V of step n is the state at its end, (n - k0 + 1) dt after the onset
         V_cont = np.where(t > 0, w * tau_s / (tau_s - tau_m) * (np.exp(-t / tau_s) - np.exp(-t / tau_m)), 0)
         assert np.abs(V - V_cont).max() < 0.05 * V_cont.max()
 

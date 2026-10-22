@@ -115,7 +115,7 @@ class aeif_cond_alpha(SpikingNeuron):
                     dg_in=Init(0.0 * _NS_MS), g_in=Init(0.0 * u.nS), w=Init(0.0 * u.pA))
     inputs = Ports(ex=Conductance(u.nS, E_rev='E_ex', filtered=True),
                    in_=Conductance(u.nS, E_rev='E_in', filtered=True),
-                   I=Current(u.pA))
+                   I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event(max_multiplicity=None))
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad())

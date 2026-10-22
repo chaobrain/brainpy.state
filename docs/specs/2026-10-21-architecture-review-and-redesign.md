@@ -419,7 +419,12 @@ rings advance.
   ports (fed by a same-step synapse model), and `current`/`graded` ports declared
   `latch=False`. A `latch=True` port adds one step by its *port semantics* (NEST
   `CurrentEvent`), not by its delay, so a zero-delay chain through latched ports has
-  one step of latency per layer. Measured on K0 (latched everywhere): a 4-layer
+  one step of latency per layer. For the same reason a latched port **breaks** a
+  zero-delay cycle (K1a-2): only zero-delay cycles through same-step ports are
+  rejected; when the order cannot update the source of a zero-delay edge into a
+  latched port first, the compiler *defers* that port (its inputs are gathered after
+  every population has updated and only fill the latch), which gives exactly the
+  numbers of the source-first order. Measured on K0 (latched everywhere): a 4-layer
   zero-delay chain fires its first spikes at steps 9, 9, 9, 9 through `event` ports but
   10, 11, 12, 13 through Expon → `LIF.I`; after K1a-2 the BrainPy-family `LIF.I`
   (`latch=False`) gives one step for all layers.
@@ -755,7 +760,7 @@ spec and a gate in its milestone.
 | D2 | State substrate | ✅ **brainstate `Module`/`State`**, functional `step` inside |
 | D3 | Front-ends | ✅ (2026-10-22, with D-e) **`Network` is the only Python API**; the NEST `Simulator` vocabulary is a thin layer over `Network` (built next to K2); the BrainPy-style front-end is deprecated (D-e) |
 | D4 | Delivery semantics | ✅ **NEST-faithful**: no hidden lag; delay ≥ 1 step on cycles |
-| D4a | Zero delay on acyclic paths | ✅ **allowed** (topological order within a step); zero-delay cycles rejected. *Revised 2026-10-22 (D-a):* a zero delay is same-step for `event`, `conductance` and unlatched `current`/`graded` ports; a latched port adds one step by port semantics (§7 L2) |
+| D4a | Zero delay on acyclic paths | ✅ **allowed** (topological order within a step); zero-delay cycles rejected. *Revised 2026-10-22 (D-a):* a zero delay is same-step for `event`, `conductance` and unlatched `current`/`graded` ports; a latched port adds one step by port semantics (§7 L2), so only zero-delay cycles through same-step ports are rejected (a latched port breaks the cycle; K1a-2) |
 | I1 | Integrators | ✅ **fixed-substep only**; adaptive RKF45 removed; per-model substep defaults set by convergence against NEST |
 | S1 | Model scope | ✅ **point neurons only**: multi-compartment and population/mean-field models are not ported and are removed at K4 (list in §13) |
 | S1a | Single-unit rate neurons | ✅ **not supported**: `lin_rate`, `tanh_rate`, `threshold_lin_rate`, `gauss_rate`, `sigmoid_rate`, `sigmoid_rate_gg_1998`, `rate_neuron_ipn/opn`, `rate_transformer_node`, with `rate_connection_instantaneous/delayed` and `step_rate_generator` are not ported and are removed at K4 |

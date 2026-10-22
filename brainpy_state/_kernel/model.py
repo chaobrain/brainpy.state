@@ -25,9 +25,14 @@ optionally ``on_input(s, p, inp, ctx) -> s`` (event jumps).
 
 Generated step (architecture doc §7.1)
 --------------------------------------
-1. **latch**: ``current`` / ``graded`` ports act with the value latched at the
-   previous step (state ``latch_<port>``); this step's value is stored for the
-   next one (NEST ring-buffer / ``y0`` semantics, a one-step delay).
+1. **latch** (per port, decision D-a): ``current`` / ``graded`` ports declared
+   ``latch=True`` (the default) act with the value latched at the previous step
+   (state ``latch_<port>``); this step's value is stored for the next one (NEST
+   ring-buffer / ``y0`` semantics, a one-step delay). Ports declared
+   ``latch=False`` act with this step's value (constant over the step's
+   substeps). A latched port's payload of step ``n`` must not influence step
+   ``n``'s update -- only the stored latch; the runner relies on it to deliver
+   latched inputs late (zero-delay cycles through latched ports).
 2. **integrate** ``derivatives`` with the model's integrator. Port inputs are
    computed once, outside the substep ``scan``, and are constant across them;
    ``conductance`` ports are passed as-is, so a gate ``gate(V)`` evaluated inside
@@ -39,7 +44,7 @@ Generated step (architecture doc §7.1)
    ``HiddenState``), which braintrace requires.
 
 Additional states are created automatically: ``latch_<port>`` (float,
-``HiddenState``) per current/graded input, and the spike rule's output
+``HiddenState``) per latched current/graded input, and the spike rule's output
 (``HiddenState``) and refractory counter (int32 ``ShortTermState``).
 """
 from __future__ import annotations
@@ -66,11 +71,10 @@ from brainpy_state._kernel.params import (
 )
 from brainpy_state._kernel.ports import (
     Conductance,
-    Current,
-    Graded,
     PortError,
     Ports,
     TimedEvent,
+    is_latched,
 )
 from brainpy_state._kernel.spiking import SpikeRule
 from brainpy_state._kernel.units import (
@@ -87,16 +91,20 @@ __all__ = [
     'NeuronModel',
     'Device',
     'conductance_current',
+    'latch_inputs',
     'latch_name',
+    'latched_ports',
     'with_conductance_ports',
 ]
-
-_LATCHED = (Current, Graded)
-
 
 def latch_name(port: str) -> str:
     """Name of the state latching the ``current`` / ``graded`` input ``port``."""
     return f'latch_{port}'
+
+
+def latched_ports(inputs: Ports) -> tuple[str, ...]:
+    """Names of the latched input ports (``Current`` / ``Graded`` with ``latch=True``)."""
+    return tuple(k for k, v in inputs.items() if is_latched(v))
 
 
 def _keep_dependency(new: Any, old: Any) -> Any:
@@ -105,6 +113,34 @@ def _keep_dependency(new: Any, old: Any) -> Any:
     # HiddenState's new value depends only on inputs; ``+ 0 * old`` keeps the
     # hidden->hidden edge in the jaxpr without changing the value.
     return new + 0 * old
+
+
+def latch_inputs(inputs: Ports, s: Record, inp: Record) -> tuple[Record, dict]:
+    """Port values acting this step and the new latch states (decision D-a).
+
+    Parameters
+    ----------
+    inputs : Ports
+        The model's input port declarations.
+    s : Record
+        State values (holding ``latch_<port>`` for every latched port).
+    inp : Record
+        This step's port payloads.
+
+    Returns
+    -------
+    acting : Record
+        ``inp`` with every latched port replaced by the value latched at the
+        previous step; unlatched ports keep this step's payload.
+    new : dict
+        ``{latch_<port>: this step's payload}`` for the latched ports, to store
+        (with the braintrace dependency workaround ``new + 0 * old``).
+    """
+    ports = latched_ports(inputs)
+    acting = Record(**{**inp, **{k: s[latch_name(k)] for k in ports}})
+    # upstream: braintrace#184
+    new = {latch_name(k): _keep_dependency(inp[k], s[latch_name(k)]) for k in ports}
+    return acting, new
 
 
 def conductance_current(port: Conductance, g: Any, V: Any, p: Record) -> Any:
@@ -334,7 +370,7 @@ class NeuronModel(brainstate.nn.Module):
                 raise TypeError(f'{name}: states {sorted(extra)} clash with the spike rule')
             if rule.clamp_var is not None and rule.clamp_var not in cls.state_decl:
                 raise TypeError(f'{name}: Clamp var {rule.clamp_var!r} is not a declared state')
-        latches = {latch_name(k) for k, v in cls.inputs.items() if isinstance(v, _LATCHED)}
+        latches = {latch_name(k) for k in latched_ports(cls.inputs)}
         clash = latches & set(cls.state_decl)
         if clash:
             raise TypeError(f'{name}: states {sorted(clash)} clash with input latches')
@@ -365,8 +401,8 @@ class NeuronModel(brainstate.nn.Module):
     @classmethod
     def all_state_decl(cls) -> States:
         """Declared states plus input latches and the spike rule's states."""
-        extra = {latch_name(k): Init(from_mantissa(0.0, v.unit))
-                 for k, v in cls.inputs.items() if isinstance(v, _LATCHED)}
+        extra = {latch_name(k): Init(from_mantissa(0.0, cls.inputs[k].unit))
+                 for k in latched_ports(cls.inputs)}
         if cls.spiking is not None:
             extra.update(dict(cls.spiking.state_decl()))
         return cls.state_decl.extend(**extra)
@@ -398,8 +434,8 @@ class NeuronModel(brainstate.nn.Module):
         s, p : Record
             State and parameter values (Quantities).
         inp : Record
-            Port inputs: latched values for ``current``/``graded`` ports, this
-            step's payload for the others.
+            Port inputs: the previous step's values for latched
+            ``current``/``graded`` ports, this step's payload for the others.
         ctx : StepContext
             Context with ``t`` set to the evaluation time inside the step.
 
@@ -507,10 +543,9 @@ class NeuronModel(brainstate.nn.Module):
         rule = self.spiking
         integ = self.integrator
 
-        # 1. latch: derivatives see the previous step's current/graded values
-        latched = {k: s[latch_name(k)] for k, v in self.inputs.items() if isinstance(v, _LATCHED)}
-        inp_ode = Record(**{**inp, **latched})
-        new_latches = {latch_name(k): _keep_dependency(inp[k], s[latch_name(k)]) for k in latched}
+        # 1. latch: derivatives see the previous step's values of latched ports and
+        #    this step's values of unlatched ones (decision D-a)
+        inp_ode, new_latches = latch_inputs(self.inputs, s, inp)
 
         # 2. integrate the float states on mantissas. The substeps run as one scan
         #    (integrators.integrate); every state the hook can change is carried

@@ -12,8 +12,8 @@ round-up conversion, :func:`~brainpy_state._kernel.units.grid_steps`), a stamp
   ``S = steps(origin + T)`` and is emitted at step ``S - 1``, so its NEST time
   stamp (``(n + 1) dt`` for an emission at step ``n``) is ``T``.
 * :class:`dc_generator` -- tests ``n + 2`` (NEST current generators): with the
-  NEST minimal delay of one step and the receiver's ``current`` latch, the
-  current acts exactly when it does in NEST.
+  NEST minimal delay of one step and a latched receiving ``current`` port (NEST
+  models, ``latch=True``), the current acts exactly when it does in NEST.
 
 Every device keeps its last output in a state (``spike`` / ``I``) that
 ``update`` returns, so observers can sample it like a neuron output.
@@ -350,8 +350,9 @@ class dc_generator(Device):
     -----
     Output ``I`` -- ``current`` (pA): ``amplitude`` at step ``n`` iff
     ``t_min < n + 2 <= t_max`` (NEST's current-generator shift), else 0. Sent
-    with a delay of one step to a neuron, whose ``current`` port is latched, it
-    acts during the same steps as in NEST.
+    with a delay of one step to a neuron whose ``current`` port is latched (NEST
+    models), it acts during the same steps as in NEST. The receiving port decides
+    the latch (decision D-a): into a ``latch=False`` port it acts one step earlier.
 
     Examples
     --------

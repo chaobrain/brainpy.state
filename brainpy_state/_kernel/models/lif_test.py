@@ -1,5 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Tests of the K0 ``LIF``: parity with ``_brainpy.LIF``, timing, gradients, braintrace."""
+import inspect
+
 import brainstate
 import braintools
 import braintrace
@@ -14,6 +16,8 @@ from brainpy_state._kernel.context import StepContext
 from brainpy_state._kernel.integrators import Exact
 from brainpy_state._kernel.models import LIF
 from brainpy_state._kernel.models._testing import rollout
+from brainpy_state._kernel.model import latch_name
+from brainpy_state._kernel.ports import Current
 
 DT = 0.1 * u.ms
 
@@ -58,10 +62,8 @@ class TestParityWithBrainPyLIF:
         params = dict(tau=[5.0, 8.0, 12.0, 20.0] * 4 * u.ms, V_th=1.0 * u.mV, R=1.0 * u.ohm)
         with jax.enable_x64(precision == 'float64'):
             I, delta = _inputs(n_steps, n)
-            # the K0 current port is latched: the old LIF sees this step's input,
-            # ours sees it one step later -> feed the old one the shifted sequence
-            I_seen = jnp.concatenate([jnp.zeros((1, n)), I[:-1]])
-            old_spk, old_V = _old_run(n_steps, n, I_seen, delta, spk_reset, tau=params['tau'])
+            # LIF.I is latch=False (D-a): both models see this step's input
+            old_spk, old_V = _old_run(n_steps, n, I, delta, spk_reset, tau=params['tau'])
             new_spk, new_V = _new_run(n_steps, n, I, delta, params=dict(tau=params['tau']),
                                       spk_reset=spk_reset, precision=precision)
         old_spk = np.asarray(old_spk)
@@ -91,13 +93,23 @@ class TestTiming:
         np.testing.assert_array_equal(out['spike'], [0.0, 1.0])
         np.testing.assert_allclose(m.dyn_states['V'].value.to_decimal(u.mV), [0.5, 0.5], rtol=1e-6)
 
-    def test_current_is_latched(self, x64):
+    def test_current_port_declared_same_step(self):
+        # D-a / K1a-2: the BrainPy-family LIF declares latch=False explicitly
+        kind = LIF.inputs['I']
+        assert isinstance(kind, Current) and kind.latch is False
+        assert 'latch=False' in inspect.getsource(LIF)
+        assert latch_name('I') not in LIF.all_state_decl()
+        assert latch_name('I') not in LIF(1).dyn_states
+
+    def test_current_acts_in_same_step(self, x64):
         m = LIF(1, precision='float64')
         m.update(StepContext.create(0.0 * u.ms, DT), {'I': 1.0 * u.mA})
-        assert float(m.dyn_states['V'].value.to_decimal(u.mV)[0]) == 0.0
-        m.update(StepContext.create(DT, DT, 1), {})
         expected = 1.0 * (1 - np.exp(-0.1 / 5.0))
         assert float(m.dyn_states['V'].value.to_decimal(u.mV)[0]) == pytest.approx(expected, rel=1e-13)
+        # no input in the next step: pure decay, nothing carried over
+        m.update(StepContext.create(DT, DT, 1), {})
+        assert float(m.dyn_states['V'].value.to_decimal(u.mV)[0]) == pytest.approx(
+            expected * np.exp(-0.1 / 5.0), rel=1e-13)
 
     def test_hard_reset_and_validation(self):
         m = LIF(1, spk_reset='hard', params=dict(V_reset=-0.5 * u.mV))

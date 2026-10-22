@@ -7,7 +7,7 @@ from typing import Any
 
 import brainunit as u
 
-from brainpy_state._kernel.model import NeuronModel, _keep_dependency, latch_name
+from brainpy_state._kernel.model import NeuronModel, latch_inputs
 from brainpy_state._kernel.params import Record
 from brainpy_state._kernel.spiking import SpikeRule
 from brainpy_state._kernel.units import grid_steps, to_mantissa
@@ -73,30 +73,28 @@ def as_record(inp: Mapping[str, Any]) -> Record:
     return inp if isinstance(inp, Record) else Record(**inp)
 
 
-def latch(s: Record, inp: Record, ports: tuple[str, ...]) -> tuple[dict, dict]:
-    """Latched values (acting this step) and the new latches of ``current`` ports.
+def latch(model: NeuronModel, s: Record, inp: Record) -> tuple[Record, dict]:
+    """Port values acting this step and the new latches (per-port ``latch`` flag, D-a).
 
     Parameters
     ----------
+    model : NeuronModel
+        Model whose ``inputs`` declare which ``current`` / ``graded`` ports latch.
     s : Record
-        State values holding ``latch_<port>``.
+        State values holding ``latch_<port>`` for the latched ports.
     inp : Record
         This step's port inputs.
-    ports : tuple of str
-        Current/graded port names.
 
     Returns
     -------
-    acting : dict
-        ``{port: value latched at the previous step}``.
+    acting : Record
+        Port inputs acting this step: the previous step's value for latched ports,
+        this step's for all others.
     new : dict
         ``{latch_<port>: this step's value}`` to store (with the braintrace
-        dependency workaround of ``model._keep_dependency``).
+        dependency workaround of ``model._keep_dependency``, braintrace#184).
     """
-    acting = {k: s[latch_name(k)] for k in ports}
-    # upstream: braintrace#184
-    new = {latch_name(k): _keep_dependency(inp[k], s[latch_name(k)]) for k in ports}
-    return acting, new
+    return latch_inputs(model.inputs, s, inp)
 
 
 def device_window(p: Record, dt_ms: Any) -> tuple[Any, Any]:

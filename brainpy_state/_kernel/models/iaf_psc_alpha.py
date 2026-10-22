@@ -100,7 +100,8 @@ class iaf_psc_alpha(SpikingNeuron):
     states = States(V_m=Init(lambda p: p.E_L), I_syn_ex=Init(0.0 * u.pA),
                     dI_syn_ex=Init(0.0 * _PA_MS), I_syn_in=Init(0.0 * u.pA),
                     dI_syn_in=Init(0.0 * _PA_MS))
-    inputs = Ports(ex=Event(unit=u.pA), in_=Event(unit=u.pA), I=Current(u.pA))
+    inputs = Ports(ex=Event(unit=u.pA), in_=Event(unit=u.pA),
+                   I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad())
@@ -110,7 +111,7 @@ class iaf_psc_alpha(SpikingNeuron):
              ) -> tuple[Record, dict[str, Any]]:
         """Advance one step (NEST ``iaf_psc_alpha::update`` order)."""
         inp = as_record(inp)
-        acting, new_latch = latch(s, inp, ('I',))
+        acting, new_latch = latch(self, s, inp)
         mV = lambda x: to_mantissa(x, u.mV)
         pA = lambda x: to_mantissa(x, u.pA)
         dpA = lambda x: to_mantissa(x, _PA_MS)
