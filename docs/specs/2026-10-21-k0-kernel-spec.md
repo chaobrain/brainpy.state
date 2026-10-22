@@ -261,7 +261,7 @@ All run in CI except those marked *(NEST)* (run in the NEST workflow), *(Brian2)
 | G6 gradients | BPTT on 20-neuron LIF and `iaf_psc_alpha` nets, Dense and CSR, delay 0 and 2 steps, float64, smooth surrogate, in the two regimes where BPTT is the exact derivative of the simulated loss: (a) hard forward, feed-forward net, `detach_reset=True`, membrane loss; (b) recurrent nets under `relaxed_spikes()` (smooth spikes, soft jumps, non-detached reset) | relative error vs central finite differences ≤ 1e-4 |
 | G7 braintrace | `braintrace.compile(net, 'eprop')` and `'d_rtrl'` on a K0 LIF net, Dense and CSR | compiles; gradients non-zero for every weight; the K0 checker rejects a deliberately non-compliant model with a clear error |
 | G8 STDP *(NEST)* | `stdp_synapse` weight trajectory, pre/post pairing protocol with dendritic delay > 0 | `CAT_B` without the current drive workaround |
-| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs T0 baseline, same host (§10.3), on CPU and on RTX 3090 GPU 1 | step time ≤ 1.1 × baseline; peak memory ≤ 1.1 × baseline; compile time reported |
+| G9 performance *(bench)* | Brunel order 2500, float32 and float64, vs the old `Simulator`, same host (§10.3), CPU: old and new interleaved in fresh processes on one idle pinned core (decision 2026-10-22, below); GPU skipped by user decision | step time ≤ 1.1 × old; peak memory ≤ 1.1 × old; compile time reported; the original T0 pinned rows compared for reference |
 | G10 quality | coverage of `_kernel` | > 90 % |
 
 (Decision after T9, accepted by the orchestrator: with a hard forward pass and a surrogate
@@ -269,6 +269,16 @@ backward pass the BPTT gradient is not the derivative of the simulated loss when
 gradient crosses a spike, so a literal FD check fails by design (relative errors 3–500
 measured on recurrent nets); G6 is checked in regimes (a) and (b) above. See
 [`2026-10-22-k0-t9-learners.md`](2026-10-22-k0-t9-learners.md) §2.)
+
+(Decision 2026-10-22, by the user via the orchestrator, during T10: the remote host
+is shared with long-running jobs that keep the load average near 5, so the `BENCH=1`
+load < 2 condition cannot be met and GPU 1 is occupied. G9 is therefore measured on
+the CPU only, without the load gate: one physical core whose CPU and hyperthread
+sibling are < 5 % busy (from `/proc/stat`) is pinned with `taskset`, the old
+`Simulator` (T0 script) and the kernel are run alternately (old, new, ...) in fresh
+processes, at least 3 rounds per configuration, runs disturbed on that core are
+discarded and redone, and the gate compares the medians of this interleaved session.
+GPU rows are skipped. Protocol: `benchmarks/g9_interleaved.py`.)
 
 **Decision rule.** All gates pass → go (K1 starts). G9 fails by > 10 % or any of G1,
 G4, G6 fails structurally → stop and revise the architecture doc before K1.

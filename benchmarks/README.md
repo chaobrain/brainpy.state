@@ -8,8 +8,8 @@ runs, and no file here is named `test_*.py` / `*_test.py`).
 |---|---|
 | `brunel_simulator_baseline.py` | K0 task T0: baseline of today's NEST-style `Simulator` on the Brunel network; the reference for K0 gate G9 |
 | `brunel_kernel.py` | the same Brunel network built with the K0 kernel (`brainpy_state._kernel`), same protocol and result schema; the measured side of gate G9 |
-| `g9_compare.py` | gate G9: matches kernel records to the T0 baseline rows and applies the 1.1x step-time / peak-memory rule (`python benchmarks/g9_compare.py KERNEL.json`) |
-| `check_g9_compare.py` | checks for `g9_compare.py`; run explicitly: `python -m pytest benchmarks/check_g9_compare.py` |
+| `g9_interleaved.py` | gate G9: old `Simulator` vs kernel interleaved in fresh processes on one idle pinned core (core chosen from `/proc/stat`, runs on a busy core discarded), 1.1x rule, plus the comparison to the T0 pinned rows |
+| `check_g9_interleaved.py` | checks for `g9_interleaved.py`; run explicitly: `python -m pytest benchmarks/check_g9_interleaved.py` |
 | `_bench_utils.py` | JAX-free helpers: statistics, memory parsing, result schema, merging, markdown table |
 | `check_bench_utils.py` | checks for the helpers; run explicitly: `python -m pytest benchmarks/check_bench_utils.py` |
 | `results/` | committed result files (JSON) and a summary table (`results/README.md`) |

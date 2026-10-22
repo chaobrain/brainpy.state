@@ -111,10 +111,13 @@ GATES: tuple = (
                 'learn/etrace_test.py::test_plan_level_rejections')),
     Gate('G8', 'stdp_synapse vs NEST with dendritic delay', 'CAT_B without the drive workaround',
          tests=('validation/stdp_nest_test.py',), requires='nest'),
-    Gate('G9', 'performance vs the T0 baseline (remote host)',
-         'median step time <= 1.1 x and peak memory <= 1.1 x baseline (CPU pinned, GPU 1)',
-         command="BENCH=1 [GPU=1] /tmp/k0/remote.sh T10 '[taskset -c 4] python "
-                 "benchmarks/brunel_kernel.py sweep --orders 2500 --commit <sha>'",
+    Gate('G9', 'performance vs the old Simulator (remote host, CPU)',
+         'median step time <= 1.1 x and peak RSS <= 1.1 x the old Simulator, order 2500, '
+         'float32 and float64, interleaved on one idle pinned core (GPU skipped by user '
+         'decision)',
+         command="/tmp/k0/remote.sh T10 'python benchmarks/g9_interleaved.py run "
+                 "--commit <sha> --rounds 3' > g9.log; "
+                 "python benchmarks/g9_interleaved.py compare g9.log",
          requires='bench'),
     Gate('G10', 'coverage of brainpy_state/_kernel', '> 90 %',
          command='python -m pytest -n 8 brainpy_state/_kernel --cov=brainpy_state/_kernel '
