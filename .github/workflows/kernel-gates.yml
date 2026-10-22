@@ -1,10 +1,14 @@
 # Gate suite of the new kernel (brainpy_state/_kernel), K0 + K1a.
 #
-# Runs every pytest-implemented gate (`-m "k0_gate or k1a_gate"`, registry:
+# Runs every pytest-implemented gate that does not need NEST
+# (`-m "(k0_gate or k1a_gate) and not requires_nest"`, registry:
 # brainpy_state/_kernel/validation/gates.py) with the `validation` extra installed, so the
-# Brian2 comparison (K0 G3) runs. NEST is not installed here: the `requires_nest` gate tests
-# skip and run in `nest-comparison.yml` (which selects `-m requires_nest` over the whole
-# package, the kernel's gate tests included). Wall-clock gates (`k1a_compile`) skip unless
+# Brian2 comparison (K0 G3) runs. NEST is not installed here, so the `requires_nest` gate
+# tests are deselected; they run in `nest-comparison.yml`, which selects
+# `-m "requires_nest and (k0_gate or k1a_gate)"`. They must be deselected rather than
+# left to skip: `@requires_nest` skips through `unittest.skipUnless`, which pytest
+# honours only on `unittest.TestCase` classes, not on the plain pytest classes of the
+# kernel's NEST tests. Wall-clock gates (`k1a_compile`) skip unless
 # selected explicitly; benchmarks are run on the dedicated host (K1a report).
 # (K1a spec §K1a-7; the D-f remainder of v0.1.1 goal 02.)
 
@@ -71,4 +75,4 @@ jobs:
         env:
           OMP_NUM_THREADS: "1"
           JAX_PLATFORMS: cpu
-        run: pytest brainpy_state/_kernel -m "k0_gate or k1a_gate" -n 2 --timeout=1800 --timeout-method=thread
+        run: pytest brainpy_state/_kernel -m "(k0_gate or k1a_gate) and not requires_nest" -n 2 --timeout=1800 --timeout-method=thread
