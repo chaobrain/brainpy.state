@@ -272,7 +272,8 @@ class iaf_psc_exp_ps(_CapacityMixin, NeuronModel):
                     spike_offset=Init(_INF * u.ms),
                     is_refractory=Init(0, dtype=np.int32), ref_count=Init(0, dtype=np.int32),
                     last_spike_offset=Init(0.0 * u.ms), overflow=Init(0, dtype=np.int32))
-    inputs = Ports(syn=TimedEvent(16, unit=u.pA), I=Current(u.pA))
+    inputs = Ports(syn=TimedEvent(16, unit=u.pA),
+                   I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=TimedEvent(1))
     integrator: ClassVar[Integrator] = Exact()
     capabilities: ClassVar[Capabilities] = Capabilities(differentiable=True, etrace=False,
@@ -286,7 +287,7 @@ class iaf_psc_exp_ps(_CapacityMixin, NeuronModel):
              ) -> tuple[Record, dict[str, Any]]:
         """Advance one step (NEST ``iaf_psc_exp_ps::update``, vectorised)."""
         inp = as_record(inp)
-        acting, new_latch = latch(s, inp, ('I',))
+        acting, new_latch = latch(self, s, inp)
         mV = lambda x: to_mantissa(x, u.mV)
         pA = lambda x: to_mantissa(x, u.pA)
         ms = lambda x: to_mantissa(x, u.ms)

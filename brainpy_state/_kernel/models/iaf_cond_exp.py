@@ -98,7 +98,7 @@ class iaf_cond_exp(SpikingNeuron):
     states = States(V_m=Init(lambda p: p.E_L), g_ex=Init(0.0 * u.nS), g_in=Init(0.0 * u.nS))
     inputs = Ports(ex=Conductance(u.nS, E_rev='E_ex', filtered=True),
                    in_=Conductance(u.nS, E_rev='E_in', filtered=True),
-                   I=Current(u.pA))
+                   I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad(), when='step')

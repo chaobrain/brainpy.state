@@ -47,16 +47,17 @@ class LIF(SpikingNeuron):
        \;(\text{soft}) \text{ or } V_{reset}\;(\text{hard}).
 
     One step (``dt``): ``V <- V + dt * phi1(-dt / tau) * dV/dt`` with the current
-    latched at the previous step (exact for constant input), then ``V += delta``
+    delivered in this step (exact for constant input), then ``V += delta``
     (event jumps, same step), then the threshold check and the reset. The spike
     output is the exact count (0/1) forward and the surrogate gradient backward.
 
     Compared with ``brainpy_state._brainpy.lif.LIF``: identical spikes and
-    voltage for the same membrane input, except that (i) the ``I`` port is
-    latched (it acts one step later, kernel ``current`` contract) and (ii) the
-    reset is applied in the spiking step, so the stored ``V`` at a spike step is
-    the post-reset value (the old model stores the pre-reset value and resets at
-    the start of the next step).
+    voltage for the same membrane input (the ``I`` port is declared
+    ``latch=False``, decision D-a: like the BrainPy model it acts in the step it
+    is delivered, so zero-delay feed-forward chains propagate within one step),
+    except that the reset is applied in the spiking step, so the stored ``V`` at a
+    spike step is the post-reset value (the old model stores the pre-reset value
+    and resets at the start of the next step).
 
     Parameters
     ----------
@@ -77,7 +78,7 @@ class LIF(SpikingNeuron):
     Notes
     -----
     Ports: ``I`` -- ``current`` in mA (``R * I`` in mV with the default units),
-    latched; ``delta`` -- ``event`` in mV, a jump of ``V`` in the step it arrives.
+    ``latch=False`` (acts in the step it arrives, no latch state); ``delta`` -- ``event`` in mV, a jump of ``V`` in the step it arrives.
     Output ``spike`` -- ``event`` with ``max_multiplicity=1``.
 
     Examples
@@ -97,7 +98,8 @@ class LIF(SpikingNeuron):
     params = Params(R=1.0 * u.ohm, tau=5.0 * u.ms, V_th=1.0 * u.mV, V_reset=0.0 * u.mV,
                     V_rest=0.0 * u.mV)
     states = States(V=Init(0.0 * u.mV))
-    inputs = Ports(I=Current(u.mA), delta=Event(unit=u.mV))
+    # BrainPy family: the current acts in the step it arrives in (D-a)
+    inputs = Ports(I=Current(u.mA, latch=False), delta=Event(unit=u.mV))
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_soft_reset,
                         surrogate=braintools.surrogate.ReluGrad())
@@ -117,7 +119,7 @@ class LIF(SpikingNeuron):
              ) -> tuple[Record, dict[str, Any]]:
         """Advance one step; see the class docstring for the order of operations."""
         inp = as_record(inp)
-        acting, new_latch = latch(s, inp, ('I',))
+        acting, new_latch = latch(self, s, inp)
         dtype = to_mantissa(s.V, u.mV).dtype
         dt = to_mantissa(ctx.dt, u.ms)
         V = to_mantissa(s.V, u.mV)

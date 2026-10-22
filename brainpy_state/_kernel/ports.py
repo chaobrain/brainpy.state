@@ -12,11 +12,19 @@ kind                      payload delivered to an input port per step
                           as a jump after the step's propagation
 :class:`TimedEvent`       :class:`TimedEventPayload` (fixed capacity per target,
                           overflow counter); integrated between events
-:class:`Current`          ``(n,)`` current, summed; latched for the next step
+:class:`Current`          ``(n,)`` current, summed; ``latch=True`` (default):
+                          acts during the next step (NEST ``CurrentEvent``),
+                          ``latch=False``: acts in the step it arrives in
 :class:`Conductance`      ``(n,)`` conductance; seen inside the ODE at every
                           substep, with ``E_rev`` and an optional gate ``gate(V)``
-:class:`Graded`           ``(n,)`` continuous value with a declared unit; latched
+:class:`Graded`           ``(n,)`` continuous value with a declared unit;
+                          ``latch`` as for :class:`Current`
 ========================  =====================================================
+
+The latch flag (decision D-a) is a property of an **input** port: the receiving
+port decides when a value acts. On output ports (devices, synapse outputs) it has
+no effect. A zero delay into an unlatched port is same-step (topological order); a
+latched port adds one step by its port semantics (architecture doc §7 L2, D4a).
 
 ``gap`` and ``modulatory`` kinds are K1 and not declared here.
 """
@@ -50,6 +58,7 @@ __all__ = [
     'Graded',
     'Ports',
     'TimedEventPayload',
+    'is_latched',
     'check_kind_compatible',
     'expected_weight_unit',
     'check_weight_unit',
@@ -104,10 +113,14 @@ class PortKind:
         return from_mantissa(jnp.zeros((int(n),), dtype), self.unit)
 
 
+def _check_flag(value: Any, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise TypeError(f'{name} must be a bool, got {value!r}')
+    return bool(value)
+
+
 def _check_filtered(filtered: Any) -> bool:
-    if not isinstance(filtered, (bool, np.bool_)):
-        raise TypeError(f'filtered must be a bool, got {filtered!r}')
-    return bool(filtered)
+    return _check_flag(filtered, 'filtered')
 
 
 @dataclass(frozen=True, init=False)
@@ -184,7 +197,7 @@ class TimedEvent(PortKind):
 
 @dataclass(frozen=True, init=False)
 class Current(PortKind):
-    """Summed current input, latched and acting during the next step.
+    """Summed current input; latched (next step) or same-step (decision D-a).
 
     Parameters
     ----------
@@ -192,17 +205,36 @@ class Current(PortKind):
         Payload unit; must be a current.
     filtered : bool, default False
         See :class:`PortKind`.
+    latch : bool, default True
+        On an input port: ``True`` -- the value delivered in step ``n`` acts during
+        step ``n + 1`` (NEST ``CurrentEvent`` / ring-buffer semantics; the model
+        gets a ``latch_<port>`` state); ``False`` -- it acts during step ``n``
+        itself (BrainPy-family models; a zero-delay acyclic path then propagates
+        within one step). Ignored on output ports.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.ports import Current
+        >>> Current(u.pA).latch
+        True
+        >>> Current(u.mA, latch=False).latch
+        False
     """
 
     kind: ClassVar[str] = 'current'
     unit: u.Unit
     filtered: bool
+    latch: bool
 
-    def __init__(self, unit: Any = u.pA, filtered: bool = False) -> None:
+    def __init__(self, unit: Any = u.pA, filtered: bool = False, *, latch: bool = True) -> None:
         unit = as_unit(unit)
         check_unit(unit, u.pA, 'Current unit')
         object.__setattr__(self, 'unit', unit)
         object.__setattr__(self, 'filtered', _check_filtered(filtered))
+        object.__setattr__(self, 'latch', _check_flag(latch, 'latch'))
 
 
 @dataclass(frozen=True, init=False)
@@ -250,7 +282,7 @@ class Conductance(PortKind):
 
 @dataclass(frozen=True, init=False)
 class Graded(PortKind):
-    """Continuous value with a declared unit, latched for the next step.
+    """Continuous value with a declared unit; latched (next step) or same-step.
 
     Parameters
     ----------
@@ -258,15 +290,46 @@ class Graded(PortKind):
         Payload unit (``None`` = dimensionless).
     filtered : bool, default False
         See :class:`PortKind`.
+    latch : bool, default True
+        As for :class:`Current`: on an input port, ``True`` acts during the next
+        step, ``False`` in the step the value arrives in. Ignored on output ports.
     """
 
     kind: ClassVar[str] = 'graded'
     unit: u.Unit
     filtered: bool
+    latch: bool
 
-    def __init__(self, unit: Any, filtered: bool = False) -> None:
+    def __init__(self, unit: Any, filtered: bool = False, *, latch: bool = True) -> None:
         object.__setattr__(self, 'unit', as_unit(unit))
         object.__setattr__(self, 'filtered', _check_filtered(filtered))
+        object.__setattr__(self, 'latch', _check_flag(latch, 'latch'))
+
+
+def is_latched(kind: PortKind) -> bool:
+    """Whether input port ``kind`` acts one step after delivery (a latched current/graded port).
+
+    Parameters
+    ----------
+    kind : PortKind
+        Input port kind.
+
+    Returns
+    -------
+    bool
+        ``True`` for :class:`Current` / :class:`Graded` ports declared
+        ``latch=True``; ``False`` for every other kind and for ``latch=False``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainunit as u
+        >>> from brainpy_state._kernel.ports import Current, Event, is_latched
+        >>> is_latched(Current(u.pA)), is_latched(Current(u.pA, latch=False)), is_latched(Event())
+        (True, False, False)
+    """
+    return isinstance(kind, (Current, Graded)) and kind.latch
 
 
 _EVENT_KINDS = (Event, TimedEvent)
@@ -302,7 +365,9 @@ class Ports(Mapping):
         return len(self._ports)
 
     def __repr__(self) -> str:
-        inner = ', '.join(f'{k}={type(v).__name__}' for k, v in self._ports.items())
+        inner = ', '.join(f'{k}={type(v).__name__}' + ('' if not isinstance(v, (Current, Graded))
+                                                        else f'(latch={v.latch})')
+                          for k, v in self._ports.items())
         return f'Ports({inner})'
 
     def require(self, name: str, where: str = '') -> PortKind:

@@ -19,7 +19,14 @@
    (:func:`payload_path`);
 5. **schedule** -- populations are updated in insertion order, except that every
    zero-delay edge ``A -> B`` forces ``A`` before ``B`` (topological order, decision
-   D4a); a zero-delay cycle is a :class:`ScheduleError`;
+   D4a). Only edges into **same-step** ports (``event``, ``timed_event``,
+   ``conductance``, ``current`` / ``graded`` with ``latch=False``) are hard
+   constraints: a zero-delay cycle through them is a :class:`ScheduleError`. A
+   **latched** port (``latch=True``, D-a) adds one step by its port semantics, so it
+   breaks a zero-delay cycle: when the order cannot put the source first, the target
+   port is *deferred* -- its inputs are gathered after every population has updated
+   and only written into the port's latch, which acts in the next step exactly as
+   with the source first (:func:`schedule_ports`, ``Plan.deferred``);
 6. **plasticity** -- a plastic projection (K0 T6) keeps per-edge CSR weights in the
    runner state; its scalar delay is split into axonal and dendritic steps
    (:class:`~brainpy_state._kernel.plasticity.PlasticPlan`): the pre side is read
@@ -54,7 +61,7 @@ from brainpy_state._kernel.network import Network, Population, Projection, Segme
 from brainpy_state._kernel.observers import Observer
 from brainpy_state._kernel.params import ConstParamState, Distribution
 from brainpy_state._kernel.plasticity import PlasticPlan
-from brainpy_state._kernel.ports import Event, TimedEvent
+from brainpy_state._kernel.ports import Event, TimedEvent, is_latched
 from brainpy_state._kernel.rng import block_key, object_key, view_post_keys
 from brainpy_state._kernel.synapse import plan_synapse_groups
 from brainpy_state._kernel.timed import TimedDelivery, TimedRing, check_capacities
@@ -72,6 +79,7 @@ __all__ = [
     'Plan',
     'compile_network',
     'schedule',
+    'schedule_ports',
 ]
 
 #: Reserved ``gid_block`` counters of the per-object sub-streams (never a real block).
@@ -81,7 +89,11 @@ DELAY_STREAM = 0xFFFFFFFC
 
 
 class ScheduleError(ValueError):
-    """The zero-delay graph has a cycle (a cycle needs a delay of at least one step)."""
+    """The zero-delay graph has a cycle through same-step ports.
+
+    A cycle needs a delay of at least one step or a latched (``latch=True``)
+    ``current`` / ``graded`` port on it.
+    """
 
 
 @dataclass
@@ -241,6 +253,69 @@ def schedule(n_pops: int, zero_edges: set) -> list:
     return order
 
 
+def schedule_ports(n_pops: int, same_step: set, latched: set) -> tuple[list, dict]:
+    """Update order and deferred latched ports (decisions D4a, D-a).
+
+    Parameters
+    ----------
+    n_pops : int
+        Number of populations.
+    same_step : set of (int, int)
+        Zero-delay edges ``(a, b)`` into same-step ports of ``b`` (``a`` must
+        update before ``b``).
+    latched : set of (int, int, str)
+        Zero-delay edges ``(a, b, port)`` into the latched port ``port`` of ``b``.
+
+    Returns
+    -------
+    order : list of int
+        The order of :func:`schedule` over all edges when that graph is acyclic
+        (the K0 order); otherwise the order over the ``same_step`` edges only.
+    deferred : dict of int to frozenset of str
+        ``{b: ports}``: latched ports whose zero-delay source does not update
+        before ``b`` (including a zero-delay self-connection). Their inputs are
+        gathered at the end of the step and only written into the latch.
+
+    Raises
+    ------
+    ScheduleError
+        On a zero-delay cycle through same-step ports.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> from brainpy_state._kernel.compiler import schedule_ports
+        >>> schedule_ports(2, {(0, 1)}, {(1, 0, 'I')})
+        ([0, 1], {0: frozenset({'I'})})
+        >>> schedule_ports(2, set(), {(0, 1, 'I')})
+        ([0, 1], {})
+    """
+    try:
+        order = schedule(n_pops, set(same_step) | {(a, b) for a, b, _ in latched})
+    except ScheduleError:
+        order = schedule(n_pops, set(same_step))
+    pos = {p: i for i, p in enumerate(order)}
+    deferred: dict[int, set] = {}
+    for a, b, port in latched:
+        if pos[a] >= pos[b]:
+            deferred.setdefault(b, set()).add(port)
+    return order, {b: frozenset(v) for b, v in sorted(deferred.items())}
+
+
+def _describe_inputs(inputs: Any) -> str:
+    """`` inputs: I=current(latch) delta=event`` (latch shown per current/graded port, D-a)."""
+    if not len(inputs):
+        return ''
+    parts = []
+    for k, kind in inputs.items():
+        tag = kind.kind or type(kind).__name__
+        if hasattr(kind, 'latch'):
+            tag += '(latch)' if kind.latch else '(same-step)'
+        parts.append(f'{k}={tag}')
+    return ' inputs: ' + ' '.join(parts)
+
+
 def _state(value: Any, trainable: bool) -> brainstate.State:
     return brainstate.ParamState(value) if trainable else ConstParamState(value)
 
@@ -274,6 +349,9 @@ class Plan(brainstate.nn.Module):
         In ``net.observers`` order.
     order : list of int
         Update order (population indices).
+    deferred : dict of int to frozenset of str
+        Latched input ports gathered at the end of the step (zero-delay cycles
+        through latched ports, :func:`schedule_ports`).
     models : list of NeuronModel
         The models (registered as child modules for ``states()``).
     weights : dict of str to list of brainstate.State
@@ -317,6 +395,7 @@ class Plan(brainstate.nn.Module):
         self.projections: list[ProjectionPlan] = []
         self.observers: list[ObserverPlan] = []
         self.order: list[int] = []
+        self.deferred: dict[int, frozenset] = {}
         self.models: list[NeuronModel] = []
         self.weights: dict[str, list] = {}
         self.plastic_params: dict[str, dict] = {}
@@ -460,10 +539,15 @@ class Plan(brainstate.nn.Module):
                  else '  (empty)')
         zero = [p.name for p in self.projections if p.placement != 'none' and p.layout.has_zero]
         L.append(f'  zero-delay projections (same-step delivery): {", ".join(zero) or "none"}')
+        if self.deferred:
+            dl = ', '.join(f'{self.populations[b].name}.{port}' for b, ports in self.deferred.items()
+                           for port in sorted(ports))
+            L.append(f'  deferred latched ports (gathered after all updates, act next step): {dl}')
         L.append('Populations:')
         for p in self.populations:
             g0, n = p.pop.gid_start, p.pop.n
-            L.append(f'  {p.name}: {p.pop.model.__name__} n={n} gids=[{g0}, {g0 + n})')
+            L.append(f'  {p.name}: {p.pop.model.__name__} n={n} gids=[{g0}, {g0 + n})'
+                     + _describe_inputs(p.pop.model.inputs))
         L.append('Projections:')
         for pp in self.projections:
             pr = pp.proj
@@ -706,7 +790,8 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
             out_units[port] = u.UNITLESS if isinstance(kind, (Event, TimedEvent)) else kind.unit
         plan.populations.append(PopulationPlan(pop=pop, model=model, out_units=out_units))
 
-    zero_edges = set()
+    zero_edges: set = set()
+    zero_latched: set = set()
     ring_len: dict[tuple, int] = {}
     timed_len: dict[tuple, int] = {}
     for proj in net.projections:
@@ -721,7 +806,13 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
         post_pops = {s.pop for s in proj.post.segments}
         for b in post_pops:
             plan.populations[b].incoming.append(proj.index)
-        zero_edges |= {(a, b) for a in _zero_delay_pops(pp) for b in post_pops}
+        for b in post_pops:
+            latched = is_latched(plan.populations[b].model.inputs[proj.port])
+            for a in _zero_delay_pops(pp):
+                if latched:
+                    zero_latched.add((a, b, proj.port))
+                else:
+                    zero_edges.add((a, b))
         if pp.placement == 'pre' and pp.layout.max >= 1:
             for a in pre_pops:
                 k = (a, proj.source_port)
@@ -753,11 +844,12 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
                             f'{prj.name}@{plan.populations[b].name}'))
     plan.synapses, plan.synapse_route = plan_synapse_groups(targets, merge=plan.merge)
     try:
-        plan.order = schedule(len(net.populations), zero_edges)
+        plan.order, plan.deferred = schedule_ports(len(net.populations), zero_edges, zero_latched)
     except ScheduleError as e:
         names = [p.name for p in net.populations]
-        raise ScheduleError(f'{e} ({names}); a cycle needs a delay of at least one step '
-                            f'(decisions D4/D4a)') from None
+        raise ScheduleError(f'{e} ({names}) through same-step ports (event, timed_event, '
+                            f'conductance, latch=False current/graded); a cycle needs a delay '
+                            f'of at least one step or a latched port (decisions D4/D4a, D-a)') from None
 
     for obs in net.observers:
         units = {}

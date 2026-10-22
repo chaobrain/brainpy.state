@@ -6,7 +6,8 @@ A :class:`SynapseModel` is attached to a projection with
 delivered event amplitudes (``sum_e weight_e * count_e``, in the port unit) enter the
 synapse state, and the synapse output is deposited into an **unfiltered**
 ``Current`` / ``Conductance`` input port of the target. The neuron then treats it
-like any value input (a ``Current`` port latches it for the next step, a
+like any value input (a latched ``Current`` port -- ``latch=True``, NEST models --
+stores it for the next step, an unlatched one uses it in the same step, a
 ``Conductance`` port sees it inside the ODE at every substep).
 
 Single owner of kinetics

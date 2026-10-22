@@ -116,8 +116,8 @@ class TestDeliveryTiming:
         assert spike_steps(res, rec, 0) == [10, 13, 16, 19]
         assert spike_steps(res, rec, 1) == [10, 13, 16, 19]
 
-    def test_current_port_one_step_latch(self):
-        # dc_generator emits from step 0; delay 1 step; the LIF current latch adds one more
+    def test_current_port_same_step_lif(self):
+        # dc_generator emits from step 0; delay 1 step; LIF.I is latch=False (D-a): no extra step
         net = Network(dt=DT)
         dc = net.add(dc_generator, 1, params=dict(amplitude=5e8 * u.pA))  # 0.5 mA -> 0.5 mV
         n = lif(net, 1, 'n')
@@ -125,8 +125,19 @@ class TestDeliveryTiming:
         rec = net.observe(n, 'V')
         res = net.compile('float32').runner().simulate(60.0 * u.ms)
         v = np.asarray(res[rec]['V'].to_decimal(u.mV))[:, 0]
-        assert v[0] == 0.0 and v[1] == 0.0 and v[2] > 0.0
+        assert v[0] == 0.0 and v[1] > 0.0
         np.testing.assert_allclose(v[-1], 0.5, rtol=1e-4)  # pA -> mA conversion
+
+    def test_current_port_one_step_latch_nest_model(self):
+        # the same into a latched port (iaf_psc_alpha.I, NEST CurrentEvent): one more step
+        net = Network(dt=DT)
+        dc = net.add(dc_generator, 1, params=dict(amplitude=100.0 * u.pA))
+        n = net.add(iaf_psc_alpha, 1, name='n', params=dict(V_th=1e3 * u.mV))
+        net.connect(dc, n, port='I')
+        rec = net.observe(n, 'V_m')
+        res = net.compile('float32').runner().simulate(1.0 * u.ms)
+        v = np.asarray(res[rec]['V_m'].to_decimal(u.mV))[:, 0]
+        assert v[0] == v[1] == -70.0 and v[2] > -70.0
 
 
 # --------------------------------------------------------------------------- delays
