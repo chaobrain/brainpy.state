@@ -9,7 +9,7 @@ inside ``step`` from traced parameters and ``ctx.dt``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import Any
 
 import braintools
 import brainunit as u
@@ -109,7 +109,7 @@ class iaf_psc_alpha(SpikingNeuron):
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad())
-    integrator: ClassVar[Integrator] = Exact()
+    integrator: Integrator = Exact()
 
     def step(self, s: Record, p: Record, inp: Mapping[str, Any], ctx: StepContext
              ) -> tuple[Record, dict[str, Any]]:

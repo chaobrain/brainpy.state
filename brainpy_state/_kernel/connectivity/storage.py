@@ -379,9 +379,10 @@ class CSR(Storage):
         self.gather = 0 < self.n_edges <= max(self.n_pre, self.n_post)
         rows = self._pre[self.order] if self.gather else None
         ar = np.arange(self.n_edges)
-        self.identity = bool(self.gather and self.n_pre == self.n_post == self.n_edges
+        # `rows is not None` <=> `self.gather`
+        self.identity = bool(rows is not None and self.n_pre == self.n_post == self.n_edges
                              and np.array_equal(rows, ar) and np.array_equal(cols, ar))
-        self.rows = jnp.asarray(rows.astype(idx_dt)) if self.gather and not self.identity else None
+        self.rows = jnp.asarray(rows.astype(idx_dt)) if rows is not None and not self.identity else None
         self._templates: dict = {}
 
     @property

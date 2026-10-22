@@ -159,7 +159,7 @@ def kernel_single(ex_times: Any, in_times: Any, t_ms: float, I_e: float, substep
     c = dict(COBA, I_e=I_e)
     with jax.enable_x64(True):
         net = Network(dt=COBA['dt'] * u.ms)
-        kw = {} if substeps is None else dict(integrator=RK(4, substeps))
+        kw: dict[str, Any] = {} if substeps is None else dict(integrator=RK(4, substeps))
         n = net.add(iaf_cond_exp, 1, params=_neuron_params(c), name='n', **kw)
         d = COBA['dt'] * u.ms
         for times, port, w in ((ex_times, 'ex', c['w_ex']), (in_times, 'in_', c['w_in'])):

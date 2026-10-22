@@ -491,7 +491,7 @@ def _describe_group(g: EdgeGroup, pp: Any) -> str:
     return g.storage.kind + (f'@d={g.delay}' if pp.placement == 'post' else '')
 
 
-def _fmt_bytes(n: int) -> str:
+def _fmt_bytes(n: float) -> str:
     for unit in ('B', 'KiB', 'MiB', 'GiB'):
         if n < 1024 or unit == 'GiB':
             return f'{n:.0f} {unit}' if unit == 'B' else f'{n:.1f} {unit}'
@@ -757,6 +757,7 @@ class Plan(brainstate.nn.Module):
         item = self.dtype.itemsize
         for pp in per_edge:
             c = pp.delivery_cost
+            assert c is not None  # filtered above
             mem_st = sum(g.storage.nbytes(item) for g in pp.groups)
             L.append(f'  {pp.name}: {c["n_groups"]} distinct delay(s) >= 1 -> {pp.delivery}'
                      + (f' ({c["strategy"]}' + (f', loop-free capacity {c["capacity"]}'
@@ -777,9 +778,9 @@ class Plan(brainstate.nn.Module):
         L.append('Capabilities:')
         neurons = [p for p in self.populations if not p.pop.model.capabilities.differentiable]
         for p in self.populations:
-            c = p.pop.model.capabilities
-            L.append(f'  {p.name}: jit_safe={c.jit_safe} differentiable={c.differentiable} '
-                     f'etrace={c.etrace} precise_spike_times={c.precise_spike_times}')
+            caps = p.pop.model.capabilities
+            L.append(f'  {p.name}: jit_safe={caps.jit_safe} differentiable={caps.differentiable} '
+                     f'etrace={caps.etrace} precise_spike_times={caps.precise_spike_times}')
         trainable = len(self.states(brainstate.ParamState))
         L.append(f'  BPTT: differentiable except {[p.name for p in neurons] or "nothing"} '
                  f'(non-differentiable populations act as inputs); {trainable} ParamState(s)')
@@ -1029,9 +1030,9 @@ def compile_network(net: Network, precision: str = 'float32', merge: bool = True
         if pp.plastic is not None:
             reads = [(a, proj.source_port, pp.plastic.d_ax) for a in pre_pops]
             reads += [(b, proj.plasticity.post_port, pp.plastic.d_den) for b in post_pops]
-            for a, port, k in reads:
-                if k >= 1:
-                    ring_len[(a, port)] = max(ring_len.get((a, port), 0), k)
+            for a, port, d in reads:
+                if d >= 1:
+                    ring_len[(a, port)] = max(ring_len.get((a, port), 0), d)
         if pp.timed is not None:
             for k, length in pp.timed.ring_lengths().items():
                 timed_len[k] = max(timed_len.get(k, 0), length)

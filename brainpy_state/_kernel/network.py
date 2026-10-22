@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import brainunit as u
 import numpy as np
@@ -104,7 +104,7 @@ class Population:
 
     index: int
     name: str
-    model: type
+    model: type[NeuronModel]
     n: int
     gid_start: int
     params: dict = field(default_factory=dict)
@@ -575,7 +575,9 @@ class Network:
             delay = self.dt
         src_kind = _merge_src_kinds(src_kinds) if src_kinds else None
         unit = None
-        for sm, sk in zip(pre_models or [None], src_kinds or [None]):
+        pre_iter: Sequence[type[NeuronModel] | None] = pre_models or [None]
+        src_iter: Sequence[PortKind | None] = src_kinds or [None]
+        for sm, sk in zip(pre_iter, src_iter):
             for dm, dk in zip(post_models, dst_kinds):
                 where = f'{sm.__name__ if sm else "?"}.{source_port} -> {dm.__name__}.{port}'
                 if sk is not None:
@@ -591,6 +593,7 @@ class Network:
                                         f'({unit} vs {w_unit})')
                     unit = unit if unit is not None else w_unit
         if plastic:
+            assert plasticity is not None  # `plastic` implies a rule
             for sk in src_kinds:
                 if not isinstance(sk, Event):
                     raise PortError(f'{type(plasticity).__name__} needs spike events from the '
@@ -687,13 +690,14 @@ def _merge_src_kinds(kinds: Sequence[PortKind]) -> PortKind:
     for k in kinds[1:]:
         if type(k) is not type(first):
             raise PortError(f'pre view mixes source port kinds {type(first).__name__} and {type(k).__name__}')
+    # every kind has the type of `first` (checked above)
     if isinstance(first, Event):
-        mults = [k.max_multiplicity for k in kinds]
+        mults = [cast(Event, k).max_multiplicity for k in kinds]
         if any(m is None for m in mults):
             return Event(max_multiplicity=None)
-        return Event(max_multiplicity=max(mults))
+        return Event(max_multiplicity=max(cast('list[int]', mults)))
     if isinstance(first, TimedEvent):
-        return TimedEvent(max(k.capacity for k in kinds), unit=first.unit)
+        return TimedEvent(max(cast(TimedEvent, k).capacity for k in kinds), unit=first.unit)
     return first
 
 

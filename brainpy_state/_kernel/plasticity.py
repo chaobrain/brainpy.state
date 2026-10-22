@@ -443,7 +443,8 @@ class PlasticPlan:
             # upstream: brainevent#200 -- int64 -> int32 scatter FutureWarning under x64
             ptr, ind, perm = brainevent.csr_to_csc_index(storage.indptr, storage.indices,
                                                          shape=(self.n_pre, self.n_post))
-            self.csc = (jnp.asarray(ind), jnp.asarray(ptr), jnp.asarray(perm))
+            self.csc: tuple[Any, Any, Any] | None = (jnp.asarray(ind), jnp.asarray(ptr),
+                                                     jnp.asarray(perm))
         else:
             self.csc = None
 
@@ -542,6 +543,8 @@ class PlasticPlan:
         has_pre, has_post = 'pre' in self.rule.traces, 'post' in self.rule.traces
         if self.path == 'fast':
             ff = self.rule.fast_form(p)
+            # the fast path is chosen only with a fast form and the CSC index (_resolve_path)
+            assert ff is not None and self.csc is not None
             shape = (self.n_pre, self.n_post)
             ind, ptr, perm = self.csc
             w = state['edge']['weight']

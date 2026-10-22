@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import brainstate
 import brainunit as u
@@ -86,7 +86,7 @@ class _CapacityMixin:
         type
             A cached subclass (same name); use it in ``Network.add``.
         """
-        return _capacity_variant(cls, int(capacity))
+        return _capacity_variant(cls, int(capacity))  # type: ignore[arg-type]  # false positive: classes hash
 
     @classmethod
     def capacity(cls) -> int:
@@ -96,7 +96,7 @@ class _CapacityMixin:
 
 
 @functools.lru_cache(maxsize=None)
-def _capacity_variant(base: type, capacity: int) -> type:
+def _capacity_variant(base: type[_CapacityMixin], capacity: int) -> type:
     attr, port = base._timed_port
     ports = dict(getattr(base, attr))
     old = ports[port]
@@ -187,7 +187,6 @@ def illinois_root(f: Any, h: Any, iterations: int = ROOT_ITERATIONS) -> Any:
     carry, _ = jax.lax.scan(body, carry, None, length=iterations)
     # no sign change after rounding (low precision near a bracket end): take that end
     return jnp.where(fb0 <= 0, h, jnp.where(fa0 >= 0, jnp.zeros_like(h), carry[-1]))
-    return c
 
 
 def _ps_propagators(h: Any, tau_m: Any, tau_ex: Any, tau_in: Any, c_m: Any) -> tuple:
@@ -275,7 +274,7 @@ class iaf_psc_exp_ps(_CapacityMixin, NeuronModel):
     inputs = Ports(syn=TimedEvent(16, unit=u.pA),
                    I=Current(u.pA, latch=True))  # NEST CurrentEvent: next step (D-a)
     outputs = Ports(spike=TimedEvent(1))
-    integrator: ClassVar[Integrator] = Exact()
+    integrator: Integrator = Exact()
     capabilities: ClassVar[Capabilities] = Capabilities(differentiable=True, etrace=False,
                                                         precise_spike_times=True)
     _timed_port = ('inputs', 'syn')
@@ -425,7 +424,15 @@ _WINDOW = dict(start=Param(0.0 * u.ms), stop=Param(_INF * u.ms), origin=Param(0.
 _DEVICE_CAPS = Capabilities(differentiable=False, etrace=False, precise_spike_times=True)
 
 
-class _OffsetsStateMixin:
+if TYPE_CHECKING:
+    # the mixin is only ever combined with ``_CapacityMixin`` and a ``Device``
+    class _OffsetsBase(_CapacityMixin, NeuronModel):
+        pass
+else:
+    _OffsetsBase = object
+
+
+class _OffsetsStateMixin(_OffsetsBase):
     """Adds the ``(n, K)`` state ``spike_offsets`` (ms, ``inf`` in empty slots)."""
 
     @classmethod

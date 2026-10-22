@@ -335,8 +335,8 @@ class NeuronModel(brainstate.nn.Module):
     state_decl: ClassVar[States] = States()
     inputs: ClassVar[Ports] = Ports()
     outputs: ClassVar[Ports] = Ports()
-    spiking: ClassVar[SpikeRule | None] = None
-    integrator: ClassVar[Integrator] = RK(order=4, substeps=1)
+    spiking: SpikeRule | None = None
+    integrator: Integrator = RK(order=4, substeps=1)
     capabilities: ClassVar[Capabilities] = Capabilities()
     #: The model adds :meth:`conductance_port_current` to its membrane equation, so
     #: :func:`with_conductance_ports` may extend it with (gated) conductance ports.
@@ -718,7 +718,7 @@ class Device(NeuronModel):
         At class creation, if ``inputs`` is not empty.
     """
 
-    integrator: ClassVar[Integrator] = Exact()
+    integrator: Integrator = Exact()
     capabilities: ClassVar[Capabilities] = Capabilities(differentiable=False, etrace=False)
 
     @classmethod
@@ -735,4 +735,4 @@ class Device(NeuronModel):
         """Emit this step's outputs (to be implemented by subclasses)."""
         raise NotImplementedError(f'{type(self).__name__} must implement step()')
 
-    step._device_placeholder = True
+    setattr(step, '_device_placeholder', True)  # marker read by _validate_declaration

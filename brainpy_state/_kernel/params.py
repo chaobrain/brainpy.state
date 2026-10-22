@@ -466,6 +466,7 @@ class Param:
             value = self.dist if self.dist is not None else self.default
         if value is None:
             raise ValueError(f'parameter {name!r} is required but no value was given')
+        shape: tuple[int, ...]
         if self.per_neuron:
             shape = (int(n),)
         elif isinstance(value, Distribution):

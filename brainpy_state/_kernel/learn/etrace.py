@@ -490,7 +490,7 @@ class EtraceNetwork(brainstate.nn.Module):
 
     def update(self, x: Any = None) -> jax.Array:
         """One network step; returns the concatenated output mantissas."""
-        ext = None
+        ext: dict[str, dict[str, Any]] | None = None
         if self._inputs:
             xs = (x,) if len(self._inputs) == 1 else tuple(x)
             if len(xs) != len(self._inputs):

@@ -104,7 +104,7 @@ class iaf_cond_exp(SpikingNeuron):
     outputs = Ports(spike=Event())
     spiking = SpikeRule(condition=_margin, jump=_reset, refractory=Clamp('V_m', 't_ref'),
                         surrogate=braintools.surrogate.ReluGrad(), when='step')
-    integrator: ClassVar[Integrator] = RK(order=4, substeps=IAF_COND_EXP_SUBSTEPS)
+    integrator: Integrator = RK(order=4, substeps=IAF_COND_EXP_SUBSTEPS)
     accepts_conductance_ports: ClassVar[bool] = True
 
     def derivatives(self, s: Record, p: Record, inp: Record, ctx: StepContext) -> dict:

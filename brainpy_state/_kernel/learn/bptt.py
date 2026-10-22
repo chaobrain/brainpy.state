@@ -311,7 +311,7 @@ class BPTT:
             raise TypeError(f'BPTT needs a Program (plan.program()), got {type(program).__name__}')
         if not callable(loss):
             raise TypeError(f'loss must be callable (recordings, targets) -> scalar, got {loss!r}')
-        options = {}
+        options: dict[str, Any] = {}
         if detach_reset is not None:
             options['detach_reset'] = detach_reset
         if spikes is not None:
@@ -600,8 +600,8 @@ class BPTT:
             Loss of every epoch (before its update).
         """
         self._require_optimizer()
-        n_epochs = _check_int('n_epochs', n_epochs, 1)
-        if n_epochs is None:
+        epochs = _check_int('n_epochs', n_epochs, 1)
+        if epochs is None:
             raise ValueError('n_epochs must be an int >= 1')
         n_steps, state0, n0, trials, xs = self._prepare(state0, data, duration, n0, trials)
-        return self._jit_fit(n_steps, n_epochs, state0, n0, trials, xs, targets)
+        return self._jit_fit(n_steps, epochs, state0, n0, trials, xs, targets)
