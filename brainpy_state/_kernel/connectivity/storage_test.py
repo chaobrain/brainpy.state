@@ -62,6 +62,19 @@ class TestPolicy:
             assert S.csr_index_dtypes(10, 10, 2 ** 31) == (np.int32, np.int64)
             assert S.csr_index_dtypes(2 ** 31, 10, 5) == (np.int64, np.int32)
 
+    def test_auto_threshold_per_backend(self):
+        # K1a-9: GPU 'auto' always picks CSR; CPU keeps density >= 0.1; unknown -> cpu
+        assert S.auto_dense_threshold('cpu') == 0.1
+        assert S.auto_dense_threshold('gpu') == float('inf')
+        assert S.auto_dense_threshold('tpu') == 0.1
+        assert S.auto_dense_threshold() == S.auto_dense_threshold(jax.default_backend())
+        full = EdgeSet.create(np.repeat(np.arange(4), 5), np.tile(np.arange(5), 4),
+                              np.arange(4), np.arange(10, 15))
+        assert isinstance(S.make_storage(full, backend='cpu'), S.Dense)
+        assert isinstance(S.make_storage(full, backend='gpu'), S.CSR)
+        assert isinstance(S.make_storage(full, backend='gpu', dense_threshold=0.1), S.Dense)
+        assert isinstance(S.make_storage(full, 'dense', backend='gpu'), S.Dense)
+
     def test_csr_structure_dtypes(self):
         s = S.CSR(edges_with_multapses())
         assert s.indices.dtype == jnp.int32 and s.indptr.dtype == jnp.int32
@@ -71,9 +84,9 @@ class TestPolicy:
         es = edges_with_multapses()
         assert isinstance(S.make_storage(es, 'dense'), S.Dense)
         assert isinstance(S.make_storage(es, 'csr'), S.CSR)
-        assert isinstance(S.make_storage(es), S.Dense)  # density 8/20
+        assert isinstance(S.make_storage(es, backend='cpu'), S.Dense)  # density 8/20
         assert isinstance(S.make_storage(es, dense_threshold=0.5), S.CSR)
-        assert isinstance(S.make_storage(es, dense_max_elems=10), S.CSR)
+        assert isinstance(S.make_storage(es, dense_max_elems=10, backend='cpu'), S.CSR)
         assert isinstance(S.make_storage(EdgeSet.create([], [], [], [0])), S.CSR)
         with pytest.raises(ValueError, match='kind'):
             S.make_storage(es, 'jitc')

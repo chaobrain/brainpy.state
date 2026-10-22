@@ -25,7 +25,6 @@ indices).
 """
 from __future__ import annotations
 
-import functools
 import math
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -36,6 +35,7 @@ import numpy as np
 
 from brainpy_state._kernel.connectivity.edgeset import EdgeSet, as_gids
 from brainpy_state._kernel.rng import CONNECT_STEP, GLOBAL_BLOCK, block_key, post_keys, step_key
+from brainpy_state._kernel.xla import kernel_jax_jit
 
 __all__ = [
     'ConnRule',
@@ -256,7 +256,7 @@ def _skip_self(idx: jax.Array, selfpos: jax.Array) -> jax.Array:
     return idx + ((selfpos >= 0) & (idx >= selfpos)).astype(idx.dtype)
 
 
-@functools.partial(jax.jit, static_argnums=3)
+@kernel_jax_jit(static_argnums=3)
 def _sample_with_replacement(keys, n_avail, selfpos, k):
     def one(key, m, s):
         idx = jax.random.randint(key, (k,), 0, m, dtype=jnp.int32)
@@ -264,7 +264,7 @@ def _sample_with_replacement(keys, n_avail, selfpos, k):
     return jax.vmap(one)(keys, n_avail, selfpos)
 
 
-@functools.partial(jax.jit, static_argnums=3)
+@kernel_jax_jit(static_argnums=3)
 def _sample_floyd(keys, n_avail, selfpos, k):
     def one(key, m, s):
         def body(i, chosen):
@@ -276,7 +276,7 @@ def _sample_floyd(keys, n_avail, selfpos, k):
     return jax.vmap(one)(keys, n_avail, selfpos)
 
 
-@functools.partial(jax.jit, static_argnums=(2, 3))
+@kernel_jax_jit(static_argnums=(2, 3))
 def _sample_topk(keys, selfpos, k, n_pre):
     ar = jnp.arange(n_pre, dtype=jnp.int32)
 
@@ -343,7 +343,7 @@ class PairwiseBernoulli(ConnRule):
         return EdgeSet.create(np.concatenate(pis), np.concatenate(qis), pre, post)
 
 
-@functools.partial(jax.jit, static_argnums=(2, 3))
+@kernel_jax_jit(static_argnums=(2, 3))
 def _bernoulli_block(keys, selfpos, p, n_pre):
     ar = jnp.arange(n_pre, dtype=jnp.int32)
 
@@ -421,7 +421,7 @@ class FixedTotalNumber(ConnRule):
         return _edges(np.concatenate(pis), np.concatenate(qis), pre, post)
 
 
-@functools.partial(jax.jit, static_argnums=(1, 2, 3))
+@kernel_jax_jit(static_argnums=(1, 2, 3))
 def _pair_draw(key, m, n_pre, n_post):
     ks, kt = jax.random.split(key)
     return (jax.random.randint(ks, (m,), 0, n_pre, dtype=jnp.int32),

@@ -357,6 +357,64 @@ The class runs on the CPU in the suite and on GPU 1 remotely. At network level o
 GPU 1, Brunel ε = 0.1 at orders 200 and 800 in float64 gives the same rate with Dense
 and with CSR, on both the default and the `cusparse` backend.
 
+### K1a-9 — small-network GPU footprint (added 2026-10-23, from the K1a-7 G3 escalation; option C)
+
+**Problem.** After K1a-8, K1a-G3 still failed on peak device memory at Brunel order
+200: f32 1.43 × the T0 peak, f64 1.50 ×. The peak of a small GPU network is mostly
+XLA autotuning scratch, not network state. While autotuning a fusion, XLA's GPU
+compiler allocates every operand and result of each candidate with an 8 MiB redzone
+on either side. The measured peaks, old `Simulator` / kernel `auto` (Dense) / kernel
+CSR:
+
+- with XLA's default redzone: 49.1 / 70.3 / 65.1 MiB;
+- with a 64 KiB redzone: 5.4 / 14.6 / 5.1 MiB.
+
+**Contract.**
+
+(A) Every program the kernel compiles is jitted through `_kernel/xla.py`: `kernel_jit`
+(`brainstate.transform.jit`) and `kernel_jax_jit` (`jax.jit`). This covers:
+
+- the runner's rollout and single step;
+- the BPTT and e-prop learners;
+- the connectivity samplers.
+
+These jits get the **per-jit** compiler option `xla_gpu_redzone_padding_bytes = 64 KiB`
+(`KERNEL_COMPILER_OPTIONS`). It is never set globally: `XLA_FLAGS` and the user's own
+jits keep XLA's default.
+
+The trade-off: a faulty autotuning candidate that writes more than 64 KiB out of
+bounds is no longer caught by the redzone check. The option does not change which
+kernel runs, the numerics or the step time. The trade-off is documented in the
+`xla.py` module docstring.
+
+(B) `make_storage('auto')` takes its Dense threshold per backend
+(`AUTO_DENSE_THRESHOLDS`, chosen from `jax.default_backend()` at compile time, like
+the delay cost model):
+
+- **CPU**: unchanged, Dense from density 0.1.
+- **GPU**: always CSR. In the sweep (Brunel A, orders 50/200/800, ε 0.1/0.2/0.5/1.0,
+  f32 and f64, after K1a-10), CSR's step time was ≤ 1.06 × Dense in every cell. That
+  is within noise at N = 250, and 0.22–0.89 × from N = 1000. CSR's peak memory was
+  lower in every cell.
+- Other backends use the CPU value.
+
+An explicit `storage=` or `dense_threshold=` overrides the rule.
+
+**Tests.** `xla_test.py` checks that:
+
+- the option is forwarded to every kernel jit (an invalid value raises from the kernel
+  jit while a plain `jax.jit` is unaffected);
+- results are unchanged;
+- on GPU (subprocess), the kernel's peak stays below 30 MiB while a user matmul jitted
+  in the same process still allocates the default redzones.
+
+`storage_test.py` checks the per-backend `auto` thresholds, including overrides and
+the fallback for unknown backends. The full `_kernel` suite and `-m k0_gate` run
+remotely; mypy is clean.
+
+**Gate.** K1a-7 re-measures K1a-G3 at all four configurations, with the same protocol
+and the raw `peak_bytes_in_use` metric.
+
 ---
 
 ## 4. Dependency and wave plan
@@ -498,3 +556,5 @@ decision column ("lead: …").
 | K1a-10 | cast float64 binary-path events to **float32** (not bool) before brainevent; Dense through `_binary_dense` (`jax.custom_jvp`, event tangent `dx @ W` in W's dtype), CSR with a plain cast; output keeps W's dtype (tested) | brainevent#204: float64 `x` @ dense W is wrong on GPU, bool/float32 are correct. bool was rejected: `astype(bool)` has a zero cotangent, so the event (input) gradient would silently become 0 (`/tmp/k0/k1a7/grad_cast.py`). A plain float32 cast keeps the forward and the W gradient identical but rounds the Dense event gradient to float32 (rel ~4e-8); the custom_jvp restores float64 (matches the float path to 1e-12). The CSR event gradient was already identical with the cast. The same cast avoids the #199 default-backend abort | orchestrator (delegated by lead), 2026-10-23 |
 | K1a-10 | verification: GPU 1, Brunel ε = 0.1 float64, Dense vs CSR, default and `cusparse` backends: order 200 57.10 / 57.10 Hz (old `Simulator` 57.16 Hz; before the fix Dense 59.7 Hz), order 800 45.20 / 45.20 Hz (before the fix Dense 53.6 Hz) | regression evidence at network level for the #204 cast | orchestrator (delegated by lead), 2026-10-23 |
 | K1a-10 | audit of merged results for float64 + GPU + Dense: K0 G9 / T10 are CPU-only (unaffected); T0 is the old `Simulator` (unaffected); K1a-4 `gpu64cs_brunel2500` and the per-edge-delay rows use CSR / `DelayScatter` (unaffected; rates equal the CPU rows); **affected**: K1a-4 `gpu64cs_brunel400` scalar-delay rows (`auto` chose Dense: 57.68 Hz vs 52.44 Hz on CPU), whose rates are wrong; their step times are kept as measured (the binary Dense kernel's cost does not depend on the payload values) but the rate column is superseded; `gpu64cs_review0` fires 0 Hz (no events, unaffected); the K1a-7 G3 float64 order-200 kernel row measured before K1a-10 is superseded (re-measured in K1a-7) | correctness note for the K1a report | orchestrator (delegated by lead), 2026-10-23 |
+| K1a-9 | (A) per-jit `xla_gpu_redzone_padding_bytes = 64 KiB` on every kernel jit through `_kernel/xla.py` (`kernel_jit` / `kernel_jax_jit`); never global (`XLA_FLAGS` and user jits untouched, tested) | option C approved by the orchestrator. Redzones are 8 MiB per side per autotuning buffer and dominate small-network GPU peaks. Trade-off: weaker out-of-bounds detection for faulty autotuning candidates; no effect on kernel choice, numerics or step time; documented in the `xla.py` docstring | orchestrator (delegated by lead), 2026-10-23 |
+| K1a-9 | (B) `make_storage('auto')` per backend: GPU always CSR (`AUTO_DENSE_THRESHOLDS['gpu'] = inf`), CPU unchanged at density ≥ 0.1, other backends use the CPU value; `dense_threshold=` / `backend=` override | measured crossover (`benchmarks/results/2026-10-23-K1a-9-storage.json`). GPU: CSR/Dense step ≤ 1.06 in every cell (f32 order 50 ε 0.5; f64 ≤ 1.04) (orders 50–800, ε 0.1–1.0, f32/f64), within noise at N = 250 so biased to CSR, and CSR memory is always lower. The f64 rows at 1.07–1.15 × reported before K1a-10 were an artefact: the cusparse-backend CSR, plus the brainevent#204 Dense values. After K1a-10 the default-backend f64 CSR is 1.02–1.04 × at N = 250 and 0.22–0.87 × above. CPU: CSR is 1.08–1.35 × slower at N ≤ 1000, outside noise, so CPU keeps Dense | orchestrator (delegated by lead), 2026-10-23 |

@@ -1,0 +1,1693 @@
+{
+ "benchmark": "k1a9_storage",
+ "date": "2026-10-23",
+ "script": "benchmarks/k1a9_storage.py sweep",
+ "protocol": "Brunel model A (fixed_prob epsilon, J scaled by 0.1/epsilon), orders 50/200/800, Dense vs CSR forced storage, each run in a fresh process, median ms/step of repeats; peak = raw peak_bytes_in_use (GPU) / max RSS (CPU). GPU 1, default brainevent backend.",
+ "notes": {
+  "gpu_f64": "measured after K1a-10 (brainevent#204 cast); the pre-K1a-10 GPU f64 Dense rows computed wrong values and are not included",
+  "gpu_f32": "measured before K1a-10 (float32 is unaffected by the cast)",
+  "cpu": "measured before K1a-10 (the CPU is unaffected by brainevent#204)"
+ },
+ "records": [
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 0.9613140870060306,
+   "first_s": 1.0604300889972365,
+   "ms_per_step": 0.02272145300230477,
+   "peak_bytes": 1119969280,
+   "peak_kind": "rss",
+   "rate_hz": 61.1,
+   "xla_flags": null,
+   "load": 0.140625
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 0.7751985219947528,
+   "first_s": 1.0782090440043248,
+   "ms_per_step": 0.027928042502026074,
+   "peak_bytes": 1103966208,
+   "peak_kind": "rss",
+   "rate_hz": 61.1,
+   "xla_flags": null,
+   "load": 0.28955078125
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 0.9242873250041157,
+   "first_s": 1.043661397008691,
+   "ms_per_step": 0.024899325500882696,
+   "peak_bytes": 1118982144,
+   "peak_kind": "rss",
+   "rate_hz": 60.99999999999999,
+   "xla_flags": null,
+   "load": 0.28955078125
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 0.763931223002146,
+   "first_s": 1.0621655629947782,
+   "ms_per_step": 0.03031912750157062,
+   "peak_bytes": 1105588224,
+   "peak_kind": "rss",
+   "rate_hz": 60.99999999999999,
+   "xla_flags": null,
+   "load": 0.3466796875
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 0.9755933830019785,
+   "first_s": 1.0376241070043761,
+   "ms_per_step": 0.022868346502946224,
+   "peak_bytes": 1125662720,
+   "peak_kind": "rss",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 2.5615234375
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 0.8099479930097004,
+   "first_s": 1.0857017079979414,
+   "ms_per_step": 0.028875324998807628,
+   "peak_bytes": 1111474176,
+   "peak_kind": "rss",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 2.5615234375
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.0191116490022978,
+   "first_s": 1.0549086990067735,
+   "ms_per_step": 0.02815076950355433,
+   "peak_bytes": 1122250752,
+   "peak_kind": "rss",
+   "rate_hz": 61.39999999999999,
+   "xla_flags": null,
+   "load": 2.43603515625
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 0.8860763210104778,
+   "first_s": 1.0472185560065554,
+   "ms_per_step": 0.030509660500683822,
+   "peak_bytes": 1116749824,
+   "peak_kind": "rss",
+   "rate_hz": 61.39999999999999,
+   "xla_flags": null,
+   "load": 2.32080078125
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 0.9198129569995217,
+   "first_s": 1.072728108993033,
+   "ms_per_step": 0.023295475999475457,
+   "peak_bytes": 1121267712,
+   "peak_kind": "rss",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 2.32080078125
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 0.7672157969936961,
+   "first_s": 1.0683664500102168,
+   "ms_per_step": 0.031525694001175,
+   "peak_bytes": 1102213120,
+   "peak_kind": "rss",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 2.21484375
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 0.9534686819970375,
+   "first_s": 1.0691445219999878,
+   "ms_per_step": 0.02476021449547261,
+   "peak_bytes": 1122635776,
+   "peak_kind": "rss",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 2.1171875
+  },
+  {
+   "device": "cpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 0.7518043290037895,
+   "first_s": 1.0897566420026124,
+   "ms_per_step": 0.03103161699982593,
+   "peak_bytes": 1107341312,
+   "peak_kind": "rss",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 2.1171875
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 0.8980158330086851,
+   "first_s": 1.0790298669890035,
+   "ms_per_step": 0.0425702979991911,
+   "peak_bytes": 1126277120,
+   "peak_kind": "rss",
+   "rate_hz": 57.099999999999994,
+   "xla_flags": null,
+   "load": 2.02734375
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 0.7633041930093896,
+   "first_s": 1.1072350240137894,
+   "ms_per_step": 0.04651160650246311,
+   "peak_bytes": 1099870208,
+   "peak_kind": "rss",
+   "rate_hz": 57.099999999999994,
+   "xla_flags": null,
+   "load": 1.94482421875
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 0.9666904659970896,
+   "first_s": 1.1255626729980577,
+   "ms_per_step": 0.06688473800022621,
+   "peak_bytes": 1144139776,
+   "peak_kind": "rss",
+   "rate_hz": 57.099999999999994,
+   "xla_flags": null,
+   "load": 1.94970703125
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 0.7564738399960333,
+   "first_s": 1.1432002379879123,
+   "ms_per_step": 0.07498261400178308,
+   "peak_bytes": 1105141760,
+   "peak_kind": "rss",
+   "rate_hz": 57.099999999999994,
+   "xla_flags": null,
+   "load": 1.94970703125
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 0.9674134000088088,
+   "first_s": 1.090888080012519,
+   "ms_per_step": 0.04432993699447252,
+   "peak_bytes": 1133985792,
+   "peak_kind": "rss",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.87353515625
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 0.7684946949884761,
+   "first_s": 1.0892600270017283,
+   "ms_per_step": 0.05056917000183603,
+   "peak_bytes": 1107615744,
+   "peak_kind": "rss",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.80322265625
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 0.9676506700052414,
+   "first_s": 1.1124999140010914,
+   "ms_per_step": 0.04578350149677135,
+   "peak_bytes": 1159901184,
+   "peak_kind": "rss",
+   "rate_hz": 56.9,
+   "xla_flags": null,
+   "load": 1.8193359375
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 0.7604327999870293,
+   "first_s": 1.193626795997261,
+   "ms_per_step": 0.051950387001852505,
+   "peak_bytes": 1108951040,
+   "peak_kind": "rss",
+   "rate_hz": 56.9,
+   "xla_flags": null,
+   "load": 1.8193359375
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.0911277979903389,
+   "first_s": 1.078855466999812,
+   "ms_per_step": 0.04794231150299311,
+   "peak_bytes": 1154621440,
+   "peak_kind": "rss",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.833984375
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 0.7758045539958403,
+   "first_s": 1.0885414649965242,
+   "ms_per_step": 0.04495652400510153,
+   "peak_bytes": 1115119616,
+   "peak_kind": "rss",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 2.328125
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.097759551004856,
+   "first_s": 1.1261006030108547,
+   "ms_per_step": 0.05382586349878693,
+   "peak_bytes": 1152835584,
+   "peak_kind": "rss",
+   "rate_hz": 57.199999999999996,
+   "xla_flags": null,
+   "load": 2.2216796875
+  },
+  {
+   "device": "cpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 0.7979311989911366,
+   "first_s": 1.1725842670130078,
+   "ms_per_step": 0.053352504000940826,
+   "peak_bytes": 1124507648,
+   "peak_kind": "rss",
+   "rate_hz": 57.199999999999996,
+   "xla_flags": null,
+   "load": 2.2216796875
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 1.2699059239967028,
+   "first_s": 2.48565959399275,
+   "ms_per_step": 0.6209528260005754,
+   "peak_bytes": 1345396736,
+   "peak_kind": "rss",
+   "rate_hz": 45.599999999999994,
+   "xla_flags": null,
+   "load": 2.10400390625
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 0.9661474320018897,
+   "first_s": 2.3555992530018557,
+   "ms_per_step": 0.7101544795004884,
+   "peak_bytes": 1176256512,
+   "peak_kind": "rss",
+   "rate_hz": 45.599999999999994,
+   "xla_flags": null,
+   "load": 1.93359375
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 1.2811052299948642,
+   "first_s": 3.224084312998457,
+   "ms_per_step": 1.0476286979974248,
+   "peak_bytes": 1487249408,
+   "peak_kind": "rss",
+   "rate_hz": 45.49999999999999,
+   "xla_flags": null,
+   "load": 1.73583984375
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.0437393759930274,
+   "first_s": 3.1353678480081726,
+   "ms_per_step": 1.0408826525017503,
+   "peak_bytes": 1194012672,
+   "peak_kind": "rss",
+   "rate_hz": 45.49999999999999,
+   "xla_flags": null,
+   "load": 1.8115234375
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 1.502476294990629,
+   "first_s": 2.434423914004583,
+   "ms_per_step": 0.6798425865054014,
+   "peak_bytes": 1398493184,
+   "peak_kind": "rss",
+   "rate_hz": 45.3,
+   "xla_flags": null,
+   "load": 2.1669921875
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.2071880560106365,
+   "first_s": 2.3290854299993953,
+   "ms_per_step": 0.7792666989989812,
+   "peak_bytes": 1250066432,
+   "peak_kind": "rss",
+   "rate_hz": 45.3,
+   "xla_flags": null,
+   "load": 1.98828125
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 1.5456608189997496,
+   "first_s": 3.2743974369950593,
+   "ms_per_step": 1.2387891719990876,
+   "peak_bytes": 1563934720,
+   "peak_kind": "rss",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 2.0146484375
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.2396330229967134,
+   "first_s": 3.286337227007607,
+   "ms_per_step": 1.1278824074979639,
+   "peak_bytes": 1275265024,
+   "peak_kind": "rss",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.88037109375
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 2.3988684419891797,
+   "first_s": 2.1971129619923886,
+   "ms_per_step": 0.7197058419988025,
+   "peak_bytes": 1660465152,
+   "peak_kind": "rss",
+   "rate_hz": 45.199999999999996,
+   "xla_flags": null,
+   "load": 1.7587890625
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.9826829660014482,
+   "first_s": 2.7851274339918746,
+   "ms_per_step": 0.9627559104992542,
+   "peak_bytes": 1436643328,
+   "peak_kind": "rss",
+   "rate_hz": 45.0,
+   "xla_flags": null,
+   "load": 1.67041015625
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 2.436652497999603,
+   "first_s": 3.383646274000057,
+   "ms_per_step": 1.1549988460028544,
+   "peak_bytes": 1827348480,
+   "peak_kind": "rss",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.7080078125
+  },
+  {
+   "device": "cpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.9965917619992979,
+   "first_s": 3.3847898110107053,
+   "ms_per_step": 1.239724587998353,
+   "peak_bytes": 1493020672,
+   "peak_kind": "rss",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 3.3095703125
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.4890488579985686,
+   "first_s": 1.2928726700047264,
+   "ms_per_step": 0.053256435501680244,
+   "peak_bytes": 67577600,
+   "peak_kind": "device",
+   "rate_hz": 61.1,
+   "xla_flags": null,
+   "load": 1.86474609375
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2316238769999472,
+   "first_s": 1.2913226539967582,
+   "ms_per_step": 0.05178703400451923,
+   "peak_bytes": 67242496,
+   "peak_kind": "device",
+   "rate_hz": 61.1,
+   "xla_flags": null,
+   "load": 1.79541015625
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.501788741996279,
+   "first_s": 1.320315634002327,
+   "ms_per_step": 0.052913718500349205,
+   "peak_bytes": 67654912,
+   "peak_kind": "device",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 1.61865234375
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2356936569995014,
+   "first_s": 1.3411922860104823,
+   "ms_per_step": 0.05193966899969382,
+   "peak_bytes": 67300096,
+   "peak_kind": "device",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 1.56884765625
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.4469495279918192,
+   "first_s": 1.290083991989377,
+   "ms_per_step": 0.053408088999276515,
+   "peak_bytes": 67891712,
+   "peak_kind": "device",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 1.4423828125
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2480752830015263,
+   "first_s": 1.3016563370038057,
+   "ms_per_step": 0.056408310498227365,
+   "peak_bytes": 67451904,
+   "peak_kind": "device",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 1.40673828125
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.4848563160048798,
+   "first_s": 1.309333119992516,
+   "ms_per_step": 0.0668222795065958,
+   "peak_bytes": 73762304,
+   "peak_kind": "device",
+   "rate_hz": 56.9,
+   "xla_flags": null,
+   "load": 1.31591796875
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.2678426880011102,
+   "first_s": 1.2561177400057204,
+   "ms_per_step": 0.05948707649804419,
+   "peak_bytes": 68233472,
+   "peak_kind": "device",
+   "rate_hz": 56.9,
+   "xla_flags": null,
+   "load": 1.29052734375
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.5730409349926049,
+   "first_s": 1.304950256992015,
+   "ms_per_step": 0.06653294499847107,
+   "peak_bytes": 74962176,
+   "peak_kind": "device",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.2998046875
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.3619861759943888,
+   "first_s": 1.2332232370099518,
+   "ms_per_step": 0.0504252285027178,
+   "peak_bytes": 69113600,
+   "peak_kind": "device",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.1953125
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.6130189439863898,
+   "first_s": 1.3132186520087998,
+   "ms_per_step": 0.06706242900690995,
+   "peak_bytes": 78353152,
+   "peak_kind": "device",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.13916015625
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.3869436740060337,
+   "first_s": 1.2059485509962542,
+   "ms_per_step": 0.05503970599966124,
+   "peak_bytes": 71753472,
+   "peak_kind": "device",
+   "rate_hz": 57.0,
+   "xla_flags": null,
+   "load": 1.1279296875
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 1.9573053359927144,
+   "first_s": 1.5658858319948195,
+   "ms_per_step": 0.24408642850175966,
+   "peak_bytes": 160781568,
+   "peak_kind": "device",
+   "rate_hz": 45.3,
+   "xla_flags": null,
+   "load": 1.2216796875
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.6643974159960635,
+   "first_s": 1.1996061030076817,
+   "ms_per_step": 0.06017977499868721,
+   "peak_bytes": 65335552,
+   "peak_kind": "device",
+   "rate_hz": 45.3,
+   "xla_flags": null,
+   "load": 1.20361328125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 2.1520112120051635,
+   "first_s": 1.5308690539968666,
+   "ms_per_step": 0.24419484099780675,
+   "peak_bytes": 189878016,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.14501953125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.8397581830067793,
+   "first_s": 1.1941901730024256,
+   "ms_per_step": 0.05951650650240481,
+   "peak_bytes": 79415552,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.12255859375
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 2.971655536995968,
+   "first_s": 1.5670040260010865,
+   "ms_per_step": 0.2437955810019048,
+   "peak_bytes": 371638016,
+   "peak_kind": "device",
+   "rate_hz": 45.099999999999994,
+   "xla_flags": null,
+   "load": 1.14794921875
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 2.522768892988097,
+   "first_s": 1.2045960960094817,
+   "ms_per_step": 0.05990302150166826,
+   "peak_bytes": 115268608,
+   "peak_kind": "device",
+   "rate_hz": 45.3,
+   "xla_flags": null,
+   "load": 1.1357421875
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.4975833810021868,
+   "first_s": 1.3357596850109985,
+   "ms_per_step": 0.07753087500168476,
+   "peak_bytes": 67904256,
+   "peak_kind": "device",
+   "rate_hz": 60.99999999999999,
+   "xla_flags": null,
+   "load": 0.2275390625
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2521213849977357,
+   "first_s": 1.3611752120050369,
+   "ms_per_step": 0.07954095799505012,
+   "peak_bytes": 67309056,
+   "peak_kind": "device",
+   "rate_hz": 60.99999999999999,
+   "xla_flags": null,
+   "load": 0.28955078125
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.4479840559943113,
+   "first_s": 1.3653089010040276,
+   "ms_per_step": 0.07758583100076066,
+   "peak_bytes": 68055552,
+   "peak_kind": "device",
+   "rate_hz": 61.39999999999999,
+   "xla_flags": null,
+   "load": 0.3466796875
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2683574880065862,
+   "first_s": 1.5747903139999835,
+   "ms_per_step": 0.07945515100436751,
+   "peak_bytes": 67400960,
+   "peak_kind": "device",
+   "rate_hz": 61.39999999999999,
+   "xla_flags": null,
+   "load": 0.8798828125
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.4673745850013802,
+   "first_s": 1.3522511300106999,
+   "ms_per_step": 0.07758305600145832,
+   "peak_bytes": 68294144,
+   "peak_kind": "device",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 1.1298828125
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2580626829876564,
+   "first_s": 1.4475145320029696,
+   "ms_per_step": 0.08072440799878677,
+   "peak_bytes": 67619584,
+   "peak_kind": "device",
+   "rate_hz": 61.199999999999996,
+   "xla_flags": null,
+   "load": 1.119140625
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.4847147590044187,
+   "first_s": 1.4212834700010717,
+   "ms_per_step": 0.10518997000326635,
+   "peak_bytes": 78358784,
+   "peak_kind": "device",
+   "rate_hz": 57.099999999999994,
+   "xla_flags": null,
+   "load": 1.109375
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.279626390998601,
+   "first_s": 1.4071156260033604,
+   "ms_per_step": 0.09198568500141846,
+   "peak_bytes": 68863232,
+   "peak_kind": "device",
+   "rate_hz": 57.099999999999994,
+   "xla_flags": null,
+   "load": 1.1005859375
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.5647842540056445,
+   "first_s": 1.3902050090109697,
+   "ms_per_step": 0.10495820899814134,
+   "peak_bytes": 80118272,
+   "peak_kind": "device",
+   "rate_hz": 56.9,
+   "xla_flags": null,
+   "load": 1.09228515625
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.3997071069898084,
+   "first_s": 1.331751641992014,
+   "ms_per_step": 0.08590910050406819,
+   "peak_bytes": 70044416,
+   "peak_kind": "device",
+   "rate_hz": 56.9,
+   "xla_flags": null,
+   "load": 1.08447265625
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.6444946200062986,
+   "first_s": 1.3419498889998067,
+   "ms_per_step": 0.1049646230021608,
+   "peak_bytes": 85359360,
+   "peak_kind": "device",
+   "rate_hz": 57.199999999999996,
+   "xla_flags": null,
+   "load": 1.07763671875
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.3914570339984493,
+   "first_s": 1.4738452330057044,
+   "ms_per_step": 0.08963421499356627,
+   "peak_bytes": 73562880,
+   "peak_kind": "device",
+   "rate_hz": 57.199999999999996,
+   "xla_flags": null,
+   "load": 1.0712890625
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 1.9235874760051956,
+   "first_s": 1.91769851600111,
+   "ms_per_step": 0.42838786100037396,
+   "peak_bytes": 278028800,
+   "peak_kind": "device",
+   "rate_hz": 45.49999999999999,
+   "xla_flags": null,
+   "load": 1.05517578125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.1,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.725220911001088,
+   "first_s": 1.2653717320063151,
+   "ms_per_step": 0.09253396149870241,
+   "peak_bytes": 71675136,
+   "peak_kind": "device",
+   "rate_hz": 45.49999999999999,
+   "xla_flags": null,
+   "load": 1.05029296875
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 2.1316214990074513,
+   "first_s": 1.9380286400119076,
+   "ms_per_step": 0.42956840899569215,
+   "peak_bytes": 323347200,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.1162109375
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.2,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 1.9105818899988662,
+   "first_s": 1.256436670999392,
+   "ms_per_step": 0.0928704044999904,
+   "peak_bytes": 90510080,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.1064453125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 2.966437704002601,
+   "first_s": 1.932766204001382,
+   "ms_per_step": 0.4273139059951063,
+   "peak_bytes": 474387200,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.08935546875
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 0.5,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 2.5896385119995102,
+   "first_s": 1.267039461992681,
+   "ms_per_step": 0.0941858724982012,
+   "peak_bytes": 156903936,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 1.0751953125
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 1.0,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.5102049710112624,
+   "first_s": 1.1992544249951607,
+   "ms_per_step": 0.05323825400409987,
+   "peak_bytes": 35134976,
+   "peak_kind": "device",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 0.10107421875
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 1.0,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2557231549872085,
+   "first_s": 1.2772139640001114,
+   "ms_per_step": 0.0498067774969968,
+   "peak_bytes": 34616832,
+   "peak_kind": "device",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 0.17333984375
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 1.0,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 250,
+   "build_s": 1.500439319992438,
+   "first_s": 1.2895857019902905,
+   "ms_per_step": 0.07756325700029265,
+   "peak_bytes": 36368384,
+   "peak_kind": "device",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 0.1591796875
+  },
+  {
+   "device": "gpu",
+   "order": 50,
+   "epsilon": 1.0,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 250,
+   "build_s": 1.2828819139976986,
+   "first_s": 1.284705527999904,
+   "ms_per_step": 0.08032571600051597,
+   "peak_bytes": 35320832,
+   "peak_kind": "device",
+   "rate_hz": 61.3,
+   "xla_flags": null,
+   "load": 0.306640625
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 1.0,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.7334570870007155,
+   "first_s": 1.2443659869895782,
+   "ms_per_step": 0.06700218449987005,
+   "peak_bytes": 51387392,
+   "peak_kind": "device",
+   "rate_hz": 57.5,
+   "xla_flags": null,
+   "load": 0.3623046875
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 1.0,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.517238489992451,
+   "first_s": 1.3237586989998817,
+   "ms_per_step": 0.0576646335030091,
+   "peak_bytes": 43447808,
+   "peak_kind": "device",
+   "rate_hz": 57.5,
+   "xla_flags": null,
+   "load": 0.41357421875
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 1.0,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 1000,
+   "build_s": 1.7454591669957153,
+   "first_s": 1.3588608599966392,
+   "ms_per_step": 0.10492266550136264,
+   "peak_bytes": 60152832,
+   "peak_kind": "device",
+   "rate_hz": 57.5,
+   "xla_flags": null,
+   "load": 0.4609375
+  },
+  {
+   "device": "gpu",
+   "order": 200,
+   "epsilon": 1.0,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 1000,
+   "build_s": 1.4959873820043867,
+   "first_s": 1.3587705009995261,
+   "ms_per_step": 0.09085211650381098,
+   "peak_bytes": 47904768,
+   "peak_kind": "device",
+   "rate_hz": 57.5,
+   "xla_flags": null,
+   "load": 0.50439453125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 1.0,
+   "precision": 32,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 4.278456743006245,
+   "first_s": 1.555839038992417,
+   "ms_per_step": 0.24321886950201588,
+   "peak_bytes": 678838016,
+   "peak_kind": "device",
+   "rate_hz": 45.7,
+   "xla_flags": null,
+   "load": 0.6611328125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 1.0,
+   "precision": 32,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 3.722594206003123,
+   "first_s": 1.1852249149960699,
+   "ms_per_step": 0.0677891594968969,
+   "peak_bytes": 163487232,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 0.9541015625
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 1.0,
+   "precision": 64,
+   "storage": "dense",
+   "kinds": [
+    "dense",
+    "dense"
+   ],
+   "n": 4000,
+   "build_s": 4.463213951996295,
+   "first_s": 1.899107435005135,
+   "ms_per_step": 0.42860692550311796,
+   "peak_bytes": 832787200,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 0.96142578125
+  },
+  {
+   "device": "gpu",
+   "order": 800,
+   "epsilon": 1.0,
+   "precision": 64,
+   "storage": "csr",
+   "kinds": [
+    "csr",
+    "csr"
+   ],
+   "n": 4000,
+   "build_s": 3.884172051999485,
+   "first_s": 1.2675543270015623,
+   "ms_per_step": 0.10103225250350079,
+   "peak_bytes": 256928768,
+   "peak_kind": "device",
+   "rate_hz": 45.4,
+   "xla_flags": null,
+   "load": 0.9677734375
+  }
+ ]
+}

@@ -66,6 +66,7 @@ from brainpy_state._kernel.ports import TimedEvent
 from brainpy_state._kernel import timed as _timed
 from brainpy_state._kernel.rng import RNG_MODES, population_block_keys, step_block_keys
 from brainpy_state._kernel.units import check_unit, from_mantissa, to_mantissa, unit_of
+from brainpy_state._kernel.xla import kernel_jit
 
 __all__ = ['Program', 'Runner', 'duration_steps', 'trial_indices']
 
@@ -847,9 +848,8 @@ class Runner:
         self.n = 0
         self.n_traces = 0
         self._structure = self.program.structure()
-        self._rollout = brainstate.transform.jit(self._run, static_argnums=(4,),
-                                                 static_argnames=('learn', 'every'))
-        self._one_step = brainstate.transform.jit(self._step)
+        self._rollout = kernel_jit(self._run, static_argnums=(4,), static_argnames=('learn', 'every'))
+        self._one_step = kernel_jit(self._step)
 
     # ------------------------------------------------------------ compiled
     def _vmap(self, f):
