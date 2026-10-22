@@ -12,6 +12,11 @@ pytest
 pytest-xdist  # for parallel test execution
 absl-py
 
+# Private kernel (brainpy_state/_kernel) dependency: dev/CI-only while the kernel stays
+# private (not imported by `import brainpy_state`). Whether it becomes a runtime
+# dependency in pyproject.toml / requirements.txt is decided at K3.
+braintrace>=0.2.6
+
 # type checking (see [tool.mypy] in pyproject.toml; run `mypy -p brainpy_state`)
 mypy
 

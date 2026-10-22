@@ -157,5 +157,32 @@ class TestEndToEndImport(unittest.TestCase):
         self.assertIn("ok LIF", result.stdout)
 
 
+class TestPrivateKernelIsolation(unittest.TestCase):
+    """``import brainpy_state`` must not pull in the private ``_kernel``.
+
+    ``_kernel`` depends on ``braintrace``, which is a dev/CI-only dependency until
+    K3 decides packaging. Users without ``braintrace`` must still be able to import
+    the public package, so the kernel (and ``braintrace``) must stay unloaded.
+    """
+
+    def test_public_import_does_not_load_kernel_or_braintrace(self):
+        code = (
+            "import sys\n"
+            "class _Block:\n"
+            "    def find_spec(self, name, path=None, target=None):\n"
+            "        if name.split('.')[0] == 'braintrace':\n"
+            "            raise ImportError('braintrace blocked for this test')\n"
+            "sys.meta_path.insert(0, _Block())\n"
+            "import brainpy.state\n"
+            "kernel = sorted(m for m in sys.modules if m.startswith('brainpy_state._kernel'))\n"
+            "print('kernel', kernel)\n"
+            "print('braintrace', 'braintrace' in sys.modules)\n"
+        )
+        result = _run_import(code)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("kernel []", result.stdout)
+        self.assertIn("braintrace False", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
