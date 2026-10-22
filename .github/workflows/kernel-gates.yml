@@ -1,0 +1,74 @@
+# Gate suite of the new kernel (brainpy_state/_kernel), K0 + K1a.
+#
+# Runs every pytest-implemented gate (`-m "k0_gate or k1a_gate"`, registry:
+# brainpy_state/_kernel/validation/gates.py) with the `validation` extra installed, so the
+# Brian2 comparison (K0 G3) runs. NEST is not installed here: the `requires_nest` gate tests
+# skip and run in `nest-comparison.yml` (which selects `-m requires_nest` over the whole
+# package, the kernel's gate tests included). Wall-clock gates (`k1a_compile`) skip unless
+# selected explicitly; benchmarks are run on the dedicated host (K1a report).
+# (K1a spec §K1a-7; the D-f remainder of v0.1.1 goal 02.)
+
+name: Kernel gates
+
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "brainpy_state/_kernel/**"
+      - "pyproject.toml"
+      - ".github/workflows/kernel-gates.yml"
+  pull_request:
+    paths:
+      - "brainpy_state/_kernel/**"
+      - "pyproject.toml"
+      - ".github/workflows/kernel-gates.yml"
+  workflow_dispatch:
+
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel-gates:
+    name: kernel gates (ubuntu, py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.13" ]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.txt
+
+      - name: Install dependencies (with the validation extra, Brian2)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-xdist pytest-timeout
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          pip install -e ".[validation]"
+
+      - name: Run the K0 and K1a gate tests
+        # -n 2: the 16 GB runner OOMs under more concurrent XLA compilations (see CI.yml).
+        env:
+          OMP_NUM_THREADS: "1"
+          JAX_PLATFORMS: cpu
+        run: pytest brainpy_state/_kernel -m "k0_gate or k1a_gate" -n 2 --timeout=1800 --timeout-method=thread

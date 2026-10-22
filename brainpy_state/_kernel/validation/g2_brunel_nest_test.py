@@ -34,15 +34,20 @@ DT = 0.1
 STATS = ('rate_E', 'rate_I', 'cv_isi_E', 'fano_E', 'corr_E')
 
 
-def nest_brunel(order: int, seed: int, t_total: float):
-    """One NEST run; returns ``(times ms, senders)`` with senders ``0..N-1`` (E first)."""
+def nest_brunel(order: int, seed: int, t_total: float, g: float = 5.0, eta: float = 2.0,
+                threads: int = 1):
+    """One NEST run; returns ``(times ms, senders)`` with senders ``0..N-1`` (E first).
+
+    ``g`` (relative inhibition) and ``eta`` (external drive / threshold rate) default to
+    the NEST example values used by G2; K1a-G5 passes its asynchronous-irregular point.
+    """
     import nest
-    p = brunel_params(order)
+    p = brunel_params(order, g=g, eta=eta)
     nest.ResetKernel()
     nest.set_verbosity('M_ERROR')
     nest.resolution = DT
     nest.rng_seed = seed
-    nest.local_num_threads = 1
+    nest.local_num_threads = threads
     npar = {'C_m': p['c_mem'], 'tau_m': p['tau_mem'], 't_ref': p['t_ref'], 'E_L': 0.0,
             'V_reset': 0.0, 'V_m': 0.0, 'V_th': p['theta'], 'tau_syn_ex': p['tau_syn'],
             'tau_syn_in': p['tau_syn']}
@@ -61,10 +66,11 @@ def nest_brunel(order: int, seed: int, t_total: float):
     return np.asarray(ev['times'], float), np.asarray(ev['senders']) - E[0].global_id
 
 
-def kernel_brunel(order: int, seed: int, t_total: float, precision: str = 'float32'):
+def kernel_brunel(order: int, seed: int, t_total: float, precision: str = 'float32',
+                  g: float = 5.0, eta: float = 2.0):
     """One kernel run (float32 by default); returns ``(times ms, senders)`` like :func:`nest_brunel`."""
-    p = brunel_params(order)
-    net, info = build_brunel(order, seed=seed, n_rec=p['N_E'] + p['N_I'])
+    p = brunel_params(order, g=g, eta=eta)
+    net, info = build_brunel(order, seed=seed, n_rec=p['N_E'] + p['N_I'], g=g, eta=eta)
     res = net.compile(precision).runner().simulate(t_total * u.ms)
     ts, ss = [], []
     for key in ('rec_E', 'rec_I'):

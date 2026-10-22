@@ -98,6 +98,13 @@ markers = [
     "k0_g8: K0 gate G8, STDP vs NEST",
     "k0_g9: K0 gate G9, performance (benchmarks/, not a pytest test)",
     "k0_g10: K0 gate G10, coverage of brainpy_state/_kernel (command)",
+    "k1a_gate: K1a gate test (registry: K1A_GATES in brainpy_state/_kernel/validation/gates.py)",
+    "k1a_g1: K1a gate G1, compile time (pytest part: k1a_compile)",
+    "k1a_g2: K1a gate G2, single-op per-edge delays",
+    "k1a_g3: K1a gate G3, G9 on GPU (benchmarks/, not a pytest test)",
+    "k1a_g4: K1a gate G4, Potjans-Diesmann microcircuit vs NEST",
+    "k1a_g5: K1a gate G5, Brunel statistics in the AI regime vs NEST",
+    "k1a_g6: K1a gate G6, K0 gate regressions (command)",
     "k1a_compile: K1a compile-time gate (wall clock; run explicitly with -m k1a_compile on an idle host)",
 ]
 

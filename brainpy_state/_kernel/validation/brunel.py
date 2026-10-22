@@ -50,7 +50,8 @@ def brunel_params(order: int, g: float = 5.0, eta: float = 2.0, epsilon: float =
 
 def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = 'auto',
                  n_rec: int = 50, record_v: bool = False,
-                 delay_buffer: str = 'auto', delay: Any = None) -> tuple[Network, dict]:
+                 delay_buffer: str = 'auto', delay: Any = None, g: float = 5.0,
+                 eta: float = 2.0) -> tuple[Network, dict]:
     """Build the network.
 
     Parameters
@@ -72,6 +73,10 @@ def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = '
     delay : Quantity or Distribution, optional
         Delay of the recurrent projections (default 1.5 ms; e.g. a per-edge
         ``Uniform`` for the K1a-4 benchmark). The Poisson input keeps 1.5 ms.
+    g : float, default 5.0
+        Relative inhibitory strength (``J_in = -g J_ex``; NEST example value).
+    eta : float, default 2.0
+        External rate relative to the threshold rate (NEST example value).
 
     Returns
     -------
@@ -92,7 +97,7 @@ def build_brunel(order: int, *, dt: float = 0.1, seed: int = 0, storage: str = '
         >>> 10.0 < e_rate < 150.0
         True
     """
-    p = brunel_params(order)
+    p = brunel_params(order, g=g, eta=eta)
     npar = dict(C_m=p['c_mem'] * u.pF, tau_m=p['tau_mem'] * u.ms, tau_syn_ex=p['tau_syn'] * u.ms,
                 tau_syn_in=p['tau_syn'] * u.ms, t_ref=p['t_ref'] * u.ms, E_L=0.0 * u.mV,
                 V_reset=0.0 * u.mV, V_th=p['theta'] * u.mV)
