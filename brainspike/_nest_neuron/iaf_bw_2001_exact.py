@@ -317,25 +317,25 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
-        >>> net = bp.iaf_bw_2001_exact(in_size=10)
+        >>> net = brainspike.iaf_bw_2001_exact(in_size=10)
         >>> net.init_all_states()
         >>> # Apply AMPA input spike
-        >>> spike = bp.iaf_bw_2001_exact.get_spike(net(spike_events=[(1, 100*u.nS)]))
+        >>> spike = brainspike.iaf_bw_2001_exact.get_spike(net(spike_events=[(1, 100*u.nS)]))
         >>> print(net.V.value)  # doctest: +SKIP
 
     **NMDA connections with unique ports:**
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
-        >>> net = bp.iaf_bw_2001_exact(in_size=5)
+        >>> net = brainspike.iaf_bw_2001_exact(in_size=5)
         >>> net.init_all_states()
         >>> # Register two NMDA ports with different weights
         >>> events = [
@@ -350,11 +350,11 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
-        >>> net = bp.iaf_bw_2001_exact(in_size=1, V_th=-50*u.mV)
+        >>> net = brainspike.iaf_bw_2001_exact(in_size=1, V_th=-50*u.mV)
         >>> net.init_all_states()
         >>> events = [
         ...     {'receptor': 'AMPA', 'weight': 200*u.nS, 'multiplicity': 2.0},
@@ -369,11 +369,11 @@ class iaf_bw_2001_exact(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.context(dt=0.1 * u.ms)
-        >>> net = bp.iaf_bw_2001_exact(in_size=3, ref_var=True, t_ref=5*u.ms)
+        >>> net = brainspike.iaf_bw_2001_exact(in_size=3, ref_var=True, t_ref=5*u.ms)
         >>> net.init_all_states()
         >>> net.V.value = net.V_th + 1*u.mV  # Force spike
         >>> spike = net()

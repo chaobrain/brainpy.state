@@ -547,10 +547,10 @@ class Simulator(brainstate.nn.Module):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bp
+            >>> import brainspike
             >>> import brainunit as u
-            >>> sim = bp.Simulator(dt=0.1 * u.ms)
-            >>> pop = sim.create(bp.iaf_psc_alpha, positions=bp.spatial.grid([4, 3], extent=[2.0, 1.5]))
+            >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+            >>> pop = sim.create(brainspike.iaf_psc_alpha, positions=brainspike.spatial.grid([4, 3], extent=[2.0, 1.5]))
             >>> [round(float(v), 2) for v in u.get_magnitude(sim.get_position(pop).to(u.um))[0]]
             [-0.75, 0.5]
         """
@@ -766,19 +766,19 @@ class Simulator(brainstate.nn.Module):
         .. code-block:: python
 
             >>> import brainunit as u
-            >>> import brainspike as bp
-            >>> sim = bp.Simulator(dt=0.1 * u.ms)
-            >>> pre = sim.create(bp.aeif_cond_alpha_astro, 10, params={'I_e': 1000.0 * u.pA})
-            >>> post = sim.create(bp.aeif_cond_alpha_astro, 10, params={'I_e': 1000.0 * u.pA})
-            >>> astro = sim.create(bp.astrocyte_lr_1994, 5, params={'delta_IP3': 0.2})
+            >>> import brainspike
+            >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+            >>> pre = sim.create(brainspike.aeif_cond_alpha_astro, 10, params={'I_e': 1000.0 * u.pA})
+            >>> post = sim.create(brainspike.aeif_cond_alpha_astro, 10, params={'I_e': 1000.0 * u.pA})
+            >>> astro = sim.create(brainspike.astrocyte_lr_1994, 5, params={'delta_IP3': 0.2})
             >>> prim, tin, tout = sim.tripartite_connect(
             ...     pre, post, astro,
-            ...     conn_spec=bp.pairwise_bernoulli(1.0),
-            ...     third_factor_conn_spec=bp.third_factor_bernoulli_with_pool(
+            ...     conn_spec=brainspike.pairwise_bernoulli(1.0),
+            ...     third_factor_conn_spec=brainspike.third_factor_bernoulli_with_pool(
             ...         p=1.0, pool_size=1, pool_type='block'),
             ...     syn_specs={'primary': {'weight': 1.0 * u.nS, 'receptor_type': 1},
             ...                'third_in': {'weight': 1.0},
-            ...                'third_out': {'synapse': bp.sic_connection(weight=1.0)}},
+            ...                'third_out': {'synapse': brainspike.sic_connection(weight=1.0)}},
             ...     seed=0)
             >>> tout._channel_label
             'I_SIC'
@@ -867,10 +867,10 @@ class Simulator(brainstate.nn.Module):
         .. code-block:: python
 
            >>> import brainunit as u
-           >>> import brainspike as bp
-           >>> sim = bp.Simulator(dt=0.1 * u.ms)
-           >>> exc = sim.create(bp.iaf_psc_exp, 4)
-           >>> _ = sim.connect(exc, exc, rule=bp.all_to_all, weight=20. * u.pA,
+           >>> import brainspike
+           >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+           >>> exc = sim.create(brainspike.iaf_psc_exp, 4)
+           >>> _ = sim.connect(exc, exc, rule=brainspike.all_to_all, weight=20. * u.pA,
            ...                 allow_autapses=False, comm='sparse')
            >>> conns = sim.get_connections(source=exc, target=exc)
            >>> len(conns)

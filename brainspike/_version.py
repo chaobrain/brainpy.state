@@ -13,12 +13,12 @@
 # limitations under the License.
 # ==============================================================================
 
-from ._compat import _parse_release
+import re
 
-__version__ = "0.1.0"
-# Robust release-segment parse: never crash on PEP 440 suffixes (".post1", "rc1",
-# ".dev0", "+local"). Falls back to (0, 0, 0) only if __version__ is malformed.
-__version_info__ = _parse_release(__version__) or (0, 0, 0)
+__version__ = "0.2.0"
+# Release segment only, so PEP 440 suffixes (".post1", "rc1", ".dev0", "+local")
+# never crash the parse. Falls back to (0, 0, 0) only if __version__ is malformed.
+_m = re.match(r'(\d+)\.(\d+)(?:\.(\d+))?', __version__)
+__version_info__ = (int(_m[1]), int(_m[2]), int(_m[3] or 0)) if _m else (0, 0, 0)
 
-del _parse_release
-
+del re, _m

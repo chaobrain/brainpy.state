@@ -103,9 +103,9 @@ def grid(shape: Sequence[int], extent=None, center=None) -> Layer:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> layer = bp.spatial.grid([4, 3], extent=[2.0, 1.5])
+        >>> layer = brainspike.spatial.grid([4, 3], extent=[2.0, 1.5])
         >>> layer.n
         12
         >>> bool(u.math.allclose(layer.coords[0], [-0.75, 0.5] * u.um))
@@ -153,8 +153,8 @@ def free(positions, extent=None, num_dimensions=None) -> Layer:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> layer = bp.spatial.free(bp.dist.Uniform(-0.5, 0.5), extent=[1.5, 1.5, 1.5])
+        >>> import brainspike
+        >>> layer = brainspike.spatial.free(brainspike.dist.Uniform(-0.5, 0.5), extent=[1.5, 1.5, 1.5])
         >>> layer.ndim
         3
     """

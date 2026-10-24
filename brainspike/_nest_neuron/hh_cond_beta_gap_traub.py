@@ -333,12 +333,12 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
        >>> import brainstate
        >>> import matplotlib.pyplot as plt
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
-       ...     neuron = bst.hh_cond_beta_gap_traub(1)
+       ...     neuron = brainspike.hh_cond_beta_gap_traub(1)
        ...     neuron.init_all_states()
        ...     # Apply 500 pA step current for 100 ms
        ...     times, voltages = [], []
@@ -360,7 +360,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     .. code-block:: python
 
        >>> # Two coupled neurons with gap junction
-       >>> neuron_pop = bst.hh_cond_beta_gap_traub(2, I_e=200 * u.pA)
+       >>> neuron_pop = brainspike.hh_cond_beta_gap_traub(2, I_e=200 * u.pA)
        >>> neuron_pop.init_all_states()
        >>> g_gap = 50.0  # nS gap conductance
        >>> with brainstate.environ.context(dt=0.1 * u.ms):
@@ -377,7 +377,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
     .. code-block:: python
 
        >>> # Slow NMDA-like synapse (tau_rise=2ms, tau_decay=50ms)
-       >>> neuron = bst.hh_cond_beta_gap_traub(
+       >>> neuron = brainspike.hh_cond_beta_gap_traub(
        ...     1,
        ...     tau_rise_ex=2.0 * u.ms,
        ...     tau_decay_ex=50.0 * u.ms,
@@ -724,7 +724,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         .. code-block:: python
 
-           >>> neuron = bst.hh_cond_beta_gap_traub(
+           >>> neuron = brainspike.hh_cond_beta_gap_traub(
            ...     10,
            ...     V_m_init=-50 * u.mV,      # Depolarized initial state
            ...     Act_m_init=0.3,            # Custom Na activation
@@ -756,8 +756,8 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         .. code-block:: python
 
-           >>> import brainspike as bst
-           >>> neuron = bst.hh_cond_beta_gap_traub(5)
+           >>> import brainspike
+           >>> neuron = brainspike.hh_cond_beta_gap_traub(5)
            >>> neuron.init_all_states()
            >>> print(neuron.V.value)  # Should be E_L = -60 mV
            >>> print(neuron.m.value)  # Equilibrium at -60 mV
@@ -766,7 +766,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         .. code-block:: python
 
-           >>> neuron = bst.hh_cond_beta_gap_traub(
+           >>> neuron = brainspike.hh_cond_beta_gap_traub(
            ...     1,
            ...     V_m_init=-45 * u.mV,  # Near threshold
            ... )
@@ -908,9 +908,9 @@ class hh_cond_beta_gap_traub(NESTNeuron):
 
         .. code-block:: python
 
-           >>> import brainspike as bst
+           >>> import brainspike
            >>> import brainunit as u
-           >>> neuron = bst.hh_cond_beta_gap_traub(1)
+           >>> neuron = brainspike.hh_cond_beta_gap_traub(1)
            >>> neuron.init_all_states()
            >>> # Manually set voltage above threshold
            >>> V_test = (-50 + 30 + 1) * u.mV  # V_T + 30 + 1 = -19 mV
@@ -922,7 +922,7 @@ class hh_cond_beta_gap_traub(NESTNeuron):
         .. code-block:: python
 
            >>> import braintools
-           >>> neuron = bst.hh_cond_beta_gap_traub(
+           >>> neuron = brainspike.hh_cond_beta_gap_traub(
            ...     1,
            ...     spk_fun=braintools.surrogate.Sigmoid(alpha=5.0),
            ... )

@@ -39,7 +39,7 @@ class bernoulli_synapse(NESTSynapse):
     delay : Quantity, optional
         Homogeneous axonal delay; must be finite and strictly positive. Grid
         quantization is handled by the substrate's
-        :class:`~brainspike._brainpy.delay.InputDelay`. Default ``1.0 ms``.
+        :class:`~brainspike._nest_network.delay.InputDelay`. Default ``1.0 ms``.
     receptor_type : int, optional
         Postsynaptic receptor port (non-negative integer). Default ``0``.
     p_transmit : float, optional

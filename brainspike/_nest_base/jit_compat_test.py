@@ -40,7 +40,7 @@ import jax
 import jax.numpy as jnp
 import brainunit as u
 
-import brainspike as B
+import brainspike
 from brainspike._nest_base.base import NESTNeuron
 
 jax.config.update('jax_enable_x64', True)
@@ -98,8 +98,8 @@ CONSTRUCTION_KWARGS = {
 def _discover_neuron_classes():
     """Return ``{name: cls}`` for every public ``NESTNeuron`` subclass."""
     out = {}
-    for name in B.__all__:
-        obj = getattr(B, name)
+    for name in brainspike.__all__:
+        obj = getattr(brainspike, name)
         if isinstance(obj, type) and issubclass(obj, NESTNeuron) and obj is not NESTNeuron:
             out[name] = obj
     return out

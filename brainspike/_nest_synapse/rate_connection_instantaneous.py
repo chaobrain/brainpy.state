@@ -158,8 +158,8 @@ class rate_connection_instantaneous(NESTSynapse):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
-       >>> conn = bst.rate_connection_instantaneous(weight=2.0)
+       >>> import brainspike
+       >>> conn = brainspike.rate_connection_instantaneous(weight=2.0)
        >>> conn.get_status()
        {'weight': 2.0, 'delay': 1, 'has_delay': False, 'supports_wfr': True}
 
@@ -195,10 +195,10 @@ class rate_connection_instantaneous(NESTSynapse):
     .. code-block:: python
 
        >>> import brainunit as u
-       >>> import brainspike as bst
-       >>> sim = bst.Simulator(dt=0.1 * u.ms)
-       >>> pre = sim.create(bst.lin_rate_ipn, 10, params=dict(tau=10.0 * u.ms))
-       >>> post = sim.create(bst.lin_rate_ipn, 5, params=dict(tau=10.0 * u.ms))
+       >>> import brainspike
+       >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+       >>> pre = sim.create(brainspike.lin_rate_ipn, 10, params=dict(tau=10.0 * u.ms))
+       >>> post = sim.create(brainspike.lin_rate_ipn, 5, params=dict(tau=10.0 * u.ms))
        >>> proj = sim.connect(pre, post, weight=0.8, comm='dense')  # doctest: +SKIP
     """
 

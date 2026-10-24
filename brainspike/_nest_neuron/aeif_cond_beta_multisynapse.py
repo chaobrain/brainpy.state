@@ -330,9 +330,9 @@ class aeif_cond_beta_multisynapse(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bp
+       >>> import brainspike
        >>> import brainunit as u
-       >>> neuron = bp.aeif_cond_beta_multisynapse(
+       >>> neuron = brainspike.aeif_cond_beta_multisynapse(
        ...     in_size=10,
        ...     tau_rise=(2.0, 0.5) * u.ms,
        ...     tau_decay=(20.0, 8.0) * u.ms,

@@ -335,11 +335,11 @@ class gauss_rate_ipn(_gauss_rate_base):
 
     .. code-block:: python
 
-        >>> import brainspike as bpst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> brainstate.environ.set_dt(0.1 * u.ms)
-        >>> neuron = bpst.gauss_rate_ipn(in_size=100)
+        >>> neuron = brainspike.gauss_rate_ipn(in_size=100)
         >>> neuron.init_all_states()
         >>> # Simulate 10 steps with no input
         >>> for _ in range(10):
@@ -349,7 +349,7 @@ class gauss_rate_ipn(_gauss_rate_base):
 
     .. code-block:: python
 
-        >>> neuron = bpst.gauss_rate_ipn(
+        >>> neuron = brainspike.gauss_rate_ipn(
         ...     in_size=50,
         ...     tau=20.0 * u.ms,
         ...     lambda_=1.5,
@@ -523,7 +523,7 @@ class gauss_rate_ipn(_gauss_rate_base):
         --------
         .. code-block:: python
 
-            >>> neuron = bpst.gauss_rate_ipn(in_size=100)
+            >>> neuron = brainspike.gauss_rate_ipn(in_size=100)
             >>> neuron.init_state()
             >>> neuron.rate.value.shape
             (100,)

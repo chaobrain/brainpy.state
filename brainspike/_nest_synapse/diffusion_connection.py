@@ -232,9 +232,9 @@ class diffusion_connection(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainspike as bs
+        >>> import brainspike
         >>> # A diffusion connection is a stateless status spec.
-        >>> conn = bs.diffusion_connection(
+        >>> conn = brainspike.diffusion_connection(
         ...     drift_factor=0.8,      # mean (drift) scaling g_mu
         ...     diffusion_factor=0.3,  # variance (diffusion) scaling g_sigma
         ...     name='excitatory_diffusion',
@@ -248,12 +248,12 @@ class diffusion_connection(NESTSynapse):
     .. code-block:: python
 
         >>> import brainunit as u
-        >>> net = bs.Simulator(dt=0.1 * u.ms)
-        >>> src = net.create(bs.siegert_neuron, 1, params=dict(tau_m=10.0 * u.ms, theta=15.0, mean=20.0))
-        >>> tgt = net.create(bs.siegert_neuron, 1, params=dict(tau_m=10.0 * u.ms, theta=15.0))
+        >>> net = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> src = net.create(brainspike.siegert_neuron, 1, params=dict(tau_m=10.0 * u.ms, theta=15.0, mean=20.0))
+        >>> tgt = net.create(brainspike.siegert_neuron, 1, params=dict(tau_m=10.0 * u.ms, theta=15.0))
         >>> _ = net.connect(
         ...     src, tgt,
-        ...     synapse=bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3),
+        ...     synapse=brainspike.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3),
         ... )
         >>> # net.simulate(50.0 * u.ms) relaxes tgt toward Phi(0.8*r_src, 0.3*r_src).
 
@@ -296,15 +296,15 @@ class diffusion_connection(NESTSynapse):
     .. code-block:: python
 
         >>> # Multiple connections with different factor profiles
-        >>> excitatory_conn = bs.diffusion_connection(
+        >>> excitatory_conn = brainspike.diffusion_connection(
         ...     drift_factor=1.5,    # Strong excitatory drive
         ...     diffusion_factor=0.5, # Moderate noise
         ... )
-        >>> inhibitory_conn = bs.diffusion_connection(
+        >>> inhibitory_conn = brainspike.diffusion_connection(
         ...     drift_factor=-1.0,   # Inhibitory drive (negative)
         ...     diffusion_factor=0.2, # Low noise
         ... )
-        >>> background_conn = bs.diffusion_connection(
+        >>> background_conn = brainspike.diffusion_connection(
         ...     drift_factor=0.1,    # Weak drive
         ...     diffusion_factor=2.0, # Strong noise (background fluctuations)
         ... )
@@ -409,8 +409,8 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> status = conn.get_status()
             >>> print(status)
             {'weight': 1.0, 'delay': None, 'drift_factor': 0.8,
@@ -487,8 +487,8 @@ class diffusion_connection(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection(drift_factor=1.0, diffusion_factor=1.0)
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection(drift_factor=1.0, diffusion_factor=1.0)
             >>> conn.set_status({'drift_factor': 0.8, 'diffusion_factor': 0.3})
             >>> assert conn.drift_factor == 0.8
             >>> assert conn.diffusion_factor == 0.3
@@ -604,8 +604,8 @@ class diffusion_connection(NESTSynapse):
 
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection(drift_factor=0.8, diffusion_factor=0.3)
             >>> status = conn.get('status')
             >>> print(status)
             {'weight': 1.0, 'delay': None, 'drift_factor': 0.8, ...}
@@ -679,8 +679,8 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection(drift_factor=1.0)
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection(drift_factor=1.0)
             >>> conn.set_drift_factor(0.5)
             >>> assert conn.drift_factor == 0.5
         """
@@ -712,8 +712,8 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection(diffusion_factor=1.0)
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection(diffusion_factor=1.0)
             >>> conn.set_diffusion_factor(0.3)
             >>> assert conn.diffusion_factor == 0.3
         """
@@ -749,8 +749,8 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection()
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection()
             >>> try:
             ...     conn.set_weight(2.0)
             ... except ValueError as e:
@@ -788,8 +788,8 @@ class diffusion_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bs
-            >>> conn = bs.diffusion_connection()
+            >>> import brainspike
+            >>> conn = brainspike.diffusion_connection()
             >>> try:
             ...     conn.set_delay(1.0)
             ... except ValueError as e:

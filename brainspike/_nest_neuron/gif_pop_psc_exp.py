@@ -225,16 +225,16 @@ class gif_pop_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> pop = bp.gif_pop_psc_exp(1, N=100)
+        >>> pop = brainspike.gif_pop_psc_exp(1, N=100)
         >>> pop.init_all_states()
 
     Create a population with custom adaptation parameters:
 
     .. code-block:: python
 
-        >>> pop = bp.gif_pop_psc_exp(
+        >>> pop = brainspike.gif_pop_psc_exp(
         ...     1,
         ...     N=200,
         ...     tau_sfa=(100.0, 500.0),

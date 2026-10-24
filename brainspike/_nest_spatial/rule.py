@@ -105,9 +105,9 @@ def spatial_pairwise_bernoulli(p, mask=None, allow_autapses=True) -> SpatialConn
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> rule = bp.spatial.spatial_pairwise_bernoulli(
-        ...     p=bp.spatial.gaussian(bp.spatial.distance, std=0.5),
-        ...     mask=bp.spatial.circular(3.0))
+        >>> import brainspike
+        >>> rule = brainspike.spatial.spatial_pairwise_bernoulli(
+        ...     p=brainspike.spatial.gaussian(brainspike.spatial.distance, std=0.5),
+        ...     mask=brainspike.spatial.circular(3.0))
     """
     return SpatialConnRule(p, mask=mask, allow_autapses=allow_autapses)

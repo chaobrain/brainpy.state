@@ -332,12 +332,12 @@ class aeif_psc_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bs
         >>>
         >>> # Create a population of 100 AdEx neurons
-        >>> neuron = bst.aeif_psc_alpha(100)
+        >>> neuron = brainspike.aeif_psc_alpha(100)
         >>>
         >>> # Initialize states
         >>> with bs.environ.context(dt=0.1 * u.ms):
@@ -354,7 +354,7 @@ class aeif_psc_alpha(NESTNeuron):
     .. code-block:: python
 
         >>> # Fast-spiking configuration
-        >>> fs_neuron = bst.aeif_psc_alpha(
+        >>> fs_neuron = brainspike.aeif_psc_alpha(
         ...     in_size=50,
         ...     C_m=150 * u.pF,
         ...     g_L=20 * u.nS,
@@ -371,21 +371,17 @@ class aeif_psc_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainevent as be
+        >>> import jax
+        >>> jax.config.update('jax_enable_x64', True)
+        >>> import brainunit as u
+        >>> import brainspike
         >>>
-        >>> # Create presynaptic spike generator
-        >>> spike_gen = bst.PoissonSpike(100, freq=10 * u.Hz)
-        >>>
-        >>> # Create postsynaptic AdEx neurons
-        >>> neurons = bst.aeif_psc_alpha(50)
-        >>>
-        >>> # Create projection with alpha synapses
-        >>> proj = be.nn.FixedProb(
-        ...     pre=spike_gen,
-        ...     post=neurons,
-        ...     prob=0.2,
-        ...     weight=50.0,  # pA per spike
-        ... )
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> noise = sim.create(brainspike.poisson_generator, rate=1000. * u.Hz)
+        >>> neurons = sim.create(brainspike.aeif_psc_alpha, 50)
+        >>> # receptor_type=1 -> excitatory alpha current, 2 -> inhibitory
+        >>> sim.connect(noise, neurons, weight=50. * u.pA, delay=1. * u.ms, receptor_type=1)
+        >>> result = sim.simulate(100. * u.ms)
 
     See Also
     --------

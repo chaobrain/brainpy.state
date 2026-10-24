@@ -32,7 +32,7 @@ class static_synapse(NESTSynapse):
     delay : Quantity, optional
         Homogeneous axonal delay; must be finite and strictly positive. Grid
         quantization (NEST rounds to integer steps, minimum one step) is handled
-        by the substrate's :class:`~brainspike._brainpy.delay.InputDelay`.
+        by the substrate's :class:`~brainspike._nest_network.delay.InputDelay`.
         Default ``1.0 ms``.
     receptor_type : int, optional
         Postsynaptic receptor port (non-negative integer). Default ``0``.

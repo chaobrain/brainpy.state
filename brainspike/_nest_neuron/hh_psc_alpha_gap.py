@@ -535,9 +535,9 @@ class hh_psc_alpha_gap(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bs
+       >>> import brainspike
        >>> import brainunit as u
-       >>> neuron = bs.hh_psc_alpha_gap(in_size=1, E_L=-70*u.mV, C_m=40*u.pF)
+       >>> neuron = brainspike.hh_psc_alpha_gap(in_size=1, E_L=-70*u.mV, C_m=40*u.pF)
        >>> neuron.init_all_states()
 
     Simulate with constant input current:
@@ -558,15 +558,15 @@ class hh_psc_alpha_gap(NESTNeuron):
 
        >>> import jax.numpy as jnp
        >>> C_m_values = jnp.linspace(30, 50, 10) * u.pF
-       >>> neurons = bs.hh_psc_alpha_gap(in_size=10, C_m=C_m_values)
+       >>> neurons = brainspike.hh_psc_alpha_gap(in_size=10, C_m=C_m_values)
        >>> neurons.init_all_states()
 
     Add gap-junction coupling between two neurons:
 
     .. code-block:: python
 
-       >>> neuron1 = bs.hh_psc_alpha_gap(in_size=1)
-       >>> neuron2 = bs.hh_psc_alpha_gap(in_size=1)
+       >>> neuron1 = brainspike.hh_psc_alpha_gap(in_size=1)
+       >>> neuron2 = brainspike.hh_psc_alpha_gap(in_size=1)
        >>> neuron1.init_all_states()
        >>> neuron2.init_all_states()
        >>> g_gap = 0.5 * u.nS  # gap-junction conductance
@@ -790,7 +790,7 @@ class hh_psc_alpha_gap(NESTNeuron):
 
         .. code-block:: python
 
-           >>> neuron = bs.hh_psc_alpha_gap(in_size=10)
+           >>> neuron = brainspike.hh_psc_alpha_gap(in_size=10)
            >>> neuron.init_state()
            >>> print(neuron.V.value.shape)
            (10,)
@@ -801,7 +801,7 @@ class hh_psc_alpha_gap(NESTNeuron):
 
            >>> import jax.numpy as jnp
            >>> V_init = jnp.linspace(-75, -65, 10) * u.mV
-           >>> neuron = bs.hh_psc_alpha_gap(in_size=10, V_m_init=V_init)
+           >>> neuron = brainspike.hh_psc_alpha_gap(in_size=10, V_m_init=V_init)
            >>> neuron.init_state()
            >>> print(neuron.V.value)  # voltage varies across population
 
@@ -809,7 +809,7 @@ class hh_psc_alpha_gap(NESTNeuron):
 
         .. code-block:: python
 
-           >>> neuron = bs.hh_psc_alpha_gap(
+           >>> neuron = brainspike.hh_psc_alpha_gap(
            ...     in_size=1,
            ...     Act_m_init=0.1,  # specific sodium activation
            ...     Inact_h_init=0.9  # specific sodium inactivation
@@ -917,7 +917,7 @@ class hh_psc_alpha_gap(NESTNeuron):
 
         .. code-block:: python
 
-           >>> neuron = bs.hh_psc_alpha_gap(in_size=1)
+           >>> neuron = brainspike.hh_psc_alpha_gap(in_size=1)
            >>> neuron.init_all_states()
            >>> neuron.V.value = 10 * u.mV  # depolarized
            >>> spk = neuron.get_spike()

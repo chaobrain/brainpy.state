@@ -362,9 +362,9 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
-       >>> model = bst.threshold_lin_rate_ipn(
+       >>> model = brainspike.threshold_lin_rate_ipn(
        ...     in_size=10, tau=20*u.ms, sigma=0.5, g=2.0, theta=1.0
        ... )
        >>> model.init_all_states(batch_size=1)
@@ -376,7 +376,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
     .. code-block:: python
 
-       >>> model = bst.threshold_lin_rate_ipn(
+       >>> model = brainspike.threshold_lin_rate_ipn(
        ...     in_size=5,
        ...     tau=10*u.ms,
        ...     lambda_=2.0,
@@ -389,7 +389,7 @@ class threshold_lin_rate_ipn(_threshold_lin_rate_base):
 
     .. code-block:: python
 
-       >>> model = bst.threshold_lin_rate_ipn(in_size=3, tau=10*u.ms, sigma=0.1)
+       >>> model = brainspike.threshold_lin_rate_ipn(in_size=3, tau=10*u.ms, sigma=0.1)
        >>> model.init_all_states()
        >>> instant_event = {'rate': 2.0, 'weight': 0.1}
        >>> delayed_event = {'rate': 1.5, 'weight': -0.05, 'delay_steps': 3}
@@ -980,9 +980,9 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
-       >>> model = bst.threshold_lin_rate_opn(
+       >>> model = brainspike.threshold_lin_rate_opn(
        ...     in_size=10, tau=20*u.ms, sigma=0.5, g=2.0, theta=1.0
        ... )
        >>> model.init_all_states(batch_size=1)
@@ -993,7 +993,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
 
     .. code-block:: python
 
-       >>> model = bst.threshold_lin_rate_opn(
+       >>> model = brainspike.threshold_lin_rate_opn(
        ...     in_size=5,
        ...     tau=10*u.ms,
        ...     sigma=0.2,
@@ -1005,7 +1005,7 @@ class threshold_lin_rate_opn(_threshold_lin_rate_base):
 
     .. code-block:: python
 
-       >>> model = bst.threshold_lin_rate_opn(in_size=3, tau=10*u.ms, sigma=0.1)
+       >>> model = brainspike.threshold_lin_rate_opn(in_size=3, tau=10*u.ms, sigma=0.1)
        >>> model.init_all_states()
        >>> instant_event = {'rate': 2.0, 'weight': 0.1}
        >>> delayed_event = {'rate': 1.5, 'weight': -0.05, 'delay_steps': 3}

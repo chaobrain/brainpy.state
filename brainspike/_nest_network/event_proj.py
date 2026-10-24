@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import brainunit as u
 
-from brainspike._brainpy.delay import InputDelay
+from brainspike._nest_network.delay import InputDelay
 from brainspike._nest_network.connectivity import resolve_param
 from brainspike._nest_network.nodeview import _flat_size
 from brainspike._nest_network.projections import _DenseMatMul, _ReceptorScatter, _SparseEventMatMul
@@ -35,7 +35,7 @@ class EventProjection(brainstate.nn.Module):
 
     Each step it reads the pre population's captured spike via ``pre_spike()``
     (a callable returning the full pre-population spike/counts vector), applies
-    an :class:`~brainspike._brainpy.delay.InputDelay` (full-delay
+    an :class:`~brainspike._nest_network.delay.InputDelay` (full-delay
     convention, as in ``AlignPostProj``), restricts to this projection's pre
     segment, maps it to the post segment (dense weighted matmul, or element-wise
     for ``one_to_one``), and registers the result as a delta input on ``post``.

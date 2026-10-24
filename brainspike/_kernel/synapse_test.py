@@ -108,7 +108,7 @@ class TestExponModel:
             np.testing.assert_allclose(np.asarray(g), ref, rtol=1e-13, atol=1e-15)
 
     def test_matches_old_brainpy_expon(self):
-        from brainspike._brainpy.exponential import Expon as OldExpon
+        from brainpy.state import Expon as OldExpon
         rng = np.random.default_rng(0)
         x = rng.normal(size=(200, 4)) * (rng.random((200, 4)) < 0.1)
         with jax.enable_x64(True):

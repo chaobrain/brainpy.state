@@ -353,45 +353,17 @@ class iaf_chs_2007(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import jax
+        >>> jax.config.update('jax_enable_x64', True)
         >>> import brainunit as u
-        >>> import brainstate as bs
-        >>> import brainevent as be
-        >>> import numpy as np
+        >>> import brainspike
         >>>
-        >>> # Prepare external noise (Gaussian)
-        >>> num_steps = 1000
-        >>> noise = np.random.randn(num_steps)
-        >>>
-        >>> # Create model
-        >>> model = bp.iaf_chs_2007(
-        ...     in_size=100,
-        ...     tau_epsp=8.5 * u.ms,
-        ...     tau_reset=15.4 * u.ms,
-        ...     V_epsp=0.77,
-        ...     V_reset=2.31,
-        ...     V_noise=0.1,
-        ...     noise=noise
-        ... )
-        >>>
-        >>> # Poisson spike source
-        >>> poisson = be.nn.PoissonEncoder(in_size=100)
-        >>>
-        >>> # Projection
-        >>> proj = bp.AlignPostProj(
-        ...     comm=be.nn.AllToAll(pre_size=100, post_size=100, w_init=0.05),
-        ...     out=bp.CUBA(),
-        ...     post=model
-        ... )
-        >>>
-        >>> # Simulate
-        >>> with bs.environ.context(dt=0.1 * u.ms):
-        ...     model.init_state()
-        ...     for _ in range(num_steps):
-        ...         inp = poisson.generate()
-        ...         proj(inp)
-        ...         spk = model.update()
-        ...
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> noise = sim.create(brainspike.poisson_generator, rate=1000. * u.Hz)
+        >>> model = sim.create(brainspike.iaf_chs_2007, 100)
+        >>> sim.connect(noise, model, weight=0.05, delay=1. * u.ms)
+        >>> result = sim.simulate(50. * u.ms)
+
     """
 
     __module__ = 'brainspike'

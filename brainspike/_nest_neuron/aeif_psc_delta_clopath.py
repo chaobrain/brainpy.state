@@ -390,13 +390,13 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainstate as bs
        >>> import brainunit as u
        >>> import matplotlib.pyplot as plt
        >>>
        >>> # Create neuron population
-       >>> neuron = bst.aeif_psc_delta_clopath(in_size=1, I_e=300*u.pA)
+       >>> neuron = brainspike.aeif_psc_delta_clopath(in_size=1, I_e=300*u.pA)
        >>>
        >>> # Simulate for 100 ms
        >>> with bs.environ.context(dt=0.1*u.ms):
@@ -417,17 +417,13 @@ class aeif_psc_delta_clopath(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainstate as bs
        >>> import brainunit as u
        >>>
        >>> # Create excitatory and inhibitory populations
-       >>> exc = bst.aeif_psc_delta_clopath(in_size=100, I_e=200*u.pA)
-       >>> inh = bst.aeif_psc_delta_clopath(in_size=25, I_e=150*u.pA)
-       >>>
-       >>> # Create delta-function projection (instantaneous voltage jump)
-       >>> # Note: Requires appropriate projection class that adds delta inputs
-       >>> # exc_to_inh = bst.DeltaProj(exc, inh, weight=0.5*u.mV, prob=0.1)
+       >>> exc = brainspike.aeif_psc_delta_clopath(in_size=100, I_e=200*u.pA)
+       >>> inh = brainspike.aeif_psc_delta_clopath(in_size=25, I_e=150*u.pA)
        >>>
        >>> # Simulate network
        >>> with bs.environ.context(dt=0.1*u.ms):

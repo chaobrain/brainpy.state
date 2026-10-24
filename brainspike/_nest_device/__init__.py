@@ -21,6 +21,7 @@ from .sinusoidal_gamma_generator import sinusoidal_gamma_generator
 from .sinusoidal_poisson_generator import sinusoidal_poisson_generator
 from .spike_dilutor import spike_dilutor
 from .spike_generator import spike_generator
+from .spike_time import SpikeTime
 from .spike_recorder import spike_recorder
 from .spike_train_injector import spike_train_injector
 from .spin_detector import spin_detector
@@ -38,6 +39,7 @@ __all__ = [
     'host_current_drive',
     'step_rate_generator',
     'spike_generator',
+    'SpikeTime',
     'spike_train_injector',
     'spike_dilutor',
     'inhomogeneous_poisson_generator',

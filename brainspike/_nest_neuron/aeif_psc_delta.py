@@ -270,13 +270,13 @@ class aeif_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bs
         >>> import jax.numpy as jnp
         >>>
         >>> # Create 100 AdEx neurons
-        >>> neu = bst.aeif_psc_delta(100, V_peak=0.*u.mV, V_reset=-60.*u.mV, t_ref=2.*u.ms)
+        >>> neu = brainspike.aeif_psc_delta(100, V_peak=0.*u.mV, V_reset=-60.*u.mV, t_ref=2.*u.ms)
         >>>
         >>> # Initialize state
         >>> with bs.environ.context(dt=0.1*u.ms):
@@ -294,7 +294,7 @@ class aeif_psc_delta(NESTNeuron):
     .. code-block:: python
 
         >>> # Enable refractory buffering
-        >>> neu = bst.aeif_psc_delta(
+        >>> neu = brainspike.aeif_psc_delta(
         ...     100,
         ...     V_peak=0.*u.mV,
         ...     V_reset=-60.*u.mV,
@@ -315,7 +315,7 @@ class aeif_psc_delta(NESTNeuron):
     .. code-block:: python
 
         >>> # Delta_T=0 disables exponential term
-        >>> neu = bst.aeif_psc_delta(
+        >>> neu = brainspike.aeif_psc_delta(
         ...     100,
         ...     Delta_T=0.0*u.mV,
         ...     V_th=-55.*u.mV,

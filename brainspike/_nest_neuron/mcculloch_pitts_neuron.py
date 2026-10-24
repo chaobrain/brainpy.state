@@ -180,10 +180,10 @@ class mcculloch_pitts_neuron(NESTNeuron):
 
        >>> import brainstate
        >>> import brainunit as u
-       >>> import brainspike as bst
+       >>> import brainspike
        >>>
        >>> # Create a single McCulloch-Pitts neuron with threshold 0.5 mV
-       >>> neuron = bst.mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
+       >>> neuron = brainspike.mcculloch_pitts_neuron(1, theta=0.5 * u.mV)
        >>> neuron.init_state()
        >>>
        >>> # Simulate with inputs below and above threshold
@@ -198,7 +198,7 @@ class mcculloch_pitts_neuron(NESTNeuron):
     .. code-block:: python
 
        >>> import jax
-       >>> neuron = bst.mcculloch_pitts_neuron(
+       >>> neuron = brainspike.mcculloch_pitts_neuron(
        ...     100, tau_m=5.0 * u.ms, stochastic_update=True
        ... )
        >>> neuron.init_state()
@@ -215,8 +215,8 @@ class mcculloch_pitts_neuron(NESTNeuron):
     .. code-block:: python
 
        >>> # Create a pair of binary neurons
-       >>> pre = bst.mcculloch_pitts_neuron(1, theta=0.0 * u.mV)
-       >>> post = bst.mcculloch_pitts_neuron(1, theta=1.5 * u.mV)
+       >>> pre = brainspike.mcculloch_pitts_neuron(1, theta=0.0 * u.mV)
+       >>> post = brainspike.mcculloch_pitts_neuron(1, theta=1.5 * u.mV)
        >>> pre.init_state()
        >>> post.init_state()
        >>>

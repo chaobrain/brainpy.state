@@ -240,12 +240,12 @@ class izhikevich(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bp
+       >>> import brainspike
        >>> import brainstate
        >>> import brainunit as u
        >>>
        >>> # Create a regular spiking neuron
-       >>> neuron = bp.izhikevich(1, a=0.02, b=0.2, c=-65*u.mV, d=8*u.mV)
+       >>> neuron = brainspike.izhikevich(1, a=0.02, b=0.2, c=-65*u.mV, d=8*u.mV)
        >>> neuron.init_state()
        >>>
        >>> # Simulate with constant input
@@ -260,7 +260,7 @@ class izhikevich(NESTNeuron):
     .. code-block:: python
 
        >>> # Create a fast spiking neuron
-       >>> neuron = bp.izhikevich(1, a=0.1, b=0.2, c=-65*u.mV, d=2*u.mV)
+       >>> neuron = brainspike.izhikevich(1, a=0.1, b=0.2, c=-65*u.mV, d=2*u.mV)
        >>> neuron.init_state()
 
     **Example 3: Chattering (CH) neuron**
@@ -268,7 +268,7 @@ class izhikevich(NESTNeuron):
     .. code-block:: python
 
        >>> # Create a chattering neuron
-       >>> neuron = bp.izhikevich(1, a=0.02, b=0.2, c=-50*u.mV, d=2*u.mV)
+       >>> neuron = brainspike.izhikevich(1, a=0.02, b=0.2, c=-50*u.mV, d=2*u.mV)
        >>> neuron.init_state()
 
     **Example 4: Population with heterogeneous parameters**
@@ -280,7 +280,7 @@ class izhikevich(NESTNeuron):
        >>> # Create 100 neurons with random parameter variation
        >>> key = jax.random.PRNGKey(0)
        >>> a_vals = jax.random.uniform(key, (100,), minval=0.01, maxval=0.1)
-       >>> neuron = bp.izhikevich(100, a=a_vals, b=0.2, c=-65*u.mV, d=8*u.mV)
+       >>> neuron = brainspike.izhikevich(100, a=a_vals, b=0.2, c=-65*u.mV, d=8*u.mV)
        >>> neuron.init_state()
 
     References

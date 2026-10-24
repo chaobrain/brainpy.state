@@ -689,13 +689,13 @@ class ht_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> import brainpy as bp
-        >>> import brainspike as bps
+        >>> import brainspike
         >>> import brainunit as u
         >>> import numpy as np
         >>> import matplotlib.pyplot as plt
         >>>
         >>> # Create a single ht_neuron
-        >>> neuron = bps.ht_neuron(1, g_peak_T=0.0, g_peak_h=0.0)
+        >>> neuron = brainspike.ht_neuron(1, g_peak_T=0.0, g_peak_h=0.0)
         >>>
         >>> # Initialize state
         >>> with bp.environ.context(dt=0.1 * u.ms):
@@ -726,7 +726,7 @@ class ht_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> # Enable I_T for burst firing
-        >>> neuron = bps.ht_neuron(1, g_peak_T=1.0, g_peak_h=0.5)
+        >>> neuron = brainspike.ht_neuron(1, g_peak_T=1.0, g_peak_h=0.5)
         >>>
         >>> with bp.environ.context(dt=0.1 * u.ms):
         ...     neuron.init_all_states()
@@ -749,33 +749,6 @@ class ht_neuron(NESTNeuron):
         >>> plt.ylabel('V (mV)')
         >>> plt.title('Rebound burst mediated by I_T')
         >>> plt.show()
-
-    **Example 3: Multi-receptor synaptic input**
-
-    .. code-block:: python
-
-        >>> # Network with AMPA and NMDA receptors
-        >>> pre = bps.LIF(100, V_rest=-70*u.mV, V_th=-50*u.mV, V_reset=-70*u.mV,
-        ...               tau=20*u.ms, R=1*u.ohm, V_initializer=bp.init.Normal(-70, 5))
-        >>> post = bps.ht_neuron(10, g_peak_AMPA=0.1, g_peak_NMDA=0.05,
-        ...                      instant_unblock_NMDA=False)
-        >>>
-        >>> # Create projections for AMPA and NMDA
-        >>> ampa_proj = bps.AlignPostProj(
-        ...     pre=pre, post=post,
-        ...     comm=bp.event.FixedProb(0.1, weight=1.0),
-        ...     syn=bps.Expon.desc(tau=2.4 * u.ms),
-        ...     label='AMPA'
-        ... )
-        >>> nmda_proj = bps.AlignPostProj(
-        ...     pre=pre, post=post,
-        ...     comm=bp.event.FixedProb(0.1, weight=1.0),
-        ...     syn=bps.Expon.desc(tau=40 * u.ms),
-        ...     label='NMDA'
-        ... )
-        >>>
-        >>> # Simulate network dynamics
-        >>> # (implementation depends on BrainPy network API)
 
     See Also
     --------
@@ -1286,11 +1259,11 @@ class ht_neuron(NESTNeuron):
         --------
         .. code-block:: python
 
-            >>> import brainspike as bps
+            >>> import brainspike
             >>> import brainunit as u
             >>> import brainstate
             >>>
-            >>> neuron = bps.ht_neuron(1)
+            >>> neuron = brainspike.ht_neuron(1)
             >>> with brainstate.environ.context(dt=0.1 * u.ms):
             ...     neuron.init_all_states()
             ...

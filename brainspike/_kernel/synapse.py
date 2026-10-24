@@ -151,7 +151,7 @@ class Expon(SynapseModel):
 
     where :math:`x_n` is the summed event amplitude delivered in step :math:`n`
     (weights in the port unit). This is the order of the old
-    ``brainspike/_brainpy/exponential.py`` ``Expon.update`` (exponential-Euler
+    ``brainpy.state.Expon.update`` (exponential-Euler
     decay, exact for this linear ODE, then the delta input).
 
     Parameters

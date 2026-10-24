@@ -2,7 +2,7 @@
 """Voltage-gated conductance ports and NMDA delivery (K0 T8).
 
 * the gate is evaluated at every RK substep (vs a gate frozen per step);
-* NMDA PSP vs the old ``_brainpy`` ``BioNMDA`` + ``MgBlock`` (unitless-g setup);
+* NMDA PSP vs ``brainpy.state`` ``BioNMDA`` + ``MgBlock`` (unitless-g setup);
 * unit invariance, float32/float64, jit / vmap / for_loop, network end to end;
 * optional single-neuron comparison against Brian2.
 """
@@ -183,8 +183,8 @@ class TestGatePerSubstep:
 
 class TestNMDAPSPvsOld:
     def test_psp_matches_old_bionmda_and_mgblock(self, x64):
-        from brainspike._brainpy.synapse import BioNMDA
-        from brainspike._brainpy.synouts import MgBlock as OldMgBlock
+        from brainpy.state import BioNMDA
+        from brainpy.state import MgBlock as OldMgBlock
         n, g_max = 1500, 3.0  # nS
         spikes = np.zeros((n, 1))
         spikes[[20, 22, 24, 400]] = 1.0

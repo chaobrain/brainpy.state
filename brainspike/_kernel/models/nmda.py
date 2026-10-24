@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Saturating NMDA receptor kinetics (K0 T8), the owner of the NMDA open fraction.
 
-Kinetics of ``_brainpy/synapse.py`` ``BioNMDA`` with the goal-01 saturation bug
+Kinetics of ``brainpy.state.BioNMDA`` with the goal-01 saturation bug
 fixed by construction: the states are dimensionless fractions, so ``1 - x`` and
 ``1 - s`` never depend on a conductance unit; the conductance scale ``g_max`` is the
 weight of the projection that delivers ``s`` to a (Mg-gated) ``conductance`` port.

@@ -462,12 +462,12 @@ class hh_psc_alpha(NESTNeuron):
 
        >>> import brainstate as bst
        >>> import brainunit as u
-       >>> import brainspike as bps
+       >>> import brainspike
        >>> import matplotlib.pyplot as plt
        >>> # Initialize simulation context
        >>> bst.environ.set(dt=0.1 * u.ms)
        >>> # Create neuron
-       >>> neuron = bps.hh_psc_alpha(in_size=1, I_e=500. * u.pA)
+       >>> neuron = brainspike.hh_psc_alpha(in_size=1, I_e=500. * u.pA)
        >>> neuron.init_all_states()
        >>> # Run simulation
        >>> times = []

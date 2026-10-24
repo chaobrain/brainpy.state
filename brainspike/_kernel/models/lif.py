@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""BrainPy-style leaky integrate-and-fire neuron on the K0 contracts.
 
-Numerics follow ``brainspike/_brainpy/lif.py`` (``LIF``): exponential-Euler
+Numerics follow ``brainpy.state.LIF``: exponential-Euler
 (exact for this linear ODE) propagation, ``delta`` voltage jumps added before the
 threshold check, soft reset by default, no refractoriness.
 """
@@ -51,7 +51,7 @@ class LIF(SpikingNeuron):
     (event jumps, same step), then the threshold check and the reset. The spike
     output is the exact count (0/1) forward and the surrogate gradient backward.
 
-    Compared with ``brainspike._brainpy.lif.LIF``: identical spikes and
+    Compared with ``brainpy.state.LIF``: identical spikes and
     voltage for the same membrane input (the ``I`` port is declared
     ``latch=False``, decision D-a: like the BrainPy model it acts in the step it
     is delivered, so zero-delay feed-forward chains propagate within one step),

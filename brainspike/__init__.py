@@ -14,18 +14,6 @@
 # ==============================================================================
 
 
-# Compatibility check: abort import if a stale brainpy would shadow brainspike.
-from ._compat import check_brainpy_compatibility
-
-check_brainpy_compatibility()
-del check_brainpy_compatibility
-
-# Namespace guard: this package is private; users must reach it through brainspike.
-from ._namespace import enforce_namespace_access
-
-enforce_namespace_access()
-del enforce_namespace_access
-
 from ._version import __version_info__, __version__
 
 # =============================================================================
@@ -35,68 +23,10 @@ from ._version import __version_info__, __version__
 from ._base import Dynamics, Neuron, Synapse
 
 # =============================================================================
-# BrainPy-style Models
-# =============================================================================
-
-from ._brainpy import (
-    # Neuron models - LIF family
-    IF, LIF, LIFRef, ALIF,
-    ExpIF, ExpIFRef,
-    AdExIF, AdExIFRef,
-    QuaIF, AdQuaIF, AdQuaIFRef,
-    Gif, GifRef,
-    CubaLIF, CobaLIF,
-
-    # Neuron models - Hodgkin-Huxley family
-    HH, MorrisLecar, WangBuzsakiHH,
-
-    # Neuron models - Izhikevich family
-    Izhikevich, IzhikevichRef,
-
-    # Neuron models - reduced (FitzHugh-Nagumo, Hindmarsh-Rose)
-    FitzHughNagumo, HindmarshRose,
-
-    # Synapse models
-    Expon, DualExpon,
-    Alpha, AMPA, GABAa, BioNMDA,
-
-    # Synaptic outputs
-    SynOut, COBA, CUBA, MgBlock,
-
-    # Short-term plasticity
-    STP, STD,
-
-    # Projections
-    Projection, AlignPostProj, DeltaProj, CurrentProj,
-    align_pre_projection, align_post_projection,
-    SymmetryGapJunction, AsymmetryGapJunction,
-
-    # Readouts
-    LeakyRateReadout,
-
-    # Input generators
-    SpikeTime, PoissonSpike, PoissonEncoder, PoissonInput, poisson_input,
-    SectionInput, ConstantInput, StepInput, RampInput,
-    SinusoidalInput, OUProcessInput, WienerProcessInput,
-)
-
-# =============================================================================
-# Network API
+# NEST Simulator API
 # =============================================================================
 
 from ._nest_network import (
-    Network,
-    Builder,
-    Recorder,
-    OneToOneProj,
-    AllToAllProj,
-    PairwiseBernoulliProj,
-    SymmetricPairwiseBernoulliProj,
-    FixedIndegreeProj,
-    FixedOutdegreeProj,
-    FixedTotalNumberProj,
-    PairwisePoissonProj,
-    # NEST-flavored explicit Simulator API
     Simulator,
     SimulationResult,
     SynapseCollection,
@@ -234,6 +164,7 @@ from ._nest_device import (
     host_current_drive,
     step_rate_generator,
     spike_generator,
+    SpikeTime,
     spike_train_injector,
     spike_dilutor,
     inhomogeneous_poisson_generator,
@@ -268,50 +199,6 @@ __all__ = [
     'Dynamics', 'Neuron', 'Synapse',
 
     # =========================================================================
-    # BrainPy-style Models
-    # =========================================================================
-
-    # Neuron models - LIF family
-    'IF', 'LIF', 'LIFRef', 'ALIF',
-    'ExpIF', 'ExpIFRef',
-    'AdExIF', 'AdExIFRef',
-    'QuaIF', 'AdQuaIF', 'AdQuaIFRef',
-    'Gif', 'GifRef',
-    'CubaLIF', 'CobaLIF',
-
-    # Neuron models - Hodgkin-Huxley family
-    'HH', 'MorrisLecar', 'WangBuzsakiHH',
-
-    # Neuron models - Izhikevich family
-    'Izhikevich', 'IzhikevichRef',
-
-    # Neuron models - reduced (FitzHugh-Nagumo, Hindmarsh-Rose)
-    'FitzHughNagumo', 'HindmarshRose',
-
-    # Synapse models
-    'Expon', 'DualExpon',
-    'Alpha', 'AMPA', 'GABAa', 'BioNMDA',
-
-    # Synaptic outputs
-    'SynOut', 'COBA', 'CUBA', 'MgBlock',
-
-    # Short-term plasticity
-    'STP', 'STD',
-
-    # Projections
-    'Projection', 'AlignPostProj', 'DeltaProj', 'CurrentProj',
-    'align_pre_projection', 'align_post_projection',
-    'SymmetryGapJunction', 'AsymmetryGapJunction',
-
-    # Readouts
-    'LeakyRateReadout',
-
-    # Input generators
-    'SpikeTime', 'PoissonSpike', 'PoissonEncoder', 'PoissonInput', 'poisson_input',
-    'SectionInput', 'ConstantInput', 'StepInput', 'RampInput',
-    'SinusoidalInput', 'OUProcessInput', 'WienerProcessInput',
-
-    # =========================================================================
     # NEST-Compatible Models
     # =========================================================================
 
@@ -330,6 +217,7 @@ __all__ = [
 
     # Stimulation devices - Spike generators
     'spike_generator',
+    'SpikeTime',
     'spike_train_injector',
     'spike_dilutor',
 
@@ -492,19 +380,7 @@ __all__ = [
     # multi-compartment models
     'cm_default',
 
-    # Network API
-    'Network',
-    'Builder',
-    'Recorder',
-    'OneToOneProj',
-    'AllToAllProj',
-    'PairwiseBernoulliProj',
-    'SymmetricPairwiseBernoulliProj',
-    'FixedIndegreeProj',
-    'FixedOutdegreeProj',
-    'FixedTotalNumberProj',
-    'PairwisePoissonProj',
-    # NEST-flavored explicit Simulator API
+    # NEST Simulator API
     'Simulator',
     'SimulationResult',
     'SynapseCollection',

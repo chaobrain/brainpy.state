@@ -281,12 +281,12 @@ class iaf_cond_beta(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bstate
         >>>
         >>> with bstate.environ.context(dt=0.1 * u.ms):
-        ...     neuron = bst.iaf_cond_beta(10, V_th=-50*u.mV, V_reset=-65*u.mV)
+        ...     neuron = brainspike.iaf_cond_beta(10, V_th=-50*u.mV, V_reset=-65*u.mV)
         ...     neuron.init_all_states()
         ...     # Apply excitatory synaptic input (5 nS conductance jump)
         ...     neuron.add_delta_input('syn_input', 5.0 * u.nS)
@@ -300,8 +300,8 @@ class iaf_cond_beta(NESTNeuron):
 
         >>> import matplotlib.pyplot as plt
         >>> with bstate.environ.context(dt=0.01 * u.ms):
-        ...     fast_ex = bst.iaf_cond_beta(1, tau_rise_ex=0.2*u.ms, tau_decay_ex=2.0*u.ms)
-        ...     slow_in = bst.iaf_cond_beta(1, tau_rise_in=2.0*u.ms, tau_decay_in=10.0*u.ms)
+        ...     fast_ex = brainspike.iaf_cond_beta(1, tau_rise_ex=0.2*u.ms, tau_decay_ex=2.0*u.ms)
+        ...     slow_in = brainspike.iaf_cond_beta(1, tau_rise_in=2.0*u.ms, tau_decay_in=10.0*u.ms)
         ...     fast_ex.init_all_states()
         ...     slow_in.init_all_states()
         ...     # Single excitatory spike at t=1ms
@@ -321,8 +321,8 @@ class iaf_cond_beta(NESTNeuron):
     .. code-block:: python
 
         >>> from brainevent.nn import FixedProb
-        >>> exc_neurons = bst.iaf_cond_beta(800, E_L=-70*u.mV, V_th=-50*u.mV)
-        >>> inh_neurons = bst.iaf_cond_beta(200, E_L=-70*u.mV, V_th=-50*u.mV)
+        >>> exc_neurons = brainspike.iaf_cond_beta(800, E_L=-70*u.mV, V_th=-50*u.mV)
+        >>> inh_neurons = brainspike.iaf_cond_beta(200, E_L=-70*u.mV, V_th=-50*u.mV)
         >>> exc_neurons.init_all_states()
         >>> inh_neurons.init_all_states()
         >>> # Create projections (placeholder - requires brainevent)

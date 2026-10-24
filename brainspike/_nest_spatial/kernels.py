@@ -231,9 +231,9 @@ def gaussian(x=distance, mean=0.0, std=1.0) -> _GaussianKernel:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> p = bp.spatial.gaussian(bp.spatial.distance, std=0.5)
+        >>> p = brainspike.spatial.gaussian(brainspike.spatial.distance, std=0.5)
         >>> float(u.get_magnitude(p(0.0 * u.um)))
         1.0
     """
@@ -277,9 +277,9 @@ def exponential(x=distance, beta=1.0) -> _ExponentialKernel:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> p = bp.spatial.exponential(bp.spatial.distance, beta=2.0)
+        >>> p = brainspike.spatial.exponential(brainspike.spatial.distance, beta=2.0)
         >>> float(u.get_magnitude(p(0.0 * u.um)))
         1.0
     """
@@ -330,9 +330,9 @@ def gamma(x=distance, kappa=1.0, theta=1.0) -> _GammaKernel:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> p = bp.spatial.gamma(bp.spatial.distance, kappa=2.0, theta=1.5)
+        >>> p = brainspike.spatial.gamma(brainspike.spatial.distance, kappa=2.0, theta=1.5)
         >>> float(u.get_magnitude(p(1.5 * u.um))) > 0.0
         True
     """
@@ -402,8 +402,8 @@ def gabor(x=None, y=None, theta=0.0, gamma=1.0, std=1.0, lam=1.0, psi=0.0) -> _G
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> k = bp.spatial.gabor(bp.spatial.distance.x, bp.spatial.distance.y, theta=45.0, lam=2.0)
+        >>> import brainspike
+        >>> k = brainspike.spatial.gabor(brainspike.spatial.distance.x, brainspike.spatial.distance.y, theta=45.0, lam=2.0)
     """
     x = distance.x if x is None else x
     y = distance.y if y is None else y
@@ -462,8 +462,8 @@ def gaussian2D(x=None, y=None, mean_x=0.0, mean_y=0.0,
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> k = bp.spatial.gaussian2D(std_x=0.5, std_y=1.0, rho=0.3)
+        >>> import brainspike
+        >>> k = brainspike.spatial.gaussian2D(std_x=0.5, std_y=1.0, rho=0.3)
     """
     x = distance.x if x is None else x
     y = distance.y if y is None else y

@@ -454,11 +454,11 @@ class glif_psc_double_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as st
+        >>> import brainspike
         >>> import brainstate as bst
         >>> import brainunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
-        >>> neurons = st.glif_psc_double_alpha(
+        >>> neurons = brainspike.glif_psc_double_alpha(
         ...     in_size=100,
         ...     g=10.0 * u.nS,
         ...     E_L=-70.0 * u.mV,
@@ -477,7 +477,7 @@ class glif_psc_double_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> neurons = st.glif_psc_double_alpha(
+        >>> neurons = brainspike.glif_psc_double_alpha(
         ...     in_size=50,
         ...     spike_dependent_threshold=True,
         ...     after_spike_currents=True,

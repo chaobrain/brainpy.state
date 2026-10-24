@@ -73,8 +73,8 @@ def plot_layer(layer, fig=None, nodecolor='b', nodesize=20):
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> fig = bp.spatial.plot_layer(bp.spatial.grid([10, 10]))   # doctest: +SKIP
+        >>> import brainspike
+        >>> fig = brainspike.spatial.plot_layer(brainspike.spatial.grid([10, 10]))   # doctest: +SKIP
     """
     plt = _import_mpl()
     coords = _mag(layer.coords)

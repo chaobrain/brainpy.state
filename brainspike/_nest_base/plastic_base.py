@@ -55,7 +55,7 @@ def validate_delay(delay) -> None:
     """Require a finite, strictly-positive axonal delay.
 
     Grid quantization (NEST rounds to integer steps, minimum one step) is
-    delegated to :class:`~brainspike._brainpy.delay.InputDelay` on the
+    delegated to :class:`~brainspike._nest_network.delay.InputDelay` on the
     substrate, so the spec only enforces finiteness and positivity here.
     """
     d = float(u.Quantity(delay).to_decimal(u.ms)) if isinstance(delay, u.Quantity) else float(delay)

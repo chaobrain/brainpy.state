@@ -384,9 +384,9 @@ class rate_neuron_opn(_lin_rate_base):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
-       >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms, sigma=0.5)
+       >>> model = brainspike.rate_neuron_opn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)
        >>> rate = model(x=0.1)  # external drive
        >>> print(rate.shape)
@@ -399,7 +399,7 @@ class rate_neuron_opn(_lin_rate_base):
        >>> import numpy as np
        >>> def tanh_nonlin(h):
        ...     return np.tanh(h)
-       >>> model = bst.rate_neuron_opn(
+       >>> model = brainspike.rate_neuron_opn(
        ...     in_size=5,
        ...     tau=10*u.ms,
        ...     sigma=0.3,
@@ -412,7 +412,7 @@ class rate_neuron_opn(_lin_rate_base):
 
     .. code-block:: python
 
-       >>> model = bst.rate_neuron_opn(in_size=3, tau=10*u.ms, sigma=0.2)
+       >>> model = brainspike.rate_neuron_opn(in_size=3, tau=10*u.ms, sigma=0.2)
        >>> model.init_all_states()
        >>> rate_deterministic = model.update(x=0.5)  # propagates deterministic dynamics
        >>> rate_noisy = model.noisy_rate.value        # includes output noise
@@ -656,9 +656,9 @@ class rate_neuron_opn(_lin_rate_base):
 
         .. code-block:: python
 
-           >>> import brainspike as bst
+           >>> import brainspike
            >>> import brainunit as u
-           >>> model = bst.rate_neuron_opn(in_size=10, tau=20*u.ms)
+           >>> model = brainspike.rate_neuron_opn(in_size=10, tau=20*u.ms)
            >>> model.init_state()
            >>> print(model.rate.value.shape)
            (10,)
@@ -668,7 +668,7 @@ class rate_neuron_opn(_lin_rate_base):
         .. code-block:: python
 
            >>> import braintools
-           >>> model = bst.rate_neuron_opn(
+           >>> model = brainspike.rate_neuron_opn(
            ...     in_size=5,
            ...     tau=10*u.ms,
            ...     rate_initializer=braintools.init.Normal(0.5, 0.1),
