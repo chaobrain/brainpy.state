@@ -36,7 +36,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(shape=(30, 30), extent=(4.0, 4.0), theta=45.0, gamma=1.0, std=0.6,
@@ -83,19 +83,19 @@ def run(shape=(30, 30), extent=(4.0, 4.0), theta=45.0, gamma=1.0, std=0.6,
         >>> bool(tgt.shape[0] >= 1)
         True
     """
-    sim = bp.Simulator(dt=0.1 * u.ms)
-    pos = bp.spatial.grid(list(shape), extent=list(extent))
-    a = sim.create(bp.iaf_psc_alpha, positions=pos)
-    b = sim.create(bp.iaf_psc_alpha, positions=pos)
+    sim = brainspike.Simulator(dt=0.1 * u.ms)
+    pos = brainspike.spatial.grid(list(shape), extent=list(extent))
+    a = sim.create(brainspike.iaf_psc_alpha, positions=pos)
+    b = sim.create(brainspike.iaf_psc_alpha, positions=pos)
     sim.connect(
         a, b,
-        rule=bp.spatial.spatial_pairwise_bernoulli(
-            p=bp.spatial.gabor(bp.spatial.distance.x, bp.spatial.distance.y,
+        rule=brainspike.spatial.spatial_pairwise_bernoulli(
+            p=brainspike.spatial.gabor(brainspike.spatial.distance.x, brainspike.spatial.distance.y,
                                theta=theta, gamma=gamma, std=std, lam=lam, psi=psi),
-            mask=bp.spatial.elliptical(major, minor, azimuth_angle=theta)),
+            mask=brainspike.spatial.elliptical(major, minor, azimuth_angle=theta)),
         weight=1.0 * u.pA, delay=1.0 * u.ms, seed=seed)
-    ctr = bp.spatial.center_element(pos)
-    target_pos = bp.spatial.target_positions(sim, a[ctr], b)[0]
+    ctr = brainspike.spatial.center_element(pos)
+    target_pos = brainspike.spatial.target_positions(sim, a[ctr], b)[0]
     return sim.get_position(a), ctr, target_pos
 
 

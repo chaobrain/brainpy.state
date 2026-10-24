@@ -30,7 +30,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(shape=(4, 3), extent=(2.0, 1.5)):
@@ -59,9 +59,9 @@ def run(shape=(4, 3), extent=(2.0, 1.5)):
         >>> [round(float(v), 2) for v in u.get_magnitude(coords.to(u.um))[0]]
         [-0.75, 0.5]
     """
-    sim = bp.Simulator(dt=0.1 * u.ms)
-    pop = sim.create(bp.iaf_psc_alpha,
-                     positions=bp.spatial.grid(list(shape), extent=list(extent)))
+    sim = brainspike.Simulator(dt=0.1 * u.ms)
+    pop = sim.create(brainspike.iaf_psc_alpha,
+                     positions=brainspike.spatial.grid(list(shape), extent=list(extent)))
     return sim.get_position(pop)
 
 

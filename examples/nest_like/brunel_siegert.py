@@ -30,7 +30,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(order=2500, simtime=50.0, dt=0.1):
@@ -68,10 +68,10 @@ def run(order=2500, simtime=50.0, dt=0.1):
 
     npar = dict(tau_m=tauMem * u.ms, t_ref=2.0 * u.ms, theta=theta, V_reset=0.0)
 
-    net = bp.Simulator(dt=dt * u.ms)
-    ex = net.create(bp.siegert_neuron, 1, params=npar)
-    inh = net.create(bp.siegert_neuron, 1, params=npar)
-    drive = net.create(bp.siegert_neuron, 1, params=dict(mean=p_rate))
+    net = brainspike.Simulator(dt=dt * u.ms)
+    ex = net.create(brainspike.siegert_neuron, 1, params=npar)
+    inh = net.create(brainspike.siegert_neuron, 1, params=npar)
+    drive = net.create(brainspike.siegert_neuron, 1, params=dict(mean=p_rate))
 
     # Six convergent diffusion_connections: each source A deposits rate*drift into
     # the {ex, inh} drift (mu) channel and rate*diffusion into their diffusion
@@ -83,11 +83,11 @@ def run(order=2500, simtime=50.0, dt=0.1):
             (ex, drift_factor_ex, diffusion_factor_ex),
             (inh, drift_factor_in, diffusion_factor_in)):
         for tgt in (ex, inh):
-            net.connect(src, tgt, synapse=bp.diffusion_connection(
+            net.connect(src, tgt, synapse=brainspike.diffusion_connection(
                 drift_factor=drift, diffusion_factor=diffusion))
 
-    mm_ex = net.create(bp.multimeter, record_from=['rate'])
-    mm_in = net.create(bp.multimeter, record_from=['rate'])
+    mm_ex = net.create(brainspike.multimeter, record_from=['rate'])
+    mm_in = net.create(brainspike.multimeter, record_from=['rate'])
     net.connect(mm_ex, ex)
     net.connect(mm_in, inh)
 

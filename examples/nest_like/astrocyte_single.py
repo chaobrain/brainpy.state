@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(sim_time=60000.0, *, dt=0.1, poisson_rate=1.0, poisson_weight=1.0,
@@ -84,31 +84,31 @@ def run(sim_time=60000.0, *, dt=0.1, poisson_rate=1.0, poisson_weight=1.0,
     """
     brainstate.random.seed(seed)
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     apar = {'delta_IP3': delta_IP3, 'Ca_initializer': ca_init, 'h_IP3R_initializer': h_init}
     if ip3_init is not None:
         apar['IP3_initializer'] = ip3_init
-    astro = sim.create(bp.astrocyte_lr_1994, 1, params=apar)
+    astro = sim.create(brainspike.astrocyte_lr_1994, 1, params=apar)
 
     if spike_times is not None:
         if len(spike_times):
-            src = sim.create(bp.spike_generator, 1, spike_times=np.asarray(spike_times) * u.ms)
+            src = sim.create(brainspike.spike_generator, 1, spike_times=np.asarray(spike_times) * u.ms)
             sim.connect(src, astro, weight=spike_weight, delay=dt * u.ms)
     else:
-        src = sim.create(bp.poisson_generator, 1, rate=poisson_rate * u.Hz)
+        src = sim.create(brainspike.poisson_generator, 1, rate=poisson_rate * u.Hz)
         sim.connect(src, astro, weight=poisson_weight, delay=dt * u.ms)
 
     astro_records = ['IP3', 'Ca'] + (['SIC'] if return_astro_sic else [])
-    mm_a = sim.create(bp.multimeter, record_from=astro_records)
+    mm_a = sim.create(brainspike.multimeter, record_from=astro_records)
     sim.connect(mm_a, astro)
 
     mm_p = None
     if with_sic:
-        post = sim.create(bp.aeif_cond_alpha_astro, 1)
+        post = sim.create(brainspike.aeif_cond_alpha_astro, 1)
         sim.connect(astro, post,
-                    synapse=bp.sic_connection(weight=sic_weight, delay_steps=sic_delay_steps))
-        mm_p = sim.create(bp.multimeter, record_from=['I_SIC'])
+                    synapse=brainspike.sic_connection(weight=sic_weight, delay_steps=sic_delay_steps))
+        mm_p = sim.create(brainspike.multimeter, record_from=['I_SIC'])
         sim.connect(mm_p, post)
 
     res = sim.simulate(sim_time * u.ms)

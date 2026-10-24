@@ -14,14 +14,14 @@ parameters).
 .. code-block:: python
 
    import brainunit as u
-   import brainspike as bp
+   import brainspike
 
-   sim = bp.Simulator(dt=0.1 * u.ms)
-   ne = sim.create(bp.iaf_psc_alpha, 800, params=npar)
-   ni = sim.create(bp.iaf_psc_alpha, 200, params=npar)
+   sim = brainspike.Simulator(dt=0.1 * u.ms)
+   ne = sim.create(brainspike.iaf_psc_alpha, 800, params=npar)
+   ni = sim.create(brainspike.iaf_psc_alpha, 200, params=npar)
 
    sim.connect(ne, ne + ni, weight=0.1 * u.pA, delay=1.5 * u.ms,
-               rule=bp.fixed_indegree(80), seed=1)
+               rule=brainspike.fixed_indegree(80), seed=1)
 
 
 Population algebra (``NodeView``)
@@ -62,7 +62,7 @@ Pass a rule to ``connect(..., rule=...)``:
 
 For **spatially-structured** connectivity (distance-dependent probability,
 masks, kernels) the rule comes from :doc:`spatial` — e.g.
-``bp.spatial.spatial_pairwise_bernoulli(...)`` — and rides the same ``connect``
+``brainspike.spatial.spatial_pairwise_bernoulli(...)`` — and rides the same ``connect``
 call.
 
 Sampling options for the random rules:
@@ -107,8 +107,8 @@ parameters NEST keeps on the neuron move onto the synapse spec here):
 .. code-block:: python
 
    import numpy as np
-   sg = sim.create(bp.spike_generator, spike_times=np.array([50., 100., 150.]) * u.ms)
-   sim.connect(sg, post, synapse=bp.tsodyks2_synapse(
+   sg = sim.create(brainspike.spike_generator, spike_times=np.array([50., 100., 150.]) * u.ms)
+   sim.connect(sg, post, synapse=brainspike.tsodyks2_synapse(
        weight=250. * u.pA, U=0.67, tau_rec=450. * u.ms, tau_fac=0. * u.ms))
 
 Short-term plasticity (``tsodyks_synapse``, ``tsodyks2_synapse``,

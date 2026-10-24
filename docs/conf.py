@@ -43,10 +43,10 @@ release = _pkg_version("brainspike")
 import sys as _sys
 
 try:
-    import brainspike as _bps
+    import brainspike
 
     for _alias in ("spatial", "network"):
-        _mod = getattr(_bps, _alias, None)
+        _mod = getattr(brainspike, _alias, None)
         if _mod is not None:
             _sys.modules[f"brainspike.{_alias}"] = _mod
 except Exception:

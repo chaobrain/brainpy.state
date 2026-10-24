@@ -34,7 +34,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(order=50, T=100.0, dt=0.1, g=5.0, epsilon=0.1, d_e=5.0, sigma=5.0, seed=0):
@@ -95,22 +95,22 @@ def run(order=50, T=100.0, dt=0.1, g=5.0, epsilon=0.1, d_e=5.0, sigma=5.0, seed=
 
     npar = dict(tau=10.0 * u.ms, mu=2.0, sigma=sigma, lambda_=1.0, g=1.0,
                 linear_summation=True)
-    net = bp.Simulator(dt=dt * u.ms)
-    n_e = net.create(bp.lin_rate_ipn, NE, params=npar)
-    n_i = net.create(bp.lin_rate_ipn, NI, params=npar)
+    net = brainspike.Simulator(dt=dt * u.ms)
+    n_e = net.create(brainspike.lin_rate_ipn, NE, params=npar)
+    n_i = net.create(brainspike.lin_rate_ipn, NI, params=npar)
 
     # Excitatory-origin connections are delayed; inhibitory-origin are instantaneous.
     net.connect(n_e, n_e, weight=w, delay=d_e * u.ms,
-                rule=bp.fixed_indegree(indeg_E_from_E), comm='dense', seed=seed)
+                rule=brainspike.fixed_indegree(indeg_E_from_E), comm='dense', seed=seed)
     net.connect(n_e, n_i, weight=w, delay=d_e * u.ms,
-                rule=bp.fixed_indegree(indeg_I_from_E), comm='dense', seed=seed + 1)
+                rule=brainspike.fixed_indegree(indeg_I_from_E), comm='dense', seed=seed + 1)
     net.connect(n_i, n_e, weight=-g * w,
-                rule=bp.fixed_indegree(indeg_E_from_I), comm='dense', seed=seed + 2)
+                rule=brainspike.fixed_indegree(indeg_E_from_I), comm='dense', seed=seed + 2)
     net.connect(n_i, n_i, weight=-g * w,
-                rule=bp.fixed_indegree(indeg_I_from_I), comm='dense', seed=seed + 3)
+                rule=brainspike.fixed_indegree(indeg_I_from_I), comm='dense', seed=seed + 3)
 
-    mm_e = net.create(bp.multimeter, record_from=['rate'])
-    mm_i = net.create(bp.multimeter, record_from=['rate'])
+    mm_e = net.create(brainspike.multimeter, record_from=['rate'])
+    mm_i = net.create(brainspike.multimeter, record_from=['rate'])
     net.connect(mm_e, n_e)
     net.connect(mm_i, n_i)
 

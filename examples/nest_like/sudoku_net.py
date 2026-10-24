@@ -39,7 +39,7 @@ import brainunit as u
 brainstate.environ.set(precision=64)
 
 import braintools
-import brainspike as bps
+import brainspike
 
 from examples.nest_like.sudoku_puzzles import validate_solution
 
@@ -132,39 +132,39 @@ class SudokuNet:
         self.stim_rate = float(stim_rate)
 
         brainstate.random.seed(self.seed)
-        self.sim = bps.Simulator(dt=DT * u.ms)
+        self.sim = brainspike.Simulator(dt=DT * u.ms)
 
         params = dict(NEURON_PARAMS)
         params['V_initializer'] = braintools.init.Uniform(-65.0 * u.mV, -55.0 * u.mV)
-        self.cells = self.sim.create(bps.iaf_psc_exp, self.n_total, params=params)
+        self.cells = self.sim.create(brainspike.iaf_psc_exp, self.n_total, params=params)
 
         # Inhibitory WTA/constraint topology: ONE sparse explicit-edge projection.
         pre, post = _inhibitory_edge_arrays(self.pop_size)
         self.sim.connect(
             self.cells, self.cells,
-            rule=bps.explicit_edges(pre, post),
+            rule=brainspike.explicit_edges(pre, post),
             weight=INTER_NEURON_WEIGHT * u.pA, delay=DELAY * u.ms, comm='sparse')
 
         # Background noise: one generator, all_to_all -> N independent Poisson trains.
-        self.noise = self.sim.create(bps.poisson_generator, rate=self.noise_rate * u.Hz)
-        self.sim.connect(self.noise, self.cells, rule=bps.all_to_all,
+        self.noise = self.sim.create(brainspike.poisson_generator, rate=self.noise_rate * u.Hz)
+        self.sim.connect(self.noise, self.cells, rule=brainspike.all_to_all,
                          weight=WEIGHT_NOISE * u.pA, delay=DELAY * u.ms)
 
         # Clue stimulation: one 200 Hz generator -> 729 parrots (one independent train
         # each), then each parrot -> its population's pop_size cells via a single sparse
         # explicit-edge projection whose weights are toggled per puzzle (0 <-> 1.3 pA).
-        self.stim_gen = self.sim.create(bps.poisson_generator, rate=self.stim_rate * u.Hz)
-        self.parrots = self.sim.create(bps.parrot_neuron, N_POPULATIONS)
-        self.sim.connect(self.stim_gen, self.parrots, rule=bps.all_to_all,
+        self.stim_gen = self.sim.create(brainspike.poisson_generator, rate=self.stim_rate * u.Hz)
+        self.parrots = self.sim.create(brainspike.parrot_neuron, N_POPULATIONS)
+        self.sim.connect(self.stim_gen, self.parrots, rule=brainspike.all_to_all,
                          weight=1.0, delay=DELAY * u.ms)            # unit gate weight
         stim_pre = np.repeat(np.arange(N_POPULATIONS), self.pop_size)   # parrot p
         stim_post = np.arange(self.n_total)                             # cell pop_size*p+k
         self.sim.connect(self.parrots, self.cells,
-                         rule=bps.explicit_edges(stim_pre, stim_post),
+                         rule=brainspike.explicit_edges(stim_pre, stim_post),
                          weight=0.0 * u.pA, delay=DELAY * u.ms, comm='sparse')
 
         # Wide readout: one spike_recorder taps every cell (columns in neuron order).
-        self.recorder = self.sim.create(bps.spike_recorder)
+        self.recorder = self.sim.create(brainspike.spike_recorder)
         self.sim.connect(self.cells, self.recorder)
 
     def read_counts(self, res):

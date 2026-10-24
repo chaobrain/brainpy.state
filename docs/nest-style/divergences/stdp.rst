@@ -70,8 +70,8 @@ the post-synaptic neuron to implement an archiving API:
 .. code-block:: python
 
    >>> import brainunit as u
-   >>> import brainspike as bp
-   >>> s = bp.stdp_synapse(tau_plus=20.0 * u.ms, tau_minus=20.0 * u.ms)
+   >>> import brainspike
+   >>> s = brainspike.stdp_synapse(tau_plus=20.0 * u.ms, tau_minus=20.0 * u.ms)
    >>> float(u.Quantity(s.tau_minus).to_decimal(u.ms))
    20.0
 
@@ -232,8 +232,8 @@ the **single nearest preceding pairing**, not the all-to-all sum:
 
 .. code-block:: python
 
-   >>> import brainspike as bp
-   >>> sym = bp.stdp_nn_symm_synapse()
+   >>> import brainspike
+   >>> sym = brainspike.stdp_nn_symm_synapse()
    >>> sym.pre_trace_mode, sym.post_trace_mode
    ('nearest', 'nearest')
 
@@ -296,8 +296,8 @@ hence ``pre_trace_tau is None``:
 
 .. code-block:: python
 
-   >>> import brainspike as bp
-   >>> pc = bp.stdp_nn_pre_centered_synapse()
+   >>> import brainspike
+   >>> pc = brainspike.stdp_nn_pre_centered_synapse()
    >>> pc.pre_trace_tau is None, pc.post_trace_mode
    (True, 'nearest')
 

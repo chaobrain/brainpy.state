@@ -37,7 +37,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(sim_time=1000.0, *, dt=0.1, n_neurons=10, n_astro=5, p_primary=1.0,
@@ -93,33 +93,33 @@ def run(sim_time=1000.0, *, dt=0.1, n_neurons=10, n_astro=5, p_primary=1.0,
     """
     brainstate.random.seed(seed)
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     npar = {'tau_syn_ex': tau_syn_ex * u.ms, 'I_e': I_e * u.pA}
-    pre = sim.create(bp.aeif_cond_alpha_astro, n_neurons, params=npar)
-    post = sim.create(bp.aeif_cond_alpha_astro, n_neurons, params=npar)
-    astro = sim.create(bp.astrocyte_lr_1994, n_astro,
+    pre = sim.create(brainspike.aeif_cond_alpha_astro, n_neurons, params=npar)
+    post = sim.create(brainspike.aeif_cond_alpha_astro, n_neurons, params=npar)
+    astro = sim.create(brainspike.astrocyte_lr_1994, n_astro,
                        params={'delta_IP3': delta_IP3, 'IP3_initializer': IP3_0})
 
     sim.tripartite_connect(
         pre, post, astro,
-        conn_spec=bp.pairwise_bernoulli(p_primary),
-        third_factor_conn_spec=bp.third_factor_bernoulli_with_pool(
+        conn_spec=brainspike.pairwise_bernoulli(p_primary),
+        third_factor_conn_spec=brainspike.third_factor_bernoulli_with_pool(
             p=p_third, pool_size=pool_size, pool_type=pool_type),
         syn_specs={
             'primary': {'weight': w_primary * u.nS, 'delay': conn_delay * u.ms,
                         'receptor_type': 1},
             'third_in': {'weight': w_third_in, 'delay': conn_delay * u.ms},
-            'third_out': {'synapse': bp.sic_connection(weight=w_a2n,
+            'third_out': {'synapse': brainspike.sic_connection(weight=w_a2n,
                                                        delay_steps=sic_delay_steps)},
         },
         seed=seed)
 
-    mm_pre = sim.create(bp.multimeter, record_from=['V_m'])
+    mm_pre = sim.create(brainspike.multimeter, record_from=['V_m'])
     sim.connect(mm_pre, pre)
-    mm_post = sim.create(bp.multimeter, record_from=['V_m', 'I_SIC'])
+    mm_post = sim.create(brainspike.multimeter, record_from=['V_m', 'I_SIC'])
     sim.connect(mm_post, post)
-    mm_a = sim.create(bp.multimeter, record_from=['IP3', 'Ca'])
+    mm_a = sim.create(brainspike.multimeter, record_from=['IP3', 'Ca'])
     sim.connect(mm_a, astro)
 
     res = sim.simulate(sim_time * u.ms)

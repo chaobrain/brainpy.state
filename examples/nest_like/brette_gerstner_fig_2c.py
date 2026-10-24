@@ -41,7 +41,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 #: Integration step (ms) — fine, because the AdEx spike upstroke is very steep.
 DT = 0.1
@@ -81,19 +81,19 @@ def run(simtime=T_SIM, dt=DT, a=A_NS, b=B_PA):
         Integer step indices at which the neuron spiked.
     """
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     # a, b set explicitly (they equal the defaults, but the paper pins them);
     # every other parameter, including the V_m = -70.6 mV start, is the default.
-    neuron = sim.create(bp.aeif_cond_alpha, 1, params={'a': a * u.nS, 'b': b * u.pA})
+    neuron = sim.create(brainspike.aeif_cond_alpha, 1, params={'a': a * u.nS, 'b': b * u.pA})
 
     for amplitude, start, stop in DC_PULSES:
-        gen = sim.create(bp.dc_generator, amplitude=amplitude * u.pA,
+        gen = sim.create(brainspike.dc_generator, amplitude=amplitude * u.pA,
                          start=start * u.ms, stop=stop * u.ms)
         sim.connect(gen, neuron)
 
-    mm = sim.create(bp.multimeter, record_from=['V_m'], interval=dt * u.ms)
-    sr = sim.create(bp.spike_recorder)
+    mm = sim.create(brainspike.multimeter, record_from=['V_m'], interval=dt * u.ms)
+    sr = sim.create(brainspike.spike_recorder)
     sim.connect(mm, neuron)
     sim.connect(neuron, sr)
 

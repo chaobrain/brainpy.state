@@ -29,7 +29,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(shape=(20, 20), std=0.2, cutoff=0.5, seed=0):
@@ -65,18 +65,18 @@ def run(shape=(20, 20), std=0.2, cutoff=0.5, seed=0):
         >>> bool(tgt.shape[0] >= 1)
         True
     """
-    sim = bp.Simulator(dt=0.1 * u.ms)
-    pos = bp.spatial.grid(list(shape))                       # default unit-square extent
-    pop1 = sim.create(bp.iaf_psc_alpha, positions=pos)
-    pop2 = sim.create(bp.iaf_psc_alpha, positions=pos)
+    sim = brainspike.Simulator(dt=0.1 * u.ms)
+    pos = brainspike.spatial.grid(list(shape))                       # default unit-square extent
+    pop1 = sim.create(brainspike.iaf_psc_alpha, positions=pos)
+    pop2 = sim.create(brainspike.iaf_psc_alpha, positions=pos)
     sim.connect(
         pop1, pop2,
-        rule=bp.spatial.spatial_pairwise_bernoulli(
-            p=bp.spatial.gaussian(bp.spatial.distance, std=std),
-            mask=bp.spatial.circular(cutoff)),
+        rule=brainspike.spatial.spatial_pairwise_bernoulli(
+            p=brainspike.spatial.gaussian(brainspike.spatial.distance, std=std),
+            mask=brainspike.spatial.circular(cutoff)),
         weight=10000.0 * u.pA, delay=1.0 * u.ms, seed=seed)
-    ctr = bp.spatial.center_element(pos)
-    target_pos = bp.spatial.target_positions(sim, pop1[ctr], pop2)[0]
+    ctr = brainspike.spatial.center_element(pos)
+    target_pos = brainspike.spatial.target_positions(sim, pop1[ctr], pop2)[0]
     return sim.get_position(pop1), ctr, target_pos
 
 

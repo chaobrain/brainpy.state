@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 #: Mutual inhibitory weight between the two decision units (NEST's value).
 W_INH = -0.2
@@ -55,14 +55,14 @@ def build_network(sigma, dt, mu_d1, mu_d2):
     """
     common = dict(tau=1.0 * u.ms, lambda_=0.1, sigma=sigma,
                   rectify_output=True, linear_summation=True)
-    net = bp.Simulator(dt=dt * u.ms)
-    d1 = net.create(bp.lin_rate_ipn, 1, params=dict(mu=mu_d1, **common))
-    d2 = net.create(bp.lin_rate_ipn, 1, params=dict(mu=mu_d2, **common))
+    net = brainspike.Simulator(dt=dt * u.ms)
+    d1 = net.create(brainspike.lin_rate_ipn, 1, params=dict(mu=mu_d1, **common))
+    d2 = net.create(brainspike.lin_rate_ipn, 1, params=dict(mu=mu_d2, **common))
     # Mutual instantaneous inhibition (plain weighted dense connect, no delay).
     net.connect(d1, d2, weight=W_INH, comm='dense')
     net.connect(d2, d1, weight=W_INH, comm='dense')
-    mm1 = net.create(bp.multimeter, record_from=['rate'])
-    mm2 = net.create(bp.multimeter, record_from=['rate'])
+    mm1 = net.create(brainspike.multimeter, record_from=['rate'])
+    mm2 = net.create(brainspike.multimeter, record_from=['rate'])
     net.connect(mm1, d1)
     net.connect(mm2, d2)
     return net, mm1, mm2

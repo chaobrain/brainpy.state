@@ -14,13 +14,13 @@ network; recorded data is read back after the run from the
 .. code-block:: python
 
    import brainunit as u
-   import brainspike as bp
+   import brainspike
 
-   sim = bp.Simulator(dt=0.1 * u.ms)
-   neuron = sim.create(bp.iaf_psc_exp, 1)
-   pg = sim.create(bp.poisson_generator, 1, rate=8000. * u.Hz, rng_seed=0)
-   sr = sim.create(bp.spike_recorder)
-   mm = sim.create(bp.multimeter, record_from=["V_m"], interval=0.1 * u.ms)
+   sim = brainspike.Simulator(dt=0.1 * u.ms)
+   neuron = sim.create(brainspike.iaf_psc_exp, 1)
+   pg = sim.create(brainspike.poisson_generator, 1, rate=8000. * u.Hz, rng_seed=0)
+   sr = sim.create(brainspike.spike_recorder)
+   mm = sim.create(brainspike.multimeter, record_from=["V_m"], interval=0.1 * u.ms)
 
    sim.connect(pg, neuron, weight=10. * u.pA, delay=1. * u.ms)
    sim.connect(neuron, sr)

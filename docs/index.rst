@@ -1,65 +1,19 @@
 ``brainspike`` documentation
-=====================================
+============================
 
-`brainspike <https://github.com/chaobrain/brainspike>`_ is the
-point-neuron modeling layer of the `BrainX ecosystem
-<https://brainx.chaobrain.com>`_. It provides spiking neural network models
-built on `JAX <https://github.com/jax-ml/jax>`_ and the `brainstate
-<https://github.com/chaobrain/brainstate>`_ state-management system.
+`brainspike <https://github.com/chaobrain/brainspike>`_ is the point-neuron
+spiking-network layer of the `BrainX ecosystem <https://brainx.chaobrain.com>`_:
+building, simulating, and training spiking neural networks of point neurons. A
+new kernel language unifies how models are built, how they are simulated, and
+how they are trained. It is built on `JAX <https://github.com/jax-ml/jax>`_ and
+`brainstate <https://github.com/chaobrain/brainstate>`_.
 
-**One differentiable substrate, two worlds.** ``brainspike`` is designed so
-that the *same* models serve both **brain simulation** (biophysical networks,
-spike rasters, conductance dynamics) and **brain-inspired computing**
-(surrogate-gradient training, online learning). The bridge is a small set of
-ideas — explicit **State**, **physical units**, and the distinctive
-**AlignPre / AlignPost** synaptic projection design — that keep memory linear in
-the number of neurons while remaining fully differentiable. See
-:doc:`concepts/alignpre-alignpost` for the keystone chapter.
-
-.. admonition:: ``brainpy`` and ``brainspike``
-
-   ``brainspike`` is the **state-based modeling layer** of BrainPy — developed and
-   released as the standalone ``brainspike`` package and surfaced through the
-   ``brainspike`` namespace. It is the recommended starting point for new
-   ``State``-based, differentiable spiking-network models. The classic,
-   ``DynamicalSystem``-based ``brainpy`` API (``brainpy.dyn``, ``brainpy.math``,
-   ``brainpy.integrators``) is unchanged and fully supported — the two paradigms
-   coexist. See :doc:`project/relationship`.
-
-.. figure:: /_static/bridging-concept.png
-   :alt: A bridge diagram. On the left, a blue "Brain Simulation" panel with a
-         network schematic, a spike raster, and a conductance-versus-time trace;
-         on the right, an orange "Brain-Inspired Computing" panel with a
-         feedforward network, a loss-versus-training-step curve, and a
-         surrogate-gradient symbol. An arc across the top links the two panels,
-         labelled "surrogate gradients" and "linear-memory online learning". Both
-         panels rest on a single platform bar reading "One differentiable
-         substrate", whose three pills read "State", "Physical units", and
-         "AlignPre / AlignPost".
-   :width: 100%
-   :align: center
-
-   **Two worlds on one substrate.** The same ``State``-based, unit-aware models —
-   wired with AlignPre / AlignPost projections — drive both biophysical **brain
-   simulation** and gradient-trained **brain-inspired computing**. Surrogate
-   gradients and linear-memory online learning are the bridge between them.
-
-
-Two model families
-^^^^^^^^^^^^^^^^^^^
-
-``brainspike`` ships two complementary, production-ready model families on a
-shared substrate:
-
-- **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx,
-  HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, GABAa, BioNMDA), projections
-  (``AlignPostProj``, ``DeltaProj``, …), readouts, input generators, and
-  short-term plasticity, in the tradition of `BrainPy
-  <https://brainpy.readthedocs.io/>`_. The idiomatic entry point — start here.
-- **NEST-compatible models** — JAX re-implementations of `NEST simulator
-  <https://nest-simulator.readthedocs.io/>`_ neuron, synapse, plasticity (STDP,
-  STP), and device models with NEST parameter names, validated against live
-  NEST with formal tolerance bands. The migration path for NEST users.
+``brainspike`` provides **NEST-compatible models** — JAX re-implementations of
+`NEST simulator <https://nest-simulator.readthedocs.io/>`_ neuron, synapse,
+plasticity (STDP, STP), and device models with NEST parameter names, validated
+against live NEST with formal tolerance bands — driven through a NEST-style
+``Simulator``. The new kernel (one ``Network`` graph shared by simulation and
+learning) is in development and still private.
 
 All parameters carry **physical units** via `brainunit
 <https://github.com/chaobrain/brainunit>`_, and every model compiles through JAX
@@ -101,100 +55,42 @@ Installation
 Quick example
 ^^^^^^^^^^^^^
 
-A small excitatory–inhibitory balanced network, built two ways: with the
-high-level BrainPy-style API, and with the NEST-compatible ``Simulator``. See the
-:doc:`5-minute tour <get-started/5-minute-tour>` for the full walkthrough.
+A Brunel (2000) sparse balanced random network, built with the explicit
+``Simulator``:
 
-.. tab-set::
+.. code-block:: python
 
-   .. tab-item:: BrainPy-style
-
-      .. code-block:: python
-
-         import brainpy
-
-         import brainspike
-         import brainstate
-         import braintools
-         import brainunit as u
+   import brainstate
+   import brainunit as u
+   from brainspike import (Simulator, iaf_psc_alpha, poisson_generator,
+                              spike_recorder, all_to_all, fixed_indegree)
 
 
-         class EINet(brainstate.nn.Module):
-             def __init__(self):
-                 super().__init__()
-                 self.n_exc, self.n_inh = 3200, 800
-                 self.num = self.n_exc + self.n_inh
-                 self.N = brainspike.LIFRef(
-                     self.num,
-                     V_rest=-60. * u.mV, V_th=-50. * u.mV, V_reset=-60. * u.mV,
-                     tau=20. * u.ms, tau_ref=5. * u.ms,
-                     V_initializer=braintools.init.Normal(-55., 2., unit=u.mV),
-                 )
-                 self.E = brainspike.AlignPostProj(
-                     comm=brainstate.nn.EventFixedProb(self.n_exc, self.num,
-                                                        conn_num=0.02, conn_weight=0.6 * u.mS),
-                     syn=brainspike.Expon.desc(self.num, tau=5. * u.ms),
-                     out=brainspike.COBA.desc(E=0. * u.mV),
-                     post=self.N,
-                 )
-                 self.I = brainspike.AlignPostProj(
-                     comm=brainstate.nn.EventFixedProb(self.n_inh, self.num,
-                                                        conn_num=0.02, conn_weight=6.7 * u.mS),
-                     syn=brainspike.Expon.desc(self.num, tau=10. * u.ms),
-                     out=brainspike.COBA.desc(E=-80. * u.mV),
-                     post=self.N,
-                 )
+   # Brunel (2000) sparse balanced random network, built with the explicit Simulator
+   order = 400
+   NE, NI = 4 * order, 1 * order              # 1600 excitatory + 400 inhibitory
+   CE, CI = int(0.1 * NE), int(0.1 * NI)      # 10% fixed in-degree
+   J = 20. * u.pA                             # excitatory PSC; inhibition is -g * J
 
-             def update(self, t, inp):
-                 with brainstate.environ.context(t=t):
-                     spk = self.N.get_spike() != 0.
-                     self.E(spk[:self.n_exc])
-                     self.I(spk[self.n_exc:])
-                     self.N(inp)
-                     return self.N.get_spike()
+   neuron = dict(C_m=250. * u.pF, tau_m=20. * u.ms, t_ref=2. * u.ms,
+                 E_L=0. * u.mV, V_reset=0. * u.mV, V_th=20. * u.mV)
 
+   sim = Simulator(dt=0.1 * u.ms)
+   ne = sim.create(iaf_psc_alpha, NE, params=neuron)
+   ni = sim.create(iaf_psc_alpha, NI, params=neuron)
+   noise = sim.create(poisson_generator, rate=15000. * u.Hz)
+   rec = sim.create(spike_recorder)
 
-         net = EINet()
-         brainstate.nn.init_all_states(net)
+   sim.connect(noise, ne + ni, weight=J, delay=1.5 * u.ms, rule=all_to_all)
+   sim.connect(ne, ne + ni, weight=J, delay=1.5 * u.ms,
+               rule=fixed_indegree(CE), comm='sparse', seed=1)
+   sim.connect(ni, ne + ni, weight=-5. * J, delay=1.5 * u.ms,
+               rule=fixed_indegree(CI), comm='sparse', seed=2)
+   sim.connect(ne[:50], rec)
 
-         with brainstate.environ.context(dt=0.1 * u.ms):
-             times = u.math.arange(0. * u.ms, 1000. * u.ms, brainstate.environ.get_dt())
-             spikes = brainstate.transform.for_loop(lambda t: net.update(t, 20. * u.mA), times)
+   res = sim.simulate(1000. * u.ms)
+   print(res.rate(rec.segments[0].population))   # excitatory firing rate
 
-   .. tab-item:: NEST-compatible
-
-      .. code-block:: python
-
-         import brainstate
-         import brainunit as u
-         from brainspike import (Simulator, iaf_psc_alpha, poisson_generator,
-                                    spike_recorder, all_to_all, fixed_indegree)
-
-
-         # Brunel (2000) sparse balanced random network, built with the explicit Simulator
-         order = 400
-         NE, NI = 4 * order, 1 * order              # 1600 excitatory + 400 inhibitory
-         CE, CI = int(0.1 * NE), int(0.1 * NI)      # 10% fixed in-degree
-         J = 20. * u.pA                             # excitatory PSC; inhibition is -g * J
-
-         neuron = dict(C_m=250. * u.pF, tau_m=20. * u.ms, t_ref=2. * u.ms,
-                       E_L=0. * u.mV, V_reset=0. * u.mV, V_th=20. * u.mV)
-
-         sim = Simulator(dt=0.1 * u.ms)
-         ne = sim.create(iaf_psc_alpha, NE, params=neuron)
-         ni = sim.create(iaf_psc_alpha, NI, params=neuron)
-         noise = sim.create(poisson_generator, rate=15000. * u.Hz)
-         rec = sim.create(spike_recorder)
-
-         sim.connect(noise, ne + ni, weight=J, delay=1.5 * u.ms, rule=all_to_all)
-         sim.connect(ne, ne + ni, weight=J, delay=1.5 * u.ms,
-                     rule=fixed_indegree(CE), comm='sparse', seed=1)
-         sim.connect(ni, ne + ni, weight=-5. * J, delay=1.5 * u.ms,
-                     rule=fixed_indegree(CI), comm='sparse', seed=2)
-         sim.connect(ne[:50], rec)
-
-         res = sim.simulate(1000. * u.ms)
-         print(res.rate(rec.segments[0].population))   # excitatory firing rate
 
 ----
 
@@ -209,20 +105,6 @@ Learn more
       .. card:: :material-regular:`rocket_launch;2em` Get Started
          :class-card: sd-text-black sd-bg-light
          :link: get-started/index.html
-
-   .. grid-item::
-      :columns: 6 6 6 4
-
-      .. card:: :material-regular:`hub;2em` Core Concepts
-         :class-card: sd-text-black sd-bg-light
-         :link: concepts/index.html
-
-   .. grid-item::
-      :columns: 6 6 6 4
-
-      .. card:: :material-regular:`library_books;2em` BrainPy-style Guide
-         :class-card: sd-text-black sd-bg-light
-         :link: brainpy-style/index.html
 
    .. grid-item::
       :columns: 6 6 6 4
@@ -243,7 +125,7 @@ Learn more
 
       .. card:: :material-regular:`explore;2em` Examples Gallery
          :class-card: sd-text-black sd-bg-light
-         :link: examples/brainpy-gallery.html
+         :link: examples/nest-gallery.html
 
 
 ----
@@ -266,16 +148,14 @@ See also the ecosystem
    :caption: Tutorials
 
    get-started/index
-   concepts/index
+   nest-style/index
 
 
 .. toctree::
    :hidden:
    :maxdepth: 1
-   :caption: Advanced Tutorials
+   :caption: Reference
 
-   brainpy-style/index
-   nest-style/index
    apis/index
 
 
@@ -284,7 +164,6 @@ See also the ecosystem
    :maxdepth: 1
    :caption: Examples
 
-   examples/brainpy-gallery
    examples/nest-gallery
 
 
@@ -295,6 +174,5 @@ See also the ecosystem
 
    changelog.md
    project/positioning
-   project/relationship
    project/citing
    project/ecosystem

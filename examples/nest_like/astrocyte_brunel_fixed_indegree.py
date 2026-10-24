@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 from examples.nest_like.astrocyte_brunel_bernoulli import build
 
@@ -72,13 +72,13 @@ def run(sim_time=1000.0, *, dt=0.1, n_ex=400, n_in=100, n_astro=500, ce=None, ci
     """
     brainstate.random.seed(seed)
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     ce = int(round(0.1 * n_ex)) if ce is None else int(ce)
     ci = int(round(0.1 * n_in)) if ci is None else int(ci)
 
     def primary_rule(role):
-        return bp.fixed_indegree(ce if role == 'ex' else ci)
+        return brainspike.fixed_indegree(ce if role == 'ex' else ci)
 
     net = build(
         sim, primary_rule=primary_rule, n_ex=n_ex, n_in=n_in, n_astro=n_astro,
@@ -88,11 +88,11 @@ def run(sim_time=1000.0, *, dt=0.1, n_ex=400, n_in=100, n_astro=500, ce=None, ci
         sic_delay_steps=sic_delay_steps, seed=seed)
     neurons, ex, inh, astro = net['neurons'], net['ex'], net['inh'], net['astro']
 
-    esr = sim.create(bp.spike_recorder); sim.connect(ex, esr)
-    isr = sim.create(bp.spike_recorder); sim.connect(inh, isr)
-    mm_a = sim.create(bp.multimeter, record_from=['IP3', 'Ca'])
+    esr = sim.create(brainspike.spike_recorder); sim.connect(ex, esr)
+    isr = sim.create(brainspike.spike_recorder); sim.connect(inh, isr)
+    mm_a = sim.create(brainspike.multimeter, record_from=['IP3', 'Ca'])
     sim.connect(mm_a, astro[:n_rec_astro])
-    mm_n = sim.create(bp.multimeter, record_from=['I_SIC'])
+    mm_n = sim.create(brainspike.multimeter, record_from=['I_SIC'])
     sim.connect(mm_n, neurons[:n_rec_astro])
 
     res = sim.simulate(sim_time * u.ms)

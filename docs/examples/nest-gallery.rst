@@ -592,5 +592,4 @@ See Also
 - :doc:`/nest-style/index` — the NEST-compatible hub (tutorials, build-your-network
   guides, porting & fidelity).
 - :doc:`/nest-style/validation-status` — per-model live-NEST parity evidence.
-- :doc:`/examples/brainpy-gallery` — the BrainPy-style example gallery.
 

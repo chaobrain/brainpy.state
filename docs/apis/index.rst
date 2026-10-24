@@ -1,33 +1,16 @@
 API Reference
 =============
 
-Complete API reference for ``brainspike``, organized by model family. The
-library exposes two families that share the same state-based substrate:
-
-- **BrainPy-style** — composable, differentiable neurons, synapses, projections,
-  outputs, plasticity, readouts, and input generators.
-- **NEST-compatible** — JAX re-implementations that preserve NEST parameter
-  names and semantics, plus the spatial and network-builder layers.
-
-Both families are usable from the single public ``brainspike`` namespace.
-
-.. toctree::
-   :hidden:
-   :caption: BrainPy-style
-
-   base
-   brainpy-neurons
-   brainpy-synapses
-   brainpy-projections
-   brainpy-synouts
-   brainpy-plasticity
-   brainpy-readouts
-   brainpy-inputs
+Complete API reference for ``brainspike``: JAX re-implementations of NEST
+models that preserve NEST parameter names and semantics, the spatial layer, and
+the NEST-style ``Simulator``. Everything is importable from the public
+``brainspike`` namespace.
 
 .. toctree::
    :hidden:
    :caption: NEST-compatible
 
+   base
    nest-base
    nest-neurons
    nest-synapses
@@ -37,68 +20,21 @@ Both families are usable from the single public ``brainspike`` namespace.
    nest-network
 
 
-BrainPy-style
--------------
-
-The native modeling layer: compose neurons, synapses, and projections, and
-train them end to end with surrogate gradients.
-
-.. grid:: 1 2 2 3
-
-   .. grid-item-card:: :material-regular:`foundation;2em` Base Classes
-      :link: base.html
-
-      Abstract base classes shared by all models: ``Dynamics``, ``Neuron``,
-      ``Synapse``.
-
-   .. grid-item-card:: :material-regular:`psychology;2em` Neurons
-      :link: brainpy-neurons.html
-
-      Spiking neuron models (LIF, ALIF, AdEx, HH, Izhikevich, …).
-
-   .. grid-item-card:: :material-regular:`timeline;2em` Synapses
-      :link: brainpy-synapses.html
-
-      Synaptic dynamics (Expon, DualExpon, Alpha, AMPA, GABAa, BioNMDA).
-
-   .. grid-item-card:: :material-regular:`account_tree;2em` Projections
-      :link: brainpy-projections.html
-
-      Connect neural populations (``AlignPostProj``, ``DeltaProj``,
-      ``CurrentProj``, gap junctions, AlignPre/AlignPost helpers).
-
-   .. grid-item-card:: :material-regular:`output;2em` Synaptic Outputs
-      :link: brainpy-synouts.html
-
-      Convert conductances to currents (COBA, CUBA, MgBlock).
-
-   .. grid-item-card:: :material-regular:`psychology_alt;2em` Short-Term Plasticity
-      :link: brainpy-plasticity.html
-
-      Short-term synaptic plasticity (STP, STD).
-
-   .. grid-item-card:: :material-regular:`sensors;2em` Readouts
-      :link: brainpy-readouts.html
-
-      Readout layers (``LeakyRateReadout``).
-
-   .. grid-item-card:: :material-regular:`input;2em` Input Generators
-      :link: brainpy-inputs.html
-
-      Spike and current generators (``PoissonSpike``, ``SpikeTime``,
-      ``PoissonInput``).
-
-
 NEST-compatible
 ---------------
 
-JAX re-implementations preserving NEST parameter names, plus the spatial and
-network-builder layers. Parity with a live NEST install is documented on the
+JAX re-implementations preserving NEST parameter names, plus the spatial layer
+and the ``Simulator``. Parity with a live NEST install is documented on the
 :doc:`validation status page </nest-style/validation-status>`.
 
 .. grid:: 1 2 2 3
 
-   .. grid-item-card:: :material-regular:`hub;2em` Base Classes
+   .. grid-item-card:: :material-regular:`foundation;2em` Shared Base Classes
+      :link: base.html
+
+      ``Dynamics``, ``Neuron``, ``Synapse``.
+
+   .. grid-item-card:: :material-regular:`hub;2em` NEST Base Classes
       :link: nest-base.html
 
       ``NESTNeuron``, ``NESTSynapse``, ``NESTPlasticity``, ``NESTDevice``.
@@ -128,8 +64,8 @@ network-builder layers. Parity with a live NEST install is documented on the
 
       Spatially-structured layers, distance kernels, masks, and visualization.
 
-   .. grid-item-card:: :material-regular:`schema;2em` Network Builder
+   .. grid-item-card:: :material-regular:`schema;2em` Simulator
       :link: nest-network.html
 
-      Declarative network construction, projections, connection rules, and the
-      simulator.
+      The NEST-style ``Simulator``, population views, connection rules, and
+      event projections.

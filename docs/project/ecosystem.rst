@@ -61,8 +61,4 @@ See :doc:`/get-started/installation` for per-backend (CPU / CUDA / TPU) options.
 See Also
 --------
 
-- :doc:`/concepts/online-learning` — how AlignPre/AlignPost enables the
-  linear-memory online learning that ``braintrace`` implements.
-- :doc:`/concepts/state-paradigm` — the ``brainstate`` State paradigm and
-  ``transform`` primitives in depth.
 - :doc:`/project/citing` — how to cite the framework.

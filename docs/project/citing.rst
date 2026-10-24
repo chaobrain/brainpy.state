@@ -1,11 +1,7 @@
 Citing brainspike
-====================
+=================
 
-If ``brainspike`` contributes to your research, please cite the two papers
-that define the framework and its differentiable design. The first describes the
-BrainPy framework as a whole; the second introduces the differentiable
-simulator and the AlignPre/AlignPost projections that ``brainspike`` is built
-around.
+If ``brainspike`` contributes to your research, please cite:
 
 BrainPy framework (eLife 2023)
 ------------------------------
@@ -55,6 +51,4 @@ Representations (ICLR). `openreview:AU2gS9ut61
 See Also
 --------
 
-- :doc:`/concepts/alignpre-alignpost` — the AlignPre/AlignPost design introduced
-  in the ICLR 2024 paper.
 - :doc:`/project/ecosystem` — the wider BrainX ecosystem of packages.

@@ -24,19 +24,17 @@ with NEST-like rules, ``simulate``:
 .. code-block:: python
 
    import brainunit as u
-   import brainspike as bp
+   import brainspike
 
-   sim = bp.Simulator(dt=0.1 * u.ms)
-   neuron = sim.create(bp.iaf_psc_alpha, 1, I_e=376. * u.pA)
-   vm = sim.create(bp.voltmeter)
+   sim = brainspike.Simulator(dt=0.1 * u.ms)
+   neuron = sim.create(brainspike.iaf_psc_alpha, 1, I_e=376. * u.pA)
+   vm = sim.create(brainspike.voltmeter)
    sim.connect(vm, neuron)                     # the voltmeter observes the neuron
    res = sim.simulate(1000. * u.ms)
    v = res.trace(vm, "V_m")                    # (T, 1) membrane-potential trace
 
 This hub is self-contained: it has its own first-steps tutorials, build-your-own-
-network guides, and the porting / fidelity material — and it links *up* into the
-shared :doc:`/concepts/index` spine (State, physical units, the ``transform``
-loops) where the deeper ideas live. We do **not** duplicate NEST's model
+network guides, and the porting / fidelity material. We do **not** duplicate NEST's model
 *physiology* here — for the biophysics of any model, follow the link out to the
 upstream `NEST documentation <https://nest-simulator.readthedocs.io/>`_; our pages
 cover the ``brainspike`` API, porting parity, semantic divergences, and the

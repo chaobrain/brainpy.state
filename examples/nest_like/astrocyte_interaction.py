@@ -27,7 +27,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,
@@ -87,16 +87,16 @@ def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,
     """
     brainstate.random.seed(seed)
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     npar = {'tau_syn_ex': tau_syn_ex * u.ms}
     pre_par = {**npar, 'I_e': I_e * u.pA} if drive == 'current' else dict(npar)
-    pre = sim.create(bp.aeif_cond_alpha_astro, 1, params=pre_par)
-    post = sim.create(bp.aeif_cond_alpha_astro, 1, params=npar)
-    astro = sim.create(bp.astrocyte_lr_1994, 1, params={'delta_IP3': delta_IP3})
+    pre = sim.create(brainspike.aeif_cond_alpha_astro, 1, params=pre_par)
+    post = sim.create(brainspike.aeif_cond_alpha_astro, 1, params=npar)
+    astro = sim.create(brainspike.astrocyte_lr_1994, 1, params={'delta_IP3': delta_IP3})
 
     if drive != 'current':
-        pg = sim.create(bp.poisson_generator, 1, rate=poisson_rate * u.Hz)
+        pg = sim.create(brainspike.poisson_generator, 1, rate=poisson_rate * u.Hz)
         # Excitatory spike drive into the presynaptic neuron's conductance: a positive
         # nS weight on receptor 1 (-> g_ex), the Simulator's expression of NEST's
         # weight-sign routing for aeif_cond_alpha_astro.
@@ -109,14 +109,14 @@ def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,
     sim.connect(pre, astro, weight=w_pre2astro, delay=conn_delay * u.ms)
     if w_astro2post > 0:
         sim.connect(astro, post,
-                    synapse=bp.sic_connection(weight=w_astro2post, delay_steps=sic_delay_steps))
+                    synapse=brainspike.sic_connection(weight=w_astro2post, delay_steps=sic_delay_steps))
 
-    mm_pre = sim.create(bp.multimeter, record_from=['V_m'])
+    mm_pre = sim.create(brainspike.multimeter, record_from=['V_m'])
     sim.connect(mm_pre, pre)
-    mm_a = sim.create(bp.multimeter, record_from=['IP3', 'Ca'])
+    mm_a = sim.create(brainspike.multimeter, record_from=['IP3', 'Ca'])
     sim.connect(mm_a, astro)
     post_records = ['I_SIC'] + (['V_m'] if record_v_post else [])
-    mm_p = sim.create(bp.multimeter, record_from=post_records)
+    mm_p = sim.create(brainspike.multimeter, record_from=post_records)
     sim.connect(mm_p, post)
 
     res = sim.simulate(sim_time * u.ms)
