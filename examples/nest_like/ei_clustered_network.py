@@ -52,7 +52,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_psc_exp, spike_recorder, all_to_all
+from brainspike import Simulator, iaf_psc_exp, spike_recorder, all_to_all
 
 #: Excitatory / inhibitory population sizes (NEST canonical 4000/1000 scaled 10x).
 N_E = 400
@@ -433,7 +433,7 @@ DEMO_SEED = 2
 
 
 def main():
-    print("ei_clustered_network (brainpy.state, iaf_psc_exp RBN)")
+    print("ei_clustered_network (brainspike, iaf_psc_exp RBN)")
     print(f"  N_E={N_E}, N_I={N_I}, Q={Q}, rep={REP}, rj={RJ}, "
           f"warmup={WARMUP} ms, simtime={SIMTIME} ms")
     for rep in (REP, 1.0):

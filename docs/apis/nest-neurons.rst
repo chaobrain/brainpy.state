@@ -3,7 +3,7 @@ NEST-Compatible Neuron Models
 
 Neuron models compatible with the `NEST simulator <https://nest-simulator.readthedocs.io/>`_.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 
 IAF Neurons — Current-Based (psc)

@@ -4,7 +4,7 @@
 Connectivity
 ============
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Wiring NEST-compatible networks with the :class:`Simulator` API. The vocabulary
 mirrors NEST: you ``connect`` a source to a target with a **connection rule** and
@@ -14,7 +14,7 @@ parameters).
 .. code-block:: python
 
    import brainunit as u
-   from brainpy import state as bp
+   import brainspike as bp
 
    sim = bp.Simulator(dt=0.1 * u.ms)
    ne = sim.create(bp.iaf_psc_alpha, 800, params=npar)

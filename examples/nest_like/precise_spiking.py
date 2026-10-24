@@ -36,7 +36,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_psc_exp, iaf_psc_exp_ps,
+from brainspike import (Simulator, iaf_psc_exp, iaf_psc_exp_ps,
                            dc_generator, voltmeter, spike_recorder)
 
 #: Injected DC amplitude (pA) — the upstream's suprathreshold drive.
@@ -124,7 +124,7 @@ def run_precise(dt, simtime=SIMTIME, stim_current=STIM_CURRENT):
 
 
 def main():
-    print("precise_spiking (brainpy.state, iaf_psc_exp grid vs iaf_psc_exp_ps precise)")
+    print("precise_spiking (brainspike, iaf_psc_exp grid vs iaf_psc_exp_ps precise)")
     print(f"  DC drive {STIM_CURRENT:.0f} pA, T={SIMTIME:.0f} ms")
     for dt in RESOLUTIONS:
         grid = run_grid(dt)

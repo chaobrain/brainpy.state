@@ -30,7 +30,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(order=2500, simtime=50.0, dt=0.1):
@@ -38,7 +38,7 @@ def run(order=2500, simtime=50.0, dt=0.1):
 
     Builds three ``siegert_neuron`` nodes (excitatory, inhibitory, constant
     drive) wired by ``diffusion_connection`` and relaxes them through the
-    :class:`~brainpy.state.Simulator` for ``simtime`` ms.
+    :class:`~brainspike.Simulator` for ``simtime`` ms.
 
     Returns ``(erate, irate, times, ex_hist, in_hist)`` where ``erate``/``irate``
     are the final (asymptotic) excitatory/inhibitory rates in spks/s and the
@@ -103,7 +103,7 @@ def main():
     print(f"Brunel mean-field (Siegert): order={order} -> "
           f"{4 * order} exc + {order} inh neurons (one rate node each).")
     erate, irate, times, ex_hist, in_hist = run(order=order)
-    print("Brunel network (brainpy.state, Siegert mean-field)")
+    print("Brunel network (brainspike, Siegert mean-field)")
     print(f"  Excitatory rate : {erate:.2f} spks/s")
     print(f"  Inhibitory rate : {irate:.2f} spks/s")
 

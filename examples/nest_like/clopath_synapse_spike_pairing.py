@@ -27,7 +27,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy.state import (Simulator, spike_generator, clopath_synapse,
+from brainspike import (Simulator, spike_generator, clopath_synapse,
                            static_synapse, aeif_psc_delta_clopath)
 
 # -- canonical cluster-07 spike-pairing protocol (NEST pynest example) ------------
@@ -149,7 +149,7 @@ def run():
 
 def main():
     rho, post_pre, pre_post, weights = run()
-    print("Clopath spike-pairing (brainpy.state, aeif_psc_delta_clopath, w in mV)")
+    print("Clopath spike-pairing (brainspike, aeif_psc_delta_clopath, w in mV)")
     for r, a, b in zip(rho, post_pre, pre_post):
         print(f"  {r:4.0f} Hz: post-pre {a:7.2f} %   pre-post {b:7.2f} %")
 

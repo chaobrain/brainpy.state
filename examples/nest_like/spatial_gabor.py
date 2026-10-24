@@ -1,7 +1,7 @@
 # examples/nest_like/spatial_gabor.py
 r"""Spatial networks: an anisotropic Gabor kernel inside a tilted elliptical mask.
 
-Demonstrates the cluster-27 additions to ``brainpy.state.spatial``: the per-axis distance
+Demonstrates the cluster-27 additions to ``brainspike.spatial``: the per-axis distance
 expressions :data:`distance.x` / :data:`distance.y`, the anisotropic :func:`gabor` distance
 distribution, and the rotated :func:`elliptical` mask. Two ``iaf_psc_alpha`` populations share a
 grid and are connected with a distance-dependent pairwise-Bernoulli rule whose probability is a
@@ -16,12 +16,12 @@ with :math:`(x', y')` the displacement rotated by ``theta`` and :math:`x = |dx|`
 (NEST's per-axis ``distance.x`` / ``distance.y`` are absolute). The candidate set is clipped to an
 ellipse tilted by the same angle, so the realized footprint is an oriented, striped blob. This is
 just ``spatial.spatial_pairwise_bernoulli(p=spatial.gabor(...), mask=spatial.elliptical(...))``
-riding the ordinary :meth:`~brainpy.state.Simulator.connect`. The central source neuron's realized
-targets are read back with :func:`~brainpy.state.spatial.target_positions` (NEST
+riding the ordinary :meth:`~brainspike.Simulator.connect`. The central source neuron's realized
+targets are read back with :func:`~brainspike.spatial.target_positions` (NEST
 ``GetTargetPositions``).
 
 The per-displacement probability is a fixed law, so the validation
-(``brainpy_state/_nest_validation/spatial_gabor_test.py``) asserts the kernel matches live NEST's
+(``brainspike/_nest_validation/spatial_gabor_test.py``) asserts the kernel matches live NEST's
 ``spatial_distributions.gabor`` element-by-element and that the realized footprint stays inside the
 ellipse.
 
@@ -36,7 +36,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(shape=(30, 30), extent=(4.0, 4.0), theta=45.0, gamma=1.0, std=0.6,
@@ -103,7 +103,7 @@ def main():
     coords, ctr, target_pos = run()
     xy = np.asarray(u.get_magnitude(coords.to(u.um)))
     tgt = np.asarray(u.get_magnitude(target_pos.to(u.um)))
-    print('spatial_gabor (brainpy.state)')
+    print('spatial_gabor (brainspike)')
     print(f'  {xy.shape[0]} nodes; centre node {ctr} has {tgt.shape[0]} realized targets')
     try:
         import matplotlib.pyplot as plt
@@ -118,7 +118,7 @@ def main():
     plt.axis([-2.5, 2.5, -2.5, 2.5])
     plt.grid(True)
     plt.legend(loc='upper right')
-    plt.title('Gabor kernel in a tilted ellipse (brainpy.state)')
+    plt.title('Gabor kernel in a tilted ellipse (brainspike)')
     plt.tight_layout()
     plt.savefig('examples/nest_like/spatial_gabor.png', dpi=100)
     print('  wrote examples/nest_like/spatial_gabor.png')

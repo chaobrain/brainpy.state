@@ -6,7 +6,7 @@ Activity-dependent plasticity synapse models compatible with the
 All classes inherit from :class:`NESTPlasticity`.
 For static and structural synapse models see :doc:`nest-synapses`.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 
 Short-Term Plasticity (STP)

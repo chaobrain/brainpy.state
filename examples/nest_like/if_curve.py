@@ -20,7 +20,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import (Simulator, aeif_cond_exp, noise_generator,
+from brainspike import (Simulator, aeif_cond_exp, noise_generator,
                            spike_recorder)
 
 # NEST if_curve neuron parameters (aeif_cond_exp).
@@ -85,7 +85,7 @@ def compute_transfer(i_mean=(400.0, 900.0, 100.0), i_std=(0.0, 600.0, 150.0),
 
 
 def main():
-    print("I-F curve (brainpy.state, aeif_cond_exp + noise_generator)")
+    print("I-F curve (brainspike, aeif_cond_exp + noise_generator)")
     i_range, std_range, rate = compute_transfer()
     for n, i in enumerate(i_range):
         row = "  ".join(f"{rate[n, m]:6.1f}" for m in range(std_range.size))

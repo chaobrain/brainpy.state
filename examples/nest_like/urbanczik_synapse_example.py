@@ -16,7 +16,7 @@ This is the user-facing presentation of cluster-21's rebuilt rule: a frozen
 ``urbanczik_synapse`` spec + pure ``update`` kernel on the
 ``VoltageCoupledPlasticProj`` substrate (primitive #2, the dendritic post-state
 reader), validated sample-for-sample against live NEST in
-``brainpy_state/_nest_validation/urbanczik_synapse_parity_test.py``.
+``brainspike/_nest_validation/urbanczik_synapse_parity_test.py``.
 
 Implementation notes (vs the upstream NEST script)
 
@@ -46,7 +46,7 @@ import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, SpikeTime, multimeter, pp_cond_exp_mc_urbanczik,
+from brainspike import (Simulator, SpikeTime, multimeter, pp_cond_exp_mc_urbanczik,
                            spike_generator, spike_recorder, urbanczik_synapse)
 
 #: Resolution (ms) and one pattern's duration (ms).
@@ -221,7 +221,7 @@ def run(n_pg=200, n_pattern_rep=100, seed=1, somatic_seed=0):
 
 def main():
     res = run()
-    print("Urbanczik-Senn dendritic plasticity (brainpy.state, pp_cond_exp_mc_urbanczik)")
+    print("Urbanczik-Senn dendritic plasticity (brainspike, pp_cond_exp_mc_urbanczik)")
     print(f"  soma spikes (teacher target): {res['soma_spikes']}")
     print(f"  dendritic weights: init {INIT_W:.1f} pA -> "
           f"final mean {res['weights'][-1].mean():.1f} "

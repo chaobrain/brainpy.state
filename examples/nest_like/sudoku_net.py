@@ -11,7 +11,7 @@ the clues. Driven by the noise the network settles on states that read out as va
 Sudoku grids.
 
 The port differs from NEST only in *construction*, not dynamics: the 510 300 inhibitory
-edges are realized as **one** sparse :func:`brainpy.state.explicit_edges` projection
+edges are realized as **one** sparse :func:`brainspike.explicit_edges` projection
 (not 729 separate ``Connect`` calls), so ``Simulator.cont()`` compiles the relaxation
 chunk once and reuses it across the host-side relaxation loop instead of retracing.
 
@@ -39,7 +39,7 @@ import brainunit as u
 brainstate.environ.set(precision=64)
 
 import braintools
-from brainpy import state as bps
+import brainspike as bps
 
 from examples.nest_like.sudoku_puzzles import validate_solution
 
@@ -112,9 +112,9 @@ class SudokuNet:
 
     Attributes
     ----------
-    sim : brainpy.state.Simulator
+    sim : brainspike.Simulator
         The compiled simulator (build once; never rebuilt per chunk/puzzle).
-    cells : brainpy.state.NodeView
+    cells : brainspike.NodeView
         The single ``iaf_psc_exp`` population of ``N_POPULATIONS * pop_size`` neurons,
         indexed ``((row*9 + col)*9 + digit)*pop_size + k``.
 
@@ -172,8 +172,8 @@ class SudokuNet:
 
         Parameters
         ----------
-        res : brainpy.state.SimulationResult
-            The result of the most recent :meth:`~brainpy.state.Simulator.cont` chunk.
+        res : brainspike.SimulationResult
+            The result of the most recent :meth:`~brainspike.Simulator.cont` chunk.
 
         Returns
         -------
@@ -194,8 +194,8 @@ class SudokuNet:
 
         Parameters
         ----------
-        res : brainpy.state.SimulationResult
-            The result of the most recent :meth:`~brainpy.state.Simulator.cont` chunk.
+        res : brainspike.SimulationResult
+            The result of the most recent :meth:`~brainspike.Simulator.cont` chunk.
 
         Returns
         -------
@@ -263,7 +263,7 @@ class SudokuNet:
         """Return the realized inhibitory edge set as ``{(pre_neuron, post_neuron), ...}``.
 
         Reads the live connectivity via
-        :meth:`~brainpy.state.Simulator.get_connections`, filtered to ``cells -> cells``.
+        :meth:`~brainspike.Simulator.get_connections`, filtered to ``cells -> cells``.
 
         Returns
         -------

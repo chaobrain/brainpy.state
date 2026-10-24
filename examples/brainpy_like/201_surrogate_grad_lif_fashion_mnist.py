@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datasets import load_dataset
 
-import brainpy
+import brainspike
 import brainstate
 import braintools
 
@@ -66,14 +66,14 @@ class SNN(brainstate.nn.DynamicsGroup):
         # synapse: i->r
         self.i2r = brainstate.nn.Sequential(
             brainstate.nn.Linear(num_in, num_rec, w_init=braintools.init.KaimingNormal(scale=40.)),
-            brainpy.state.Expon(num_rec, tau=10. * u.ms, g_initializer=braintools.init.ZeroInit())
+            brainspike.Expon(num_rec, tau=10. * u.ms, g_initializer=braintools.init.ZeroInit())
         )
         # recurrent: r
-        self.r = brainpy.state.LIF(num_rec, tau=10 * u.ms, V_reset=0 * u.mV, V_rest=0 * u.mV, V_th=1. * u.mV)
+        self.r = brainspike.LIF(num_rec, tau=10 * u.ms, V_reset=0 * u.mV, V_rest=0 * u.mV, V_th=1. * u.mV)
         # synapse: r->o
         self.r2o = brainstate.nn.Sequential(
             brainstate.nn.Linear(num_rec, num_out, w_init=braintools.init.KaimingNormal(scale=2.)),
-            brainpy.state.Expon(num_out, tau=10. * u.ms, g_initializer=braintools.init.ZeroInit())
+            brainspike.Expon(num_out, tau=10. * u.ms, g_initializer=braintools.init.ZeroInit())
         )
 
     def update(self, spikes):

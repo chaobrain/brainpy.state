@@ -1,7 +1,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """K1a-G4: Potjans--Diesmann microcircuit at full scale, kernel vs NEST 3.10.
 
-Network: :mod:`brainpy_state._kernel.validation.microcircuit` (77 169 ``iaf_psc_exp``
+Network: :mod:`brainspike._kernel.validation.microcircuit` (77 169 ``iaf_psc_exp``
 neurons, ~3e8 synapses, Poisson background). Protocol (lead decision 2026-10-22):
 5 seeds each side, rates over 1000 ms after a discarded 100 ms transient; kernel in
 float32 on the CPU and on GPU 1. Every run is a fresh process (one RESULT_JSON line).
@@ -40,10 +40,10 @@ def _emit(rec: dict) -> None:
 
 
 def run_kernel(a) -> None:
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     sys.path.insert(0, REPO_ROOT)
     import jax
-    from brainpy_state._kernel.validation.microcircuit import kernel_microcircuit
+    from brainspike._kernel.validation.microcircuit import kernel_microcircuit
 
     dev = jax.devices()[0]
     is_gpu = dev.platform in ('gpu', 'cuda')
@@ -64,9 +64,9 @@ def run_kernel(a) -> None:
 
 
 def run_nest(a) -> None:
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     sys.path.insert(0, REPO_ROOT)
-    from brainpy_state._kernel.validation.microcircuit import nest_microcircuit
+    from brainspike._kernel.validation.microcircuit import nest_microcircuit
     t0 = time.perf_counter()
     r = nest_microcircuit(a.seed, T_WARM, T_STAT, scale=a.scale, threads=a.threads,
                           bg_input=a.bg_input)
@@ -89,9 +89,9 @@ def _records(paths) -> list:
 def compare(a) -> None:
     import numpy as np
     sys.path.insert(0, REPO_ROOT)
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
-    from brainpy_state._kernel.validation.microcircuit import POPULATIONS
-    from brainpy_state._kernel.validation.stats import g2_rule
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
+    from brainspike._kernel.validation.microcircuit import POPULATIONS
+    from brainspike._kernel.validation.stats import g2_rule
 
     recs = _records(a.logs)
     nest = [r for r in recs if r['sim'] == 'nest']

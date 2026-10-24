@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Brette et al. 2007 (Vogels-Abbott) COBA + CUBA benchmarks — NEST-style port.
 
-Port of NEST's ``brette_et_al_2007/{coba,cuba}.py`` onto brainpy.state's explicit
+Port of NEST's ``brette_et_al_2007/{coba,cuba}.py`` onto brainspike's explicit
 ``Simulator`` API. Both are the Vogels & Abbott (2005) [1]_ sparse self-sustained
 excitatory/inhibitory network — the FACETS simulator-review benchmarks [2]_:
 
@@ -44,7 +44,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy.state import (
+from brainspike import (
     Simulator, fixed_indegree, one_to_one,
     iaf_cond_exp, iaf_psc_exp, poisson_generator, spike_recorder,
 )

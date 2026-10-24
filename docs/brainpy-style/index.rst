@@ -1,7 +1,7 @@
 BrainPy-style Modeling
 ======================
 
-The BrainPy-style layer is the native modeling surface of ``brainpy.state``: a
+The BrainPy-style layer is the native modeling surface of ``brainspike``: a
 library of composable spiking neurons, synapses, synaptic outputs, projections,
 short-term plasticity, and readouts that you assemble into networks and drive
 with the ``brainstate`` transform primitives. The same building blocks serve

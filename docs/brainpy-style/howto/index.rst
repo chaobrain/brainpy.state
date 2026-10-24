@@ -4,7 +4,7 @@ How-to guides
 Task-oriented recipes for the BrainPy-style layer. Each guide is self-contained
 and solves one concrete problem — pick the one that matches what you need right
 now. The guides are organized into two tracks that mirror the dual audience of
-``brainpy.state``.
+``brainspike``.
 
 .. grid:: 1 1 2 2
    :gutter: 3

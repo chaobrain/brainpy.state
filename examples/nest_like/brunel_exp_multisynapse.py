@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Brunel (2000) network with exponential multi-receptor synapses — NEST-style port.
 
-Port of NEST's ``brunel_exp_multisynapse_nest.py`` onto brainpy.state's explicit
+Port of NEST's ``brunel_exp_multisynapse_nest.py`` onto brainspike's explicit
 Simulator API, driving the real ``iaf_psc_exp_multisynapse`` neuron. Each neuron
 exposes ``nr_ports`` receptor ports whose synaptic time constants span 0.1–1.09 ms;
 every connection (noise and recurrent) is routed to a uniformly-drawn port via
@@ -19,7 +19,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy.state import (
+from brainspike import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_exp_multisynapse, poisson_generator, spike_recorder,
 )
@@ -78,7 +78,7 @@ def main():
     res = sim.simulate(simtime * u.ms)
     erate = res.rate(esr.segments[0].population)
     irate = res.rate(isr.segments[0].population)
-    print("Brunel network (brainpy.state, exp multi-receptor synapses)")
+    print("Brunel network (brainspike, exp multi-receptor synapses)")
     print(f"  Excitatory rate : {erate:.2f} spks/s")
     print(f"  Inhibitory rate : {irate:.2f} spks/s")
 

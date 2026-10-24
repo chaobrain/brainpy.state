@@ -1,10 +1,10 @@
 The BrainX Ecosystem
 ====================
 
-``brainpy.state`` is the point-neuron modeling layer of the `BrainX ecosystem
+``brainspike`` is the point-neuron modeling layer of the `BrainX ecosystem
 <https://brainx.chaobrain.com/>`_ — a family of composable, JAX-based packages
 for brain modeling and brain-inspired computing. Each package owns one concern,
-and ``brainpy.state`` builds on them: state management, physical units,
+and ``brainspike`` builds on them: state management, physical units,
 event-driven operators, training/analysis tooling, and online learning.
 
 .. grid:: 2
@@ -17,12 +17,12 @@ event-driven operators, training/analysis tooling, and online learning.
       abstraction, ``init_all_states``, ``environ.context`` (``dt``/``t``), the
       ``brainstate.nn`` modules and connectivity, and the ``brainstate.transform``
       primitives (``jit`` / ``for_loop`` / ``scan`` / ``checkpointed_*``) that
-      drive every ``brainpy.state`` model.
+      drive every ``brainspike`` model.
 
    .. grid-item-card:: brainunit
       :link: https://github.com/chaobrain/brainunit
 
-      Physical units for neuroscience. Every ``brainpy.state`` parameter carries a
+      Physical units for neuroscience. Every ``brainspike`` parameter carries a
       unit (``mV``, ``ms``, ``nS``, …) so dimensional errors are caught at
       construction time rather than producing silently wrong results.
 

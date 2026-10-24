@@ -1,10 +1,10 @@
-Citing brainpy.state
+Citing brainspike
 ====================
 
-If ``brainpy.state`` contributes to your research, please cite the two papers
+If ``brainspike`` contributes to your research, please cite the two papers
 that define the framework and its differentiable design. The first describes the
 BrainPy framework as a whole; the second introduces the differentiable
-simulator and the AlignPre/AlignPost projections that ``brainpy.state`` is built
+simulator and the AlignPre/AlignPost projections that ``brainspike`` is built
 around.
 
 BrainPy framework (eLife 2023)

@@ -39,7 +39,7 @@
 import brainunit as u
 import matplotlib.pyplot as plt
 
-import brainpy
+import brainspike
 import brainstate
 import braintools
 
@@ -52,23 +52,23 @@ class EINet(brainstate.nn.Module):
         self.num = n_exc + n_inh
 
         # neurons
-        self.N = brainpy.state.LIF(
+        self.N = brainspike.LIF(
             n_exc + n_inh,
             V_rest=-52. * u.mV, V_th=-50. * u.mV, V_reset=-60. * u.mV, tau=10. * u.ms,
             V_initializer=braintools.init.Normal(-60., 10., unit=u.mV), spk_reset='soft'
         )
 
         # synapses
-        self.E = brainpy.state.AlignPostProj(
+        self.E = brainspike.AlignPostProj(
             comm=brainstate.nn.EventFixedProb(n_exc, self.num, prob, JE),
-            syn=brainpy.state.Expon.desc(self.num, tau=2. * u.ms),
-            out=brainpy.state.CUBA.desc(),
+            syn=brainspike.Expon.desc(self.num, tau=2. * u.ms),
+            out=brainspike.CUBA.desc(),
             post=self.N,
         )
-        self.I = brainpy.state.AlignPostProj(
+        self.I = brainspike.AlignPostProj(
             comm=brainstate.nn.EventFixedProb(n_inh, self.num, prob, JI),
-            syn=brainpy.state.Expon.desc(self.num, tau=2. * u.ms),
-            out=brainpy.state.CUBA.desc(),
+            syn=brainspike.Expon.desc(self.num, tau=2. * u.ms),
+            out=brainspike.CUBA.desc(),
             post=self.N,
         )
 

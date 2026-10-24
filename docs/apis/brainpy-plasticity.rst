@@ -3,7 +3,7 @@ BrainPy-style Plasticity
 
 Short-term synaptic plasticity models.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 .. autosummary::
     :toctree: generated/

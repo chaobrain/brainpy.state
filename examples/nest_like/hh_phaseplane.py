@@ -44,7 +44,7 @@ import jax.numpy as jnp
 import brainunit as u
 from brainstate.util import DotDict
 
-from brainpy.state import hh_psc_alpha
+from brainspike import hh_psc_alpha
 
 brainstate.environ.set(dt=0.1 * u.ms)
 
@@ -216,7 +216,7 @@ def ap_trajectory(amplitude=AMPLITUDE, dt=0.1, n_steps=1000, V0=-34.0, n0=0.2):
 
 
 def main():
-    print("hh_phaseplane (brainpy.state) — V–n phase-plane analysis")
+    print("hh_phaseplane (brainspike) — V–n phase-plane analysis")
     V_vec, n_vec, dVdt, dndt = vector_field()
     nc_V, nc_n = nullclines(V_vec, n_vec, dVdt, dndt)
     ap = ap_trajectory()

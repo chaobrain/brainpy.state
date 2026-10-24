@@ -7,7 +7,7 @@ Two networks:
   ``iaf_psc_alpha`` neurons driven one-to-one by 2000 Poisson units (20 kHz,
   0.5 pA, delay 0.1 ms), recurrent ``fixed_indegree(100)``, 1 pA, delay 1.5 ms
   (scalar) or ``Uniform(0.1 ms, D ms)`` per edge;
-* ``brunel`` -- Brunel model A (:func:`~brainpy_state._kernel.validation.brunel.build_brunel`)
+* ``brunel`` -- Brunel model A (:func:`~brainspike._kernel.validation.brunel.build_brunel`)
   at ``--order``, recurrent delays 1.5 ms (scalar) or ``Uniform(0.1 ms, D ms)``.
 
 ``run`` measures one configuration in this process and prints one ``RESULT_JSON``
@@ -45,10 +45,10 @@ PREFIX = 'RESULT_JSON '
 
 def _build(args):
     import brainunit as u
-    from brainpy_state._kernel.connectivity import fixed_indegree, one_to_one
-    from brainpy_state._kernel.models import iaf_psc_alpha, poisson_generator
-    from brainpy_state._kernel.network import Network
-    from brainpy_state._kernel.params import Uniform
+    from brainspike._kernel.connectivity import fixed_indegree, one_to_one
+    from brainspike._kernel.models import iaf_psc_alpha, poisson_generator
+    from brainspike._kernel.network import Network
+    from brainspike._kernel.params import Uniform
 
     d = 1.5 * u.ms if args.delay == 'scalar' else Uniform(0.1 * u.ms, float(args.delay) * u.ms)
     if args.net == 'review':
@@ -61,19 +61,19 @@ def _build(args):
                     name='EE')
         rec = net.observe(E[:50], 'spike', name='rec')
         return net, rec
-    from brainpy_state._kernel.validation.brunel import build_brunel
+    from brainspike._kernel.validation.brunel import build_brunel
     net, info = build_brunel(args.order, delay=d)
     return net, info['rec_E']
 
 
 def run_one(args):
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     sys.path.insert(0, REPO_ROOT)
     import jax
     jax.config.update('jax_enable_x64', args.precision == 64)
     import brainunit as u
     import numpy as np
-    from brainpy_state._kernel import compiler
+    from brainspike._kernel import compiler
 
     backend = jax.default_backend()
     if args.brainevent_backend:  # upstream: brainevent#199 (float64 GPU needs 'cusparse')

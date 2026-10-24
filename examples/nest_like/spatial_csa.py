@@ -5,7 +5,7 @@ NEST's ``csa_spatial_example`` wires two 20x20 grids through the **Connection Se
 (``csa.random * (csa.gaussian(0.2, 0.5) * d)``), which requires NEST to be compiled against
 ``libneurosim``. The connectivity that expression *describes* is an ordinary
 distance-dependent pairwise-Bernoulli draw: a Gaussian of the source->target distance with
-``sigma = 0.2`` cut off at ``0.5``. brainpy.state expresses exactly that with the built-in
+``sigma = 0.2`` cut off at ``0.5``. brainspike expresses exactly that with the built-in
 spatial rule -- no CSA, no external dependency::
 
     spatial.spatial_pairwise_bernoulli(
@@ -16,7 +16,7 @@ The CSA ``gaussian(sigma, cutoff)`` profile maps to ``gaussian(distance, std=sig
 :math:`\\exp(-d^2/2\\sigma^2)` shape) with the hard ``cutoff`` realised by a
 ``circular(cutoff)`` mask, and the leading ``csa.random *`` is the Bernoulli draw itself.
 The realized footprint of the central source neuron is read back with
-:func:`~brainpy.state.spatial.target_positions` (NEST's ``PlotTargets``).
+:func:`~brainspike.spatial.target_positions` (NEST's ``PlotTargets``).
 
 Run:  PYTHONPATH=. python examples/nest_like/spatial_csa.py
 """
@@ -29,7 +29,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(shape=(20, 20), std=0.2, cutoff=0.5, seed=0):
@@ -84,7 +84,7 @@ def main():
     coords, ctr, target_pos = run()
     xy = np.asarray(u.get_magnitude(coords.to(u.um)))
     tgt = np.asarray(u.get_magnitude(target_pos.to(u.um)))
-    print('spatial_csa (brainpy.state, CSA-free)')
+    print('spatial_csa (brainspike, CSA-free)')
     print(f'  two 20x20 grids; centre node {ctr} has {tgt.shape[0]} realized targets')
     try:
         import matplotlib.pyplot as plt
@@ -98,7 +98,7 @@ def main():
     plt.gca().set_aspect('equal', 'box')
     plt.grid(True)
     plt.legend(loc='upper right')
-    plt.title('Targets of centre neuron, Gaussian profile (brainpy.state)')
+    plt.title('Targets of centre neuron, Gaussian profile (brainspike)')
     plt.tight_layout()
     plt.savefig('examples/nest_like/spatial_csa.png', dpi=100)
     print('  wrote examples/nest_like/spatial_csa.png')

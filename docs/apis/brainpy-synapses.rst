@@ -3,7 +3,7 @@ BrainPy-style Synapses
 
 BrainPy-style synaptic dynamics models.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Simple Synapse Models
 ---------------------

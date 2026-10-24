@@ -3,7 +3,7 @@ BrainPy-style Neurons
 
 BrainPy-style spiking neuron models.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Leaky Integrate-and-Fire Models
 -------------------------------

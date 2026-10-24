@@ -3,18 +3,18 @@
 """A tripartite interaction: two neurons and one astrocyte (NEST port).
 
 Port of NEST's ``astrocyte_interaction.py``. A presynaptic
-:class:`~brainpy.state.aeif_cond_alpha_astro` projects both to a postsynaptic
-neuron (a direct EPSP) and to an :class:`~brainpy.state.astrocyte_lr_1994` (raising
+:class:`~brainspike.aeif_cond_alpha_astro` projects both to a postsynaptic
+neuron (a direct EPSP) and to an :class:`~brainspike.astrocyte_lr_1994` (raising
 astrocytic IP3). The astrocyte's cytosolic calcium crosses the SIC threshold and
 feeds a slow inward current back into the postsynaptic neuron through a
-:class:`~brainpy.state.sic_connection` -- the tripartite loop (Bazargani & Attwell
+:class:`~brainspike.sic_connection` -- the tripartite loop (Bazargani & Attwell
 2016; Li & Rinzel 1994).
 
 The presynaptic neuron is Poisson-driven in the demo (``drive='poisson'``); the
 parity test drives it deterministically with a constant current
 (``drive='current'``) so the loop matches live NEST sample-for-sample. Records:
 presynaptic ``V_m``, astrocytic IP3/Ca, postsynaptic ``I_SIC``. Runs end-to-end
-through the :class:`~brainpy.state.Simulator` (one compiled ``for_loop``).
+through the :class:`~brainspike.Simulator` (one compiled ``for_loop``).
 
 Run:  python examples/nest_like/astrocyte_interaction.py
 """
@@ -27,7 +27,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(sim_time=60000.0, *, dt=0.1, drive='poisson', poisson_rate=1500.0,

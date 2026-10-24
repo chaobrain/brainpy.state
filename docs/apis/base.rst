@@ -3,7 +3,7 @@ Base Classes
 
 Abstract base classes that all neuron and synapse models inherit from.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 .. autosummary::
    :toctree: generated/

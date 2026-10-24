@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new idea or improvement for brainpy.state
+about: Suggest a new idea or improvement for brainspike
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

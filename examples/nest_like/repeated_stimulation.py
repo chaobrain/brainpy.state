@@ -26,7 +26,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (
+from brainspike import (
     Simulator, poisson_generator, parrot_neuron, spike_recorder,
 )
 
@@ -139,7 +139,7 @@ def window_count(counts, lo_ms, hi_ms, dt=DT):
 
 def main():
     trains = run_trials()
-    print("repeated_stimulation (brainpy.state, poisson -> parrot -> recorder)")
+    print("repeated_stimulation (brainspike, poisson -> parrot -> recorder)")
     print(f"  rate {RATE:.0f} Hz, window ({T_START:.0f}, {T_STOP:.0f}] ms, "
           f"{NUM_TRIALS} trials")
     expected = RATE * (T_STOP - T_START) / 1000.0

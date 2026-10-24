@@ -4,7 +4,7 @@
 Model directory
 ===============
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 The NEST-compatible neuron models grouped by family. Each family links to the
 :doc:`API reference </apis/nest-neurons>` for the exact signature and to the
@@ -17,7 +17,7 @@ biophysics.
    This page is a *directory*, not a model textbook. We deliberately do **not**
    duplicate NEST's model semantics — for the equations, parameter meanings, and
    references of any model, follow the link to the upstream NEST documentation.
-   What lives here is the ``brainpy.state`` surface: which models exist, how they
+   What lives here is the ``brainspike`` surface: which models exist, how they
    are grouped, and how each is integrated (see
    :doc:`integration-categories`).
 
@@ -26,7 +26,7 @@ All models are constructed through the :class:`Simulator`:
 .. code-block:: python
 
    import brainunit as u
-   from brainpy import state as bp
+   import brainspike as bp
 
    sim = bp.Simulator(dt=0.1 * u.ms)
    pop = sim.create(bp.iaf_psc_alpha, 100, I_e=0. * u.pA)   # a population of 100

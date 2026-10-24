@@ -1,4 +1,4 @@
-# Continuous Integration for brainpy.state
+# Continuous Integration for brainspike
 #
 # Fast PR/push gate: runs the test suite on Linux, macOS, and Windows EXCLUDING the
 # live-NEST comparison tests (`-m "not requires_nest"`). The NEST comparison suite is
@@ -75,4 +75,4 @@ jobs:
         # wall-time (hence the 90-min job cap above); macOS/Windows keep -n auto.
         env:
           OMP_NUM_THREADS: "1"
-        run: pytest brainpy_state/ -m "not requires_nest" -n ${{ matrix.os == 'ubuntu-latest' && '2' || 'auto' }} --timeout=600 --timeout-method=thread
+        run: pytest brainspike/ -m "not requires_nest" -n ${{ matrix.os == 'ubuntu-latest' && '2' || 'auto' }} --timeout=600 --timeout-method=thread

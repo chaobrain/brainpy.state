@@ -3,7 +3,7 @@ BrainPy-style Projections
 
 Connect neural populations with the Comm-Syn-Out architecture.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Projection Classes
 ------------------

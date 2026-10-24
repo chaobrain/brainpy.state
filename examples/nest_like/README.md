@@ -1,7 +1,7 @@
 # NEST-style ports
 
 Reference networks from the [NEST simulator](https://www.nest-simulator.org/)
-ported onto **brainpy.state**'s explicit `Simulator` API. The goal is twofold:
+ported onto **brainspike**'s explicit `Simulator` API. The goal is twofold:
 demonstrate a NEST-flavored network-construction syntax that drives the real
 NEST-compatible models (`iaf_psc_alpha`, `poisson_generator`, `spike_recorder`,
 …), and validate those models by reproducing published benchmarks against a live
@@ -14,7 +14,7 @@ owns the populations, devices, and connections:
 
 ```python
 import brainunit as u
-from brainpy.state import (
+from brainspike import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_alpha, poisson_generator, spike_recorder,
 )
@@ -91,7 +91,7 @@ python examples/nest_like/brunel_alpha.py
 ## Single- and few-neuron demos (§3.2)
 
 Seven of NEST's single-/few-neuron tutorials, each a faithful port driven by a
-live-NEST parity test (`brainpy_state/_nest_validation/<name>_test.py`). Run any
+live-NEST parity test (`brainspike/_nest_validation/<name>_test.py`). Run any
 directly, e.g. `python examples/nest_like/one_neuron.py`.
 
 - **`one_neuron.py`** — an `iaf_psc_alpha` driven by a constant `I_e = 376 pA`,
@@ -127,7 +127,7 @@ These ports drive four `Simulator` extensions reused by later clusters:
 ## Plasticity demos (§3.3)
 
 All five of NEST's plasticity tutorials, each a faithful port driven by a
-live-NEST parity test (`brainpy_state/_nest_validation/<name>_test.py`). Run any
+live-NEST parity test (`brainspike/_nest_validation/<name>_test.py`). Run any
 directly, e.g. `python examples/nest_like/evaluate_tsodyks2_synapse.py`.
 
 - **`clopath_synapse_spike_pairing.py`** — the canonical voltage-based STDP
@@ -195,7 +195,7 @@ before comparison.
 ## Recording & device demos (§3.4)
 
 Five of NEST's recording/device tutorials, each paired with a live-NEST parity
-test (`brainpy_state/_nest_validation/<name>_test.py`). Run any directly, e.g.
+test (`brainspike/_nest_validation/<name>_test.py`). Run any directly, e.g.
 `python examples/nest_like/recording_demo.py`.
 
 - **`multimeter_file.py`** — a `multimeter` records three analog recordables
@@ -274,7 +274,7 @@ These ports add two reusable seams on top of the §3.2 vocabulary:
 
 Sixteen of NEST's single-neuron model tutorials (NEST §3.5): most are faithful
 ports driven by a live-NEST trace-parity test
-(`brainpy_state/_nest_validation/<name>_test.py`); the stochastic and mean-field
+(`brainspike/_nest_validation/<name>_test.py`); the stochastic and mean-field
 ones use a documented analytic or distributional carve-out (where the PRNG streams
 diverge, the closed form or the seed-averaged statistics are the ground truth).
 Run any directly, e.g. `python examples/nest_like/glif_cond_neuron.py`.
@@ -547,7 +547,7 @@ the analytical solution.
 > tracked for the sibling conductance neurons in `neurons-gap.md`.
 >
 > **Cluster 24** closes §3.8: it adds the `Simulator`-level
-> [`tripartite_connect`](../../brainpy_state/_nest_network/simulator.py) +
+> [`tripartite_connect`](../../brainspike/_nest_network/simulator.py) +
 > `third_factor_bernoulli_with_pool` astrocyte-pool rule. One realized primary
 > `pre→post` sample is shared across all three arms — primary (`pre→post`),
 > `third_in` (`pre→astro`, delta IP3) and `third_out` (`astro→post`, the
@@ -567,8 +567,8 @@ the analytical solution.
 ## Spatial-network demos (§3.9)
 
 NEST's `spatial/` tutorials place neurons at **coordinates** and wire them with
-distance-dependent rules (`nest.spatial.*` / `nest.spatial_distributions.*`). brainpy.state
-gains a sibling [`brainpy.state.spatial`](../../brainpy_state/_nest_spatial) namespace mirroring
+distance-dependent rules (`nest.spatial.*` / `nest.spatial_distributions.*`). brainspike
+gains a sibling [`brainspike.spatial`](../../brainspike/_nest_spatial) namespace mirroring
 that surface: position layers (`grid`, `free` in 2-D/3-D), the `distance` sentinel and the
 `gaussian` kernel, masks (`circular`/`spherical`/`box`), the `spatial_pairwise_bernoulli`
 connection rule, and query helpers (`center_element`, `Distance`, `target_nodes`,
@@ -694,9 +694,9 @@ Run `PYTHONPATH=. python examples/nest_like/sudoku.py --quick` for a fast smoke 
 ## Validation
 
 Live-NEST parity tests live in
-[`brainpy_state/_nest_validation/`](../../brainpy_state/_nest_validation) and
+[`brainspike/_nest_validation/`](../../brainspike/_nest_validation) and
 skip automatically when `nest` is not importable. Each test builds the same
-network in live NEST and in brainpy.state and asserts the firing rate is within
+network in live NEST and in brainspike and asserts the firing rate is within
 5 % — a statistical comparison (the RNG streams differ), never a per-neuron
 match. Representative figures:
 

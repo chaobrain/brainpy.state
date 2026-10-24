@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Wang (2002) spiking decision-making network on ``iaf_bw_2001``.
 
-Port of NEST's ``wang_decision_making.py`` onto brainpy.state's explicit
+Port of NEST's ``wang_decision_making.py`` onto brainspike's explicit
 ``Simulator`` API, driving the real ``iaf_bw_2001`` conductance neuron with its
 AMPA / GABA / **recurrent NMDA** receptors.
 
@@ -31,11 +31,11 @@ sender's per-spike NMDA gate increment; NEST requires the sender be an
 spike_offset`` over the NMDA channel (dense matmul — the sparse path would binarize
 the presynaptic value). That seam is validated against live NEST to machine
 precision, both feed-forward
-(``brainpy_state/_nest_validation/iaf_bw_2001_nest_parity_test.py``) and
+(``brainspike/_nest_validation/iaf_bw_2001_nest_parity_test.py``) and
 **recurrently** — the design arbiter
-(``brainpy_state/_nest_validation/iaf_bw_2001_recurrent_nmda_parity_test.py``).
+(``brainspike/_nest_validation/iaf_bw_2001_recurrent_nmda_parity_test.py``).
 Distributional winner-take-all parity for *this* network against live NEST is in
-``brainpy_state/_nest_validation/wang_decision_making_test.py``.
+``brainspike/_nest_validation/wang_decision_making_test.py``.
 
 Scaling
 -------
@@ -62,7 +62,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy.state import (Simulator, iaf_bw_2001, poisson_generator,
+from brainspike import (Simulator, iaf_bw_2001, poisson_generator,
                            inhomogeneous_poisson_generator, spike_recorder,
                            all_to_all)
 

@@ -4,7 +4,7 @@
 Devices
 =======
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Stimulation and recording devices, faithful to NEST's device vocabulary. A
 :class:`Simulator` device is created like any model and connected into the
@@ -14,7 +14,7 @@ network; recorded data is read back after the run from the
 .. code-block:: python
 
    import brainunit as u
-   from brainpy import state as bp
+   import brainspike as bp
 
    sim = bp.Simulator(dt=0.1 * u.ms)
    neuron = sim.create(bp.iaf_psc_exp, 1)

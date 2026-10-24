@@ -41,13 +41,13 @@ def _build(case: str, k: int | None, capacity: int | None):
     import brainunit as u
     import numpy as np
 
-    from brainpy_state._kernel.connectivity import fixed_indegree, one_to_one
-    from brainpy_state._kernel.integrators import RK
-    from brainpy_state._kernel.network import Network
+    from brainspike._kernel.connectivity import fixed_indegree, one_to_one
+    from brainspike._kernel.integrators import RK
+    from brainspike._kernel.network import Network
 
     dt = 0.1 * u.ms
     if case in ('aeif', 'cond'):
-        from brainpy_state._kernel.models import aeif_cond_alpha, iaf_cond_exp, spike_generator
+        from brainspike._kernel.models import aeif_cond_alpha, iaf_cond_exp, spike_generator
         base = aeif_cond_alpha if case == 'aeif' else iaf_cond_exp
         model = base
         if k is not None:
@@ -61,7 +61,7 @@ def _build(case: str, k: int | None, capacity: int | None):
         net.observe(p, 'V_m', 'spike')
         return net, dict(substeps=model.integrator.substeps)
     if case == 'ps':
-        from brainpy_state._kernel.models.precise import iaf_psc_exp_ps, poisson_generator_ps
+        from brainspike._kernel.models.precise import iaf_psc_exp_ps, poisson_generator_ps
         K = capacity or 16
         n = 100
         net = Network(dt=dt, seed=11)
@@ -74,16 +74,16 @@ def _build(case: str, k: int | None, capacity: int | None):
         net.observe(nrn, 'V_m', 'spike')
         return net, dict(slots=K)
     if case == 'brunel':
-        from brainpy_state._kernel.validation.brunel import build_brunel
+        from brainspike._kernel.validation.brunel import build_brunel
         return build_brunel(2500, seed=1)[0], dict(order=2500)
     if case == 'coba':
-        from brainpy_state._kernel.validation.coba import build_coba
+        from brainspike._kernel.validation.coba import build_coba
         return build_coba(0, 1.0)[0], dict(neurons=4000)
     if case == 'nmda':
-        from brainpy_state._kernel.gates import MgBlock
-        from brainpy_state._kernel.model import with_conductance_ports
-        from brainpy_state._kernel.models import NMDA, iaf_cond_exp, spike_generator
-        from brainpy_state._kernel.ports import Conductance
+        from brainspike._kernel.gates import MgBlock
+        from brainspike._kernel.model import with_conductance_ports
+        from brainspike._kernel.models import NMDA, iaf_cond_exp, spike_generator
+        from brainspike._kernel.ports import Conductance
         cell = with_conductance_ports(iaf_cond_exp, nmda=Conductance(u.nS, E_rev='E_nmda', gate=MgBlock()),
                                       params=dict(E_nmda=0.0 * u.mV))
         net = Network(dt=dt, seed=3)
@@ -95,8 +95,8 @@ def _build(case: str, k: int | None, capacity: int | None):
         net.observe(post, 'V_m')
         return net, {}
     if case == 'stdp':
-        from brainpy_state._kernel.models import LIF, spike_generator
-        from brainpy_state._kernel.plasticity import stdp_synapse
+        from brainspike._kernel.models import LIF, spike_generator
+        from brainspike._kernel.plasticity import stdp_synapse
         K = 8
         net = Network(dt=dt)
         pre = net.add(spike_generator, K, params=dict(spike_times=np.arange(1.0, 9.0) * u.ms))
@@ -118,10 +118,10 @@ def _bptt_lif():
     import jax
     import numpy as np
 
-    from brainpy_state._kernel.connectivity import fixed_indegree
-    from brainpy_state._kernel.learn import BPTT, ExternalInput, spike_count_mse
-    from brainpy_state._kernel.models import LIF
-    from brainpy_state._kernel.network import Network
+    from brainspike._kernel.connectivity import fixed_indegree
+    from brainspike._kernel.learn import BPTT, ExternalInput, spike_count_mse
+    from brainspike._kernel.models import LIF
+    from brainspike._kernel.network import Network
 
     dt = 0.1 * u.ms
     sig = braintools.surrogate.Sigmoid()
@@ -251,5 +251,5 @@ def main(argv=None) -> None:
 
 if __name__ == '__main__':
     os.environ.setdefault('JAX_PLATFORMS', 'cpu')
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     main()

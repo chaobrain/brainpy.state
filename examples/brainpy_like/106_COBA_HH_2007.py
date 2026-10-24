@@ -21,7 +21,7 @@
 #
 # This is the Hodgkin-Huxley variant (benchmark 3) of the FACETS simulator review.
 # The integrate-and-fire benchmarks 1 (COBA, iaf_cond_exp) and 2 (CUBA, iaf_psc_exp)
-# of the same review are ported on the brainpy.state Simulator API, with live-NEST
+# of the same review are ported on the brainspike Simulator API, with live-NEST
 # rate-band parity, in ``examples/nest_like/brette_et_al_2007.py``.
 #
 
@@ -29,7 +29,7 @@ import brainunit as u
 import matplotlib.pyplot as plt
 import numpy as np
 
-import brainpy
+import brainspike
 import brainstate
 
 # brainstate.environ.set(precision='bf16')
@@ -66,7 +66,7 @@ we = 6. * u.nS  # excitatory synaptic conductance [nS]
 wi = 67. * u.nS  # inhibitory synaptic conductance [nS]
 
 
-class HH(brainpy.state.Neuron):
+class HH(brainspike.Neuron):
     """
     Hodgkin-Huxley neuron model.
     """
@@ -141,16 +141,16 @@ class EINet(brainstate.nn.Module):
         self.varshape = self.n_exc + self.n_inh
         self.N = HH(self.varshape)
 
-        self.E = brainpy.state.AlignPostProj(
+        self.E = brainspike.AlignPostProj(
             comm=brainstate.nn.EventFixedProb(self.n_exc, self.varshape, conn_num=0.02, conn_weight=we),
-            syn=brainpy.state.Expon(self.varshape, tau=taue),
-            out=brainpy.state.COBA(E=Ee),
+            syn=brainspike.Expon(self.varshape, tau=taue),
+            out=brainspike.COBA(E=Ee),
             post=self.N
         )
-        self.I = brainpy.state.AlignPostProj(
+        self.I = brainspike.AlignPostProj(
             comm=brainstate.nn.EventFixedProb(self.n_inh, self.varshape, conn_num=0.02, conn_weight=wi),
-            syn=brainpy.state.Expon(self.varshape, tau=taui),
-            out=brainpy.state.COBA(E=Ei),
+            syn=brainspike.Expon(self.varshape, tau=taui),
+            out=brainspike.COBA(E=Ei),
             post=self.N
         )
 

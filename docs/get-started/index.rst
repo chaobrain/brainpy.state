@@ -2,7 +2,7 @@
 Get Started
 ===========
 
-``brainpy.state`` is the point-neuron modeling layer of the BrainX ecosystem:
+``brainspike`` is the point-neuron modeling layer of the BrainX ecosystem:
 **one differentiable substrate** that serves two audiences from the same code.
 
 - If you come from **computational neuroscience**, you build biophysical
@@ -29,7 +29,7 @@ mental model that makes the rest of the documentation click.
       :link-type: doc
 
       Build and run an excitatory–inhibitory balanced network, then plot a
-      spike raster. The fastest way to feel what ``brainpy.state`` does.
+      spike raster. The fastest way to feel what ``brainspike`` does.
 
    .. grid-item-card:: 3 · Mental model
       :link: /get-started/mental-model

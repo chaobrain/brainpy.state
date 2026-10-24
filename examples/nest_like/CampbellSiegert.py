@@ -21,7 +21,7 @@ rate against the analytic predictions.
 **Validation is an analytic cross-check, not a live-NEST trace parity.** The
 Poisson drive is a PRNG stream that diverges between NEST and JAX, so a per-sample
 ``V_m`` comparison against NEST is meaningless. Instead the *theory itself* is the
-ground truth: ``brainpy_state/_nest_validation/CampbellSiegert_test.py`` asserts
+ground truth: ``brainspike/_nest_validation/CampbellSiegert_test.py`` asserts
 that the Simulator's empirical mean/variance/rate match the Campbell/Siegert
 formulae within statistical tolerance (and, when NEST is present, that live NEST
 matches the same formulae — both agree with theory without agreeing sample by
@@ -40,7 +40,7 @@ import brainunit as u
 from scipy.optimize import fmin
 from scipy.special import erf
 
-from brainpy.state import (Simulator, iaf_psc_alpha, poisson_generator,
+from brainspike import (Simulator, iaf_psc_alpha, poisson_generator,
                            voltmeter, spike_recorder)
 
 # --- NEST CampbellSiegert parameters (single Poisson source variant) ---------
@@ -190,7 +190,7 @@ def run_analysis(simtime=SIMTIME, seed=0):
 
 
 def main():
-    print("Campbell & Siegert approximation (brainpy.state)")
+    print("Campbell & Siegert approximation (brainspike)")
     res = run_analysis()
     print(f"  mean membrane potential (actual / calculated): "
           f"{res['mean_act']:.4f} / {res['mu_mV']:.4f} mV")

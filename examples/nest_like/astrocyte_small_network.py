@@ -3,9 +3,9 @@
 """A small neuron-astrocyte network (NEST ``astrocyte_small_network`` port).
 
 Port of NEST's ``astrocyte_small_network``. Two populations of
-:class:`~brainpy.state.aeif_cond_alpha_astro` neurons (presynaptic + postsynaptic)
-and a population of :class:`~brainpy.state.astrocyte_lr_1994` astrocytes are wired
-with :meth:`~brainpy.state.Simulator.tripartite_connect`: the primary neuron->neuron
+:class:`~brainspike.aeif_cond_alpha_astro` neurons (presynaptic + postsynaptic)
+and a population of :class:`~brainspike.astrocyte_lr_1994` astrocytes are wired
+with :meth:`~brainspike.Simulator.tripartite_connect`: the primary neuron->neuron
 edges use ``pairwise_bernoulli`` and the astrocyte third-factor edges use
 ``third_factor_bernoulli_with_pool`` (``pool_size=1``, ``pool_type='block'`` -- each
 block of postsynaptic neurons draws its astrocyte from a non-overlapping pool). One
@@ -13,13 +13,13 @@ realized primary sample is shared across all three arms (NEST tripartite semanti
 
 * **primary** ``pre -> post`` -- a conductance EPSP (receptor 1, nS).
 * **third_in** ``pre -> astro`` -- a delta drive raising astrocytic IP3.
-* **third_out** ``astro -> post`` -- a :class:`~brainpy.state.sic_connection`
+* **third_out** ``astro -> post`` -- a :class:`~brainspike.sic_connection`
   feeding the slow inward current ``I_SIC`` back to the postsynaptic neurons.
 
 Presynaptic spikes (driven by a constant ``I_e``) raise IP3, whose calcium crosses
 the SIC threshold and feeds ``I_SIC`` into the postsynaptic neurons -- the tripartite
 loop (Li & Rinzel 1994; Nadkarni & Jung 2003). The whole network runs end-to-end
-through the :class:`~brainpy.state.Simulator` (one compiled ``for_loop``).
+through the :class:`~brainspike.Simulator` (one compiled ``for_loop``).
 
 Synapse divergence from NEST: NEST's demo uses ``tsodyks_synapse`` for the
 primary/third_in arms; this port (and its parity harness) uses **static** synapses,
@@ -37,7 +37,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(sim_time=1000.0, *, dt=0.1, n_neurons=10, n_astro=5, p_primary=1.0,

@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 r"""Mesoscopic GIF population-rate network vs. its microscopic realization.
 
-Ports NEST's ``pynest/examples/gif_pop_psc_exp.py`` to brainpy.state. A finite
+Ports NEST's ``pynest/examples/gif_pop_psc_exp.py`` to brainspike. A finite
 Brunel-style network of two coupled populations (one excitatory, one inhibitory)
 of generalized integrate-and-fire neurons is simulated **two ways**:
 
@@ -56,9 +56,9 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, gif_psc_exp, gif_pop_psc_exp,
+from brainspike import (Simulator, gif_psc_exp, gif_pop_psc_exp,
                            step_current_generator, spike_recorder)
-from brainpy.state import fixed_indegree
+from brainspike import fixed_indegree
 
 # ---------------------------------------------------------------------------
 # Parameters (NEST gif_pop_psc_exp.py verbatim).
@@ -273,7 +273,7 @@ def window_rate(act, t, t0, t1):
 
 def main():
     print("Mesoscopic GIF population network vs microscopic realization "
-          "(brainpy.state)")
+          "(brainspike)")
     meso = run_meso(seed=1)
     micro = run_micro(seed=1)
 

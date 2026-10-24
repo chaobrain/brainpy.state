@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """AdEx neuron with multiple beta-function receptors — NEST-style port.
 
-Port of NEST's ``aeif_cond_beta_multisynapse.py`` onto brainpy.state's explicit
+Port of NEST's ``aeif_cond_beta_multisynapse.py`` onto brainspike's explicit
 Simulator API, driving the real ``aeif_cond_beta_multisynapse`` neuron. A single
 ``spike_generator`` (one spike at ``t = 10 ms``) fans out to **four distinct
 conductance receptors** of the same neuron, each reached through
@@ -34,7 +34,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, aeif_cond_beta_multisynapse,
+from brainspike import (Simulator, aeif_cond_beta_multisynapse,
                            spike_generator, multimeter)
 
 #: NEST ``aeif_cond_beta_multisynapse`` params set by the example (4 receptors;
@@ -112,7 +112,7 @@ def run_traces(ports=(1, 2, 3, 4), dt=0.1, simtime=1000.0):
 
 
 def main():
-    print("aeif_cond_beta_multisynapse (brainpy.state) — 4-receptor PSPs")
+    print("aeif_cond_beta_multisynapse (brainspike) — 4-receptor PSPs")
     tr = run_traces(dt=0.1, simtime=1000.0)
     for k, d in zip((1, 2, 3, 4), DELAYS):
         gk = tr[f'g_{k}']

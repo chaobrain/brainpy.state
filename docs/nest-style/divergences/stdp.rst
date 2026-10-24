@@ -4,14 +4,14 @@
 STDP parity: where state lives and how spikes pair
 ==================================================================
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 This page is for users **porting NEST spike-timing-dependent plasticity (STDP)
-code** to ``brainpy.state``. It documents two things the source alone will not
+code** to ``brainspike``. It documents two things the source alone will not
 tell you at a glance:
 
 1. **Where the learning state lives** — NEST keeps the post-synaptic eligibility
-   trace (and several rule parameters) on the *neuron*; ``brainpy.state`` moves
+   trace (and several rule parameters) on the *neuron*; ``brainspike`` moves
    them onto the *synapse* (or a broadcast node) so a rule runs standalone, with
    no archiving-capable neuron required. Setting a parameter on the wrong object
    relative to NEST is the single most common porting mistake.
@@ -30,7 +30,7 @@ this page consolidates what those tests proved.
 The online-substrate model in one paragraph
 ============================================
 
-``brainpy.state`` STDP rules are pure ``update(state, ctx)`` kernels evaluated
+``brainspike`` STDP rules are pure ``update(state, ctx)`` kernels evaluated
 **every time step** on a JAX event-driven substrate. The substrate maintains the
 pre-synaptic ``K+`` and post-synaptic ``K-`` traces (decay-then-add per neuron,
 gathered per edge) and the kernel applies **potentiation on the post spike** and
@@ -63,20 +63,20 @@ the trace back through ``get_K_value()`` at ``send()`` time. Setting
    nest.CopyModel("stdp_synapse", "syn", {"tau_plus": 20.0})
    # the synapse carries tau_plus; the K- time constant lives on the neuron.
 
-In **brainpy.state**, ``tau_minus`` is a **synapse-spec attribute**. It drives the
+In **brainspike**, ``tau_minus`` is a **synapse-spec attribute**. It drives the
 substrate's per-post-neuron ``K-`` trace directly, so STDP runs without requiring
 the post-synaptic neuron to implement an archiving API:
 
 .. code-block:: python
 
    >>> import brainunit as u
-   >>> import brainpy.state as bp
+   >>> import brainspike as bp
    >>> s = bp.stdp_synapse(tau_plus=20.0 * u.ms, tau_minus=20.0 * u.ms)
    >>> float(u.Quantity(s.tau_minus).to_decimal(u.ms))
    20.0
 
 **Porting rule.** A NEST script that sets ``tau_minus`` on the neuron must set the
-**same value on the brainpy.state synapse spec**. A live-NEST parity run sets both
+**same value on the brainspike synapse spec**. A live-NEST parity run sets both
 the post neuron's ``tau_minus`` and the synapse's ``tau_minus`` to identical values
 so the two ``K-`` traces match. The same move applies to every trace-based STDP
 rule in the family (``stdp_synapse``, ``stdp_synapse_hom``, ``stdp_pl_synapse_hom``,
@@ -91,7 +91,7 @@ Parameter-location map for the STDP family
 ==========================================
 
 The trace-storage move generalises: wherever NEST precomputes a weight change on
-an archiving neuron, ``brainpy.state`` relocates the governing parameters onto the
+an archiving neuron, ``brainspike`` relocates the governing parameters onto the
 synapse spec (or, for the dopamine modulator, onto the ``volume_transmitter``) so
 the rule is self-contained. Parity always sets identical values on both sides.
 
@@ -101,7 +101,7 @@ the rule is self-contained. Parity always sets identical values on both sides.
 
    * - Parameter(s)
      - NEST home
-     - brainpy.state home
+     - brainspike home
      - Why it moves
    * - ``tau_minus``
        (``stdp_synapse``, ``_hom``, ``_pl_hom``, ``stdp_nn_*``,
@@ -166,7 +166,7 @@ Clopath ``delay_u_bars`` and online LTP (≤ 5 % band)
    NEST's deferred decayed-history sum; it grows with pairing frequency.
 :Tolerance asserted: A **documented 5 % band** plus exact direction and
    frequency-ordering (realised ≤ 3.31 %; a pure-LTD train matches to 0.002 %).
-:Parity test: ``brainpy_state/_nest_validation/clopath_synapse_parity_test.py``.
+:Parity test: ``brainspike/_nest_validation/clopath_synapse_parity_test.py``.
 
 .. _stdp-dopamine:
 
@@ -174,14 +174,14 @@ Dopamine online-vs-deferred integration (~0.2 % band)
 -----------------------------------------------------
 
 :What diverges: The weight trajectory under dopamine modulation.
-:Why: ``brainpy.state`` integrates the weight **every step** against the broadcast
+:Why: ``brainspike`` integrates the weight **every step** against the broadcast
    ``n`` (with a one-step lag), whereas NEST integrates lazily at ``send()`` /
    ``trigger_update_weight``. Because ``n`` is a clean scalar carrying no analog
    history, the residual is far tighter than Clopath's.
 :Tolerance asserted: A **~0.2 % band** (realised ``max|Δw| < 8e-3 pA`` over LTP /
    LTD / clamp / window sweeps spanning 50–200 pA), with direction and ordering
    exact.
-:Parity test: ``brainpy_state/_nest_validation/stdp_dopamine_synapse_parity_test.py``.
+:Parity test: ``brainspike/_nest_validation/stdp_dopamine_synapse_parity_test.py``.
 
 .. _stdp-phantom-pre:
 
@@ -191,7 +191,7 @@ Nearest-neighbour "phantom pre at 0" (``stdp_nn_symm`` / ``stdp_nn_restr`` only)
 :What diverges: A single facilitation against a *virtual* pre spike at ``t = 0``.
 :Why: NEST's first ``send()`` initialises ``t_lastspike_ = 0``, so a post spike
    that precedes the first real pre facilitates against a phantom pre at the origin.
-   The ``brainpy.state`` substrate seeds its traces and eligibility flags at 0,
+   The ``brainspike`` substrate seeds its traces and eligibility flags at 0,
    modelling the physically-correct "no pre has occurred" — so it does **not**
    reproduce the phantom pairing. ``stdp_nn_pre_centered_synapse`` and
    ``stdp_facetshw_synapse_hom`` are immune (their facilitation scales by a
@@ -199,7 +199,7 @@ Nearest-neighbour "phantom pre at 0" (``stdp_nn_symm`` / ``stdp_nn_restr`` only)
 :Tolerance asserted: Not reproduced (documented). Parity sidesteps it with a
    leading pre spike, or by placing the first pre late enough that the
    ``exp(-(Δ)/tau_plus)`` phantom term sits below the test's absolute tolerance.
-:Parity tests: ``brainpy_state/_nest_validation/stdp_nn_symm_synapse_parity_test.py``
+:Parity tests: ``brainspike/_nest_validation/stdp_nn_symm_synapse_parity_test.py``
    and ``…/stdp_nn_restr_synapse_parity_test.py``.
 
 
@@ -232,7 +232,7 @@ the **single nearest preceding pairing**, not the all-to-all sum:
 
 .. code-block:: python
 
-   >>> import brainpy.state as bp
+   >>> import brainspike as bp
    >>> sym = bp.stdp_nn_symm_synapse()
    >>> sym.pre_trace_mode, sym.post_trace_mode
    ('nearest', 'nearest')
@@ -256,7 +256,7 @@ in the trace mode.
   19:1437–1467; Morrison, Diesmann & Gerstner (2008) *Biol. Cybern.* 98:459–478,
   fig. 7A.
 * **Divergence:** see :ref:`stdp-phantom-pre`.
-* **Parity test:** ``brainpy_state/_nest_validation/stdp_nn_symm_synapse_parity_test.py``.
+* **Parity test:** ``brainspike/_nest_validation/stdp_nn_symm_synapse_parity_test.py``.
 
 
 .. _stdp-nn-restr:
@@ -267,7 +267,7 @@ in the trace mode.
 The symmetric scheme **plus a one-pairing-per-spike restriction**: a post spike
 facilitates with the nearest preceding pre **only if a pre has occurred since the
 previous post**, and a pre spike depresses with the nearest preceding post **only
-if a post has occurred since the previous pre**. ``brainpy.state`` carries this
+if a post has occurred since the previous pre**. ``brainspike`` carries this
 with two per-edge eligibility flags (``pre_avail`` / ``post_avail``): each spike
 makes its own side available and consumes the opposite, reproducing NEST's
 ``start != finish`` gate without scanning history.
@@ -278,7 +278,7 @@ makes its own side available and consumes the opposite, reproducing NEST's
 * **References:** Morrison, Diesmann & Gerstner (2008) *Biol. Cybern.*
   98:459–478, fig. 7C.
 * **Divergence:** see :ref:`stdp-phantom-pre`.
-* **Parity test:** ``brainpy_state/_nest_validation/stdp_nn_restr_synapse_parity_test.py``.
+* **Parity test:** ``brainspike/_nest_validation/stdp_nn_restr_synapse_parity_test.py``.
 
 
 .. _stdp-nn-pre-centered:
@@ -296,7 +296,7 @@ hence ``pre_trace_tau is None``:
 
 .. code-block:: python
 
-   >>> import brainpy.state as bp
+   >>> import brainspike as bp
    >>> pc = bp.stdp_nn_pre_centered_synapse()
    >>> pc.pre_trace_tau is None, pc.post_trace_mode
    (True, 'nearest')
@@ -309,7 +309,7 @@ accumulator that starts at 0).
   ``Kminus`` depression at 299–302; ``Kplus`` decay/+1 at 304).
 * **References:** Morrison, Diesmann & Gerstner (2008) *Biol. Cybern.*
   98:459–478, fig. 7B; Izhikevich & Desai (2003) *Neural Comput.* 15:1511–1523.
-* **Parity test:** ``brainpy_state/_nest_validation/stdp_nn_pre_centered_synapse_parity_test.py``.
+* **Parity test:** ``brainspike/_nest_validation/stdp_nn_pre_centered_synapse_parity_test.py``.
 
 
 .. _stdp-facetshw:
@@ -339,7 +339,7 @@ its own pair's charge — an observable ordering that the parity test pins.
   readout.
 * **NEST source:** ``models/stdp_facetshw_synapse_hom.h`` and ``…_impl.h``
   (``send()``: readout, quantisation, LUT update).
-* **Parity test:** ``brainpy_state/_nest_validation/stdp_facetshw_synapse_hom_parity_test.py``.
+* **Parity test:** ``brainspike/_nest_validation/stdp_facetshw_synapse_hom_parity_test.py``.
 
 
 See also

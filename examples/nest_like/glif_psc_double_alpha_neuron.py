@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Double-alpha current-based GLIF neuron — NEST-style port.
 
-Port of NEST's ``glif_psc_double_alpha_neuron.py`` onto brainpy.state's explicit
+Port of NEST's ``glif_psc_double_alpha_neuron.py`` onto brainspike's explicit
 Simulator API. ``glif_psc_double_alpha`` behaves exactly like ``glif_psc`` except
 that each synaptic port's post-synaptic current is a **double** alpha function — a
 fast alpha plus ``amp_slow`` times a slow alpha — giving far more control over the
@@ -39,7 +39,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, glif_psc, glif_psc_double_alpha,
+from brainspike import (Simulator, glif_psc, glif_psc_double_alpha,
                            spike_generator, multimeter, spike_recorder)
 
 RESOLUTION = 0.05               # ms; NEST example resolution
@@ -139,7 +139,7 @@ def run_traces(cfg, dt=RESOLUTION, simtime=SIMTIME):
 
 
 def main():
-    print("glif_psc_double_alpha_neuron (brainpy.state) — single vs double alpha")
+    print("glif_psc_double_alpha_neuron (brainspike) — single vs double alpha")
     traces = {}
     for label, cfg in CONFIGS:
         tr = run_traces(cfg)

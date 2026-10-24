@@ -11,9 +11,9 @@ bias ``dE`` selects the higher-``mu`` unit; with ``dE = 0`` the input noise brea
 
 Each scenario runs a no-evidence phase (``mu = 0``) then an evidence phase
 (``mu = 1 +/- dE``), each relaxed end-to-end through the
-:class:`~brainpy.state.Simulator` (one compiled ``for_loop`` per phase -- no Python step
-loop). The :class:`~brainpy.state.Simulator` re-initialises state at the start of every
-:meth:`~brainpy.state.Simulator.simulate`, so the two-phase protocol is realised as two
+:class:`~brainspike.Simulator` (one compiled ``for_loop`` per phase -- no Python step
+loop). The :class:`~brainspike.Simulator` re-initialises state at the start of every
+:meth:`~brainspike.Simulator.simulate`, so the two-phase protocol is realised as two
 independent relaxations whose evidence phase starts from ``rate = 0`` -- numerically the
 same state NEST holds at the end of its (rate-0) no-evidence phase, so the decision matches.
 
@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 #: Mutual inhibitory weight between the two decision units (NEST's value).
 W_INH = -0.2
@@ -48,9 +48,9 @@ def build_network(sigma, dt, mu_d1, mu_d2):
 
     Returns
     -------
-    net : brainpy.state.Simulator
+    net : brainspike.Simulator
         The wired two-unit decision network.
-    mm1, mm2 : brainpy.state.NodeView
+    mm1, mm2 : brainspike.NodeView
         Multimeters recording the ``rate`` of D1 and D2.
     """
     common = dict(tau=1.0 * u.ms, lambda_=0.1, sigma=sigma,
@@ -73,7 +73,7 @@ def run_scenario(sigma, dE, dt=0.1, T_each=100.0, seed=0):
 
     Phase 1 presents no evidence (``mu = 0``); phase 2 presents evidence
     ``mu = 1 +/- dE``. Both phases are relaxed through the
-    :class:`~brainpy.state.Simulator` and their ``rate`` traces concatenated.
+    :class:`~brainspike.Simulator` and their ``rate`` traces concatenated.
 
     Parameters
     ----------
@@ -125,7 +125,7 @@ def run_scenario(sigma, dE, dt=0.1, T_each=100.0, seed=0):
 
 def main():  # pragma: no cover
     sigmas, dEs = [0.0, 0.1, 0.2], [0.0, 0.004, 0.008]
-    print('rate_neuron_dm (brainpy.state) -- WTA decision grid')
+    print('rate_neuron_dm (brainspike) -- WTA decision grid')
     try:
         import matplotlib.pyplot as plt
         fig, axes = plt.subplots(3, 3, figsize=(14, 8), sharex=True)
@@ -143,7 +143,7 @@ def main():  # pragma: no cover
                 if r == 2:
                     ax.set_xlabel('time (ms)')
         axes[0, 2].legend()
-        plt.suptitle('Rate-neuron decision making (brainpy.state)')
+        plt.suptitle('Rate-neuron decision making (brainspike)')
         plt.tight_layout()
         plt.savefig('examples/nest_like/rate_neuron_dm.png', dpi=100)
         print('  wrote examples/nest_like/rate_neuron_dm.png')

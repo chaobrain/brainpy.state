@@ -29,7 +29,7 @@ examples:
 # Core library
 core:
   - changed-files:
-    - any-glob-to-any-file: ['brainpy_state/_src/**/*']
+    - any-glob-to-any-file: ['brainspike/_src/**/*']
 
 # Build/Package
 build:

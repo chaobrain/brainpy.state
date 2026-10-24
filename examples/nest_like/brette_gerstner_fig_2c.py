@@ -3,7 +3,7 @@
 r"""Brette & Gerstner (2005) Fig 2C — AdEx spike-frequency adaptation (NEST port).
 
 Port of NEST's ``brette_gerstner_fig_2c.py``. A single adaptive exponential
-integrate-and-fire neuron (:class:`~brainpy.state.aeif_cond_alpha`) is driven by
+integrate-and-fire neuron (:class:`~brainspike.aeif_cond_alpha`) is driven by
 two rectangular current pulses and reproduces Figure 2C of Brette & Gerstner
 [1]_: a 500 pA pulse over ``[0, 200) ms`` charges the membrane sub-threshold,
 then an 800 pA pulse over ``[500, 1000) ms`` drives a spike train whose
@@ -21,7 +21,7 @@ Every other AdEx parameter is left at its default, which equals NEST's
 ``V_peak = 0 mV`` the spike cutoff, ``V_reset = -60 mV``, ``Delta_T = 2 mV``,
 ``tau_w = 144 ms``); the membrane starts at ``V_m = -70.6 mV = E_L``.
 
-The whole model runs through the :class:`~brainpy.state.Simulator` (one compiled
+The whole model runs through the :class:`~brainspike.Simulator` (one compiled
 ``for_loop``); there is no Python step loop.
 
 Run:  python examples/nest_like/brette_gerstner_fig_2c.py
@@ -41,7 +41,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 #: Integration step (ms) — fine, because the AdEx spike upstroke is very steep.
 DT = 0.1

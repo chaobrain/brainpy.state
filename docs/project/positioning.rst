@@ -1,7 +1,7 @@
 Positioning and scope
 =====================
 
-``brainpy.state`` is a **differentiable point-neuron modeling substrate**: the same
+``brainspike`` is a **differentiable point-neuron modeling substrate**: the same
 neurons, synapses, plasticity rules, and projections run NEST-validated biological
 simulation *and* train with gradients or online learning.
 
@@ -47,7 +47,7 @@ in progress:
 
 - **The current 0.1 API is frozen.** It keeps working, but receives no new features or
   fixes; it will be removed when the new kernel replaces it.
-- **The new kernel is private** (not yet exported from ``brainpy.state``). It becomes
+- **The new kernel is private** (not yet exported from ``brainspike``). It becomes
   public in a later milestone, together with a migration guide.
 - **One front-end.** ``Network`` will be the only way to build and run a model. The
   NEST-style ``Simulator`` (``create`` / ``connect`` / ``simulate``) is kept as a thin

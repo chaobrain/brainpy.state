@@ -41,7 +41,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (ginzburg_neuron, mcculloch_pitts_neuron,
+from brainspike import (ginzburg_neuron, mcculloch_pitts_neuron,
                            correlospinmatrix_detector)
 
 #: Target mean activity of the autonomous neuron n1 (gain ``2*m_x`` -> 0.5).
@@ -240,7 +240,7 @@ def main(seed=0, simtime=50000.0):
     cov = covariance_matrix(cc, ma, simtime=simtime)
     center = cc.shape[-1] // 2
 
-    print("correlospinmatrix_detector_two_neuron (brainpy.state, ginzburg -> mcculloch_pitts)")
+    print("correlospinmatrix_detector_two_neuron (brainspike, ginzburg -> mcculloch_pitts)")
     print(f"  weight={WEIGHT}, tau_m={TAU_M} ms, T={simtime:.0f} ms, "
           f"tau_max={TAU_MAX} ms, delta_tau={DELTA_TAU} ms")
     print(f"  direct train means: n1={y1.mean():.4f}, n2={y2.mean():.4f}")

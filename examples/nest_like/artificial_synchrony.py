@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_psc_alpha, voltmeter, all_to_all
+from brainspike import Simulator, iaf_psc_alpha, voltmeter, all_to_all
 
 #: Population size.
 N = 64
@@ -179,7 +179,7 @@ def sweep(strengths=STRENGTHS, **kw):
 
 
 def main():
-    print("artificial_synchrony (brainpy.state, iaf_psc_alpha, grid branch)")
+    print("artificial_synchrony (brainspike, iaf_psc_alpha, grid branch)")
     print(f"  N={N}, dt={DT} ms, simtime={SIMTIME} ms, window=[{T_START}, {SIMTIME}] ms")
     sigmas = sweep()
     for s, sig in zip(STRENGTHS, sigmas):

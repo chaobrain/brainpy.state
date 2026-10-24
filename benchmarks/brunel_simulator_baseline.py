@@ -79,7 +79,7 @@ def build_brunel(order, comm='sparse'):
     import numpy as np
     import brainunit as u
     import braintools
-    from brainpy_state import (Simulator, fixed_indegree, all_to_all,
+    from brainspike import (Simulator, fixed_indegree, all_to_all,
                                iaf_psc_alpha, poisson_generator, spike_recorder)
 
     dt, delay = 0.1, 1.5
@@ -186,7 +186,7 @@ def base_meta(args):
 def run_one(args):
     """Measure one (order, precision) configuration in this process."""
     meta = base_meta(args)
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     sys.path.insert(0, REPO_ROOT)  # measure the local source tree
 
     import jax
@@ -196,7 +196,7 @@ def run_one(args):
     import numpy as np
     import brainunit as u
     import brainevent
-    import brainpy_state
+    import brainspike
 
     if args.brainevent_backend:
         # e.g. 'cusparse': opt-in work-around for the default GPU kernel's
@@ -206,7 +206,7 @@ def run_one(args):
     dev = jax.devices()[0]
     device = 'gpu' if dev.platform in ('gpu', 'cuda', 'rocm') else dev.platform
     is_gpu = device == 'gpu'
-    meta.update(versions=_versions(), brainpy_state_file=brainpy_state.__file__,
+    meta.update(versions=_versions(), brainspike_file=brainspike.__file__,
                 device_kind=dev.device_kind, device_platform=dev.platform,
                 n_devices=jax.device_count(),
                 gpu_info=_gpu_info() if is_gpu else None)

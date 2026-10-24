@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Brunel (2000) random balanced network with alpha synapses — NEST-style port.
 
-Port of NEST's ``brunel_alpha_nest.py`` onto brainpy.state's explicit Simulator
+Port of NEST's ``brunel_alpha_nest.py`` onto brainspike's explicit Simulator
 API, driving the real ``iaf_psc_alpha`` / ``poisson_generator`` / ``spike_recorder``
 models. Default ``order=400`` keeps the dense event projection memory-light; pass
 a larger ``order`` once the sparse comm (EventFixedNumConn) lands.
@@ -19,7 +19,7 @@ import scipy.special as sp
 import brainunit as u
 import braintools
 
-from brainpy.state import (
+from brainspike import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_alpha, poisson_generator, spike_recorder,
 )
@@ -85,7 +85,7 @@ def main():
     res = sim.simulate(simtime * u.ms)
     erate = res.rate(esr.segments[0].population)
     irate = res.rate(isr.segments[0].population)
-    print("Brunel network (brainpy.state, alpha synapses)")
+    print("Brunel network (brainspike, alpha synapses)")
     print(f"  Excitatory rate : {erate:.2f} spks/s")
     print(f"  Inhibitory rate : {irate:.2f} spks/s")
 

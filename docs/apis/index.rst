@@ -1,7 +1,7 @@
 API Reference
 =============
 
-Complete API reference for ``brainpy.state``, organized by model family. The
+Complete API reference for ``brainspike``, organized by model family. The
 library exposes two families that share the same state-based substrate:
 
 - **BrainPy-style** — composable, differentiable neurons, synapses, projections,
@@ -9,7 +9,7 @@ library exposes two families that share the same state-based substrate:
 - **NEST-compatible** — JAX re-implementations that preserve NEST parameter
   names and semantics, plus the spatial and network-builder layers.
 
-Both families are usable from the single public ``brainpy.state`` namespace.
+Both families are usable from the single public ``brainspike`` namespace.
 
 .. toctree::
    :hidden:

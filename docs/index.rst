@@ -1,13 +1,13 @@
-``brainpy.state`` documentation
+``brainspike`` documentation
 =====================================
 
-`brainpy.state <https://github.com/chaobrain/brainpy.state>`_ is the
+`brainspike <https://github.com/chaobrain/brainspike>`_ is the
 point-neuron modeling layer of the `BrainX ecosystem
 <https://brainx.chaobrain.com>`_. It provides spiking neural network models
 built on `JAX <https://github.com/jax-ml/jax>`_ and the `brainstate
 <https://github.com/chaobrain/brainstate>`_ state-management system.
 
-**One differentiable substrate, two worlds.** ``brainpy.state`` is designed so
+**One differentiable substrate, two worlds.** ``brainspike`` is designed so
 that the *same* models serve both **brain simulation** (biophysical networks,
 spike rasters, conductance dynamics) and **brain-inspired computing**
 (surrogate-gradient training, online learning). The bridge is a small set of
@@ -16,11 +16,11 @@ ideas — explicit **State**, **physical units**, and the distinctive
 the number of neurons while remaining fully differentiable. See
 :doc:`concepts/alignpre-alignpost` for the keystone chapter.
 
-.. admonition:: ``brainpy`` and ``brainpy.state``
+.. admonition:: ``brainpy`` and ``brainspike``
 
-   ``brainpy.state`` is the **state-based modeling layer** of BrainPy — developed and
-   released as the standalone ``brainpy_state`` package and surfaced through the
-   ``brainpy.state`` namespace. It is the recommended starting point for new
+   ``brainspike`` is the **state-based modeling layer** of BrainPy — developed and
+   released as the standalone ``brainspike`` package and surfaced through the
+   ``brainspike`` namespace. It is the recommended starting point for new
    ``State``-based, differentiable spiking-network models. The classic,
    ``DynamicalSystem``-based ``brainpy`` API (``brainpy.dyn``, ``brainpy.math``,
    ``brainpy.integrators``) is unchanged and fully supported — the two paradigms
@@ -48,7 +48,7 @@ the number of neurons while remaining fully differentiable. See
 Two model families
 ^^^^^^^^^^^^^^^^^^^
 
-``brainpy.state`` ships two complementary, production-ready model families on a
+``brainspike`` ships two complementary, production-ready model families on a
 shared substrate:
 
 - **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx,
@@ -75,21 +75,21 @@ Installation
 
        .. code-block:: bash
 
-          pip install -U brainpy.state[cpu]
+          pip install -U brainspike[cpu]
 
     .. tab-item:: GPU
 
        .. code-block:: bash
 
-          pip install -U brainpy.state[cuda12]
+          pip install -U brainspike[cuda12]
 
-          pip install -U brainpy.state[cuda13]
+          pip install -U brainspike[cuda13]
 
     .. tab-item:: TPU
 
        .. code-block:: bash
 
-          pip install -U brainpy.state[tpu]
+          pip install -U brainspike[tpu]
 
     .. tab-item:: Ecosystem
 
@@ -112,6 +112,8 @@ high-level BrainPy-style API, and with the NEST-compatible ``Simulator``. See th
       .. code-block:: python
 
          import brainpy
+
+         import brainspike
          import brainstate
          import braintools
          import brainunit as u
@@ -122,24 +124,24 @@ high-level BrainPy-style API, and with the NEST-compatible ``Simulator``. See th
                  super().__init__()
                  self.n_exc, self.n_inh = 3200, 800
                  self.num = self.n_exc + self.n_inh
-                 self.N = brainpy.state.LIFRef(
+                 self.N = brainspike.LIFRef(
                      self.num,
                      V_rest=-60. * u.mV, V_th=-50. * u.mV, V_reset=-60. * u.mV,
                      tau=20. * u.ms, tau_ref=5. * u.ms,
                      V_initializer=braintools.init.Normal(-55., 2., unit=u.mV),
                  )
-                 self.E = brainpy.state.AlignPostProj(
+                 self.E = brainspike.AlignPostProj(
                      comm=brainstate.nn.EventFixedProb(self.n_exc, self.num,
                                                         conn_num=0.02, conn_weight=0.6 * u.mS),
-                     syn=brainpy.state.Expon.desc(self.num, tau=5. * u.ms),
-                     out=brainpy.state.COBA.desc(E=0. * u.mV),
+                     syn=brainspike.Expon.desc(self.num, tau=5. * u.ms),
+                     out=brainspike.COBA.desc(E=0. * u.mV),
                      post=self.N,
                  )
-                 self.I = brainpy.state.AlignPostProj(
+                 self.I = brainspike.AlignPostProj(
                      comm=brainstate.nn.EventFixedProb(self.n_inh, self.num,
                                                         conn_num=0.02, conn_weight=6.7 * u.mS),
-                     syn=brainpy.state.Expon.desc(self.num, tau=10. * u.ms),
-                     out=brainpy.state.COBA.desc(E=-80. * u.mV),
+                     syn=brainspike.Expon.desc(self.num, tau=10. * u.ms),
+                     out=brainspike.COBA.desc(E=-80. * u.mV),
                      post=self.N,
                  )
 
@@ -165,7 +167,7 @@ high-level BrainPy-style API, and with the NEST-compatible ``Simulator``. See th
 
          import brainstate
          import brainunit as u
-         from brainpy.state import (Simulator, iaf_psc_alpha, poisson_generator,
+         from brainspike import (Simulator, iaf_psc_alpha, poisson_generator,
                                     spike_recorder, all_to_all, fixed_indegree)
 
 
@@ -249,7 +251,7 @@ Learn more
 See also the ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^
 
-``brainpy.state`` is one part of the `BrainX ecosystem <https://brainx.chaobrain.com/>`__:
+``brainspike`` is one part of the `BrainX ecosystem <https://brainx.chaobrain.com/>`__:
 
 - `brainstate <https://github.com/chaobrain/brainstate>`_ — state management for JAX-based brain modeling
 - `brainunit <https://github.com/chaobrain/brainunit>`_ — physical units for neuroscience

@@ -18,7 +18,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_cond_exp_sfa_rr, voltmeter
+from brainspike import Simulator, iaf_cond_exp_sfa_rr, voltmeter
 
 
 def build(vinit=-70.0, simtime=75.0):
@@ -56,7 +56,7 @@ def main():
     except ImportError:
         have_plt = False
 
-    print("Initial membrane voltage sweep (brainpy.state, iaf_cond_exp_sfa_rr)")
+    print("Initial membrane voltage sweep (brainspike, iaf_cond_exp_sfa_rr)")
     for vinit in np.arange(-100, -50, 10, float):
         sim, vm, _neuron, _t = build(vinit=vinit, simtime=simtime)
         res = sim.simulate(simtime * u.ms)

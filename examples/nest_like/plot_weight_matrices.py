@@ -14,7 +14,7 @@ four population pairings it enumerates the realized edges and scatters
 ``W[source, target] += weight`` into a dense matrix — no held projection handle,
 exactly NEST's ``SynapseCollection`` idiom.
 
-Two faithful adaptations to ``brainpy.state``:
+Two faithful adaptations to ``brainspike``:
 
 * **Population-local indices.** ``source`` / ``target`` are indices *within* their
   population, so the matrices are indexed directly — there is no global node-id
@@ -37,8 +37,8 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_psc_alpha, fixed_indegree
-from brainpy.state import dist
+from brainspike import Simulator, iaf_psc_alpha, fixed_indegree
+from brainspike import dist
 
 # --- NEST plot_weight_matrices parameters (verbatim) -------------------------
 NE = 100            # number of excitatory neurons
@@ -144,7 +144,7 @@ def weight_matrices(sim, E, I):
 
 def main():
     print("plot_weight_matrices: E/I weight-matrix extraction by connection "
-          "introspection (brainpy.state)")
+          "introspection (brainspike)")
     sim, E, I = build()
     W = weight_matrices(sim, E, I)
     for name in ('EE', 'EI', 'IE', 'II'):

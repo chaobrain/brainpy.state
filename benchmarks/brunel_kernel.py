@@ -40,14 +40,14 @@ BENCHMARK = 'brunel_kernel'
 def run_one(args):
     """Measure one (order, precision) configuration in this process."""
     meta = base_meta(args)
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     sys.path.insert(0, REPO_ROOT)
 
     import jax
     jax.config.update('jax_enable_x64', args.precision == 64)
     import brainunit as u
     import brainevent
-    from brainpy_state._kernel.validation.brunel import build_brunel, rates
+    from brainspike._kernel.validation.brunel import build_brunel, rates
 
     if args.brainevent_backend:  # upstream: brainevent#199 (GPU float64 needs 'cusparse')
         brainevent.config.set_backend('gpu', args.brainevent_backend)

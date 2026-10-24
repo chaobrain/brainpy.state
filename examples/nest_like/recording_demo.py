@@ -8,7 +8,7 @@ True/False) to show how to select a backend and read the data back. The network
 is deliberately trivial: a single ``poisson_generator`` stimulates one
 ``iaf_psc_exp`` so there is some spike data to record.
 
-brainpy.state records **in memory** only — there is no file-backed backend yet
+brainspike records **in memory** only — there is no file-backed backend yet
 (``devices-gap.md`` P2) — so the ``record_to`` axis of the tour collapses to the
 in-memory equivalent: a ``spike_recorder`` taps the neuron's per-step spikes and
 the trace is read back with ``res.spikes`` / ``res.rate`` / ``res.n_events``. The
@@ -34,7 +34,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_psc_exp, poisson_generator,
+from brainspike import (Simulator, iaf_psc_exp, poisson_generator,
                            spike_recorder, multimeter)
 
 #: Poisson drive rate (Hz) — the upstream's saturating 1 MHz.
@@ -124,7 +124,7 @@ def main():
     sim, sr, mm, _neuron, simtime = build()
     res = sim.simulate(simtime * u.ms)
 
-    print("recording_demo (brainpy.state, iaf_psc_exp, in-memory backend)")
+    print("recording_demo (brainspike, iaf_psc_exp, in-memory backend)")
     print(f"  Poisson drive {RATE:.0f} Hz (w={WEIGHT} pA) -> single neuron")
     print(f"  resolution: {float(u.get_mantissa(res.times[1] - res.times[0])):.1f} ms")
     print(f"  firing rate: {res.rate(sr):.2f} spks/s ; n_events: {res.n_events(sr)}")

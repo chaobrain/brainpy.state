@@ -21,7 +21,7 @@ NMDA-flavoured EPSPs on dend2, and the GABA IPSPs hyperpolarising the soma — a
 attenuated as they spread electrotonically to the other compartments.
 
 The live-NEST parity test
-(``brainpy_state/_nest_validation/receptors_and_current_test.py``) drives a real
+(``brainspike/_nest_validation/receptors_and_current_test.py``) drives a real
 ``cm_default`` with this identical wiring and confirms the three compartment
 voltages match.
 
@@ -35,7 +35,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, cm_default, spike_generator, dc_generator, multimeter
+from brainspike import Simulator, cm_default, spike_generator, dc_generator, multimeter
 
 DT = 0.1        # resolution [ms]
 T_SIM = 400.0   # total simulation time [ms]
@@ -124,7 +124,7 @@ def run_traces(simtime=T_SIM):
 
 
 def main():
-    print("Three-compartment cm_default: GABA/AMPA/AMPA_NMDA receptors + dc (brainpy.state)")
+    print("Three-compartment cm_default: GABA/AMPA/AMPA_NMDA receptors + dc (brainspike)")
     t, traces = run_traces()
     for name, label in (('v_comp0', 'soma (GABA)'), ('v_comp1', 'dend1 (AMPA+dc)'),
                         ('v_comp2', 'dend2 (AMPA_NMDA)')):

@@ -23,7 +23,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_psc_alpha, poisson_generator,
+from brainspike import (Simulator, iaf_psc_alpha, poisson_generator,
                            voltmeter, spike_recorder)
 
 
@@ -71,7 +71,7 @@ def main():
     res = sim.simulate(simtime * u.ms)
     t = np.asarray(u.get_mantissa(res.times / u.ms))
     v = np.asarray(u.get_mantissa(res.trace(vm, "V_m") / u.mV)).reshape(-1)
-    print("One neuron with noise (brainpy.state)")
+    print("One neuron with noise (brainspike)")
     print(f"  Poisson drive 80 kHz (w=+1.2) / 15 kHz (w=-1.0)")
     print(f"  V_m: mean {v.mean():.2f} mV, std {v.std():.2f} mV")
     print(f"  Firing rate: {res.rate(sr):.2f} spks/s")

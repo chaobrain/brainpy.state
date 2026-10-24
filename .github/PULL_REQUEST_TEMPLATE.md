@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to brainpy.state!
+Thank you for contributing to brainspike!
 Please fill out this template to help us review your pull request.
 See CONTRIBUTING.md for guidelines.
 -->
@@ -53,7 +53,7 @@ See CONTRIBUTING.md for guidelines.
 
 **Test environment:**
 - Python version:
-- brainpy.state version:
+- brainspike version:
 - JAX version:
 - OS:
 

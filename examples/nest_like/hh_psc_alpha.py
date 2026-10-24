@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Hodgkin–Huxley neuron (``hh_psc_alpha``) F–I curve — NEST-style port.
 
-Port of NEST's ``hh_psc_alpha.py`` onto brainpy.state's explicit Simulator API.
+Port of NEST's ``hh_psc_alpha.py`` onto brainspike's explicit Simulator API.
 A single ``hh_psc_alpha`` neuron is driven by a constant bias current ``I_e`` (the
 NEST-faithful drive for this demo); the membrane potential and the three gating
 variables are recorded with a ``multimeter``, and the spike count is recorded with
@@ -25,7 +25,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import Simulator, hh_psc_alpha, multimeter, spike_recorder
+from brainspike import Simulator, hh_psc_alpha, multimeter, spike_recorder
 
 #: NEST ``hh_psc_alpha`` default parameters (excluding the swept ``I_e``).
 MODEL_PARAMS = dict(
@@ -133,7 +133,7 @@ def fi_curve(amps, dt=0.1, simtime=1000.0, warmup=200.0):
 
 
 def main():
-    print("hh_psc_alpha (brainpy.state) — subthreshold trace + F–I curve")
+    print("hh_psc_alpha (brainspike) — subthreshold trace + F–I curve")
 
     # Subthreshold relaxation from V_m_init = -65 mV toward rest.
     tr = run_traces(I_e=0.0, dt=0.1, simtime=50.0)

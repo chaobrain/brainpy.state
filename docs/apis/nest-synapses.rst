@@ -5,7 +5,7 @@ Static and structural synapse models compatible with the
 `NEST simulator <https://nest-simulator.readthedocs.io/>`_.
 For activity-dependent plasticity models see :doc:`nest-plasticity`.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 
 Static Synapses

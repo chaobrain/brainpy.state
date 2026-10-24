@@ -1,4 +1,4 @@
-# brainpy_state
+# brainspike
 
 ## Working agreement
 
@@ -18,9 +18,9 @@
    match later changes.
 8. Tests should >90% coverage, but focus on meaningful tests that cover edge cases and critical paths, not just trivial lines. 
 9. **Two namespaces, two contexts — never cross them, or development hits circular imports.**
-    - **Example code (docstrings, `examples/`, docs)** → use the public `brainpy.state` namespace (`from brainpy import state as ...`, or `from brainpy.state import ...`); examples must run against the surface end users actually import, and must NOT import private `brainpy_state._*` submodules (inline or re-derive what they need from the public API instead).
-    - **Inner package source and tests** → import `brainpy_state` directly (`from brainpy_state import ...`). Reaching the package through `brainpy.state` from inside it re-enters `brainpy`'s import machinery while `brainpy_state` is still initializing — a partially-initialized-module / circular-import error — and can resolve to an installed `brainpy` instead of the local source under test.
-    - **Enforced.** `brainpy_state/_namespace.py::enforce_namespace_access()` runs at package-init top and raises `ImportError` on a direct external `import brainpy_state`, pointing users at `brainpy.state`. The blessed `brainpy.state` shim, `pytest`, `sphinx`, and the `BRAINPY_STATE_ALLOW_DIRECT_IMPORT=1` override are exempt — so internal source/tests/doc-builds keep importing `brainpy_state` directly.
+    - **Example code (docstrings, `examples/`, docs)** → use the public `brainspike` namespace (`from brainpy import state as ...`, or `from brainspike import ...`); examples must run against the surface end users actually import, and must NOT import private `brainspike._*` submodules (inline or re-derive what they need from the public API instead).
+    - **Inner package source and tests** → import `brainspike` directly (`from brainspike import ...`). Reaching the package through `brainspike` from inside it re-enters `brainpy`'s import machinery while `brainspike` is still initializing — a partially-initialized-module / circular-import error — and can resolve to an installed `brainpy` instead of the local source under test.
+    - **Enforced.** `brainspike/_namespace.py::enforce_namespace_access()` runs at package-init top and raises `ImportError` on a direct external `import brainspike`, pointing users at `brainspike`. The blessed `brainspike` shim, `pytest`, `sphinx`, and the `BRAINSPIKE_ALLOW_DIRECT_IMPORT=1` override are exempt — so internal source/tests/doc-builds keep importing `brainspike` directly.
 10. **Never drive a model with a bare Python `for`/`while` loop when it runs repeatedly.** Python loops execute op-by-op (dispatch overhead, no fusion) and trace fresh each step; the `brainstate.transform` primitives lower the whole loop into one compiled XLA program, tracing the body only once. Pick by shape of the work:
     - **Single step or one-shot call** → `brainstate.transform.jit` — wrap the step/model call so it compiles once and reuses the trace.
     - **Many steps, collect outputs** → `brainstate.transform.for_loop` — repeat a step `length` times or map over `xs`; `State` is carried automatically and stacked outputs are returned.

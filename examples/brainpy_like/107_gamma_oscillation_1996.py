@@ -23,12 +23,12 @@
 import brainunit as u
 import matplotlib.pyplot as plt
 
-import brainpy
+import brainspike
 import brainstate
 import braintools
 
 
-class HH(brainpy.state.Neuron):
+class HH(brainspike.Neuron):
     def __init__(
         self, in_size, ENa=55. * u.mV, EK=-90. * u.mV, EL=-65 * u.mV, C=1.0 * u.uF,
         gNa=35. * u.msiemens, gK=9. * u.msiemens, gL=0.1 * u.msiemens, V_th=20. * u.mV, phi=5.0
@@ -88,7 +88,7 @@ class HH(brainpy.state.Neuron):
         return self.V.value
 
 
-class Synapse(brainpy.state.Synapse):
+class Synapse(brainspike.Synapse):
     def __init__(self, in_size, alpha=12 / u.ms, beta=0.1 / u.ms):
         super().__init__(in_size=in_size)
         self.alpha = alpha
@@ -112,12 +112,12 @@ class GammaNet(brainstate.nn.Module):
         self.neu = HH(num)
         # self.syn = brainstate.nn.GABAa(num, alpha=12 / (u.ms * u.mM), beta=0.1 / u.ms)
         self.syn = Synapse(num)
-        self.proj = brainpy.state.CurrentProj(
+        self.proj = brainspike.CurrentProj(
             self.syn.prefetch('g'),
             comm=brainstate.nn.AllToAll(
                 self.neu.varshape, self.neu.varshape, include_self=False, w_init=0.1 * u.msiemens / num
             ),
-            out=brainpy.state.COBA(E=-75. * u.mV),
+            out=brainspike.COBA(E=-75. * u.mV),
             post=self.neu
         )
 

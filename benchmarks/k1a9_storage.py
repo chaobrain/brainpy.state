@@ -31,7 +31,7 @@ PREFIX = 'K1A9_RUN '
 
 
 def run_one(args):
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     sys.path.insert(0, REPO_ROOT)
     sys.path.insert(0, HERE)
     import jax
@@ -39,10 +39,10 @@ def run_one(args):
     import brainevent
     import brainunit as u
     import _bench_utils as bu
-    from brainpy_state._kernel.connectivity import fixed_indegree, one_to_one
-    from brainpy_state._kernel.models import iaf_psc_alpha, poisson_generator
-    from brainpy_state._kernel.network import Network
-    from brainpy_state._kernel.validation.brunel import brunel_params
+    from brainspike._kernel.connectivity import fixed_indegree, one_to_one
+    from brainspike._kernel.models import iaf_psc_alpha, poisson_generator
+    from brainspike._kernel.network import Network
+    from brainspike._kernel.validation.brunel import brunel_params
 
     if args.brainevent_backend:  # upstream: brainevent#199 (float64 GPU needs 'cusparse')
         brainevent.config.set_backend('gpu', args.brainevent_backend)

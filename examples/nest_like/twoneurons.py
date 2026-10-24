@@ -6,7 +6,7 @@ Port of NEST's ``twoneurons.py``. A presynaptic ``iaf_psc_alpha`` (``neuron_1``)
 is driven by a constant current ``I_e = 376 pA`` and connected to a postsynaptic
 ``iaf_psc_alpha`` (``neuron_2``) through a static synapse (``weight = 20 pA``,
 ``delay = 1 ms``). Each neuron's membrane potential is observed by its own
-``voltmeter`` --- a brainpy.state analog tap records a single population, so the
+``voltmeter`` --- a brainspike analog tap records a single population, so the
 NEST demo's single voltmeter-to-both-neurons connection becomes one voltmeter per
 neuron (the reversed ``connect(voltmeter, neuron)`` direction is the same).
 
@@ -20,7 +20,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_psc_alpha, voltmeter
+from brainspike import Simulator, iaf_psc_alpha, voltmeter
 
 
 def build(I_e=376.0, weight=20.0, delay=1.0, simtime=1000.0):
@@ -62,7 +62,7 @@ def main():
     t = np.asarray(u.get_mantissa(res.times / u.ms))
     v1 = np.asarray(u.get_mantissa(res.trace(vm1, "V_m") / u.mV)).reshape(-1)
     v2 = np.asarray(u.get_mantissa(res.trace(vm2, "V_m") / u.mV)).reshape(-1)
-    print("Two neurons (brainpy.state)")
+    print("Two neurons (brainspike)")
     print(f"  neuron_1 (I_e=376 pA): {int((np.diff(v1) < -10.0).sum())} spikes")
     print(f"  neuron_2 (w=20 pA PSPs): V_m in [{v2.min():.2f}, {v2.max():.2f}] mV")
 

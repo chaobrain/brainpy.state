@@ -4,9 +4,9 @@
 Semantic divergences
 ====================
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
-When you port a NEST model to ``brainpy.state``, the parameter *names* match — but
+When you port a NEST model to ``brainspike``, the parameter *names* match — but
 a few **semantics** differ in ways the source code does not surface at a glance.
 This catalog states each divergence exactly. Every entry is backed by a live-NEST
 parity test, so the catalog consolidates what those tests proved (see
@@ -18,7 +18,7 @@ There are five kinds of divergence a port must account for.
 1. Where state lives
 ====================
 
-NEST sometimes keeps learning or trace state on the *neuron*; ``brainpy.state``
+NEST sometimes keeps learning or trace state on the *neuron*; ``brainspike``
 moves it onto the *synapse* (or a broadcast node) so a rule runs standalone —
 without requiring an archiving-capable postsynaptic neuron. The canonical case is
 the STDP post-synaptic trace time constant ``tau_minus``: a **neuron** parameter
@@ -37,7 +37,7 @@ table — is on the STDP page:
 ==========================
 
 Wherever NEST precomputes a weight change on an archiving neuron,
-``brainpy.state`` relocates the governing parameters onto the synapse spec (or, for
+``brainspike`` relocates the governing parameters onto the synapse spec (or, for
 the dopamine modulator, onto the ``volume_transmitter``). Parity always sets
 identical values on both sides. The exhaustive table — including which Clopath
 parameters move to the synapse and which voltage filters *stay* on the neuron — is
@@ -69,7 +69,7 @@ fresh measurement:
      - not reproduced (documented)
      - :ref:`stdp-phantom-pre`
 
-The online-vs-deferred origin of these bands — ``brainpy.state`` integrates every
+The online-vs-deferred origin of these bands — ``brainspike`` integrates every
 step while NEST defers the weight integral to the next pre spike — is explained in
 the STDP overview.
 

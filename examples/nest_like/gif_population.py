@@ -25,7 +25,7 @@ all-to-all, exactly as in NEST.
 **Validation is a distributional carve-out, not a trace parity.** The GIF escape
 spiking and the Poisson drive are PRNG streams that diverge between NEST and JAX,
 so a per-sample comparison is meaningless; both simulators agree only
-*distributionally*. ``brainpy_state/_nest_validation/gif_population_test.py``
+*distributionally*. ``brainspike/_nest_validation/gif_population_test.py``
 asserts (NEST-free) that the adaptation oscillation is present (the binned
 population-rate autocorrelation dips below zero at an intermediate lag) and that
 recurrence sharpens it, and — when NEST is present — that the seed-averaged
@@ -41,8 +41,8 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, gif_psc_exp, poisson_generator, spike_recorder
-from brainpy.state import fixed_indegree, all_to_all
+from brainspike import Simulator, gif_psc_exp, poisson_generator, spike_recorder
+from brainspike import fixed_indegree, all_to_all
 
 DT = 0.1            # resolution [ms]
 T_SIM = 2000.0      # simulation time [ms]
@@ -199,7 +199,7 @@ def run_population(seed=0, *, recurrent=True, n_ex=N_EX, t_sim=T_SIM, bin_ms=5.0
 
 def main():
     print("Population of GIF neurons with adaptation-driven oscillation "
-          "(brainpy.state)")
+          "(brainspike)")
     rec = run_population(seed=0, recurrent=True)
     ctl = run_population(seed=0, recurrent=False)
     max_lag = int(round(500.0 / rec['bin_ms']))         # 500 ms of lags

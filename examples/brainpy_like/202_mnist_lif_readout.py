@@ -17,7 +17,7 @@
 import argparse
 import time
 
-import brainpy
+import brainspike
 import braintools
 import brainunit as u
 import jax.numpy as jnp
@@ -44,7 +44,7 @@ class SNN(brainstate.nn.Module):
         super().__init__()
         self.l1 = brainstate.nn.Linear(
             28 * 28, 10, b_init=None, w_init=braintools.init.LecunNormal(scale=10., unit=u.mA))
-        self.l2 = brainpy.state.LIF(10, V_rest=0. * u.mV, V_reset=0. * u.mV, V_th=1. * u.mV, tau=tau * u.ms)
+        self.l2 = brainspike.LIF(10, V_rest=0. * u.mV, V_reset=0. * u.mV, V_th=1. * u.mV, tau=tau * u.ms)
 
     def update(self, x):
         return self.l2(self.l1(x))

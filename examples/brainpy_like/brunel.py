@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Brunel random network — flagship example for the brainpy.state Network API.
+"""Brunel random network — flagship example for the brainspike Network API.
 
 Two populations (excitatory + inhibitory), random fixed-indegree connectivity,
 conductance-based synapses. Built with the imperative ``Builder`` style.
@@ -11,7 +11,7 @@ import brainstate
 import jax.numpy as jnp
 import brainunit as u
 
-from brainpy.state import (
+from brainspike import (
     Builder, LIF, Expon, COBA, FixedIndegreeProj,
 )
 

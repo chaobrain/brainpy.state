@@ -9,12 +9,12 @@ NEST's ``csa_example`` builds connectivity through the **Connection Set Algebra*
 
 **The CSA / conngen mechanism is intentionally not ported.** It is a NEST-specific
 integration with an external library (CSA + libneurosim) for *simulator-independent*
-connectivity descriptions; brainpy.state has no ``conngen`` rule and no CSA dependency.
+connectivity descriptions; brainspike has no ``conngen`` rule and no CSA dependency.
 
 This is not a capability gap, though: the *connectivity* a CSA expression describes is
-expressed natively by brainpy.state's connection rules.
+expressed natively by brainspike's connection rules.
 
-* ``csa.random(0.1)`` (this demo) is exactly :func:`~brainpy.state.pairwise_bernoulli` with
+* ``csa.random(0.1)`` (this demo) is exactly :func:`~brainspike.pairwise_bernoulli` with
   ``p=0.1`` -- demonstrated by :func:`run` below.
 * ``csa.random * (csa.gaussian(sigma, cutoff) * d)`` (the *spatial* CSA demo,
   ``csa_spatial_example``) is a distance-dependent Gaussian draw, ported natively in
@@ -40,7 +40,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(n=16, p=0.1, seed=0):
@@ -79,7 +79,7 @@ def run(n=16, p=0.1, seed=0):
 
 def main():
     density = run(n=200)
-    print('csa_example (brainpy.state -- CSA conngen not ported; native pairwise_bernoulli)')
+    print('csa_example (brainspike -- CSA conngen not ported; native pairwise_bernoulli)')
     print(f'  csa.random(0.1) ~= pairwise_bernoulli(0.1); realized density = {density:.3f}')
     print('  for spatial CSA connectivity, see examples/nest_like/spatial_csa.py')
 

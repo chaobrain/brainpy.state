@@ -2,19 +2,19 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """A single astrocyte with calcium dynamics (NEST ``astrocyte_single`` port).
 
-Port of NEST's ``astrocyte_single.py``. One :class:`~brainpy.state.astrocyte_lr_1994`
+Port of NEST's ``astrocyte_single.py``. One :class:`~brainspike.astrocyte_lr_1994`
 is driven by a Poissonian spike train: each presynaptic spike raises astrocytic
 inositol 1,4,5-trisphosphate (IP3), which in turn drives the cytosolic calcium
 dynamics (Li & Rinzel 1994; De Young & Keizer 1992; Nadkarni & Jung 2003).
 
 NEST's ``astrocyte_lr_1994`` exposes no ``SIC`` recordable (only ``IP3`` /
 ``Ca_astro`` / ``h_IP3R``), so to surface the resulting slow inward current this
-port adds one downstream :class:`~brainpy.state.aeif_cond_alpha_astro` connected by
-a :class:`~brainpy.state.sic_connection`; its ``I_SIC`` is the astrocyte's emitted
+port adds one downstream :class:`~brainspike.aeif_cond_alpha_astro` connected by
+a :class:`~brainspike.sic_connection`; its ``I_SIC`` is the astrocyte's emitted
 SIC delivered ``sic_delay_steps`` later. The IP3/Ca dynamics are identical to NEST's
 single-astrocyte demo.
 
-The whole model runs through the :class:`~brainpy.state.Simulator` (one compiled
+The whole model runs through the :class:`~brainspike.Simulator` (one compiled
 ``for_loop``); there is no Python step loop.
 
 Run:  python examples/nest_like/astrocyte_single.py
@@ -28,7 +28,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(sim_time=60000.0, *, dt=0.1, poisson_rate=1.0, poisson_weight=1.0,
