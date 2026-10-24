@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] – 2026-10-25
+
+### Highlights
+
+The package is renamed to **`brainspike`** (`pip install brainspike`,
+`import brainspike`). It covers point-neuron spiking networks: building,
+simulating and training them, unified by a kernel language. The NEST-compatible
+models, the `Simulator`, `dist`, `spatial` and the kernel keep their names under
+the new namespace.
+
+### Changed
+
+- **Renamed** the distribution and import package `brainpy_state` / `brainpy.state`
+  to `brainspike`. Replace `brainpy.state.X` with `brainspike.X` for every name
+  that is still exported. Environment variables `BRAINPY_STATE_*` are now
+  `BRAINSPIKE_*`.
+- `brainpy` is no longer a runtime dependency. It is used only by the kernel
+  parity tests (`requirements-dev.txt`).
+- The documentation moves to <https://brainx.chaobrain.com/brainspike/> and the
+  repository to <https://github.com/chaobrain/brainspike>.
+
+### Removed
+
+- The BrainPy-style models and helpers: the LIF / HH / Izhikevich / reduced
+  neuron families (`IF`, `LIF`, `LIFRef`, `ALIF`, `ExpIF`, `AdExIF`, `QuaIF`,
+  `AdQuaIF`, `Gif`, `CubaLIF`, `CobaLIF`, `HH`, `MorrisLecar`, `WangBuzsakiHH`,
+  `Izhikevich`, `FitzHughNagumo`, `HindmarshRose` and their `*Ref` variants),
+  synapses (`Expon`, `DualExpon`, `Alpha`, `AMPA`, `GABAa`, `BioNMDA`), synaptic
+  outputs (`SynOut`, `COBA`, `CUBA`, `MgBlock`), `STP` / `STD`, projections
+  (`Projection`, `AlignPostProj`, `DeltaProj`, `CurrentProj`,
+  `align_pre_projection`, `align_post_projection`, gap junctions),
+  `LeakyRateReadout`, and the input generators (`PoissonSpike`, `PoissonEncoder`,
+  `PoissonInput`, `poisson_input`, `SectionInput`, `ConstantInput`, `StepInput`,
+  `RampInput`, `SinusoidalInput`, `OUProcessInput`, `WienerProcessInput`).
+- The high-level `Network` / `Builder` API, `Recorder`, and the rule-based
+  projections (`OneToOneProj`, `AllToAllProj`, `PairwiseBernoulliProj`,
+  `SymmetricPairwiseBernoulliProj`, `FixedIndegreeProj`, `FixedOutdegreeProj`,
+  `FixedTotalNumberProj`, `PairwisePoissonProj`). Build networks with
+  `Simulator`; the kernel `Network` replaces them in a later release.
+
+---
+
 ## [0.1.0] – 2026-06-17
 
 ### Highlights
