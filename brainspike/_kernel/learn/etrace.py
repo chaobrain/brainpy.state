@@ -3,18 +3,20 @@
 
 Online-learning algorithms (e-prop, D-RTRL, ...) live in braintrace;
 ``brainspike`` guarantees that its networks are *etrace-compatible* and says
-clearly when one is not. braintrace 0.2.6 silently returns zero or wrong gradients
-in several situations (spec §1), so the rules are checked before
-``braintrace.compile``:
+clearly when one is not. braintrace 0.2.6 silently returned zero or wrong gradients
+in several situations (spec §1; braintrace#184-#186, fixed in 0.2.7), so the rules
+are checked before ``braintrace.compile``:
 
 1. **Weights are ``ParamState``\\ s applied through braintrace primitives**
    (``braintrace.matmul`` for Dense, ``braintrace.sparse_matmul`` for CSR -- the
    storages' ``forward_etrace``). A trainable ``ParamState`` that braintrace does not
    relate to a hidden state (raw matmul, neuron parameter used element-wise) would
    get a zero gradient.
-2. **No braintrace primitive inside a ``while`` body**: braintrace 0.2.6 has no
-   fixed per-iteration Jacobian for a data-dependent trip count and raises
-   ``NotImplementedError``. Static ``scan`` / ``fori_loop`` bodies are fine
+2. **No braintrace primitive inside a ``while`` body**: braintrace has no fixed
+   per-iteration Jacobian for a data-dependent trip count and raises
+   ``NotImplementedError`` (by design, still so in 0.2.7). Weight-free ``while``
+   loops are not rejected (supported since braintrace 0.2.7, braintrace#186).
+   Static ``scan`` / ``fori_loop`` bodies are fine
    (braintrace unrolls them; gradients equal the Python-unrolled loop), so port
    inputs may be applied per substep in a scanned integrator.
 3. **Outputs are read from ``HiddenState`` values**: an output depending on a
@@ -58,8 +60,9 @@ __all__ = [
     'Online',
 ]
 
-# upstream: braintrace#186 -- braintrace 0.2.6 handles ETP primitives in static scan
-# bodies but not in while bodies; rule 2 rejects only the latter.
+# upstream: braintrace#186 (fixed in 0.2.7: weight-free while loops) -- braintrace handles
+# ETP primitives in static scan bodies but, by design, not in while bodies; rule 2
+# rejects only the latter.
 _LOOP_PRIMITIVES = ('while',)
 
 
@@ -237,8 +240,8 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
     writes = list(sf.get_write_states(*example_inputs))
 
     # rule 4: no ParamState writes
-    # upstream: braintrace#187 -- intended behaviour; shorten this message to a pointer
-    # once braintrace documents the rule and makes NotSupportedError actionable.
+    # upstream: braintrace#187 (done in 0.2.7: braintrace's error now names the state and
+    # both supported patterns) -- rule 4 stays, checked first, with the decision-L4 wording.
     bad = [name(s) for s in writes if isinstance(s, brainstate.ParamState)]
     if bad:
         raise EtraceError(f'ParamState(s) {bad} are written inside the step: online learning '
@@ -246,7 +249,7 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
                           f'online learning is not supported, decision L4)')
 
     # rule 2: no ETP primitives inside while bodies (static scan / fori_loop are fine)
-    # upstream: braintrace#186
+    # upstream: braintrace#186 (ETP weights in while bodies stay unsupported upstream)
     looped = _etp_in_loops(jaxpr)
     if looped:
         raise EtraceError(f'braintrace primitives {sorted(set(looped))} are called inside a '

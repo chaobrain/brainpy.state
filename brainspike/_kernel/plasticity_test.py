@@ -394,6 +394,8 @@ def random_net(rule, n_pre=12, n_post=8, T=400.0, seed=0, weight=None, observe=F
 
 
 class TestPaths:
+    # brainevent#200 (fixed in 0.3.0): csr_to_csc_index no longer warns under x64
+    @pytest.mark.filterwarnings('error:.*cannot safely cast:FutureWarning')
     def test_fast_equals_reference(self):
         add = dict(mu_plus=0.0, mu_minus=0.0, p=dict(lambda_=0.02, Wmax=80.0))
         with jax.enable_x64(True):
@@ -409,6 +411,8 @@ class TestPaths:
         assert np.any(W[-1] != W[0]) and W.min() >= 0.0 and W.max() <= 80.0
         assert np.any(W == 80.0) or np.any(W == 0.0) or np.ptp(W) > 1.0
 
+    # brainevent#200 (fixed in 0.3.0): csr_to_csc_index no longer warns under x64
+    @pytest.mark.filterwarnings('error:.*cannot safely cast:FutureWarning')
     def test_fast_path_float32_and_batched(self):
         rule = rule_of(mu_plus=0.0, mu_minus=0.0)
         net, proj = random_net(rule, T=100.0)

@@ -440,7 +440,6 @@ class PlasticPlan:
         self.post_e = jnp.asarray(np.asarray(storage.indices).astype(np.int32))
         self.path = self._resolve_path(p, w0_np)
         if self.path == 'fast':
-            # upstream: brainevent#200 -- int64 -> int32 scatter FutureWarning under x64
             ptr, ind, perm = brainevent.csr_to_csc_index(storage.indptr, storage.indices,
                                                          shape=(self.n_pre, self.n_post))
             self.csc: tuple[Any, Any, Any] | None = (jnp.asarray(ind), jnp.asarray(ptr),

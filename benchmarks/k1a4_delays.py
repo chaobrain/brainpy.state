@@ -76,7 +76,7 @@ def run_one(args):
     from brainspike._kernel import compiler
 
     backend = jax.default_backend()
-    if args.brainevent_backend:  # upstream: brainevent#199 (float64 GPU needs 'cusparse')
+    if args.brainevent_backend:  # optional GPU backend override (e.g. 'cusparse')
         import brainevent
         brainevent.config.set_backend('gpu', args.brainevent_backend)
     over = {k: v for k, v in (('chunk', args.chunk), ('capacity_factor', args.capacity_factor))
@@ -220,7 +220,7 @@ def main(argv=None):
         sp.add_argument('--window-ms', type=float, default=100.0)
         sp.add_argument('--repeats', type=int, default=5)
         sp.add_argument('--brainevent-backend', default=None,
-                        help="brainevent GPU backend (float64 on GPU needs 'cusparse', brainevent#199)")
+                        help="brainevent GPU backend override (e.g. 'cusparse'); default: brainevent's default")
         sp.add_argument('--chunk', type=int, default=None,
                         help='override the cost model chunk (segments per scatter iteration)')
         sp.add_argument('--capacity-factor', type=float, default=None,

@@ -413,14 +413,12 @@ def _spike_edges(n_pre=40, n_post=30, k=6, seed=0):
 
 
 class TestFloat64BinaryPayload:
-    """brainevent#204 / #199: float64 payloads on the binary path (K1a-10)."""
+    """brainevent#204 / #199 regression (K1a-10; fixed upstream in brainevent 0.3.0, K1b-0).
 
-    def test_events_dtype(self):
-        with jax.enable_x64(True):
-            assert S._events(jnp.ones(3, jnp.float64)).dtype == jnp.float32
-            for dt in (jnp.float32, jnp.bool_, jnp.float16):
-                x = jnp.ones(3, dt)
-                assert S._events(x) is x
+    float64 payloads on the binary path go to brainevent unchanged: forward values,
+    payload and weight gradients must equal the exact float path in float64 (CPU and
+    GPU; run this class on GPU too).
+    """
 
     @pytest.mark.parametrize('cls', STORAGES)
     @pytest.mark.parametrize('batch', [None, 3])
@@ -436,16 +434,6 @@ class TestFloat64BinaryPayload:
             assert yb.dtype == jnp.float64 and yf.dtype == jnp.float64
             assert yb.shape == shape[:-1] + (es.n_post,)
             np.testing.assert_allclose(np.asarray(yb), np.asarray(yf), rtol=1e-13, atol=1e-13)
-
-    def test_dense_forward_bit_identical_to_uncast_on_cpu(self):
-        # the cast changes nothing where brainevent reads float64 correctly (CPU)
-        with jax.enable_x64(True):
-            r = np.random.default_rng(1)
-            x = jnp.asarray(r.random((2, 50)) < 0.2, jnp.float64)
-            W = jnp.asarray(r.normal(size=(50, 20)))
-            with jax.default_device(jax.devices('cpu')[0]):
-                np.testing.assert_array_equal(np.asarray(S._binary_dense(x, W)),
-                                              np.asarray(brainevent_matmul(x, W)))
 
     @pytest.mark.parametrize('cls', STORAGES)
     def test_gradients_match_float_path(self, cls):
@@ -465,21 +453,40 @@ class TestFloat64BinaryPayload:
                 assert a.dtype == jnp.float64
                 np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-12, atol=1e-12)
 
-    def test_dense_forward_mode_and_check_grads(self):
+    @pytest.mark.parametrize('cls', STORAGES)
+    def test_forward_mode_matches_float_path(self, cls):
+        # JVPs (payload and weight tangents) equal the float path: what the hand-written
+        # custom_jvp of K1a-10 / 7c3dfba guaranteed while the payload was cast to float32
         with jax.enable_x64(True):
-            r = np.random.default_rng(3)
-            x = jnp.asarray(r.random(12) < 0.4, jnp.float64)
-            W = jnp.asarray(r.normal(size=(12, 7)))
-            jf = jax.jacfwd(S._binary_dense, argnums=1)(x, W)
-            jr = jax.jacrev(S._binary_dense, argnums=1)(x, W)
-            np.testing.assert_allclose(np.asarray(jf), np.asarray(jr), atol=1e-14)
+            es, r = _spike_edges(seed=4)
+            st = cls(es)
+            w = st.weight_from_edges(jnp.asarray(r.normal(size=es.n_edges)))
+            x = jnp.asarray(r.random(es.n_pre) < 0.3, jnp.float64)
+            dx = jnp.asarray(r.normal(size=es.n_pre))
+            dw = jnp.asarray(r.normal(size=w.shape))
+            outs = [jax.jvp(lambda xx, ww: st.forward(xx, ww, p), (x, w), (dx, dw))
+                    for p in ('binary', 'float')]
+            for a, b in zip(*outs):
+                assert a.dtype == jnp.float64
+                np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-12, atol=1e-12)
+
+    @pytest.mark.parametrize('cls', STORAGES)
+    def test_jacfwd_jacrev_and_check_grads(self, cls):
+        with jax.enable_x64(True):
+            es, r = _spike_edges(n_pre=12, n_post=7, k=4, seed=3)
+            st = cls(es)
+            w = st.weight_from_edges(jnp.asarray(r.normal(size=es.n_edges)))
+            x = jnp.asarray(r.random(es.n_pre) < 0.4, jnp.float64)
+            f = lambda xx, ww: st.forward(xx, ww, 'binary')
+            for arg in (0, 1):
+                jf = jax.jacfwd(f, argnums=arg)(x, w)
+                jr = jax.jacrev(f, argnums=arg)(x, w)
+                np.testing.assert_allclose(np.asarray(jf), np.asarray(jr), atol=1e-14)
             # weights only: finite differences in x see the binarisation (zero), while the
             # payload cotangent is the straight-through ``ct @ W.T`` of the float path
-            check_grads(lambda ww: S._binary_dense(x, ww), (W,), order=1, modes=('fwd', 'rev'))
-            gx = jax.grad(lambda xx: jnp.sum(S._binary_dense(xx, W)))(x)
-            np.testing.assert_allclose(np.asarray(gx), np.asarray(W.sum(1)), rtol=1e-14)
+            check_grads(lambda ww: f(x, ww), (w,), order=1, modes=('fwd', 'rev'))
+            gx = jax.grad(lambda xx: jnp.sum(f(xx, w)))(x)
+            gx_ref = jax.grad(lambda xx: jnp.sum(st.forward(xx, w, 'float')))(x)
+            np.testing.assert_allclose(np.asarray(gx), np.asarray(gx_ref), rtol=1e-14)
 
 
-def brainevent_matmul(x, W):
-    import brainevent
-    return brainevent.BinaryArray(x) @ W
