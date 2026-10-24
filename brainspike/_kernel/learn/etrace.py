@@ -3,34 +3,44 @@
 
 Online-learning algorithms (e-prop, D-RTRL, ...) live in braintrace;
 ``brainspike`` guarantees that its networks are *etrace-compatible* and says
-clearly when one is not. braintrace 0.2.6 silently returned zero or wrong gradients
-in several situations (spec §1; braintrace#184-#186, fixed in 0.2.7), so the rules
-are checked before ``braintrace.compile``:
+clearly when one is not. braintrace silently returns zero or wrong gradients in a
+few situations, so these rules are checked around ``braintrace.compile`` (needs
+braintrace >= 0.2.7, which fixed braintrace#184-#187):
 
 1. **Weights are ``ParamState``\\ s applied through braintrace primitives**
    (``braintrace.matmul`` for Dense, ``braintrace.sparse_matmul`` for CSR -- the
-   storages' ``forward_etrace``). A trainable ``ParamState`` that braintrace does not
-   relate to a hidden state (raw matmul, neuron parameter used element-wise) would
-   get a zero gradient.
+   storages' ``forward_etrace``), **or pure readout weights**. A trainable
+   ``ParamState`` that braintrace does not relate to a hidden state (raw matmul,
+   neuron parameter used element-wise) gets a zero gradient, unless it reaches
+   the step's outputs without reaching any new hidden value (a readout such as
+   ``tanh(V) @ w_out``): braintrace adds the exact same-step gradient of those.
 2. **No braintrace primitive inside a ``while`` body**: braintrace has no fixed
    per-iteration Jacobian for a data-dependent trip count and raises
-   ``NotImplementedError`` (by design, still so in 0.2.7). Weight-free ``while``
-   loops are not rejected (supported since braintrace 0.2.7, braintrace#186).
-   Static ``scan`` / ``fori_loop`` bodies are fine
+   ``NotImplementedError`` (by design). Weight-free ``while`` loops are allowed
+   (braintrace#186). Static ``scan`` / ``fori_loop`` bodies are fine
    (braintrace unrolls them; gradients equal the Python-unrolled loop), so port
    inputs may be applied per substep in a scanned integrator.
-3. **Outputs are read from ``HiddenState`` values**: an output depending on a
-   weight through a value that is not a new hidden-state value gives zero gradients.
+3. **Same-step bypass outputs only where braintrace computes them**: an output may
+   depend on a weight through a value that is not a new hidden-state value (a
+   spike read from the pre-reset membrane, a readout weight); braintrace adds the
+   exact same-step gradient of that path (braintrace#185). Rejected, by
+   :func:`check_learner` after compilation: such outputs under an algorithm with
+   ``learning_signal='modulatory'`` (e.g. ``'three_factor'``, which has no bypass
+   rewrite), and any bypass braintrace reports as dropped
+   (``OUTPUT_BYPASS_DROPPED``: the path crosses a ``while`` loop or an effectful
+   equation, so that part of the gradient would be zero).
 4. **No ``ParamState`` writes inside the traced step**: weights are constant within
    an online step, so local plasticity on a weight that online learning trains is
    rejected (decision L4; braintrace does not support time-varying parameters).
-5. **Every new ``HiddenState`` value depends on a hidden state** (braintrace 0.2.6
-   raises ``KeyError`` when one depends only on inputs; the fix is
-   ``new + 0 * old``, which :class:`EtraceNetwork` applies to every hidden state).
+
+New hidden values may depend on inputs only (e.g. a latched input port): braintrace
+>= 0.2.7 traces them (braintrace#184), so no workaround is applied.
 
 :func:`check_plan` applies the plan-level part (plasticity, capabilities,
 trainable neuron parameters) at network-construction time; :func:`check_etrace`
-traces one step of a module and applies all rules. :class:`EtraceNetwork` is the
+traces one step of a module and applies rules 1, 2 and 4 and the trace-level part
+of rule 3; :func:`check_learner` applies the rest of rule 3 to the compiled
+learner. :class:`EtraceNetwork` is the
 stateful one-step module of a plan that braintrace compiles, and :class:`Online`
 is the learner built from a ``Program`` (decision D-c) that runs online-learning
 episodes from any state.
@@ -56,6 +66,7 @@ __all__ = [
     'EtraceReport',
     'check_plan',
     'check_etrace',
+    'check_learner',
     'EtraceNetwork',
     'Online',
 ]
@@ -130,11 +141,19 @@ class EtraceReport:
         Paths of the ``HiddenState``\\ s written by the step.
     relations : list of tuple
         ``(primitive name, weight path, hidden paths)`` per braintrace relation.
+    readouts : list of str
+        Paths of the pure readout weights (rule 1: related to no hidden state,
+        reaching the outputs only).
+    bypass : list of int
+        Indices of the outputs (flattened leaves) that depend on a weight through
+        a value that is not a new hidden value (rule 3).
     """
 
     weights: list = field(default_factory=list)
     hidden: list = field(default_factory=list)
     relations: list = field(default_factory=list)
+    readouts: list = field(default_factory=list)
+    bypass: list = field(default_factory=list)
 
 
 def _sub_jaxprs(eqn: Any) -> list:
@@ -239,14 +258,15 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
     states = list(sf.get_states(*example_inputs))
     writes = list(sf.get_write_states(*example_inputs))
 
-    # rule 4: no ParamState writes
-    # upstream: braintrace#187 (done in 0.2.7: braintrace's error now names the state and
-    # both supported patterns) -- rule 4 stays, checked first, with the decision-L4 wording.
+    # rule 4: no ParamState writes (checked first, with the decision-L4 wording; braintrace's
+    # own error names the same two patterns since 0.2.7, braintrace#187)
     bad = [name(s) for s in writes if isinstance(s, brainstate.ParamState)]
     if bad:
         raise EtraceError(f'ParamState(s) {bad} are written inside the step: online learning '
                           f'needs weights that are constant within a step (local plasticity + '
-                          f'online learning is not supported, decision L4)')
+                          f'online learning is not supported, decision L4). Update trained '
+                          f'weights outside the step from the online gradients (Online.run), or '
+                          f'keep a locally updated, untrained weight in a brainstate.LongTermState')
 
     # rule 2: no ETP primitives inside while bodies (static scan / fori_loop are fine)
     # upstream: braintrace#186 (ETP weights in while bodies stay unsupported upstream)
@@ -275,44 +295,34 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
         k = len(jax.tree.leaves(s.value))
         state_out[id(s)] = out_vars[pos:pos + k]
         pos += k
-    hidden_r = [s for s in states if isinstance(s, brainstate.HiddenState)]
     hidden_w = [s for s in writes if isinstance(s, brainstate.HiddenState)]
     weights = [s for s in states if isinstance(s, brainstate.ParamState)]
+    hidden_out = [v for s in hidden_w for v in state_out[id(s)] if _is_var(v)]
+    outs = [v for v in out_vars[:n_out] if _is_var(v)]
 
-    # rule 5: every new hidden value depends on a hidden state
-    # upstream: braintrace#184
-    seed = {}
-    for s in hidden_r:
-        for v in state_in[id(s)]:
-            seed[v] = 1
-    dep = _flow(jaxpr, seed)
-    orphan = []
-    for s in hidden_w:
-        if not any(_is_var(v) and dep.get(v, 0) for v in state_out[id(s)]):
-            orphan.append(name(s))
-    if orphan:
-        raise EtraceError(f'HiddenState(s) {orphan} get a new value that depends on no hidden '
-                          f'state (only on inputs/parameters); braintrace 0.2.6 fails on them. '
-                          f'Keep the dependency with `new + 0 * old`, or store them in a '
-                          f'ShortTermState')
-
-    # rule 3: outputs depend on weights only through new hidden values
-    # upstream: braintrace#185 -- braintrace silently returns zero gradients otherwise
+    # rule 3 (trace-level part): outputs depending on weights through values that are not
+    # new hidden values. braintrace >= 0.2.7 adds their exact same-step gradient
+    # (braintrace#185), so they are recorded here and judged by check_learner.
     taint_seed = {v: 1 for s in weights for v in state_in[id(s)]}
-    clean = {v: 0 for s in hidden_w for v in state_out[id(s)] if _is_var(v)}
+    clean = {v: 0 for v in hidden_out}
     taint = _flow(jaxpr, taint_seed, reset=clean)
     for v in clean:
         taint[v] = 0
-    leaked = [i for i, v in enumerate(out_vars[:n_out]) if _is_var(v) and taint.get(v, 0)]
-    if leaked:
-        raise EtraceError(f'outputs {leaked} depend on trainable weights through values that '
-                          f'are not new HiddenState values; braintrace would return zero '
-                          f'gradients. Return values read from HiddenStates after writing them')
+    bypass = [i for i, v in enumerate(out_vars[:n_out]) if _is_var(v) and taint.get(v, 0)]
 
-    # rule 1: every trainable weight goes through a braintrace primitive
+    # rule 1: every trainable weight goes through a braintrace primitive, or is a pure
+    # readout (reaches the outputs and no new hidden value; trained through the bypass)
     relations = braintrace.find_hidden_param_op_relations_from_module(model, *example_inputs)
     related = {id(st) for r in relations for st in r.trainable_param_states.values()}
-    missing = [name(s) for s in weights if id(s) not in related]
+    missing, readouts = [], []
+    for s in weights:
+        if id(s) in related:
+            continue
+        reach = _flow(jaxpr, {v: 1 for v in state_in[id(s)]})
+        if any(reach.get(v, 0) for v in outs) and not any(reach.get(v, 0) for v in hidden_out):
+            readouts.append(name(s))
+        else:
+            missing.append(name(s))
     if missing:
         raise EtraceError(f'trainable weights not applied through a braintrace primitive '
                           f'(or not reaching a HiddenState): {missing}; they would get zero '
@@ -321,7 +331,64 @@ def check_etrace(model: Any, *example_inputs: Any) -> EtraceReport:
     rel = [(r.primitive.name, name(next(iter(r.trainable_param_states.values()))),
             ['.'.join(map(str, h)) for h in r.connected_hidden_paths]) for r in relations]
     return EtraceReport(weights=[name(s) for s in weights], hidden=[name(s) for s in hidden_w],
-                        relations=rel)
+                        relations=rel, readouts=readouts, bypass=bypass)
+
+
+def check_learner(learner: Any, report: EtraceReport | None = None) -> None:
+    """Rule 3 on a compiled braintrace learner: same-step bypass gradients must exist.
+
+    Parameters
+    ----------
+    learner : braintrace.ETraceAlgorithm
+        Result of ``braintrace.compile`` on a module that passed :func:`check_etrace`.
+    report : EtraceReport, optional
+        The :func:`check_etrace` report of the module (its ``bypass`` outputs).
+
+    Raises
+    ------
+    EtraceError
+        If braintrace dropped part of a bypass path (``OUTPUT_BYPASS_DROPPED``: the
+        path crosses a ``while`` loop or an effectful equation, so that part of the
+        gradient would be zero), or if the learner uses
+        ``learning_signal='modulatory'`` (no bypass rewrite) while outputs bypass
+        the new hidden values.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainstate
+        >>> import braintrace
+        >>> import jax.numpy as jnp
+        >>> from brainspike._kernel.learn.etrace import check_etrace, check_learner
+        >>> class Cell(brainstate.nn.Module):
+        ...     def __init__(self):
+        ...         super().__init__()
+        ...         self.W = brainstate.ParamState(jnp.ones((2, 3)))
+        ...         self.h = brainstate.HiddenState(jnp.zeros(3))
+        ...     def update(self, x):
+        ...         self.h.value = 0.9 * self.h.value + braintrace.matmul(x, self.W.value)
+        ...         return self.h.value
+        >>> cell = Cell()
+        >>> report = check_etrace(cell, jnp.ones(2))
+        >>> check_learner(braintrace.compile(cell, 'd_rtrl', jnp.ones(2)), report)
+    """
+    diagnostics = getattr(getattr(learner, 'report', None), 'diagnostics', ())
+    dropped = [d for d in diagnostics if d.kind == braintrace.DiagnosticKind.OUTPUT_BYPASS_DROPPED]
+    if dropped:
+        sources = [s for d in dropped for s in (d.context or {}).get('sources', ())]
+        raise EtraceError(f'weights or hidden states {sources} reach the step outputs, bypassing '
+                          f'every new HiddenState value, through a while loop or an effectful '
+                          f'equation: braintrace cannot compute that part of their gradient '
+                          f'(OUTPUT_BYPASS_DROPPED). Read the outputs from new HiddenState '
+                          f'values, or move the loop out of the output path')
+    signal = getattr(getattr(learner, 'config', None), 'learning_signal', None)
+    if signal == 'modulatory' and report is not None and report.bypass:
+        raise EtraceError(f'outputs {report.bypass} depend on trainable weights through values '
+                          f'that are not new HiddenState values, and the algorithm uses '
+                          f"learning_signal='modulatory', which has no same-step bypass "
+                          f'gradient: they would get zero gradients along that path. Return '
+                          f'values read from HiddenStates after writing them')
 
 
 def _per_edge_hint(model: Any) -> str:
@@ -343,11 +410,6 @@ def _per_edge_hint(model: Any) -> str:
 # ---------------------------------------------------------------------------
 # one-step module of a plan
 # ---------------------------------------------------------------------------
-
-def _keep_dependency(new: Any, old: Any) -> Any:
-    # upstream: braintrace#184 (`new + 0 * old` keeps the hidden->hidden edge)
-    return new + 0 * old
-
 
 def _names(plan: Any, spec: Any) -> list:
     if spec is None:
@@ -507,17 +569,18 @@ class EtraceNetwork(brainstate.nn.Module):
         state = self.read()
         n = self.n.value
         new, _ = prog.step(prog.read_params(), state, n, jnp.uint32(self.trial), ext=ext)
+        # the new values are written as they are: the value braintrace sees as a new hidden
+        # state is the one this step's consumers (zero-delay targets, rings) read
         for p in plan.populations:
             for k, s in p.model.dyn_states.items():
-                v = new['pops'][p.name][k]
-                s.value = _keep_dependency(v, s.value) if isinstance(s, brainstate.HiddenState) else v
+                s.value = new['pops'][p.name][k]
         for k, s in self.rings.items():
             s.value = new['rings'][k]
         for k, s in self.arrivals.items():
             s.value = new['arrivals'][k]
         for k, s in self.syn.items():
             g, name = k.rsplit('/', 1)
-            s.value = _keep_dependency(new['syn'][g][name], s.value)
+            s.value = new['syn'][g][name]
         self.n.value = n + 1
         outs = []
         for pplan, st in self._outputs:
@@ -596,6 +659,7 @@ class Online:
         args = () if x0 is None else (x0,)
         self.report = check_etrace(net, *args)
         self.model = braintrace.compile(net, algorithm, *args, **options)
+        check_learner(self.model, self.report)
         self.network = net
         self.params = {f'weights/{pp.name}/{g}': grp.weight
                        for pp in self.program.plan.projections for g, grp in enumerate(pp.groups)

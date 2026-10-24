@@ -20,6 +20,7 @@ from brainspike._kernel.learn import (
     ExternalInput,
     Online,
     check_etrace,
+    check_learner,
     check_plan,
 )
 from brainspike._kernel.learn.etrace import EtraceReport
@@ -92,6 +93,31 @@ def test_braintrace_compile_directly_on_network():
         xs, _ = _data(40)
         out = brainstate.transform.for_loop(model, xs)
     assert out.shape == (40, N_O)
+
+
+@pytest.mark.parametrize('model,port,w', [(LIF, 'delta', 0.2 * u.mV), (iaf_psc_alpha, 'ex', 50.0 * u.pA)])
+def test_online_with_per_edge_delay_scatter(model, port, w):
+    """A non-trainable per-edge-delay (DelayScatter) projection next to a trainable one.
+
+    braintrace 0.2.7 reported OUTPUT_BYPASS_DROPPED on this network while the #184
+    workaround (``new + 0 * old``) was applied: consumers read ``new`` and braintrace
+    saw ``new + 0 * old`` as the hidden value. Without it the learner compiles cleanly.
+    """
+    net = Network(dt=DT, seed=5)
+    x = net.add(ExternalInput, N_IN, name='x')
+    h = net.add(model, 10, name='h', surrogate=SIG)
+    net.connect(x, h, port=port, weight=w, trainable=True, name='xh')
+    net.connect(h, h, fixed_indegree(3), port=port, weight=w,
+                delay=jnp.array([0.1, 0.3, 0.2] * 10) * u.ms, name='hh')
+    plan = net.compile()
+    assert type(plan.projection('hh').groups[0].storage).__name__ == 'DelayScatter'
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', UserWarning)  # no braintrace WARNING diagnostic either
+        online = Online(plan.program(), 'd_rtrl', inputs='x', outputs='h', loss=_mse)
+    kinds = {d.kind for d in online.model.report.diagnostics}
+    assert braintrace.DiagnosticKind.OUTPUT_BYPASS_DROPPED not in kinds
+    loss, grads = online.grad(None, _data(20)[0], jnp.full((20, 10), 0.2))
+    assert np.isfinite(float(loss)) and set(grads) == {'weights/xh/0'}
 
 
 def test_etrace_network_matches_runner():
@@ -196,18 +222,159 @@ class _InputOnlyHidden(_Good):
         return super().update(x)
 
 
+class _RawToHiddenAndOutput(_Good):
+    """A raw weight that reaches both a hidden state and the output: not a pure readout."""
+
+    def __init__(self):
+        super().__init__()
+        self.U = brainstate.ParamState(jnp.ones((3, 4)) * 0.1)
+
+    def update(self, x):
+        V = 0.9 * self.V.value + braintrace.matmul(x, self.W.value) + x @ self.U.value
+        self.V.value = V
+        return self.V.value + x @ self.U.value
+
+
+class _WeightIntoShortTerm(_Good):
+    """A weight that only feeds a ``ShortTermState`` (like a per-edge-delay arrival ring)."""
+
+    def __init__(self):
+        super().__init__()
+        self.U = brainstate.ParamState(jnp.ones((3, 4)))
+
+    def init_state(self, *args, **kwargs):
+        super().init_state()
+        self.ring = brainstate.ShortTermState(jnp.zeros(4))
+
+    def update(self, x):
+        self.ring.value = x @ self.U.value
+        return super().update(x)
+
+
+class _Readout(_Good):
+    def __init__(self):
+        super().__init__()
+        self.w_out = brainstate.ParamState(jnp.ones((4, 2)) * 0.3)
+
+    def update(self, x):
+        return jnp.tanh(super().update(x)) @ self.w_out.value
+
+
+class _BypassThroughWhile(_Base):
+    def update(self, x):
+        V = 0.9 * self.V.value + braintrace.matmul(x, self.W.value)
+        s = self.f(V - 1.0)
+        self.V.value = V - jax.lax.stop_gradient(s)
+        # weight-free while on the (pre-reset) output path: braintrace drops that gradient
+        return jax.lax.while_loop(lambda c: c[0] < 2, lambda c: (c[0] + 1, 0.5 * c[1]), (0, s))[1]
+
+
 @pytest.mark.parametrize('cls,match', [
     (_RawMatmul, 'not applied through a braintrace primitive'),
+    (_RawToHiddenAndOutput, r"not applied through a braintrace primitive .*\['U'\]"),
     (_WritesWeight, 'written inside the step'),
     (_InWhile, 'inside a while_loop body'),
-    (_OutputNotHidden, 'not new HiddenState values'),
-    (_InputOnlyHidden, 'depends on no hidden state'),
 ])
 def test_checker_rejects_non_compliant(cls, match):
     m = cls()
     brainstate.nn.init_all_states(m)
     with pytest.raises(EtraceError, match=match):
         check_etrace(m, jnp.ones(3))
+
+
+def test_checker_rejects_weight_reaching_no_hidden_state_or_output():
+    m = _WeightIntoShortTerm()
+    brainstate.nn.init_all_states(m)
+    with pytest.raises(EtraceError, match=r"\['U'\]"):
+        check_etrace(m, jnp.ones(3))
+
+
+def test_rule4_message_points_to_supported_patterns():
+    m = _WritesWeight()
+    brainstate.nn.init_all_states(m)
+    with pytest.raises(EtraceError, match='LongTermState'):
+        check_etrace(m, jnp.ones(3))
+
+
+@pytest.mark.parametrize('cls,bypass,readouts', [
+    (_OutputNotHidden, [0], []),      # spike read from the pre-reset value (braintrace#185)
+    (_InputOnlyHidden, [], []),       # input-only hidden state (braintrace#184)
+    (_Readout, [0], ['w_out']),       # readout weight applied in the step
+    (_BypassThroughWhile, [0], []),   # accepted here, rejected by check_learner
+])
+def test_checker_accepts_braintrace_027_cases(cls, bypass, readouts):
+    m = cls()
+    brainstate.nn.init_all_states(m)
+    rep = check_etrace(m, jnp.ones(3))
+    assert rep.bypass == bypass and rep.readouts == readouts
+    assert ('etp_mv', 'W', ['V']) in rep.relations
+
+
+@pytest.mark.parametrize('cls', [_OutputNotHidden, _InputOnlyHidden, _Readout, _Good])
+@pytest.mark.parametrize('algorithm', ['d_rtrl', 'eprop'])
+def test_braintrace_027_cases_match_bptt(cls, algorithm):
+    """Models the 0.2.6 checker rejected compile, and their online gradient is BPTT."""
+    with jax.enable_x64(True):
+        xs = jax.random.uniform(jax.random.key(3), (10, 3), dtype=jnp.float64) * 2.0
+        m = cls()
+        brainstate.nn.init_all_states(m)
+        n_out = jnp.shape(m.update(xs[0]))[-1]
+        ys = jnp.full((10, n_out), 0.3)
+
+        def fresh():
+            m = cls()
+            brainstate.nn.init_all_states(m)
+            return m, {k: v for k, v in m.states(brainstate.ParamState).items()}
+
+        m, params = fresh()
+        ref = brainstate.transform.grad(lambda: brainstate.transform.for_loop(
+            lambda x, y: jnp.mean((m(x) - y) ** 2), xs, ys).mean(), grad_states=params)()
+        m, params = fresh()
+        rep = check_etrace(m, xs[0])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            learner = braintrace.compile(m, algorithm, xs[0])
+            check_learner(learner, rep)
+            g = learner.etrace_grad(xs, ys, step_fn=lambda x, y: jnp.mean((learner(x) - y) ** 2),
+                                    weights=params)
+        for k in ref:
+            np.testing.assert_allclose(np.asarray(g[k]), np.asarray(ref[k]), rtol=1e-10, atol=1e-14)
+            assert np.abs(np.asarray(ref[k])).max() > 0
+
+
+def test_check_learner_rejects_dropped_bypass():
+    m = _BypassThroughWhile()
+    brainstate.nn.init_all_states(m)
+    rep = check_etrace(m, jnp.ones(3))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        learner = braintrace.compile(m, 'd_rtrl', jnp.ones(3))
+    with pytest.raises(EtraceError, match='OUTPUT_BYPASS_DROPPED'):
+        check_learner(learner, rep)
+    with pytest.raises(EtraceError, match='OUTPUT_BYPASS_DROPPED'):
+        check_learner(learner)  # the diagnostic alone suffices
+
+
+@pytest.mark.parametrize('cls', [_OutputNotHidden, _Readout])
+def test_check_learner_rejects_bypass_under_modulatory_signal(cls):
+    m = cls()
+    brainstate.nn.init_all_states(m)
+    rep = check_etrace(m, jnp.ones(3))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        learner = braintrace.compile(m, 'three_factor', jnp.ones(3))
+    with pytest.raises(EtraceError, match='modulatory'):
+        check_learner(learner, rep)
+    check_learner(braintrace.compile(m, 'd_rtrl', jnp.ones(3)), rep)  # bypass rewrite: fine
+
+
+def test_check_learner_accepts_modulatory_without_bypass():
+    m = _Good()
+    brainstate.nn.init_all_states(m)
+    rep = check_etrace(m, jnp.ones(3))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        check_learner(braintrace.compile(m, 'three_factor', jnp.ones(3)), rep)
 
 
 def test_checker_accepts_compliant():

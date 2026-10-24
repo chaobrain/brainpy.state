@@ -117,14 +117,6 @@ def latched_ports(inputs: Ports) -> tuple[str, ...]:
     return tuple(k for k, v in inputs.items() if is_latched(v))
 
 
-def _keep_dependency(new: Any, old: Any) -> Any:
-    # upstream: braintrace#184
-    # braintrace 0.2.6 fails (KeyError in the hidden-group transition) when a
-    # HiddenState's new value depends only on inputs; ``+ 0 * old`` keeps the
-    # hidden->hidden edge in the jaxpr without changing the value.
-    return new + 0 * old
-
-
 def latch_inputs(inputs: Ports, s: Record, inp: Record) -> tuple[Record, dict]:
     """Port values acting this step and the new latch states (decision D-a).
 
@@ -143,13 +135,13 @@ def latch_inputs(inputs: Ports, s: Record, inp: Record) -> tuple[Record, dict]:
         ``inp`` with every latched port replaced by the value latched at the
         previous step; unlatched ports keep this step's payload.
     new : dict
-        ``{latch_<port>: this step's payload}`` for the latched ports, to store
-        (with the braintrace dependency workaround ``new + 0 * old``).
+        ``{latch_<port>: this step's payload}`` for the latched ports, to store.
+        A latch depends on no state, only on this step's input; braintrace >= 0.2.7
+        traces such input-only hidden states (braintrace#184).
     """
     ports = latched_ports(inputs)
     acting = Record(**{**inp, **{k: s[latch_name(k)] for k in ports}})
-    # upstream: braintrace#184
-    new = {latch_name(k): _keep_dependency(inp[k], s[latch_name(k)]) for k in ports}
+    new = {latch_name(k): inp[k] for k in ports}
     return acting, new
 
 
