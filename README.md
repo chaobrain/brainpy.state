@@ -1,5 +1,5 @@
 <p align="center">
-  	<img alt="Header image of brainspike - brain dynamics programming in Python." src="https://raw.githubusercontent.com/chaobrain/brainspike/main/docs/_static/brianpystate_horizontal.png" width=80%>
+  	<img alt="brainspike logo" src="https://raw.githubusercontent.com/chaobrain/brainspike/main/docs/_static/brainspike.png" width=40%>
 </p>
 
 
