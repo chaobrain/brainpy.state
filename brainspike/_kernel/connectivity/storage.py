@@ -219,6 +219,28 @@ def _binary_dense_jvp(primals: tuple, tangents: tuple) -> tuple:
     return y, dy
 
 
+def _binary_sparse(x: jax.Array, m: jax.Array, matrix: Callable) -> jax.Array:
+    """``BinaryArray(x) @ matrix(m)`` with the payload passed through :func:`_events`.
+
+    The sparse counterpart of :func:`_binary_dense`: brainevent 0.3 evaluates the
+    payload cotangent of its CSR rule in the float32 of the cast payload, so the JVP
+    is written out here too (``dx @ matrix(m)`` plus the event-driven ``x @ matrix(dm)``).
+    """
+
+    @jax.custom_jvp
+    def f(x, m):
+        return brainevent.BinaryArray(_events(x)) @ matrix(m)
+
+    @f.defjvp
+    def f_jvp(primals, tangents):
+        x, m = primals
+        dx, dm = tangents
+        y = f(x, m)
+        return y, dx.astype(y.dtype) @ matrix(m) + brainevent.BinaryArray(_events(x)) @ matrix(dm)
+
+    return f(x, m)
+
+
 def _host_index(a: Any) -> np.ndarray:
     """Host index array in int32 when it fits (halves the memory of int64 copies)."""
     a = np.asarray(a)
@@ -520,9 +542,9 @@ class CSR(Storage):
             return _wrap(y, unit)
         mat = self._matrix(m)
         if path == 'binary':
-            # upstream: brainevent#204 / #199 -- float64 payloads are passed as float32
-            # (exact for spikes; brainevent's CSR VJPs stay in the data dtype)
-            y = brainevent.BinaryArray(_events(x)) @ mat
+            # upstream: brainevent#204 / #199 -- float64 payloads are cast in `_binary_sparse`
+            y = (_binary_sparse(x, m, self._matrix) if x.dtype == jnp.float64
+                 else brainevent.BinaryArray(x) @ mat)
         else:  # upstream: brainevent#201 -- no event-driven matmul for count payloads
             y = x.astype(dt) @ mat
         return _wrap(y, unit)
