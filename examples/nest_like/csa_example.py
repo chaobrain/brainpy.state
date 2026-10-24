@@ -40,7 +40,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(n=16, p=0.1, seed=0):
@@ -68,10 +68,10 @@ def run(n=16, p=0.1, seed=0):
         >>> bool(0.07 < density < 0.13)        # ~ p, up to sampling noise
         True
     """
-    sim = bp.Simulator(dt=0.1 * u.ms)
-    pre = sim.create(bp.iaf_psc_alpha, n)
-    post = sim.create(bp.iaf_psc_alpha, n)
-    sim.connect(pre, post, rule=bp.pairwise_bernoulli(p),
+    sim = brainspike.Simulator(dt=0.1 * u.ms)
+    pre = sim.create(brainspike.iaf_psc_alpha, n)
+    post = sim.create(brainspike.iaf_psc_alpha, n)
+    sim.connect(pre, post, rule=brainspike.pairwise_bernoulli(p),
                 weight=10000.0 * u.pA, delay=1.0 * u.ms, seed=seed)
     sc = sim.get_connections(source=pre, target=post)
     return len(sc) / float(n * n)

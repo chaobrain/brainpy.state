@@ -25,7 +25,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(n=1000, extent=(1.5, 1.5, 1.5), std=0.25, box=0.75, seed=0):
@@ -65,22 +65,22 @@ def run(n=1000, extent=(1.5, 1.5, 1.5), std=0.25, box=0.75, seed=0):
         >>> bool(dist.shape[0] == tgt.shape[0])
         True
     """
-    sim = bp.Simulator(dt=0.1 * u.ms)
-    pos = bp.spatial.free(bp.dist.Uniform(-0.5, 0.5), extent=list(extent))
-    l1 = sim.create(bp.iaf_psc_alpha, n, positions=pos)
+    sim = brainspike.Simulator(dt=0.1 * u.ms)
+    pos = brainspike.spatial.free(brainspike.dist.Uniform(-0.5, 0.5), extent=list(extent))
+    l1 = sim.create(brainspike.iaf_psc_alpha, n, positions=pos)
     sim.connect(
         l1, l1,
-        rule=bp.spatial.spatial_pairwise_bernoulli(
-            p=bp.spatial.gaussian(bp.spatial.distance, std=std),
-            mask=bp.spatial.box(lower_left=[-box, -box, -box],
+        rule=brainspike.spatial.spatial_pairwise_bernoulli(
+            p=brainspike.spatial.gaussian(brainspike.spatial.distance, std=std),
+            mask=brainspike.spatial.box(lower_left=[-box, -box, -box],
                                 upper_right=[box, box, box])),
         weight=1.0 * u.pA, delay=1.0 * u.ms, allow_autapses=False, seed=seed)
     coords = sim.get_position(l1)
     # the free layer is sampled from a distribution, so resolve the central node on the
     # realized coordinates (rebuild a concrete layer -> reuse center_element / FindCenterElement)
-    ctr = bp.spatial.center_element(bp.spatial.free(coords))
-    target_pos = bp.spatial.target_positions(sim, l1[ctr], l1)[0]
-    target_dist = bp.spatial.pairwise_distance(coords[ctr][None], target_pos)[0]
+    ctr = brainspike.spatial.center_element(brainspike.spatial.free(coords))
+    target_pos = brainspike.spatial.target_positions(sim, l1[ctr], l1)[0]
+    target_dist = brainspike.spatial.pairwise_distance(coords[ctr][None], target_pos)[0]
     return coords, ctr, target_pos, target_dist
 
 

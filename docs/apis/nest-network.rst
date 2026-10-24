@@ -1,28 +1,23 @@
-NEST-Compatible Network Builder
-===============================
+NEST-Compatible Simulator
+=========================
 
-High-level builders, projections, connection rules, and simulation utilities
-for assembling and running NEST-compatible networks in ``brainspike``.
-This is the declarative, NEST-like network layer: describe populations and
-connections with a :class:`~brainspike.network.Builder`, materialize a
-:class:`~brainspike.network.Network`, and drive it with a
-:class:`~brainspike.network.Simulator`.
+The NEST-style ``Simulator`` and its helpers: create populations and devices,
+connect them under NEST-like connection rules, and simulate
+(``create`` / ``connect`` / ``simulate``).
 
 .. currentmodule:: brainspike
 
 
-Network Construction & Execution
---------------------------------
+Simulation
+----------
 
-Assemble a network from a declarative description and run it.
+Create, connect, and run a network.
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
     :template: classtemplate.rst
 
-    network.Network
-    network.Builder
     network.Simulator
     network.SimulationResult
 
@@ -44,35 +39,26 @@ Handles returned when slicing populations or referring to groups of synapses.
 Recording
 ---------
 
-Collect spikes, state variables, and synaptic weights during simulation.
+Read recorded synaptic weights after simulation.
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
     :template: classtemplate.rst
 
-    network.Recorder
     network.weight_recorder_events
 
 
-Projection Classes
-------------------
+Event Projections
+-----------------
 
-Connect populations under the various NEST-like connection rules.
+The projections ``Simulator.connect`` builds between populations.
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
     :template: classtemplate.rst
 
-    network.OneToOneProj
-    network.AllToAllProj
-    network.PairwiseBernoulliProj
-    network.SymmetricPairwiseBernoulliProj
-    network.FixedIndegreeProj
-    network.FixedOutdegreeProj
-    network.FixedTotalNumberProj
-    network.PairwisePoissonProj
     network.EventProjection
     network.EventPlasticProj
     network.VoltageCoupledPlasticProj

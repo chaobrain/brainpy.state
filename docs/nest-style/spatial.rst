@@ -22,15 +22,15 @@ Create a population on a layout by passing ``positions=`` to
 .. code-block:: python
 
    import brainunit as u
-   import brainspike as bp
+   import brainspike
 
-   sim = bp.Simulator(dt=0.1 * u.ms)
-   pos = bp.spatial.grid([4, 3], extent=[2.0, 1.5])     # 4 columns × 3 rows
-   pop = sim.create(bp.iaf_psc_alpha, positions=pos)
+   sim = brainspike.Simulator(dt=0.1 * u.ms)
+   pos = brainspike.spatial.grid([4, 3], extent=[2.0, 1.5])     # 4 columns × 3 rows
+   pop = sim.create(brainspike.iaf_psc_alpha, positions=pos)
 
    coords = sim.get_position(pop)                        # (12, 2) node coordinates
 
-``bp.spatial.grid([nx, ny], extent=[Lx, Ly])`` lays neurons on a regular grid
+``brainspike.spatial.grid([nx, ny], extent=[Lx, Ly])`` lays neurons on a regular grid
 exactly as NEST does (column is the slow axis, row the fast axis; ``x`` increases
 left→right and ``y`` decreases top→bottom). :meth:`Simulator.get_position`
 (NEST's ``GetPosition``) reads the node coordinates back.
@@ -47,20 +47,20 @@ with an optional **mask** (a spatial cutoff), and is passed as ``rule=`` to
 
    sim.connect(
        a, b,
-       rule=bp.spatial.spatial_pairwise_bernoulli(
-           p=bp.spatial.gaussian(bp.spatial.distance, std=0.5),
-           mask=bp.spatial.circular(3.0)),
+       rule=brainspike.spatial.spatial_pairwise_bernoulli(
+           p=brainspike.spatial.gaussian(brainspike.spatial.distance, std=0.5),
+           mask=brainspike.spatial.circular(3.0)),
        weight=1.0 * u.pA, delay=1.0 * u.ms, seed=0)
 
 The building blocks:
 
-- ``bp.spatial.distance`` — the source→target distance, the argument to a kernel.
-- ``bp.spatial.gaussian(distance, std=...)`` — a Gaussian connection-probability
+- ``brainspike.spatial.distance`` — the source→target distance, the argument to a kernel.
+- ``brainspike.spatial.gaussian(distance, std=...)`` — a Gaussian connection-probability
   kernel :math:`p(d) = \exp(-d^2 / (2\,\mathrm{std}^2))` (other kernels follow
   the same shape).
-- ``bp.spatial.circular(radius)`` — a circular mask clipping connections beyond
+- ``brainspike.spatial.circular(radius)`` — a circular mask clipping connections beyond
   ``radius``.
-- ``bp.spatial.spatial_pairwise_bernoulli(p=, mask=)`` — draw each
+- ``brainspike.spatial.spatial_pairwise_bernoulli(p=, mask=)`` — draw each
   source→target edge with probability ``p`` inside ``mask``.
 
 Because the per-distance probability is a fixed law (only the PRNG draw diverges
@@ -76,11 +76,11 @@ After wiring, read back which targets a source actually connected to:
 
 .. code-block:: python
 
-   ctr = bp.spatial.center_element(pos)                  # the central node
-   targets = bp.spatial.target_positions(sim, a[ctr], b)[0]
+   ctr = brainspike.spatial.center_element(pos)                  # the central node
+   targets = brainspike.spatial.target_positions(sim, a[ctr], b)[0]
 
-``bp.spatial.target_positions`` (NEST's ``GetTargetPositions``) returns the
-coordinates of a source's realized targets; ``bp.spatial.center_element`` picks the
+``brainspike.spatial.target_positions`` (NEST's ``GetTargetPositions``) returns the
+coordinates of a source's realized targets; ``brainspike.spatial.center_element`` picks the
 node nearest the layout centre — handy for plotting a single neuron's connection
 footprint.
 

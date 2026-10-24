@@ -42,7 +42,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 #: Integration step (ms).
 DT = 0.1
@@ -84,21 +84,21 @@ def run(simtime=T_SIM, dt=DT, a=A_NS, b=B_PA, tau_w=TAU_W_MS):
         Integer step indices at which the neuron spiked (the rebound burst).
     """
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     # V_m is intentionally NOT initialised to E_L: the default -70.6 mV matches
     # NEST, which leaves V_m at its default when E_L is set to -60 mV (see note).
-    neuron = sim.create(bp.aeif_cond_exp, 1, params={
+    neuron = sim.create(brainspike.aeif_cond_exp, 1, params={
         'V_peak': V_PEAK_MV * u.mV, 'E_L': E_L_MV * u.mV, 'a': a * u.nS,
         'b': b * u.pA, 'tau_w': tau_w * u.ms})
 
     amplitude, start, stop = DC_STEP
-    gen = sim.create(bp.dc_generator, amplitude=amplitude * u.pA,
+    gen = sim.create(brainspike.dc_generator, amplitude=amplitude * u.pA,
                      start=start * u.ms, stop=stop * u.ms)
     sim.connect(gen, neuron)
 
-    mm = sim.create(bp.multimeter, record_from=['V_m'], interval=dt * u.ms)
-    sr = sim.create(bp.spike_recorder)
+    mm = sim.create(brainspike.multimeter, record_from=['V_m'], interval=dt * u.ms)
+    sr = sim.create(brainspike.spike_recorder)
     sim.connect(mm, neuron)
     sim.connect(neuron, sr)
 

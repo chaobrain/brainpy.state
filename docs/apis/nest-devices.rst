@@ -30,6 +30,7 @@ Spike Generators
     :template: classtemplate.rst
 
     spike_generator
+    SpikeTime
     spike_train_injector
     spike_dilutor
 

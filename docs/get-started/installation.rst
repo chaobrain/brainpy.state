@@ -110,8 +110,9 @@ Confirm everything imports and a model can be constructed:
    print(f"brainspike version: {brainspike.__version__}")
    print(f"brainstate version:    {brainstate.__version__}")
 
-   # Build a small population of LIF neurons to check the API is live.
-   neuron = brainspike.LIF(10)
+   # Build a small population of neurons to check the API is live.
+   with brainstate.environ.context(dt=0.1 * u.ms):
+       neuron = brainspike.iaf_psc_alpha(10)
    print("Installation successful!")
 
 Backend notes
@@ -156,9 +157,7 @@ This creates an editable install that reflects your local changes.
 Next steps
 ==========
 
-- Take the :doc:`5-minute tour </get-started/5-minute-tour>` to build and run
-  your first network.
-- Read the :doc:`mental model </get-started/mental-model>` to understand the
-  four ideas the framework is built on.
-- Dive into the :doc:`Core Concepts spine </concepts/index>` when you want the
-  full story behind the design.
+- Start the :doc:`NEST-compatible tutorials </nest-style/index>` to build and
+  run your first network.
+- Browse the :doc:`NEST example gallery </examples/nest-gallery>` for complete
+  network models.

@@ -52,10 +52,6 @@ in progress:
 - **One front-end.** ``Network`` will be the only way to build and run a model. The
   NEST-style ``Simulator`` (``create`` / ``connect`` / ``simulate``) is kept as a thin
   layer that builds a ``Network``.
-- **The BrainPy-style API will be deprecated**: standalone neuron modules driven by hand
-  inside a ``brainstate`` module, and the AlignPre/AlignPost projections. Their models
-  are ported onto the new contracts and used through ``Network``; the memory-efficient
-  post-aligned merging becomes an automatic compiler pass.
 - **Performance.** CPU performance of the new kernel has been measured against the
   current simulator on one benchmark (Brunel network); GPU performance has not been
   measured yet, and no GPU numbers are claimed.

@@ -30,7 +30,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def run(shape=(30, 30), extent=(3.0, 3.0), std=0.5, radius=3.0, seed=0):
@@ -68,18 +68,18 @@ def run(shape=(30, 30), extent=(3.0, 3.0), std=0.5, radius=3.0, seed=0):
         >>> bool(tgt.shape[0] >= 1)        # the centre connects to at least itself-at-distance-0
         True
     """
-    sim = bp.Simulator(dt=0.1 * u.ms)
-    pos = bp.spatial.grid(list(shape), extent=list(extent))
-    a = sim.create(bp.iaf_psc_alpha, positions=pos)
-    b = sim.create(bp.iaf_psc_alpha, positions=pos)
+    sim = brainspike.Simulator(dt=0.1 * u.ms)
+    pos = brainspike.spatial.grid(list(shape), extent=list(extent))
+    a = sim.create(brainspike.iaf_psc_alpha, positions=pos)
+    b = sim.create(brainspike.iaf_psc_alpha, positions=pos)
     sim.connect(
         a, b,
-        rule=bp.spatial.spatial_pairwise_bernoulli(
-            p=bp.spatial.gaussian(bp.spatial.distance, std=std),
-            mask=bp.spatial.circular(radius)),
+        rule=brainspike.spatial.spatial_pairwise_bernoulli(
+            p=brainspike.spatial.gaussian(brainspike.spatial.distance, std=std),
+            mask=brainspike.spatial.circular(radius)),
         weight=1.0 * u.pA, delay=1.0 * u.ms, seed=seed)
-    ctr = bp.spatial.center_element(pos)
-    target_pos = bp.spatial.target_positions(sim, a[ctr], b)[0]
+    ctr = brainspike.spatial.center_element(pos)
+    target_pos = brainspike.spatial.target_positions(sim, a[ctr], b)[0]
     return sim.get_position(a), ctr, target_pos
 
 

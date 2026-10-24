@@ -26,10 +26,10 @@ All models are constructed through the :class:`Simulator`:
 .. code-block:: python
 
    import brainunit as u
-   import brainspike as bp
+   import brainspike
 
-   sim = bp.Simulator(dt=0.1 * u.ms)
-   pop = sim.create(bp.iaf_psc_alpha, 100, I_e=0. * u.pA)   # a population of 100
+   sim = brainspike.Simulator(dt=0.1 * u.ms)
+   pop = sim.create(brainspike.iaf_psc_alpha, 100, I_e=0. * u.pA)   # a population of 100
 
 Parameters use NEST's names and units (``C_m`` in ``pF``, ``tau_m`` in ``ms``,
 ``V_th`` in ``mV``, ``I_e`` in ``pA``, …). Pass them as keywords, or as a

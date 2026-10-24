@@ -43,7 +43,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-import brainspike as bp
+import brainspike
 
 
 def build(sim, *, primary_rule, n_ex, n_in, n_astro, p_third, pool_size,
@@ -95,25 +95,25 @@ def build(sim, *, primary_rule, n_ex, n_in, n_astro, p_third, pool_size,
         ``primary`` / ``third_in`` / ``third_out`` arms and the ``inhibitory`` arm).
     """
     npar = {'tau_syn_ex': tau_syn_ex * u.ms, 'tau_syn_in': tau_syn_in * u.ms}
-    neurons = sim.create(bp.aeif_cond_alpha_astro, n_ex + n_in, params=npar)
-    astro = sim.create(bp.astrocyte_lr_1994, n_astro, params={'IP3_initializer': IP3_0})
+    neurons = sim.create(brainspike.aeif_cond_alpha_astro, n_ex + n_in, params=npar)
+    astro = sim.create(brainspike.astrocyte_lr_1994, n_astro, params={'IP3_initializer': IP3_0})
     ex, inh = neurons[:n_ex], neurons[n_ex:]
 
     # Independent background Poisson drive (one train per neuron, receptor 1 -> g_ex).
-    pg = sim.create(bp.poisson_generator, n_ex + n_in, rate=poisson_rate * u.Hz)
-    sim.connect(pg, neurons, rule=bp.one_to_one, weight=w_e * u.nS,
+    pg = sim.create(brainspike.poisson_generator, n_ex + n_in, rate=poisson_rate * u.Hz)
+    sim.connect(pg, neurons, rule=brainspike.one_to_one, weight=w_e * u.nS,
                 delay=d_e * u.ms, receptor_type=1)
 
     # Excitatory primary + astrocyte pairing (one shared sample across the 3 arms).
     primary, third_in, third_out = sim.tripartite_connect(
         ex, neurons, astro,
         conn_spec=primary_rule('ex'),
-        third_factor_conn_spec=bp.third_factor_bernoulli_with_pool(
+        third_factor_conn_spec=brainspike.third_factor_bernoulli_with_pool(
             p=p_third, pool_size=pool_size, pool_type=pool_type),
         syn_specs={
             'primary': {'weight': w_e * u.nS, 'delay': d_e * u.ms, 'receptor_type': 1},
             'third_in': {'weight': w_e, 'delay': d_e * u.ms},
-            'third_out': {'synapse': bp.sic_connection(weight=w_a2n,
+            'third_out': {'synapse': brainspike.sic_connection(weight=w_a2n,
                                                        delay_steps=sic_delay_steps)},
         },
         seed=seed)
@@ -163,10 +163,10 @@ def run(sim_time=1000.0, *, dt=0.1, n_ex=400, n_in=100, n_astro=500, p_primary=0
     """
     brainstate.random.seed(seed)
     brainstate.environ.set(dt=dt * u.ms)
-    sim = bp.Simulator(dt=dt * u.ms)
+    sim = brainspike.Simulator(dt=dt * u.ms)
 
     def primary_rule(_role):
-        return bp.pairwise_bernoulli(p_primary)
+        return brainspike.pairwise_bernoulli(p_primary)
 
     net = build(
         sim, primary_rule=primary_rule, n_ex=n_ex, n_in=n_in, n_astro=n_astro,
@@ -176,11 +176,11 @@ def run(sim_time=1000.0, *, dt=0.1, n_ex=400, n_in=100, n_astro=500, p_primary=0
         sic_delay_steps=sic_delay_steps, seed=seed)
     neurons, ex, inh, astro = net['neurons'], net['ex'], net['inh'], net['astro']
 
-    esr = sim.create(bp.spike_recorder); sim.connect(ex, esr)
-    isr = sim.create(bp.spike_recorder); sim.connect(inh, isr)
-    mm_a = sim.create(bp.multimeter, record_from=['IP3', 'Ca'])
+    esr = sim.create(brainspike.spike_recorder); sim.connect(ex, esr)
+    isr = sim.create(brainspike.spike_recorder); sim.connect(inh, isr)
+    mm_a = sim.create(brainspike.multimeter, record_from=['IP3', 'Ca'])
     sim.connect(mm_a, astro[:n_rec_astro])
-    mm_n = sim.create(bp.multimeter, record_from=['I_SIC'])
+    mm_n = sim.create(brainspike.multimeter, record_from=['I_SIC'])
     sim.connect(mm_n, neurons[:n_rec_astro])
 
     res = sim.simulate(sim_time * u.ms)
