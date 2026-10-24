@@ -2,8 +2,11 @@
 """K1a-G3: gate G9 on the GPU -- Brunel alpha, old ``Simulator`` vs the kernel, GPU 1.
 
 Configurations (K1a spec §K1a-7): orders 200 and 2500; float32 with brainevent's
-default GPU backend, float64 with the ``cusparse`` backend (brainevent#199: the default
-GPU kernel aborts on a float64 event vector). The reference is the T0 GPU row of the
+default GPU backend, float64 with the ``cusparse`` backend (chosen in K1a-7 because
+brainevent 0.2.1's default GPU kernel aborted on a float64 event vector, brainevent#199;
+fixed in 0.3.0, but the f64 rows keep ``cusparse`` so they stay comparable with the
+recorded K1a-7 baseline; moving them to the default backend is a K1b re-measurement).
+The reference is the T0 GPU row of the
 old ``Simulator`` (``results/2026-10-21-T0-simulator-baseline.json``); the old
 ``Simulator`` is also re-measured here, alternating with the kernel in fresh processes
 (old, new, old, new, ...), with the T0 protocol inside every process

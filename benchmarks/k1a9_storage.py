@@ -44,7 +44,7 @@ def run_one(args):
     from brainspike._kernel.network import Network
     from brainspike._kernel.validation.brunel import brunel_params
 
-    if args.brainevent_backend:  # upstream: brainevent#199 (float64 GPU needs 'cusparse')
+    if args.brainevent_backend:  # optional GPU backend override (e.g. 'cusparse')
         brainevent.config.set_backend('gpu', args.brainevent_backend)
     dev = jax.devices()[0]
     gpu = dev.platform in ('gpu', 'cuda', 'rocm')

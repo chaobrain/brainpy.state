@@ -15,7 +15,7 @@ absl-py
 # Private kernel (brainspike/_kernel) dependency: dev/CI-only while the kernel stays
 # private (not imported by `import brainspike`). Whether it becomes a runtime
 # dependency in pyproject.toml / requirements.txt is decided at K3.
-braintrace>=0.2.6
+braintrace>=0.2.7
 
 # Reference BrainPy-style models for the kernel parity tests (brainspike/_kernel/*_test.py).
 # Dev/CI-only: shipped brainspike code never imports brainpy.

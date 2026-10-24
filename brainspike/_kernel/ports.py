@@ -157,7 +157,14 @@ class Event(PortKind):
         Largest number of spikes one source can emit per step; ``None`` means
         unbounded (generators, ``aeif`` with several in-step spikes). Sources with
         ``max_multiplicity == 1`` may use the event-driven binary payload path;
-        all others use the exact float (count) path.
+        all others use the exact float (count) path. **Contract:** a source that
+        declares ``max_multiplicity == 1`` must emit payloads in {0, 1} (forward
+        values; surrogate gradients are free). The binary path treats an entry as
+        active iff it is non-zero (brainevent >= 0.3), so a negative or fractional
+        value is delivered as a full spike there but as ``x * w`` on the float path.
+        The built-in spiking models satisfy this (hard spikes); a custom model that
+        emits other values must declare ``max_multiplicity=None``. The values are
+        not checked at run time (a check would cost a reduction per step).
     unit : brainunit.Unit, optional
         On an input port, the unit of the synaptic weight (e.g. ``u.pA`` for a PSC
         jump); ``None`` means dimensionless. Ignored on output ports.

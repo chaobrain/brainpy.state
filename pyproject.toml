@@ -40,7 +40,7 @@ dependencies = [
     "jax>=0.9.0",
     "brainstate>=0.5.0",
     "brainunit",
-    "brainevent>=0.2.1",
+    "brainevent>=0.3.0",
     "braintools>=0.0.9",
 ]
 dynamic = ['version']
@@ -105,6 +105,11 @@ markers = [
     "k1a_g5: K1a gate G5, Brunel statistics in the AI regime vs NEST",
     "k1a_g6: K1a gate G6, K0 gate regressions (command)",
     "k1a_compile: K1a compile-time gate (wall clock; run explicitly with -m k1a_compile on an idle host)",
+]
+# upstream: braintrace#197 -- braintrace 0.2.7 builds jaxprs without a DebugInfo; jax warns
+# once per jaxpr (~6.5k warnings per kernel run). Only this exact message is ignored.
+filterwarnings = [
+    "ignore:core\\.Jaxpr is missing a DebugInfo object\\.:DeprecationWarning",
 ]
 
 
