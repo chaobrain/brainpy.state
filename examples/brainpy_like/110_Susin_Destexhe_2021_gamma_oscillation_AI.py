@@ -27,7 +27,7 @@ import braintools
 import brainunit as u
 import matplotlib.pyplot as plt
 
-import brainpy
+import brainspike
 import brainstate
 from Susin_Destexhe_2021_gamma_oscillation import (
     get_inputs, visualize_simulation_results,
@@ -93,40 +93,40 @@ class AINet(brainstate.nn.Module):
         FS_par_.update(Vth=-50 * u.mV, V_sp_th=-40 * u.mV)
         self.fs_pop = AdEx(self.num_inh, tau_e=self.exc_syn_tau, tau_i=self.inh_syn_tau, **FS_par_)
         self.rs_pop = AdEx(self.num_exc, tau_e=self.exc_syn_tau, tau_i=self.inh_syn_tau, **RS_par_)
-        self.ext_pop = brainpy.state.PoissonEncoder(self.num_exc)
+        self.ext_pop = brainspike.PoissonEncoder(self.num_exc)
 
         # Poisson inputs
-        self.ext_to_FS = brainpy.state.DeltaProj(
+        self.ext_to_FS = brainspike.DeltaProj(
             comm=brainstate.nn.EventFixedProb(self.num_exc, self.num_inh, 0.02, self.ext_weight),
             post=self.fs_pop,
             label='ge'
         )
-        self.ext_to_RS = brainpy.state.DeltaProj(
+        self.ext_to_RS = brainspike.DeltaProj(
             comm=brainstate.nn.EventFixedProb(self.num_exc, self.num_exc, 0.02, self.ext_weight),
             post=self.rs_pop,
             label='ge'
         )
 
         # synaptic projections
-        self.RS_to_FS = brainpy.state.DeltaProj(
+        self.RS_to_FS = brainspike.DeltaProj(
             self.rs_pop.prefetch('spike').delay.at(self.delay),
             comm=brainstate.nn.EventFixedProb(self.num_exc, self.num_inh, 0.02, self.exc_syn_weight),
             post=self.fs_pop,
             label='ge'
         )
-        self.RS_to_RS = brainpy.state.DeltaProj(
+        self.RS_to_RS = brainspike.DeltaProj(
             self.rs_pop.prefetch('spike').delay.at(self.delay),
             comm=brainstate.nn.EventFixedProb(self.num_exc, self.num_exc, 0.02, self.exc_syn_weight),
             post=self.rs_pop,
             label='ge'
         )
-        self.FS_to_FS = brainpy.state.DeltaProj(
+        self.FS_to_FS = brainspike.DeltaProj(
             self.fs_pop.prefetch('spike').delay.at(self.delay),
             comm=brainstate.nn.EventFixedProb(self.num_inh, self.num_inh, 0.02, self.inh_syn_weight),
             post=self.fs_pop,
             label='gi'
         )
-        self.FS_to_RS = brainpy.state.DeltaProj(
+        self.FS_to_RS = brainspike.DeltaProj(
             self.fs_pop.prefetch('spike').delay.at(self.delay),
             comm=brainstate.nn.EventFixedProb(self.num_inh, self.num_exc, 0.02, self.inh_syn_weight),
             post=self.rs_pop,

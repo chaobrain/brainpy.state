@@ -3,7 +3,7 @@ BrainPy-style Input Generators
 
 Input spike and current generation models.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Spike Generators
 ----------------

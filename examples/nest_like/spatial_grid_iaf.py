@@ -3,8 +3,8 @@
 
 Creates a population of ``iaf_psc_alpha`` neurons on a regular 4-column x 3-row grid of
 extent ``[2.0, 1.5]`` (NEST default length units, taken here as micrometres) through
-:meth:`~brainpy.state.Simulator.create` with ``positions=spatial.grid(...)``, then reads
-the node coordinates back with :meth:`~brainpy.state.Simulator.get_position` (NEST
+:meth:`~brainspike.Simulator.create` with ``positions=spatial.grid(...)``, then reads
+the node coordinates back with :meth:`~brainspike.Simulator.get_position` (NEST
 ``GetPosition``).
 
 The grid layout is *exactly* NEST's: column index is the slow axis and row index the fast
@@ -17,7 +17,7 @@ column ``k // n_rows``, row ``k % n_rows`` and
     y_k = c_y + L_y/2 - (\\mathrm{row} + 0.5)\\,L_y / n_y .
 
 The coordinates are asserted to match live NEST element-for-element in
-``brainpy_state/_nest_validation/spatial_grid_test.py``.
+``brainspike/_nest_validation/spatial_grid_test.py``.
 
 Run:  PYTHONPATH=. python examples/nest_like/spatial_grid_iaf.py
 """
@@ -30,7 +30,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(shape=(4, 3), extent=(2.0, 1.5)):
@@ -68,7 +68,7 @@ def run(shape=(4, 3), extent=(2.0, 1.5)):
 def main():
     coords = run()
     xy = np.asarray(u.get_magnitude(coords.to(u.um)))
-    print('spatial_grid_iaf (brainpy.state)')
+    print('spatial_grid_iaf (brainspike)')
     print(f'  {xy.shape[0]} nodes on a 4x3 grid, extent [2.0, 1.5]')
     for k, (x, y) in enumerate(xy):
         print(f'  node {k:2d}: ({x:+.3f}, {y:+.3f})')
@@ -86,7 +86,7 @@ def main():
     plt.grid(True)
     plt.xlabel('4 Columns, Extent: 1.5')
     plt.ylabel('3 Rows, Extent: 1.0')
-    plt.title('Spatial grid of iaf_psc_alpha (brainpy.state)')
+    plt.title('Spatial grid of iaf_psc_alpha (brainspike)')
     plt.tight_layout()
     plt.savefig('examples/nest_like/spatial_grid_iaf.png', dpi=100)
     print('  wrote examples/nest_like/spatial_grid_iaf.png')

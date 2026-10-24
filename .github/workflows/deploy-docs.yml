@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DEPLOY_PATH: /var/www/brainx.chaobrain.com.pkgs/brainpy-state
+  DEPLOY_PATH: /var/www/brainx.chaobrain.com.pkgs/brainspike
 
 jobs:
   build:

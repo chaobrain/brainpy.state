@@ -33,7 +33,7 @@ noise is a PRNG stream that diverges between NEST and JAX, so a per-sample
 comparison is meaningless; both simulators agree only *distributionally*. The
 phase-locking is imposed by the *deterministic* shared oscillation, so the phase
 statistics are the robust ground truth:
-``brainpy_state/_nest_validation/BrodyHopfield_test.py`` asserts that the
+``brainspike/_nest_validation/BrodyHopfield_test.py`` asserts that the
 oscillation induces phase-locking (and that removing it abolishes it), and — when
 NEST is present — that the seed-averaged vector strength, firing rate and phase
 histogram match live NEST.
@@ -54,7 +54,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_psc_alpha, ac_generator,
+from brainspike import (Simulator, iaf_psc_alpha, ac_generator,
                            noise_generator, spike_recorder)
 
 # --- NEST BrodyHopfield parameters (verbatim) --------------------------------
@@ -259,7 +259,7 @@ def run_phase_locking(n=N, t_sim=T, *, drive_amp=DRIVE_AMP, noise_std=NOISE_STD,
 
 def main():
     print("BrodyHopfield: spike synchronization through subthreshold oscillation "
-          "(brainpy.state)")
+          "(brainspike)")
     osc = run_phase_locking()
     flat = run_phase_locking(drive_amp=0.0)     # control: no oscillation
     print(f"  with 35 Hz drive : vector strength R = {osc['R']:.3f}, "

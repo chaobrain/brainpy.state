@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Generalized-IAF neuron with conductance multisynapse — NEST-style port.
 
-Port of NEST's ``gif_cond_exp_multisynapse.py`` onto brainpy.state's explicit
+Port of NEST's ``gif_cond_exp_multisynapse.py`` onto brainspike's explicit
 Simulator API, driving the real ``gif_cond_exp_multisynapse`` neuron. A single
 ``spike_generator`` (one spike at ``t = 10 ms``) fans out to **two distinct
 exponential-conductance receptors** of the same neuron via
@@ -35,7 +35,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, gif_cond_exp_multisynapse,
+from brainspike import (Simulator, gif_cond_exp_multisynapse,
                            spike_generator, multimeter)
 
 #: NEST ``gif_cond_exp_multisynapse`` params set by the example (2 receptors;
@@ -110,7 +110,7 @@ def run_traces(ports=(1, 2), dt=0.1, simtime=100.0):
 
 
 def main():
-    print("gif_cond_exp_multisynapse (brainpy.state) — 2-receptor PSPs")
+    print("gif_cond_exp_multisynapse (brainspike) — 2-receptor PSPs")
     tr = run_traces(dt=0.1, simtime=100.0)
     for k, d, e in zip((1, 2), DELAYS, MODEL_PARAMS['E_rev']):
         gk = tr[f'g_{k}']

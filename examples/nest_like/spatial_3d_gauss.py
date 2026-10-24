@@ -6,11 +6,11 @@ Places 1000 ``iaf_psc_alpha`` neurons at uniformly-random positions in a 3D box 
 and connects the layer to itself with a Gaussian distance kernel
 :math:`p(d)=\\exp(-d^2/(2\\,\\mathrm{std}^2))` (``std=0.25``), no autapses, clipped to a cubic
 box mask ``[-0.75, 0.75]^3`` anchored on the source. The realized footprint of the central
-node is read back with :func:`~brainpy.state.spatial.target_positions` and its target
+node is read back with :func:`~brainspike.spatial.target_positions` and its target
 distances are histogrammed (NEST's figure).
 
 Random layer positions diverge sample-by-sample from NEST (independent PRNGs), so the
-validation (``brainpy_state/_nest_validation/spatial_3d_test.py``) checks the
+validation (``brainspike/_nest_validation/spatial_3d_test.py``) checks the
 position-independent **law**: the box-mask cutoff is hard, autapses are absent, and the
 empirical ``p(d)`` and edge count match live NEST distributionally.
 
@@ -25,7 +25,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(n=1000, extent=(1.5, 1.5, 1.5), std=0.25, box=0.75, seed=0):
@@ -88,7 +88,7 @@ def main():
     coords, ctr, target_pos, target_dist = run()
     xyz = np.asarray(u.get_magnitude(coords.to(u.um)))
     dist = np.asarray(u.get_magnitude(target_dist.to(u.um)))
-    print('spatial_3d_gauss (brainpy.state)')
+    print('spatial_3d_gauss (brainspike)')
     print(f'  {xyz.shape[0]} nodes in 3D; centre node {ctr} has {dist.shape[0]} targets')
     print(f'  target distance: min {dist.min():.3f}, max {dist.max():.3f}, mean {dist.mean():.3f}')
     try:

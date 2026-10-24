@@ -24,8 +24,8 @@ shutil.rmtree('apis/generated', ignore_errors=True)
 
 # -- Project information -----------------------------------------------------
 
-project = 'brainpy.state'
-copyright = '2020-, brainpy.state'
+project = 'brainspike'
+copyright = '2020-, brainspike'
 author = 'BrainX Team'
 
 from highlight_lexer import fix_ipython2_lexer_in_notebooks
@@ -34,21 +34,21 @@ fix_ipython2_lexer_in_notebooks(os.path.dirname(os.path.abspath(__file__)))
 
 from importlib.metadata import version as _pkg_version
 
-release = _pkg_version("brainpy_state")
+release = _pkg_version("brainspike")
 
 # Register attribute-alias submodules so autosummary/autodoc can resolve dotted
-# paths like ``brainpy.state.spatial.Layer``. ``brainpy.state.spatial`` and
-# ``brainpy.state.network`` are real module objects exposed as attributes on the
+# paths like ``brainspike.spatial.Layer``. ``brainspike.spatial`` and
+# ``brainspike.network`` are real module objects exposed as attributes on the
 # public shim, but are not importable as dotted paths until registered here.
 import sys as _sys
 
 try:
-    import brainpy.state as _bps
+    import brainspike as _bps
 
     for _alias in ("spatial", "network"):
         _mod = getattr(_bps, _alias, None)
         if _mod is not None:
-            _sys.modules[f"brainpy.state.{_alias}"] = _mod
+            _sys.modules[f"brainspike.{_alias}"] = _mod
 except Exception:
     pass
 
@@ -75,7 +75,7 @@ extensions = [
 
 
 
-html_baseurl = 'https://brainx.chaobrain.com/brainpy-state/'
+html_baseurl = 'https://brainx.chaobrain.com/brainspike/'
 
 # Prefer NumPy-style docstrings across the API docs.
 napoleon_google_docstring = False
@@ -161,7 +161,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'nest-status/internal/**
 
 html_theme = "sphinx_book_theme"
 html_logo = "_static/brainpystate_vertical.png"
-html_title = "brainpy.state documentation"
+html_title = "brainspike documentation"
 html_copy_source = True
 html_sourcelink_suffix = ""
 html_favicon = "_static/brainpystate_vertical.png"

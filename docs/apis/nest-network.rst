@@ -2,13 +2,13 @@ NEST-Compatible Network Builder
 ===============================
 
 High-level builders, projections, connection rules, and simulation utilities
-for assembling and running NEST-compatible networks in ``brainpy.state``.
+for assembling and running NEST-compatible networks in ``brainspike``.
 This is the declarative, NEST-like network layer: describe populations and
-connections with a :class:`~brainpy.state.network.Builder`, materialize a
-:class:`~brainpy.state.network.Network`, and drive it with a
-:class:`~brainpy.state.network.Simulator`.
+connections with a :class:`~brainspike.network.Builder`, materialize a
+:class:`~brainspike.network.Network`, and drive it with a
+:class:`~brainspike.network.Simulator`.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 
 Network Construction & Execution

@@ -1,8 +1,8 @@
-# Gate suite of the new kernel (brainpy_state/_kernel), K0 + K1a.
+# Gate suite of the new kernel (brainspike/_kernel), K0 + K1a.
 #
 # Runs every pytest-implemented gate that does not need NEST
 # (`-m "(k0_gate or k1a_gate) and not requires_nest"`, registry:
-# brainpy_state/_kernel/validation/gates.py) with the `validation` extra installed, so the
+# brainspike/_kernel/validation/gates.py) with the `validation` extra installed, so the
 # Brian2 comparison (K0 G3) runs. NEST is not installed here, so the `requires_nest` gate
 # tests are deselected; they run in `nest-comparison.yml`, which selects
 # `-m "requires_nest and (k0_gate or k1a_gate)"`. They must be deselected rather than
@@ -20,12 +20,12 @@ on:
     branches:
       - main
     paths:
-      - "brainpy_state/_kernel/**"
+      - "brainspike/_kernel/**"
       - "pyproject.toml"
       - ".github/workflows/kernel-gates.yml"
   pull_request:
     paths:
-      - "brainpy_state/_kernel/**"
+      - "brainspike/_kernel/**"
       - "pyproject.toml"
       - ".github/workflows/kernel-gates.yml"
   workflow_dispatch:
@@ -75,4 +75,4 @@ jobs:
         env:
           OMP_NUM_THREADS: "1"
           JAX_PLATFORMS: cpu
-        run: pytest brainpy_state/_kernel -m "(k0_gate or k1a_gate) and not requires_nest" -n 2 --timeout=1800 --timeout-method=thread
+        run: pytest brainspike/_kernel -m "(k0_gate or k1a_gate) and not requires_nest" -n 2 --timeout=1800 --timeout-method=thread

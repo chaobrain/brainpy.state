@@ -5,7 +5,7 @@
 # from the environment for the first two.
 SPHINXOPTS    ?=
 SPHINXBUILD   ?= sphinx-build
-SPHINXPROJ    = brainpy_state
+SPHINXPROJ    = brainspike
 SOURCEDIR     = .
 BUILDDIR      = _build
 

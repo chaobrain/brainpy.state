@@ -3,7 +3,7 @@
 """Multimeter recording of several analog variables — NEST-style port.
 
 Port of NEST's ``multimeter_file.py``, the multi-recordable recording demo. The
-upstream writes the data to an ``ascii`` file backend; brainpy.state has no
+upstream writes the data to an ``ascii`` file backend; brainspike has no
 file-backed recorders (``devices-gap.md`` P2), so this is the **in-memory
 equivalent** — the multimeter taps the neuron's State each step and the trace is
 read back with ``res.trace(mm, name)``.
@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_psc_exp, multimeter, spike_generator
+from brainspike import Simulator, iaf_psc_exp, multimeter, spike_generator
 
 #: Recordables tapped from ``iaf_psc_exp`` (NEST vocabulary).
 RECORD_FROM = ('V_m', 'I_syn_ex', 'I_syn_in')
@@ -88,7 +88,7 @@ def main():
     v = np.asarray(u.get_mantissa(res.trace(mm, "V_m") / u.mV)).reshape(-1)
     iex = np.asarray(u.get_mantissa(res.trace(mm, "I_syn_ex") / u.pA)).reshape(-1)
     iin = np.asarray(u.get_mantissa(res.trace(mm, "I_syn_in") / u.pA)).reshape(-1)
-    print("multimeter_file (brainpy.state, iaf_psc_exp, in-memory)")
+    print("multimeter_file (brainspike, iaf_psc_exp, in-memory)")
     print(f"  V_m: start {v[0]:.2f} mV, min {v.min():.2f} mV, max {v.max():.2f} mV")
     print(f"  I_syn_ex: max {iex.max():.2f} pA ; I_syn_in: min {iin.min():.2f} pA")
 

@@ -1,7 +1,7 @@
-# Live-NEST comparison tests for brainpy.state
+# Live-NEST comparison tests for brainspike
 #
 # The `@requires_nest` parity tests (selected by `-m requires_nest`) drive each model in
-# live NEST and in brainpy.state and compare them. They need the NEST simulator (installed
+# live NEST and in brainspike and compare them. They need the NEST simulator (installed
 # via conda) and number in the hundreds, so they are SLOW and deliberately kept out of the
 # per-PR `Continuous Integration` workflow. Run this manually from the Actions tab
 # ("Run workflow") when touching the `_nest/` substrate or its validation harness; a weekly
@@ -73,12 +73,12 @@ jobs:
         # stalling a worker; the thread method is used (no SIGALRM dependency).
         env:
           OMP_NUM_THREADS: "1"
-        run: pytest brainpy_state/ -m "requires_nest and not (k0_gate or k1a_gate)" -n auto --timeout=900 --timeout-method=thread
+        run: pytest brainspike/ -m "requires_nest and not (k0_gate or k1a_gate)" -n auto --timeout=900 --timeout-method=thread
 
       - name: Run the kernel's live-NEST gate tests (K0 + K1a)
-        # The NEST-marked gate tests of brainpy_state/_kernel (registry:
-        # brainpy_state/_kernel/validation/gates.py). Some are multi-seed network
+        # The NEST-marked gate tests of brainspike/_kernel (registry:
+        # brainspike/_kernel/validation/gates.py). Some are multi-seed network
         # comparisons (K1a-G5: 10 + 10 Brunel order-2500 runs), hence the longer timeout.
         env:
           OMP_NUM_THREADS: "1"
-        run: pytest brainpy_state/_kernel -m "requires_nest and (k0_gate or k1a_gate)" -n auto --timeout=3600 --timeout-method=thread
+        run: pytest brainspike/_kernel -m "requires_nest and (k0_gate or k1a_gate)" -n auto --timeout=3600 --timeout-method=thread

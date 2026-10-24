@@ -32,7 +32,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import mip_generator, correlation_detector
+from brainspike import mip_generator, correlation_detector
 
 #: Simulation resolution (ms).
 RESOLUTION = 0.1
@@ -191,7 +191,7 @@ def main(seed=12345, simtime=10000.0):
     lmbd1 = (n1 / (simtime - TAU_MAX)) * 1000.0
     lmbd2 = (n2 / (simtime - TAU_MAX)) * 1000.0
 
-    print("cross_check_mip_corrdet (brainpy.state, eager mip + correlation_detector)")
+    print("cross_check_mip_corrdet (brainspike, eager mip + correlation_detector)")
     print(f"  rate={RATE} Hz, p_copy={P_COPY}, T={simtime:.0f} ms; lambdas: "
           f"{lmbd1:.2f} / {lmbd2:.2f} spks/s")
     hist = det['count_histogram']

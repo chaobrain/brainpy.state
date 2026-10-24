@@ -4,11 +4,11 @@
 Spatially-structured networks
 =============================
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 When neurons sit at positions in space and the probability (or weight) of a
 connection depends on the source→target distance, build the layout and the
-distance-dependent rule with the :mod:`brainpy.state.spatial` toolkit. It mirrors
+distance-dependent rule with the :mod:`brainspike.spatial` toolkit. It mirrors
 NEST's spatial / topology vocabulary and rides the ordinary
 :meth:`Simulator.connect` call — the same call any non-spatial rule uses.
 
@@ -22,7 +22,7 @@ Create a population on a layout by passing ``positions=`` to
 .. code-block:: python
 
    import brainunit as u
-   from brainpy import state as bp
+   import brainspike as bp
 
    sim = bp.Simulator(dt=0.1 * u.ms)
    pos = bp.spatial.grid([4, 3], extent=[2.0, 1.5])     # 4 columns × 3 rows

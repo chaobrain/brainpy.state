@@ -46,7 +46,7 @@ import numpy as np
 import brainunit as u
 import brainstate.transform as transform
 
-from brainpy.state import sinusoidal_gamma_generator
+from brainspike import sinusoidal_gamma_generator
 
 #: DC (mean) rate of the drive (Hz).
 RATE = 100.0
@@ -229,7 +229,7 @@ def cv_by_order(seed=0, orders=ORDERS, simtime=SIMTIME, dt=DT, n_targets=N_TARGE
 
 
 def main():
-    print("sinusoidal_gamma_generator (brainpy.state, eager for_loop drive)")
+    print("sinusoidal_gamma_generator (brainspike, eager for_loop drive)")
     print(f"  gamma regularization: CV -> 1/sqrt(m), dc={RATE:.0f} Hz, "
           f"{N_TARGETS} channels, T={SIMTIME:.0f} ms")
     cvs = cv_by_order()

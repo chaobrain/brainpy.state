@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """One neuron driven by a constant current — NEST-style port.
 
-Port of NEST's ``one_neuron.py`` onto brainpy.state's explicit Simulator API.
+Port of NEST's ``one_neuron.py`` onto brainspike's explicit Simulator API.
 A single ``iaf_psc_alpha`` is driven by a constant external current ``I_e`` and
 its membrane potential is observed by a ``voltmeter``. As in NEST, the voltmeter
 is connected in the *reversed* direction --- ``connect(voltmeter, neuron)`` ---
@@ -22,7 +22,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_psc_alpha, voltmeter
+from brainspike import Simulator, iaf_psc_alpha, voltmeter
 
 
 def build(I_e=376.0, simtime=1000.0):
@@ -58,7 +58,7 @@ def main():
     res = sim.simulate(simtime * u.ms)
     t = np.asarray(u.get_mantissa(res.times / u.ms))
     v = np.asarray(u.get_mantissa(res.trace(vm, "V_m") / u.mV)).reshape(-1)
-    print("One neuron (brainpy.state, I_e = 376 pA)")
+    print("One neuron (brainspike, I_e = 376 pA)")
     print(f"  V_m: start {v[0]:.2f} mV, max {v.max():.2f} mV, "
           f"{int((np.diff(v) < -10.0).sum())} spikes in {simtime:.0f} ms")
 

@@ -3,16 +3,16 @@
 """A Brunel network with astrocytes, Bernoulli wiring (NEST port).
 
 Port of NEST's ``astrocyte_brunel_bernoulli``. A balanced random (Brunel) network
-of :class:`~brainpy.state.aeif_cond_alpha_astro` neurons (excitatory + inhibitory)
-plus a population of :class:`~brainpy.state.astrocyte_lr_1994` astrocytes. The
+of :class:`~brainspike.aeif_cond_alpha_astro` neurons (excitatory + inhibitory)
+plus a population of :class:`~brainspike.astrocyte_lr_1994` astrocytes. The
 **excitatory** population projects to both neurons and astrocytes through
-:meth:`~brainpy.state.Simulator.tripartite_connect` (one shared primary sample feeds
+:meth:`~brainspike.Simulator.tripartite_connect` (one shared primary sample feeds
 all three arms); the inhibitory population projects to neurons only.
 
 * primary ``ex -> all`` -- ``pairwise_bernoulli(p_primary)`` conductance EPSP
   (receptor 1 -> ``g_ex``, ``w_e`` nS).
 * ``third_in`` ``ex -> astro`` -- a delta drive raising astrocytic IP3.
-* ``third_out`` ``astro -> all`` -- a :class:`~brainpy.state.sic_connection` feeding
+* ``third_out`` ``astro -> all`` -- a :class:`~brainspike.sic_connection` feeding
   the slow inward current ``I_SIC`` back into the neurons; the astrocyte pool of each
   target neuron is ``pool_size`` astrocytes drawn at random (``pool_type='random'``).
 * inhibitory ``inh -> all`` -- ``pairwise_bernoulli(p_primary)`` (receptor 2 ->
@@ -43,7 +43,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def build(sim, *, primary_rule, n_ex, n_in, n_astro, p_third, pool_size,
@@ -61,7 +61,7 @@ def build(sim, *, primary_rule, n_ex, n_in, n_astro, p_third, pool_size,
         The simulator to populate.
     primary_rule : callable
         ``primary_rule('ex')`` / ``primary_rule('in')`` must return the excitatory /
-        inhibitory primary :class:`~brainpy.state.ConnRule` (e.g.
+        inhibitory primary :class:`~brainspike.ConnRule` (e.g.
         ``pairwise_bernoulli(p)`` or ``fixed_indegree(C)``).
     n_ex, n_in, n_astro : int
         Excitatory / inhibitory neuron and astrocyte population sizes.

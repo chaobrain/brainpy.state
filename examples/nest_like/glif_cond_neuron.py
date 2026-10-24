@@ -2,7 +2,7 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
 """Conductance-based GLIF neuron, five mechanism levels — NEST-style port.
 
-Port of NEST's ``glif_cond_neuron.py`` onto brainpy.state's explicit Simulator
+Port of NEST's ``glif_cond_neuron.py`` onto brainspike's explicit Simulator
 API, driving the real ``glif_cond`` neuron. The Allen-Institute generalized-LIF
 model is exercised at its **five mechanism levels**, selected by three boolean
 flags ``(spike_dependent_threshold, after_spike_currents, adapting_threshold)``:
@@ -42,7 +42,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, glif_cond, spike_generator,
+from brainspike import (Simulator, glif_cond, spike_generator,
                            step_current_generator, poisson_generator,
                            parrot_neuron, multimeter, spike_recorder)
 
@@ -167,7 +167,7 @@ def run_traces(mech, with_poisson=True, dt=RESOLUTION, simtime=SIMTIME):
 
 
 def main():
-    print("glif_cond_neuron (brainpy.state) — five GLIF mechanism levels")
+    print("glif_cond_neuron (brainspike) — five GLIF mechanism levels")
     traces = {}
     for label, mech in GLIF_LEVELS:
         tr = run_traces(mech, with_poisson=True)

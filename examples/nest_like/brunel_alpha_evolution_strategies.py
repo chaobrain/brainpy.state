@@ -8,7 +8,7 @@ drive ``eta`` and the inhibition/excitation ratio ``g`` of a Brunel balanced
 network (alpha synapses) so its population-averaged rate, ISI coefficient of
 variation, and pairwise spike-count correlation hit target values.
 
-Only ``simulate`` is brainpy.state-specific: it builds the same network as
+Only ``simulate`` is brainspike-specific: it builds the same network as
 ``brunel_alpha.py`` on the explicit :class:`Simulator` for a given ``(g, eta)``
 and returns NEST-shaped ``{"senders", "times"}`` spike dicts. The analysis and
 optimizer functions below are faithful ports of the NEST reference (pure NumPy,
@@ -26,7 +26,7 @@ import scipy.special as sp
 import brainunit as u
 import braintools
 
-from brainpy.state import (
+from brainspike import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_alpha, poisson_generator, spike_recorder,
 )
@@ -99,7 +99,7 @@ def compute_statistics(parameters, espikes, ispikes):
 
 
 ###############################################################################
-# Network simulation (brainpy.state Simulator; mirrors brunel_alpha.py)
+# Network simulation (brainspike Simulator; mirrors brunel_alpha.py)
 
 
 def LambertWm1(x):

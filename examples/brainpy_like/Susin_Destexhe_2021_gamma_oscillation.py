@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import kaiserord, lfilter, firwin, hilbert
 
-import brainpy
+import brainspike
 import brainstate
 
 # Table 1: specific neuron model parameters
@@ -46,7 +46,7 @@ Ch_par = dict(
 )
 
 
-class AdEx(brainpy.state.Neuron):
+class AdEx(brainspike.Neuron):
     def __init__(
         self,
         in_size,

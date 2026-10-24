@@ -2,7 +2,7 @@
 Installation
 ============
 
-``brainpy.state`` is a flexible, efficient, and extensible framework for
+``brainspike`` is a flexible, efficient, and extensible framework for
 computational neuroscience and brain-inspired computation. This page gets you a
 working install fast.
 
@@ -13,7 +13,7 @@ Requirements
 - The ``pip`` package manager
 - Linux (Ubuntu 16.04+), macOS (10.12+), or Windows
 
-``brainpy.state`` runs on top of JAX, so the only thing that changes between
+``brainspike`` runs on top of JAX, so the only thing that changes between
 hardware backends is which JAX build gets pulled in. The extras below
 (``[cpu]``, ``[cuda12]``, ``[cuda13]``, ``[tpu]``) select that for you.
 
@@ -24,14 +24,14 @@ Install the latest release with CPU support:
 
 .. code-block:: bash
 
-   pip install brainpy.state -U
+   pip install brainspike -U
 
 This is enough for development, testing, and small-to-medium simulations.
 
 Choose a backend
 ================
 
-Pick the tab that matches your hardware. Each extra installs ``brainpy.state``
+Pick the tab that matches your hardware. Each extra installs ``brainspike``
 together with the matching JAX build.
 
 .. tab-set::
@@ -40,7 +40,7 @@ together with the matching JAX build.
 
       .. code-block:: bash
 
-         pip install brainpy.state[cpu] -U
+         pip install brainspike[cpu] -U
 
       The default, portable choice. Great for development, testing, and
       small-scale simulations on any machine.
@@ -49,7 +49,7 @@ together with the matching JAX build.
 
       .. code-block:: bash
 
-         pip install brainpy.state[cuda12] -U
+         pip install brainspike[cuda12] -U
 
       NVIDIA GPU acceleration for the CUDA 12.x toolkit. Make sure your driver
       and CUDA toolkit match before installing.
@@ -58,7 +58,7 @@ together with the matching JAX build.
 
       .. code-block:: bash
 
-         pip install brainpy.state[cuda13] -U
+         pip install brainspike[cuda13] -U
 
       NVIDIA GPU acceleration for the CUDA 13.x toolkit.
 
@@ -66,21 +66,21 @@ together with the matching JAX build.
 
       .. code-block:: bash
 
-         pip install brainpy.state[tpu] -U
+         pip install brainspike[tpu] -U
 
       Google Cloud TPU support — typically used on Google Cloud Platform or in
       a Colab TPU runtime.
 
 .. note::
 
-   The backend extra only controls the JAX build. The ``brainpy.state`` API and
+   The backend extra only controls the JAX build. The ``brainspike`` API and
    all example code are identical across CPU, GPU, and TPU — write once, run
    anywhere.
 
 Install the full BrainX ecosystem
 =================================
 
-To install ``brainpy.state`` alongside the rest of the ecosystem in one go:
+To install ``brainspike`` alongside the rest of the ecosystem in one go:
 
 .. code-block:: bash
 
@@ -88,7 +88,7 @@ To install ``brainpy.state`` alongside the rest of the ecosystem in one go:
 
 This pulls in:
 
-- ``brainpy.state`` — the point-neuron modeling layer (this package)
+- ``brainspike`` — the point-neuron modeling layer (this package)
 - ``brainstate`` — state management and the compilation/``transform`` backend
 - ``brainunit`` — the physical-units system
 - ``braintools`` — initializers, optimizers, metrics, surrogate gradients, and
@@ -103,15 +103,15 @@ Confirm everything imports and a model can be constructed:
 
 .. code-block:: python
 
-   import brainpy
+   import brainspike
    import brainstate
    import brainunit as u
 
-   print(f"brainpy.state version: {brainpy.state.__version__}")
+   print(f"brainspike version: {brainspike.__version__}")
    print(f"brainstate version:    {brainstate.__version__}")
 
    # Build a small population of LIF neurons to check the API is live.
-   neuron = brainpy.state.LIF(10)
+   neuron = brainspike.LIF(10)
    print("Installation successful!")
 
 Backend notes
@@ -147,8 +147,8 @@ For development against a local checkout:
 
 .. code-block:: bash
 
-   git clone https://github.com/chaobrain/brainpy.state.git
-   cd brainpy.state
+   git clone https://github.com/chaobrain/brainspike.git
+   cd brainspike
    pip install -e .
 
 This creates an editable install that reflects your local changes.

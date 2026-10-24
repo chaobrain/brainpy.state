@@ -42,7 +42,7 @@ import numpy as np
 import brainunit as u
 import jax.numpy as jnp
 
-from brainpy.state import (Simulator, SpikeTime, iaf_psc_alpha, voltmeter,
+from brainspike import (Simulator, SpikeTime, iaf_psc_alpha, voltmeter,
                            one_to_one, pulsepacket_generator)
 
 #: Number of spikes per packet (NEST ``activity``).
@@ -327,7 +327,7 @@ def averaged_membrane(mat, dt=DT, simtime=SIMTIME, weight=WEIGHT):
 
 
 def main():
-    print("pulsepacket (brainpy.state, host-loop generator + Simulator membrane drive)")
+    print("pulsepacket (brainspike, host-loop generator + Simulator membrane drive)")
     mat = generate_packet(seed=0)
     stats = packet_stats(mat)
     print(f"  packet: {N_NEURONS} neurons x activity={ACTIVITY} -> total={stats['total']} "

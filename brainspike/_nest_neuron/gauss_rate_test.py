@@ -1,0 +1,149 @@
+# Copyright 2026 BrainX Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+# -*- coding: utf-8 -*-
+
+import importlib.util
+import math
+import unittest
+
+import brainstate
+import braintools
+import brainunit as u
+import jax
+import jax.numpy as jnp
+import numpy as np
+import numpy.testing as npt
+from brainspike import gauss_rate_ipn
+
+jax.config.update('jax_enable_x64', True)
+brainstate.environ.set(precision=64)
+
+
+def _is_nest_available():
+    return importlib.util.find_spec('nest') is not None
+
+
+def _run_nest_trace(model_name, params, record_from, simtime_ms, dt_ms):
+    import nest
+
+    nest.set_verbosity('M_WARNING')
+    nest.ResetKernel()
+    nest.resolution = dt_ms
+    nest.use_wfr = False
+
+    neuron = nest.Create(model_name)
+    neuron.set(params)
+    mm = nest.Create('multimeter', params={
+        'record_from': list(record_from),
+        'interval': dt_ms,
+    })
+    nest.Connect(mm, neuron, syn_spec={'delay': dt_ms})
+    nest.Simulate(simtime_ms)
+
+    ev = mm.events
+    dftype = brainstate.environ.dftype()
+    out = {'times': np.asarray(ev['times'], dtype=dftype)}
+    for key in record_from:
+        out[key] = np.asarray(ev[key], dtype=dftype)
+    return out
+
+
+class TestGaussRate(unittest.TestCase):
+    def setUp(self):
+        brainstate.environ.set(dt=0.1 * u.ms)
+        self.dt_ms = 0.1
+        self.dt = self.dt_ms * u.ms
+
+    def _step(self, neuron, k, **kwargs):
+        with brainstate.environ.context(t=k * self.dt):
+            return neuron.update(**kwargs)
+
+    def test_nest_default_parameters(self):
+        ipn = gauss_rate_ipn(1)
+        self.assertEqual(ipn.tau, 10.0 * u.ms)
+        self.assertEqual(ipn.lambda_, 1.0)
+        self.assertEqual(ipn.sigma, 0.0)
+        self.assertEqual(ipn.mu, 0.0)
+        self.assertEqual(ipn.g, 1.0)
+        self.assertEqual(ipn.mult_coupling, False)
+        self.assertEqual(ipn.linear_summation, True)
+        self.assertEqual(ipn.rectify_rate, 0.0)
+        self.assertEqual(ipn.rectify_output, False)
+        self.assertEqual(ipn.recordables, ['rate', 'noise'])
+
+    def test_parameter_validation(self):
+        with self.assertRaises(ValueError):
+            gauss_rate_ipn(1, tau=0.0 * u.ms)
+        with self.assertRaises(ValueError):
+            gauss_rate_ipn(1, lambda_=-1e-3)
+        with self.assertRaises(ValueError):
+            gauss_rate_ipn(1, sigma=-1e-3)
+        with self.assertRaises(ValueError):
+            gauss_rate_ipn(1, rectify_rate=-1e-3)
+
+
+    def test_matches_nest_trace_with_replayed_noise(self):
+        if not _is_nest_available():
+            self.skipTest('NEST simulator not available')
+
+        nominal_steps = 200
+        simtime_ms = nominal_steps * self.dt_ms
+        sigma = 0.45
+        nest_out = _run_nest_trace(
+            model_name='gauss_rate_ipn',
+            params={
+                'tau': 5.0,
+                'lambda': 1.2,
+                'sigma': sigma,
+                'mu': 0.25,
+                'g': 1.7,
+                'rate': -0.3,
+            },
+            record_from=['rate', 'noise'],
+            simtime_ms=simtime_ms,
+            dt_ms=self.dt_ms,
+        )
+        replay_steps = nest_out['noise'].size
+
+        with brainstate.environ.context(dt=self.dt):
+            ipn_bp = gauss_rate_ipn(
+                1,
+                tau=5.0 * u.ms,
+                lambda_=1.2,
+                sigma=sigma,
+                mu=0.25,
+                g=1.7,
+                rate_initializer=braintools.init.Constant(-0.3),
+            )
+            ipn_bp.init_state()
+            dftype = brainstate.environ.dftype()
+            noise_seq = jnp.asarray(nest_out['noise'] / sigma, dtype=dftype)
+
+            def body(noise_k):
+                ipn_bp.update(noise=noise_k)
+                return (ipn_bp.rate.value.reshape(-1)[0], ipn_bp.noise.value.reshape(-1)[0])
+
+            results = brainstate.transform.for_loop(body, noise_seq)
+            bp_rate = np.asarray(results[0])
+            bp_noise = np.asarray(results[1])
+
+        n_cmp = min(bp_rate.size, nest_out['rate'].size)
+        npt.assert_allclose(bp_rate[:n_cmp], nest_out['rate'][:n_cmp], atol=1e-12)
+        npt.assert_allclose(bp_noise[:n_cmp], nest_out['noise'][:n_cmp], atol=1e-12)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -7,7 +7,7 @@ Port of NEST's ``astrocyte_brunel_fixed_indegree``. Identical to the sibling
 ``fixed_indegree`` (every neuron receives exactly ``CE`` excitatory and ``CI``
 inhibitory inputs) instead of ``pairwise_bernoulli``. The excitatory population
 projects to both neurons and astrocytes through
-:meth:`~brainpy.state.Simulator.tripartite_connect` (one shared primary sample feeds
+:meth:`~brainspike.Simulator.tripartite_connect` (one shared primary sample feeds
 the primary, ``third_in`` and ``third_out`` arms); the astrocyte third-factor rule is
 ``third_factor_bernoulli_with_pool`` (``pool_size=10``, ``pool_type='random'``).
 
@@ -33,7 +33,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 from examples.nest_like.astrocyte_brunel_bernoulli import build
 

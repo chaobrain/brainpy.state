@@ -21,7 +21,7 @@ import numpy as np
 import brainunit as u
 from scipy.optimize import bisect
 
-from brainpy.state import (Simulator, iaf_psc_alpha, poisson_generator,
+from brainspike import (Simulator, iaf_psc_alpha, poisson_generator,
                            voltmeter, spike_recorder)
 
 # NEST balancedneuron parameters.
@@ -94,7 +94,7 @@ def find_inhibitory_rate(simtime=25000.0, lower=15.0, upper=25.0, prec=0.01,
 def main():
     # 25 s as in NEST gives a stable estimate but is slow under JIT; trim if needed.
     simtime = 25000.0
-    print("Balanced neuron (brainpy.state): bisecting the inhibitory rate ...")
+    print("Balanced neuron (brainspike): bisecting the inhibitory rate ...")
     in_rate = find_inhibitory_rate(simtime=simtime)
     print(f"Optimal inhibitory population rate: {in_rate:.2f} spks/s")
 

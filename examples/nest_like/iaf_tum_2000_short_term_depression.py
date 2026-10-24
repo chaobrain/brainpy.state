@@ -33,7 +33,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_tum_2000, dc_generator, voltmeter
+from brainspike import Simulator, iaf_tum_2000, dc_generator, voltmeter
 
 # Membrane parameters (Tsodyks-Pawelzik-Markram 1998, Fig 1A; depression regime).
 TAU_M = 40.0                       # membrane time constant [ms]
@@ -111,7 +111,7 @@ def run_traces(simtime=T_SIM):
 
 
 def main():
-    print('iaf_tum_2000 short-term depression (brainpy.state, Fig 1A)')
+    print('iaf_tum_2000 short-term depression (brainspike, Fig 1A)')
     print(f'  DC amplitude {DC_AMP:.2f} pA -> ~20 Hz presynaptic train')
     t, v = run_traces()
     # successive EPSP peaks decrease under depression

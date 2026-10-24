@@ -5,7 +5,7 @@ Core Concepts
 One differentiable substrate, two worlds
 ========================================
 
-``brainpy.state`` exists to make a single argument: **brain simulation and
+``brainspike`` exists to make a single argument: **brain simulation and
 brain-inspired computing are the same computation, expressed once.** The neurons,
 synapses, and projections you assemble to *simulate* a biophysical network are the
 exact objects you *train* with gradients and scale with linear-memory online

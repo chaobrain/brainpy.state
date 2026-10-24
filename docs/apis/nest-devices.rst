@@ -3,7 +3,7 @@ NEST-Compatible Devices
 
 Stimulation and recording devices compatible with the `NEST simulator <https://nest-simulator.readthedocs.io/>`_.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 
 Current Generators

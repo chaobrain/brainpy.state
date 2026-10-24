@@ -1,10 +1,10 @@
-# brainpy.state Examples
+# brainspike Examples
 
-This directory contains example scripts demonstrating the capabilities of brainpy.state for simulating and training spiking neural networks.
+This directory contains example scripts demonstrating the capabilities of brainspike for simulating and training spiking neural networks.
 
 ## Overview
 
-``brainpy.state`` is rewritten based on [brainstate](https://github.com/chaobrain/brainstate) and provides a powerful framework for computational neuroscience and brain-inspired computation.
+``brainspike`` is rewritten based on [brainstate](https://github.com/chaobrain/brainstate) and provides a powerful framework for computational neuroscience and brain-inspired computation.
 
 ## Example Categories
 
@@ -40,7 +40,7 @@ Examples demonstrating training of SNNs using surrogate gradient methods:
 ### NEST-style ports (`nest/`)
 
 Faithful ports of NEST-simulator reference networks onto the explicit
-`brainpy.state.Simulator` API (NEST vocabulary — `create` / `connect` /
+`brainspike.Simulator` API (NEST vocabulary — `create` / `connect` /
 `simulate`), driving the real NEST-compatible models and validated against live
 NEST. See [`nest/README.md`](../nest/README.md).
 
@@ -50,7 +50,7 @@ NEST. See [`nest/README.md`](../nest/README.md).
 ## Requirements
 
 ```bash
-pip install -U brainpy-state[cpu]  # or brainpy[cuda12] for GPU support
+pip install -U brainspike[cpu]  # or brainpy[cuda12] for GPU support
 ```
 
 ## Usage
@@ -77,4 +77,4 @@ These examples are based on influential papers in computational neuroscience. Se
 
 ## Documentation
 
-For more information, visit the [brainpy.state documentation](https://brainx.chaobrain.com/brainpy-state).
+For more information, visit the [brainspike documentation](https://brainx.chaobrain.com/brainspike).

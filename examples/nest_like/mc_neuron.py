@@ -27,7 +27,7 @@ midway through the run. The Simulator lowers the whole simulation into one compi
 loop, so a parameter cannot be changed mid-run; the faithful Simulator-API
 equivalent is a ``step_current_generator`` that steps the soma current to 150 pA at
 700 ms (a timed device current into the soma current receptor). The live-NEST
-parity test (``brainpy_state/_nest_validation/mc_neuron_test.py``) drives a real
+parity test (``brainspike/_nest_validation/mc_neuron_test.py``) drives a real
 ``iaf_cond_alpha_mc`` with this identical wiring and confirms the per-compartment
 ``V_m`` and ``g_ex`` / ``g_in`` traces match.
 
@@ -41,7 +41,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_cond_alpha_mc, dc_generator,
+from brainspike import (Simulator, iaf_cond_alpha_mc, dc_generator,
                            step_current_generator, spike_generator,
                            multimeter, spike_recorder)
 
@@ -151,7 +151,7 @@ def run_traces(simtime=T_SIM):
 
 
 def main():
-    print("Three-compartment iaf_cond_alpha_mc neuron (brainpy.state)")
+    print("Three-compartment iaf_cond_alpha_mc neuron (brainspike)")
     t, traces, n = run_traces()
     print(f"  output spikes (soma rheobase): {n}")
     for c, label in (('s', 'soma'), ('p', 'proximal'), ('d', 'distal')):

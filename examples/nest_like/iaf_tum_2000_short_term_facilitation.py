@@ -34,7 +34,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import Simulator, iaf_tum_2000, dc_generator, voltmeter
+from brainspike import Simulator, iaf_tum_2000, dc_generator, voltmeter
 
 # Membrane parameters (Tsodyks-Pawelzik-Markram 1998, Fig 1B; facilitation regime).
 TAU_M = 60.0                       # membrane time constant [ms]
@@ -112,7 +112,7 @@ def run_traces(simtime=T_SIM):
 
 
 def main():
-    print('iaf_tum_2000 short-term facilitation (brainpy.state, Fig 1B)')
+    print('iaf_tum_2000 short-term facilitation (brainspike, Fig 1B)')
     print(f'  DC amplitude {DC_AMP:.2f} pA -> ~20 Hz presynaptic train')
     t, v = run_traces()
     print(f'  post V_m: rest {v[0]:.3f} mV, peak {v.max():.3f} mV')

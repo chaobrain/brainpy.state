@@ -75,7 +75,7 @@ def _mc(sim, seed, scale, device='cpu', **kw):
 
 
 def test_microcircuit_compare(tmp_path, capsys):
-    os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+    os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
     lines = [_mc('nest', s, 0) for s in range(1, 4)]
     lines += [_mc('kernel', s, 0, 'cpu') for s in range(1, 4)]       # equal -> pass
     lines += [_mc('kernel', s, 1, 'gpu') for s in range(1, 4)]       # +0.5 Hz -> fail

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "brainpy_state"
-description = "brainpy.state: stateful spiking neural network models in BrainPy"
+name = "brainspike"
+description = "brainspike: stateful spiking neural network models in BrainPy"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -48,24 +48,24 @@ dynamic = ['version']
 
 
 [tool.setuptools.dynamic]
-version = {attr = "brainpy_state._version.__version__"}
+version = {attr = "brainspike._version.__version__"}
 
 
 [tool.setuptools.packages.find]
-include = ["brainpy_state*"]
+include = ["brainspike*"]
 
 
-# Ship the PEP 561 marker so type checkers treat brainpy_state (and its whole
+# Ship the PEP 561 marker so type checkers treat brainspike (and its whole
 # subpackage tree) as a typed package for downstream users. A single marker at
 # the top-level package root is sufficient per PEP 561.
 [tool.setuptools.package-data]
-brainpy_state = ["py.typed"]
+brainspike = ["py.typed"]
 
 
 [project.urls]
-"Bug Tracker" = "https://github.com/chaobrain/brainpy.state/issues"
-"Documentation" = "https://brainx.chaobrain.com/brainpy-state/"
-"Source Code" = "https://github.com/chaobrain/brainpy.state"
+"Bug Tracker" = "https://github.com/chaobrain/brainspike/issues"
+"Documentation" = "https://brainx.chaobrain.com/brainspike/"
+"Source Code" = "https://github.com/chaobrain/brainspike"
 
 
 [project.optional-dependencies]
@@ -87,7 +87,7 @@ validation = ["brian2>=2.10"]
 markers = [
     "requires_nest: live-NEST comparison test; needs the NEST simulator installed",
     "requires_brian2: Brian2 comparison test; needs the `validation` extra (brian2)",
-    "k0_gate: K0 go/no-go gate test (registry: brainpy_state/_kernel/validation/gates.py)",
+    "k0_gate: K0 go/no-go gate test (registry: brainspike/_kernel/validation/gates.py)",
     "k0_g1: K0 gate G1, timing per port kind vs NEST",
     "k0_g2: K0 gate G2, Brunel statistics vs NEST",
     "k0_g3: K0 gate G3, COBA vs Brian2",
@@ -97,8 +97,8 @@ markers = [
     "k0_g7: K0 gate G7, braintrace compatibility",
     "k0_g8: K0 gate G8, STDP vs NEST",
     "k0_g9: K0 gate G9, performance (benchmarks/, not a pytest test)",
-    "k0_g10: K0 gate G10, coverage of brainpy_state/_kernel (command)",
-    "k1a_gate: K1a gate test (registry: K1A_GATES in brainpy_state/_kernel/validation/gates.py)",
+    "k0_g10: K0 gate G10, coverage of brainspike/_kernel (command)",
+    "k1a_gate: K1a gate test (registry: K1A_GATES in brainspike/_kernel/validation/gates.py)",
     "k1a_g1: K1a gate G1, compile time (pytest part: k1a_compile)",
     "k1a_g2: K1a gate G2, single-op per-edge delays",
     "k1a_g3: K1a gate G3, G9 on GPU (benchmarks/, not a pytest test)",
@@ -113,11 +113,11 @@ markers = [
 # Pragmatic "real-bug" configuration: surface genuine type errors in this
 # package without enforcing whole-codebase `disallow_untyped_defs` (which would
 # bury the signal under thousands of "missing annotation" notes on JAX/array
-# scientific code). Run with `mypy -p brainpy_state`.
+# scientific code). Run with `mypy -p brainspike`.
 # NumPy 2.x ships PEP 695 `type` aliases in its stubs, which mypy only parses when
 # targeting Python >= 3.12; the package itself still supports 3.11+ at runtime.
 python_version = "3.12"
-files = ["brainpy_state"]
+files = ["brainspike"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unused_configs = true
@@ -133,7 +133,7 @@ exclude = '_test\.py$'
 # The brain* ecosystem ships py.typed but exposes large dynamically-generated
 # namespaces (e.g. brainunit units `u.mV`, `u.ms`) that a static checker cannot
 # see, producing ~1700 false "Module has no attribute" errors. Treat these deps
-# as opaque so the check focuses on brainpy_state's own type consistency. Other
+# as opaque so the check focuses on brainspike's own type consistency. Other
 # untyped scientific deps are ignored the same way.
 [[tool.mypy.overrides]]
 module = [

@@ -19,7 +19,7 @@ state and external drive), then growing after the perturbation in the chaotic ca
 Implementation notes
 --------------------
 * The external drive is a **single** ``poisson_generator`` broadcast to all
-  neurons; NEST (and brainpy.state) deliver an *independent* realization to each
+  neurons; NEST (and brainspike) deliver an *independent* realization to each
   target, so one generator suffices and is far cheaper than one-per-neuron.
 * Determinism is engineered so the two trials are bit-identical before ``t_stim``:
   the recurrent connections are sampled under fixed ``seed``\\ s, the initial
@@ -37,7 +37,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (
+from brainspike import (
     Simulator, fixed_indegree, all_to_all,
     iaf_psc_delta, poisson_generator, spike_generator, spike_recorder,
 )
@@ -339,7 +339,7 @@ def main():
     # transition is probabilistic, so the seed scan shows a mix of stable and
     # chaotic realizations.
     cfg = dict(ne=300, ni=75, ke=KE, ki=KI, t_stim=120.0, dt=DT, T=250.0)
-    print("sensitivity_to_perturbation (brainpy.state, iaf_psc_delta balanced E/I)")
+    print("sensitivity_to_perturbation (brainspike, iaf_psc_delta balanced E/I)")
     print(f"  N={cfg['ne'] + cfg['ni']}, K={cfg['ke']}/{cfg['ki']}, J={J} mV, g={G}, "
           f"t_stim={cfg['t_stim']} ms, dt={cfg['dt']} ms")
     chaotic = None

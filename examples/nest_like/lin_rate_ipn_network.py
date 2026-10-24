@@ -4,7 +4,7 @@
 
 An excitatory (``NE = 4*order``) and an inhibitory (``NI = order``) population of
 ``lin_rate_ipn`` neurons with **delayed excitatory** and **instantaneous inhibitory**
-connections, relaxed end-to-end through the :class:`~brainpy.state.Simulator` (one
+connections, relaxed end-to-end through the :class:`~brainspike.Simulator` (one
 compiled ``for_loop`` -- no Python step loop). The per-step ``rate`` of one excitatory and
 one inhibitory neuron is plotted, reproducing NEST's tutorial figure.
 
@@ -15,13 +15,13 @@ instantaneous coupling as a plain ``connect(weight=..., comm='dense')`` and the 
 coupling by adding ``delay=...``; its one-step pipeline lag is exactly NEST's
 ``use_wfr=False`` instantaneous seed.
 
-NEST wires the populations with ``fixed_outdegree``; brainpy.state exposes
+NEST wires the populations with ``fixed_outdegree``; brainspike exposes
 ``fixed_indegree`` (there is no ``fixed_outdegree`` rule), so each connection's outdegree
 ``K_out`` is mapped to the mean-field-equivalent indegree ``K_in = N_src * K_out / N_tgt``
 (identical expected in-degree, hence the same mean-field input). With ``sigma > 0`` the
 linear network fluctuates about its mean fixed point ``r* = (lambda I - W)^{-1} mu`` -- the
 deterministic fixed point asserted tightly against NEST in
-``brainpy_state/_nest_validation/lin_rate_ipn_network_test.py``.
+``brainspike/_nest_validation/lin_rate_ipn_network_test.py``.
 
 Run:  PYTHONPATH=. python examples/nest_like/lin_rate_ipn_network.py
 """
@@ -34,7 +34,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 
 def run(order=50, T=100.0, dt=0.1, g=5.0, epsilon=0.1, d_e=5.0, sigma=5.0, seed=0):
@@ -123,7 +123,7 @@ def run(order=50, T=100.0, dt=0.1, g=5.0, epsilon=0.1, d_e=5.0, sigma=5.0, seed=
 
 def main():  # pragma: no cover
     rate_e0, rate_i0, times, _, _ = run()
-    print('lin_rate_ipn_network (brainpy.state)')
+    print('lin_rate_ipn_network (brainspike)')
     print(f'  final excitatory rate : {rate_e0[-1]:.3f}')
     print(f'  final inhibitory rate : {rate_i0[-1]:.3f}')
     try:
@@ -133,7 +133,7 @@ def main():  # pragma: no cover
         plt.plot(times, rate_i0, label='inhibitory')
         plt.xlabel('time (ms)')
         plt.ylabel('rate (a.u.)')
-        plt.title('Network of linear rate neurons (brainpy.state)')
+        plt.title('Network of linear rate neurons (brainspike)')
         plt.legend()
         plt.tight_layout()
         plt.savefig('examples/nest_like/lin_rate_ipn_network_rates.png', dpi=100)

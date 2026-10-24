@@ -3,7 +3,7 @@
 r"""Brette & Gerstner (2005) Fig 3D — AdEx post-inhibitory rebound (NEST port).
 
 Port of NEST's ``brette_gerstner_fig_3d.py``. A single adaptive exponential
-integrate-and-fire neuron (:class:`~brainpy.state.aeif_cond_exp`) is hyperpolarised
+integrate-and-fire neuron (:class:`~brainspike.aeif_cond_exp`) is hyperpolarised
 by an 800 pA *inhibitory* (negative) step current over ``[0, 400) ms``; when the
 step is released the membrane *rebounds* through threshold and fires a short
 burst — Figure 3D of Brette & Gerstner [1]_, the post-inhibitory-rebound regime.
@@ -22,7 +22,7 @@ AdEx parameters are NEST's ``aeif_cond_exp`` defaults.
    default (it does **not** initialise at ``E_L``). Pinning ``V_m`` to ``E_L``
    would start the run 10.6 mV too high and break the parity.
 
-The whole model runs through the :class:`~brainpy.state.Simulator` (one compiled
+The whole model runs through the :class:`~brainspike.Simulator` (one compiled
 ``for_loop``); there is no Python step loop.
 
 Run:  python examples/nest_like/brette_gerstner_fig_3d.py
@@ -42,7 +42,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy import state as bp
+import brainspike as bp
 
 #: Integration step (ms).
 DT = 0.1

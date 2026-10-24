@@ -24,7 +24,7 @@ with NEST-like rules, ``simulate``:
 .. code-block:: python
 
    import brainunit as u
-   from brainpy import state as bp
+   import brainspike as bp
 
    sim = bp.Simulator(dt=0.1 * u.ms)
    neuron = sim.create(bp.iaf_psc_alpha, 1, I_e=376. * u.pA)
@@ -39,7 +39,7 @@ shared :doc:`/concepts/index` spine (State, physical units, the ``transform``
 loops) where the deeper ideas live. We do **not** duplicate NEST's model
 *physiology* here — for the biophysics of any model, follow the link out to the
 upstream `NEST documentation <https://nest-simulator.readthedocs.io/>`_; our pages
-cover the ``brainpy.state`` API, porting parity, semantic divergences, and the
+cover the ``brainspike`` API, porting parity, semantic divergences, and the
 validation showcase.
 
 .. card:: Scaling up: large networks
@@ -49,14 +49,14 @@ validation showcase.
    Looking for full-scale reference networks — Brunel random balanced networks,
    EI-clustered networks, astrocyte–neuron networks? The
    :doc:`NEST example gallery </examples/nest-gallery>` catalogues 75 ported
-   scripts as a NEST → ``brainpy.state`` Rosetta map, each backed by a live-NEST
+   scripts as a NEST → ``brainspike`` Rosetta map, each backed by a live-NEST
    parity test.
 
 
 First steps
 ===========
 
-Start here. Four short tutorials in the ``brainpy.state`` idiom (State, units,
+Start here. Four short tutorials in the ``brainspike`` idiom (State, units,
 and the :class:`Simulator` API) — mirroring PyNEST Parts 1–4.
 
 .. grid:: 1 2 2 4
@@ -132,7 +132,7 @@ spatial structure.
       :link: /examples/nest-gallery
       :link-type: doc
 
-      All 75 ported ``nest_like`` scripts as a NEST → ``brainpy.state`` map.
+      All 75 ported ``nest_like`` scripts as a NEST → ``brainspike`` map.
 
 
 Porting & fidelity
@@ -148,7 +148,7 @@ the validation showcase, and how the integrators work under the hood.
       :link: porting-walkthrough
       :link-type: doc
 
-      Brunel side by side — NEST vs ``brainpy.state`` — with the parameter map
+      Brunel side by side — NEST vs ``brainspike`` — with the parameter map
       and the divergences a port must account for.
 
    .. grid-item-card:: Semantic divergences

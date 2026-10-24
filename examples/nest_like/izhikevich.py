@@ -24,7 +24,7 @@ Each regime records both the membrane potential ``V_m`` and the recovery
 variable ``U_m`` through a multimeter, so the demo also exercises the ``U_m``
 recordable. The integration uses NEST's default ``consistent_integration=True``
 (forward Euler), so the traces match a live ``nest.izhikevich`` to machine
-precision (see ``brainpy_state/_nest_validation/izhikevich_test.py``).
+precision (see ``brainspike/_nest_validation/izhikevich_test.py``).
 
 Run:  PYTHONPATH=. python examples/nest_like/izhikevich.py
 """
@@ -37,7 +37,7 @@ import numpy as np
 import braintools
 import brainunit as u
 
-from brainpy.state import Simulator, izhikevich, multimeter, spike_recorder
+from brainspike import Simulator, izhikevich, multimeter, spike_recorder
 
 # Canonical Izhikevich (2003) regime parameters: (a, b, c [mV], d [mV]).
 REGIMES = {
@@ -103,7 +103,7 @@ def run_traces(regime, simtime=T_SIM):
 
 
 def main():
-    print("Izhikevich firing regimes (brainpy.state, constant 10 pA drive)")
+    print("Izhikevich firing regimes (brainspike, constant 10 pA drive)")
     results = {}
     for regime in REGIMES:
         t, v, um, n = run_traces(regime)

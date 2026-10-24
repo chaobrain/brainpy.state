@@ -23,7 +23,7 @@ import brainunit as u
 import jax
 import matplotlib.pyplot as plt
 
-import brainpy
+import brainspike
 import brainstate
 import braintools
 
@@ -51,7 +51,7 @@ delay = 5.0 * u.ms  # ms
 # ------------
 
 
-class Population(brainpy.state.Neuron):
+class Population(brainspike.Neuron):
     def __init__(self, in_size, **kwargs):
         super().__init__(in_size, **kwargs)
 
@@ -85,7 +85,7 @@ class Population(brainpy.state.Neuron):
 # synaptic  model
 # ---------------
 
-class Projection(brainpy.state.Synapse):
+class Projection(brainspike.Synapse):
     def __init__(self, group, **kwargs):
         super().__init__(group.varshape, **kwargs)
 
@@ -123,7 +123,7 @@ class Net(brainstate.nn.Module):
     def __init__(self, n_spike):
         super().__init__()
         times = brainstate.random.randn(n_spike) * spike_sigma + 20 * u.ms
-        self.ext = brainpy.state.SpikeTime(n_spike, times=times, indices=u.math.arange(n_spike))
+        self.ext = brainspike.SpikeTime(n_spike, times=times, indices=u.math.arange(n_spike))
         self.pop = Population(in_size=n_groups * group_size)
         self.syn = Projection(self.pop)
 

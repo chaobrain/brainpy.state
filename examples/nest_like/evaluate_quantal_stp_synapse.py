@@ -35,7 +35,7 @@ import braintools
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_psc_exp, spike_generator, multimeter,
+from brainspike import (Simulator, iaf_psc_exp, spike_generator, multimeter,
                            quantal_stp_synapse, tsodyks2_synapse)
 
 #: Resolution (ms).
@@ -198,7 +198,7 @@ def deterministic_reference(regime="depression", weight=WEIGHT, n_sites=N_SITES,
 
 
 def main():
-    print("Quantal STP (brainpy.state, iaf_psc_exp post, V_m = stochastic PSC train)")
+    print("Quantal STP (brainspike, iaf_psc_exp post, V_m = stochastic PSC train)")
     fig_data = {}
     for regime in REGIMES:
         t, mean_tr = seed_mean_trace(regime)

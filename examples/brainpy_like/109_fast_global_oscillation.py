@@ -25,7 +25,7 @@ import brainunit as u
 import jax
 import matplotlib.pyplot as plt
 
-import brainpy
+import brainspike
 import brainstate
 import braintools
 
@@ -43,7 +43,7 @@ N = 5000
 sparseness = C / N
 
 
-class LIF(brainpy.state.Neuron):
+class LIF(brainspike.Neuron):
     def __init__(self, in_size, **kwargs):
         super().__init__(in_size, **kwargs)
 
@@ -78,7 +78,7 @@ class Net(brainstate.nn.Module):
         super().__init__()
         self.group = LIF(num)
         self.delay = brainstate.nn.Delay(jax.ShapeDtypeStruct((num,), bool), delta)
-        self.syn = brainpy.state.DeltaProj(
+        self.syn = brainspike.DeltaProj(
             comm=brainstate.nn.EventFixedProb(num, num, sparseness, -J),
             post=self.group
         )

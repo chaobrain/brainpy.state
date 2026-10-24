@@ -4,7 +4,7 @@
 Validation status
 =================
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 Why trust the NEST-compatible family? Because each model is checked against a
 **live NEST install** and the comparison is asserted in a test you can run
@@ -12,7 +12,7 @@ yourself. This page is the trust showcase: how parity is asserted, the tolerance
 categories that say *what counts as a match for what kind of model*, the
 per-family status, and how to run the harness.
 
-The validation harness lives at ``brainpy_state/_nest_validation/``. Every parity
+The validation harness lives at ``brainspike/_nest_validation/``. Every parity
 test imports the **same** comparison engine and the **same** documented
 tolerances, so "did it match NEST?" is asked the same way everywhere.
 
@@ -52,7 +52,7 @@ Tolerance categories A–E
 ========================
 
 The single source of truth for *what tolerance for what kind of model* is
-``brainpy_state/_nest_validation/tolerance_conventions.py`` — importable,
+``brainspike/_nest_validation/tolerance_conventions.py`` — importable,
 unit-aware constants. The five categories span the comparison space the harness
 must cover (membrane-voltage trace, firing rate, weight trajectory,
 PSC-amplitude train, F–I curve):
@@ -103,7 +103,7 @@ Per-family parity status
 
 Each family is validated under the category that fits how it is solved (see
 :doc:`integration-categories`). The table lists a representative parity test for
-each; browse ``brainpy_state/_nest_validation/`` for the full set.
+each; browse ``brainspike/_nest_validation/`` for the full set.
 
 .. list-table::
    :header-rows: 1
@@ -166,11 +166,11 @@ you can run them with or without a NEST install.
 .. code-block:: bash
 
    # All live-NEST parity tests (skipped where NEST is absent):
-   python -m pytest brainpy_state/_nest_validation/ -m requires_nest -q
+   python -m pytest brainspike/_nest_validation/ -m requires_nest -q
 
    # Everything in the package — harness unit tests always run; the live-NEST
    # tests run if NEST is present, else skip:
-   python -m pytest brainpy_state/_nest_validation/ -q
+   python -m pytest brainspike/_nest_validation/ -q
 
 Without NEST installed, the ``@requires_nest`` tests skip and the harness's own
 unit tests (the tolerance conventions and the comparison engine) still pass, so
@@ -194,7 +194,7 @@ scope:
   ``≥ 5``-seed protocol; this is a documented limitation, not a parity failure.
 
 When you find a numerical mismatch against NEST upstream, open an issue with a
-minimal reproducer at https://github.com/chaobrain/brainpy.state/issues.
+minimal reproducer at https://github.com/chaobrain/brainspike/issues.
 
 
 See also

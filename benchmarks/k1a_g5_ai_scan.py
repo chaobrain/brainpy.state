@@ -2,7 +2,7 @@
 """K1a-G5 step 1: NEST-only scan for an asynchronous-irregular (AI) Brunel point.
 
 Brunel ``iaf_psc_alpha`` (NEST ``brunel_alpha_nest.py`` network,
-:func:`brainpy_state._kernel.validation.brunel.brunel_params`) over a grid of
+:func:`brainspike._kernel.validation.brunel.brunel_params`) over a grid of
 ``g`` (relative inhibition) and ``eta`` (external drive), NEST 3.10 only. Every point
 runs ``--seeds`` seeds of ``T_WARM + T_STAT`` (100 ms discarded + 1000 ms, as G2) and
 reports the G2 statistics (rate E/I, CV-ISI, Fano factor, pairwise correlation of the
@@ -27,7 +27,7 @@ import time
 
 import numpy as np
 
-os.environ.setdefault('BRAINPY_STATE_ALLOW_DIRECT_IMPORT', '1')
+os.environ.setdefault('BRAINSPIKE_ALLOW_DIRECT_IMPORT', '1')
 
 T_WARM = 100.0
 T_STAT = 1000.0
@@ -36,9 +36,9 @@ STATS = ('rate_E', 'rate_I', 'cv_isi_E', 'fano_E', 'corr_E')
 
 def _one(args):
     order, g, eta, seed = args
-    from brainpy_state._kernel.validation.brunel import brunel_params
-    from brainpy_state._kernel.validation.g2_brunel_nest_test import nest_brunel
-    from brainpy_state._kernel.validation.stats import network_stats
+    from brainspike._kernel.validation.brunel import brunel_params
+    from brainspike._kernel.validation.g2_brunel_nest_test import nest_brunel
+    from brainspike._kernel.validation.stats import network_stats
     p = brunel_params(order, g=g, eta=eta)
     t0 = time.perf_counter()
     t, s = nest_brunel(order, seed, T_WARM + T_STAT, g=g, eta=eta)

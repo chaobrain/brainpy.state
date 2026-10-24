@@ -1,10 +1,10 @@
 BrainPy-style Examples
 ======================
 
-Complete, runnable examples built with the native ``brainpy.state`` API:
+Complete, runnable examples built with the native ``brainspike`` API:
 composable neurons, synapses, AlignPre/AlignPost projections, and
 surrogate-gradient training. Every script lives in the `examples/brainpy_like/
-<https://github.com/chaobrain/brainpy.state/tree/main/examples/brainpy_like>`_
+<https://github.com/chaobrain/brainspike/tree/main/examples/brainpy_like>`_
 directory of the repository.
 
 Each card is tagged along two axes:
@@ -34,7 +34,7 @@ AlignPost projection (see :doc:`/concepts/alignpre-alignpost`).
    :gutter: 3
 
    .. grid-item-card:: Brunel random network (Builder)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/brunel.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/brunel.py
 
       Two populations, random fixed-indegree COBA wiring, built with the
       imperative ``Builder`` API — the flagship Network-API example.
@@ -42,7 +42,7 @@ AlignPost projection (see :doc:`/concepts/alignpre-alignpost`).
       **Simulation** · beginner
 
    .. grid-item-card:: COBA balanced network (2005)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/103_COBA_2005.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/103_COBA_2005.py
 
       Vogels-Abbott conductance-based E/I network with ``AlignPostProj`` +
       ``Expon`` + ``COBA``. The reference simulation pattern.
@@ -50,14 +50,14 @@ AlignPost projection (see :doc:`/concepts/alignpre-alignpost`).
       **Simulation** · beginner
 
    .. grid-item-card:: CUBA balanced network (2005)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/104_CUBA_2005.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/104_CUBA_2005.py
 
       The current-based variant of Vogels-Abbott — simpler and faster than COBA.
 
       **Simulation** · beginner
 
    .. grid-item-card:: CUBA balanced network (variant)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/104_CUBA_2005_version2.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/104_CUBA_2005_version2.py
 
       A second construction of the CUBA network showing an alternative wiring
       style.
@@ -65,7 +65,7 @@ AlignPost projection (see :doc:`/concepts/alignpre-alignpost`).
       **Simulation** · intermediate
 
    .. grid-item-card:: EI balanced network (1996)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/102_EI_net_1996.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/102_EI_net_1996.py
 
       Van Vreeswijk & Sompolinsky balanced network exhibiting chaotic
       asynchronous-irregular firing.
@@ -73,7 +73,7 @@ AlignPost projection (see :doc:`/concepts/alignpre-alignpost`).
       **Simulation** · intermediate
 
    .. grid-item-card:: COBA with Hodgkin-Huxley neurons (2007)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/106_COBA_HH_2007.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/106_COBA_HH_2007.py
 
       The COBA benchmark rebuilt on biophysically detailed Hodgkin-Huxley cells.
 
@@ -88,7 +88,7 @@ Network rhythms — gamma generation, synchrony, and fast oscillations.
    :gutter: 3
 
    .. grid-item-card:: Interneuron gamma (1996)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/107_gamma_oscillation_1996.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/107_gamma_oscillation_1996.py
 
       Wang & Buzsaki inhibition-based gamma (30-80 Hz) in a hippocampal
       interneuron network.
@@ -96,7 +96,7 @@ Network rhythms — gamma generation, synchrony, and fast oscillations.
       **Simulation** · intermediate
 
    .. grid-item-card:: Synfire chains (1999)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/108_synfire_chains_199.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/108_synfire_chains_199.py
 
       Diesmann et al. reliable propagation of synchronous spike volleys through a
       feedforward chain.
@@ -104,7 +104,7 @@ Network rhythms — gamma generation, synchrony, and fast oscillations.
       **Simulation** · intermediate
 
    .. grid-item-card:: Fast global oscillation
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/109_fast_global_oscillation.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/109_fast_global_oscillation.py
 
       Brunel & Hakim fast (>100 Hz) global oscillations in sparsely-connected
       inhibitory networks with low firing rates.
@@ -112,35 +112,35 @@ Network rhythms — gamma generation, synchrony, and fast oscillations.
       **Simulation** · intermediate
 
    .. grid-item-card:: Gamma mechanisms — AI state (2021)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/110_Susin_Destexhe_2021_gamma_oscillation_AI.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/110_Susin_Destexhe_2021_gamma_oscillation_AI.py
 
       Susin & Destexhe asynchronous-irregular background state (no rhythm).
 
       **Simulation** · advanced
 
    .. grid-item-card:: Gamma mechanisms — CHING (2021)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/111_Susin_Destexhe_2021_gamma_oscillation_CHING.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/111_Susin_Destexhe_2021_gamma_oscillation_CHING.py
 
       Susin & Destexhe coherent high-frequency inhibition-based gamma.
 
       **Simulation** · advanced
 
    .. grid-item-card:: Gamma mechanisms — ING (2021)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/112_Susin_Destexhe_2021_gamma_oscillation_ING.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/112_Susin_Destexhe_2021_gamma_oscillation_ING.py
 
       Susin & Destexhe pure-inhibitory (ING) gamma generation.
 
       **Simulation** · advanced
 
    .. grid-item-card:: Gamma mechanisms — PING (2021)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/113_Susin_Destexhe_2021_gamma_oscillation_PING.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/113_Susin_Destexhe_2021_gamma_oscillation_PING.py
 
       Susin & Destexhe pyramidal-interneuron (PING) gamma — the E-I loop.
 
       **Simulation** · advanced
 
    .. grid-item-card:: Gamma mechanisms — combined driver (2021)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/Susin_Destexhe_2021_gamma_oscillation.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/Susin_Destexhe_2021_gamma_oscillation.py
 
       The combined Susin & Destexhe model exploring all four gamma regimes in one
       script.
@@ -156,7 +156,7 @@ Paper-scale simulations and signal-propagation studies.
    :gutter: 3
 
    .. grid-item-card:: Cortical microcircuit model
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/203_cortical_model.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/203_cortical_model.py
 
       A multi-layer cortical column model with layer-specific LIF populations and
       connectivity.
@@ -164,7 +164,7 @@ Paper-scale simulations and signal-propagation studies.
       **Simulation** · advanced
 
    .. grid-item-card:: Inter-areal propagation (Joglekar 2018)
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/204_joglekar_2018_propagation.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/204_joglekar_2018_propagation.py
 
       Joglekar et al. graded vs all-or-none signal propagation across a
       connectome-constrained network of cortical areas.
@@ -181,7 +181,7 @@ Gradient-based training through the spiking model with surrogate gradients (see
    :gutter: 3
 
    .. grid-item-card:: Surrogate-gradient LIF
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/200_surrogate_grad_lif.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/200_surrogate_grad_lif.py
 
       Train a small spiking network on a synthetic task with surrogate gradients
       (the spytorch tutorial 1 reproduction).
@@ -189,7 +189,7 @@ Gradient-based training through the spiking model with surrogate gradients (see
       **Training** · beginner
 
    .. grid-item-card:: Fashion-MNIST SNN
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/201_surrogate_grad_lif_fashion_mnist.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/201_surrogate_grad_lif_fashion_mnist.py
 
       A multi-layer spiking network classifying Fashion-MNIST end to end
       (spytorch tutorials 2 & 3).
@@ -197,7 +197,7 @@ Gradient-based training through the spiking model with surrogate gradients (see
       **Training** · intermediate
 
    .. grid-item-card:: MNIST with a rate readout
-      :link: https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/202_mnist_lif_readout.py
+      :link: https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/202_mnist_lif_readout.py
 
       MNIST classification with a ``LeakyRateReadout`` decoding spikes into class
       scores.

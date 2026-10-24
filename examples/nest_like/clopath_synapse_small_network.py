@@ -35,7 +35,7 @@ import numpy as np
 import brainunit as u
 import braintools
 
-from brainpy.state import (Simulator, spike_generator, clopath_synapse,
+from brainspike import (Simulator, spike_generator, clopath_synapse,
                            static_synapse, all_to_all, aeif_psc_delta_clopath)
 
 # -- canonical cluster-07 Clopath protocol constants ------------------------------
@@ -137,7 +137,7 @@ def weight_matrix(weight_row, edges, n=N, fill=np.nan):
 def main():
     times, weights, edges = run()
     final = weights[-1]
-    print("Clopath small recurrent network (brainpy.state, w in mV, init "
+    print("Clopath small recurrent network (brainspike, w in mV, init "
           f"{INIT_W})")
     print("  final recurrent weight matrix (rows = pre, cols = post):")
     M = weight_matrix(final, edges)

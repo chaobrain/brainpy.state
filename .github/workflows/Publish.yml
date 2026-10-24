@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/brainpy-state
+      url: https://pypi.org/p/brainspike
 
     steps:
       - name: Download distribution packages

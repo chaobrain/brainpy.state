@@ -4,7 +4,7 @@ Online learning
 
 *Who it's for: training, at scale.* This is the **trainable → online / scalable**
 half of the bridge. The previous page,
-:doc:`/concepts/differentiability`, showed that ``brainpy.state`` models are
+:doc:`/concepts/differentiability`, showed that ``brainspike`` models are
 differentiable and trainable with backpropagation-through-time (BPTT). This page
 explains what happens when you need to learn *online* — updating as the network
 runs, without storing the whole trajectory — and why the
@@ -91,14 +91,14 @@ The engine: ``braintrace``
 ==========================
 
 The linear-memory algorithm ships as a dedicated package in the BrainX ecosystem,
-separate from ``brainpy.state`` so that the modeling layer stays focused on building
+separate from ``brainspike`` so that the modeling layer stays focused on building
 and simulating networks while the learning engine evolves independently.
 
 .. admonition:: A note on names (read this to avoid confusion)
    :class: tip
 
    The *simulator* is **BrainPy**, and its modern state-based API is
-   **brainpy.state** (this documentation). The *online-learning engine* was
+   **brainspike** (this documentation). The *online-learning engine* was
    introduced under the name **BrainScale** in the preprint, and is published as
    **BrainTrace** — the installable package is **``braintrace``**. If you read
    "BrainScale" in the preprint and "BrainTrace"/``braintrace`` in the released
@@ -115,7 +115,7 @@ executed here; install and consult ``braintrace`` for the real, current API):
    import brainpy
    import braintrace            # the BrainScale -> BrainTrace online-learning engine
 
-   net = MySpikingNetwork()     # built from brainpy.state neurons + AlignPre/AlignPost
+   net = MySpikingNetwork()     # built from brainspike neurons + AlignPre/AlignPost
    learner = braintrace.online_learner(net)   # attach linear-memory RTRL
 
    for x, y in stream:          # learn online, step by step, in constant memory
@@ -142,7 +142,7 @@ builds on is from Wang et al. (2024, ICLR) — see
 .. note::
 
    This 2026 paper is cited here as **related work** because it motivates the
-   online-learning capability. The "cite this software" entry for ``brainpy.state``
+   online-learning capability. The "cite this software" entry for ``brainspike``
    itself remains the eLife BrainPy (2023) and ICLR 2024 references — see
    :doc:`/project/citing`.
 

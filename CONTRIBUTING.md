@@ -1,6 +1,6 @@
-# Contributing to brainpy.state
+# Contributing to brainspike
 
-Thank you for your interest in contributing to brainpy.state! We welcome contributions from the community and are grateful for your support in making brainpy.state better.
+Thank you for your interest in contributing to brainspike! We welcome contributions from the community and are grateful for your support in making brainspike better.
 
 ## Table of Contents
 
@@ -26,11 +26,11 @@ Before creating bug reports, please check existing issues to avoid duplicates. W
 - **Clear title and description**
 - **Steps to reproduce** the problem
 - **Expected vs actual behavior**
-- **brainpy.state version** and environment details (Python version, OS, JAX version)
+- **brainspike version** and environment details (Python version, OS, JAX version)
 - **Code samples** or test cases that demonstrate the issue
 - **Error messages** and stack traces
 
-Submit bug reports via [GitHub Issues](https://github.com/chaobrain/brainpy.state/issues/new).
+Submit bug reports via [GitHub Issues](https://github.com/chaobrain/brainspike/issues/new).
 
 ### Suggesting Enhancements
 
@@ -64,8 +64,8 @@ We welcome code contributions! This includes:
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/brainpy.state.git
-   cd brainpy.state
+   git clone https://github.com/YOUR_USERNAME/brainspike.git
+   cd brainspike
    ```
 
 3. **Create a virtual environment**:
@@ -203,7 +203,7 @@ def simulate_network(network, duration, dt=0.1):
 
 Aim for high test coverage on new code:
 ```bash
-pytest --cov=brainpy_state brainpy_state/
+pytest --cov=brainspike brainspike/
 ```
 
 ## Documentation
@@ -232,33 +232,33 @@ Every new public class or function must ship with documentation:
   under a `Parameter Mapping` or `Implementation Notes` section.
 - For any new model file, also add a colocated `*_test.py` that exercises
   default parameters and at least one parameter sweep.
-- Export the new symbol in `brainpy_state/__init__.py` (`__all__` plus the
+- Export the new symbol in `brainspike/__init__.py` (`__all__` plus the
   import) so it appears in the public API surface.
 
 ### Documenting validation and live-NEST parity
 
-`brainpy.state` ships two model families — BrainPy-style and NEST-compatible —
+`brainspike` ships two model families — BrainPy-style and NEST-compatible —
 both presented as production-ready. We do not carry "Stable" / "Experimental"
 maturity labels. Instead of labelling a model's maturity, **substantiate trust
 with evidence**: show that a NEST-compatible model numerically agrees with a
 live NEST install, and keep every docstring claim accurate.
 
 When you add or change a **NEST-compatible model** (anything under
-`brainpy_state/_nest_*/`):
+`brainspike/_nest_*/`):
 
-- **Add a parity test** under `brainpy_state/_nest_validation/` that compares the
+- **Add a parity test** under `brainspike/_nest_validation/` that compares the
   model against a live NEST install. These tests are marked `requires_nest`; run
   them with:
   ```bash
   pytest -m requires_nest
   ```
 - **Record the tolerance category** the model meets (the A–E bands defined in
-  `brainpy_state/_nest_validation/tolerance_conventions.py`), and choose the
+  `brainspike/_nest_validation/tolerance_conventions.py`), and choose the
   band the model is actually validated against — do not over-claim.
 - **Update the validation showcase** (`docs/nest-style/validation-status.rst`) so
   the model's parity result and tolerance category appear in the per-family
   table, and note any known coverage gaps.
-- **Document deliberate divergences.** If brainpy.state's behavior differs from
+- **Document deliberate divergences.** If brainspike's behavior differs from
   NEST (parameter location, where state lives, numerical band, pairing
   convention), describe it in the docstring under a `Parameter Mapping` or
   `Implementation Notes` section, and add it to the divergence catalog
@@ -277,26 +277,26 @@ For **all models** (both families):
 Before requesting review, confirm:
 
 - [ ] Docstrings present on all new public APIs (NumPy style).
-- [ ] New module exported via `__all__` in `brainpy_state/__init__.py`.
+- [ ] New module exported via `__all__` in `brainspike/__init__.py`.
 - [ ] Added to the corresponding `docs/apis/*.rst` page.
 - [ ] If NEST-compatible: parameter names match the upstream NEST documentation,
-      a parity test exists under `brainpy_state/_nest_validation/`, and the
+      a parity test exists under `brainspike/_nest_validation/`, and the
       tolerance category is recorded in `docs/nest-style/validation-status.rst`.
 - [ ] Docstrings are claim-accurate (no behavior or fidelity beyond what the
       tests cover).
-- [ ] `pytest brainpy_state/` passes locally.
+- [ ] `pytest brainspike/` passes locally.
 - [ ] Any executable code block in updated docs or notebooks runs
       end-to-end without errors.
 
-For the full rendered documentation, see <https://brainx.chaobrain.com/brainpy-state/>.
+For the full rendered documentation, see <https://brainx.chaobrain.com/brainspike/>.
 
 ## Community
 
 ### Getting Help
 
-- **Documentation**: https://brainx.chaobrain.com/brainpy-state/
-- **GitHub Discussions**: https://github.com/chaobrain/brainpy.state/discussions
-- **Issues**: https://github.com/chaobrain/brainpy.state/issues
+- **Documentation**: https://brainx.chaobrain.com/brainspike/
+- **GitHub Discussions**: https://github.com/chaobrain/brainspike/discussions
+- **Issues**: https://github.com/chaobrain/brainspike/issues
 
 ### Recognition
 
@@ -305,4 +305,4 @@ Contributors are recognized in:
 - Contributors file
 - Project documentation
 
-Thank you for contributing to brainpy.state! Your efforts help make computational neuroscience more accessible and powerful for everyone.
+Thank you for contributing to brainspike! Your efforts help make computational neuroscience more accessible and powerful for everyone.

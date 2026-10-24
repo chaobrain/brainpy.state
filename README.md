@@ -1,23 +1,23 @@
 <p align="center">
-  	<img alt="Header image of brainpy.state - brain dynamics programming in Python." src="https://raw.githubusercontent.com/chaobrain/brainpy.state/main/docs/_static/brianpystate_horizontal.png" width=80%>
+  	<img alt="Header image of brainspike - brain dynamics programming in Python." src="https://raw.githubusercontent.com/chaobrain/brainspike/main/docs/_static/brianpystate_horizontal.png" width=80%>
 </p>
 
 
 
 <p align="center">
-	<a href="https://pypi.org/project/brainpy_state/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainpy_state"></a>
-	<a href="https://github.com/chaobrain/brainpy.state"><img alt="LICENSE" src="https://img.shields.io/badge/License-Apache%202.0-blue?style=plastic"></a>
-  	<a href="https://brainx.chaobrain.com/brainpy-state/"><img alt="Documentation" src="https://img.shields.io/badge/docs-brainx.chaobrain.com-blue"></a>
-  	<a href="https://badge.fury.io/py/brainpy_state"><img alt="PyPI version" src="https://badge.fury.io/py/brainpy_state.svg"></a>
-    <a href="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainpy.state/actions/workflows/CI.yml/badge.svg"></a>
+	<a href="https://pypi.org/project/brainspike/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainspike"></a>
+	<a href="https://github.com/chaobrain/brainspike"><img alt="LICENSE" src="https://img.shields.io/badge/License-Apache%202.0-blue?style=plastic"></a>
+  	<a href="https://brainx.chaobrain.com/brainspike/"><img alt="Documentation" src="https://img.shields.io/badge/docs-brainx.chaobrain.com-blue"></a>
+  	<a href="https://badge.fury.io/py/brainspike"><img alt="PyPI version" src="https://badge.fury.io/py/brainspike.svg"></a>
+    <a href="https://github.com/chaobrain/brainspike/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainspike/actions/workflows/CI.yml/badge.svg"></a>
 </p>
 
 
-[`brainpy.state`](https://github.com/chaobrain/brainpy.state) is **one differentiable substrate that bridges brain simulation and brain-inspired computing**: the same neurons, synapses, plasticity rules, and projections run NEST-validated biological simulation *and* train with gradients or online learning. It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/), built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate).
+[`brainspike`](https://github.com/chaobrain/brainspike) is **one differentiable substrate that bridges brain simulation and brain-inspired computing**: the same neurons, synapses, plasticity rules, and projections run NEST-validated biological simulation *and* train with gradients or online learning. It is the point-neuron modeling layer of the [BrainX ecosystem](https://brainx.chaobrain.com/), built on [JAX](https://github.com/jax-ml/jax) and [brainstate](https://github.com/chaobrain/brainstate).
 
-The same building blocks let you run biophysical spiking networks *and* train them with gradient descent — because the projections that keep simulation memory-efficient are exactly what make gradient-based and online learning memory-efficient too. That bridge was introduced in the [ICLR 2024 paper](https://openreview.net/forum?id=AU2gS9ut61) and is the keystone of the [Core Concepts](https://brainx.chaobrain.com/brainpy-state/concepts/index.html).
+The same building blocks let you run biophysical spiking networks *and* train them with gradient descent — because the projections that keep simulation memory-efficient are exactly what make gradient-based and online learning memory-efficient too. That bridge was introduced in the [ICLR 2024 paper](https://openreview.net/forum?id=AU2gS9ut61) and is the keystone of the [Core Concepts](https://brainx.chaobrain.com/brainspike/concepts/index.html).
 
-`brainpy.state` ships **two model families**, both production-ready:
+`brainspike` ships **two model families**, both production-ready:
 
 - **BrainPy-style models** — high-level, composable neurons (LIF, ALIF, AdEx, HH, Izhikevich, …), synapses (Expon, Alpha, AMPA, GABAa, BioNMDA), the AlignPre/AlignPost projections, synaptic outputs (COBA / CUBA / MgBlock), short-term plasticity, readouts, and input generators, in the tradition of [BrainPy](https://brainpy.readthedocs.io/). Differentiable through surrogate gradients out of the box.
 - **NEST-compatible models** — JAX re-implementations of [NEST simulator](https://nest-simulator.readthedocs.io/) neurons, synapses, plasticity (STDP, STP), and devices that preserve NEST's parameter names and unit conventions, numerically validated against a live NEST install within documented tolerance bands.
@@ -28,7 +28,7 @@ All parameters carry **physical units** via [brainunit](https://github.com/chaob
 ## Key features
 
 - **One differentiable substrate** — biophysical simulation and gradient-based / brain-inspired computing share the same neurons, synapses, and projections.
-- **Memory-efficient projections** — the AlignPre/AlignPost design aligns synaptic state to the pre- or post-synaptic neurons (`O(N)`) instead of to individual synapses (`O(N_pre · N_post)`), without approximation. See the [AlignPre/AlignPost concept page](https://brainx.chaobrain.com/brainpy-state/concepts/alignpre-alignpost.html).
+- **Memory-efficient projections** — the AlignPre/AlignPost design aligns synaptic state to the pre- or post-synaptic neurons (`O(N)`) instead of to individual synapses (`O(N_pre · N_post)`), without approximation. See the [AlignPre/AlignPost concept page](https://brainx.chaobrain.com/brainspike/concepts/alignpre-alignpost.html).
 - **Composable architecture** — mix and match neurons, synapses, synaptic outputs (COBA / CUBA / MgBlock), and projections.
 - **Physical units everywhere** — parameters use `brainunit` quantities (`mV`, `ms`, `nS`, …), preventing unit errors at construction time.
 - **Differentiable** — surrogate gradients enable backpropagation through spiking networks for gradient-based training.
@@ -38,31 +38,31 @@ All parameters carry **physical units** via [brainunit](https://github.com/chaob
 
 ## Scope
 
-`brainpy.state` is for computational neuroscientists who want NEST models on GPU/TPU or want to train them, and for brain-inspired-computing researchers who need biologically constrained spiking networks.
+`brainspike` is for computational neuroscientists who want NEST models on GPU/TPU or want to train them, and for brain-inspired-computing researchers who need biologically constrained spiking networks.
 
 - **Model scope:** point neurons only (no multi-compartment or population/mean-field models) and no single-unit rate neurons.
 - **Out of scope:** detailed multi-compartment morphology, MPI cluster-scale simulation (single-host multi-device is in scope), MUSIC/SONATA co-simulation (SONATA import is in scope), and e-prop (see [braintrace](https://github.com/chaobrain/braintrace)).
 
 **Kernel redesign in progress.** The package is moving onto a new kernel: one `Network` graph (populations, projections, devices, observers) over models with written contracts (declared ports, states, parameters and spike rules), so the graph a simulation runs is the graph a learner trains ([architecture spec](docs/specs/2026-10-21-architecture-review-and-redesign.md), [roadmap](docs/specs/2026-10-21-roadmap.md)). The first milestone has passed its go/no-go gates; the new kernel is still private. Meanwhile the current 0.1 API shown below is frozen (it keeps working; no new features or fixes). The NEST-style `Simulator` will become a thin layer over `Network`, and the **BrainPy-style API** (standalone neuron modules and the AlignPre/AlignPost projections) **will be deprecated** once the new kernel is public. CPU performance of the new kernel has been measured on one benchmark; GPU performance has not been measured yet.
 
-See [Positioning and scope](https://brainx.chaobrain.com/brainpy-state/project/positioning.html).
+See [Positioning and scope](https://brainx.chaobrain.com/brainspike/project/positioning.html).
 
 
 ## Installation
 
-`brainpy.state` requires Python ≥ 3.11 and runs on Linux, macOS, and Windows.
+`brainspike` requires Python ≥ 3.11 and runs on Linux, macOS, and Windows.
 
 ```bash
-pip install brainpy.state -U
+pip install brainspike -U
 ```
 
 For hardware-specific JAX backends:
 
 ```bash
-pip install brainpy.state[cpu] -U     # CPU only
-pip install brainpy.state[cuda12] -U  # CUDA 12.x
-pip install brainpy.state[cuda13] -U  # CUDA 13.x
-pip install brainpy.state[tpu] -U     # TPU
+pip install brainspike[cpu] -U     # CPU only
+pip install brainspike[cuda12] -U  # CUDA 12.x
+pip install brainspike[cuda13] -U  # CUDA 13.x
+pip install brainspike[tpu] -U     # TPU
 ```
 
 Or install the full BrainX ecosystem:
@@ -74,14 +74,15 @@ pip install BrainX -U
 
 ## Quickstart
 
-`brainpy.state` offers two entry points, depending on which family you reach for. Both examples build a model from the **public `brainpy.state` namespace** and run it on the JAX backend.
+`brainspike` offers two entry points, depending on which family you reach for. Both examples build a model from the **public `brainspike` namespace** and run it on the JAX backend.
 
 ### 1. BrainPy-style — an excitatory–inhibitory balanced network
 
-A COBA E/I network wired with the memory-efficient `AlignPostProj`. The synaptic state lives on the post-synaptic neurons (`O(N_post)`) — see the [AlignPre/AlignPost concept page](https://brainx.chaobrain.com/brainpy-state/concepts/alignpre-alignpost.html) for why this is exact, not an approximation.
+A COBA E/I network wired with the memory-efficient `AlignPostProj`. The synaptic state lives on the post-synaptic neurons (`O(N_post)`) — see the [AlignPre/AlignPost concept page](https://brainx.chaobrain.com/brainspike/concepts/alignpre-alignpost.html) for why this is exact, not an approximation.
 
 ```python
 import brainpy
+import brainspike
 import brainstate
 import braintools
 import brainunit as u
@@ -92,24 +93,24 @@ class EINet(brainstate.nn.Module):
         super().__init__()
         self.n_exc, self.n_inh = 3200, 800
         self.num = self.n_exc + self.n_inh
-        self.N = brainpy.state.LIFRef(
+        self.N = brainspike.LIFRef(
             self.num,
             V_rest=-60. * u.mV, V_th=-50. * u.mV, V_reset=-60. * u.mV,
             tau=20. * u.ms, tau_ref=5. * u.ms,
             V_initializer=braintools.init.Normal(-55., 2., unit=u.mV),
         )
-        self.E = brainpy.state.AlignPostProj(
+        self.E = brainspike.AlignPostProj(
             comm=brainstate.nn.EventFixedProb(self.n_exc, self.num,
                                               conn_num=0.02, conn_weight=0.6 * u.mS),
-            syn=brainpy.state.Expon.desc(self.num, tau=5. * u.ms),
-            out=brainpy.state.COBA.desc(E=0. * u.mV),
+            syn=brainspike.Expon.desc(self.num, tau=5. * u.ms),
+            out=brainspike.COBA.desc(E=0. * u.mV),
             post=self.N,
         )
-        self.I = brainpy.state.AlignPostProj(
+        self.I = brainspike.AlignPostProj(
             comm=brainstate.nn.EventFixedProb(self.n_inh, self.num,
                                               conn_num=0.02, conn_weight=6.7 * u.mS),
-            syn=brainpy.state.Expon.desc(self.num, tau=10. * u.ms),
-            out=brainpy.state.COBA.desc(E=-80. * u.mV),
+            syn=brainspike.Expon.desc(self.num, tau=10. * u.ms),
+            out=brainspike.COBA.desc(E=-80. * u.mV),
             post=self.N,
         )
 
@@ -133,7 +134,7 @@ with brainstate.environ.context(dt=0.1 * u.ms):
     )
 ```
 
-See [`examples/brainpy_like/103_COBA_2005.py`](https://github.com/chaobrain/brainpy.state/blob/main/examples/brainpy_like/103_COBA_2005.py) for the full version with a spike raster.
+See [`examples/brainpy_like/103_COBA_2005.py`](https://github.com/chaobrain/brainspike/blob/main/examples/brainpy_like/103_COBA_2005.py) for the full version with a spike raster.
 
 ### 2. NEST-like — a single neuron driven by a constant current
 
@@ -148,46 +149,46 @@ import brainunit as u
 jax.config.update("jax_enable_x64", True)   # NEST-parity runs use float64
 brainstate.environ.set(precision=64)
 
-sim = brainpy.state.Simulator(dt=0.1 * u.ms)
-neuron = sim.create(brainpy.state.iaf_psc_alpha, 1, I_e=376.0 * u.pA)
-vm = sim.create(brainpy.state.voltmeter)
+sim = brainspike.Simulator(dt=0.1 * u.ms)
+neuron = sim.create(brainspike.iaf_psc_alpha, 1, I_e=376.0 * u.pA)
+vm = sim.create(brainspike.voltmeter)
 sim.connect(vm, neuron)              # reversed: the voltmeter observes the neuron
 
 res = sim.simulate(1000.0 * u.ms)
 v_m = res.trace(vm, "V_m")           # membrane potential trace (with units)
 ```
 
-See [`examples/nest_like/one_neuron.py`](https://github.com/chaobrain/brainpy.state/blob/main/examples/nest_like/one_neuron.py) for the full version with plotting, and the [NEST-compatible hub](https://brainx.chaobrain.com/brainpy-state/nest-style/index.html) for the tutorials, model directory, and validation evidence.
+See [`examples/nest_like/one_neuron.py`](https://github.com/chaobrain/brainspike/blob/main/examples/nest_like/one_neuron.py) for the full version with plotting, and the [NEST-compatible hub](https://brainx.chaobrain.com/brainspike/nest-style/index.html) for the tutorials, model directory, and validation evidence.
 
 
 ## Two model families
 
-`brainpy.state` is organized around two model families that share one substrate — explicit `State`, physical units, and `brainstate.transform`-driven simulation. Both are production-ready; the API reference is organized by family for navigation, not by maturity.
+`brainspike` is organized around two model families that share one substrate — explicit `State`, physical units, and `brainstate.transform`-driven simulation. Both are production-ready; the API reference is organized by family for navigation, not by maturity.
 
 ### BrainPy-style (native)
 
-The idiomatic, composable layer: 45+ neurons, the AlignPre/AlignPost projections, synaptic outputs, short-term plasticity, readouts, and input generators. Every BrainPy-style neuron is differentiable through surrogate gradients, so the same model you simulate you can also train. Start with the [BrainPy-style modeling guide](https://brainx.chaobrain.com/brainpy-state/brainpy-style/index.html).
+The idiomatic, composable layer: 45+ neurons, the AlignPre/AlignPost projections, synaptic outputs, short-term plasticity, readouts, and input generators. Every BrainPy-style neuron is differentiable through surrogate gradients, so the same model you simulate you can also train. Start with the [BrainPy-style modeling guide](https://brainx.chaobrain.com/brainspike/brainpy-style/index.html).
 
 ### NEST-compatible (validated against live NEST)
 
-JAX re-implementations of NEST neurons, synapses, plasticity rules, and devices that keep NEST's parameter names and unit conventions, so you can port a NEST model with minimal friction. Rather than asking you to take fidelity on trust, every model carries **live-NEST parity evidence**: numerical agreement is checked against a real NEST install within documented tolerance bands. See the [validation showcase](https://brainx.chaobrain.com/brainpy-state/nest-style/validation-status.html) for per-model parity results and tolerance categories.
+JAX re-implementations of NEST neurons, synapses, plasticity rules, and devices that keep NEST's parameter names and unit conventions, so you can port a NEST model with minimal friction. Rather than asking you to take fidelity on trust, every model carries **live-NEST parity evidence**: numerical agreement is checked against a real NEST install within documented tolerance bands. See the [validation showcase](https://brainx.chaobrain.com/brainspike/nest-style/validation-status.html) for per-model parity results and tolerance categories.
 
 
 ## Documentation
 
-Full documentation: <https://brainx.chaobrain.com/brainpy-state/>
+Full documentation: <https://brainx.chaobrain.com/brainspike/>
 
-- **Get started** (install → run → mental model): <https://brainx.chaobrain.com/brainpy-state/get-started/index.html>
-- **Core concepts** (the bridging thesis; AlignPre/AlignPost keystone): <https://brainx.chaobrain.com/brainpy-state/concepts/index.html>
-- **BrainPy-style modeling**: <https://brainx.chaobrain.com/brainpy-state/brainpy-style/index.html>
-- **NEST-compatible hub** (tutorials, models, validation): <https://brainx.chaobrain.com/brainpy-state/nest-style/index.html>
-- **API reference**: <https://brainx.chaobrain.com/brainpy-state/apis/index.html>
-- **Examples**: <https://brainx.chaobrain.com/brainpy-state/examples/brainpy-gallery.html>
+- **Get started** (install → run → mental model): <https://brainx.chaobrain.com/brainspike/get-started/index.html>
+- **Core concepts** (the bridging thesis; AlignPre/AlignPost keystone): <https://brainx.chaobrain.com/brainspike/concepts/index.html>
+- **BrainPy-style modeling**: <https://brainx.chaobrain.com/brainspike/brainpy-style/index.html>
+- **NEST-compatible hub** (tutorials, models, validation): <https://brainx.chaobrain.com/brainspike/nest-style/index.html>
+- **API reference**: <https://brainx.chaobrain.com/brainspike/apis/index.html>
+- **Examples**: <https://brainx.chaobrain.com/brainspike/examples/brainpy-gallery.html>
 
 
 ## Examples and tutorials
 
-Runnable examples live in [`examples/`](https://github.com/chaobrain/brainpy.state/tree/main/examples): BrainPy-style scripts under [`examples/brainpy_like/`](https://github.com/chaobrain/brainpy.state/tree/main/examples/brainpy_like) and NEST-compatible ports under [`examples/nest_like/`](https://github.com/chaobrain/brainpy.state/tree/main/examples/nest_like). They are catalogued in the [BrainPy-style gallery](https://brainx.chaobrain.com/brainpy-state/examples/brainpy-gallery.html) and the [NEST gallery](https://brainx.chaobrain.com/brainpy-state/examples/nest-gallery.html). Highlights:
+Runnable examples live in [`examples/`](https://github.com/chaobrain/brainspike/tree/main/examples): BrainPy-style scripts under [`examples/brainpy_like/`](https://github.com/chaobrain/brainspike/tree/main/examples/brainpy_like) and NEST-compatible ports under [`examples/nest_like/`](https://github.com/chaobrain/brainspike/tree/main/examples/nest_like). They are catalogued in the [BrainPy-style gallery](https://brainx.chaobrain.com/brainspike/examples/brainpy-gallery.html) and the [NEST gallery](https://brainx.chaobrain.com/brainspike/examples/nest-gallery.html). Highlights:
 
 - E-I balanced networks, COBA and CUBA variants
 - Gamma oscillations (Susin & Destexhe 2021: AI, CHING, ING, PING mechanisms)
@@ -206,7 +207,7 @@ validation/parity evidence for NEST-compatible models).
 
 ## Ecosystem
 
-`brainpy.state` is one part of the [BrainX ecosystem](https://brainx.chaobrain.com/):
+`brainspike` is one part of the [BrainX ecosystem](https://brainx.chaobrain.com/):
 
 | Package | Description |
 |---------|-------------|
@@ -219,7 +220,7 @@ validation/parity evidence for NEST-compatible models).
 
 ## Citing
 
-If you use `brainpy.state`, please consider citing the following:
+If you use `brainspike`, please consider citing the following:
 
 ```bibtex
 @article {10.7554/eLife.86365,
@@ -252,4 +253,4 @@ If you use `brainpy.state`, please consider citing the following:
 
 ## License
 
-`brainpy.state` is released under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.
+`brainspike` is released under the Apache License 2.0. See [LICENSE](LICENSE) for the full text.

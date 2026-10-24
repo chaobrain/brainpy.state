@@ -6,8 +6,8 @@ File: [`2026-10-21-T0-simulator-baseline.json`](2026-10-21-T0-simulator-baseline
 (all samples and metadata). Protocol: [`../README.md`](../README.md).
 
 - Commit measured: `c8b46484b79b096eecbc78dc5736f26fd6d2609e`, the pre-rebase T0
-  branch (later squashed). Its `brainpy_state/` is identical to `main` at `931c544`.
-  The K0 commits that followed (T1, T2, T4) only add `brainpy_state/_kernel/` and
+  branch (later squashed). Its `brainspike/` is identical to `main` at `931c544`.
+  The K0 commits that followed (T1, T2, T4) only add `brainspike/_kernel/` and
   docs, so this is the `Simulator` on `main` when T0 merged. The benchmark code is
   the same as in the merged commit, apart from documentation.
 - Host: `wanglab3090b-01a0.chaobrain`, Intel i7-14700KF (28 CPUs), RTX 3090 (GPU 1,

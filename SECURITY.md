@@ -12,12 +12,12 @@ We release patches for security vulnerabilities for the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-If you discover a security vulnerability in brainpy.state, please report it to us responsibly:
+If you discover a security vulnerability in brainspike, please report it to us responsibly:
 
 ### Preferred Method: Security Advisories
 
 Use GitHub's Security Advisory feature:
-1. Navigate to the [Security tab](https://github.com/chaobrain/brainpy.state/security/advisories)
+1. Navigate to the [Security tab](https://github.com/chaobrain/brainspike/security/advisories)
 2. Click "Report a vulnerability"
 3. Fill out the form with details about the vulnerability
 
@@ -66,15 +66,15 @@ Security bugs in third-party modules (jax, numpy, etc.) should be reported direc
 
 ## Bug Bounty Program
 
-We currently do not offer a paid bug bounty program, but we deeply appreciate and acknowledge all security researchers who help keep brainpy.state secure.
+We currently do not offer a paid bug bounty program, but we deeply appreciate and acknowledge all security researchers who help keep brainspike secure.
 
 ## Security Best Practices for Users
 
-When using brainpy.state:
+When using brainspike:
 - Always use the latest stable version
 - Keep dependencies updated
 - Review and understand code before executing untrusted models
 - Be cautious when loading pre-trained models from untrusted sources
-- Follow security best practices when deploying brainpy.state in production environments
+- Follow security best practices when deploying brainspike in production environments
 
-Thank you for helping keep brainpy.state and its users safe!
+Thank you for helping keep brainspike and its users safe!

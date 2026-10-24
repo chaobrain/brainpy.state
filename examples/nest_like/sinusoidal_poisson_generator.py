@@ -44,7 +44,7 @@ import numpy as np
 import brainunit as u
 import brainstate.transform as transform
 
-from brainpy.state import sinusoidal_poisson_generator
+from brainspike import sinusoidal_poisson_generator
 
 #: DC (mean) rate of the sinusoidal drive (Hz).
 RATE = 100.0
@@ -219,7 +219,7 @@ def spike_count_autocorr(spk, dt=DT, bin_ms=PST_BIN, max_lag=MAX_LAG):
 
 
 def main():
-    print("sinusoidal_poisson_generator (brainpy.state, eager for_loop drive)")
+    print("sinusoidal_poisson_generator (brainspike, eager for_loop drive)")
     print(f"  λ(t) = max(0, {RATE:.0f} + {AMPLITUDE:.0f}·sin(2π·{FREQUENCY:.0f}·t)) Hz, "
           f"{N_TARGETS} channels, T={SIMTIME:.0f} ms")
 

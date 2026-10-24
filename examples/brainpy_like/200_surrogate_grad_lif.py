@@ -28,7 +28,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-import brainpy
+import brainspike
 import brainstate
 import braintools
 
@@ -50,10 +50,10 @@ class SNN(brainstate.nn.Module):
                 w_init=braintools.init.KaimingNormal(scale=scale, unit=u.mA),
                 b_init=braintools.init.ZeroInit(unit=u.mA)
             ),
-            brainpy.state.Expon(num_rec, tau=5. * u.ms, g_initializer=braintools.init.Constant(0. * u.mA))
+            brainspike.Expon(num_rec, tau=5. * u.ms, g_initializer=braintools.init.Constant(0. * u.mA))
         )
         # recurrent: r
-        self.r = brainpy.state.LIF(
+        self.r = brainspike.LIF(
             num_rec, tau=20 * u.ms, V_reset=0 * u.mV,
             V_rest=0 * u.mV, V_th=1. * u.mV,
             spk_fun=braintools.surrogate.ReluGrad()
@@ -61,7 +61,7 @@ class SNN(brainstate.nn.Module):
         # synapse: r->o
         self.r2o = brainstate.nn.Linear(num_rec, num_out, w_init=braintools.init.KaimingNormal())
         # # output: o
-        self.o = brainpy.state.Expon(num_out, tau=10. * u.ms, g_initializer=braintools.init.Constant(0.))
+        self.o = brainspike.Expon(num_out, tau=10. * u.ms, g_initializer=braintools.init.Constant(0.))
 
     def update(self, spike):
         return self.o(self.r2o(self.r(self.i2r(spike))))

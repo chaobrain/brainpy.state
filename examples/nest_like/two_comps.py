@@ -26,7 +26,7 @@ Both connections carry NEST's 0.5 ms delay. Watching the somatic and dendritic
 voltages side by side shows how active dendritic channels (cm_act) amplify and
 sharpen the dendritic response relative to the purely passive cable (cm_pas).
 
-The live-NEST parity test (``brainpy_state/_nest_validation/two_comps_test.py``)
+The live-NEST parity test (``brainspike/_nest_validation/two_comps_test.py``)
 drives a real ``cm_default`` with this identical wiring and confirms the per-
 compartment ``v_comp`` / gating / receptor-conductance traces match.
 
@@ -40,7 +40,7 @@ brainstate.environ.set(precision=64)
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, cm_default, spike_generator, multimeter
+from brainspike import Simulator, cm_default, spike_generator, multimeter
 
 DT = 0.1        # resolution [ms]
 T_SIM = 160.0   # total simulation time [ms]
@@ -181,7 +181,7 @@ def run_traces(simtime=T_SIM):
 
 
 def main():
-    print("Two-compartment cm_default neurons: passive vs active dendrite (brainpy.state)")
+    print("Two-compartment cm_default neurons: passive vs active dendrite (brainspike)")
     t, traces = run_traces()
     for key, label in (('pas', 'passive dend'), ('act', 'active dend')):
         tr = traces[key]

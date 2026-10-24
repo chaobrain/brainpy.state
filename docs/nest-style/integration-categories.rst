@@ -4,7 +4,7 @@
 Integration categories
 ======================
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 NEST-compatible models fall into five **integration categories** that differ in
 how the underlying ODE (if any) is solved. Knowing a model's category tells you

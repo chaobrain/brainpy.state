@@ -30,8 +30,8 @@ import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 
-from brainpy.state import Simulator, hh_psc_alpha_gap, voltmeter, all_to_all
-from brainpy.state import gap_junction
+from brainspike import Simulator, hh_psc_alpha_gap, voltmeter, all_to_all
+from brainspike import gap_junction
 
 I_E = 100.0          # pA, constant drive
 V_PERTURB = -10.0    # mV, the perturbed cell's initial voltage

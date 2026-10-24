@@ -7,7 +7,7 @@ These build layers of nodes embedded in 2-D or 3-D space, define
 distance-dependent connection kernels and masks, and provide tools to inspect
 and visualize the resulting connectivity.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 
 Layers & Positions

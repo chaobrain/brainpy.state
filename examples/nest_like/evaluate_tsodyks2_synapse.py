@@ -27,7 +27,7 @@ import braintools
 import numpy as np
 import brainunit as u
 
-from brainpy.state import (Simulator, iaf_psc_exp, spike_generator, multimeter,
+from brainspike import (Simulator, iaf_psc_exp, spike_generator, multimeter,
                            tsodyks2_synapse)
 
 #: Resolution (ms).
@@ -120,7 +120,7 @@ def burst_peak_ratio(vm, train=TRAIN, dt=DT):
 
 
 def main():
-    print("Tsodyks-2 STP (brainpy.state, iaf_psc_exp post, V_m = PSC train)")
+    print("Tsodyks-2 STP (brainspike, iaf_psc_exp post, V_m = PSC train)")
     traces = {}
     for regime in REGIMES:
         t, v = run(regime)

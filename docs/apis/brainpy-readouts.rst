@@ -3,7 +3,7 @@ BrainPy-style Readouts
 
 Readout modules for converting spiking or rate-coded outputs.
 
-.. currentmodule:: brainpy.state
+.. currentmodule:: brainspike
 
 .. autosummary::
     :toctree: generated/
