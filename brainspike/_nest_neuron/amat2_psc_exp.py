@@ -327,12 +327,12 @@ class amat2_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bstate
         >>>
         >>> # Create a neuron with voltage-dependent threshold
-        >>> neuron = bst.amat2_psc_exp(
+        >>> neuron = brainspike.amat2_psc_exp(
         ...     in_size=100,
         ...     beta=0.5 / u.ms,  # Enable voltage-dependent threshold
         ...     tau_v=5.0 * u.ms,
@@ -350,8 +350,8 @@ class amat2_psc_exp(NESTNeuron):
     .. code-block:: python
 
         >>> # AMAT2 with beta=0 behaves like MAT2
-        >>> amat2 = bst.amat2_psc_exp(in_size=10, beta=0.0 / u.ms)
-        >>> mat2 = bst.mat2_psc_exp(in_size=10)
+        >>> amat2 = brainspike.amat2_psc_exp(in_size=10, beta=0.0 / u.ms)
+        >>> mat2 = brainspike.mat2_psc_exp(in_size=10)
         >>>
         >>> # Both should produce similar dynamics
         >>> with bstate.environ.context(dt=0.1 * u.ms):
@@ -362,7 +362,7 @@ class amat2_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> neuron = bst.amat2_psc_exp(
+        >>> neuron = brainspike.amat2_psc_exp(
         ...     in_size=1,
         ...     beta=1.0 / u.ms,  # Strong voltage dependence
         ...     tau_v=3.0 * u.ms,  # Fast voltage tracking

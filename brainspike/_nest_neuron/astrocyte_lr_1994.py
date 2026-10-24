@@ -357,9 +357,9 @@ class astrocyte_lr_1994(NESTNeuron):
 
        >>> import brainstate as bst
        >>> import brainunit as u
-       >>> import brainspike as bps
+       >>> import brainspike
        >>> with bst.environ.context(dt=0.1 * u.ms):
-       ...     astro = bps.astrocyte_lr_1994(in_size=10)
+       ...     astro = brainspike.astrocyte_lr_1994(in_size=10)
        ...     astro.init_state()
        ...     # Simulate 100 ms with constant IP3 input
        ...     for _ in range(1000):
@@ -372,7 +372,7 @@ class astrocyte_lr_1994(NESTNeuron):
        >>> import numpy as np
        >>> import matplotlib.pyplot as plt
        >>> with bst.environ.context(dt=0.1 * u.ms):
-       ...     astro = bps.astrocyte_lr_1994(in_size=1)
+       ...     astro = brainspike.astrocyte_lr_1994(in_size=1)
        ...     astro.init_state()
        ...     ca_trace = []
        ...     for _ in range(5000):  # 500 ms

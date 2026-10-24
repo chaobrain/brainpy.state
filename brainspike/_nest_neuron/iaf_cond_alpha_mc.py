@@ -301,9 +301,9 @@ class iaf_cond_alpha_mc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
-        >>> neuron = bst.iaf_cond_alpha_mc(in_size=10)
+        >>> neuron = brainspike.iaf_cond_alpha_mc(in_size=10)
         >>> neuron.init_state()
         >>> spike = neuron.update(x=100. * u.pA)
 
@@ -313,7 +313,7 @@ class iaf_cond_alpha_mc(NESTNeuron):
 
         >>> soma_params = {'C_m': 200.0 * u.pF, 'g_L': 15.0 * u.nS}
         >>> proximal_params = {'C_m': 100.0 * u.pF}
-        >>> neuron = bst.iaf_cond_alpha_mc(
+        >>> neuron = brainspike.iaf_cond_alpha_mc(
         ...     in_size=5,
         ...     soma=soma_params,
         ...     proximal=proximal_params,
@@ -512,7 +512,7 @@ class iaf_cond_alpha_mc(NESTNeuron):
         --------
         .. code-block:: python
 
-            >>> neuron = bst.iaf_cond_alpha_mc(in_size=10)
+            >>> neuron = brainspike.iaf_cond_alpha_mc(in_size=10)
             >>> neuron.receptor_types
             {'soma_exc': 1, 'soma_inh': 2, 'proximal_exc': 3, ...}
         """
@@ -541,7 +541,7 @@ class iaf_cond_alpha_mc(NESTNeuron):
         --------
         .. code-block:: python
 
-            >>> neuron = bst.iaf_cond_alpha_mc(in_size=10)
+            >>> neuron = brainspike.iaf_cond_alpha_mc(in_size=10)
             >>> neuron.recordables
             ['V_m.s', 'g_ex.s', 'g_in.s', 'V_m.p', ...]
         """

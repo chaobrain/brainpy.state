@@ -13,133 +13,15 @@
 # limitations under the License.
 # ==============================================================================
 
-# -*- coding: utf-8 -*-
-
 import unittest
 
-import braintools
 import brainstate
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 import brainunit as u
 
-import brainspike as brainspike_pkg
-from brainspike._brainpy.delay import InputDelay
-from brainspike import (AlignPostProj, CurrentProj, LIF, Expon, CUBA)
-
-
-def _impulse(n_steps, n_pre, active):
-    """A (n_steps, n_pre) drive: the given pre-neurons spike once at step 0."""
-    seq = np.zeros((n_steps, n_pre))
-    seq[0, active] = 1.0
-    return jnp.asarray(seq)
-
-
-class _AlignPostNet(brainstate.nn.Module):
-    def __init__(self, n, delay, comm_w):
-        super().__init__()
-        self.pop = LIF(n, tau=1e6 * u.ms, V_rest=0. * u.mV, V_th=1e9 * u.mV, V_reset=0. * u.mV)
-        self.proj = AlignPostProj(
-            comm=brainstate.nn.Linear(n, n, w_init=comm_w, b_init=None),
-            syn=Expon.desc(n, tau=100. * u.ms),
-            out=CUBA.desc(scale=u.volt),
-            post=self.pop,
-            delay=delay,
-        )
-
-    def update(self, spk):
-        with brainstate.environ.context(t=0. * u.ms):
-            self.proj(spk)
-            self.pop(0. * u.mA)
-        return self.proj.syn.g.value
-
-
-class _CurrentNet(brainstate.nn.Module):
-    def __init__(self, n, delay, comm_w):
-        super().__init__()
-        self.pop = LIF(n, tau=1e6 * u.ms, V_rest=0. * u.mV, V_th=1e9 * u.mV, V_reset=0. * u.mV)
-        self.proj = CurrentProj(
-            comm=brainstate.nn.Linear(n, n, w_init=comm_w, b_init=None),
-            out=CUBA(scale=u.volt),
-            post=self.pop,
-            delay=delay,
-        )
-
-    def update(self, spk):
-        with brainstate.environ.context(t=0. * u.ms):
-            self.proj(spk)
-            self.pop(0. * u.mA)
-        return self.pop.V.value
-
-
-def _run(net, drive):
-    return np.asarray([np.asarray(u.get_mantissa(net.update(drive[k]))) for k in range(drive.shape[0])])
-
-
-class TestAlignPostProjDelay(unittest.TestCase):
-    def setUp(self):
-        brainstate.environ.set(dt=1.0 * u.ms)
-
-    def test_homogeneous_delay_shifts_onset(self):
-        n, T = 4, 6
-        drive = _impulse(T, n, active=0)
-        net0 = _AlignPostNet(n, delay=None, comm_w=braintools.init.Constant(1.0 * u.mS))
-        net2 = _AlignPostNet(n, delay=2. * u.ms, comm_w=braintools.init.Constant(1.0 * u.mS))
-        brainstate.nn.init_all_states(net0)
-        brainstate.nn.init_all_states(net2)
-        g0 = _run(net0, drive).sum(axis=1)
-        g2 = _run(net2, drive).sum(axis=1)
-        # No delay: synapse charges at step 0.
-        self.assertGreater(g0[0], 1.0)
-        # delay = 2 steps: silent at steps 0, 1; charges at step 2.
-        npt.assert_allclose(g2[0], 0., atol=1e-9)
-        npt.assert_allclose(g2[1], 0., atol=1e-9)
-        self.assertGreater(g2[2], 1.0)
-        # The delayed response is the undelayed response shifted by exactly 2 steps.
-        npt.assert_allclose(g2[2:], g0[:T - 2], rtol=1e-5, atol=1e-9)
-
-    def test_delay_none_matches_baseline(self):
-        # delay=None must take the original code path -> immediate onset.
-        n, T = 4, 5
-        drive = _impulse(T, n, active=0)
-        net = _AlignPostNet(n, delay=None, comm_w=braintools.init.Constant(1.0 * u.mS))
-        brainstate.nn.init_all_states(net)
-        g = _run(net, drive).sum(axis=1)
-        self.assertGreater(g[0], 1.0)
-
-    def test_axonal_delay_per_post_onset(self):
-        # identity comm so pre-neuron j feeds post-neuron j only.
-        n, T = 4, 7
-        delays = jnp.array([1., 2., 3., 4.]) * u.ms
-        net = _AlignPostNet(n, delay=delays, comm_w=jnp.eye(n) * u.mS)
-        brainstate.nn.init_all_states(net)
-        drive = _impulse(T, n, active=slice(None))  # every pre-neuron spikes at step 0
-        g = _run(net, drive)  # (T, n)
-        for j in range(n):
-            onset = int(np.argmax(g[:, j] > 1e-9))
-            self.assertEqual(onset, j + 1, msg=f'post {j}: onset {onset} != {j + 1}')
-
-
-class TestCurrentProjDelay(unittest.TestCase):
-    def setUp(self):
-        brainstate.environ.set(dt=1.0 * u.ms)
-
-    def test_homogeneous_delay_shifts_onset(self):
-        n, T = 4, 6
-        drive = _impulse(T, n, active=0)
-        net0 = _CurrentNet(n, delay=None, comm_w=jnp.eye(n) * u.mS)
-        net3 = _CurrentNet(n, delay=3. * u.ms, comm_w=jnp.eye(n) * u.mS)
-        brainstate.nn.init_all_states(net0)
-        brainstate.nn.init_all_states(net3)
-        v0 = _run(net0, drive)[:, 0]
-        v3 = _run(net3, drive)[:, 0]
-        # No delay: post neuron 0 receives current at step 0.
-        self.assertGreater(abs(v0[0]), 0.)
-        # delay = 3 steps: silent until step 3.
-        for k in range(3):
-            npt.assert_allclose(v3[k], 0., atol=1e-12)
-        self.assertGreater(abs(v3[3]), 0.)
+from brainspike._nest_network.delay import InputDelay
 
 
 class TestInputDelaySeam(unittest.TestCase):

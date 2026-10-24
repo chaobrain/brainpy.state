@@ -17,6 +17,10 @@ absl-py
 # dependency in pyproject.toml / requirements.txt is decided at K3.
 braintrace>=0.2.6
 
+# Reference BrainPy-style models for the kernel parity tests (brainspike/_kernel/*_test.py).
+# Dev/CI-only: shipped brainspike code never imports brainpy.
+brainpy>=2.9.0
+
 # type checking (see [tool.mypy] in pyproject.toml; run `mypy -p brainspike`)
 mypy
 

@@ -145,8 +145,8 @@ class sic_connection(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> conn = bp.sic_connection(weight=0.5, delay_steps=2)
+        >>> import brainspike
+        >>> conn = brainspike.sic_connection(weight=0.5, delay_steps=2)
         >>> conn.get_status()
         {'weight': 0.5, 'delay_steps': 2, 'delay': 2, ...}
 
@@ -155,20 +155,20 @@ class sic_connection(NESTSynapse):
     .. code-block:: python
 
         >>> import brainunit as u
-        >>> sim = bp.Simulator(dt=0.1 * u.ms)
-        >>> astro = sim.create(bp.astrocyte_lr_1994, 1)
-        >>> neuron = sim.create(bp.aeif_cond_alpha_astro, 1)
-        >>> proj = sim.connect(astro, neuron, synapse=bp.sic_connection(weight=0.5))
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> astro = sim.create(brainspike.astrocyte_lr_1994, 1)
+        >>> neuron = sim.create(brainspike.aeif_cond_alpha_astro, 1)
+        >>> proj = sim.connect(astro, neuron, synapse=brainspike.sic_connection(weight=0.5))
 
     **Validate model compatibility:**
 
     .. code-block:: python
 
-        >>> bp.sic_connection.supports_connection(
+        >>> brainspike.sic_connection.supports_connection(
         ...     'astrocyte_lr_1994', 'aeif_cond_alpha_astro'
         ... )
         True
-        >>> bp.sic_connection.check_connection(
+        >>> brainspike.sic_connection.check_connection(
         ...     'astrocyte_lr_1994', 'iaf_psc_alpha'
         ... )  # doctest: +SKIP
         ValueError: Unsupported sic_connection pair...
@@ -277,7 +277,7 @@ class sic_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> conn = bp.sic_connection(weight=1.0, delay_steps=1)
+            >>> conn = brainspike.sic_connection(weight=1.0, delay_steps=1)
             >>> conn.set_status(weight=2.5, delay=3)
             >>> conn.get_status()['weight']
             2.5
@@ -330,7 +330,7 @@ class sic_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> conn = bp.sic_connection(weight=0.8, delay_steps=2)
+            >>> conn = brainspike.sic_connection(weight=0.8, delay_steps=2)
             >>> conn.get('weight')
             0.8
             >>> conn.get('status')['delay']
@@ -360,7 +360,7 @@ class sic_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> conn = bp.sic_connection()
+            >>> conn = brainspike.sic_connection()
             >>> conn.set_weight(2.5)
             >>> conn.weight
             2.5
@@ -399,7 +399,7 @@ class sic_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> conn = bp.sic_connection(delay_steps=1)
+            >>> conn = brainspike.sic_connection(delay_steps=1)
             >>> conn.set_delay_steps(5)
             >>> conn.delay_steps
             5
@@ -458,11 +458,11 @@ class sic_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> bp.sic_connection.supports_connection(
+            >>> brainspike.sic_connection.supports_connection(
             ...     'astrocyte_lr_1994', 'aeif_cond_alpha_astro'
             ... )
             True
-            >>> bp.sic_connection.supports_connection(
+            >>> brainspike.sic_connection.supports_connection(
             ...     'iaf_psc_alpha', 'aeif_cond_alpha_astro'
             ... )
             False
@@ -497,11 +497,11 @@ class sic_connection(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> bp.sic_connection.check_connection(
+            >>> brainspike.sic_connection.check_connection(
             ...     'astrocyte_lr_1994', 'aeif_cond_alpha_astro'
             ... )
             True
-            >>> bp.sic_connection.check_connection(
+            >>> brainspike.sic_connection.check_connection(
             ...     'iaf_psc_alpha', 'aeif_cond_alpha_astro'
             ... )  # doctest: +SKIP
             ValueError: Unsupported sic_connection pair...

@@ -37,7 +37,7 @@ def _run(n_steps, steps, params=None, precision='float64', dt=DT, value=1.0, ini
 
 
 def _old_bionmda(n_steps, steps, T_dur, dt=DT):
-    from brainspike._brainpy.synapse import BioNMDA
+    from brainpy.state import BioNMDA
     old = BioNMDA(1, T_dur=T_dur, g_initializer=braintools.init.Constant(0.))  # unitless g
     with brainstate.environ.context(dt=dt):
         old.init_state()

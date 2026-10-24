@@ -311,11 +311,11 @@ class gif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bs
         >>> bs.environ.context(dt=0.1 * u.ms)
-        >>> neuron = bst.gif_cond_exp(in_size=10)
+        >>> neuron = brainspike.gif_cond_exp(in_size=10)
         >>> neuron.init_all_states()
         >>> spikes = neuron.update(x=5.0 * u.pA)
 
@@ -323,11 +323,11 @@ class gif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bs
         >>> bs.environ.context(dt=0.1 * u.ms)
-        >>> neuron = bst.gif_cond_exp(
+        >>> neuron = brainspike.gif_cond_exp(
         ...     in_size=10,
         ...     tau_sfa=(100.0, 200.0),  # Two SFA time constants (ms)
         ...     q_sfa=(5.0, 10.0),       # SFA jumps (mV)

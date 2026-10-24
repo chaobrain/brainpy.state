@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brainspike"
-description = "brainspike: stateful spiking neural network models in BrainPy"
+description = "Point-neuron spiking neural networks: build, simulate, and train with a unified kernel language."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -38,7 +38,6 @@ keywords = [
 dependencies = [
     "numpy>=1.15",
     "jax>=0.9.0",
-    "brainpy>=2.7.6",
     "brainstate>=0.5.0",
     "brainunit",
     "brainevent>=0.2.1",

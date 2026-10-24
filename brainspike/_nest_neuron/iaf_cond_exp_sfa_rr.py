@@ -282,8 +282,8 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
 
         >>> import brainstate as bst
         >>> import brainunit as u
-        >>> import brainspike as bp
-        >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=1)
+        >>> import brainspike
+        >>> neuron = brainspike.iaf_cond_exp_sfa_rr(in_size=1)
         >>> with bst.environ.context(dt=0.1 * u.ms):
         ...     neuron.init_all_states()
         ...     print(neuron.V.value)
@@ -294,7 +294,7 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
     .. code-block:: python
 
         >>> import matplotlib.pyplot as plt
-        >>> neuron = bp.iaf_cond_exp_sfa_rr(in_size=10, I_e=500 * u.pA)
+        >>> neuron = brainspike.iaf_cond_exp_sfa_rr(in_size=10, I_e=500 * u.pA)
         >>> with bst.environ.context(dt=0.1 * u.ms):
         ...     neuron.init_all_states()
         ...     voltages = []
@@ -308,9 +308,9 @@ class iaf_cond_exp_sfa_rr(NESTNeuron):
     .. code-block:: python
 
         >>> # Strong adaptation (large q_sfa)
-        >>> neuron_adapt = bp.iaf_cond_exp_sfa_rr(in_size=1, I_e=600*u.pA, q_sfa=50*u.nS)
+        >>> neuron_adapt = brainspike.iaf_cond_exp_sfa_rr(in_size=1, I_e=600*u.pA, q_sfa=50*u.nS)
         >>> # Weak adaptation (small q_sfa)
-        >>> neuron_weak = bp.iaf_cond_exp_sfa_rr(in_size=1, I_e=600*u.pA, q_sfa=5*u.nS)
+        >>> neuron_weak = brainspike.iaf_cond_exp_sfa_rr(in_size=1, I_e=600*u.pA, q_sfa=5*u.nS)
         >>> # neuron_adapt will show stronger decrease in firing rate over time
 
     Notes

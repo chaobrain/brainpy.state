@@ -270,10 +270,10 @@ class siegert_neuron(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
-        >>> model = bp.siegert_neuron(in_size=10, tau=2*u.ms, tau_m=10*u.ms)
+        >>> model = brainspike.siegert_neuron(in_size=10, tau=2*u.ms, tau_m=10*u.ms)
         >>> model.init_all_states()
         >>> with brainstate.environ.context(dt=0.1*u.ms):
         ...     for _ in range(100):
@@ -294,8 +294,8 @@ class siegert_neuron(NESTNeuron):
 
     .. code-block:: python
 
-        >>> exc = bp.siegert_neuron(in_size=800, tau=1*u.ms, theta=15.0)
-        >>> inh = bp.siegert_neuron(in_size=200, tau=1*u.ms, theta=15.0)
+        >>> exc = brainspike.siegert_neuron(in_size=800, tau=1*u.ms, theta=15.0)
+        >>> inh = brainspike.siegert_neuron(in_size=200, tau=1*u.ms, theta=15.0)
         >>> exc.init_all_states()
         >>> inh.init_all_states()
         >>> # Simulate recurrent network (conceptual; requires projection setup)
@@ -838,10 +838,10 @@ class siegert_neuron(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainspike as bp
+            >>> import brainspike
             >>> import numpy as np
             >>> import brainunit as u
-            >>> model = bp.siegert_neuron(in_size=1, tau_m=10*u.ms, t_ref=2*u.ms, theta=15.0)
+            >>> model = brainspike.siegert_neuron(in_size=1, tau_m=10*u.ms, t_ref=2*u.ms, theta=15.0)
             >>> mu_vals = np.linspace(0, 25, 50)
             >>> rates = model.siegert_rate(mu=mu_vals, sigma_square=2.0)
             >>> print(rates.shape)  # (50,)
@@ -851,7 +851,7 @@ class siegert_neuron(NESTNeuron):
 
         .. code-block:: python
 
-            >>> model = bp.siegert_neuron(in_size=100, tau_m=10*u.ms)
+            >>> model = brainspike.siegert_neuron(in_size=100, tau_m=10*u.ms)
             >>> sigma_sq = np.linspace(0.1, 5.0, 100)
             >>> rates = model.siegert_rate(mu=15.0, sigma_square=sigma_sq)
             >>> print(rates.shape)  # (100,)
@@ -860,7 +860,7 @@ class siegert_neuron(NESTNeuron):
 
         .. code-block:: python
 
-            >>> model = bp.siegert_neuron(in_size=(10, 10), tau_m=10*u.ms)
+            >>> model = brainspike.siegert_neuron(in_size=(10, 10), tau_m=10*u.ms)
             >>> mu_grid = np.random.uniform(10, 20, size=(10, 10))
             >>> rates = model.siegert_rate(mu=mu_grid, sigma_square=3.0)
             >>> print(rates.shape)  # (10, 10)

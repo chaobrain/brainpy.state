@@ -407,11 +407,6 @@ class Dynamics(brainstate.nn.Dynamics):
             If the input is not a Dynamics instance or a ParamDescriber that creates
             a Dynamics instance.
 
-        Examples
-        --------
-        >>> import brainstate
-        >>> n1 = brainspike.LIF(10)
-        >>> n1.align_pre(brainspike.Expon.desc(n1.varshape))  # n2 will run after n1
         """
         if isinstance(dyn, Dynamics):
             self.add_after_update(id(dyn), dyn)
@@ -438,7 +433,7 @@ class Neuron(Dynamics):
     provides common functionality for spike generation, membrane potential dynamics, and
     surrogate gradient handling required for training spiking neural networks.
 
-    All neuron models (e.g., IF, LIF, LIFRef, ALIF) should inherit from this class and
+    All neuron models (e.g., iaf_psc_alpha, aeif_cond_alpha, hh_psc_alpha) should inherit from this class and
     implement the required abstract methods, particularly ``get_spike()`` which defines
     the spike generation mechanism.
 
@@ -501,98 +496,6 @@ class Neuron(Dynamics):
     - Initialized via ``init_state(batch_size=None, **kwargs)``
     - Reset via ``reset_state(batch_size=None, **kwargs)``
     - Updated via ``update(x)`` which returns spikes for the current timestep
-
-    Examples
-    --------
-    **Creating a Custom Neuron Model**
-
-    .. code-block:: python
-
-        >>> import brainstate
-        >>> import brainunit as u
-        >>> import braintools
-        >>> import brainpy
-        >>>
-        >>> class SimpleNeuron(brainspike.Neuron):
-        ...     def __init__(self, in_size, V_th=1.0*u.mV, **kwargs):
-        ...         super().__init__(in_size, **kwargs)
-        ...         self.V_th = V_th
-        ...
-        ...     def init_state(self, batch_size=None, **kwargs):
-        ...         self.V = brainstate.HiddenState(
-        ...             braintools.init.param(
-        ...                 braintools.init.Constant(0.*u.mV),
-        ...                 self.varshape,
-        ...                 batch_size
-        ...             )
-        ...         )
-        ...
-        ...     def reset_state(self, batch_size=None, **kwargs):
-        ...         self.V.value = braintools.init.param(
-        ...             braintools.init.Constant(0.*u.mV),
-        ...             self.varshape,
-        ...             batch_size
-        ...         )
-        ...
-        ...     def get_spike(self, V=None):
-        ...         V = self.V.value if V is None else V
-        ...         return self.spk_fun((V - self.V_th) / self.V_th)
-        ...
-        ...     def update(self, x):
-        ...         self.V.value += x
-        ...         return self.get_spike()
-
-    **Using Built-in Neuron Models**
-
-    .. code-block:: python
-
-        >>> import brainpy
-        >>> import brainstate
-        >>> import brainunit as u
-        >>>
-        >>> # Create a LIF neuron layer
-        >>> neuron = brainspike.LIF(
-        ...     in_size=100,
-        ...     tau=10*u.ms,
-        ...     V_th=1.0*u.mV,
-        ...     spk_fun=braintools.surrogate.ReluGrad(),
-        ...     spk_reset='soft'
-        ... )
-        >>>
-        >>> # Initialize state for batch processing
-        >>> neuron.init_state(batch_size=32)
-        >>>
-        >>> # Process input and get spikes
-        >>> input_current = 2.0 * u.mA
-        >>> spikes = neuron.update(input_current)
-        >>> print(spikes.shape)
-        (32, 100)
-
-    **Building a Multi-Layer Spiking Network**
-
-    .. code-block:: python
-
-        >>> import brainpy
-        >>> import brainstate
-        >>> import brainunit as u
-        >>>
-        >>> # Create a network with multiple neuron types
-        >>> class SpikingNet(brainstate.nn.Module):
-        ...     def __init__(self):
-        ...         super().__init__()
-        ...         self.layer1 = brainspike.LIF(784, tau=5*u.ms)
-        ...         self.fc1 = brainstate.nn.Linear(784, 256)
-        ...         self.layer2 = brainspike.ALIF(256, tau=10*u.ms, tau_a=200*u.ms)
-        ...         self.fc2 = brainstate.nn.Linear(256, 10)
-        ...         self.layer3 = brainspike.LIF(10, tau=8*u.ms)
-        ...
-        ...     def __call__(self, x):
-        ...         spikes1 = self.layer1.update(x)
-        ...         x1 = self.fc1(spikes1)
-        ...         spikes2 = self.layer2.update(x1)
-        ...         x2 = self.fc2(spikes2)
-        ...         spikes3 = self.layer3.update(x2)
-        ...         return spikes3
 
     References
     ----------
@@ -659,7 +562,7 @@ class Synapse(Dynamics):
     spikes) between neurons, including temporal dynamics, plasticity, and neurotransmitter
     effects.
 
-    All specific synapse implementations (like Expon, Alpha, DualExpon, AMPA, GABAa, etc.)
+    All specific synapse implementations
     should inherit from this class and implement the required methods for state management
     and dynamics update.
 
@@ -676,14 +579,6 @@ class Synapse(Dynamics):
     ----------
     varshape : tuple
         Shape of the synaptic state variables, derived from ``in_size``.
-
-    See Also
-    --------
-    Expon : Simple first-order exponential decay synapse model
-    DualExpon : Dual exponential synapse model with separate rise and decay
-    Alpha : Alpha function synapse model
-    AMPA : AMPA receptor-mediated excitatory synapse
-    GABAa : GABAa receptor-mediated inhibitory synapse
 
     Notes
     -----
@@ -712,140 +607,6 @@ class Synapse(Dynamics):
     Some synapse models inherit from :class:`AlignPost` to enable
     event-driven computation where synaptic variables are aligned with postsynaptic
     neurons. This is particularly efficient for sparse connectivity patterns.
-
-    Examples
-    --------
-    **Creating a Custom Synapse Model**
-
-    .. code-block:: python
-
-        >>> import brainpy
-        >>> import brainstate
-        >>> import brainunit as u
-        >>> import braintools
-        >>>
-        >>> class SimpleSynapse(brainspike.Synapse):
-        ...     def __init__(self, in_size, tau=5.0*u.ms, **kwargs):
-        ...         super().__init__(in_size, **kwargs)
-        ...         self.tau = braintools.init.param(tau, self.varshape)
-        ...         self.g_init = braintools.init.Constant(0.*u.mS)
-        ...
-        ...     def init_state(self, batch_size=None, **kwargs):
-        ...         self.g = brainstate.HiddenState(braintools.init.param(self.g_init, self.varshape, batch_size))
-        ...
-        ...     def reset_state(self, batch_size=None, **kwargs):
-        ...         self.g.value = braintools.init.param(self.g_init, self.varshape, batch_size)
-        ...
-        ...     def update(self, x=None):
-        ...         # Simple exponential decay: dg/dt = -g/tau + x
-        ...         dg = lambda g: -g / self.tau
-        ...         self.g.value = brainstate.nn.exp_euler_step(dg, self.g.value)
-        ...         if x is not None:
-        ...             self.g.value += x
-        ...         return self.g.value
-
-    **Using Built-in Synapse Models**
-
-    .. code-block:: python
-
-        >>> import brainpy
-        >>> import brainstate
-        >>> import brainunit as u
-        >>> import jax
-        >>>
-        >>> # Create an exponential synapse
-        >>> synapse = brainspike.Expon(in_size=100, tau=8.0*u.ms)
-        >>>
-        >>> # Initialize state
-        >>> synapse.init_state(batch_size=32)
-        >>>
-        >>> # Update with presynaptic spikes
-        >>> spikes = jax.random.bernoulli(
-        ...     jax.random.PRNGKey(0),
-        ...     p=0.1,
-        ...     shape=(32, 100)
-        ... )
-        >>> conductance = synapse.update(spikes * 1.0*u.mS)
-        >>> print(conductance.shape)
-        (32, 100)
-
-    **Building a Feedforward Spiking Network**
-
-    .. code-block:: python
-
-        >>> import brainpy
-        >>> import brainstate
-        >>> import brainunit as u
-        >>>
-        >>> class SynapticNetwork(brainstate.nn.Module):
-        ...     def __init__(self):
-        ...         super().__init__()
-        ...         # Input layer
-        ...         self.input_neurons = brainspike.LIF(784, tau=5*u.ms)
-        ...         # First hidden layer with synaptic filtering
-        ...         self.fc1 = brainstate.nn.Linear(784, 256)
-        ...         self.syn1 = brainspike.Expon(256, tau=8*u.ms)
-        ...         self.hidden1 = brainspike.LIF(256, tau=10*u.ms)
-        ...         # Second hidden layer with AMPA synapse
-        ...         self.fc2 = brainstate.nn.Linear(256, 128)
-        ...         self.syn2 = brainspike.AMPA(128)
-        ...         self.hidden2 = brainspike.LIF(128, tau=10*u.ms)
-        ...         # Output layer
-        ...         self.fc3 = brainstate.nn.Linear(128, 10)
-        ...         self.output_neurons = brainspike.LIF(10, tau=8*u.ms)
-        ...
-        ...     def __call__(self, x):
-        ...         # Input layer
-        ...         spikes0 = self.input_neurons.update(x)
-        ...         # First hidden layer
-        ...         current1 = self.fc1(spikes0)
-        ...         g1 = self.syn1.update(current1)
-        ...         spikes1 = self.hidden1.update(g1)
-        ...         # Second hidden layer
-        ...         current2 = self.fc2(spikes1)
-        ...         g2 = self.syn2.update(current2)
-        ...         spikes2 = self.hidden2.update(g2)
-        ...         # Output layer
-        ...         current3 = self.fc3(spikes2)
-        ...         output_spikes = self.output_neurons.update(current3)
-        ...         return output_spikes
-
-    **Recurrent Network with Inhibition**
-
-    .. code-block:: python
-
-        >>> import brainpy
-        >>> import brainstate
-        >>> import brainunit as u
-        >>>
-        >>> class EINetwork(brainstate.nn.Module):
-        ...     def __init__(self, n_exc=800, n_inh=200):
-        ...         super().__init__()
-        ...         # Excitatory population
-        ...         self.exc_neurons = brainspike.LIF(n_exc, tau=10*u.ms)
-        ...         self.exc_syn = brainspike.AMPA(n_exc)
-        ...         # Inhibitory population
-        ...         self.inh_neurons = brainspike.LIF(n_inh, tau=8*u.ms)
-        ...         self.inh_syn = brainspike.GABAa(n_inh)
-        ...         # Connectivity
-        ...         self.exc_to_exc = brainstate.nn.Linear(n_exc, n_exc)
-        ...         self.exc_to_inh = brainstate.nn.Linear(n_exc, n_inh)
-        ...         self.inh_to_exc = brainstate.nn.Linear(n_inh, n_exc)
-        ...         self.inh_to_inh = brainstate.nn.Linear(n_inh, n_inh)
-        ...
-        ...     def __call__(self, ext_input):
-        ...         # Excitatory neurons receive external input and recurrent excitation/inhibition
-        ...         exc_current = (ext_input +
-        ...                       self.exc_to_exc(self.exc_syn.g.value) -
-        ...                       self.inh_to_exc(self.inh_syn.g.value))
-        ...         exc_spikes = self.exc_neurons.update(exc_current)
-        ...         self.exc_syn.update(exc_spikes)
-        ...         # Inhibitory neurons receive excitatory input and recurrent inhibition
-        ...         inh_current = (self.exc_to_inh(self.exc_syn.g.value) -
-        ...                       self.inh_to_inh(self.inh_syn.g.value))
-        ...         inh_spikes = self.inh_neurons.update(inh_current)
-        ...         self.inh_syn.update(inh_spikes)
-        ...         return exc_spikes, inh_spikes
 
     References
     ----------

@@ -17,14 +17,12 @@
 
 """Tests that ``__version_info__`` stays well-formed and in sync with ``__version__``.
 
-Robustness of the parse against PEP 440 suffixes is covered by the
-``_parse_release`` tests in :mod:`brainspike._compat_test`; here we only pin
-that the package's own version metadata is consistent and never crashes import.
+These pin that the package's own version metadata is consistent and never
+crashes import.
 """
 
 import unittest
 
-from brainspike._compat import _parse_release
 from brainspike._version import __version__, __version_info__
 
 
@@ -34,8 +32,8 @@ class TestVersionInfo(unittest.TestCase):
         self.assertEqual(len(__version_info__), 3)
         self.assertTrue(all(isinstance(p, int) for p in __version_info__))
 
-    def test_matches_parsed_version_string(self):
-        self.assertEqual(__version_info__, _parse_release(__version__))
+    def test_matches_version_string(self):
+        self.assertTrue(__version__.startswith('.'.join(map(str, __version_info__))))
 
     def test_reflects_release_prefix_of_version(self):
         # The first two components must mirror the declared version string.

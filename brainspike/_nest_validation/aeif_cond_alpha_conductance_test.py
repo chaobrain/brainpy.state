@@ -30,7 +30,7 @@ try:
 except Exception:                                   # pragma: no cover - env dependent
     nest = None
 
-import brainspike as bp
+import brainspike
 from brainspike._nest_validation.nest_compare import requires_nest, compare_trace
 from brainspike._nest_validation.tolerance_conventions import TraceTolerance
 
@@ -58,12 +58,12 @@ def _ms(x):
 def _bp_drive(spike_times, weight, receptor_type, sim_time=SIM_T):
     """brainpy: spike_generator -> aeif_cond_alpha; return (times, V_m, g_ex, g_in)."""
     brainstate.environ.set(dt=DT * u.ms)
-    sim = bp.Simulator(dt=DT * u.ms)
-    n = sim.create(bp.aeif_cond_alpha, 1)
+    sim = brainspike.Simulator(dt=DT * u.ms)
+    n = sim.create(brainspike.aeif_cond_alpha, 1)
     if len(spike_times):
-        sg = sim.create(bp.spike_generator, 1, spike_times=np.asarray(spike_times) * u.ms)
+        sg = sim.create(brainspike.spike_generator, 1, spike_times=np.asarray(spike_times) * u.ms)
         sim.connect(sg, n, weight=weight * u.nS, delay=DT * u.ms, receptor_type=receptor_type)
-    mm = sim.create(bp.multimeter, record_from=['V_m', 'g_ex', 'g_in'])
+    mm = sim.create(brainspike.multimeter, record_from=['V_m', 'g_ex', 'g_in'])
     sim.connect(mm, n)
     res = sim.simulate(sim_time * u.ms)
     return (res.times, res.trace(mm, 'V_m'), res.trace(mm, 'g_ex'), res.trace(mm, 'g_in'))

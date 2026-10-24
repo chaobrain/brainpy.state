@@ -561,10 +561,10 @@ class hh_psc_alpha_clopath(NESTNeuron):
     .. code-block:: python
 
         >>> import brainstate as bst
-        >>> import brainspike as bps
+        >>> import brainspike
         >>> import brainunit as u
         >>> bst.environ.set(dt=0.1 * u.ms)
-        >>> neurons = bps.hh_psc_alpha_clopath(
+        >>> neurons = brainspike.hh_psc_alpha_clopath(
         ...     in_size=100,
         ...     tau_u_bar_plus=114. * u.ms,  # Slow LTP filter
         ...     tau_u_bar_minus=10. * u.ms,  # Fast LTD filter
@@ -846,9 +846,9 @@ class hh_psc_alpha_clopath(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainspike as bps
+            >>> import brainspike
             >>> import brainunit as u
-            >>> neurons = bps.hh_psc_alpha_clopath(in_size=10)
+            >>> neurons = brainspike.hh_psc_alpha_clopath(in_size=10)
             >>> neurons.init_state()
             >>> V_test = u.math.array([[-70., -10., 0., 5., 20.]]) * u.mV
             >>> spikes_surrogate = neurons.get_spike(V_test)

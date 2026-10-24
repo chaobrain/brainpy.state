@@ -344,10 +344,10 @@ class gif_cond_exp_multisynapse(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> # AMPA: fast excitatory, NMDA: slow excitatory, GABA_A: fast inhibitory
-        >>> neuron = bst.gif_cond_exp_multisynapse(
+        >>> neuron = brainspike.gif_cond_exp_multisynapse(
         ...     in_size=100,
         ...     tau_syn=(2.0, 20.0, 5.0),  # ms
         ...     E_rev=(0.0, 0.0, -85.0),   # mV

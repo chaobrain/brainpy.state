@@ -411,11 +411,11 @@ class glif_cond(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate as bts
         >>> # Create GLIF1 neuron (all mechanisms disabled)
-        >>> neuron = bst.glif_cond(
+        >>> neuron = brainspike.glif_cond(
         ...     100,
         ...     spike_dependent_threshold=False,
         ...     after_spike_currents=False,
@@ -434,7 +434,7 @@ class glif_cond(NESTNeuron):
     .. code-block:: python
 
         >>> # Create GLIF5 with all mechanisms enabled
-        >>> neuron = bst.glif_cond(
+        >>> neuron = brainspike.glif_cond(
         ...     (10, 10),  # 10x10 population
         ...     spike_dependent_threshold=True,
         ...     after_spike_currents=True,
@@ -451,14 +451,18 @@ class glif_cond(NESTNeuron):
 
     .. code-block:: python
 
-        >>> from brainevent.nn import FixedProb
-        >>> # Create projection targeting receptor 1
-        >>> proj = bst.align_post_projection(
-        ...     pre=pre_neurons,
-        ...     post=glif_neurons,
-        ...     comm=FixedProb(0.1, weight=0.5 * u.nS),
-        ...     label='receptor_1'  # route to receptor port 1
-        ... )
+        >>> import jax
+        >>> jax.config.update('jax_enable_x64', True)
+        >>> import brainunit as u
+        >>> import brainspike
+        >>>
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> src = sim.create(brainspike.poisson_generator, rate=500. * u.Hz)
+        >>> glif = sim.create(brainspike.glif_cond, 10, tau_syn=(0.5, 1.5, 5.0),
+        ...                   E_rev=(0.0, 0.0, -80.0))
+        >>> # receptor_type=k routes the input to receptor port k (1-based)
+        >>> sim.connect(src, glif, weight=0.5 * u.nS, delay=1. * u.ms, receptor_type=2)
+        >>> result = sim.simulate(50. * u.ms)
 
     See Also
     --------

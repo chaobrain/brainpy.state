@@ -286,9 +286,9 @@ class iaf_cond_alpha(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
-        >>> neurons = bst.iaf_cond_alpha(
+        >>> neurons = brainspike.iaf_cond_alpha(
         ...     in_size=100,
         ...     V_th=-50. * u.mV,
         ...     tau_syn_ex=0.5 * u.ms,

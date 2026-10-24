@@ -359,16 +359,16 @@ class pp_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
-       >>> neurons = bst.pp_psc_delta(100)
+       >>> neurons = brainspike.pp_psc_delta(100)
        >>> neurons.init_all_states()
 
     Exponential transfer function (default):
 
     .. code-block:: python
 
-       >>> neurons = bst.pp_psc_delta(
+       >>> neurons = brainspike.pp_psc_delta(
        ...     100,
        ...     c_1=0.0,      # no linear part
        ...     c_2=1.238,    # exponential prefactor
@@ -379,7 +379,7 @@ class pp_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-       >>> neurons = bst.pp_psc_delta(
+       >>> neurons = brainspike.pp_psc_delta(
        ...     100,
        ...     c_1=10.0,     # linear slope (Hz/mV)
        ...     c_2=5.0,      # offset rate (Hz)
@@ -390,7 +390,7 @@ class pp_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-       >>> neurons = bst.pp_psc_delta(
+       >>> neurons = brainspike.pp_psc_delta(
        ...     100,
        ...     tau_sfa=(100.0, 1000.0),  # two adaptation kernels
        ...     q_sfa=(5.0, 10.0)          # jump sizes in mV
@@ -400,7 +400,7 @@ class pp_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-       >>> neurons = bst.pp_psc_delta(
+       >>> neurons = brainspike.pp_psc_delta(
        ...     100,
        ...     dead_time=0.0  # multiple spikes per step possible
        ... )
@@ -409,7 +409,7 @@ class pp_psc_delta(NESTNeuron):
 
     .. code-block:: python
 
-       >>> neurons = bst.pp_psc_delta(
+       >>> neurons = brainspike.pp_psc_delta(
        ...     100,
        ...     dead_time=2.0,           # mean dead time (ms)
        ...     dead_time_random=True,   # enable random dead time
@@ -422,7 +422,7 @@ class pp_psc_delta(NESTNeuron):
 
        >>> import jax
        >>> key = jax.random.PRNGKey(42)
-       >>> neurons = bst.pp_psc_delta(100, rng_key=key)
+       >>> neurons = brainspike.pp_psc_delta(100, rng_key=key)
     """
     __module__ = 'brainspike'
 

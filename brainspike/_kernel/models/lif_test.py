@@ -1,5 +1,5 @@
 # Copyright 2026 BrainX Ecosystem Limited. Apache 2.0.
-"""Tests of the K0 ``LIF``: parity with ``_brainpy.LIF``, timing, gradients, braintrace."""
+"""Tests of the K0 ``LIF``: parity with ``brainpy.state.LIF``, timing, gradients, braintrace."""
 import inspect
 
 import brainstate
@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from brainspike._brainpy.lif import LIF as OldLIF
+from brainpy.state import LIF as OldLIF
 from brainspike._kernel.context import StepContext
 from brainspike._kernel.integrators import Exact
 from brainspike._kernel.models import LIF

@@ -40,7 +40,7 @@ try:
 except Exception:                                   # pragma: no cover - env dependent
     nest = None
 
-import brainspike as bp
+import brainspike
 from brainspike._nest_validation.nest_compare import requires_nest, compare_trace
 from brainspike._nest_validation.tolerance_conventions import TraceTolerance
 
@@ -72,12 +72,12 @@ def _ms(x):
 def _bp_drive(spike_times, weight, receptor_type, sim_time=SIM_T):
     """brainpy: spike_generator -> aeif_cond_exp; return (times, V_m, g_ex, g_in)."""
     brainstate.environ.set(dt=DT * u.ms)
-    sim = bp.Simulator(dt=DT * u.ms)
-    n = sim.create(bp.aeif_cond_exp, 1)
+    sim = brainspike.Simulator(dt=DT * u.ms)
+    n = sim.create(brainspike.aeif_cond_exp, 1)
     if len(spike_times):
-        sg = sim.create(bp.spike_generator, 1, spike_times=np.asarray(spike_times) * u.ms)
+        sg = sim.create(brainspike.spike_generator, 1, spike_times=np.asarray(spike_times) * u.ms)
         sim.connect(sg, n, weight=weight * u.nS, delay=DT * u.ms, receptor_type=receptor_type)
-    mm = sim.create(bp.multimeter, record_from=['V_m', 'g_ex', 'g_in'])
+    mm = sim.create(brainspike.multimeter, record_from=['V_m', 'g_ex', 'g_in'])
     sim.connect(mm, n)
     res = sim.simulate(sim_time * u.ms)
     return (res.times, res.trace(mm, 'V_m'), res.trace(mm, 'g_ex'), res.trace(mm, 'g_in'))
@@ -148,13 +148,13 @@ class TestAeifCondExpConductanceEdgeCases(unittest.TestCase):
         single = float(np.max(_ms(_bp_drive(EXC_SPIKES, EXC_W, receptor_type=1)[2])))
 
         brainstate.environ.set(dt=DT * u.ms)
-        sim = bp.Simulator(dt=DT * u.ms)
-        n = sim.create(bp.aeif_cond_exp, 1)
-        sg1 = sim.create(bp.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
+        sim = brainspike.Simulator(dt=DT * u.ms)
+        n = sim.create(brainspike.aeif_cond_exp, 1)
+        sg1 = sim.create(brainspike.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
         sim.connect(sg1, n, weight=EXC_W * u.nS, delay=DT * u.ms, receptor_type=1)
-        sg2 = sim.create(bp.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
+        sg2 = sim.create(brainspike.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
         sim.connect(sg2, n, weight=EXC_W * u.nS, delay=DT * u.ms, receptor_type=1)
-        mm = sim.create(bp.multimeter, record_from=['g_ex'])
+        mm = sim.create(brainspike.multimeter, record_from=['g_ex'])
         sim.connect(mm, n)
         double = float(np.max(_ms(sim.simulate(SIM_T * u.ms).trace(mm, 'g_ex'))))
 
@@ -165,7 +165,7 @@ class TestAeifCondExpConductanceEdgeCases(unittest.TestCase):
 
     def test_self_pull_seam_returns_zero(self):
         """A bare ``update()`` (no ``w_by_rec``, nothing connected) leaves g_ex/g_in at 0."""
-        n = bp.aeif_cond_exp(1)
+        n = brainspike.aeif_cond_exp(1)
         n.init_state()
         with brainstate.environ.context(t=0. * u.ms):
             n.update()
@@ -175,9 +175,9 @@ class TestAeifCondExpConductanceEdgeCases(unittest.TestCase):
     def test_receptor_type_out_of_range_raises(self):
         """``receptor_type=3`` on a 2-receptor neuron raises a clear range error."""
         brainstate.environ.set(dt=DT * u.ms)
-        sim = bp.Simulator(dt=DT * u.ms)
-        n = sim.create(bp.aeif_cond_exp, 1)
-        sg = sim.create(bp.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
+        sim = brainspike.Simulator(dt=DT * u.ms)
+        n = sim.create(brainspike.aeif_cond_exp, 1)
+        sg = sim.create(brainspike.spike_generator, 1, spike_times=np.asarray(EXC_SPIKES) * u.ms)
         with self.assertRaisesRegex(ValueError, 'out of range'):
             sim.connect(sg, n, weight=EXC_W * u.nS, delay=DT * u.ms, receptor_type=3)
             sim.simulate(SIM_T * u.ms)

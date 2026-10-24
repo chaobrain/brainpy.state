@@ -19,7 +19,7 @@ import re
 import unittest
 from pathlib import Path
 
-import brainspike as bps
+import brainspike
 
 # The divergence reference page, located relative to the repo root. It is absent
 # when the package is installed without the docs tree, so the page-dependent
@@ -48,7 +48,7 @@ _SPEC_REF = {
 
 
 def _specs():
-    return {name: getattr(bps, name) for name in _SPEC_REF}
+    return {name: getattr(brainspike, name) for name in _SPEC_REF}
 
 
 class CrossLinkTest(unittest.TestCase):

@@ -263,11 +263,11 @@ class rate_transformer_node(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> # Create a transformer node with 10 units
-        >>> transformer = bst.rate_transformer_node(in_size=10, g=2.0)
+        >>> transformer = brainspike.rate_transformer_node(in_size=10, g=2.0)
         >>> # Initialize state
         >>> transformer.init_state()
         >>> # Send instant rate events (rate=0.5, weight=1.0)
@@ -281,11 +281,11 @@ class rate_transformer_node(NESTNeuron):
     .. code-block:: python
 
         >>> import numpy as np
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> # Define sigmoid activation
         >>> def sigmoid(h):
         ...     return 1.0 / (1.0 + np.exp(-h))
-        >>> transformer = bst.rate_transformer_node(
+        >>> transformer = brainspike.rate_transformer_node(
         ...     in_size=5,
         ...     linear_summation=True,
         ...     input_nonlinearity=sigmoid
@@ -301,10 +301,10 @@ class rate_transformer_node(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
-        >>> transformer = bst.rate_transformer_node(in_size=3)
+        >>> transformer = brainspike.rate_transformer_node(in_size=3)
         >>> transformer.init_state()
         >>> # Send delayed event (rate=1.0, weight=0.5, delay=2 steps)
         >>> with brainstate.environ.context(dt=1.0 * u.ms):
@@ -318,11 +318,11 @@ class rate_transformer_node(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import numpy as np
         >>> # ReLU applied per-event before summation
         >>> relu = lambda h: np.maximum(0, h)
-        >>> transformer = bst.rate_transformer_node(
+        >>> transformer = brainspike.rate_transformer_node(
         ...     in_size=1,
         ...     linear_summation=False,
         ...     input_nonlinearity=relu

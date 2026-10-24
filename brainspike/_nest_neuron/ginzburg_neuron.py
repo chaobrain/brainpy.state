@@ -250,12 +250,12 @@ class ginzburg_neuron(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>>
         >>> # Create population of 100 binary neurons with sigmoidal gain
-        >>> neurons = bst.ginzburg_neuron(100, tau_m=10*u.ms, theta=5*u.mV, c_3=0.5/u.mV)
+        >>> neurons = brainspike.ginzburg_neuron(100, tau_m=10*u.ms, theta=5*u.mV, c_3=0.5/u.mV)
         >>>
         >>> # Initialize and simulate
         >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -271,7 +271,7 @@ class ginzburg_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> # Pure linear gain: g(h) = c_1 * h
-        >>> linear_neurons = bst.ginzburg_neuron(
+        >>> linear_neurons = brainspike.ginzburg_neuron(
         ...     50, c_1=0.1/u.mV, c_2=0.0, tau_m=5*u.ms
         ... )
 
@@ -280,7 +280,7 @@ class ginzburg_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> # Combined gain with linear baseline
-        >>> hybrid_neurons = bst.ginzburg_neuron(
+        >>> hybrid_neurons = brainspike.ginzburg_neuron(
         ...     50,
         ...     tau_m=8*u.ms,
         ...     theta=3*u.mV,
@@ -294,7 +294,7 @@ class ginzburg_neuron(NESTNeuron):
     .. code-block:: python
 
         >>> # Update at every time step instead of Poisson times
-        >>> sync_neurons = bst.ginzburg_neuron(
+        >>> sync_neurons = brainspike.ginzburg_neuron(
         ...     100, tau_m=10*u.ms, stochastic_update=False
         ... )
         >>>
@@ -310,8 +310,8 @@ class ginzburg_neuron(NESTNeuron):
 
         >>> import brainevent as be
         >>>
-        >>> pre = bst.ginzburg_neuron(100, theta=0*u.mV, c_2=1.0, c_3=1.0/u.mV)
-        >>> post = bst.ginzburg_neuron(100, theta=2*u.mV, c_2=1.0, c_3=0.5/u.mV)
+        >>> pre = brainspike.ginzburg_neuron(100, theta=0*u.mV, c_2=1.0, c_3=1.0/u.mV)
+        >>> post = brainspike.ginzburg_neuron(100, theta=2*u.mV, c_2=1.0, c_3=0.5/u.mV)
         >>>
         >>> # Connect with fixed probability, encoding state changes as delta inputs
         >>> proj = be.nn.align_pre_projection(

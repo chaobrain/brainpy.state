@@ -311,12 +311,12 @@ class iaf_bw_2001(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>>
         >>> # Create neuron population
-        >>> neurons = bst.iaf_bw_2001(100, V_th=-50*u.mV, t_ref=3*u.ms)
+        >>> neurons = brainspike.iaf_bw_2001(100, V_th=-50*u.mV, t_ref=3*u.ms)
         >>>
         >>> # Initialize states
         >>> with brainstate.environ.context(dt=0.1*u.ms):

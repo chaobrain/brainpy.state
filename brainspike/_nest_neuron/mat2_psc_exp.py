@@ -338,10 +338,10 @@ class mat2_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-       >>> import brainspike as bp
+       >>> import brainspike
        >>> import brainunit as u
        >>> # Create a population of 100 MAT neurons
-       >>> neurons = bp.mat2_psc_exp(100, tau_1=10*u.ms, tau_2=200*u.ms)
+       >>> neurons = brainspike.mat2_psc_exp(100, tau_1=10*u.ms, tau_2=200*u.ms)
        >>> neurons.init_all_states()
        >>> # Inject step current and simulate
        >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -352,7 +352,7 @@ class mat2_psc_exp(NESTNeuron):
     .. code-block:: python
 
        >>> # Single neuron with strong adaptation
-       >>> neuron = bp.mat2_psc_exp(1, alpha_1=50*u.mV, alpha_2=5*u.mV)
+       >>> neuron = brainspike.mat2_psc_exp(1, alpha_1=50*u.mV, alpha_2=5*u.mV)
        >>> neuron.init_all_states()
        >>> with brainstate.environ.context(dt=0.1*u.ms):
        ...     V_trace = []
@@ -365,11 +365,11 @@ class mat2_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-       >>> exc = bp.mat2_psc_exp(800)
-       >>> inh = bp.mat2_psc_exp(200, tau_syn_ex=0.5*u.ms)
+       >>> exc = brainspike.mat2_psc_exp(800)
+       >>> inh = brainspike.mat2_psc_exp(200, tau_syn_ex=0.5*u.ms)
        >>> exc.init_all_states()
        >>> inh.init_all_states()
-       >>> # Connect populations via projections (see brainspike.Projection)
+       >>> # Connect populations with brainspike.Simulator.connect
     """
 
     __module__ = 'brainspike'

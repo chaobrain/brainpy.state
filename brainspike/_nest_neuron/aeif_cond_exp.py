@@ -285,11 +285,11 @@ class aeif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> # Create 100 AdEx neurons
-        >>> neurons = bst.aeif_cond_exp(100)
+        >>> neurons = brainspike.aeif_cond_exp(100)
         >>> # Initialize states
         >>> neurons.init_all_states()
         >>> # Simulate with constant current input
@@ -301,7 +301,7 @@ class aeif_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> neurons = bst.aeif_cond_exp(
+        >>> neurons = brainspike.aeif_cond_exp(
         ...     in_size=100,
         ...     V_peak=0.0 * u.mV,
         ...     V_reset=-70.0 * u.mV,

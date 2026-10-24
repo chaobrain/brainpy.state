@@ -419,12 +419,12 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>> import numpy as np
         >>> # Create a single neuron
-        >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=1)
+        >>> neuron = brainspike.pp_cond_exp_mc_urbanczik(in_size=1)
         >>> neuron.init_all_states()
         >>> # Simulate for 100 ms with constant soma current
         >>> dt = 0.1 * u.ms
@@ -440,7 +440,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     .. code-block:: python
 
-        >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=1, t_ref=0.0*u.ms)
+        >>> neuron = brainspike.pp_cond_exp_mc_urbanczik(in_size=1, t_ref=0.0*u.ms)
         >>> neuron.init_all_states()
         >>> soma_voltages, dend_voltages = [], []
         >>> with brainstate.environ.context(dt=0.1*u.ms):
@@ -454,7 +454,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
     .. code-block:: python
 
-        >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=2)
+        >>> neuron = brainspike.pp_cond_exp_mc_urbanczik(in_size=2)
         >>> neuron.init_all_states()
         >>> with brainstate.environ.context(dt=0.1*u.ms):
         ...     for i in range(100):
@@ -1216,11 +1216,11 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
 
         .. code-block:: python
 
-            >>> import brainspike as bp
+            >>> import brainspike
             >>> import brainunit as u
             >>> import brainstate
             >>> import matplotlib.pyplot as plt
-            >>> neuron = bp.pp_cond_exp_mc_urbanczik(in_size=1)
+            >>> neuron = brainspike.pp_cond_exp_mc_urbanczik(in_size=1)
             >>> neuron.init_all_states()
             >>> with brainstate.environ.context(dt=0.1*u.ms):
             ...     for i in range(1000):
@@ -1238,7 +1238,7 @@ class pp_cond_exp_mc_urbanczik(NESTNeuron):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> neuron_pop = bp.pp_cond_exp_mc_urbanczik(in_size=(10, 10))
+            >>> neuron_pop = brainspike.pp_cond_exp_mc_urbanczik(in_size=(10, 10))
             >>> neuron_pop.init_all_states()
             >>> # Simulate...
             >>> # Get history for neuron at position (3, 7)

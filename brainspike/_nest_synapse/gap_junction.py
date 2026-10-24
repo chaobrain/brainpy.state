@@ -181,11 +181,11 @@ class gap_junction(NESTSynapse):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>>
         >>> # Create gap junction with 10 nS conductance
-        >>> gap = bp.nest.gap_junction(weight=10.0)
+        >>> gap = brainspike.nest.gap_junction(weight=10.0)
         >>>
         >>> # Query connection properties
         >>> gap.get_status()
@@ -283,7 +283,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=5.0)
+            >>> gap = brainspike.nest.gap_junction(weight=5.0)
             >>> gap.properties
             {'requires_symmetric': True, 'supports_wfr': True}
         """
@@ -310,7 +310,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=2.5)
+            >>> gap = brainspike.nest.gap_junction(weight=2.5)
             >>> status = gap.get_status()
             >>> status['weight']
             2.5
@@ -351,7 +351,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=1.0)
+            >>> gap = brainspike.nest.gap_junction(weight=1.0)
             >>> gap.set_status({'weight': 5.0})
             >>> gap.get_status()['weight']
             5.0
@@ -404,7 +404,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=3.5)
+            >>> gap = brainspike.nest.gap_junction(weight=3.5)
             >>> gap.get('weight')
             3.5
             >>> gap.get('requires_symmetric')
@@ -440,7 +440,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=1.0)
+            >>> gap = brainspike.nest.gap_junction(weight=1.0)
             >>> gap.set_weight(5.5)
             >>> gap.weight
             5.5
@@ -472,7 +472,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction()
+            >>> gap = brainspike.nest.gap_junction()
             >>> gap.set_delay(1.5)
             ValueError: gap_junction connection has no delay
 
@@ -519,7 +519,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=2.0)
+            >>> gap = brainspike.nest.gap_junction(weight=2.0)
             >>> gap.begin_wfr_cycle(min_delay_steps=3, interpolation_order=1)
             >>> gap.interpolation_coefficients.shape
             (6,)  # 3 lags * 2 coefficients per lag
@@ -554,7 +554,7 @@ class gap_junction(NESTSynapse):
         --------
         .. code-block:: python
 
-            >>> gap = bp.nest.gap_junction(weight=2.0)
+            >>> gap = brainspike.nest.gap_junction(weight=2.0)
             >>> gap.begin_wfr_cycle(min_delay_steps=3, interpolation_order=0)
             >>> gap.handle_gap_event(coeffarray=np.array([1.0, 2.0, 3.0]))
             >>> gap.sumj_g_ij
@@ -606,7 +606,7 @@ class gap_junction(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> gap = bp.nest.gap_junction(weight=3.0)
+            >>> gap = brainspike.nest.gap_junction(weight=3.0)
             >>> pre_coeffs = np.array([0.5, 1.0, 1.5])
             >>> event = gap.prepare_secondary_event(pre_coeffs)
             >>> event['weight']
@@ -667,7 +667,7 @@ class gap_junction(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> gap = bp.nest.gap_junction(weight=2.0)
+            >>> gap = brainspike.nest.gap_junction(weight=2.0)
             >>> gap.begin_wfr_cycle(min_delay_steps=3, interpolation_order=0)
             >>> pre_coeffs = np.array([1.0, 1.5, 2.0])
             >>> gap.handle_gap_event(coeffarray=pre_coeffs)
@@ -790,7 +790,7 @@ class gap_junction(NESTSynapse):
         .. code-block:: python
 
             >>> import numpy as np
-            >>> gap = bp.nest.gap_junction(weight=2.0)
+            >>> gap = brainspike.nest.gap_junction(weight=2.0)
             >>> gap.begin_wfr_cycle(min_delay_steps=3, interpolation_order=0)
             >>> gap.handle_gap_event(coeffarray=np.array([10.0, 20.0, 30.0]))
             >>> V_post = -65.0  # mV
@@ -802,7 +802,7 @@ class gap_junction(NESTSynapse):
 
         .. code-block:: python
 
-            >>> gap2 = bp.nest.gap_junction(weight=1.5)
+            >>> gap2 = brainspike.nest.gap_junction(weight=1.5)
             >>> gap2.begin_wfr_cycle(min_delay_steps=2, interpolation_order=1)
             >>> gap2.handle_gap_event(coeffarray=np.array([5.0, 10.0, 15.0, 20.0]))
             >>> I_gap = gap2.evaluate_gap_current(V_m=-70.0, lag=0, t=0.5)
@@ -814,7 +814,7 @@ class gap_junction(NESTSynapse):
 
         .. code-block:: python
 
-            >>> gap3 = bp.nest.gap_junction(weight=1.0)
+            >>> gap3 = brainspike.nest.gap_junction(weight=1.0)
             >>> gap3.begin_wfr_cycle(min_delay_steps=1, interpolation_order=3)
             >>> gap3.handle_gap_event(coeffarray=np.array([1.0, 2.0, 3.0, 4.0]))
             >>> I_gap = gap3.evaluate_gap_current(V_m=-60.0, lag=0, t=0.3)

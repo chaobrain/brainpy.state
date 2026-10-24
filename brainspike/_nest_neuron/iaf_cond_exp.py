@@ -255,15 +255,15 @@ class iaf_cond_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bst
+        >>> import brainspike
         >>> import brainunit as u
-        >>> neurons = bst.iaf_cond_exp(100, V_th=-50*u.mV, t_ref=5*u.ms)
+        >>> neurons = brainspike.iaf_cond_exp(100, V_th=-50*u.mV, t_ref=5*u.ms)
 
     Simulate with external current input:
 
     .. code-block:: python
 
-        >>> with bst.environ.context(dt=0.1*u.ms):
+        >>> with brainspike.environ.context(dt=0.1*u.ms):
         ...     neurons.init_all_states()
         ...     for t in range(1000):
         ...         spike = neurons.update(x=500*u.pA)

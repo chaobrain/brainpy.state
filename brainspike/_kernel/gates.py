@@ -67,7 +67,7 @@ class MgBlock:
 
     Notes
     -----
-    Fixes goal-01 bug 2 by construction: the old ``_brainpy`` ``MgBlock`` had
+    Fixes goal-01 bug 2 by construction: ``brainpy.state.MgBlock`` had
     unitless defaults and failed with a unit-carrying ``V``. Here ``V`` **must**
     carry a voltage unit (a bare array raises), so the curve cannot silently
     depend on the voltage unit.

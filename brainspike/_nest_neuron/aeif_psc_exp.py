@@ -287,12 +287,12 @@ class aeif_psc_exp(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> import brainstate
         >>>
         >>> # Create population of 100 AdEx neurons
-        >>> neurons = bp.aeif_psc_exp(100, I_e=200 * u.pA)
+        >>> neurons = brainspike.aeif_psc_exp(100, I_e=200 * u.pA)
         >>>
         >>> # Initialize states
         >>> with brainstate.environ.context(dt=0.1 * u.ms):
@@ -309,7 +309,7 @@ class aeif_psc_exp(NESTNeuron):
     .. code-block:: python
 
         >>> # Create neurons with 2 ms refractory period
-        >>> neurons = bp.aeif_psc_exp(
+        >>> neurons = brainspike.aeif_psc_exp(
         ...     in_size=100,
         ...     t_ref=2.0 * u.ms,
         ...     tau_syn_ex=5.0 * u.ms,

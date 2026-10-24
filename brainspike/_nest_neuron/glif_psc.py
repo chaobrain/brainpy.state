@@ -395,10 +395,10 @@ class glif_psc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> with u.context(dt=0.1 * u.ms):
-        ...     model = bp.glif_psc(100, spike_dependent_threshold=False,
+        ...     model = brainspike.glif_psc(100, spike_dependent_threshold=False,
         ...                         after_spike_currents=False, adapting_threshold=False)
         ...     model.init_all_states()
         ...     output = model(350 * u.pA)
@@ -407,10 +407,10 @@ class glif_psc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> with u.context(dt=0.1 * u.ms):
-        ...     model = bp.glif_psc(100, spike_dependent_threshold=True,
+        ...     model = brainspike.glif_psc(100, spike_dependent_threshold=True,
         ...                         after_spike_currents=True, adapting_threshold=True)
         ...     model.init_all_states()
         ...     output = model(200 * u.pA)
@@ -419,10 +419,10 @@ class glif_psc(NESTNeuron):
 
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
         >>> with u.context(dt=0.1 * u.ms):
-        ...     model = bp.glif_psc(100, tau_syn=(2.0, 5.0, 10.0))
+        ...     model = brainspike.glif_psc(100, tau_syn=(2.0, 5.0, 10.0))
         ...     model.init_all_states()
         ...     # Register inputs to different receptor ports
         ...     model.add_delta_input('exc_receptor_0', lambda: 10 * u.pA)

@@ -3,7 +3,7 @@
 
 This is the first of the three typed plasticity primitives. It owns the *compute*: a CSR edge layout (reusing the
 :class:`~brainspike._nest_network.projections._SparseEventMatMul` convention),
-an :class:`~brainspike._brainpy.delay.InputDelay` axonal delay seam,
+an :class:`~brainspike._nest_network.delay.InputDelay` axonal delay seam,
 rule-declared per-edge / per-neuron :class:`brainstate.State` allocation, and
 the ``brainevent.CSR`` event matmul that delivers weighted spikes into
 ``post.add_delta_input``.
@@ -30,7 +30,7 @@ import jax.numpy as jnp
 import numpy as np
 import brainunit as u
 
-from brainspike._brainpy.delay import InputDelay
+from brainspike._nest_network.delay import InputDelay
 from brainspike._nest_network.connectivity import csr_structure
 from brainspike._nest_network.event_proj import EventProjection
 

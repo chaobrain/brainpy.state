@@ -43,8 +43,8 @@ def center_element(layer) -> int:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> bp.spatial.center_element(bp.spatial.grid([4, 3], extent=[2.0, 1.5]))
+        >>> import brainspike
+        >>> brainspike.spatial.center_element(brainspike.spatial.grid([4, 3], extent=[2.0, 1.5]))
         4
     """
     coords = layer.coords
@@ -93,8 +93,8 @@ def nearest_element(layer, locations, find_all=False):
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> bp.spatial.nearest_element(bp.spatial.grid([3, 1], extent=[3.0, 1.0]), [0.9, 0.0])
+        >>> import brainspike
+        >>> brainspike.spatial.nearest_element(brainspike.spatial.grid([3, 1], extent=[3.0, 1.0]), [0.9, 0.0])
         2
     """
     coords = u.get_magnitude(layer.coords.to(_LEN))            # (n, ndim) bare micrometres
@@ -137,9 +137,9 @@ def select_nodes_by_mask(layer, anchor, mask):
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> layer = bp.spatial.grid([3, 3], extent=[2.0, 2.0])
-        >>> bp.spatial.select_nodes_by_mask(layer, [0.0, 0.0], bp.spatial.circular(0.7)).tolist()
+        >>> import brainspike
+        >>> layer = brainspike.spatial.grid([3, 3], extent=[2.0, 2.0])
+        >>> brainspike.spatial.select_nodes_by_mask(layer, [0.0, 0.0], brainspike.spatial.circular(0.7)).tolist()
         [1, 3, 4, 5, 7]
     """
     anchor_pos = _as_len(anchor)[None, :]                      # (1, ndim) source
@@ -244,14 +244,14 @@ def target_nodes(sim, source, target):
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> sim = bp.Simulator(dt=0.1 * u.ms)
-        >>> pop = sim.create(bp.iaf_psc_alpha, positions=bp.spatial.grid([3, 1], extent=[3.0, 1.0]))
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> pop = sim.create(brainspike.iaf_psc_alpha, positions=brainspike.spatial.grid([3, 1], extent=[3.0, 1.0]))
         >>> _ = sim.connect(pop, pop,
-        ...     rule=bp.spatial.spatial_pairwise_bernoulli(p=1.0, mask=bp.spatial.circular(1.2)),
+        ...     rule=brainspike.spatial.spatial_pairwise_bernoulli(p=1.0, mask=brainspike.spatial.circular(1.2)),
         ...     weight=1.0 * u.pA, delay=1.0 * u.ms)
-        >>> [t.tolist() for t in bp.spatial.target_nodes(sim, pop, pop)]
+        >>> [t.tolist() for t in brainspike.spatial.target_nodes(sim, pop, pop)]
         [[0, 1], [0, 1, 2], [1, 2]]
     """
     sc = sim.get_connections(source=source, target=target)
@@ -285,14 +285,14 @@ def target_positions(sim, source, target):
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
+        >>> import brainspike
         >>> import brainunit as u
-        >>> sim = bp.Simulator(dt=0.1 * u.ms)
-        >>> pop = sim.create(bp.iaf_psc_alpha, positions=bp.spatial.grid([3, 1], extent=[3.0, 1.0]))
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> pop = sim.create(brainspike.iaf_psc_alpha, positions=brainspike.spatial.grid([3, 1], extent=[3.0, 1.0]))
         >>> _ = sim.connect(pop, pop,
-        ...     rule=bp.spatial.spatial_pairwise_bernoulli(p=1.0, mask=bp.spatial.circular(1.2)),
+        ...     rule=brainspike.spatial.spatial_pairwise_bernoulli(p=1.0, mask=brainspike.spatial.circular(1.2)),
         ...     weight=1.0 * u.pA, delay=1.0 * u.ms)
-        >>> [tuple(p.shape) for p in bp.spatial.target_positions(sim, pop, pop)]
+        >>> [tuple(p.shape) for p in brainspike.spatial.target_positions(sim, pop, pop)]
         [(2, 2), (3, 2), (2, 2)]
     """
     coords = sim._positions[id(target.segments[0].population)]

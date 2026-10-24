@@ -427,8 +427,8 @@ class iaf_chxk_2008(NESTNeuron):
 
         >>> import brainstate as bs
         >>> import brainunit as u
-        >>> import brainspike as bps
-        >>> neuron = bps.iaf_chxk_2008(1)
+        >>> import brainspike
+        >>> neuron = brainspike.iaf_chxk_2008(1)
         >>> with bs.environ.context(dt=0.1 * u.ms):
         ...     neuron.init_state()
         ...     spike = neuron.update(100. * u.pA)  # buffered to next step

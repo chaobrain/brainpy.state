@@ -149,8 +149,8 @@ def circular(radius) -> _RadialMask:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> mask = bp.spatial.circular(0.5)
+        >>> import brainspike
+        >>> mask = brainspike.spatial.circular(0.5)
     """
     return _RadialMask(radius)
 
@@ -167,8 +167,8 @@ def box(lower_left, upper_right) -> _BoxMask:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> mask = bp.spatial.box([-0.75, -0.75, -0.75], [0.75, 0.75, 0.75])
+        >>> import brainspike
+        >>> mask = brainspike.spatial.box([-0.75, -0.75, -0.75], [0.75, 0.75, 0.75])
     """
     return _BoxMask(lower_left, upper_right)
 
@@ -192,8 +192,8 @@ def rectangular(lower_left, upper_right, azimuth_angle=0.0) -> _RectangularMask:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> mask = bp.spatial.rectangular([-0.5, -0.5], [0.5, 0.5], azimuth_angle=30.0)
+        >>> import brainspike
+        >>> mask = brainspike.spatial.rectangular([-0.5, -0.5], [0.5, 0.5], azimuth_angle=30.0)
     """
     return _RectangularMask(lower_left, upper_right, azimuth_angle=azimuth_angle)
 
@@ -219,8 +219,8 @@ def doughnut(inner_radius, outer_radius) -> _DoughnutMask:
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> mask = bp.spatial.doughnut(0.3, 0.7)
+        >>> import brainspike
+        >>> mask = brainspike.spatial.doughnut(0.3, 0.7)
     """
     return _DoughnutMask(inner_radius, outer_radius)
 
@@ -247,8 +247,8 @@ def elliptical(major_axis, minor_axis, azimuth_angle=0.0, anchor=None) -> _Ellip
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> mask = bp.spatial.elliptical(4.0, 2.0, azimuth_angle=45.0)
+        >>> import brainspike
+        >>> mask = brainspike.spatial.elliptical(4.0, 2.0, azimuth_angle=45.0)
     """
     return _EllipseMask(major_axis, minor_axis, azimuth_angle=azimuth_angle, anchor=anchor)
 
@@ -279,8 +279,8 @@ def ellipsoidal(major_axis, minor_axis, polar_axis, azimuth_angle=0.0,
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> mask = bp.spatial.ellipsoidal(4.0, 2.0, 1.0, azimuth_angle=30.0, polar_angle=15.0)
+        >>> import brainspike
+        >>> mask = brainspike.spatial.ellipsoidal(4.0, 2.0, 1.0, azimuth_angle=30.0, polar_angle=15.0)
     """
     return _EllipseMask(major_axis, minor_axis, polar_axis=polar_axis,
                         azimuth_angle=azimuth_angle, polar_angle=polar_angle, anchor=anchor)

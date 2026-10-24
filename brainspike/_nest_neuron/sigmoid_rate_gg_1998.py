@@ -302,10 +302,10 @@ class sigmoid_rate_gg_1998_ipn(_sigmoid_rate_gg_1998_base):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
        >>> import brainstate as bs
-       >>> pop = bst.sigmoid_rate_gg_1998_ipn(
+       >>> pop = brainspike.sigmoid_rate_gg_1998_ipn(
        ...     in_size=100, tau=20*u.ms, lambda_=0.5, sigma=0.1, g=2.0
        ... )
        >>> pop.init_all_states()

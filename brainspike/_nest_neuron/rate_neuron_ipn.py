@@ -353,9 +353,9 @@ class rate_neuron_ipn(_lin_rate_base):
 
     .. code-block:: python
 
-       >>> import brainspike as bst
+       >>> import brainspike
        >>> import brainunit as u
-       >>> model = bst.rate_neuron_ipn(in_size=10, tau=20*u.ms, sigma=0.5)
+       >>> model = brainspike.rate_neuron_ipn(in_size=10, tau=20*u.ms, sigma=0.5)
        >>> model.init_all_states(batch_size=1)
        >>> rate = model(x=0.1)  # external drive
        >>> print(rate.shape)
@@ -368,7 +368,7 @@ class rate_neuron_ipn(_lin_rate_base):
        >>> import numpy as np
        >>> def tanh_nonlin(h):
        ...     return np.tanh(h)
-       >>> model = bst.rate_neuron_ipn(
+       >>> model = brainspike.rate_neuron_ipn(
        ...     in_size=5,
        ...     tau=10*u.ms,
        ...     lambda_=2.0,
@@ -382,7 +382,7 @@ class rate_neuron_ipn(_lin_rate_base):
 
     .. code-block:: python
 
-       >>> model = bst.rate_neuron_ipn(in_size=3, tau=10*u.ms, sigma=0.1)
+       >>> model = brainspike.rate_neuron_ipn(in_size=3, tau=10*u.ms, sigma=0.1)
        >>> model.init_all_states()
        >>> instant_event = {'rate': 1.0, 'weight': 0.1}
        >>> delayed_event = {'rate': 0.5, 'weight': -0.05, 'delay_steps': 3}

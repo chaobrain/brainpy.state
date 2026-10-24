@@ -179,13 +179,13 @@ def explicit_edges(pre_idx, post_idx) -> _ExplicitEdges:
 
         >>> import numpy as np
         >>> import brainunit as u
-        >>> import brainspike as bp
-        >>> sim = bp.Simulator(dt=0.1 * u.ms)
-        >>> pop = sim.create(bp.iaf_psc_exp, 5)
+        >>> import brainspike
+        >>> sim = brainspike.Simulator(dt=0.1 * u.ms)
+        >>> pop = sim.create(brainspike.iaf_psc_exp, 5)
         >>> # wire 0->1, 0->4, 2->3 as one sparse projection
         >>> pre = np.array([0, 0, 2])
         >>> post = np.array([1, 4, 3])
-        >>> _ = sim.connect(pop, pop, rule=bp.explicit_edges(pre, post),
+        >>> _ = sim.connect(pop, pop, rule=brainspike.explicit_edges(pre, post),
         ...                 weight=-0.2 * u.pA, comm='sparse')
         >>> len(sim.get_connections(source=pop, target=pop))
         3
@@ -288,8 +288,8 @@ def third_factor_bernoulli_with_pool(*, p: float, pool_size: int, pool_type: str
     --------
     .. code-block:: python
 
-        >>> import brainspike as bp
-        >>> rule = bp.third_factor_bernoulli_with_pool(
+        >>> import brainspike
+        >>> rule = brainspike.third_factor_bernoulli_with_pool(
         ...     p=0.5, pool_size=10, pool_type='random')
         >>> rule.p, rule.pool_size, rule.pool_type
         (0.5, 10, 'random')
