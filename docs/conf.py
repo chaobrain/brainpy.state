@@ -160,11 +160,11 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'nest-status/internal/**
 
 
 html_theme = "sphinx_book_theme"
-html_logo = "_static/brainpystate_vertical.png"
+html_logo = "_static/brainspike.png"
 html_title = "brainspike documentation"
 html_copy_source = True
 html_sourcelink_suffix = ""
-html_favicon = "_static/brainpystate_vertical.png"
+html_favicon = "_static/brainspike.png"
 html_last_updated_fmt = ""
 html_css_files = ['css/theme.css']
 
