@@ -59,7 +59,7 @@ import numpy as np
 from brainspike._kernel.compiler import Plan, ProjectionPlan
 from brainspike._kernel.context import StepContext, check_spike_options
 from brainspike._kernel.delay_scatter import DelayScatter
-from brainspike._kernel.model import Device, _keep_dependency, latch_name
+from brainspike._kernel.model import Device, latch_name
 from brainspike._kernel.observers import Recording, Results, window_init, window_update
 from brainspike._kernel.params import Record, read_states
 from brainspike._kernel.ports import TimedEvent
@@ -639,8 +639,7 @@ class Program:
                 kind = pplan.model.inputs[port]
                 k = latch_name(port)
                 v = from_mantissa(acc[port], kind.unit) if port in acc else kind.zeros(pplan.pop.n, self.dtype)
-                # upstream: braintrace#184 (keep the latch's hidden->hidden edge)
-                latched[k] = _like(_keep_dependency(v, old[k]), old[k])
+                latched[k] = _like(v, old[k])
             pops[pplan.name] = Record(**latched)
 
         # plasticity (reads the rings before this step's outputs are written)

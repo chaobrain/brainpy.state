@@ -94,8 +94,7 @@ def latch(model: NeuronModel, s: Record, inp: Record) -> tuple[Record, dict]:
         Port inputs acting this step: the previous step's value for latched ports,
         this step's for all others.
     new : dict
-        ``{latch_<port>: this step's value}`` to store (with the braintrace
-        dependency workaround of ``model._keep_dependency``, braintrace#184).
+        ``{latch_<port>: this step's value}`` to store.
     """
     return latch_inputs(model.inputs, s, inp)
 

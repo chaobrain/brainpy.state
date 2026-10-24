@@ -13,6 +13,7 @@ from brainspike._kernel.learn.etrace import (
     EtraceReport,
     Online,
     check_etrace,
+    check_learner,
     check_plan,
 )
 from brainspike._kernel.learn.inputs import ExternalInput
@@ -29,5 +30,6 @@ __all__ = [
     'Online',
     'check_plan',
     'check_etrace',
+    'check_learner',
     'ExternalInput',
 ]
